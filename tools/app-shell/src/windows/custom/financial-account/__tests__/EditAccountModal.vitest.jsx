@@ -2,10 +2,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// The Type/Currency dropdowns are Radix <Select>s, which rely on Pointer Capture
-// and scrollIntoView — neither is implemented by jsdom. Polyfill them so the
-// dropdown can open and an option can be picked in the "changing the Type saves
-// the new value" test (ETP-4581).
+// Polyfill Pointer Capture / scrollIntoView (not implemented by jsdom) for the Radix-based
+// widgets still used by the modal. Type/Currency use the shared CreatableSearchSelect (ETP-5728).
 beforeAll(() => {
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
@@ -195,6 +193,19 @@ async function openConnectedModal(props = {}) {
   return result;
 }
 
+/** Picks an account Type in the shared CreatableSearchSelect (ETP-5728): open the chip, click the option. */
+async function pickType(user, kind) {
+  const ids = { Bank: 'B', Cash: 'C', Card: 'CA' };
+  await user.click(await screen.findByTestId('field-edit-account-type-chip'));
+  await user.click(await screen.findByTestId(`option-edit-account-type-${ids[kind]}`));
+}
+
+/** Picks an account in an AccountSelect field: opens its popup, clicks the option (ETP-5681). */
+async function pickAccount(user, key, id) {
+  await user.click(screen.getByTestId(`field-${key}`));
+  await user.click(await screen.findByTestId(`${key}-popup-option-${id}`));
+}
+
 describe('EditAccountModal', () => {
   beforeEach(() => {
     toastSuccess.mockClear();
@@ -366,7 +377,7 @@ describe('EditAccountModal', () => {
       expect(screen.queryByTestId('edit-account-connect-bank')).not.toBeInTheDocument();
       // IBAN is editable even while connected (ETP-4896 follow-up); Currency stays read-only.
       expect(screen.getByTestId('edit-account-iban')).toBeInTheDocument();
-      expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('field-edit-account-currency-chip')).not.toBeInTheDocument();
     });
 
     it('triggers sync and refresh on Sync now', async () => {
@@ -719,8 +730,8 @@ describe('EditAccountModal', () => {
       await screen.findByTestId('edit-account-reconnect-bank');
 
       expect(screen.getByTestId('edit-account-iban')).toBeInTheDocument();
-      expect(screen.queryByTestId('edit-account-type')).toBeNull();
-      expect(screen.queryByTestId('edit-account-currency')).toBeNull();
+      expect(screen.queryByTestId('field-edit-account-type-chip')).toBeNull();
+      expect(screen.queryByTestId('field-edit-account-currency-chip')).toBeNull();
     });
 
     it('still allows releasing the surviving link without reconnecting first', async () => {
@@ -1162,10 +1173,10 @@ describe('EditAccountModal', () => {
         renderModal({ account });
 
         if (editable) {
-          expect(await screen.findByTestId('edit-account-currency')).toBeInTheDocument();
+          expect(await screen.findByTestId('field-edit-account-currency-chip')).toBeInTheDocument();
         } else {
           await waitFor(() =>
-            expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument(),
+            expect(screen.queryByTestId('field-edit-account-currency-chip')).not.toBeInTheDocument(),
           );
           // Locked currency still renders as a read-only field showing the account's ISO code.
           expect(screen.getByText('EUR')).toBeInTheDocument();
@@ -1201,7 +1212,7 @@ describe('EditAccountModal', () => {
     function expectClearedFieldsHidden(section) {
       HIDDEN_CLEARED_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
-        expect(within(section).queryByTestId(`field-${key}-chip`)).not.toBeInTheDocument();
+        expect(within(section).queryByTestId(`field-${key}-clear`)).not.toBeInTheDocument();
       });
       HIDDEN_CLEARED_LABELS.forEach((labelKey) => {
         expect(within(section).queryByText(labelKey)).not.toBeInTheDocument();
@@ -1217,7 +1228,7 @@ describe('EditAccountModal', () => {
       ALL_RENDERED_FIELDS.forEach((key) => {
         expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(7);
+      expect(within(section).getAllByTestId(/^field-[A-Za-z]+$/)).toHaveLength(7);
       expectClearedFieldsHidden(section);
 
       // All 3 sub-section headings render, "General" included.
@@ -1239,7 +1250,7 @@ describe('EditAccountModal', () => {
       GENERAL_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(4);
+      expect(within(section).getAllByTestId(/^field-[A-Za-z]+$/)).toHaveLength(4);
       expectClearedFieldsHidden(section);
 
       // "General" is omitted, not merely hidden — the heading itself is absent.
@@ -1261,7 +1272,7 @@ describe('EditAccountModal', () => {
       GENERAL_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(4);
+      expect(within(section).getAllByTestId(/^field-[A-Za-z]+$/)).toHaveLength(4);
       expectClearedFieldsHidden(section);
       expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
       expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
@@ -1320,8 +1331,8 @@ describe('EditAccountModal', () => {
       // Neither field's input/chip renders...
       expect(within(section).queryByTestId('field-clearedPaymentAccount')).not.toBeInTheDocument();
       expect(within(section).queryByTestId('field-clearedPaymentAccountOUT')).not.toBeInTheDocument();
-      expect(within(section).queryByTestId('field-clearedPaymentAccount-chip')).not.toBeInTheDocument();
-      expect(within(section).queryByTestId('field-clearedPaymentAccountOUT-chip')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('field-clearedPaymentAccount-clear')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('field-clearedPaymentAccountOUT-clear')).not.toBeInTheDocument();
       // ...nor does its label...
       expect(within(section).queryByText('financeAccountsAccountingClearedIn')).not.toBeInTheDocument();
       expect(within(section).queryByText('financeAccountsAccountingClearedOut')).not.toBeInTheDocument();
@@ -1363,8 +1374,7 @@ describe('EditAccountModal', () => {
 
       // Change an unrelated field so Save is enabled — the two cleared fields are never touched
       // by the user because they are not even rendered.
-      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE2'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE2');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       await user.click(screen.getByTestId('edit-account-save'));
@@ -1424,29 +1434,24 @@ describe('EditAccountModal', () => {
       // Nothing changed yet — Save is disabled (nothing dirty anywhere in the form).
       expect(screen.getByTestId('edit-account-save')).toBeDisabled();
 
-      // Change depositAccount away from its snapshot value. Clearing via the chip's X
-      // reopens the dropdown immediately (CreatableSearchSelect's handleClear), so the
-      // desired option can be picked straight away.
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+      // Change depositAccount away from its snapshot value by picking another account in its
+      // popup (AccountSelect → SearchPopup, ETP-5681).
+      await pickAccount(user, 'depositAccount', 'DEP2');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Also change fINBankfeeAcct — a second, independent key in the same map.
-      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE2'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE2');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Revert depositAccount back to its original snapshot value — the OTHER field
       // (fINBankfeeAcct) is still dirty, so Save must stay enabled: the two keys are not
       // collapsed into one shared dirty flag.
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      await pickAccount(user, 'depositAccount', 'DEP1');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Revert fINBankfeeAcct too — every key in the map now matches its snapshot again,
       // so Save disables.
-      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE1');
       await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
     });
   });
@@ -1491,16 +1496,14 @@ describe('EditAccountModal', () => {
       // Fill the Banco-only "General" field while the account is still type Banco.
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
-      await user.click(screen.getByTestId('field-fINBankfeeAcct'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE1');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Switch back to General and change Type to Cash BEFORE saving. The Accounting tab's
       // "General" sub-section (and fINBankfeeAcct with it) is now unmounted — Cash renders only
       // 6 fields across 2 sub-sections, no "General" group at all.
       await user.click(getTab('financeAccountsEditTabGeneral'));
-      await user.click(screen.getByTestId('edit-account-type'));
-      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+      await pickType(user, 'Cash');
 
       await user.click(screen.getByTestId('edit-account-save'));
 
@@ -1545,28 +1548,24 @@ describe('EditAccountModal', () => {
       // Flip Type to Cash (depositAccount is common to both Banco and Cash's "Payment IN" group,
       // so it stays rendered either way) with no accounting change yet.
       await user.click(getTab('financeAccountsEditTabGeneral'));
-      await user.click(screen.getByTestId('edit-account-type'));
-      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCash' }));
+      await pickType(user, 'Cash');
 
       // Change depositAccount while the account is (momentarily) type Cash.
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+      await pickAccount(user, 'depositAccount', 'DEP2');
 
       // Revert Type back to Banco — typeDirty clears, isolating accounting.dirty as the only
       // remaining source of Save being enabled.
       await user.click(getTab('financeAccountsEditTabGeneral'));
-      await user.click(screen.getByTestId('edit-account-type'));
-      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeBank' }));
+      await pickType(user, 'Bank');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Revert depositAccount to its snapshot too — every key in the accounting field state map
       // matches its snapshot again, so Save disables. Confirms the dirty map survived the round-trip type
       // switch uncorrupted (no bug here — this is the "confirmed fine" half of the QA check).
       await user.click(getTab('financeAccountsEditTabAccounting'));
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      await pickAccount(user, 'depositAccount', 'DEP1');
       await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
     });
   });
@@ -1744,7 +1743,7 @@ describe('EditAccountModal', () => {
       // Clear the only pre-filled field — under the old (retired) required-fINAssetAcct
       // behavior this exact action would have disabled Save. It must not anymore, for ANY
       // field, since none is required.
-      await user.click(within(screen.getByTestId('field-fINBankrevaluationgainAcct-chip')).getByLabelText('clear'));
+      await user.click(screen.getByTestId('field-fINBankrevaluationgainAcct-clear'));
 
       await waitFor(() =>
         expect(screen.getByTestId('field-fINBankrevaluationgainAcct')).toBeInTheDocument(),
@@ -1783,7 +1782,7 @@ describe('EditAccountModal', () => {
       renderModal({ account: TX_BANK_ACCOUNT });
       // No editable Type select is rendered…
       await waitFor(() =>
-        expect(screen.queryByTestId('edit-account-type')).not.toBeInTheDocument(),
+        expect(screen.queryByTestId('field-edit-account-type-chip')).not.toBeInTheDocument(),
       );
       // …but the localized type label ("Banco") is shown as read-only info.
       expect(screen.getByText('financeAccountsNewTypeBank')).toBeInTheDocument();
@@ -1792,7 +1791,7 @@ describe('EditAccountModal', () => {
     it('shows Currency as plain info text (no editable select) when the account has transactions', async () => {
       renderModal({ account: TX_BANK_ACCOUNT });
       await waitFor(() =>
-        expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument(),
+        expect(screen.queryByTestId('field-edit-account-currency-chip')).not.toBeInTheDocument(),
       );
       // The locked currency renders its ISO code as read-only info text.
       expect(screen.getByText('EUR')).toBeInTheDocument();
@@ -1800,8 +1799,8 @@ describe('EditAccountModal', () => {
 
     it('renders both the Type and Currency editable selects when the account has no transactions', async () => {
       renderModal({ account: NO_TX_BANK_ACCOUNT });
-      expect(await screen.findByTestId('edit-account-type')).toBeInTheDocument();
-      expect(await screen.findByTestId('edit-account-currency')).toBeInTheDocument();
+      expect(await screen.findByTestId('field-edit-account-type-chip')).toBeInTheDocument();
+      expect(await screen.findByTestId('field-edit-account-currency-chip')).toBeInTheDocument();
     });
 
     it('saves the new Type value via updateAccount when the account has no transactions', async () => {
@@ -1811,8 +1810,7 @@ describe('EditAccountModal', () => {
 
       // Open the Type dropdown and pick "Card" (CA) — a non-cash change so the
       // form layout (General tab, IBAN) doesn't reflow mid-interaction.
-      await user.click(await screen.findByTestId('edit-account-type'));
-      await user.click(await screen.findByRole('option', { name: 'financeAccountsNewTypeCard' }));
+      await pickType(user, 'Card');
 
       await user.click(screen.getByTestId('edit-account-save'));
 
@@ -1823,6 +1821,16 @@ describe('EditAccountModal', () => {
       // Only the changed field is sent — the untouched currency stays out of the payload.
       expect(payload).not.toHaveProperty('currencyId');
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    });
+
+    it('renders Type/Currency with the shared selector and blocks Save when one is cleared (ETP-5728)', async () => {
+      const user = userEvent.setup();
+      renderModal({ account: NO_TX_BANK_ACCOUNT });
+      expect(await screen.findByTestId('field-edit-account-type-chip')).toBeInTheDocument();
+      expect(await screen.findByTestId('field-edit-account-currency-chip')).toBeInTheDocument();
+
+      await user.click(within(screen.getByTestId('field-edit-account-type-chip')).getByRole('button', { name: 'clear' }));
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
     });
 
     it('keeps the Name field editable regardless of transactions (regression)', async () => {
@@ -1844,8 +1852,8 @@ describe('EditAccountModal', () => {
       expect(screen.getByLabelText('financeAccountsCopyIban')).toBeInTheDocument();
       expect(screen.getByTestId('edit-account-iban')).toBeInTheDocument();
       // Type/Currency, by contrast, stay locked (connected) → no editable controls.
-      expect(screen.queryByTestId('edit-account-type')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('field-edit-account-type-chip')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('field-edit-account-currency-chip')).not.toBeInTheDocument();
     });
   });
 
@@ -1884,8 +1892,8 @@ describe('EditAccountModal', () => {
       // The field grid holds ONLY name + iban — no Type/Currency controls or info spans.
       expect(within(grid).getByTestId('edit-account-name')).toBeInTheDocument();
       expect(within(grid).getByTestId('edit-account-iban')).toBeInTheDocument();
-      expect(within(grid).queryByTestId('edit-account-type')).not.toBeInTheDocument();
-      expect(within(grid).queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('field-edit-account-type-chip')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('field-edit-account-currency-chip')).not.toBeInTheDocument();
       expect(within(grid).queryByTestId('edit-account-type-info')).not.toBeInTheDocument();
       expect(within(grid).queryByTestId('edit-account-currency-info')).not.toBeInTheDocument();
     });
@@ -1895,14 +1903,14 @@ describe('EditAccountModal', () => {
 
       // Editable selects live in the field grid, below Name/IBAN.
       const grid = screen.getByTestId('edit-account-name').closest('.grid');
-      expect(within(grid).getByTestId('edit-account-type')).toBeInTheDocument();
-      expect(await within(grid).findByTestId('edit-account-currency')).toBeInTheDocument();
+      expect(within(grid).getByTestId('field-edit-account-type-chip')).toBeInTheDocument();
+      expect(await within(grid).findByTestId('field-edit-account-currency-chip')).toBeInTheDocument();
 
       // The header status strip (AccountStatusInfo) is not rendered at all in the
       // editable case — no Type/Currency content anywhere in the header.
       const header = screen.getByTestId('DialogHeader__73027d');
-      expect(within(header).queryByTestId('edit-account-type')).not.toBeInTheDocument();
-      expect(within(header).queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      expect(within(header).queryByTestId('field-edit-account-type-chip')).not.toBeInTheDocument();
+      expect(within(header).queryByTestId('field-edit-account-currency-chip')).not.toBeInTheDocument();
       expect(within(header).queryByTestId('edit-account-type-info')).not.toBeInTheDocument();
       expect(within(header).queryByTestId('edit-account-currency-info')).not.toBeInTheDocument();
 
@@ -1918,8 +1926,8 @@ describe('EditAccountModal', () => {
       let grid = screen.getByTestId('edit-account-name').closest('.grid');
       expect(within(grid).getByTestId('edit-account-name')).toBeInTheDocument();
       expect(within(grid).getByTestId('edit-account-iban')).toBeInTheDocument();
-      expect(within(grid).queryByTestId('edit-account-type')).not.toBeInTheDocument();
-      expect(within(grid).queryByTestId('edit-account-currency')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('field-edit-account-type-chip')).not.toBeInTheDocument();
+      expect(within(grid).queryByTestId('field-edit-account-currency-chip')).not.toBeInTheDocument();
       withTx.unmount();
 
       // EDITABLE case (no transactions) → the grid still has name + iban AND now the
@@ -1928,8 +1936,8 @@ describe('EditAccountModal', () => {
       grid = screen.getByTestId('edit-account-name').closest('.grid');
       expect(within(grid).getByTestId('edit-account-name')).toBeInTheDocument();
       expect(within(grid).getByTestId('edit-account-iban')).toBeInTheDocument();
-      expect(within(grid).getByTestId('edit-account-type')).toBeInTheDocument();
-      expect(within(grid).getByTestId('edit-account-currency')).toBeInTheDocument();
+      expect(within(grid).getByTestId('field-edit-account-type-chip')).toBeInTheDocument();
+      expect(within(grid).getByTestId('field-edit-account-currency-chip')).toBeInTheDocument();
     });
   });
 

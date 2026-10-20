@@ -109,7 +109,7 @@ vi.mock('@/components/forms/fields', async (importOriginal) => {
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { todayISO } from '@/components/payment/paymentData';
+import { todayCalendarISO as todayISO } from '@/lib/dateOnly.js';
 import { NewTransactionModal } from '../NewTransactionModal.jsx';
 
 const CURRENCY = { id: 'cur-1', iso: 'USD' };

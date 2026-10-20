@@ -4,16 +4,18 @@
 from mixing unrelated intents. The unit of review is not a folder; it is the
 architectural or functional scope of the change.
 
-## Required Gate
+## Status
 
-The GitHub Actions workflow `.github/workflows/domain-boundary-check.yml` runs on
-every `pull_request` and `merge_group` event. It intentionally does not use
-`paths:` filters, so the required status check is always present.
+Not run in CI or in the hooks. The check polices intents mixed inside one repository, and
+the Schema Forge split moved that boundary to the repository level. The workflow
+`.github/workflows/domain-boundary-check.yml` stayed behind as a no-op that always passed,
+in case a branch protection rule required it; no rule did, and ETP-5695 removed it. The
+pre-push call is commented out for the same reason.
 
-Run it locally with:
+Run it by hand with:
 
 ```bash
-make domain-boundary-check BASE=origin/epic/ETP-3504
+make domain-boundary-check BASE=origin/develop
 ```
 
 The implementation lives only in the publishable workspace package
@@ -39,7 +41,7 @@ const report = analyzeBoundary({
 For exception testing:
 
 ```bash
-make domain-boundary-check BASE=origin/epic/ETP-3504 \
+make domain-boundary-check BASE=origin/develop \
   LABELS=cross-domain-approved \
   PR_BODY_FILE=docs/plans/ETP-0000-cross-domain.md
 ```

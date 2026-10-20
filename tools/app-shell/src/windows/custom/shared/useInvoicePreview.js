@@ -4,7 +4,7 @@ import { useInvoicePdf } from './useInvoicePdf.js';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
+import { getPendingSifTargets, getSifBodyKey, getSifButtonLabelKey } from './sifSending.js';
 import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
 import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
 import { isPaymentProcessed } from './paymentStatuses.js';
@@ -129,6 +129,8 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
   const canSendToSif = invoiceData?.documentStatus === 'CO' && hasPendingTargets;
   const sifBodyKey = getSifBodyKey(specName, pendingTargets);
+  // ETP-5700 — system-specific caption ("Enviar a SII" / "Enviar a TicketBAI" / ...), not "Enviar a SIF".
+  const sifLabelKey = getSifButtonLabelKey(specName, pendingTargets);
 
   const closeSifModal = useCallback(() => setShowSifModal(false), []);
 
@@ -195,7 +197,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     showSendModal, sendModalClosing, openEmailModal, closeEmailModal,
     // SIF
     showSifModal, setShowSifModal,
-    closeSifModal, canSendToSif, sifBodyKey,
+    closeSifModal, canSendToSif, sifBodyKey, sifLabelKey,
     pendingTargets,
     sifBase: neoBaseUrl,
     refetchInvoice,

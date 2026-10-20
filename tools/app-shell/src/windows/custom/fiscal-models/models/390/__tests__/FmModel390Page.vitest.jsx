@@ -365,7 +365,8 @@ describe('FmModel390Page — manual inputs', () => {
     const p = props();
     render(<FmModel390Page decl={makeDecl()} {...p} />);
     goToBlock('resultado_liquidacion');
-    typeInput('LIQANUAL_VAT_LAW_REGULARIZATION', '40.5');
+    // Typed with the instance decimal separator (","), through the 303's MaskedAmountInput.
+    typeInput('LIQANUAL_VAT_LAW_REGULARIZATION', '40,5');
     expect(screen.getByTestId('FmBoxes390__box_84').textContent).toContain('400.5');
     expect(screen.getByTestId('FmBoxes390__box_86').textContent).toContain('400.5');
     expect(kpiValue('fm.m390.kpi.result')).toBe('400.5');
@@ -381,7 +382,7 @@ describe('FmModel390Page — manual inputs', () => {
     await waitFor(() => expect(p.onManualDataSaved).toHaveBeenCalledWith('decl-390', manualData));
   });
 
-  // The 303-style editor is a number input (as the 303's), so a non-numeric text cannot be typed;
+  // The 303-style editor is the 303's MaskedAmountInput, so a non-numeric text cannot be typed;
   // the page still refuses a negative compensation.
   // ETP-5716 — the 390 editable box behaves as the 303's: pencil → editor; blur / Enter commit,
   // Escape cancels, an untouched editor commits nothing; the change waits for Guardar.
@@ -414,18 +415,38 @@ describe('FmModel390Page — manual inputs', () => {
     expect(persistManualData.mock.calls[0][1].aeatInputs.LIQANUAL_VAT_IMPORT).toBe('12.00');
   });
 
-  // Review W3: an unparseable number (validity.badInput, the browser reads it as '') must not
-  // delete the stored value.
-  it('an unparseable number does not clear the box', () => {
+  // Review W3: an edit with no number in it (a lone "-" or decimal separator) must not delete the
+  // stored value — dropped by the cell, as in the 303.
+  it('a draft with no number in it does not clear the box', () => {
     const manualData = { aeatInputs: { LIQANUAL_VAT_IMPORT: '5.00' } };
     render(<FmModel390Page decl={makeDecl({ manualData })} {...props()} />);
     goToBlock('resultado_liquidacion');
     fireEvent.click(screen.getByTestId('FmBoxes390__edit_LIQANUAL_VAT_IMPORT'));
     const field = screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT');
-    fireEvent.change(field, { target: { value: '' } });
-    Object.defineProperty(field, 'validity', { value: { badInput: true } });
+    fireEvent.change(field, { target: { value: '-' } });
     fireEvent.blur(field);
     expect(shownValue('LIQANUAL_VAT_IMPORT')).toBe('5');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  // Same editor as the 303 (MaskedAmountInput): "," is the decimal separator, a 3rd decimal is
+  // refused at the keystroke, Enter commits and Escape discards.
+  it('edits through the 303 amount editor (separators, hard stop, Enter, Escape)', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('resultado_liquidacion');
+    fireEvent.click(screen.getByTestId('FmBoxes390__edit_LIQANUAL_VAT_IMPORT'));
+    let field = screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT');
+    fireEvent.change(field, { target: { value: '12,5' } });
+    fireEvent.change(field, { target: { value: '12,505' } });
+    expect(field.value).toBe('12,5');
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(shownValue('LIQANUAL_VAT_IMPORT')).toBe('12.5');
+
+    fireEvent.click(screen.getByTestId('FmBoxes390__edit_LIQANUAL_VAT_IMPORT'));
+    field = screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT');
+    fireEvent.change(field, { target: { value: '99' } });
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(shownValue('LIQANUAL_VAT_IMPORT')).toBe('12.5');
   });
 
   it('rejects a negative compensation [85]', () => {

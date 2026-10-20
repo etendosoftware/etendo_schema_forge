@@ -19,10 +19,12 @@ import OcrSidePanel, { ReadOnlyOcrSidePanel } from '../shared/OcrSidePanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
-import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
+import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, buildInvoiceUnpostActions, invoiceUnpostRowFilter, makeInvoiceReactivateRowFilter } from '../shared/useInvoiceWindow.js';
 import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
+import { useSifRowSendAction } from '../shared/useSifRowSendAction.jsx';
+import SifSendModalHost from '../shared/SifSendModalHost.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -114,6 +116,12 @@ const LABEL_OVERRIDES = {
 };
 
 function PurchaseInvoiceBulkAction(props) {
+  // ETP-5745 follow-up — one row-fetch per SELECTED row when reactivating, not per list row;
+  // see makeInvoiceReactivateRowFilter's doc for why this is a plain (hook-free) factory, not a
+  // hook — this component is invoked as a bare function call (ETP-5209), never rendered as JSX.
+  const reactivateRowFilter = makeInvoiceReactivateRowFilter({
+    apiBaseUrl: props.apiBaseUrl, token: props.token,
+  });
   return (
     <>
       <BulkDocumentAction
@@ -123,6 +131,7 @@ function PurchaseInvoiceBulkAction(props) {
         // already unposts first (`preUnpost: true` in decisions.json); this makes the bulk
         // bar run the same two steps instead of failing with "Factura contabilizada".
         preUnpostActions={['RE']}
+        rowFilter={reactivateRowFilter}
         data-testid="BulkDocumentAction__c20e53" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -132,6 +141,14 @@ function PurchaseInvoiceBulkAction(props) {
         rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__c20e53" />
+      {/* ETP-5692 — bulk Descontabilizar (unpost), gated to Completed + posted rows; leaves them Completed */}
+      <BulkDocumentAction
+        {...props}
+        actionMode="neoAction"
+        buildActions={buildInvoiceUnpostActions}
+        rowFilter={invoiceUnpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__c20e53" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -162,6 +179,19 @@ export default function PurchaseInvoiceWindow(props) {
   const [savedRecord, setSavedRecord] = useState(null);
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('183');
+  // ETP-5700 — grid row-kebab "Enviar a SII" (or "Enviar a Batuz" under Bizkaia).
+  const { sifMenuActions, sifModal } = useSifRowSendAction({
+    specName: 'purchase-invoice',
+    apiBaseUrl,
+    enabled: windowAccessTier !== 'read-only',
+    onRefresh: () => setRefreshKey(k => k + 1),
+    // The form view (recordId) mounts no grid; it sends from the kebab (SifSendMenuItem).
+    loadConfig: !recordId,
+  });
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
   const breadcrumb = 'Purchases / Purchase Invoice';
@@ -182,8 +212,11 @@ export default function PurchaseInvoiceWindow(props) {
       showEmail: false,
       onRefresh: () => setRefreshKey(k => k + 1),
       ui,
+      extraMenuActions: sifMenuActions,
+      apiBaseUrl,
+      token,
     }),
-    [navigate, windowName, requestDelete, ui],
+    [navigate, windowName, requestDelete, ui, sifMenuActions, apiBaseUrl, token],
   );
 
   const summary = [
@@ -201,13 +234,14 @@ export default function PurchaseInvoiceWindow(props) {
   // window.draftMode.keepSaveWhenCompletedFields. This override is what actually reaches
   // DetailView: the generated HeaderPage sets draftMode from the contract but expands
   // {...props} AFTER it, so this value wins and the contract's never applies here.
-  // draft-mode-allowlist-sync.test.js fails if the two drift apart.
-  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
+  // The 'passes the decisions.json completed-document allowlists through the draftMode override'
+  // test in __tests__/index.vitest.jsx fails if the two drift apart.
+  // ETP-5692 — project/costcenter join the list so a Completed invoice that was unposted
+  // can save corrected header dimensions; their decisions.json readOnlyLogic override
+  // (@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')) keeps them locked while the invoice
+  // is posted (matching core C_INVOICE_TRG) or in any processed status other than CO.
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate', 'project', 'costcenter', 'aeatsiiErrorRegistral'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
 
-  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
-  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
-  // Checked once here, before either branch, so both list and detail are covered.
-  const windowAccessTier = useWindowAccess('183');
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
   // (which already forces window.readOnly internally for the detail branch).
@@ -240,6 +274,13 @@ export default function PurchaseInvoiceWindow(props) {
           data-testid="HeaderPage__c20e53" />
         {contactPortal}
         {taxSifModal}
+        {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
+            unconditionally: the kebab unmounts its own content on close. Since ETP-5700 the
+            kebab is the form view's only send entry point (no topbar button). */}
+        <SifSendModalHost
+          apiBaseUrl={apiBaseUrl}
+          recordId={recordId}
+          data-testid="SifSendModalHost__c20e53" />
       </CreateContactContext.Provider>
     );
   }
@@ -328,6 +369,7 @@ export default function PurchaseInvoiceWindow(props) {
         window={effectiveWindow}
         data-testid="ListView__c20e53" />
       {deleteDialog}
+      {sifModal}
       {cloneTargets && createPortal(
         <CloneOrderModal
           records={cloneTargets}

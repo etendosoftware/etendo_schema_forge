@@ -531,4 +531,46 @@ describe('DifferenceModal — re-seeding on reopen', () => {
     expect(screen.getByTestId('recon-difference-description')).toHaveValue('');
     expect(screen.getByTestId('recon-difference-concept-value')).toHaveTextContent('GL-1');
   });
+
+  it('keeps the typed description and picked GL item when the host re-renders with a new-identity default', async () => {
+    const user = userEvent.setup();
+    const props = modalProps({ defaultGlItem: { ...glItems[0] } });
+    const { rerender } = render(<DifferenceModal {...props} />);
+
+    await user.click(screen.getByTestId('recon-difference-concept-option-GL-2'));
+    await user.type(screen.getByTestId('recon-difference-description'), 'my note');
+
+    // Same content, fresh object identity (what an inline literal in the host produces).
+    rerender(<DifferenceModal {...props} defaultGlItem={{ ...glItems[0] }} />);
+    rerender(<DifferenceModal {...props} defaultGlItem={{ ...glItems[0] }} />);
+
+    expect(screen.getByTestId('recon-difference-description')).toHaveValue('my note');
+    expect(screen.getByTestId('recon-difference-concept-value')).toHaveTextContent('GL-2');
+  });
+
+  it('keeps user input even when the default changes while open, and re-applies it on the next open', async () => {
+    const user = userEvent.setup();
+    const props = modalProps({ defaultGlItem: glItems[0] });
+    const { rerender } = render(<DifferenceModal {...props} />);
+
+    await user.type(screen.getByTestId('recon-difference-description'), 'keep me');
+    rerender(<DifferenceModal {...props} defaultGlItem={glItems[1]} />);
+    expect(screen.getByTestId('recon-difference-description')).toHaveValue('keep me');
+
+    rerender(<DifferenceModal {...props} defaultGlItem={glItems[1]} open={false} />);
+    rerender(<DifferenceModal {...props} defaultGlItem={glItems[1]} open />);
+    expect(screen.getByTestId('recon-difference-description')).toHaveValue('');
+    expect(screen.getByTestId('recon-difference-concept-value')).toHaveTextContent('GL-2');
+  });
+
+  it('does not move focus into the concept picker when it opens (its dropdown opens on focus)', () => {
+    const props = modalProps({ defaultGlItem: glItems[0] });
+    render(<DifferenceModal {...props} />);
+
+    const dialog = screen.getByTestId('recon-difference-dialog');
+    expect(dialog.contains(document.activeElement)
+      && document.activeElement !== dialog).toBe(false);
+    expect(document.activeElement.tagName).not.toBe('BUTTON');
+    expect(document.activeElement.tagName).not.toBe('INPUT');
+  });
 });

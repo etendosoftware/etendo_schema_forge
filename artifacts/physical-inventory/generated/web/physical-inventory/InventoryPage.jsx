@@ -26,7 +26,7 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:inventory
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:inventory
 
@@ -208,10 +208,12 @@ export const api = {
   },
   "labelOverrides": {
     "en_US": {
-      "Processed": "Status"
+      "Processed": "Status",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
-      "Processed": "Estado"
+      "Processed": "Estado",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

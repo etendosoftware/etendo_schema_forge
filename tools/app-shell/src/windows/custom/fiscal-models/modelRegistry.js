@@ -37,6 +37,9 @@
 //                               notice of "Nueva declaración" for this model, or `null` (no hook).
 //   selectableYears             () => number[] — the exercises "Nueva declaración" offers for this
 //                               model, or `null` to use the shared `SELECTABLE_YEARS` (fm303Layouts).
+//   duplicatePeriodType         'rectificative' | 'substitutive' | null — the type label the list
+//                               shows for a never-saved draft whose period already has a presented
+//                               declaration (ETP-5725), or `null` for no such fallback.
 import { monthlyDeadline303 } from './models/303/deadline303.js';
 import { monthlyDeadline349 } from './models/349/deadline349.js';
 import { annualDeadline390 } from './models/390/deadline390.js';
@@ -62,6 +65,7 @@ const MODELS = Object.freeze([
     // ETP-5716: 2025 303s, to test the 390 2025 preload / cuadre. Revert to `null` to go back to the
     // shared SELECTABLE_YEARS (current filing year only).
     selectableYears: () => [2026, 2025],
+    duplicatePeriodType: 'rectificative',
   }),
   Object.freeze({
     id: '349',
@@ -79,6 +83,7 @@ const MODELS = Object.freeze([
     singleOrdinaryPerYear: false,
     newDeclWarning: null,
     selectableYears: null,
+    duplicatePeriodType: 'substitutive',
   }),
   // Annual VAT summary. Not active by default (an opt-in model: SII entities are exempt). Filed
   // telematically (`POST /fiscal390/submit`) or registered as presented elsewhere.
@@ -98,6 +103,7 @@ const MODELS = Object.freeze([
     singleOrdinaryPerYear: true,
     newDeclWarning: newDeclWarning390,
     selectableYears: selectableYears390,
+    duplicatePeriodType: null,
   }),
 ]);
 

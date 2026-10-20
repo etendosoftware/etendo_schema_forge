@@ -1265,8 +1265,17 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   ));
 }
 
-export function getSecondaryTabEntityKey(secondaryTabs, index) {
-  return (secondaryTabs[index]?.isFormTab || secondaryTabs[index]?.Panel) ? null : (secondaryTabs[index]?.key ?? null);
+// ETP-5648: a capability-hidden tab gets no entity key, so its hook never fetches it.
+export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities) {
+  const tab = secondaryTabs[index];
+  if (tab?.isFormTab || tab?.Panel || !isCapabilityVisible(capabilities, tab?.visibleWhenCapability)) return null;
+  return tab?.key ?? null;
+}
+
+// ETP-5648: `window.detailVisibleWhenCapability` drops the detail (lines) tab entirely for a
+// role without the capability: no tab, no children fetch, no evaluate-display, no callouts.
+export function gateDetailTab(detailEntity, DetailTable, capabilityKey, capabilities) {
+  return isCapabilityVisible(capabilities, capabilityKey) ? [detailEntity, DetailTable] : [null, null];
 }
 
 // ETP-5205: `readOnly` here is DetailView's `windowReadOnly` (static decisions.json

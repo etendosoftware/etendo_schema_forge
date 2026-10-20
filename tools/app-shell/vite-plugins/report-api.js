@@ -616,19 +616,19 @@ export default function reportApiPlugin(options = {}) {
                 );
               }
 
+              // ETP-5573: mirrors ReportSelectorsServlet.buildWarehouseQuery() (com.etendoerp.go).
+              // A warehouse is scoped by its OWN organization, not by an ad_org_warehouse
+              // assignment row — Etendo GO never creates one, so requiring it hid every warehouse
+              // created from the Warehouse window. Keep both implementations in sync.
               if (type === 'warehouse') {
                 if (selectedOrgId) {
                   values.push(selectedOrgId);
-                  whereFragments.push(
-                    `AND EXISTS (SELECT 1 FROM ad_org_warehouse ow WHERE ow.m_warehouse_id = m_warehouse.m_warehouse_id AND ow.ad_org_id = $${values.length})`
-                  );
+                  whereFragments.push(`AND m_warehouse.ad_org_id IN ($${values.length}, '0')`);
                 }
 
                 if (roleOrgIds.length > 0) {
                   values.push(roleOrgIds);
-                  whereFragments.push(
-                    `AND EXISTS (SELECT 1 FROM ad_org_warehouse ow WHERE ow.m_warehouse_id = m_warehouse.m_warehouse_id AND ow.ad_org_id = ANY($${values.length}))`
-                  );
+                  whereFragments.push(`AND m_warehouse.ad_org_id = ANY($${values.length})`);
                 }
               }
 

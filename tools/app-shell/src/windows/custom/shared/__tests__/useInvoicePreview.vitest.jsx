@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/useInvoicePreview.js
 /**
  * Hook-level tests for useInvoicePreview.
  *
@@ -38,6 +39,7 @@ const getPendingSifTargetsMock = vi.fn(() => ({ sendSii: false, sendTbai: false 
 vi.mock('../sifSending.js', () => ({
   getPendingSifTargets: (...args) => getPendingSifTargetsMock(...args),
   getSifBodyKey: () => null,
+  getSifButtonLabelKey: () => 'sendToSifLabelSii',
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({

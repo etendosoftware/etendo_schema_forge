@@ -61,7 +61,7 @@ jobs:
               echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "datadog_application_id=${{ vars.VITE_DATADOG_APPLICATION_ID_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "datadog_client_token=${{ vars.VITE_DATADOG_CLIENT_TOKEN_PRODUCTION }}" >> $GITHUB_OUTPUT
-              echo "datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo 'datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_PRODUCTION }}' >> $GITHUB_OUTPUT
               ;;
             staging)
               echo "s3_bucket=${{ vars.S3_BUCKET_STAGING }}" >> $GITHUB_OUTPUT
@@ -73,7 +73,7 @@ jobs:
               echo "configcat_sdk_key=" >> $GITHUB_OUTPUT
               echo "datadog_application_id=${{ vars.VITE_DATADOG_APPLICATION_ID_STAGING }}" >> $GITHUB_OUTPUT
               echo "datadog_client_token=${{ vars.VITE_DATADOG_CLIENT_TOKEN_STAGING }}" >> $GITHUB_OUTPUT
-              echo "datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_STAGING }}" >> $GITHUB_OUTPUT
+              echo 'datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_STAGING }}' >> $GITHUB_OUTPUT
               ;;
             *)
               echo "s3_bucket=${{ vars.S3_BUCKET_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
@@ -85,7 +85,7 @@ jobs:
               echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "datadog_application_id=${{ vars.VITE_DATADOG_APPLICATION_ID_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "datadog_client_token=${{ vars.VITE_DATADOG_CLIENT_TOKEN_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
-              echo "datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
+              echo 'datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_EXPERIMENTAL }}' >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -136,6 +136,8 @@ jobs:
           # The build knows its target, so the bundle is told its environment
           # instead of guessing it from location.hostname.
           VITE_APP_ENV: ${{ steps.target.outputs.env_label }}
+          # RUM is opt-in since ETP-4578: the IDs alone no longer switch it on.
+          VITE_RUM_ENABLED: "true"
           VITE_RUM_APP_MONITOR_ID: ${{ steps.target.outputs.rum_app_monitor_id }}
           VITE_RUM_IDENTITY_POOL_ID: ${{ steps.target.outputs.rum_identity_pool_id }}
           # Datadog RUM — client credentials are public by design; API key remains secret for source maps.
@@ -155,7 +157,12 @@ jobs:
           # Public API documentation endpoint used by the API keys screen. Only
           # production runs the public API gateway, so every target links there.
           VITE_PUBLIC_API_DOCS_URL: ${{ vars.PUBLIC_ORIGIN_PRODUCTION }}/api
-          # ConfigCat control plane (ETP-4691) — key as variable, not secret: Vite
+          # Flag control plane (ETP-5751): Datadog Feature Flags, reusing the RUM
+          # application ID/client token above and VITE_APP_ENV as the Datadog
+          # flag environment. Setting the VITE_FLAGS_PROVIDER Actions variable to
+          # `configcat` and redeploying is the rollback lever until the cutover.
+          VITE_FLAGS_PROVIDER: ${{ vars.VITE_FLAGS_PROVIDER || 'datadog' }}
+          # ConfigCat fallback control plane (ETP-4691) — key as variable, not secret: Vite
           # bakes it into the JS bundle, so it is public by construction and
           # masking it would only hide it from the build log. Production and
           # experimental use separate per-environment Actions variables; staging

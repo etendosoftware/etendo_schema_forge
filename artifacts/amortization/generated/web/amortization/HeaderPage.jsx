@@ -25,7 +25,7 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:header
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:header
 
@@ -46,7 +46,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['name', 'accountingDate', 'startingDate', 'currency'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -281,7 +281,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
         ]}
         draftMode={draftModeWithConfirm}
-        requiredHeaderFields={requiredHeaderFields}
         titleField="name"
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}

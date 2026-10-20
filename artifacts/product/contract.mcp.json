@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.15.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-23T13:43:00.032Z",
-  "contractChecksum": "8d494516a7bfee01",
+  "updatedAt": "2026-10-16T15:28:49.201Z",
+  "contractChecksum": "4c5050b1da02c549",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -610,10 +610,12 @@
         "M_Product_Category_ID": "Categoría",
         "ProductType": "Tipo",
         "Value": "Código",
+        "IsStocked": "Almacenable",
         "DateFrom": "Fecha de inicio",
         "DateTo": "Fecha de expiración"
       },
       "es_AR": {
+        "IsStocked": "Almacenable",
         "DateFrom": "Fecha de inicio",
         "DateTo": "Fecha de expiración"
       }
@@ -1069,5 +1071,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "dd6cea4dc47ce125"
+  "checksum": "a3da0c448e014a23"
 }

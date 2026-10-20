@@ -9,6 +9,7 @@ import AccountingTable from '@generated/warehouse/generated/web/warehouse/Accoun
 import AccountingForm from '@generated/warehouse/generated/web/warehouse/AccountingForm';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
 async function createDefaultStorageBin(warehouse, { token, apiBaseUrl }, apiFetch) {
   const searchKey = `${warehouse.searchKey}-0-0-0`;
   const res = await apiFetch('/storageBin', {
@@ -46,7 +47,7 @@ export default function WarehouseWindow(props) {
   const secondaryTabs = [
     { key: 'products', label: ui('warehouseProductsTab'), Panel: WarehouseProductsTab },
     { key: 'productTransactions', label: ui('warehouseTransactionsTab'), Panel: WarehouseTransactionsTable },
-    { key: 'accounting', label: ui('warehouseAccountingTab'), Table: AccountingTable, Form: AccountingForm },
+    { key: 'accounting', label: ui('warehouseAccountingTab'), Table: AccountingTable, Form: AccountingForm, visibleWhenCapability: ACCOUNTING_CAPABILITY },
   ];
 
   const handleAfterCreate = async (warehouse, context) => {
@@ -82,8 +83,6 @@ export default function WarehouseWindow(props) {
       Table={WarehouseCustomTable}
       hidePrint
       hideLink
-      listbarPaddingX="px-2"
-      listbarPaddingY="py-2"
       tablePaddingX="px-2"
       tablePaddingBottom="pb-2"
       toolbarPaddingX="px-2"

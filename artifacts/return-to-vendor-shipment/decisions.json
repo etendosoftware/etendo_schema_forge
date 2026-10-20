@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
+    "agentPrompt": "#REF#agent-prompts/return-to-vendor-shipment/spec.md",
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -28,12 +29,14 @@
       "es_ES": {
         "sourceReceiptDocNo": "Albarán origen",
         "MovementQty": "Cant. a devolver",
-        "QuantityOrder": "Cant. pedida"
+        "QuantityOrder": "Cant. pedida",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "sourceReceiptDocNo": "Source Receipt",
         "MovementQty": "Return Qty",
-        "QuantityOrder": "Ordered Qty"
+        "QuantityOrder": "Ordered Qty",
+        "C_UOM_ID": "Unit"
       }
     },
     "processOverrides": {
@@ -212,6 +215,10 @@
         "freightCurrency": {
           "visibility": "discarded"
         },
+        "etgoCurrency": {
+          "visibility": "system",
+          "defaultExpr": "@C_Currency_ID@"
+        },
         "freightCostRule": {
           "visibility": "discarded"
         },
@@ -348,7 +355,9 @@
           "visibility": "system"
         },
         "documentType": {
-          "visibility": "system"
+          "visibility": "system",
+          "defaultExpr": "@SQL=SELECT C_DocType_ID FROM C_DocType WHERE C_DocType.DocBaseType='MMR' AND C_DocType.IsSOTrx='N' AND C_DocType.IsReturn='Y' AND C_DocType.AD_Client_ID=@#AD_Client_ID@ AND C_DocType.IsActive='Y' AND AD_ISORGINCLUDED(@AD_Org_ID@, C_DocType.AD_Org_ID, @#AD_Client_ID@) <> -1 ORDER BY C_DocType.IsDefault DESC, AD_ISORGINCLUDED(@AD_Org_ID@, C_DocType.AD_Org_ID, @#AD_Client_ID@) ASC",
+          "reason": "ETP-5682 \u2014 client-scoped return document type for the /defaults preview, mirroring NeoHandlerUtils.findReturnDocType (the create handler injects the same choice). Replaces an unscoped ORDER BY ... LIMIT 1 default that resolved to another tenant's doctype; a LIMIT also defeats the NEO tenant guard."
         },
         "movementType": {
           "visibility": "system"
@@ -398,22 +407,31 @@
           "inputMode": "number",
           "section": "principal",
           "grow": true,
-          "labels": { "es_ES": "Cant. a devolver", "en_US": "Return Qty" }
+          "labels": {
+            "es_ES": "Cant. a devolver",
+            "en_US": "Return Qty"
+          }
         },
         "uOM": {
           "visibility": "readOnly",
-          "grid": false,
+          "grid": true,
           "inputMode": "search",
-          "section": "other"
+          "section": "other",
+          "gridOrder": 3,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "orderQuantity": {
           "visibility": "readOnly",
           "gridReadOnly": true,
           "grid": true,
-          "gridOrder": 3,
+          "gridOrder": 4,
           "section": "principal",
           "grow": true,
-          "labels": { "es_ES": "Cant. recibida orig.", "en_US": "Original Received Qty" }
+          "labels": {
+            "es_ES": "Cant. recibida orig.",
+            "en_US": "Original Received Qty"
+          }
         },
         "description": {
           "grid": false,

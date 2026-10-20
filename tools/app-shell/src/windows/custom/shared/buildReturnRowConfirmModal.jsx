@@ -1,5 +1,6 @@
 import { useUI } from '@/i18n';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
+import { documentPeriodDate } from '@/lib/periodNotAvailable.js';
 
 /**
  * ETP-5378 — shared shape for the row-hover Confirmar popup on both return windows, fed
@@ -57,6 +58,7 @@ export function buildReturnRowConfirmModal(config) {
         defaultCreateInvoice={!isFullyInvoiced}
         rectifiableInvoicesUrl={rectifiableInvoicesUrl}
         token={token}
+        periodDate={documentPeriodDate(data)}
         title={ui(config.titleKey)}
         docInfo={{ bpName: data?.['businessPartner$_identifier'], documentNo: data?.documentNo }}
         infoRowPre={ui(config.infoRowPreKey)}

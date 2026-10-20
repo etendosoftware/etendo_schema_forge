@@ -10,7 +10,11 @@ import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useInvoicePreview } from './useInvoicePreview.js';
 import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
-import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
+// ETP-5700: the fiscal-monitor `StatusPill` is styled by `.fm-pill`, which only
+// fiscal-monitor.css defines — and only FiscalMonitorPage imports it — so in this
+// window it rendered as plain text. `FiscalStatusBadge` carries its own styling and
+// is what the invoice grid columns already use, so detail and grid now match.
+import { FiscalStatusBadge } from './FiscalStatusBadge.jsx';
 import { getInvoiceFiscalTargets } from './fiscalTargets.js';
 import SifSendingModal from './SifSendingModal.jsx';
 import SummaryCard, { InfoRow } from './preview-cards/SummaryCard.jsx';
@@ -19,6 +23,7 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
+import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
 
 // ETP-4841: a credit instrument is identified by the SIGN of its total, not by its
 // document type. This used to compare `arInvoiceSubtype` against the pre-ETP-4737
@@ -38,7 +43,7 @@ function isCreditNote(invoice) {
  *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
-function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
+function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey = 'sendToSifLabelSii', onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
   const ui = useUI();
   return (
     <>
@@ -60,7 +65,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
           onClick={onOpenSif}
           data-testid="Button__cf88e6">
           <FileText className="text-muted-foreground" data-testid="FileText__cf88e6" />
-          {ui('sendToSif')}
+          {ui(sifLabelKey)}
         </Button>
       )}
       {/* ETP-5205 — hidden (not just disabled) under the Solo-Lectura tier. */}
@@ -129,7 +134,12 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
   // Same gating as OrderPreview: show the row whenever the backend sent a value.
   // Sales invoices read "Delivered", purchase invoices "Received".
   const isPurchaseInvoice = specName === 'purchase-invoice';
-  const deliveryPercent = invoice?.eTGODeliveryStatus != null && invoice.eTGODeliveryStatus !== ''
+  // ETP-5706: a sales rectificative invoice has no delivery to track. The backend
+  // still computes a percentage for it (a return receipt counts as a "delivery"
+  // in ETGO_GET_DELIVERY_STATUS), so the row is suppressed here. Scoped to
+  // sales-invoice only: purchase-invoice keeps its "Received" row unchanged.
+  const hideDelivery = specName === 'sales-invoice' && getArSubtype(invoice) === 'RECTIFICATIVA';
+  const deliveryPercent = !hideDelivery && invoice?.eTGODeliveryStatus != null && invoice.eTGODeliveryStatus !== ''
     ? Number(invoice.eTGODeliveryStatus)
     : undefined;
 
@@ -157,9 +167,9 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
               // ETP-5229: a null/undefined status (invoice never relevant to SII) must
-              // render as a dash via StatusPill's own fallback, never a fabricated 'PE'
+              // render as a dash via FiscalStatusBadge's own fallback, never a fabricated 'PE'
               // ("Pendiente") — do not reintroduce a `?? 'PE'` default here.
-              : <StatusPill estado={siiStatus} data-testid="StatusPill__cf88e6" />}
+              : <FiscalStatusBadge status={siiStatus} data-testid="FiscalStatusBadge__cf88e6" />}
           </InfoRow>
         )}
         {fiscalTargets.showTbai && (
@@ -175,7 +185,7 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
               // ETP-5229: `useFiscalStatus` already resolves the correct 'Pendiente'
               // fallback (via `isSent(tbaiIssent)`) when TBAI is in scope; a bare `null`
               // here means "not relevant at all" and must stay a dash.
-              : <StatusPill estado={tbaiStatus} data-testid="StatusPill__cf88e6" />}
+              : <FiscalStatusBadge status={tbaiStatus} data-testid="FiscalStatusBadge__cf88e6" />}
           </InfoRow>
         )}
         {fiscalTargets.showVerifactu && (
@@ -185,7 +195,7 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
               // ETP-5229: same rule as SII above — no fabricated 'PE' default.
-              : <StatusPill estado={vfStatus} data-testid="StatusPill__cf88e6" />}
+              : <FiscalStatusBadge status={vfStatus} data-testid="FiscalStatusBadge__cf88e6" />}
           </InfoRow>
         )}
       </SummaryCard>
@@ -414,6 +424,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? p.openEmailModal : undefined}
       canSendToSif={canSendToSif}
+      sifLabelKey={p.sifLabelKey}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={canAddPayment}
       addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}

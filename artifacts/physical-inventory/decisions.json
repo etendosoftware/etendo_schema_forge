@@ -42,10 +42,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "Processed": "Status"
+        "Processed": "Status",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "Processed": "Estado"
+        "Processed": "Estado",
+        "C_UOM_ID": "Unidad"
       }
     },
     "menuActions": [
@@ -73,7 +75,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ]
   },
@@ -145,6 +147,7 @@
           "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "type": "boolean",
           "form": false,
@@ -182,8 +185,9 @@
           "visibility": "readOnly",
           "label": "System Count",
           "grid": true,
-          "gridOrder": 3,
+          "gridOrder": 2,
           "grow": true,
+          "gridReadOnly": true,
           "columnWidth": 192,
           "readOnlyLogic": null
         },
@@ -191,7 +195,7 @@
           "visibility": "editable",
           "label": "User Count",
           "grid": true,
-          "gridOrder": 4,
+          "gridOrder": 3,
           "grow": true,
           "columnWidth": 192,
           "readOnlyLogic": null
@@ -203,6 +207,7 @@
           "grid": true,
           "gridOrder": 5,
           "grow": true,
+          "gridReadOnly": true,
           "columnWidth": 192,
           "readOnlyLogic": null
         },
@@ -214,11 +219,11 @@
         "uOM": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 2,
-          "grow": true,
+          "gridOrder": 4,
           "gridReadOnly": true,
           "inputMode": "selector",
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "display": "tag"
         },
         "attributeSetValue": {
           "visibility": "discarded"

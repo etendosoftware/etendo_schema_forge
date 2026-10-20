@@ -1463,3 +1463,14 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
     });
   });
 });
+
+// ETP-5684 — the custom invoice list re-declares `posted`, so it must carry the same
+// capability gate as the decisions field; DataTable drops it for a role without the flag.
+describe('PurchaseInvoiceHeaderTable — posted column gated on showAccountingFields (ETP-5684)', () => {
+  it('declares visibleWhenCapability on the posted column', () => {
+    capturedColumnsHolder.value = null;
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const posted = capturedColumnsHolder.value.find((c) => c.key === 'posted');
+    expect(posted.visibleWhenCapability).toBe('showAccountingFields');
+  });
+});

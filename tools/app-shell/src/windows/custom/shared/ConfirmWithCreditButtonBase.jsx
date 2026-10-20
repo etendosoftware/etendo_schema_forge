@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
+import { documentPeriodDate } from '@/lib/periodNotAvailable.js';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
 
@@ -25,7 +26,7 @@ import { useConfirmWithCredit } from './useConfirmWithCredit';
  */
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
-  entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+  entitySegment, invoiceRoute, invoiceType,
   specName, entityName,
   confirmEventName,
   saveGate, onRefresh, isDocumentReadOnly,
@@ -40,13 +41,13 @@ export default function ConfirmWithCreditButtonBase({
   const navigate = useNavigate();
   const resultNavigatedRef = useRef(false);
   const {
-    ui, status, currency, hasReturnInvoice,
+    ui, status, hasReturnInvoice,
     headers, base, showModal, setShowModal,
     creatingInvoice, result, setResult,
     handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   } = useConfirmWithCredit({
     data, recordId, token, apiBaseUrl,
-    entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+    entitySegment, invoiceRoute, invoiceType,
   });
 
   // ETP-5408 — the generic draftMode Confirm button dispatches this event (see the doc
@@ -98,6 +99,7 @@ export default function ConfirmWithCreditButtonBase({
           defaultCreateInvoice={!isFullyInvoiced}
           rectifiableInvoicesUrl={rectifiableInvoicesUrl}
           token={token}
+          periodDate={documentPeriodDate(data)}
           title={confirmModalTitle}
           docInfo={{ bpName: data?.['businessPartner$_identifier'], documentNo: data?.documentNo }}
           infoRowPre={infoRowPre}
@@ -133,11 +135,8 @@ export default function ConfirmWithCreditButtonBase({
       )}
       {result && createPortal(
         <ConfirmResultModal
-          title={result.title}
           docs={result.docs}
-          currency={currency}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
-          primary={result.docs.length > 0 ? ui('soViewInvoice') : undefined}
           onClose={() => {
             setResult(null);
             setTimeout(() => {

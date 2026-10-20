@@ -25,7 +25,7 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:gLJournal
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:gLJournal
 
@@ -46,13 +46,13 @@ const draftMode = {
 // @sf-generated-end draftMode:gLJournal
 
 // @sf-generated-start requiredHeaderFields:gLJournal
-const requiredHeaderFields = ['description', 'accountingDate', 'period', 'currency', 'opening', 'multigeneralLedger'];
+const requiredHeaderFields = ['description', 'accountingDate', 'period', 'opening', 'multigeneralLedger'];
 // @sf-generated-end requiredHeaderFields:gLJournal
 
 // @sf-generated-start addLineFields:gLJournalLine
 const addLineFields = {
   entry: [
-    { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
     { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'number', required: true, label: 'Debit', labels: {"en_US":"Debit","es_ES":"Débito"}, clearsField: 'foreignCurrencyCredit' },
     { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'number', required: true, label: 'Credit', labels: {"en_US":"Credit","es_ES":"Crédito"}, clearsField: 'foreignCurrencyDebit' },
     { key: 'openItems', column: 'Open_Items', type: 'checkbox', required: true, label: 'Open Items' },

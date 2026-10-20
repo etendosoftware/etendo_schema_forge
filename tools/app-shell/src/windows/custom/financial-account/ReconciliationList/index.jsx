@@ -17,6 +17,8 @@ import {
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 
 /**
  * "Reconciliaciones" tab (ETP-4795) — the read-only history of the account's reconciliation
@@ -47,7 +49,10 @@ export function ReconciliationListTab({
   const [search, setSearch] = useState('');
   const [advancedFilter, setAdvancedFilter] = useState(null);
 
-  const columns = useMemo(() => buildReconciliationFilterColumns(ui), [ui]);
+  // ETP-5684 — "Contabilizado" (filter field and sort entry) only for a role with
+  // "Show Accounting Fields".
+  const capabilities = useCapabilitiesSafe();
+  const columns = useMemo(() => buildReconciliationFilterColumns(ui, capabilities), [ui, capabilities]);
 
   const filtered = useMemo(
     () => applyConditions(
@@ -66,7 +71,7 @@ export function ReconciliationListTab({
     ui,
     postedLabel: (posted) => reconciliationPostedLabel(posted, ui),
   }), [ui]);
-  const sortColumns = useMemo(() => buildReconciliationSortColumns(ui), [ui]);
+  const sortColumns = useMemo(() => buildReconciliationSortColumns(ui, capabilities), [ui, capabilities]);
   const {
     sorted, sortKey, sortDirection, toggleSort, selectSort, clearSort, isDefaultSort,
   } = useClientSort(filtered, { accessors: sortAccessors });
@@ -155,7 +160,7 @@ export const RECONCILIATION_FILTER_COLUMNS = {
   posted: { type: 'enum' },
 };
 
-export function buildReconciliationFilterColumns(ui) {
+export function buildReconciliationFilterColumns(ui, capabilities) {
   return [
     { key: 'documentNo', label: ui('financeAccountReconciliationsColDocumentNo'), type: 'string' },
     { key: 'transactionDate', label: ui('financeAccountReconciliationsColCloseDate'), type: 'date' },
@@ -180,6 +185,7 @@ export function buildReconciliationFilterColumns(ui) {
     {
       key: 'posted',
       label: ui('financeAccountReconciliationsColPosted'),
+      visibleWhenCapability: ACCOUNTING_CAPABILITY,
       type: 'enum',
       enumLabels: {
         Y: ui('financeAccountReconciliationsPosted_Y'),
@@ -191,7 +197,7 @@ export function buildReconciliationFilterColumns(ui) {
         l: ui('financeAccountReconciliationsPosted_l'),
       },
     },
-  ];
+  ].filter((c) => isCapabilityVisible(capabilities, c.visibleWhenCapability));
 }
 
 /**

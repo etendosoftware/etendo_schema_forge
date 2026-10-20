@@ -6,6 +6,24 @@ CLI tools used by the team to streamline development workflows.
 
 The integration E2E suite resolves its backend as `E2E_BACKEND_URL`, then the `PORT` in `<env root>/build/local-env/env` (a local-env worktree, keeping the host and context path of `context.url`), then `context.url` from `config/Openbravo.properties`, then `http://localhost:8080/etendo`. `E2E_PASSWORD` keeps its `12345` default; the specs use onboarding credentials or `E2E_USER`/`E2E_PASSWORD`, not the `admin` login.
 
+## Pre-push scope and CPU use
+
+Since ETP-5695 the pre-push runs less than CI, and CI runs the rest:
+
+- **Unit tests:** only the ones the branch can affect, selected by `scripts/select-tests.js` against the base branch (`make test-changed-coverage`). `make test-changed` runs the same selection while you work; `PLAN=1 make test-changed` only prints it. The PR's `Tests` job runs the whole suite.
+- **Coverage:** the overall comparison against the base branch is left to the PR's `Sonar Build` check (`docs/coverage-gate.md`).
+- **Target branch:** the pre-push measures the push against the branch it will merge into (`.githooks/lib/target-branch.sh`): `PRE_PUSH_TARGET` when set, else the base of the branch's open PR (via `gh`), else `main` for `main` and `hotfix/*` and `develop` for the rest. The conflict check, the relevance diff, Sonar's base and the unit-test selection all use it.
+- **Playwright integration specs:** left to CI's full pipeline. `PRE_PUSH_INTEGRATION=1` runs them in the pre-push too, against the backend resolved as described above.
+
+`PRE_PUSH_WORKERS` (default: half the logical CPUs) sets the vitest worker processes and caps the mocked Playwright workers at that number, and never above 4. `TEST_WORKERS` (vitest) and `E2E_WORKERS` (Playwright) override each one. Each vitest worker uses about 1.5 cores. Measured on a 10-core machine:
+
+| Step | Workers | Time | Average CPU |
+|---|---|---|---|
+| vitest, 308 files with coverage | 9 (vitest default) / 5 / 3 | 169 s / 177 s / 251 s | 81% / 74% / 57% |
+| Playwright mocked, 563 tests | 4 / 2 | 298 s / 447 s | 60% / 42% |
+
+To keep more of the machine free during a push, lower `PRE_PUSH_WORKERS`; each halving costs about half again in time.
+
 ## Optional Kubernetes Pre-push Runner
 
 The normal pre-push hook runs locally. Set `PREPUSH_EXECUTION=cloud` in the
@@ -183,8 +201,9 @@ gh pr list
 # View PR checks
 gh pr checks 123
 
-# Create an issue
-gh issue create --title "Bug: description" --label bug
+# Create an issue — Etendo-product issues go to etendo-ai, then onto the Etendo Roadmap
+# (repo routing, Product field and IDs: .claude/skills/etendo-roadmap/SKILL.md)
+gh issue create -R etendosoftware/etendo-ai --title "Bug: description" --label bug
 
 # Query the GitHub API
 gh api repos/etendosoftware/etendo_schema_forge/pulls/123/comments

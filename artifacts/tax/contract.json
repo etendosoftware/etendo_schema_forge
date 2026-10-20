@@ -1,8 +1,8 @@
 {
-  "version": "0.20.1",
+  "version": "0.21.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-09-22T16:03:27.614Z",
-  "checksum": "5af61c5f3cdb57cc",
+  "updatedAt": "2026-10-16T16:21:17.709Z",
+  "checksum": "237141414712da24",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -868,6 +868,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 1,
             "grow": true,
             "validation": {
@@ -889,6 +891,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 2,
             "grow": true,
             "validation": {
@@ -1638,8 +1642,8 @@
     "processEndpoints": []
   },
   "apiPrediction": {
-    "specName": "tax-rate",
-    "baseUrl": "/sws/neo/tax-rate",
+    "specName": "tax",
+    "baseUrl": "/sws/neo/tax",
     "crud": {
       "tax": {
         "get": true,
@@ -1648,8 +1652,8 @@
         "put": true,
         "patch": true,
         "delete": false,
-        "listUrl": "/sws/neo/tax-rate/tax",
-        "detailUrl": "/sws/neo/tax-rate/tax/{id}",
+        "listUrl": "/sws/neo/tax/tax",
+        "detailUrl": "/sws/neo/tax/tax/{id}",
         "supportedFilters": [
           "name",
           "applicableTo"
@@ -1662,8 +1666,8 @@
         "put": true,
         "patch": true,
         "delete": false,
-        "listUrl": "/sws/neo/tax-rate/accounting",
-        "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+        "listUrl": "/sws/neo/tax/accounting",
+        "detailUrl": "/sws/neo/tax/accounting/{id}",
         "supportedFilters": []
       }
     },
@@ -1674,7 +1678,7 @@
         "column": "C_TaxCategory_ID",
         "reference": "TaxCategory",
         "inputMode": "selector",
-        "url": "/sws/neo/tax-rate/tax/selectors/taxCategory"
+        "url": "/sws/neo/tax/tax/selectors/taxCategory"
       },
       {
         "entity": "accounting",
@@ -1682,7 +1686,7 @@
         "column": "T_Due_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+        "url": "/sws/neo/tax/accounting/selectors/taxDue"
       },
       {
         "entity": "accounting",
@@ -1690,7 +1694,7 @@
         "column": "T_Credit_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+        "url": "/sws/neo/tax/accounting/selectors/taxCredit"
       }
     ],
     "actions": [],

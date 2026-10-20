@@ -51,7 +51,7 @@ const draftMode = {
 // @sf-generated-end draftMode:returnToVendorShipment
 
 // @sf-generated-start requiredHeaderFields:returnToVendorShipment
-const requiredHeaderFields = ['documentNo', 'businessPartner', 'partnerAddress', 'movementDate', 'warehouse', 'etblkpBulkposting'];
+const requiredHeaderFields = ['businessPartner', 'partnerAddress', 'movementDate', 'warehouse'];
 // @sf-generated-end requiredHeaderFields:returnToVendorShipment
 
 // @sf-generated-start addLineFields:returnToVendorShipmentLine
@@ -270,12 +270,14 @@ export const api = {
     "es_ES": {
       "sourceReceiptDocNo": "Albarán origen",
       "MovementQty": "Cant. a devolver",
-      "QuantityOrder": "Cant. pedida"
+      "QuantityOrder": "Cant. pedida",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "sourceReceiptDocNo": "Source Receipt",
       "MovementQty": "Return Qty",
-      "QuantityOrder": "Ordered Qty"
+      "QuantityOrder": "Ordered Qty",
+      "C_UOM_ID": "Unit"
     }
   }
 };

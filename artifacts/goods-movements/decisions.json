@@ -55,7 +55,6 @@
       "navigateTo": "/physical-inventory/new"
     },
     "whiteFormBackground": true,
-    "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2",
     "hideLink": true,
     "hidePrint": true,
@@ -67,13 +66,15 @@
         "Processed": "Status",
         "M_Locator_ID": "Source Warehouse",
         "M_LocatorTo_ID": "Destination Warehouse",
-        "MovementQty": "Quantity"
+        "MovementQty": "Quantity",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
         "Processed": "Estado",
         "M_Locator_ID": "Almacén origen",
         "M_LocatorTo_ID": "Almacén destino",
-        "MovementQty": "Cantidad"
+        "MovementQty": "Cantidad",
+        "C_UOM_ID": "Unidad"
       }
     },
     "customComponents": {
@@ -87,7 +88,7 @@
         "hintKeys": {
           "D": "goodsMovementsPostedDisabledHint"
         },
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
       }
     ]
   },
@@ -142,6 +143,7 @@
           "visibility": "system"
         },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "form": false,
           "grid": true,
@@ -198,7 +200,6 @@
           "searchable": true,
           "lookup": true,
           "lookupDrawer": "product-stock",
-          "lookupTitle": "Product",
           "onSelectMappings": [
             {
               "from": "_aux._LOC",
@@ -217,27 +218,29 @@
           "grid": true,
           "readOnlyLogic": null,
           "reason": "Source storage bin — key field for movement lines",
-          "gridOrder": 3
+          "gridOrder": 2
         },
         "newStorageBin": {
           "grid": true,
           "readOnlyLogic": null,
           "excludeValueOf": "storageBin",
           "reason": "Destination storage bin — key field for movement lines; cannot equal the source bin",
-          "gridOrder": 4
+          "gridOrder": 3
         },
         "movementQuantity": {
           "grid": true,
           "readOnlyLogic": null,
           "defaultValue": "1",
           "columnWidth": 160,
-          "gridOrder": 5
+          "gridOrder": 4
         },
         "uOM": {
           "visibility": "readOnly",
           "grid": true,
           "readOnlyLogic": null,
-          "gridOrder": 2
+          "gridOrder": 5,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "description": {
           "readOnlyLogic": null,

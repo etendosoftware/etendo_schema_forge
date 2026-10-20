@@ -34,7 +34,7 @@ Agent definitions live in `.claude/agents/` — each agent wrote their own file 
 | tenant-fixer.md | Remedy | TENANT REMEDIATION — closes Etendo GO provisioning gaps on both fronts (preventive onboarding fixes for new tenants + corrective data-fixes for existing ones) | Diagnostic |
 | tester-functional.md | Tester (functional) | TESTS — writes and extends Node / Vitest / Playwright tests in `etendo_schema_forge`, reuse-first | Methodical |
 | tester-go.md | Tester (go) | TESTS — writes and extends JUnit tests in `com.etendoerp.go` (Mockito by default), reuse-first | Methodical |
-| merge-block-helper.md | Blockie | MERGE BLOCK PRE-FLIGHT — given a dev task (ETP-XXXX), checks its `feature/ETP-XXXX` branch + PR across the 3 repos, verifies CI/review/mergeability/target/code-owner gate, reports a traffic-light readiness table. Merges (plain local `git merge`) ONLY the branches the human explicitly authorizes, and always **into the current merge-block branch, NEVER `develop`** (the block hits `develop` once later → one Jenkins run); never touches the PRs, never pushes | Diagnostic |
+| merge-block-helper.md | Blockie | DAILY CUT (ETP-5695 flow) — (A) given a dev task (ETP-XXXX), pre-flights its PRs into `develop` across the 3 repos (CI incl. mini pipeline, review, code-owner gate, conflicts, target) and reports a traffic light; (B) prepares the day's cut: `mergeblock/ETP-YYYY` cut from `develop` + `origin/main` merged, on explicit OK; (C) when the cut's pipeline fails, walks the ladder (re-run, cut earlier, fix tests only, revert in reverse merge order). Never merges into `develop` or `main`, never pushes, never touches the PRs | Diagnostic |
 
 When spawning agents, pass the agent's frontmatter `name` as `subagent_type` (`workflow`, `schema-forge-developer`, `window-agent`, `alex`, `qa`, `documentarian`, `tenant-fixer`, `merge-block-helper`, `tester-functional`, `tester-go`); the definition file supplies the identity and rules, so the prompt only carries the task.
 Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `SendMessage`.
@@ -54,8 +54,8 @@ Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `Sen
 | "Add a new custom component slot for sidebars" | **Schema Forge Developer** | New extension point in generator + docs |
 | "Build a generic component for document preview" | **Schema Forge Developer** | New shared UI component in `tools/app-shell/` |
 | "Create the feature branch and PR" | **Clerk** | Workflow operations |
-| "Check ETP-4321 for the merge block" / "is it ready to merge?" | **Blockie** | Pre-flight PR verification across the 3 repos for a merge block |
-| "Merge the ones I told you into my block branch" | **Blockie** | Human-authorized local `git merge` into the current merge-block branch (never `develop` directly) |
+| "Check ETP-4321" / "is it ready to merge into develop?" | **Blockie** | Pre-flight PR verification across the 3 repos |
+| "Prepare today's cut" / "the cut failed" | **Blockie** | Cut `mergeblock/ETP-YYYY` from `develop` (on explicit OK), or walk the failure ladder |
 | "Remediate accounting/period/org-tree gaps for an existing client" | **Remedy** | Corrective data-fix (`cli/src/data-fixes/`) scoped by `ad_client_id` |
 | "Fix the onboarding so new clients get a chart of accounts" | **Remedy** | Preventive onboarding-gap fix (root cause) |
 | "Write a tenant data-fix / migration SQL" | **Remedy** | Owns the data-fixes framework + SQL-first criterion |
@@ -130,7 +130,8 @@ All commits MUST follow Etendo Git Police conventions as defined by the `/etendo
 - Branch naming: `feature/ETP-1234`, `hotfix/#N-ETP-1234`, `epic/ETP-1234`
 
 ## Resolving GitHub Issues
-Create a Jira task inside the current epic, then delegate branch + PR creation to Clerk. PR must reference the GitHub issue (e.g., `Fixes #141`).
+Create a Jira task inside the current epic, then delegate branch + PR creation to Clerk. PR must reference the GitHub issue (e.g., `Fixes etendosoftware/etendo-ai#141`; plain `#141` only for a same-repo issue).
+Only public ideas/bugs/features get a GitHub issue (internal work stays Jira-only). Etendo-product issues (schema_forge, schema_forge_core, com.etendoerp.go) are filed in `etendosoftware/etendo-ai`, Classic ones in their own repo; every one lands on the Etendo Roadmap with Product set. An accepted issue gets one or more cross-linked Jira tasks; a Jira task needs no issue. Procedure and IDs: the `etendo-roadmap` skill.
 
 </pipeline_rules>
 
@@ -166,6 +167,7 @@ Create a Jira task inside the current epic, then delegate branch + PR creation t
 | Assign Jira issue | ✅ |
 | Create / merge PR | ✅ |
 | Check epic status | ✅ |
+| Create / triage GitHub issue (Etendo → `etendo-ai`) + add to Etendo Roadmap, per `etendo-roadmap` skill | ✅ |
 
 Clerk agent file: `.claude/agents/workflow.md`
 Spawn with: `subagent_type="workflow"` and the operation to perform.
@@ -378,8 +380,8 @@ live in `.claude/hooks/`.
 | `check-detailview-growth.mjs` | `PreToolUse` / file edits | **Blocks** an edit that makes `DetailView.jsx` longer than its merge-base (override the base with `DETAILVIEW_BASE_REF`) |
 
 Why: `--no-verify` skips `.githooks/pre-push`, the only local gate that catches
-failing tests, coverage drops (`docs/coverage-gate.md`) and Sonar regressions
-before CI. Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
+failing tests and Sonar regressions before CI (coverage drops are caught by the
+PR's `Sonar Build` check, `docs/coverage-gate.md`). Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
 cycle. When the gate blocks a push, **fixing what it reports is the task** — do
 not route around it. If the gate itself is broken, say so and stop.
 

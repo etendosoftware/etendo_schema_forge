@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
 import { parseCalendarDate } from '../../../lib/dateOnly.js';
+import { parseLocaleNumber } from '../../../lib/parseLocaleNumber.js';
 import { toast } from 'sonner';
 // ETP-5431 pt.2 — box 111's autocompletion formula lives next to its field definition in
 // fm303Layouts.js (like every other `derivedValue`); `recomputeDerivedBoxes` below is its single
@@ -273,6 +274,15 @@ export function exceedsTypedDecimalDigits(rawStr) {
   return trimmed.length - dotIndex - 1 > 2;
 }
 
+// ETP-5716 (review W3) — true for an inline-cell draft that is not empty yet holds no number (a lone
+// "-", a lone decimal separator: what MaskedAmountInput reports while the user is mid-typing).
+// parseLocaleNumber reads it as null, and committing null deletes the stored box value, so the 303
+// and 390 cells drop such an edit instead. An empty draft is a deliberate clear and still commits.
+export function isUnparseableDraft(raw) {
+  if (raw == null || String(raw).trim() === '') return false;
+  return parseLocaleNumber(raw).value == null;
+}
+
 // ETP-5456 (fiscal-advisory correction) — the AEAT record-length ceiling (Lon=17: 15 integer
 // digits + 2 decimals for `Num`, 14+2 for a negative `N`) is a PRESENTATION-FORMAT constraint on
 // how the file is written, not a fiscal rule that authorizes changing the declared amount. An
@@ -529,6 +539,19 @@ function applyComplementariaParams(params, identChecks) {
 
 export function applyIdentParams(params, identChecks) {
   applyMappedIdentParams(params, identChecks);
+  // ETP-5725 (reopened QA review, Blocker B1) — a DEDICATED, unambiguous flag for the backend's
+  // corrective/ordinaria consistency guard (FiscalDeclCrudHandler#checkCorrectiveConsistency,
+  // read via Fiscal303BoxesHandler#dispatch's GENERATE branch AND, as of this fix,
+  // Fiscal303SubmissionSupport#handleSubmit — the real AEAT telematic submit endpoint).
+  // Deliberately set here, in the SHARED param builder every 303 request that can file/generate
+  // goes through (`generate303File` AND `AeatSubmitFlow.jsx`'s own submit request), not in one
+  // caller — the original version of this fix set it only inside `generate303File`, which is
+  // exactly how `AeatSubmitFlow.jsx`'s submit request missed it and left the real filing
+  // endpoint unguarded (review B1). `applyRectificativaParams` below also sets
+  // `IsComplementary=Y`, but that param is shared with the UNRELATED legacy "complementaria"
+  // checkbox (`applyComplementariaParams`), so it cannot be trusted server-side to mean "this is
+  // a rectificativa" — this one always means exactly that, only ever "Y" or absent.
+  if (identChecks?.rectificativa) params.set('Rectificativa', 'Y');
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
   // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
@@ -677,7 +700,18 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
       method: 'PUT',
       body: JSON.stringify(body),
     });
-    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    if (!res.ok) {
+      // ETP-5725 (reopened QA fix, UX follow-up) — on a reactivation blocked by a sibling
+      // declaration (FiscalDeclCrudHandler#rejectReactivationWithSibling), the 409 alone cannot
+      // tell the caller WHY: this same status also covers re-presenting an already-submitted
+      // declaration (rejectRepresentation) and the plain draft-sibling case. The backend tags
+      // its message with a stable `[reason=...]` marker precisely so this layer doesn't have to
+      // guess — see that guard's own `reactivationBlockReason` doc for the exact values.
+      const raw = await res.text().catch(() => '');
+      const message = parseServerMessage(raw);
+      const reasonMatch = message ? message.match(/\[reason=([a-z_]+)\]/) : null;
+      return { ok: false, error: `http_${res.status}`, reason: reasonMatch?.[1] };
+    }
     const snapshot = await readSubmittedSnapshot(res);
     return snapshot ? { ok: true, submittedSnapshot: snapshot } : { ok: true };
   } catch (_) {
@@ -1081,17 +1115,34 @@ export function withBox111NonZeroFlag(identification, liveBoxes) {
   return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
 }
 
-// ETP-5597 pt.1 — superset of `withBox111NonZeroFlag`: also merges `_box69Positive` (casilla 69,
-// "Resultado de la autoliquidación", strictly > 0 — an amount to pay), which fm303Layouts.js's
-// tipo_declaracion options read through `disabledWhen` to lock Compensación/Devolución types.
-// A missing box 69 (nothing computed yet) is `false`, so nothing is locked before the first
-// calculation. Use this wherever the identification object feeds the layout engine (rendering
-// and pre-flight gates); `withBox111NonZeroFlag` stays for callers that only need box 111.
+/**
+ * ETP-5597 — the single place where the result boxes decide which `tipo_declaracion` options are
+ * allowed (consumed through `_tipoDeclRestriction` by fm303Layouts.js's option `disabledWhen`):
+ *   - casilla 71 > 0 (amount to pay)            → 'positive_result' (C/D/V/X disabled)
+ *   - casilla 69 > 0 AND casilla 71 < 0          → 'zero_only' (only N allowed)
+ *   - anything else, incl. 69/71 not computed yet → null (no restriction)
+ * Mutually exclusive by the sign of casilla 71, so the order of the checks is not significant.
+ */
+export function resolveTipoDeclaracionRestriction(box69, box71) {
+  const r71 = box71 == null ? null : Number(box71);
+  if (r71 == null || Number.isNaN(r71)) return null;
+  if (r71 > 0) return 'positive_result';
+  const r69 = box69 == null ? null : Number(box69);
+  if (r71 < 0 && r69 != null && r69 > 0) return 'zero_only';
+  return null;
+}
+
+// ETP-5597 pt.1 — superset of `withBox111NonZeroFlag`: also merges `_tipoDeclRestriction` (see
+// `resolveTipoDeclaracionRestriction`), which fm303Layouts.js's tipo_declaracion options read
+// through `disabledWhen`. A missing box 69/71 (nothing computed yet) yields no restriction, so
+// nothing is locked before the first calculation. Use this wherever the identification object
+// feeds the layout engine (rendering and pre-flight gates); `withBox111NonZeroFlag` stays for
+// callers that only need box 111.
 export function withDerivedBoxFlags(identification, liveBoxes) {
-  const box69 = getBoxValue(liveBoxes, 69);
   return {
     ...withBox111NonZeroFlag(identification, liveBoxes),
-    _box69Positive: box69 != null && Number(box69) > 0,
+    _tipoDeclRestriction: resolveTipoDeclaracionRestriction(
+      getBoxValue(liveBoxes, 69), getBoxValue(liveBoxes, 71)),
   };
 }
 

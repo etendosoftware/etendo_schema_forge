@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Return Material Receipt",
+    "agentPrompt": "#REF#agent-prompts/return-material-receipt/spec.md",
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -28,12 +29,14 @@
       "es_ES": {
         "sourceShipmentDocNo": "Albarán origen",
         "movementQuantity": "Cant. a devolver",
-        "orderQuantity": "Cant. entregada original"
+        "orderQuantity": "Cant. entregada original",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "sourceShipmentDocNo": "Source Shipment",
         "movementQuantity": "Return Qty",
-        "orderQuantity": "Original Delivered Qty"
+        "orderQuantity": "Original Delivered Qty",
+        "C_UOM_ID": "Unit"
       }
     },
     "processOverrides": {
@@ -210,6 +213,10 @@
         },
         "freightCurrency": {
           "visibility": "discarded"
+        },
+        "etgoCurrency": {
+          "visibility": "system",
+          "defaultExpr": "@C_Currency_ID@"
         },
         "freightCostRule": {
           "visibility": "discarded"
@@ -400,14 +407,17 @@
         },
         "uOM": {
           "visibility": "readOnly",
-          "grid": false,
+          "grid": true,
           "inputMode": "search",
-          "section": "other"
+          "section": "other",
+          "gridOrder": 3,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "orderQuantity": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 3,
+          "gridOrder": 4,
           "gridReadOnly": true,
           "section": "principal"
         },

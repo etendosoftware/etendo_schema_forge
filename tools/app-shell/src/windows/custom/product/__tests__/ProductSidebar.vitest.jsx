@@ -220,8 +220,8 @@ describe('ProductSidebar', () => {
 // ETP-4606 / ETP-5091 — Service, Expense ("Gasto") and Resource ("Recurso")
 // products have no physical existence, so the stock sidebar (period selector,
 // availability widget, stock movement chart) does not apply to them and must
-// not render at all. Mirrors the equivalent rule in
-// `ProductAdditionalInfoPanel.jsx` for the Logistics section.
+// not render at all. Mirrors the rule that shows the stock flags
+// (`Almacenable`/`Retornable`) in the main form only for Item (`decisions.json`).
 describe.each([
   ['Service', 'S'],
   ['Expense', 'E'],

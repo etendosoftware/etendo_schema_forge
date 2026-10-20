@@ -15,7 +15,8 @@ import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { formatAmount, formatPercent, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits, isUnparseableDraft } from '../../fiscalModelsUtils.js';
 import {
   INPUT, FLAG, TERRITORY_PERCENT_INPUTS, cellInput, cellBox, buildBoxIndex, findBox, parseAmount,
   inputOrigin, isTerritoryMode, territoryPercentSum, isSubstitutive, isMonthlyReturn, isConcurso,
@@ -80,9 +81,9 @@ function CalcCell({ box, value, highlighted, ctx }) {
 
 // A manual input cell — the SAME behaviour as the 303's editable box (FmBoxes303 renderBoxCell /
 // renderCellInput, ETP-5716): the value is shown formatted with a pencil button; clicking the
-// pencil (or Enter / Space on it, it is a button reached with Tab) opens the inline editor — a
-// number input, autofocused, starting from the stored value. The edit is committed on blur or
-// Enter, discarded on Escape, and an untouched editor commits nothing. Nothing is saved here:
+// pencil (or Enter / Space on it, it is a button reached with Tab) opens the inline editor — the
+// same MaskedAmountInput, autofocused, starting from the stored value. The edit is committed on
+// blur or Enter, discarded on Escape, and an untouched editor commits nothing. Nothing is saved here:
 // the page keeps the change until Guardar / Calcular / Generar / Presentar, as the 303 does with
 // its overrides. 390 specifics kept: the origin styles (calculated / manual / modified), ↺
 // "Restaurar" to the preloaded value, percent inputs and the locked state.
@@ -107,11 +108,12 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
     setDraft(undefined);
     setEditing(true);
   };
-  // `badInput` (review W3): a number the browser cannot parse ("1.234,56", "12,5" in some
-  // locales) reads as '' — committing it would silently delete the stored value, so the edit is
-  // dropped (as in the 303 cell).
-  const commit = (badInput = false) => {
-    if (!cancelled.current && !badInput && draft !== undefined) onInputChange?.(key, draft, spec);
+  // Review W3: a draft with no number in it (a lone "-" or decimal separator) is dropped instead
+  // of committed — committing it would delete the stored value (as in the 303 cell).
+  const commit = () => {
+    if (!cancelled.current && draft !== undefined && !isUnparseableDraft(draft)) {
+      onInputChange?.(key, draft, spec);
+    }
     cancelled.current = false;
     setDraft(undefined);
     setEditing(false);
@@ -133,21 +135,22 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
     >
       <BoxNumber box={spec.box} />
       {editing && !locked ? (
-        <input
+        // The canonical MaskedAmountInput, as in the 303 cell (ETP-5597): instance separators,
+        // grouping on amounts and off on percentages, the CLEAN value ("12.5") reported through
+        // onChange, Enter commits through its own blur. Amounts get the 303's keystroke hard stop
+        // (Lon=17: 15 integer digits, 14 when negative; 2 decimals); percentages are exempt and
+        // range-checked on commit by the page.
+        <MaskedAmountInput
+          bare
+          grouping={!spec.percent}
           className="fm-aeat-cell__input fm-390-cell__input"
-          type="number"
-          step="any"
           aria-label={label}
           value={draft ?? (n != null ? String(n) : '')}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={e => commit(Boolean(e.target.validity?.badInput))}
-          onKeyDown={e => {
-            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
-            if (e.key === 'Escape') cancel(e.currentTarget);
-          }}
+          isAllowed={clean => spec.percent || !(exceedsTypedIntegerDigits(null, clean) || exceedsTypedDecimalDigits(clean))}
+          onChange={clean => setDraft(clean)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Escape') cancel(e.currentTarget); }}
           autoFocus
-          min={spec.percent || spec.nonNegative ? 0 : undefined}
-          max={spec.percent ? 100 : undefined}
           data-testid={`FmBoxes390__inputField_${key}`}
         />
       ) : (

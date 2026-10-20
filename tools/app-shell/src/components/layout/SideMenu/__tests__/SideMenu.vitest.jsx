@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -169,7 +170,7 @@ vi.mock('@phosphor-icons/react', () => {
     Star: iconStub,
     IdentificationCard: iconStub,
     ShareNetwork: iconStub,
-    TrendUp: iconStub,
+    ChartLineUp: iconStub,
     Receipt: iconStub,
     Bank: iconStub,
     Package: iconStub,
@@ -373,6 +374,33 @@ describe('SideMenu', () => {
     expect(other).toHaveTextContent('environmentDemo');
   });
 
+  // ETP-5047: a canceled productive environment reports plan "free" with environmentType
+  // "PRODUCTIVE". It is labelled "Productive", but its chip keeps the muted colour, which follows
+  // the plan: productive, not paying. A paying productive keeps the success colour.
+  it('labels a canceled productive environment "Productive" in the muted chip style', () => {
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [
+        { clientId: 'canceled-1', clientName: 'Canceled Productive', plan: 'free',
+          environmentType: 'PRODUCTIVE', subscriptionStatus: 'EXPIRED', accessState: 'ALLOWED' },
+        { clientId: 'prod-1', clientName: 'Acme Productive', plan: 'productive', environmentType: 'PRODUCTIVE' },
+      ],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'canceled-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).getByText('environmentProductive')).toBeInTheDocument();
+    const canceledChip = within(screen.getByTestId('company-option-canceled-1')).getByText('environmentProductive');
+    expect(canceledChip).toHaveClass('bg-muted', 'text-muted-foreground');
+    expect(canceledChip).not.toHaveClass('bg-status-success');
+    expect(screen.getByTestId('company-option-canceled-1')).not.toHaveTextContent('environmentDemo');
+    const paidChip = within(screen.getByTestId('company-option-prod-1')).getByText('environmentProductive');
+    expect(paidChip).toHaveClass('bg-status-success', 'text-status-success-foreground');
+    expect(paidChip).not.toHaveClass('bg-muted');
+  });
+
   it('selecting the current company does not switch, selecting another one does', () => {
     const switchTo = vi.fn();
     const environments = [
@@ -516,8 +544,9 @@ describe('SideMenu', () => {
       fireEvent.mouseEnter(trigger);
       const activeLink = screen.getByTestId('menu-item-dashboard');
       const inactiveLink = screen.getByTestId('menu-item-dashboard-extra');
-      expect(activeLink.className).toMatch(/bg-accent-highlight/);
-      expect(inactiveLink.className).not.toMatch(/bg-accent-highlight/);
+      expect(activeLink.className).toMatch(/bg-card/);
+      expect(activeLink.className).toMatch(/ring-border-control/);
+      expect(inactiveLink.className).not.toMatch(/bg-card/);
       fireEvent.mouseLeave(trigger);
     });
 
@@ -599,8 +628,9 @@ describe('SideMenu', () => {
       render(<SideMenu {...defaultProps} menuGroups={COLLAPSED_DIRECT_GROUPS} expanded={false} />);
       const activeLink = screen.getByTestId('menu-item-dashboard');
       const inactiveLink = screen.getByTestId('menu-item-settings');
-      expect(activeLink.className).toMatch(/bg-accent-highlight/);
-      expect(inactiveLink.className).not.toMatch(/bg-accent-highlight/);
+      expect(activeLink.className).toMatch(/bg-card/);
+      expect(activeLink.className).toMatch(/ring-border-control/);
+      expect(inactiveLink.className).not.toMatch(/bg-card/);
     });
 
     it('shows the empty-favorites hint when the Favorites group is expanded with no favorites', async () => {

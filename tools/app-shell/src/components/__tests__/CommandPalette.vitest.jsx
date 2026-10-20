@@ -507,6 +507,38 @@ describe('CommandPalette', () => {
     });
   });
 
+  describe('shows the empty state when the backend only returns noise', () => {
+    it('renders "noResultsFound" and no record groups for a flat, text-less result set', async () => {
+      vectorSearchOverride.current = {
+        matches: [0.80, 0.80, 0.79, 0.79, 0.79, 0.78, 0.78, 0.78, 0.78, 0.78].map((score, i) => ({
+          target: 'sales-invoice', id: `INV-${i}`, score, fields: { documentNo: `F-${i}` },
+        })),
+        isLoading: false,
+      };
+      renderWithQuery('zzzz');
+
+      expect(await screen.findByText('noResultsFound')).toBeInTheDocument();
+      expect(screen.queryByTestId('vector-search-exact')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('vector-search-relevant')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('vector-search-related')).not.toBeInTheDocument();
+    });
+
+    it('does not open a discarded noise row on Enter', async () => {
+      vectorSearchOverride.current = {
+        matches: [0.80, 0.80, 0.79, 0.79, 0.78].map((score, i) => ({
+          target: 'sales-invoice', id: `INV-${i}`, score, fields: { documentNo: `F-${i}` },
+        })),
+        isLoading: false,
+      };
+      renderWithQuery('zzzz');
+      await screen.findByText('noResultsFound');
+
+      fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+  });
+
   // ETP-5602: under "related" results the window tag sat inline after short labels, while
   // in the other groups it looked right-aligned only because long labels filled the row. The
   // similarity score ("74%") was shown on every row and means nothing to users.

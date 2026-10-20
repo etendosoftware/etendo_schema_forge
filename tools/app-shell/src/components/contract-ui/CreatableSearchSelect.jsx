@@ -7,6 +7,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
+import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
@@ -89,6 +90,24 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *                                      fetch-once mode. Default false preserves the original
  *                                      fetch-once + local filter behaviour untouched.
  *
+ * @param {function} [useLookup]      - Hook-driven data mode (ETP-5728, Finance selectors): a React
+ *                                      hook `(query) => { results, loading }` returning `{ id, name }`
+ *                                      rows. When set, options come from the hook instead of
+ *                                      `selectorUrl`/`staticOptions`; the hook is called on EVERY
+ *                                      render (rules of hooks), so the prop must not toggle between
+ *                                      undefined and defined for a mounted instance (hook-order
+ *                                      stability); a fresh `useCallback` over data is fine as long as
+ *                                      it calls no hooks of its own conditionally. The hook does its own
+ *                                      debouncing/filtering (the list is not re-filtered locally), and
+ *                                      `serverSearch` paging is disabled in this mode so a short
+ *                                      result never triggers "load more".
+ * @param {boolean}  [disabled]       - Locks the field (input/chip/chevron) regardless of `dependsOn`.
+ * @param {function} [renderOption]   - `(opt) => ReactNode` — custom row content (default `opt.name`).
+ * @param {function} [filterFn]       - `(opt, lowercasedQuery) => boolean` — custom local filter used
+ *                                      by the fetch-once/static mode (default: name substring).
+ * @param {function} [chipLabel]      - `(opt) => string` — chip label for the selected option when it
+ *                                      is present in the loaded options (default `displayValue`).
+ *
  * ## Usage example (address picker wired to LocationEditorModal)
  * ```jsx
  * <CreatableSearchSelect
@@ -113,12 +132,13 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 function computeSelectDisplayState({
   parentKey, parentValue, value, emptyOptionLabel, required, editingIntent, open,
   createLabel, onCreateRequest, loading, filteredOptions, query, resolvedLabel, ui,
-  placeholderOverride,
+  placeholderOverride, disabled,
 }) {
   const hasSelection = value != null && value !== '';
-  const isDisabled = !!(parentKey && !parentValue && !value);
+  const isDisabled = !!disabled || !!(parentKey && !parentValue && !value);
   const showEmptyOption = !!emptyOptionLabel && !required;
-  const showChip = hasSelection && !editingIntent && !isDisabled;
+  // An explicitly `disabled` field still shows its selection as a (read-only) chip.
+  const showChip = hasSelection && !editingIntent && (!isDisabled || !!disabled);
   const placeholder = (showEmptyOption && !hasSelection)
     ? emptyOptionLabel
     : (placeholderOverride || `${ui('searchLabelPrefix')} ${resolvedLabel}...`);
@@ -133,6 +153,11 @@ function computeSelectDisplayState({
     && (showEmptyOption || showCreateAction || loading || filteredOptions.length > 0 || query.trim()));
   return { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown };
 }
+
+/** Inert stand-in for `useLookup` so the lookup hook is ALWAYS called (rules of hooks). */
+const NO_RESULTS = [];
+const NOOP_LOOKUP_RESULT = { results: NO_RESULTS, loading: false };
+function useNoopLookup() { return NOOP_LOOKUP_RESULT; }
 
 // Page size for serverSearch mode's paginated fetches (initial load, search, and
 // scroll-triggered "load more"). Matches SelectorInput.jsx's SELECTOR_PAGE so both
@@ -161,12 +186,47 @@ function buildServerSearchParams({ selectorContext, parentKey, parentValue, filt
 function fetchServerOptions({ apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey, query, offset = 0, limit = SERVER_SEARCH_PAGE }) {
   const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query, offset, limit });
   return apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '' })
-    .then(res => (res.ok ? res.json() : null))
+    .then(res => {
+      // ETP-5681: a failed request must REJECT, not resolve as an empty page — the shared cache
+      // stores any resolved value, so a resolved `[]` was replayed on every open for the whole
+      // catalog freshness window and the selector looked empty until the user typed.
+      if (!res.ok) throw new Error(`Selector request failed: ${res.status}`);
+      return res.json();
+    })
     .then(data => {
       const items = (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
       return { items, hasMore: items.length >= limit };
     });
 }
+
+/**
+ * serverSearch mode: the shared-cache entry for a FIRST page (offset 0), when a DataProvider cache
+ * is mounted. Load-more pages never use the cache. `cachedPageUsable` is a fresh, NON-EMPTY page —
+ * an empty first page hides the dropdown, so it is never trusted (ETP-5681).
+ */
+function lookupCachedFirstPage({ dataCache, cacheScope, selectorUrl, selectorContext, filterKey, parentValue, searchQuery, offset }) {
+  const useCache = Boolean(offset === 0 && dataCache?.cache && cacheScope);
+  if (!useCache) return { useCache, cacheKey: null, cached: null, cachedPageUsable: false };
+  const cacheKey = createQueryKey({
+    ...cacheScope, apiBase: selectorUrl, entity: 'selector',
+    filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
+    recordId: `q:${searchQuery ?? ''}`,
+  });
+  const cached = dataCache.cache.getEntry(cacheKey);
+  const cachedPageUsable = !!cached && !cached.stale && (cached.data?.items?.length ?? 0) > 0;
+  return { useCache, cacheKey, cached, cachedPageUsable };
+}
+
+/**
+ * Toggles the loading flag for a page request: the first page drives `loading` (only when the
+ * placeholder is shown — a background revalidation keeps the cached options visible), a load-more
+ * page drives `loadingMore`.
+ */
+function setPageLoading({ offset, showLoading, setLoading, setLoadingMore }, isLoading) {
+  if (offset > 0) setLoadingMore(isLoading);
+  else if (showLoading) setLoading(isLoading);
+}
+
 
 /** Pinned "create X" / "use typed value" action rendered at the top of the dropdown panel. */
 function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) {
@@ -200,7 +260,7 @@ function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) 
 function SearchSelectOptionsPanel({
   field, ui, query, showEmptyOption, emptyOptionLabel, onSelectEmpty,
   createLabel, onCreateRequest, onCreate, loading, filteredOptions, onSelect,
-  activeIndex, onHoverOption, serverSearch, hasMore,
+  activeIndex, onHoverOption, serverSearch, hasMore, renderOption,
 }) {
   return (
     // min-w-full + w-max: sizes this inner content wrapper to the widest option's natural
@@ -249,7 +309,7 @@ function SearchSelectOptionsPanel({
           onMouseDown={(e) => { e.preventDefault(); onSelect(opt); }}
           onMouseEnter={() => onHoverOption?.(index)}
         >
-          {opt.name}
+          {renderOption ? renderOption(opt) : opt.name}
         </button>
       ))}
       {!loading && filteredOptions.length === 0 && query.trim() && (
@@ -264,6 +324,43 @@ function SearchSelectOptionsPanel({
       )}
     </div>
   );
+}
+
+/** Narrows the pre-fetched (fetch-once/static) option list by the typed query: a caller-supplied
+ * `filterFn(opt, lowercasedQuery)` wins, otherwise a case-insensitive name substring match. */
+function filterOptionsByQuery(options, query, filterFn) {
+  const q = query.trim().toLowerCase();
+  if (!q) return options;
+  if (filterFn) return options.filter(o => filterFn(o, q));
+  return options.filter(o => o.name.toLowerCase().includes(q));
+}
+
+/** Chip label: a caller-supplied `chipLabel` formatter wins when the selected option is loaded
+ * (static/fetched list or the visible list); otherwise the caller's displayValue / the resolved
+ * label / the raw value. */
+function resolveChipText({ chipLabel, hasSelection, value, options, filteredOptions, displayValue, resolvedDisplay }) {
+  const selectedOption = chipLabel && hasSelection
+    ? (options.find(o => o.id === value) ?? filteredOptions.find(o => o.id === value))
+    : null;
+  return selectedOption ? chipLabel(selectedOption) : (displayValue || resolvedDisplay || value);
+}
+
+/** While the list is open, closes ONLY the list on Escape. Radix Dialog listens for Escape on
+ * `document` in the capture phase, which runs before any React onKeyDown, so a `window` capture
+ * listener (registered only while open) is the one that runs first. */
+function useCloseOnEscapeWhileOpen(open, onEscapeClose) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEscape = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      onEscapeClose();
+    };
+    window.addEventListener('keydown', onEscape, { capture: true });
+    return () => window.removeEventListener('keydown', onEscape, { capture: true });
+  }, [open, onEscapeClose]);
 }
 
 export function CreatableSearchSelect({
@@ -281,13 +378,22 @@ export function CreatableSearchSelect({
   emptyOptionLabel,
   staticOptions,
   preferDown = false,
-  serverSearch = false,
+  serverSearch: serverSearchProp = false,
+  // Hook-driven data mode + extension points (ETP-5728) — see the prop docs above.
+  useLookup,
+  disabled = false,
+  renderOption,
+  filterFn,
+  chipLabel,
   // Optional flat override for the idle-state placeholder text (e.g. a plain "Select..."),
   // replacing the default "Search {resolvedLabel}..." composition. Every existing caller
   // omits this, so behavior is unchanged unless a caller opts in.
   placeholderOverride,
 }) {
   const ui = useUI();
+  const lookupMode = typeof useLookup === 'function';
+  // Hook-lookup results are not paged: serverSearch's load-more would loop on a short page.
+  const serverSearch = serverSearchProp && !lookupMode;
   // ETP-4564: shared cache for selector option pages (scope-isolated, catalog
   // freshness). Null when no DataProvider is mounted → direct fetch (prior behavior).
   const dataCache = useOptionalDataCache();
@@ -297,6 +403,14 @@ export function CreatableSearchSelect({
   // label (ETP-4600 Gap B). The chip's label comes from `displayValue` (caller-provided)
   // or `resolvedDisplay` (this component's own lookup fallback) below, never from `query`.
   const [query, setQuery] = useState('');
+  // Hook-driven data mode: ALWAYS called (a noop when `useLookup` is absent) so the hook order is
+  // stable; the caller must keep `useLookup`'s identity constant while mounted.
+  const useLookupHook = lookupMode ? useLookup : useNoopLookup;
+  const lookup = useLookupHook(query) ?? NOOP_LOOKUP_RESULT;
+  const lookupResults = lookup.results ?? NO_RESULTS;
+  // Spinner/placeholder only while there is nothing to show: a debounced re-query keeps the
+  // previous rows on screen instead of blanking the list on every keystroke.
+  const lookupLoading = lookupMode && !!lookup.loading && lookupResults.length === 0;
   // Fallback label used only when the caller passes `value` without a matching
   // `displayValue` (e.g. label not yet resolved by the caller). Decoupled from `query`
   // so opening/reopening the dropdown never leaks the resolved label into the search box.
@@ -528,8 +642,13 @@ export function CreatableSearchSelect({
     // of overwriting/appending onto the newer search's state (serverOptions/offsetRef/hasMoreRef).
     if (offset === 0) searchGenerationRef.current += 1;
     const requestGeneration = searchGenerationRef.current;
-    fetchInFlightRef.current = true;
-    if (offset === 0) setLoading(true); else setLoadingMore(true);
+    const applyPage = ({ items, hasMore: more }) => {
+      if (searchGenerationRef.current !== requestGeneration) return;
+      setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
+      offsetRef.current = offset + items.length;
+      hasMoreRef.current = more;
+      setHasMore(more);
+    };
     const fetchPage = () => fetchServerOptions({
       apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
       query: searchQuery, offset, limit: SERVER_SEARCH_PAGE,
@@ -538,34 +657,48 @@ export function CreatableSearchSelect({
     // (same context + query) reuses it instead of refetching. Falls back to a direct fetch
     // when no DataProvider is mounted (prior behavior). Load-more pages (offset>0) always
     // fetch directly — only the initial page is the reuse-on-reopen case ETP-4564 targets.
-    const run = (offset === 0 && dataCache?.cache && cacheScope)
+    //
+    // ETP-5681: stale-while-revalidate on top of that. A cached NON-EMPTY page is shown at once
+    // (no loading placeholder); it is refetched in the background when it is older than
+    // `SELECTOR_REVALIDATE_AFTER_MS` (lib/selectorRevalidation.js) or was invalidated (e.g. a
+    // cost center deactivated in its own window). A cached EMPTY page is never trusted: an empty
+    // first page hides the dropdown entirely (see showDropdown), so replaying one made the
+    // selector look broken until the user typed.
+    const { useCache, cacheKey, cached, cachedPageUsable } = lookupCachedFirstPage({
+      dataCache, cacheScope, selectorUrl, selectorContext, filterKey, parentValue, searchQuery, offset,
+    });
+    if (cachedPageUsable) {
+      applyPage(cached.data);
+      if (!needsSelectorRevalidation(cached)) return;
+    }
+    fetchInFlightRef.current = true;
+    // A background revalidation keeps the cached options on screen instead of blanking them
+    // behind the "loading" placeholder.
+    const showLoading = !cachedPageUsable;
+    setPageLoading({ offset, showLoading, setLoading, setLoadingMore }, true);
+    const run = useCache
       ? dataCache.cache.fetchQuery({
-        key: createQueryKey({
-          ...cacheScope, apiBase: selectorUrl, entity: 'selector',
-          filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
-          recordId: `q:${searchQuery ?? ''}`,
-        }),
+        key: cacheKey,
         fetcher: fetchPage,
         staleTime: dataCache.catalogStaleTime,
+        // Reaching this point with an entry means it is empty, stale or past the revalidation
+        // age — all three must hit the server, not the cache.
+        force: !!cached,
       })
       : fetchPage();
     run
-      .then(({ items, hasMore: more }) => {
-        if (searchGenerationRef.current !== requestGeneration) return;
-        setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
-        offsetRef.current = offset + items.length;
-        hasMoreRef.current = more;
-        setHasMore(more);
-      })
+      .then(applyPage)
       .catch(() => {
         if (searchGenerationRef.current !== requestGeneration) return;
+        // A failed background revalidation keeps the cached page (and its pagination) on screen.
+        if (cachedPageUsable) return;
         if (offset === 0) setServerOptions([]);
         hasMoreRef.current = false;
         setHasMore(false);
       })
       .finally(() => {
         fetchInFlightRef.current = false;
-        if (offset === 0) setLoading(false); else setLoadingMore(false);
+        setPageLoading({ offset, showLoading, setLoading, setLoadingMore }, false);
       });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -597,11 +730,11 @@ export function CreatableSearchSelect({
   //   grows this list beyond the first page, ETP-4975).
   // - fetch-once mode (default): narrow the pre-fetched list by the typed query locally.
   const filteredOptions = useMemo(() => {
+    if (lookupMode) return lookupResults;
     if (serverSearch) return serverOptions ?? [];
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter(o => o.name.toLowerCase().includes(q));
-  }, [serverSearch, serverOptions, options, query]);
+    return filterOptionsByQuery(options, query, filterFn);
+  }, [lookupMode, lookupResults, serverSearch, serverOptions, options, query, filterFn]);
+  const panelLoading = lookupMode ? lookupLoading : loading;
 
   // Reset keyboard highlight whenever the dropdown opens/closes or the search text changes —
   // a stale index from a previous open/query would highlight the wrong row (ETP-4600 Gap A).
@@ -621,9 +754,12 @@ export function CreatableSearchSelect({
   const { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown } =
     computeSelectDisplayState({
       parentKey, parentValue, value, emptyOptionLabel, placeholderOverride, required: field.required,
-      editingIntent, open, createLabel, onCreateRequest, loading, filteredOptions, query,
-      resolvedLabel, ui,
+      editingIntent, open, createLabel, onCreateRequest, loading: panelLoading, filteredOptions, query,
+      resolvedLabel, ui, disabled,
     });
+  const chipText = resolveChipText({
+    chipLabel, hasSelection, value, options, filteredOptions, displayValue, resolvedDisplay,
+  });
 
   const handleSelect = (opt) => {
     isEditingRef.current = false;
@@ -637,11 +773,50 @@ export function CreatableSearchSelect({
     onChange(opt.id, opt.name, opt);
   };
 
+  // Opens the dropdown and (re)loads its first page. Shared by every open gesture — focus,
+  // click on an already-focused input, chevron, ArrowUp/Down — so none of them can open an
+  // empty panel (ETP-5681). The `open` guard keeps a gesture on an already-open dropdown from
+  // restarting its search (same guard as InlineSearchCombo, ETP-5005).
+  const openAndLoad = () => {
+    // Coming back within the blur grace period: cancel the pending close, or the dropdown this
+    // gesture keeps open would snap shut 200 ms later.
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    if (open) return;
+    setOpen(true);
+    if (serverSearch) {
+      // Reload the first page on every OPEN — guarantees an unfiltered, up-to-date list every
+      // time the user opens the selector (ETP-4600), however they got here. The shared cache
+      // decides whether that is a network round trip (see triggerServerSearch). This replaced a
+      // blur-time (close path) invalidation that raced saves — see resetSearchState above.
+      offsetRef.current = 0;
+      hasMoreRef.current = true;
+      setHasMore(true);
+      triggerServerSearch(query, 0);
+      return;
+    }
+    // Lazy-load: if options for the current parent are not yet fetched, trigger fetch
+    const lazyKey = `${parentValue ?? ''}:${refreshKey}`;
+    if (loadedForRef.current !== lazyKey) {
+      setRefreshKey(k => k); // identity update — effect re-evaluates its cache check
+    }
+  };
+
   const handleClear = () => {
     isEditingRef.current = false;
     setEditingIntent(false);
     setQuery('');
     setOpen(true);
+    // The focus below lands while `open` is already true, so openAndLoad's guard skips it —
+    // load the unfiltered first page here instead (ETP-5681).
+    if (serverSearch) {
+      offsetRef.current = 0;
+      hasMoreRef.current = true;
+      setHasMore(true);
+      triggerServerSearch('', 0);
+    }
     onChange('', '');
     // The chip <button> unmounts and the <input> mounts once hasSelection flips to
     // false — without moving focus onto it, clicking away never fires onBlur, so the
@@ -680,7 +855,7 @@ export function CreatableSearchSelect({
   const handleInputKeyDown = (e) => {
     if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       e.preventDefault();
-      setOpen(true);
+      openAndLoad();
       return;
     }
     switch (e.key) {
@@ -715,6 +890,15 @@ export function CreatableSearchSelect({
         break;
     }
   };
+
+  // Escape with the list open must close ONLY the list (see useCloseOnEscapeWhileOpen).
+  const closeListOnEscape = useCallback(() => {
+    isEditingRef.current = false;
+    setOpen(false);
+    resetSearchState();
+    if (hasSelection) setEditingIntent(false);
+  }, [hasSelection, resetSearchState]);
+  useCloseOnEscapeWhileOpen(open, closeListOnEscape);
 
   const handleCreate = () => {
     isEditingRef.current = false;
@@ -874,8 +1058,9 @@ export function CreatableSearchSelect({
     >
       {showChip ? (
         <SelectorChip
-          label={displayValue || resolvedDisplay || value}
+          label={chipText}
           onClick={handleChipClick}
+          disabled={isDisabled}
           onClear={handleClear}
           clearAriaLabel={ui('clear')}
           testId={`field-${field.key}-chip`}
@@ -920,29 +1105,13 @@ export function CreatableSearchSelect({
               }, 300);
             }
           }}
-          onFocus={() => {
-            setOpen(true);
-            if (serverSearch) {
-              // Always invalidate the cached page and fetch a fresh one on OPEN —
-              // guarantees an unfiltered, up-to-date list every time the user opens the
-              // selector (ETP-4600), regardless of how they got here (chip click, chevron
-              // toggle, or a plain focus/tab). This replaced a blur-time (close path)
-              // invalidation that used to fire ~200ms after the user left the field via a
-              // setTimeout — see the resetSearchState comment above for why that raced
-              // saves. One fetch per real focus event: not a loop, since focus only fires
-              // once per open gesture.
-              setServerOptions(null);
-              offsetRef.current = 0;
-              hasMoreRef.current = true;
-              setHasMore(true);
-              triggerServerSearch(query, 0);
-              return;
-            }
-            // Lazy-load: if options for the current parent are not yet fetched, trigger fetch
-            const cacheKey = `${parentValue ?? ''}:${refreshKey}`;
-            if (loadedForRef.current !== cacheKey) {
-              setRefreshKey(k => k); // identity update — effect re-evaluates its cache check
-            }
+          onFocus={openAndLoad}
+          // ETP-5681: focus only fires when the input does NOT already have it. After Esc (or
+          // within the blur grace period) the input keeps focus with the dropdown closed, so a
+          // click on it used to open nothing until the user typed. Mirrors InlineSearchCombo's
+          // open-from-any-gesture behaviour (ETP-5005).
+          onMouseDown={() => {
+            if (typeof document !== 'undefined' && document.activeElement === inputRef.current) openAndLoad();
           }}
           onKeyDown={handleInputKeyDown}
           onBlur={() => {
@@ -957,20 +1126,24 @@ export function CreatableSearchSelect({
           }}
         />
       )}
-      {loading || loadingMore ? (
+      {!lookupMode && (loading || loadingMore) ? (
         <Loader2
           className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-auto"
           data-testid={"Loader2__" + field.id} />
       ) : (
         <button
           type="button"
+          disabled={isDisabled}
+          aria-label={ui('openOptions')}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             if (showChip) { handleChipClick(); return; }
             if (open) {
               setOpen(false);
+            } else if (typeof document !== 'undefined' && document.activeElement === inputRef.current) {
+              // Already focused: focus() is a no-op and fires no onFocus (ETP-5681).
+              openAndLoad();
             } else {
-              setOpen(true);
               inputRef.current?.focus();
             }
           }}
@@ -1001,8 +1174,8 @@ export function CreatableSearchSelect({
           // this element's scrollTop, even though overflow:auto and a real maxHeight are
           // correctly set (confirmed live: scrollTop stayed 0 after a wheel event, but a
           // direct `el.scrollTop = x` assignment worked fine — only the NATIVE scroll
-          // mechanism is blocked). Bypass it manually, matching the same fix already used by
-          // LookupPicker.jsx for the identical scenario. Only do the manual adjustment when
+          // mechanism is blocked). Bypass it manually, matching the same fix applied in
+          // the sibling InlineSearchCombo panel. Only do the manual adjustment when
           // e.defaultPrevented is already true — react-remove-scroll's capture-phase listener
           // runs before this bubble-phase handler, so that flag tells us whether native scroll
           // was actually blocked. When this component is used OUTSIDE a Dialog (no
@@ -1037,7 +1210,8 @@ export function CreatableSearchSelect({
             createLabel={createLabel}
             onCreateRequest={onCreateRequest}
             onCreate={handleCreate}
-            loading={loading}
+            loading={panelLoading}
+            renderOption={renderOption}
             filteredOptions={filteredOptions}
             onSelect={handleSelect}
             activeIndex={activeIndex}

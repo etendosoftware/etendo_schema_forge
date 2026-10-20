@@ -1,10 +1,17 @@
+// @covers tools/app-shell/src/windows/custom/shared/SifAttachmentsSection.jsx
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock i18n — SifAttachmentsSection only needs the `attachments` key (reused from the
 // generic Attachments feature's own locale strings, no new "section title" key added).
+// The attachments table renders through the generic DataTable (ETP-5526), which
+// also reads the label / locale hooks.
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLabel: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useLocale: () => ({ genericLabels: {}, statuses: {} }),
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
 // Replace the shared attachments hook with a controllable mock so tests can drive

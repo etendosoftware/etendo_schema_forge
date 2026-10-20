@@ -25,7 +25,7 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:movement
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', hintKeys: {"D":"goodsMovementsPostedDisabledHint"} },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields', hintKeys: {"D":"goodsMovementsPostedDisabledHint"} },
 ];
 // @sf-generated-end extraBadges:movement
 
@@ -56,7 +56,7 @@ const requiredHeaderFields = ['name', 'movementDate'];
 const addLineFields = {
   entry: [
     { key: 'lineNo', column: 'Line', type: 'number', required: true, label: 'Line No.', defaultValue: '@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@' },
-    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', lookupTitle: 'Product', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]},{"value":"0","to":"movementQuantity"}] },
+    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]},{"value":"0","to":"movementQuantity"}] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 1 },
     { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', required: true, label: 'Storage Bin', reference: 'Locator', inputMode: 'selector' },
@@ -200,13 +200,15 @@ export const api = {
       "Processed": "Status",
       "M_Locator_ID": "Source Warehouse",
       "M_LocatorTo_ID": "Destination Warehouse",
-      "MovementQty": "Quantity"
+      "MovementQty": "Quantity",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
       "Processed": "Estado",
       "M_Locator_ID": "Almacén origen",
       "M_LocatorTo_ID": "Almacén destino",
-      "MovementQty": "Cantidad"
+      "MovementQty": "Cantidad",
+      "C_UOM_ID": "Unidad"
     }
   }
 };
@@ -275,7 +277,6 @@ export default function MovementPage({ windowName, recordId, ...props }) {
       api={api}
       listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideLink

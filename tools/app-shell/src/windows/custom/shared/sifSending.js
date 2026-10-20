@@ -74,6 +74,30 @@ export function getSifBodyKey(specName, { sendSii, sendTbai }) {
 }
 
 /**
+ * ETP-5700 — the caption of every "send to the fiscal system" entry point (detail
+ * preview button, form kebab item, grid row kebab item). It used
+ * to be the generic `sendToSif` ("Enviar a SIF") whatever the invoice was going to;
+ * it now names the system(s) the invoice is actually pending for, with the same
+ * sales/purchase split as {@link getSifBodyKey}: a purchase invoice's TBAI target is
+ * always Batuz (fiscalTargets.js grants it only under BIZKAIA — ETP-5087), so it
+ * reads "Enviar a Batuz" rather than "Enviar a TicketBAI".
+ *
+ * Only meaningful when at least one target is pending — every caller renders the
+ * action only in that case. With nothing pending it falls back to the SII caption,
+ * mirroring getSifBodyKey's own default.
+ *
+ * @param {string} specName kebab-case spec (`sales-invoice`, `purchase-invoice`, ...)
+ * @param {{sendSii: boolean, sendTbai: boolean}} pendingTargets from {@link getPendingSifTargets}
+ * @returns {string} i18n key
+ */
+export function getSifButtonLabelKey(specName, { sendSii, sendTbai } = {}) {
+  const isPurchase = specName === 'purchase-invoice';
+  if (sendSii && sendTbai) return isPurchase ? 'sendToSifLabelBothPurchase' : 'sendToSifLabelBoth';
+  if (sendTbai) return isPurchase ? 'sendToSifLabelTbaiPurchase' : 'sendToSifLabelTbai';
+  return 'sendToSifLabelSii';
+}
+
+/**
  * ETP-5087: the RESULT copy must follow the same purchase/sales split the
  * confirmation copy already applies — a purchase invoice that was just sent to
  * Batuz used to report "Enviado a TicketBAI correctamente.", contradicting the
@@ -88,4 +112,46 @@ export function getSifTbaiSuccessKey(specName) {
 
 export function getSifTbaiErrorKey(specName) {
   return specName === 'purchase-invoice' ? 'sendToSifErrorTbaiPurchase' : 'sendToSifErrorTbai';
+}
+
+/**
+ * ETP-5700 — the form-view kebab entry (`SifSendMenuItem`, wired through
+ * `decisions.json → window.customComponents.moreMenuContent`) cannot host the send
+ * modal itself: `DetailMoreActionsMenu` unmounts its content the moment the menu
+ * closes, which a click inside the modal does. It hands the request — with the targets
+ * it already computed — to `SifSendModalHost`, which each invoice window mounts next to
+ * its form for as long as the record is open, through this window event (same mechanism
+ * as the existing `${specName}:invoice-updated` event).
+ *
+ * The host must NOT be a component that is itself conditionally rendered: the first
+ * version asked the former topbar `SendToSifButton` (removed in ETP-5700), which
+ * rendered nothing on a completed invoice whose form was locked, so the kebab entry
+ * did nothing.
+ */
+export const SIF_OPEN_SEND_EVENT = 'sif:open-send-modal';
+
+/**
+ * @param {string} specName kebab-case spec of the window
+ * @param {string} recordId invoice id
+ * @param {{sendSii: boolean, sendTbai: boolean}} pendingTargets targets to send, from
+ *   {@link getPendingSifTargets}
+ */
+export function requestSifSendModal(specName, recordId, pendingTargets) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(SIF_OPEN_SEND_EVENT, { detail: { specName, recordId, pendingTargets } }));
+}
+
+/**
+ * Whether a {@link SIF_OPEN_SEND_EVENT} is addressed to this record of this window.
+ * Ids are compared as strings, like `useInvoiceUpdatedListener`.
+ *
+ * @param {Event|null|undefined} event
+ * @param {string} specName
+ * @param {string} recordId
+ * @returns {boolean}
+ */
+export function isSifSendRequestFor(event, specName, recordId) {
+  const detail = event?.detail;
+  return !!detail && detail.specName === specName && recordId != null
+    && String(detail.recordId) === String(recordId);
 }

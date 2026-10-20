@@ -218,7 +218,8 @@ a program, so it must stay factual and short; the docs are read by a person abou
 to make a decision, so they must carry the trade-off.
 
 Which doc, per the repo-split rule: the change's **own repo**. Frontend behaviour
-→ `docs/feature-flags.md` here. Backend behaviour →
+→ the feature's topic doc here (not `docs/feature-flags.md`, which since ETP-5605
+covers the flag framework only). Backend behaviour →
 `docs/feature-flags-and-tenant-upgrade.md` in `com.etendoerp.go`. A change
 spanning both needs a doc update in both.
 

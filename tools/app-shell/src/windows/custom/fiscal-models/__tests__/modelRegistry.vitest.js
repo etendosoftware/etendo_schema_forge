@@ -51,6 +51,7 @@ describe('modelRegistry — entries', () => {
     // A model filed monthly has a monthly rule; a model filed annually has an annual one.
     expect(typeof m.monthlyDeadline === 'function').toBe(m.periodicities.includes('monthly'));
     expect(typeof m.annualDeadline === 'function').toBe(m.periodicities.includes('annual'));
+    expect([null, 'rectificative', 'substitutive']).toContain(m.duplicatePeriodType);
     if (m.monthlyDeadline) {
       for (let month = 1; month <= 12; month++) {
         const d = m.monthlyDeadline(2026, month);
@@ -80,6 +81,11 @@ describe('modelRegistry — entries', () => {
       annualDeadline: null, siiWarningOnActivate: false, singleOrdinaryPerYear: false, newDeclWarning: null,
     }));
     expect(getModel('349').selectableYears).toBeNull();
+    // ETP-5725: a never-saved draft on a presented period reads as rectificativa (303) /
+    // sustitutiva (349); the 390 has no such fallback.
+    expect(getModel('303').duplicatePeriodType).toBe('rectificative');
+    expect(getModel('349').duplicatePeriodType).toBe('substitutive');
+    expect(getModel('390').duplicatePeriodType).toBeNull();
     // ETP-5716: the 303 also offers 2025 (2025 303s to test the 390 2025 preload).
     expect(getModel('303').selectableYears()).toEqual([2026, 2025]);
   });

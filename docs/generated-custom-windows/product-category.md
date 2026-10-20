@@ -30,6 +30,7 @@ The window uses these layout overrides (all set in `decisions.json → window`):
 | Key | Value | Effect |
 |-----|-------|--------|
 | `detailEntity` | `"accounting"` | Accounting tab as the primary child entity |
+| `detailVisibleWhenCapability` | `"showAccountingFields"` | **(ETP-5648)** The Accounting tab is this window's detail tab, so it is hidden, and never fetched, for a role without the capability; the header form stays available. The server refuses `<spec>/accounting` with `403` for such a role anyway |
 | `linesLayout` | `"inlineEditable"` | Inline pencil/trash editing on Accounting rows |
 | `noHeaderBorder` | `true` | Removes the border under the header form |
 | `toolbarBorderBottom` | `true` | No effect since ETP-5601 (the record toolbar is standardized) |
@@ -172,3 +173,14 @@ consumer (`product-category/index.jsx` passes `Form={ProductCategoryCustomForm}`
 `DetailView`, no intermediate wrapper) — no other mount path to gate. Not live-testable in this
 session — the available read-only-tier test role has zero grant at all on this window; relies on
 unit-test coverage.
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting** tab (`fixedAsset`, `productExpense`, `productRevenue`, `productCOGS`, `invoicePriceVariance`) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

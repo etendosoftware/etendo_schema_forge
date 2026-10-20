@@ -1,6 +1,8 @@
+// @covers tools/app-shell/src/windows/custom/shared/InvoicePreviewModal.jsx
 // @covers tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
 
 // --- Mocks ----------------------------------------------------------------
 
@@ -10,17 +12,12 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US' }),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (val) => val || '-',
-  // getPendingSifTargets (via isTbaiEligibleByDate, ETP-5122) needs a real
-  // date-only parser to compare invoiceDate against the TBAI adoption date.
-  parseCalendarDate: (raw) => {
-    if (!raw) return null;
-    const match = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!match) return null;
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  },
-}));
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+// The fiscal gate this modal renders through (InvoicePreview -> useInvoicePreview ->
+// getPendingSifTargets -> isSifEligibleByDate) needs the real `parseCalendarDate`
+// date-only semantics (ETP-5122).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (val) => val || '-'));
 
 vi.mock('@/lib/formatAmount.js', () => ({
   formatAmount: (val) => Number(val || 0).toFixed(2),
@@ -300,12 +297,12 @@ describe('InvoicePreviewModal', () => {
 
   it('shows Send to SIF in the preview actions when the fiscal profile enables it', () => {
     renderPreview({ specName: 'sales-invoice' });
-    expect(screen.getByText('sendToSif')).toBeInTheDocument();
+    expect(screen.getByText(/^sendToSifLabel/)).toBeInTheDocument();
   });
 
   it('opens the SIF confirmation modal from the preview action', () => {
     renderPreview({ specName: 'sales-invoice' });
-    fireEvent.click(screen.getByText('sendToSif'));
+    fireEvent.click(screen.getByText(/^sendToSifLabel/));
     expect(screen.getByText('sendToSifTitle')).toBeInTheDocument();
     expect(screen.getByText('sendToSifBodyTbai')).toBeInTheDocument();
   });
@@ -320,7 +317,7 @@ describe('InvoicePreviewModal', () => {
     });
 
     renderPreview({ specName: 'sales-invoice' });
-    fireEvent.click(screen.getByText('sendToSif'));
+    fireEvent.click(screen.getByText(/^sendToSifLabel/));
     fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
 
     // SifSendingModal renders a '%' percentage during the sending phase
@@ -357,7 +354,7 @@ describe('InvoicePreviewModal', () => {
       });
 
     renderPreview({ specName: 'sales-invoice' });
-    fireEvent.click(screen.getByText('sendToSif'));
+    fireEvent.click(screen.getByText(/^sendToSifLabel/));
     fireEvent.click(screen.getByText('sendToSifConfirm'));
 
     await screen.findByRole('button', { name: 'close' });

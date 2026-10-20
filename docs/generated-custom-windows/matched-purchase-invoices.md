@@ -441,3 +441,12 @@ name goes through the same `DOC_TYPE_LABEL_KEYS` as the filter option and
 code map the filter already uses, so `DOCUMENT_TYPE_TO_TABLE_ID` is gone too. A new document
 type now needs one label → code entry; see `not-posted-documents.md` ("One label → code map").
 The same page's "Abrir documento" opens these rows at `/matched-purchase-invoices/{id}`.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed). That includes `MatchedInvoiceBulkActions`, which builds its own `post`/`unpost` bulk entries.
+- The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Invoice",
+    "agentPrompt": "#REF#agent-prompts/sales-invoice/spec.md",
     "documentDateField": "invoiceDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,
@@ -20,7 +21,8 @@
       "topbarExtra": "InvoiceDeliveryBadge",
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "InvoiceBottomPanel",
-      "topbarRight": "InvoiceTopbarExtra"
+      "topbarRight": "InvoiceTopbarExtra",
+      "moreMenuContent": "SifSendMenuItem"
     },
     "linesLayout": "inlineEditable",
     "vectorSearch": {
@@ -64,6 +66,16 @@
         "visibleWhenFieldFalse": "posted",
         "successKey": "documentPosted",
         "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenStatus": "CO",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
       }
     ],
     "secondaryTabs": {
@@ -81,7 +93,8 @@
       "processField": "documentAction",
       "processValue": "CO",
       "label": "Confirm",
-      "keepSaveWhenCompletedFields": ["accountingDate"]
+      "keepSaveWhenCompletedFields": ["accountingDate", "project", "costcenter", "aeatsiiErrorRegistral"],
+      "editableLineFieldsWhenCompleted": ["project", "costcenter"]
     },
     "dateFilterKey": "invoiceDate",
     "labelOverrides": {
@@ -92,7 +105,8 @@
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
-        "em_etgo_tbai_status": "Estado TicketBAI"
+        "em_etgo_tbai_status": "Estado TicketBAI",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
@@ -100,10 +114,12 @@
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
-        "em_etgo_tbai_status": "TicketBAI Status"
+        "em_etgo_tbai_status": "TicketBAI Status",
+        "C_UOM_ID": "Unit"
       },
       "es_AR": {
-        "OutstandingAmt": "Saldo pendiente"
+        "OutstandingAmt": "Saldo pendiente",
+        "C_UOM_ID": "Unidad"
       }
     },
     "subsetFilters": [
@@ -126,7 +142,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ],
     "rowQuickActions": {
@@ -248,7 +264,7 @@
         },
         "documentAction": {
           "visibility": "system",
-          "agentPrompt": "Document workflow action for this sales invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it assigns the final document number, computes taxes and totals and creates the payment plan; VO voids it. From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. CL closes it. Preconditions for CO: at least one line, a customer with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger: posting is a separate action on this window (not a documentAction value), so never send PO here — read the posted field to know the accounting state. Read documentStatus and posted with etendo_get before acting. The remaining values offered in actionValues (AP, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of this window's flow."
+          "agentPrompt": "Document workflow action for this sales invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it assigns the final document number, computes taxes and totals and creates the payment plan; VO voids it. From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. CL closes it. Preconditions for CO: at least one line, a customer with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger, and posted is not a documentAction value (never send PO here): book a completed, not-posted invoice with etendo_action(action:'post'); remove the accounting entries of a completed AND posted invoice with etendo_action(action:'unpost'). Unposting is NOT reactivation (RE): the invoice stays CO, and only accountingDate, project, costcenter, line project/costcenter and the exchange rates become correctable — then post again. Do unpost, fix and post in one go, since a background accounting process may re-post an unposted invoice within ~5 minutes. Read documentStatus and posted with etendo_get before acting. The remaining values offered in actionValues (AP, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of this window's flow."
         },
         "createLinesFromOrder": {
           "visibility": "discarded"
@@ -312,14 +328,16 @@
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "defaultExpr": "0",
+          "form": false,
           "grid": true,
           "gridOrder": 6,
-          "section": "summary",
           "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
-          "section": "summary"
+          "defaultExpr": "0",
+          "form": false
         },
         "outstandingAmount": {
           "visibility": "readOnly",
@@ -425,11 +443,15 @@
           "visibility": "system"
         },
         "project": {
+          "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
+          "_note": "ETP-5692 \u2014 overrides the AD logic @Posted@='Y': the dimension is editable on a draft and on a Completed (CO) invoice that is not posted (the Unpost-then-correct flow), and locked once posted or in any other processed status (e.g. voided). Lines: evaluated against the line merged over the header (lib/completedLineEdits.js), since c_invoiceline has no Posted/Processed/DocStatus.",
           "visibility": "editable",
           "section": "principal",
           "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\" — the config-gated header dimension fields were rendering in the secondary/collapsed area instead of the main visible form."
         },
         "costcenter": {
+          "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
+          "_note": "ETP-5692 \u2014 overrides the AD logic @Posted@='Y': the dimension is editable on a draft and on a Completed (CO) invoice that is not posted (the Unpost-then-correct flow), and locked once posted or in any other processed status (e.g. voided). Lines: evaluated against the line merged over the header (lib/completedLineEdits.js), since c_invoiceline has no Posted/Processed/DocStatus.",
           "visibility": "editable",
           "section": "principal",
           "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
@@ -626,7 +648,11 @@
           "min": false
         },
         "uOM": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 4,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "listPrice": {
           "visibility": "editable",
@@ -634,7 +660,7 @@
           "form": true,
           "inputMode": "number",
           "order": 4,
-          "gridOrder": 4,
+          "gridOrder": 5,
           "section": "principal",
           "columnType": "amount",
           "min": false
@@ -645,7 +671,7 @@
           "form": true,
           "inputMode": "number",
           "order": 5,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
@@ -659,7 +685,7 @@
         "tax": {
           "grid": true,
           "order": 6,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "section": "principal",
           "inputMode": "selector",
           "forceCalloutFields": [
@@ -691,7 +717,7 @@
         "grossAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": true,
           "section": "principal",
           "displayLogic": null
@@ -739,12 +765,16 @@
           "visibility": "discarded"
         },
         "project": {
+          "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
+          "_note": "ETP-5692 \u2014 overrides the AD logic @Posted@='Y': the dimension is editable on a draft and on a Completed (CO) invoice that is not posted (the Unpost-then-correct flow), and locked once posted or in any other processed status (e.g. voided). Lines: evaluated against the line merged over the header (lib/completedLineEdits.js), since c_invoiceline has no Posted/Processed/DocStatus.",
           "visibility": "editable",
           "grid": false,
           "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",
           "dimensionsPanel": true
         },
         "costcenter": {
+          "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
+          "_note": "ETP-5692 \u2014 overrides the AD logic @Posted@='Y': the dimension is editable on a draft and on a Completed (CO) invoice that is not posted (the Unpost-then-correct flow), and locked once posted or in any other processed status (e.g. voided). Lines: evaluated against the line merged over the header (lib/completedLineEdits.js), since c_invoiceline has no Posted/Processed/DocStatus.",
           "visibility": "editable",
           "grid": false,
           "reason": "ETP-4529 — accounting dimension. Collected into the generator's synthetic dimensionsPanel column (see docs/decisions-reference.md) instead of a plain grid column; grid stays false, dimensionsPanel: true routes it into the expand-row \"Dimensiones contables\" UX.",

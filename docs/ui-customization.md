@@ -37,6 +37,17 @@ the generated value at all. The fix has to be made by hand at the override site 
 option to `getInvoiceDraftMode` and passing it from the one window that needs it), not by touching
 `decisions.json` again.
 
+**ETP-5692 — the two invoice windows now carry two such lists in both places:**
+`keepSaveWhenCompletedFields` and `editableLineFieldsWhenCompleted` are declared in
+`artifacts/{sales,purchase}-invoice/decisions.json → window.draftMode` (so the contract and the
+generated `HeaderPage` are right) AND passed by hand to `getInvoiceDraftMode` in each `index.jsx`
+(which is what actually reaches `DetailView`). Change both: the sync is guarded by the
+`passes the decisions.json completed-document allowlists through the draftMode override` test in
+`tools/app-shell/src/windows/custom/{sales,purchase}-invoice/__tests__/index.vitest.jsx`, which
+fails if the `index.jsx` override drifts from `decisions.json`. Reading the lists from one source was considered
+and not done: it would mean importing the window's whole `decisions.json`/`contract.json` into the
+SPA bundle, or changing how the generated `HeaderPage` merges `draftMode`.
+
 **When adding/changing a `decisions.json → window.*` key, grep for a hand-rolled prop with the same
 name** (`grep -rn "draftMode={" tools/app-shell/src/windows/custom/`, or the equivalent for the prop
 you're changing) before assuming a `make regen` alone is enough. This is the same "custom files are
@@ -312,9 +323,38 @@ Handler precedence: `documentAction` > `columnName` > `action` > `component` > e
 
 **Save-before-action guard (ETP-4940).** Before invoking a `documentAction` entry, `DetailMoreActionsMenu.jsx`'s `runDocumentAction` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) to persist any pending header edit first — otherwise an edit made without clicking Save first was silently discarded, the action running against the last-persisted value. On save failure the action does not run (the existing `handleSave` error toast surfaces the failure). **Known gap:** unlike the draftMode Confirm button (which guards on the fuller `isDirty` — header OR line-edit/add-row state), this guard is scoped to `hook.isDirtyHeader` only, so a pending line-row edit with a clean header is not saved before a kebab `documentAction` fires. This is currently unreachable via any shipped generated window — the only kebab `documentAction` is `reactivate` (RE), which only appears once a document is already Completed, where lines are normally read-only — but it is pinned by an explicit regression test (`DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx`, look for "KNOWN GAP W1") so it does not silently widen if a future window wires a kebab action for a non-completed status.
 
+**Dynamic kebab entries — `customComponents.moreMenuContent`.** When an entry's caption or visibility depends on more than the document status or a record field (e.g. the org's fiscal configuration), declare a component instead: `"customComponents": { "moreMenuContent": "<Component>" }`. It is rendered inside the menu after the `menuActions` items and receives `data`, `recordId`, `token`, `apiBaseUrl`, `onClose`, `onRefresh` and `isDirty` (the header has unsaved edits — `hook.isDirtyHeader`, header fields only, not pending line edits; ETP-5700); returning `null` hides it. The menu unmounts it on close (a click inside a modal closes the menu too), so an entry that opens a modal must delegate the modal to a host that the window mounts **unconditionally** — not to a sibling that may itself be hidden, such as a topbar button.
+
+Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/shared/`, re-exported from `artifacts/{sales,purchase}-invoice/custom/`) computes the pending fiscal targets with `useInvoiceSifSending`, closes the menu and calls `requestSifSendModal(specName, recordId, pendingTargets)` from `sifSending.js`. That dispatches the `sif:open-send-modal` window event; `SifSendModalHost`, which the invoice window wrapper (`index.jsx`) renders next to the form for as long as a record is open, filters it with `isSifSendRequestFor` (same spec, same record id) and portals the shared `SifSendingModal`. After a successful send it fires `${specName}:invoice-updated` so the topbar refreshes the record. Since ETP-5700 this kebab entry is the invoice form view's only send entry point: the topbar `SendToSifButton` was removed because the action showed twice.
+
+```json
+"customComponents": { "moreMenuContent": "SifSendMenuItem" }
+```
+
+```jsx
+// tools/app-shell/src/windows/custom/sales-invoice/index.jsx — detail branch
+<SifSendModalHost apiBaseUrl={apiBaseUrl} recordId={recordId} />
+```
+
+The kebab content has no save handle, so it cannot flush pending header edits itself. An entry whose action must see the saved values should use `isDirty` to refuse to run on a dirty form: `SifSendMenuItem` renders disabled (`aria-disabled`, dimmed) with the `sendToSifSaveFirst` tooltip ("Guarda los cambios antes de enviar") and ignores clicks until the user saves. Field reference: `docs/decisions-reference.md` → Custom Components.
+
 **The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
+
+#### Posting actions follow "Show Accounting Fields" (ETP-5684)
+
+Contabilizar / Descontabilizar are hidden from every role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins always have it). **You declare nothing for this.** The three action renderers drop any descriptor whose `neoAction` (form kebab, row kebab) or `value` (bulk toolbar) is `post` or `unpost`:
+
+| Renderer | Surface |
+|---|---|
+| `DetailMoreActionsMenu.jsx` | form kebab (`menuActions`) |
+| `RowQuickActions.jsx` | row kebab (`rowQuickActions` menu entries, incl. hand-rolled ones in a window's `index.jsx`) |
+| `BulkDocumentAction.jsx` | bulk toolbar, whichever builder produced the list (`buildPostActions`, a window's own builder) |
+
+All three call `filterPostingActions(actions, capabilities)` from `tools/app-shell/src/lib/capabilityVisibility.js`. It keys on the generic posting action that `DocumentPostingService` serves for every document — a structural contract, not an entity name — and ignores `key`, which is a free label. The gate fails closed, so a component test without an `AuthProvider` loses Post/Unpost: grant the capability with `src/test/capabilitiesSafeMock.js` (see its header). Reactivate's `preUnpost` calls `unpost` directly, not through a menu, so it is unaffected.
+
+The posting **status** (the `posted` field) is NOT automatic: declare `"visibleWhenCapability": "showAccountingFields"` on it in `decisions.json`, and on any hand-written `posted` list column (`visibleWhenCapability: ACCOUNTING_CAPABILITY`). `ListView` then also drops the column from the advanced filter, the sort popover and the export, and strips a restored filter or sort on it. `tools/app-shell/test/accounting-capability-guard.test.js` fails the build on an ungated `posted` in either place. Hand-rolled financial-account surfaces gate themselves (movements dot + sort segment + kebab, reconciliations column/filter/sort, reconciled-transactions modal, payment timeline "Asiento contabilizado"). Confirm-dialog warnings about removing the accounting entry are kept on purpose: they describe a consequence of an action the user is allowed to take.
 
 #### Dynamic process-button captions — `processOverrides.<proc>.labelToggle`
 
@@ -489,12 +529,21 @@ Adds a transversal **Attachments** tab to the detail view for uploading, listing
 | `POST` | `/sws/neo/attachments/{tableName}/{recordId}` (multipart/form-data) | Upload a new attachment |
 | `GET` | `/sws/neo/attachments/file/{attachmentId}` | Download a single attachment |
 | `GET` | `/sws/neo/attachments/{tableName}/{recordId}/zip` | Download all attachments as a ZIP archive |
+| `GET` | `/sws/neo/attachments/{tableName}/{recordId}/zip?ids=a,b` | Download only those attachments as a ZIP (ETP-5526). Every id must belong to `{recordId}` — a foreign or unknown id answers `404` and streams nothing; `ids` present but empty answers `400` |
 | `DELETE` | `/sws/neo/attachments/file/{attachmentId}` | Delete an attachment |
 | `PATCH` | `/sws/neo/attachments/file/{attachmentId}` body `{ "description": "..." }` | Update the attachment description |
 
 The handler delegates to the standard Etendo `AttachImplementationManager` and stores metadata in the `C_FILE` table — attachments uploaded through this tab are visible in Classic Etendo and vice versa.
 
-**Frontend behavior:** drag-and-drop drop zone + tabular listing with per-row actions (download, edit description, delete) and a global "Download all" action. The `tableName` is resolved from `frontendContract.entities.header.tableName` automatically — there is no manual wiring.
+**Frontend behavior:** drag-and-drop drop zone + tabular listing with per-row actions (download, edit description, delete). The `tableName` is resolved from `frontendContract.entities.header.tableName` automatically — there is no manual wiring.
+
+**Bulk actions live in the selection bar (ETP-5526).** Ticking rows raises the shared `SelectionToolbar` — the same floating pill Contactos, Cuentas financieras, Amortización, Activos and the list views use — carrying the selected count, a ZIP download of just those files, and a delete that asks for confirmation first. The old header-wide **Descargar todo (ZIP)** and **Eliminar todo** controls are gone from this tab; the table header is exactly the five Figma columns (file name, size, upload date, last update, uploaded by) plus the hover action cell.
+
+**The grid is the generic `DataTable` (ETP-5526).** `AttachmentsTable` no longer hand-builds a `<table>`: it feeds `DataTable` its own rows (attachments are not a NEO entity — `C_File` has no AD tab — so `ListView` does not apply), the same shape as `NotPostedDocumentsPage`. It therefore shares every list's row visuals (*List row visuals* in §13): the lift hover with Shadows/lg and the redrawn top separator (via `rowHoverStyle="lift-always"`, because attachment rows have no click target of their own), the `#F5F7F9` checked row, and the fade behind the row actions. The per-row Download / Delete buttons render through `rowQuickActions.render` with the shared `ROW_ACTION_BUTTON_NEUTRAL` / `ROW_ACTION_BUTTON_DESTRUCTIVE` classes and `IconicTrashIcon`, revealed on hover. Columns sort client-side (`useClientSort`); in-flight uploads stay on top with a spinner, a disabled checkbox (when selection is on — `isRowSelectable` is false for them) and no actions. Dates follow Figma: abbreviated weekday, day and month, in the UI locale and the viewer's local time — "Jue 30 abr" in es_ES, "Thu Apr 30" in en_US — with the year appended after a single space only when the date is not in the current year (local time): "Jue 30 abr 2024", "Thu Apr 30 2024"; parts in the locale's own order, weekday capitalized, no abbreviation dots. They are formatted by `formatAttachmentDate` through the columns' own `render` (the backend sends UTC instants, so this is not a `parseCalendarDate` case); `DataTable`'s shared date cell is untouched, and sorting still uses the raw ISO value, so it stays chronological.
+
+`AttachmentsTable` is shared, so selection there is an **opt-in, caller-owned** capability: a caller that passes `selectedIds` + `onSelectionChange(ids)` gets the checkbox column, and a caller that does not gets no checkbox column at all. `DataTable` keeps its own checkbox state; `AttachmentsTable` pushes the caller's changes down to it (an emptied Set clears it through `clearSelectionTrigger`; a selected row that left the list is dropped through `deselectTrigger`). `SifAttachmentsSection` (the SII/TBAI/Verifactu "Adjuntos" block) is the second caller: it opts out — which also removed the checkboxes it used to show and could not act on — and keeps its own "Download all (ZIP)" control (now a link right-aligned above the grid), which is why `onDownloadAll` still exists on the table.
+
+**A processed/completed document no longer blocks attachment work (ETP-5526).** `isDocumentReadOnly` — the generic lock `DetailView` wires from the document's own state — used to hide delete and disable the dropzone; it now does neither. Attachments are evidence *about* a document, not part of it, and a closed invoice is exactly when the signed copy has to be filed. The separate `readOnly` prop is unchanged: it still hides every delete action (per-row and the bar's) while leaving upload and download alone, which is what blocks deleting a non-draft fiscal declaration's justificante (ETP-5432). Consequence, known and accepted: there is currently no way to express a fully read-only attachments view through `AttachmentsTab`.
 
 ---
 
@@ -591,13 +640,15 @@ generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
 compilation step lives in the generator (`schema_forge_core`, out of scope for
 this sub-task). Today the only way to set it is to pass `listViewOptions`
-directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
-same way `contacts` does it. **That object REPLACES — it does not merge with —
+directly from a hand-written `windows/custom/{window}/index.jsx` wrapper (no
+window does so today — `contacts`, the only former user, migrated to the
+generic action in ETP-5758). **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
 wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
-dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
-canonical example.
+dropped. `tools/app-shell/src/windows/custom/contacts/index.jsx` shows the
+replace-not-merge pattern (it repeats the generated flags, without
+`hideBulkDelete`).
 
 > **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
 > `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
@@ -605,13 +656,15 @@ canonical example.
 > apply to any window, so it is gone unconditionally, with no flag needed or
 > supported anymore.
 
-**Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
-does **not** mean "this window has no bulk delete." `contacts` has its own,
-older bulk-delete affordance (a trash + X button pair rendered via
-`selectionBarRightActions`, predating this mechanism) that was **not**
-unified with `useBulkRowDelete` in this sub-task — that migration is tracked
-as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
-not-yet-migrated bulk-delete," never as "has none."
+**`contacts` migrated (ETP-5758):** `contacts` used to set `hideBulkDelete: true`
+and render its own, older bulk delete (a trash button via
+`selectionBarRightActions` plus its own confirm dialog). That dialog closed
+before the deletes ran and left the trash button enabled, so a user could
+launch several batches over the same rows. It now uses the generic action,
+whose dialog stays open and read-only (buttons disabled, no Esc/overlay close)
+until the batch settles, while the toolbar button is `disabled={bulkDeleting}`.
+A window that opts out with `hideBulkDelete` and rolls its own bulk delete must
+give it the same in-flight guard.
 
 **`listViewOptions.hideListBar` gates only the IDLE list bar — never the
 selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
@@ -916,7 +969,7 @@ auto-inserted after each):
 
 Because the shell no longer provides its own cancel/X affordance for callers
 to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
-hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+hand-rolled bar, like `contacts`' former `selectionBarRightActions` and Financial
 Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
 button** — `SelectionToolbar` always renders one as the trailing segment.
 
@@ -1029,8 +1082,9 @@ modal, the action dropdown, the per-row `Promise.allSettled` loop and the
 ok/failed toast. The button text comes from the `labelKey` prop. The nine
 document-action mounts all pass `labelKey="process"` ("Procesar" / "Process");
 the accounting mounts pass `labelKey="post"` ("Contabilizar", four windows) and,
-since ETP-5302, `labelKey="unpost"` ("Descontabilizar", `goods-receipt` and
-`goods-shipment` — see the pair below). `"bulkCompletion"` ("Procesado masivo")
+since ETP-5302, `labelKey="unpost"` ("Descontabilizar" — first `goods-receipt`
+and `goods-shipment`, since ETP-5692 also `sales-invoice` and `purchase-invoice`
+with their own CO-gated pair; see the pair below). `"bulkCompletion"` ("Procesado masivo")
 is only the prop default, which no window currently relies on.
 Inside the dropdown, `CO` is labeled **Confirmar** /
 **Confirm** (`labelKey: 'confirm'`) and `RE` **Reactivar** / **Reactivate**.
@@ -1143,11 +1197,21 @@ detail kebab's *Descontabilizar* already used, so no backend or i18n work was
 needed.
 
 **Why a separate pair rather than teaching `buildPostActions` to also emit
-`unpost`:** `sales-invoice` and `purchase-invoice` mount the post pair too, and
-they must **not** offer a standalone unpost. On an invoice, reversing the
-accounting is a step *inside* Reactivate (`preUnpost`), never a user-facing
-action of its own. Only `goods-receipt` and `goods-shipment`, whose detail kebab
-already exposes *Descontabilizar*, mount the unpost pair.
+`unpost`:** a window opts into the standalone unpost explicitly, and only a
+window whose detail kebab also declares a standalone *Descontabilizar*
+(`menuActions` entry with `action: "unpost"`) should mount the unpost pair — a
+window must not grow the action in the bulk bar only. ETP-5302 shipped with
+`sales-invoice` and `purchase-invoice` deliberately excluded (invoice unposting
+lived only *inside* Reactivate, via `preUnpost`); **ETP-5692 reversed that**:
+both invoice windows now declare the `unpost` menu action, offer it in the row
+kebab (`buildInvoiceRowQuickActions`) and mount a bulk unpost button, so an
+invoice can be unposted and stay Completed. Reactivate keeps its own `preUnpost`
+step. The invoice button uses its own pair, `buildInvoiceUnpostActions` /
+`invoiceUnpostRowFilter` in `windows/custom/shared/useInvoiceWindow.js`, which
+also requires status `CO` (a non-Completed row is rejected with
+`bulkRowNotCompleted` and counted as skipped — like every row filter, the reason is
+not shown: the result toast only carries counters, ETP-5316); the posted-only pair
+above is unchanged for the albarán windows.
 
 **Why its own button rather than a second option inside "Contabilizar":** the
 dropdown lives under a button whose label is the action — a window offering both
@@ -1301,7 +1365,7 @@ The generic `LinesEmptyState` component lives at `tools/app-shell/src/components
 />
 ```
 
-`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, adding is always allowed.
+`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, the default gate is the generated `requiredHeaderFields` list (`resolveCanAddLines` in `detailViewHelpers.jsx`): adding is allowed once every listed header field holds a value, and always when the list is empty. `generate-frontend.js` builds that list from the header's `required` + `form` fields the user can fill — it excludes `visibility` `discarded`, `system` **and `readOnly`** (ETP-5676), because a readOnly field such as `grandTotalAmount`/`summedLineAmount`, `documentNo` or `docStatus` is filled by the backend after the save and would otherwise hide the button until then. A field that is only locked by `readOnlyLogic` (e.g. after completion) is still editable in draft and stays in the list.
 
 **`window.maxDetailLines` — cap the line count (decisions-driven; `0` = import-only lines):**
 
@@ -1469,6 +1533,24 @@ I want row quick actions on my window
 
 **Layout and visual behavior.** The overlay is anchored to the right edge of the row, becomes visible on `group-hover/row`, and uses auto-width based on the number of visible buttons (Figma's 192px assumes all five render; collapsing to the buttons present avoids dead space). Container height is 40px, gap between buttons is 2px, each button is a 32×32 circle. Neutral icons are stroked with `#828FA3`; the Delete icon uses `#D50B3E`. Canonical order, left to right: **Edit → Duplicate → Email → Kebab → Delete** (see §2.1 of the plan).
 
+**Button and cell visuals (ETP-5600, Figma "Fila Contactos / Hover").** Buttons are *sm Round Tertiary*: no fill at rest, 20px icons, 200ms ease-in. Neutral buttons keep the `#828FA3` icon in every state and hover to a `#121217` @ 5% overlay; Delete keeps the `#D50B3E` Iconic trash (`IconicTrashIcon`, app-shell-core `custom-icons.jsx`) and hovers to the light destructive tint `#FEF0F4` — never a solid red fill. Focus-visible paints a white fill with a two-ring halo (2px white gap + 4px `#121217`, or `#F53D6B` for Delete). The reserved cell behind them (`quickActionsColumnClassName` in `DataTable.jsx`) is no longer a solid grey band while hover-sticky: it is a left-to-right gradient from transparent to `var(--row-hover-bg)`, so the column it floats over fades out. Every `DataTable` row sets `--row-hover-bg` to its own hovered background (see *List row visuals* below), so the fade always ends on the real row colour and no window sets the variable itself. This changes the look of the quick actions on **every** list with `rowQuickActions`. **Document lines share the same buttons:** the hover strip of `InlineLinesPanel` (`data-testid="line-actions"` — extra `rowActions`/Add dimensions, Edit, Delete) renders the very same class strings, which live in `contract-ui/rowVisuals.js` (`ROW_ACTION_BUTTON_NEUTRAL`, `ROW_ACTION_BUTTON_DESTRUCTIVE`) and are imported by both components — change them there, never per component. Line icons are 20px (Pencil; Delete is `IconicTrashIcon`, testid `IconicTrashIcon__3b7ec2`), the gap is 2px so four buttons fit the 160px action slot, there is no pill (`QUICK_ACTIONS_USE_PILL = false`), and the Edit button of the line being edited keeps the 5% overlay at rest (`ROW_ACTION_BUTTON_ACTIVE`) as its active cue. The detail topbar's Delete (`DetailDeleteButton.jsx`, `data-testid="action-delete"`, every window) follows the matching *md Rounded Secondary Outline Destructive* spec: 40×40, radius md, 1px `#FBB1C4` border on white, 24px `#D50B3E` Iconic trash; hover `#FEF0F4` + a 1px/2px 5% shadow; focus-visible white + the 2px/4px `#F53D6B` halo.
+
+**List row visuals (ETP-5600, Figma "Fila").** The `DataTable` row look is shared by every list (Sales Invoices, Quotations, Sales Orders, Documents, Purchase Invoices, Contacts, Accounts…) and is chosen by the `rowHoverStyle` prop, a direct `DataTable` prop (not a `decisions.json` key):
+
+| `rowHoverStyle` | Rest | Hover (clickable rows only) |
+|---|---|---|
+| `lift` (default; `elevated` is the former name, kept as an alias) | transparent, 1px `border-subtle` separator | opaque `bg-card` (white), Shadows/lg (`0 4px 6px -2px rgba(18,18,23,.05), 0 10px 15px -3px rgba(18,18,23,.08)`), raised with `z-10`, **instant** (no colour transition: a fading background made the chips inside the row flash under the shadow) |
+| `tint` (explicit opt-out) | transparent | the pre-ETP-5600 `bg-muted/50` wash, `transition-colors` |
+| `lift-always` (ETP-5526) | as `lift` | as `lift`, but on **every** row, clickable or not (cursor stays default). For a grid with hover actions and no row click — the attachments table |
+
+- **Separators.** Both lines stay visible on a hovered row. The line above it is the previous row's `border-b` in the table's collapsed-border grid; the raised row paints over it, so `getRowClassName` redraws it on the row's own cells (`[&:hover>td]:shadow-[inset_0_1px_0_hsl(var(--border-subtle))]`), above every cell background — the checkbox cell and the sticky quick-actions gradient included. The shadow falls downward, over the line below. The token `--border-subtle` is `#E1E7EF`; the Figma divider (`color/border/menu/divider`) is `#E8EAEF`, a near match kept on the shared token.
+- **Selected / checked rows** use Figma's *Selected* colour `#F5F7F9` (`--field-hover`, exact match) and no shadow at rest. Selection always wins over hover: a checked (or active `selectedId`) row keeps its selection colour while hovered, and under `lift` it still gets the hover shadow, so every clickable row gives the same pointer feedback. The inline-lines focus row (`selectedRowId`) keeps its `bg-muted` + focus ring and does not lift.
+- **Quick-actions fade.** Each row sets `--row-hover-bg` for its state — `hsl(var(--card))` on a lifted hover, `--field-hover` when checked, the composited tint under `tint` — and `quickActionsColumnClassName` ends its gradient on it.
+- **Non-clickable rows** (no `onRowClick`/`onNavigate`) never lift; they keep the shared `TableRow` base `hover:bg-muted/50` — unless the grid passes `rowHoverStyle="lift-always"`, which lifts them too (and adds the last-row shadow room below).
+- **Last-row shadow, without a gap.** Under `lift` with clickable rows (and not `linesLayout="inlineEditable"`), the table wrapper adds `[&>div]:pb-6` so the last row's shadow is not clipped by `<Table>`'s own `overflow-auto` box (ETP-5388), and takes that room back from the layout with `!-mb-6` on itself (ETP-5600). Figma ends a list at its last row (or the 40px totals row) and runs a tab grid straight into its add-line bar, so nothing below the table sees a 24px gap: the following element (pagination, add-line bar, Total block) starts right under the last row and overlaps the empty padding, which is made click-through (`[&>div]:pointer-events-none`, `auto` again on the `<table>`) because `<Table>`'s wrapper is `position: relative` and would otherwise swallow clicks on the top 24px of that element. The hovered row's shadow (`z-10`) paints over it; a shadow is never a hit target. The negative margin sits on the outer wrapper, not the inner one, because the outer wrapper is itself a scroll container (`overflow-x-auto` forces `overflow-y: auto`): an inner `-mb-6` would overflow it, raising a stray vertical scrollbar and clipping the shadow again. A vertically scrolling ancestor (ListView's ScrollPane, the Accounts scroll region) still counts the wrapper's full border box as scrollable overflow, so scrolled to the bottom the shadow keeps its 24px and no row ends up behind what follows. The `!` is required: the parent's `space-y-0` zeroes `margin-bottom` on every child after the sticky header with a stronger selector. ListView's own `tablePaddingBottom` (`pb-6` on its ScrollPane) is the page's bottom gutter, not shadow room, and is unchanged.
+- **Document lines (`InlineLinesPanel`, `linesLayout="inlineEditable"`, Figma "Fila Producto" / "Fila Editable" / "Fila Desplegable dimensiones").** Its rows are flex `<div>`s, not `DataTable` rows, but they take the same values from `components/contract-ui/rowVisuals.js`, shared with `DataTable`: rest `bg-card` (white); hover keeps white and adds Shadows/lg (`ROW_LIFT_SHADOW`), instant (`transition-none`), no border change, raised with `hover:relative hover:z-20`; a line being edited keeps the same Shadows/lg (`ROW_LIFT_SHADOW_STATIC`). A checked line uses `ROW_CHECKED_BG` (`#F5F7F9`, `--field-hover`) — Figma has no Selected variant for lines, so it takes the list's, and hover keeps it (it was `bg-primary/5` before ETP-5600). The open-line highlight (`selectedRowId`) keeps `bg-muted/40` + `ring-1 ring-focus-ring`. A flex row never overlaps the row above, so the top separator stays visible without the `<td>` redraw. Lines of a read-only (completed) document do not lift — Figma shows no hover there. **Last-line shadow.** The lines' body box is an `overflow-x-auto` scroll box (so it also clips vertically) and shows the native horizontal scrollbar. When the lines can lift and nothing else follows the last line inside that box (no open add-row, no balance footer), `computeBodyScrollClassName` adds `pb-4` (16px, enough for the visible ~14px Shadows/lg tail) so the last — often only — line's shadow is not cut. Without horizontal overflow (measured on resize, column-set and row-count changes) the box takes the room back with `-mb-4`, as `DataTable` does, so no gap shows and the add-line bar starts right under the last line; the padding is click-through (`pointer-events-none`, `auto` again on its children), and the bar, `sticky z-10`, still wins clicks on the overlap while the hovered line (`z-20`) paints its shadow over it. With horizontal overflow there is no negative margin (the bar would cover the scrollbar, and click-through would disable it): the scrollbar simply sits 16px lower.
+- Pass `rowHoverStyle="tint"` only where a raised white row reads wrong — a grid sitting on a grey panel. No current consumer needs it. Hand-built tables that do not use `DataTable` (`fiscal-models` `.fm-table`) mirror the same shadow and top-separator fix in their own CSS.
+
 **Custom action content in hand-built tables.** A hand-built window that needs domain-specific row actions can reuse `DataTable`'s same reserved column, hover-sticky positioning, background mask and horizontal-scroll behavior instead of appending a synthetic actions column. Pass `rowQuickActions.render(row)` for the custom content and `rowQuickActions.buttonCount` for the maximum number of 32px buttons it renders. If the content does not follow the canonical button geometry, pass `rowQuickActions.reservedWidthPx` instead; it takes priority over `buttonCount`. These are direct `DataTable` props for custom React tables, not `decisions.json` keys. Without `render`, the standard `RowQuickActions` behavior is unchanged.
 
 **Visibility is inherited from the edit view.** When an action does not apply to a record (AD permission, document state, `documentPreview` absent, delete gate), it is **hidden** — never rendered as a disabled, greyed-out button. Disabled state is reserved exclusively for the in-flight case (see below). The Delete visibility gate (`hideDeleteWhenComplete` + status check) lives in the shared utility `tools/app-shell/src/utils/recordActions.js`, which is the single source of truth used by both `DetailView` and `RowQuickActions`. Custom `visibleWhen` predicates are AND-chained with that base visibility — they refine, never force-show.
@@ -1562,6 +1644,8 @@ Clicking either the chevron or the hover action toggles the same expand state �
 }
 ```
 `dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — the generator's `generateTableComponent` follows this same `dimensionFields.length > 0 ? [...] : []` pattern.
+
+**ETP-5692 — editable on a completed document, per field (`draftMode.editableLineFieldsWhenCompleted`):** while the document is locked by completion the whole sub-row is read-only, exactly as before — unless `DetailView` passes `InlineLinesPanel` the optional prop `isFieldEditableWhenReadOnly(row, fieldKey) => boolean`, built from that `draftMode` list by `lib/completedLineEdits.js` (fail-closed; each field still obeys its own `readOnlyLogic` evaluated on `{ ...header, ...line }`). `InlineLinesPanel` then (a) lets `commitField` through for exactly those fields and (b) hands `DimensionGrid` the optional per-field predicate `isFieldReadOnly(field) => boolean`, which takes precedence over the grid-wide `readOnly` when present. The save goes through `DetailView`'s `buildCompletedLineFieldUpdateHandler` (`inlineLineUpdateHandlers.js`): a one-field PATCH, since `buildInlineRowUpdateHandler` returns `undefined` on a locked document. Both props are absent for every other caller, which therefore renders and behaves exactly as before. See `docs/decisions-reference.md` → `draftMode`.
 
 **Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Edit dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
 
@@ -1701,7 +1785,7 @@ One more request precedes the paging: the selector **fails closed** (returns an 
 
 Either way the **save/complete gating logic is identical and unaffected** — both paths read `computeBalanceGate()`'s `balanceState` directly, never anything a renderer displays.
 
-**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Windows without `window.balanceFooter` configured are unaffected: `balanceFooter` is `null`/absent for them, so `DataTable`'s generic footer-totals still renders exactly as before.
+**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Independently of `balanceFooter`, a `DataTable` rendered with `hideDataRows` never renders the generic footer-totals row either (ETP-5771): it has no visible rows to total, and because the call site spreads the full lines list in as `data`, the row otherwise summed every `amount` column (e.g. unit prices plus a duplicate of the document total) right under the add-row form on windows without `balanceFooter` — exposed once a header summary stopped carrying `amount` fields and the `showDetailFooterTotals` default flipped to `true`. Normal `DataTable`s (no `hideDataRows`) keep rendering the generic footer-totals exactly as before.
 
 **When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
 
@@ -1723,7 +1807,7 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `computeBalanceGate()` produces `balanceState` (gates Save/Complete) and, for `inlineEditable` windows, `buildBalanceFooterGridTotals()` (in `detailViewHelpers.jsx`) formats it into the `balanceFooter` prop threaded into `<DetailTable>` → `InlineLinesPanel`. `renderTotalsBlock()` renders the classic-layout `BalanceFooterPanel` fallback instead of `DocumentTotalsPanel` only when `linesLayout !== "inlineEditable"`.
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `renderBalanceFooterRow()` renders the column-aligned totals row for `inlineEditable` windows.
 - `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
-- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row (see "Add-row and `DataTable`'s generic footer-totals" above).
+- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row; `hideDataRows` suppresses it too (ETP-5771) (see "Add-row and `DataTable`'s generic footer-totals" above).
 
 **Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
@@ -1781,6 +1865,9 @@ Customer/Vendor Accounting, etc.).
    ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
    `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
    `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   A capability-hidden tab is also never fetched in the background (ETP-5648). When the
+   accounting tab is the window's *detail* tab (`detailEntity`, as in `product-category` and
+   `business-partner-category`), gate it with `window.detailVisibleWhenCapability` instead.
    **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s
@@ -1896,6 +1983,34 @@ an accounting-schema row, the `secondaryTabs`-pattern equivalent of `window.maxD
 enforced client-side by `resolveCanAddSecondaryLines(st, childrenCount)` in `DetailView.jsx`,
 gating `secondaryAddLineBar`, the inline `addRow`, and the empty-state add trigger once the tab's
 own child count reaches the declared `maxDetailLines`.
+
+#### The "More" overflow menu of the Form View tab strip (ETP-5515)
+
+The Form View's bottom tab strip (`DetailTabStrip.jsx`, rendered by `DetailView`) shows at most
+**4 tabs plus a "Más" / "More" menu** in every window, with or without a sidebar; labels never
+wrap (`whitespace-nowrap`). With 4 tabs or fewer there is no menu. No `decisions.json` option:
+the rule is generic, so it applies to every window, declarative or custom.
+
+- **Dynamic slot.** The last visible tab (4th) is a slot. Picking a hidden tab from the menu puts
+  it in the slot and the tab that was there drops into the menu; selecting any fixed tab (the
+  first three) restores the original arrangement. The arrangement is derived purely from the
+  active tab key (`resolveTabStripLayout` in `detailTabStripLayout.js`), so it also follows
+  deep links (`location.state.openSecondaryTab`).
+- **Width-aware.** The limit of 4 is a ceiling: the visible count is `min(4, tabs that fit)` in the
+  strip's own width (`useFittingTabCount.js` + `computeFittingTabCount`), so a 4-tab window gets a
+  "Más" at narrow widths or high zoom and tabs never overlap the side panel. The rest of the rules
+  (slot, reset, active tab always visible) hold for any count. Floor: 1 fixed tab + the slot; if
+  even that does not fit, the strip clips (`min-w-0 overflow-hidden`) instead of overlapping.
+  Natural widths come from an invisible probe row rendered inside the strip (same box classes as `TabStripButton`, shared via `tabStripButtonBaseCls`; labels and counters are drawn with CSS `::after{content:attr(data-text)}`, so the probe adds no text nodes, test ids or focusable elements to the DOM); a `ResizeObserver`
+  on the strip and the probe re-measures on resize, sidebar open/close, zoom and font changes.
+  Without layout (jsdom, no `ResizeObserver`, zero width) it falls back to the count-only rule.
+- **Counters** (e.g. "Dirección 1") and the save-first disabled hint travel with the tab into and
+  out of the menu.
+- **Test ids.** Visible tabs keep `tab-<key>`; the trigger is `detail-tab-more` and menu entries
+  are `detail-tab-more-item-<key>`. A test that clicks `tab-<key>` for a tab beyond the 4th must
+  open `detail-tab-more` first.
+- Hand-built windows that render their own tab strip (e.g. financial-account `DetailTabs`) are not
+  affected.
 
 ---
 
@@ -2140,11 +2255,13 @@ at all.
 
 - **Why an allowlist and not "every window using the default product drawer":** ~10 other specs share
   that drawer (requisition, physical inventory, cost adjustment, return to vendor…), and the
-  goods-movements / internal-consumption **line forms** reach it too, because
-  `EntityForm.LookupFormField` hardcodes `ProductSearchDrawer` instead of honouring the window's
+  goods-movements / internal-consumption **line forms** used to reach it too, because
+  `EntityForm.LookupFormField` hardcoded `ProductSearchDrawer` instead of honouring the window's
   `lookupDrawer` (the key documented in [`docs/decisions-reference.md`](decisions-reference.md) →
-  *Lookup Drawer Override*). That inconsistency is a separate ticket; the allowlist keeps this feature
-  out of its blast radius in the meantime.
+  *Lookup Drawer Override*). ETP-5681 closed that inconsistency: `LookupFormField` now resolves the
+  drawer through the same `lookupDrawers.js` registry as the add-row and the inline edit, so those two
+  line forms open their declared `product-stock` drawer (which does not forward `createEnabled`). The
+  allowlist still keeps the feature to the specs that asked for it.
 - **The `product-stock` variant never shows the row.** Creating a stockless product inside a picker
   that filters by stock returns an immediately empty result, so the stock drawer opts out simply by
   not forwarding the flag. Multi-select pickers (`keepOpenOnSelect`, e.g. the report viewer) opt out
@@ -2520,7 +2637,7 @@ with the chosen value — see **Input-required round-trip** below.
 |---|---|
 | `followUpDocuments.js` | Pure helpers: `readFollowUpEntries`, `buildFollowUpActionUrl`, error-code → i18n key map (`FOLLOW_UP_ERROR_KEYS`, fallback `followUpErrorGeneric`), the input-required helpers (`readFollowUpInputRequest`, `followUpInputLabels`, `mergeFollowUpInputValues`), the prompt hand-off (`requestFollowUpPrompt` / `consumeFollowUpPrompt`) and `createFollowUpAfterProcess(spec, options)` |
 | `useFollowUpDocuments` | State machine `closed → choice → (loading) → result`; POSTs through `useApiFetch`; keeps a backend-requested input (`session.inputRequest`, `session.inputs`, `setInputValue`); on success dispatches `<spec>:document-created` and calls `onCreated` |
-| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` with `variant="popup"` (link to the created document, in the same Figma "PopUps" shell as the choice phase: close icon, left-aligned title, card-style link, outlined «Cerrar» + dark pill «Ver …»; the default variant other windows use is unchanged); errors inline |
+| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` (see §21 — the component owns the dialog, its title and its keyboard handling; this modal only maps the created documents to `docs`); errors inline |
 | `FollowUpDocumentButton` | `topbarRight` entry point: renders only while a configured follow-up is available (never for a read-only window); always mounts the modal, so the post-Confirm prompt also opens it |
 
 **Per-window config** — a map keyed by the backend follow-up key (see
@@ -2539,8 +2656,9 @@ options: {
     icon,                          // lucide component
     titleKey, buttonLabelKey,      // used when this is the only follow-up offered; separate keys: the
                                    // modal title asks («¿Gestionar envío?»), the button does not («Gestionar envío»)
-    resultDocType,                 // ConfirmResultModal type: 'salida' | 'entrada' | 'facturaVenta' | 'facturaCompra'
-    resultTitleKey,
+    resultDocType,                 // ConfirmResultModal doc type (see §21 for the full list) — drives the
+                                   // result popup's title, card label, badge gender and «Ver …» button.
+                                   // Today: 'salida' (sales-invoice) | 'entrada' (purchase-invoice)
   },
 },
 summary: { documentLabelKey /* required */,
@@ -2581,7 +2699,8 @@ group (Arrow/Home/End) where Enter selects the focused card AND continues, every
 visible `:focus-visible` outline, and the layout stacks below 640px. With a single option the
 radio group is replaced by the direct confirmation and focus starts on the primary button (the
 static card is not a Tab stop). The result
-phase has the same Tab trap and Esc rule and focuses the link to the created document.
+phase is `ConfirmResultModal`, which has the same Tab trap and Esc rule of its own and focuses its
+primary button («Ver albarán» for one created document) — see §21.
 
 **Input-required round-trip.** When the backend cannot decide a value the follow-up document
 needs (today: the target warehouse of the shipment / receipt), it answers the action POST with an
@@ -2645,6 +2764,92 @@ carries the option's `actionLabel` and no arrow icon (the spinner still shows wh
 Options take an optional `badgeTone` (`'success'` default, `'info'`), mapped to the
 `--status-success-*` / `--status-info-*` tokens. sales-quotation always passes two options, no
 `badgeTone`, and is unaffected (green «Recomendado», arrow on the primary).
+
+### 21. Generated-documents popup — `ConfirmResultModal` (ETP-5674)
+
+`tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx` is THE result popup every flow
+shows after it created one or more documents, on both Sales and Purchases: confirming an order with
+shipment / receipt / invoice, invoicing a shipment or a receipt (single and bulk), the rectificative
+invoice of a return, a purchase return created from a receipt, a quotation turned into an order or
+an invoice, and the follow-up documents of §20. Do not build a window-local result view — pass
+`docs` to this component.
+
+**Props.** Callers only describe *what* was created; all the copy is derived inside the component,
+so two flows that create the same document can never word it differently.
+
+```jsx
+<ConfirmResultModal
+  docs={[
+    { type: 'salida',       num: 'ALB-0001', documentStatus: 'DR', route: '/goods-shipment/<id>' },
+    { type: 'facturaVenta', num: 'FAC-0042', documentStatus: 'CO', route: '/sales-invoice/<id>' },
+  ]}
+  navigate={navigate}            // (route) => void — opens a document
+  onClose={resetConfirmedState}  // «Cerrar», the X icon and Esc
+  onNavigate={() => { navigatedRef.current = true; }}  // optional; runs INSTEAD of onClose
+/>                                                      // right before navigating (default: onClose)
+```
+
+| `docs[i]` key | Meaning |
+|---|---|
+| `type` | A `TYPE_CONFIG` key (table below). An unknown type falls back to `facturaCompra`. |
+| `num` | Document number, rendered as «Nº &lt;num&gt;» (`confirmResultModal.docNumber`). |
+| `documentStatus` | Optional. `'CO'` → green «Completado/Completada» badge (gendered by type); anything else, including missing → neutral «Borrador». Always pass the real status from the action response — invoices are confirmed on creation while a shipment in the same popup can still be a draft. |
+| `route` | Optional. Without it the card is shown but is not clickable, and no «Ver …» button is offered. |
+
+There is **no** `title`, `primary`, `currency` or per-doc `amount`/`status` prop: the popup shows
+no amount, and its title, banner and buttons are computed:
+
+| `docs.length` | Title | Banner | Footer |
+|---|---|---|---|
+| 1 | per-type title (e.g. «Albarán creado», «Factura creada») | «Se ha generado un documento» / «Ábrelo para consultarlo.» | with a `route`: «Cerrar» (secondary) + «Ver …» (primary, opens it); without: «Cerrar» only |
+| 2+ | «Documentos creados» (`confirmResultModal.title.many`) | «Se han generado N documentos» / «Abre cualquiera de ellos para consultarlo.» | «Cerrar» only (primary); the cards navigate |
+| 0 | `followUpDocumentCreated` fallback | none | «Cerrar» only |
+
+**Document types** (`TYPE_CONFIG`; i18n keys under `confirmResultModal.*` in `en_US` / `es_ES` /
+`es_AR`):
+
+| `type` | Card label (es_ES) | Title when alone (es_ES) | «Ver …» key | Badge gender | Used by |
+|---|---|---|---|---|---|
+| `salida` | Albarán de venta | Albarán creado | `soViewShipment` | masculine | sales-order confirm, sales-invoice follow-up |
+| `entrada` | Albarán de compra | Albarán creado | `poViewReceipt` | masculine | purchase-order confirm, purchase-invoice follow-up |
+| `facturaVenta` | Factura de venta | Factura creada | `soViewInvoice` | feminine | sales-order confirm, goods-shipment invoicing (single / bulk / row Confirmar), sales-quotation «Facturar directamente» |
+| `facturaCompra` | Factura de compra | Factura creada | `poViewInvoice` | feminine | purchase-order confirm, goods-receipt invoicing (single / bulk / row Confirmar) |
+| `facturaRectificativa` | Factura rectificativa | Factura rectificativa creada | `soViewInvoice` | feminine | return-material-receipt |
+| `facturaRectificativaCompra` | Factura rectificativa de compra | Factura rectificativa de compra creada | `poViewInvoice` | feminine | return-to-vendor-shipment |
+| `devolucionCompra` | Devolución de compra | Devolución de compra creada | `confirmResultModal.view.devolucion` | feminine | goods-receipt «Crear devolución» (opens `/return-to-vendor-shipment/{id}`) |
+| `pedidoVenta` | Pedido de venta | Pedido creado | `sqViewOrder` | masculine | sales-quotation «Crear pedido» |
+
+Adding a document type = one `TYPE_CONFIG` row (label key, title key, view key, lucide icon,
+gender) plus its `confirmResultModal.docType.*` / `confirmResultModal.title.*` keys in all three
+locales. Shared hooks pass the type through instead of a title: `invoiceDocType` in
+`useRowConfirmAction` / `ReturnWindowShell`'s `confirmAction`, `invoiceType` in
+`ConfirmWithCreditButtonBase` / `useConfirmWithCredit`, `primaryDoc.type` / `invoiceDoc.type` in
+`useOrderWindow`, `resultDocType` in the follow-up config (§20). `confirmedTitleKey` survives in
+`useOrderWindow` / `useRowConfirmAction` only for the success **toast** shown when a confirm
+created no document — it never reaches the popup.
+
+**Dialog behaviour** (owned by the component — callers must not wrap it in their own dialog or
+focus trap): the panel is `role="dialog" aria-modal="true"` labelled by its title; focus moves to
+the primary button on open (so Enter runs it) and returns to the opener on unmount; Tab is trapped
+inside (`useDialogFocusTrap`, shared with `ActionChoiceModal`); Esc closes only when it is this
+dialog's own (`isOwnEscape`); a navigable card is a native `<button>` (Enter / Space open it).
+Overlay `zIndex: 50` (the app's modal tier — see `docs/walkthrough-flows.md`).
+
+**Stable selectors** (E2E and walkthroughs):
+
+| `data-testid` | Element |
+|---|---|
+| `confirm-result-modal` | overlay |
+| `confirm-result-dialog` | the `role="dialog"` panel |
+| `confirm-result-title` | title |
+| `confirm-result-banner` | green banner (`role="status"`), absent with 0 docs |
+| `confirm-result-card-<i>` | card `i`, with `data-doc-type` (the `type`) and `data-doc-status` (`CO` or `DR`) |
+| `action-confirm-result-view` | «Ver …» (only with exactly one navigable doc) |
+| `action-confirm-result-close` | «Cerrar» — present in **both** footer variants; target of the `create-sales-order` walkthrough's last step (`confirmed-ack`), do not rename |
+| `action-confirm-result-dismiss` | the X icon |
+
+Pure helpers `getConfirmResultTypeConfig(type)` and `getConfirmResultCopy(docs, ui)` are exported for
+reuse and tests. Unit coverage: `tools/app-shell/src/components/contract-ui/__tests__/ConfirmResultModal.vitest.jsx`.
 
 ## Decision tree: which option to use?
 
@@ -2940,6 +3145,12 @@ Render each entry point only when it is defined. The reference implementation,
 (`components/CopilotContext.jsx`, returns `null` instead of throwing without a `CopilotProvider`) to show
 an "Ask Copilot" button that calls `copilot.open`, and `useLaunchWalkthrough(source)`
 (`lib/walkthrough/useLaunchWalkthrough.js`, see `docs/walkthrough-flows.md` §9) to start a guided tutorial.
+
+The core `ImportDropzone` (`@etendosoftware/app-shell-core/components/import/ImportDropzone.jsx`) is shared
+by every window's `ImportDialog` and by this empty state, so its look changes everywhere at once (ETP-5600):
+by default a 1px dashed gray/200 border with no fill; on hover a 5% `#121217` overlay and a gray/400 border
+(200ms ease-in); while a file is dragged over, the primary highlight. An optional `disabled` prop (default
+`false`) renders the disabled fill, drops `tabIndex` to -1 and ignores clicks and drops.
 
 ### `primarySave` — keep Save as the primary button on existing records
 

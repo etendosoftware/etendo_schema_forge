@@ -44,11 +44,11 @@ const requiredHeaderFields = ['searchKey', 'name', 'default', 'active'];
 // @sf-generated-start addLineFields:accounting
 const addLineFields = {
   entry: [
-    { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', required: true, label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', required: true, label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', required: true, label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+    { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+    { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+    { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', required: true, label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+    { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
   ],
   derived: [
 
@@ -198,6 +198,7 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
         toolbarPaddingX="px-2"
         formCardPadding="p-2"
         formScrollPaddingX="px-2"
+        detailVisibleWhenCapability="showAccountingFields"
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product_Category", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}
@@ -215,7 +216,6 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideLink

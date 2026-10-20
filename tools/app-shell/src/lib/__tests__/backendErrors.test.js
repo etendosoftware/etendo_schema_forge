@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/lib/backendErrors.js
 // @covers tools/app-shell/src/locales/en_US.json
 // @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -9,6 +10,8 @@ import {
   extractBackendMessageParams,
   translateBackendError,
   parseBackendErrorMessage,
+  parseBackendError,
+  translateBackendErrorResponse,
 } from '../backendErrors.js';
 
 /**
@@ -272,6 +275,37 @@ describe('translateBackendError', () => {
           if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
         }
       });
+    }
+  });
+
+  // Sales order Reactivate refusals (com.etendoerp.go OrderReactivationGuard). The backend
+  // sends them in English only, so the SPA must map each one to a locale key.
+  describe('sales order reactivation refusals', () => {
+    const KNOWN = [
+      {
+        raw: 'This order cannot be reactivated because it has linked shipments or invoices.',
+        key: 'cannotReactivateLinkedDocs',
+      },
+      {
+        raw: 'The documents linked to this order could not be checked, so it has not been reactivated. Try again.',
+        key: 'backendError.orderLinkedDocsCheckFailed',
+      },
+    ];
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const json = JSON.parse(
+        readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      for (const { raw, key } of KNOWN) {
+        it(`resolves "${raw.slice(0, 40)}..." through ${key} to the ${locale} text`, () => {
+          const asked = [];
+          const t = (k) => { asked.push(k); return json.genericLabels[k] ?? k; };
+          const translated = translateBackendError(raw, t);
+          assert.ok(asked.includes(key), `${raw} is not mapped to ${key}`);
+          assert.equal(translated, json.genericLabels[key], `${locale}.${key}`);
+          assert.ok(translated.trim(), `${locale}.${key} is blank`);
+          if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
+        });
+      }
     }
   });
 
@@ -2052,6 +2086,188 @@ describe('translateBackendError — "zero or negative quantity (process)" parame
   });
 });
 
+// InvoiceCompletionLineGuard.java (com.etendoerp.go — ETP-5710). The server refuses to complete an
+// invoice whose lines kept a net amount of 0 and names the lines by PRODUCT (their line numbers are
+// internal). The SPA renders the same sentence in the user's locale; `error.code` stays
+// `invoiceLinesWithoutAmount` for machine readers, but every consumer that already routes a failed
+// completion through translateBackendError (the confirm modal, the row quick action, the bulk
+// toast) gets the translation here with no per-flow plumbing.
+describe('translateBackendError — invoice lines without amount (ETP-5710)', () => {
+  const KEY = 'backendError.invoiceLinesWithoutAmount';
+  const es = fakeUiTranslator({
+    [KEY]: 'No se puede completar la factura: las líneas de {products} tienen cantidad y precio pero importe neto 0. Vuelve a guardar esas líneas para que se recalcule el importe y después complétala.',
+  });
+  const raw = (products) => `The invoice cannot be completed: the lines of ${products} have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.`;
+
+  it('translates the product list into es_ES', () => {
+    assert.equal(
+      translateBackendError(raw('Agua, Cerveza, Queso Sardo'), es),
+      'No se puede completar la factura: las líneas de Agua, Cerveza, Queso Sardo tienen cantidad y precio pero importe neto 0. Vuelve a guardar esas líneas para que se recalcule el importe y después complétala.',
+    );
+  });
+
+  it('handles a single product', () => {
+    assert.match(translateBackendError(raw('Agua'), es), /las líneas de Agua tienen/);
+  });
+
+  it('leaves an unknown message untouched', () => {
+    const other = 'The invoice cannot be completed: something else.';
+    assert.equal(translateBackendError(other, es), other);
+  });
+
+  it('returns the original message when the key is missing from the locale', () => {
+    const missing = (k) => k;
+    assert.equal(translateBackendError(raw('Agua'), missing), raw('Agua'));
+  });
+
+  it('has the key in en_US, es_ES and es_AR with the {products} placeholder', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const dict = JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8'));
+      const flat = JSON.stringify(dict);
+      assert.ok(flat.includes(`"${KEY}"`), `${loc} is missing ${KEY}`);
+      assert.ok(flat.match(new RegExp(`"${KEY}":\\s*"[^"]*\\{products\\}`)), `${loc} lost {products}`);
+    }
+  });
+});
+
+// ReturnableQuantity.java / ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711). The
+// over-return refusal names the product and both quantities; the product is free text, so it is
+// located by the fixed delimiters.
+describe('translateBackendError — over-return refusals (ETP-5711)', () => {
+  const es = fakeUiTranslator({
+    'backendError.returnQuantityExceeds': 'No se pueden devolver {requested} de {product}: solo quedan {available} por devolver de esta línea ({total} en el documento de origen).',
+    'backendError.returnNothingLeftOnLine': 'No se pueden devolver {requested} de {product}: no queda nada por devolver de esta línea ({total} en el documento de origen).',
+    'backendError.returnNothingLeft': 'No queda nada por devolver de este documento: todas las líneas ya se han devuelto.',
+    'backendError.returnLineRequiresImport': 'Las líneas de una devolución no se pueden crear directamente.',
+    'backendError.returnLineNotInDocument': 'La línea {lineId} no es una línea de este documento.',
+    'backendError.returnReasonTooLong': 'El motivo es demasiado largo: máximo {max} caracteres (tiene {length}).',
+  });
+
+  it('translates the direct-creation refusal of both directions to the same key', () => {
+    const expected = 'Las líneas de una devolución no se pueden crear directamente.';
+    assert.equal(
+      translateBackendError('Return lines cannot be created directly. Add them to the return with importReceiptLines, or create the whole return from the source document with createPurchaseReturn.', es),
+      expected,
+    );
+    assert.equal(
+      translateBackendError('Return lines cannot be created directly. Add them to the return with importShipmentLines, or create the whole return from the source document with createReturn.', es),
+      expected,
+    );
+  });
+
+  it('translates "line is not a line of this document" keeping the id', () => {
+    assert.equal(
+      translateBackendError('Line 4F2A is not a line of this document.', es),
+      'La línea 4F2A no es una línea de este documento.',
+    );
+    assert.equal(translateBackendError('Line  is not a line of this document.', es), 'Line  is not a line of this document.');
+  });
+
+  it('translates the over-long reason keeping both numbers', () => {
+    assert.equal(
+      translateBackendError('The reason is too long: it can have at most 255 characters (it has 300).', es),
+      'El motivo es demasiado largo: máximo 255 caracteres (tiene 300).',
+    );
+    const odd = 'The reason is too long: it can have at most (it has 3).';
+    assert.equal(translateBackendError(odd, es), odd);
+  });
+
+  it('translates the over-return with product and quantities', () => {
+    assert.equal(
+      translateBackendError('Cannot return 5 of Agua: only 4 can still be returned from this line (10 on the source document).', es),
+      'No se pueden devolver 5 de Agua: solo quedan 4 por devolver de esta línea (10 en el documento de origen).',
+    );
+  });
+
+  it('keeps a product name that itself contains " of " and ": only "', () => {
+    assert.equal(
+      translateBackendError('Cannot return 2 of Box of 6: only 1 can still be returned from this line (3 on the source document).', es),
+      'No se pueden devolver 2 de Box of 6: solo quedan 1 por devolver de esta línea (3 en el documento de origen).',
+    );
+  });
+
+  it('translates the nothing-left variants', () => {
+    assert.equal(
+      translateBackendError('Cannot return 1 of Agua: nothing is left to return from this line (10 on the source document).', es),
+      'No se pueden devolver 1 de Agua: no queda nada por devolver de esta línea (10 en el documento de origen).',
+    );
+    assert.equal(
+      translateBackendError('Nothing is left to return from this document: every line has already been returned.', es),
+      'No queda nada por devolver de este documento: todas las líneas ya se han devuelto.',
+    );
+  });
+
+  it('leaves an unrelated "Cannot return" message untouched', () => {
+    const other = 'Cannot return anything today.';
+    assert.equal(translateBackendError(other, es), other);
+  });
+
+  it('has the keys in en_US, es_ES and es_AR', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      for (const k of ['returnQuantityExceeds', 'returnNothingLeftOnLine', 'returnNothingLeft', 'returnSourceNotCompleted', 'returnLineRequiresImport', 'returnLineNotInDocument', 'returnReasonTooLong']) {
+        assert.ok(flat.includes(`"backendError.${k}"`), `${loc} is missing ${k}`);
+      }
+    }
+  });
+});
+
+// ReturnShipmentUtils.java (com.etendoerp.go — ETP-5712): the factura rectificativa of a return.
+// The zero-amount refusal (`error.code = returnInvoiceWithoutAmount`) names the products by the
+// fixed delimiters of its sentence; the "nothing to rectify" 400 is an exact-match sentence.
+describe('translateBackendError — return factura rectificativa (ETP-5712)', () => {
+  const es = fakeUiTranslator({
+    'backendError.returnInvoiceWithoutAmount': 'No se puede crear la factura rectificativa: no se ha encontrado precio para {products}, y quedaría confirmada con importe cero.',
+    'backendError.rectifiedInvoiceRequired': 'Esta devolución no tiene factura que rectificar.',
+  });
+  const PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
+  const SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+
+  it('translates the zero-amount refusal keeping the product names', () => {
+    assert.equal(
+      translateBackendError(`${PREFIX}Agua, Sal${SUFFIX}`, es),
+      'No se puede crear la factura rectificativa: no se ha encontrado precio para Agua, Sal, y quedaría confirmada con importe cero.',
+    );
+  });
+
+  it('keeps a product name that itself contains a comma', () => {
+    assert.equal(
+      translateBackendError(`${PREFIX}Tornillo 4, 5 mm${SUFFIX}`, es),
+      'No se puede crear la factura rectificativa: no se ha encontrado precio para Tornillo 4, 5 mm, y quedaría confirmada con importe cero.',
+    );
+  });
+
+  it('leaves a message with the prefix but no products untouched', () => {
+    const odd = `${PREFIX.trimEnd()}${SUFFIX}`;
+    assert.equal(translateBackendError(odd, es), odd);
+  });
+
+  it('translates the "no invoice to rectify" sentence the backend sends now', () => {
+    assert.equal(
+      translateBackendError('This return has no invoice to rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. Invoice the original document first, or pass originInvoices with the id of an invoice from rectifiableInvoices.', es),
+      'Esta devolución no tiene factura que rectificar.',
+    );
+  });
+
+  it('has the new key with {products} in en_US, es_ES and es_AR, and the rectified sentence is the new one', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.returnInvoiceWithoutAmount":\s*"[^"]*\{products\}/), `${loc} lost {products}`);
+    }
+    const en = readFileSync(new URL('../../locales/en_US.json', import.meta.url), 'utf8');
+    assert.ok(en.includes('"backendError.rectifiedInvoiceRequired": "This return has no invoice to rectify'), 'en_US still carries the old sentence');
+  });
+
+  it('ships backendError.rectifiedInvoiceRequired in every locale, es_AR in voseo', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.match(flat, /"backendError\.rectifiedInvoiceRequired":\s*"[^"]+"/, `${loc} is missing rectifiedInvoiceRequired`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.match(ar, /"backendError\.rectifiedInvoiceRequired":\s*"[^"]*Facturá primero[^"]*seleccioná/);
+  });
+});
+
 // AmortizationConfirmGuard.java (com.etendoerp.go — ETP-5414). Simple exact-match
 // BACKEND_ERROR_MAP entries, same shape as the "duplicate email" block above — no dynamic
 // value, so no fakeUiTranslator/regex match needed. Three of the four reuse the SAME key
@@ -2752,6 +2968,36 @@ describe('translateBackendError — OtherPostingProcessActive (ETP-5529)', () =>
   });
 });
 
+// ── ETP-5577: core `PeriodNotAvailable` — a document dated in a period that is not open ──
+//
+// A productive tenant starts with every period never-opened. The completion procedures, the
+// posting engine and the payment services all name this refusal in `messageKeys`.
+describe('translateBackendError — PeriodNotAvailable (ETP-5577)', () => {
+  const RAW_EN = 'The period does not exist or it is not opened';
+
+  it('renders the es_ES copy from the identity', () => {
+    assert.match(
+      translateBackendError(RAW_EN, localeTranslator('es_ES'), { messageKeys: ['PeriodNotAvailable'] }),
+      /período contable de la fecha del documento no está abierto/,
+    );
+  });
+
+  it('renders the same copy for PeriodNotValid, GL_JOURNAL\'s key for the same refusal', () => {
+    assert.match(
+      translateBackendError('No valid period for this accounting date.', localeTranslator('es_ES'),
+        { messageKeys: ['PeriodNotValid'] }),
+      /período contable de la fecha del documento no está abierto/,
+    );
+  });
+
+  it('renders the en_US copy from the identity', () => {
+    assert.match(
+      translateBackendError(RAW_EN, localeTranslator('en_US'), { messageKeys: ['PeriodNotAvailable'] }),
+      /accounting period of the document's date is not open/,
+    );
+  });
+});
+
 // ── ETP-5445: core `NotCalculatedCost` (document-level) on Internal Consumption posting ──
 //
 // Posting an Internal Consumption whose products have no calculated cost yet makes the core
@@ -2950,3 +3196,257 @@ describe('user email correction messages (UserRoleAssignmentHandler)', () => {
   }
 });
 
+// ── ETP-5692: invoice post/unpost refusals, translated by identity ──
+//
+// com.etendoerp.go answers these in plain English plus a `messageKeys` identity that is NOT an
+// AD_MESSAGE record, so backendErrors.js is the only place they become Spanish. The SPA's own gates
+// keep them off the normal path; a stale screen (the invoice was posted, unposted or voided
+// elsewhere) is what surfaces them. Reads the REAL locale files so a missing entry fails here.
+describe('translateBackendError — invoice post/unpost refusals by identity (ETP-5692)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  // [messageKey, i18n key, the backend's English prose]
+  const CASES = [
+    ['ETGO_InvoiceFieldsLockedPosted', 'backendError.invoicePostedFieldsLocked',
+      'This invoice is posted, so accountingDate, costcenter cannot be changed. Unpost it first to correct its accounting.'],
+    ['ETGO_InvoiceExchangeRateLockedPosted', 'backendError.invoicePostedExchangeRateLocked',
+      'This invoice is posted, so its exchange rates cannot be changed. Unpost it first.'],
+    ['ETGO_InvoiceUnpostNotPosted', 'backendError.invoiceUnpostNotPosted',
+      'This invoice is not posted, so it has no accounting entries to remove.'],
+    ['ETGO_InvoiceUnpostNotCompleted', 'backendError.invoiceUnpostNotCompleted',
+      "Only a completed invoice can be unposted. This invoice's status is VO."],
+    ['ETGO_PostingDocumentNotProcessed', 'backendError.postingDocumentNotProcessed',
+      'Only processed (completed) documents can be posted. Complete the document first.'],
+    ['ETGO_CompletedInvoiceFieldsLocked', 'backendError.completedInvoiceFieldsLocked',
+      'This invoice is completed, so businessPartner can no longer be changed. Fields that can still be changed: accountingDate, project, costcenter, description.'],
+    ['ETGO_InvoiceFieldsLockedStatus', 'backendError.invoiceStatusDimensionsLocked',
+      'project cannot be changed on an invoice in status VO; only a completed invoice allows it.'],
+    ['ETGO_InvoiceFieldsLockedSiiSent', 'backendError.invoiceSiiSentReferenceLocked',
+      "This purchase invoice has already been sent to the SII, so orderReference (the supplier's invoice number) can no longer be changed."],
+    ['PostedDocument', 'backendError.documentAlreadyPosted', 'Document already Posted.'],
+  ];
+
+  for (const [messageKey, i18nKey, prose] of CASES) {
+    it(`renders ${messageKey} from its identity in es_ES and en_US, never the English prose`, () => {
+      const esText = translateBackendError(prose, es, { messageKeys: [messageKey] });
+      const enText = translateBackendError(prose, en, { messageKeys: [messageKey] });
+      assert.equal(esText, es(i18nKey));
+      assert.equal(enText, en(i18nKey));
+      assert.notEqual(esText, i18nKey, `es_ES.${i18nKey} is missing`);
+      assert.notEqual(enText, i18nKey, `en_US.${i18nKey} is missing`);
+      assert.notEqual(esText, prose);
+      assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
+    });
+  }
+
+  it('speaks the accountants’ Spanish: Descontabilizar / contabilizada / asientos', () => {
+    assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
+    assert.match(es('backendError.invoicePostedExchangeRateLocked'), /contabilizada.*Descontabil/);
+    assert.match(es('backendError.invoiceUnpostNotPosted'), /asientos/);
+  });
+
+  it('keeps the backend prose when the locale has no entry (never the raw key)', () => {
+    const [messageKey, , prose] = CASES[0];
+    assert.equal(translateBackendError(prose, (k) => k, { messageKeys: [messageKey] }), prose);
+  });
+
+  it('ignores the fence messageParams (API property names, raw doc status) — the copy is generic', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+    assert.equal(text, es('backendError.invoiceUnpostNotCompleted'));
+    assert.doesNotMatch(text, /VO|\{docStatus\}/);
+  });
+});
+
+// ── ETP-5745 follow-up: reactivation refused for a fiscally-accepted, already-rectified
+// invoice — rendered from its identity plus interpolated messageParams (fiscalSystem,
+// rectificativas). The first BACKEND_ERROR_KEY_MAP entry whose locale text actually consumes
+// messageParams end to end (every sibling key in the ETP-5692 block above is param-less).
+describe('translateBackendError — invoice reactivate fiscal-rectified refusal (ETP-5745 follow-up)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceReactivateFiscalRectified';
+  const I18N_KEY = 'backendError.invoiceReactivateFiscalRectified';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'ignored backend prose';
+    const esText = translateBackendError(prose, es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    });
+    const enText = translateBackendError(prose, en, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    });
+    assert.notEqual(esText, I18N_KEY);
+    assert.notEqual(enText, I18N_KEY);
+    assert.notEqual(esText, prose);
+    assert.notEqual(esText, enText);
+  });
+
+  it('interpolates fiscalSystem and a single-element rectificativas array with no brackets', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: [KEY],
+      messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    });
+    assert.match(text, /Verifactu/);
+    assert.match(text, /FR-0001/);
+    assert.doesNotMatch(text, /[[\]]/);
+  });
+
+  it('joins a multi-element rectificativas array with ", ", not Array.toString\'s bare comma', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: [KEY],
+      messageParams: { fiscalSystem: 'TicketBAI', rectificativas: ['FR-0001', 'FR-0002', 'FR-0003'] },
+    });
+    assert.match(text, /FR-0001, FR-0002, FR-0003/);
+    assert.doesNotMatch(text, /FR-0001,FR-0002/);
+  });
+
+  it('passes a non-array (bare) rectificativas value through unchanged', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: [KEY],
+      messageParams: { fiscalSystem: 'Verifactu', rectificativas: 'FR-0001' },
+    });
+    assert.match(text, /FR-0001/);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    }), prose);
+  });
+});
+
+// ── translateByMessageKey messageParams forwarding — no regression on param-less keys ──
+//
+// translateByMessageKey now forwards messageParams to t(key, params) for EVERY keyed message,
+// via toInterpolationParams (array values joined with ', '). Every pre-existing
+// BACKEND_ERROR_KEY_MAP entry has a locale string with no `{var}` token, so passing params
+// through must render identically to passing none — t() simply ignores params the string does
+// not reference (the standard, documented interpolation behavior).
+describe('translateByMessageKey — messageParams forwarding does not regress param-less keys (ETP-5745 follow-up)', () => {
+  const es = localeTranslator('es_ES');
+
+  it('renders ETGO_InvoiceUnpostNotPosted identically whether or not messageParams are sent', () => {
+    const withoutParams = translateBackendError('ignored', es, { messageKeys: ['ETGO_InvoiceUnpostNotPosted'] });
+    const withParams = translateBackendError('ignored', es, {
+      messageKeys: ['ETGO_InvoiceUnpostNotPosted'], messageParams: { someExtra: ['a', 'b'] },
+    });
+    assert.equal(withParams, withoutParams);
+    assert.ok(withParams.trim());
+  });
+
+  it('renders ProductNotNullAndMovementQtyZero identically whether or not messageParams are sent', () => {
+    const withoutParams = translateBackendError('ignored', es, { messageKeys: ['ProductNotNullAndMovementQtyZero'] });
+    const withParams = translateBackendError('ignored', es, {
+      messageKeys: ['ProductNotNullAndMovementQtyZero'], messageParams: { fields: ['a', 'b'] },
+    });
+    assert.equal(withParams, withoutParams);
+  });
+});
+
+describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
+  const es = localeTranslator('es_ES');
+  const jsonResponse = (body, status = 422) => ({ status, json: async () => body });
+  // CompletedInvoiceWriteFence.reject — the identity is nested under `error`.
+  const fenceBody = {
+    error: {
+      status: 422,
+      code: 'posted_invoice_fields_locked',
+      message: 'This invoice is posted, so accountingDate cannot be changed. Unpost it first to correct its accounting.',
+      fields: ['accountingDate'],
+      hint: "Run the invoice header action 'unpost' first, then retry this update; post the invoice again afterwards.",
+      messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+      messageParams: { fields: ['accountingDate'] },
+    },
+  };
+
+  it('reads the message and the nested identity of the write-fence body in one pass', async () => {
+    assert.deepEqual(await parseBackendError(jsonResponse(fenceBody)), {
+      message: fenceBody.error.message,
+      messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+      messageParams: { fields: ['accountingDate'] },
+    });
+  });
+
+  it('reads the flat InvoicePostingGate body (success:false, message, messageKeys, messageParams)', async () => {
+    const body = {
+      success: false,
+      message: "Only a completed invoice can be unposted. This invoice's status is VO.",
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    };
+    assert.deepEqual(await parseBackendError(jsonResponse(body)), {
+      message: body.message,
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+  });
+
+  it('returns an empty result for a non-JSON body', async () => {
+    const res = { status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } };
+    assert.deepEqual(await parseBackendError(res), {});
+  });
+
+  it('translates the write-fence 422 by identity, not by its English prose (the inline line / tab save path)', async () => {
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse(fenceBody), es),
+      es('backendError.invoicePostedFieldsLocked'),
+    );
+  });
+
+  it('translates the exchange-rate refusal of a posted invoice', async () => {
+    const body = {
+      error: {
+        status: 422,
+        code: 'posted_invoice_exchange_rate_locked',
+        message: 'This invoice is posted, so its exchange rates cannot be changed. Unpost it first.',
+        fields: [],
+        messageKeys: ['ETGO_InvoiceExchangeRateLockedPosted'],
+        messageParams: { fields: [] },
+      },
+    };
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse(body), es),
+      es('backendError.invoicePostedExchangeRateLocked'),
+    );
+  });
+
+  it('still translates a body without identity by its text, and falls back to Error <status>', async () => {
+    const stale = 'This record was modified by someone else after you read it. Your changes were not saved.';
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse({ error: { message: stale } }, 409), es),
+      es('backendError.staleRecord'),
+    );
+    assert.equal(await translateBackendErrorResponse(jsonResponse({}, 500), es), 'Error 500');
+  });
+
+  it('keeps parseBackendErrorMessage returning only the message', async () => {
+    assert.equal(await parseBackendErrorMessage(jsonResponse(fenceBody)), fenceBody.error.message);
+  });
+});
+
+// ── ETP-5669: G/L journal period mismatch, translated by identity with its params ──
+describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const prose = "Period 'Apr-26' does not contain the accounting date 2026-06-20. Update the period (or the date) and complete again.";
+  const options = {
+    messageKeys: ['ETGO_GLJournalPeriodMismatch'],
+    messageParams: { period: 'Apr-26', accountingDate: '2026-06-20' },
+  };
+
+  it('names the stored period and the date in the UI locale', () => {
+    const esText = translateBackendError(prose, es, options);
+    const enText = translateBackendError(prose, en, options);
+    assert.match(esText, /período del asiento \(Apr-26\).*\(2026-06-20\)/);
+    assert.match(enText, /period \(Apr-26\).*\(2026-06-20\)/);
+    assert.notEqual(esText, enText);
+  });
+
+  it('is not worded as "period not open"', () => {
+    assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
+  });
+});

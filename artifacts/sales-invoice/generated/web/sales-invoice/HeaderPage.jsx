@@ -17,6 +17,7 @@ import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoic
 import InvoiceBottomPanel from '../../../custom/InvoiceBottomPanel';
 import InvoiceTopbarExtra from '../../../custom/InvoiceTopbarExtra';
 import InvoiceDeliveryBadge from '../../../custom/InvoiceDeliveryBadge';
+import SifSendMenuItem from '../../../custom/SifSendMenuItem';
 import catalogs from './mockCatalogs';
 
 
@@ -26,8 +27,6 @@ const breadcrumb = 'Sales / Sales Invoice';
 // @sf-generated-start summary:header
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
@@ -52,13 +51,20 @@ const draftMode = {
   "processValue": "CO",
   "label": "Confirm",
   "keepSaveWhenCompletedFields": [
-    "accountingDate"
+    "accountingDate",
+    "project",
+    "costcenter",
+    "aeatsiiErrorRegistral"
+  ],
+  "editableLineFieldsWhenCompleted": [
+    "project",
+    "costcenter"
   ]
 };
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'accountingDate'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'currency', 'priceList', 'accountingDate'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -319,6 +325,14 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "lines",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/lines/selectors/uOM"
     },
     {
       "entity": "lines",
@@ -617,7 +631,8 @@ export const api = {
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
-      "em_etgo_tbai_status": "Estado TicketBAI"
+      "em_etgo_tbai_status": "Estado TicketBAI",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "OutstandingAmt": "Outstanding Amount",
@@ -625,10 +640,12 @@ export const api = {
       "em_etgo_delivery_status": "Delivery Status",
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
-      "em_etgo_tbai_status": "TicketBAI Status"
+      "em_etgo_tbai_status": "TicketBAI Status",
+      "C_UOM_ID": "Unit"
     },
     "es_AR": {
-      "OutstandingAmt": "Saldo pendiente"
+      "OutstandingAmt": "Saldo pendiente",
+      "C_UOM_ID": "Unidad"
     }
   }
 };
@@ -677,9 +694,11 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         bottomSection={InvoiceBottomPanel}
         topbarRight={InvoiceTopbarExtra}
         topbarExtra={InvoiceDeliveryBadge}
+        customMenuContent={SifSendMenuItem}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
-          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: status === 'CO' && (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}

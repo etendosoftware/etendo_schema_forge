@@ -117,7 +117,7 @@ not a change.
     `AutoMatchSupport.computeAmountTolerance()` / `withinDateWindow()` apply them. They are
     unrelated to the `0.01` epsilon that gates the `Conciliar` button.
   - **Difference settings** (`GlItemDifferenceSection`, ETP-4795, **all account types**):
-    **Cuenta contable** — a `ChipSelect` over `useGLItemLookup`, persisting
+    **Cuenta contable** — a `ChipSelect` (thin wrapper over the shared `CreatableSearchSelect`, the same selector as "País"; its chevron toggles the list, ETP-5728) over `useGLItemLookup`, persisting
     `FIN_Financial_Account.EM_Aprm_Glitem_Diff` (DAL `aprmGlitemDiff`, an OBUISEL selector on
     `C_GLItem`). **This is the accounting account the residual amount is posted against when a cash
     close or a reconciliation does not balance**; it is the same column Classic's manual
@@ -273,6 +273,21 @@ Field editability in the top section:
   (`useUI` replaces only the first occurrence). Known gap: the same branch in
   `AccountsHeaderTable.jsx` is being rewritten on the ETP-5140 branch and was left untouched here
   to avoid a conflict.
+
+  **Server-side advisory (ETP-5805).** The same rule now also runs in the backend, so agents
+  (MCP) and REST callers get the warning the SPA banner shows: a `PUT`/`PATCH` of
+  `pSD2ImportFromDate` on `financial-account/account` and `POST import-settings` still save, and
+  the response carries a `messages: [{type: "warning", text}]` entry when `importFrom < today − N`
+  (strict, same boundary as the banner; the PUT path compares the calendar day sent in the request,
+  never the stored `Date`, so the server time zone cannot shift it). It is computed by
+  `FinancialAccountBankConnectionSupport.findImportFromBeyondFetchInterval` from the same N as
+  `GET status` → `maxFetchInterval`; no UI change, the SPA keeps its live as-you-type banner.
+  `import-settings` evaluates the resulting from-date (also when only `importToDate` is sent), while
+  the PUT branch is gated on the field being sent and skipped on a failed write.
+  Placement: MCP puts `messages` inside core's `response` wrapper (flattened to the top level for the
+  agent); REST puts it at the body root — for `import-settings`, whose body is `{"response":{"data":…}}`,
+  that is next to `response`. There is no `warnings[]` key. Silent when there is no active connection,
+  no declared limit, or the request date is unparseable.
 
   Caveat worth knowing: `fetchAndRegisterProvider` upserts a **hard-coded 90** when the Salt Edge
   provider-details call fails, so the advisory can confidently cite 90 for a bank that actually
@@ -885,7 +900,7 @@ consequence, not a side effect: it is the same bug on both sides.
 `BankConnectionFlowUI`'s `<Dialog open={connecting}>` is controlled with no `onOpenChange` — so
 the X was rendered but inert, and Escape / outside-click are `preventDefault()`-ed as well. It is
 now hidden with `[&>button]:hidden` on the `DialogContent` className, the same idiom used by
-`AddPaymentModal`, `DetailView`, `NewMovementWizard` and `NewTransactionModal`. The flow is
+`AddPaymentModal`, `DetailView` and `NewTransactionModal` (the former `NewMovementWizard` shared it until it was deleted in ETP-5728). The flow is
 cancelled by closing the Salt Edge popup window, which `waitForConnection`'s `popup.closed` poll
 picks up within 500 ms (`useBankConnectionActions.js:70-80`), resolving `null` so nothing is
 created or linked and the user can retry without reloading. Wiring the X instead would have
@@ -1252,13 +1267,28 @@ Transfer* button (`aprmFundsTrans`) is now listed as withdrawn with `useInstead:
 
 **Add payment from the account is not offered — to people or agents.** The endpoint
 (`?action=create-payment`, `AddPaymentService`) still exists, but its only SPA caller,
-`NewMovementWizard`, has been mounted nowhere since ETP-4500 replaced it with
-`NewTransactionModal`. Payments and collections are registered from the invoice
+`NewMovementWizard`, was mounted nowhere since ETP-4500 replaced it with
+`NewTransactionModal`, and was deleted in ETP-5728. Payments and collections are registered from the invoice
 (`registerPayment`), so the MCP does not declare it either.
 
 Posting stays on `financial-account/transaction` (`post` / `unpost`). Runtime reference:
 `com.etendoerp.go/docs/neo-headless.md` §4.12.1.4 (movements), §4.12.1.5 (transfers) and §4.12.9
 (differences with the SPA's route).
+
+## MCP / agent access to the bank connection (ETP-5804)
+
+The two disconnect options of "Editar cuenta" and the row kebab (see "Disconnecting: two modes
+(ETP-4764)" above) are declared actions of `financial-account/account`, called with
+`etendo_action {spec:"financial-account", entity:"account", id:<financial account id>, action:...}`:
+
+| Action | Mode | Effect |
+|---|---|---|
+| `disconnectBank` | soft, reversible (`permanentDeletion=false`) | Sync stops; normally the account keeps its link and history and can be reconnected from the UI; a connection shared by several accounts is unlinked instead (`permanent:true, reconnectable:false`), so the agent reads `reconnectable`. Repeating it while the account is still soft-disconnected is safe (200); once the account is unlinked there is nothing left to disconnect and it answers 404. Releases the account for manual bank statements, which a connected account rejects with 409 |
+| `deleteBankConnection` | permanent, irreversible (`permanentDeletion=true`) | Deletes the connection at Salt Edge and unlinks the account; the bank connection then no longer blocks deleting it (other delete blockers may still apply). Its description instructs the agent to ask the user first and call it only after they confirm |
+
+Both answer `{disconnected, permanent, reconnectable}`; an account with no connection answers 404.
+Connecting and reconnecting stay hidden from the MCP: they need the account holder to authenticate at
+the bank (SCA). Runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8.
 
 ## MCP / agent access to bank statements (ETP-5447, ETP-5469)
 
