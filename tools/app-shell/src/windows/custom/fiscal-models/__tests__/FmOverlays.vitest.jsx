@@ -10,7 +10,8 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+  // `warning` / `dismiss`: the IAE year-end reminder (showIaeActivityReminder) of a 303 T4.
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), dismiss: vi.fn() },
 }));
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('@/components/related-documents/helpers.js', () => ({
@@ -1569,6 +1570,8 @@ describe('NewDeclModal — annual model (390)', () => {
     expect(getYearOptions(container).map(o => o.textContent.trim())).toEqual(['2026', '2025']);
     fireEvent.click(getYearOption(container, 2025));
     fireEvent.click(getPeriodBtn(container, 'T4'));
+    // T4 of a 303 (2025 too) shows the IAE year-end reminder.
+    expect(toast.warning).toHaveBeenCalled();
     fireEvent.click(getCreateBtn(container));
     expect(onConfirm).toHaveBeenLastCalledWith({ model: '303', year: 2025, period: 'T4', status: 'draft' });
   });
