@@ -1,8 +1,8 @@
 {
-  "version": "0.92.0",
+  "version": "0.93.0",
   "generatedAt": "2026-09-17T15:12:05.781Z",
-  "updatedAt": "2026-10-09T12:19:29.647Z",
-  "contractChecksum": "5cb6e5ff8d4563a6",
+  "updatedAt": "2026-10-19T17:33:12.923Z",
+  "contractChecksum": "e7ac9f3dcbb935ee",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -240,6 +240,14 @@
             }
           ]
         }
+      },
+      {
+        "entity": "lines",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/lines/selectors/uOM"
       },
       {
         "entity": "lines",
@@ -988,7 +996,8 @@
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
-        "em_etgo_tbai_status": "Estado TicketBAI"
+        "em_etgo_tbai_status": "Estado TicketBAI",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
@@ -996,10 +1005,12 @@
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
-        "em_etgo_tbai_status": "TicketBAI Status"
+        "em_etgo_tbai_status": "TicketBAI Status",
+        "C_UOM_ID": "Unit"
       },
       "es_AR": {
-        "OutstandingAmt": "Saldo pendiente"
+        "OutstandingAmt": "Saldo pendiente",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -1206,6 +1217,10 @@
           },
           "tax": {
             "readOnlyLogic": "@Processed@='Y'"
+          },
+          "uOM": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y' | (@UomManagement@='Y' & @Financial_Invoice_Line@='N')"
           },
           "unitPrice": {
             "required": true,
@@ -1523,5 +1538,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "9b0833956cb9e5d5"
+  "checksum": "874bd2d3b9699b20"
 }

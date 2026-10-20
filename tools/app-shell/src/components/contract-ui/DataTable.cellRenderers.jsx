@@ -301,7 +301,21 @@ export function renderMultiFieldCell({ row, col, token, apiBaseUrl }) {
   );
 }
 
+/**
+ * `display: 'tag'` (decisions.json) on a foreign-key / text column: the value is shown as the
+ * same pill the "Estado doc." column uses (`StatusTag`), always in the NEUTRAL (grey) tone —
+ * never `getStatusTone(value)`, which would colour it by whatever code happens to match (ETP-5696,
+ * the unit of measure of a document line). An empty value renders nothing, so a line with no
+ * product shows an empty cell instead of an empty pill.
+ */
+export function renderNeutralTagCell(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const label = String(value);
+  return <StatusTag status={label} label={label} tone="neutral" data-testid="StatusTag__neutral-tag" />;
+}
+
 export function renderDefaultCell({ row, col, display, visibleColumns }) {
+  if (col.display === 'tag') return renderNeutralTagCell(display);
   // ETP-5281 capped every text cell at 200px so a long value truncates instead of
   // overflowing into the next column — correct for a fixed-basis column, but it also
   // clobbered a `col.grow` column's whole reason for existing: `columnFlex()` already

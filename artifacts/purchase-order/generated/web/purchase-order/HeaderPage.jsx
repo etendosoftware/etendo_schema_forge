@@ -739,7 +739,8 @@ export const api = {
       "InvoiceStatus": "Estado de facturación",
       "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
       "EM_ETGO_Invoice_Status": "Estado de facturación",
-      "PriceList": "Precio"
+      "PriceList": "Precio",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
@@ -747,7 +748,8 @@ export const api = {
       "DeliveryStatusPurchase": "Reception Status",
       "InvoiceStatus": "Invoicing Status",
       "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-      "EM_ETGO_Invoice_Status": "Invoicing Status"
+      "EM_ETGO_Invoice_Status": "Invoicing Status",
+      "C_UOM_ID": "Unit"
     }
   }
 };

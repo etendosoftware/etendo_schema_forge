@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-09-16T11:53:10.457Z",
-  "updatedAt": "2026-10-16T16:16:17.544Z",
-  "checksum": "7cfbb894c34e405a",
+  "updatedAt": "2026-10-19T17:33:12.658Z",
+  "checksum": "27bbf0be2dd03aef",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -55,12 +55,14 @@
         "es_ES": {
           "sourceShipmentDocNo": "Albarán origen",
           "movementQuantity": "Cant. a devolver",
-          "orderQuantity": "Cant. entregada original"
+          "orderQuantity": "Cant. entregada original",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "sourceShipmentDocNo": "Source Shipment",
           "movementQuantity": "Return Qty",
-          "orderQuantity": "Original Delivered Qty"
+          "orderQuantity": "Original Delivered Qty",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "movementDate",
@@ -599,12 +601,15 @@
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "search",
             "section": "other",
+            "display": "tag",
+            "gridOrder": 3,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -661,7 +666,7 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "gridOrder": 3,
+            "gridOrder": 4,
             "gridReadOnly": true,
             "validation": {
               "maxLength": 10
@@ -755,12 +760,14 @@
         "es_ES": {
           "sourceShipmentDocNo": "Albarán origen",
           "movementQuantity": "Cant. a devolver",
-          "orderQuantity": "Cant. entregada original"
+          "orderQuantity": "Cant. entregada original",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "sourceShipmentDocNo": "Source Shipment",
           "movementQuantity": "Return Qty",
-          "orderQuantity": "Original Delivered Qty"
+          "orderQuantity": "Original Delivered Qty",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "movementDate",
@@ -1941,12 +1948,14 @@
       "es_ES": {
         "sourceShipmentDocNo": "Albarán origen",
         "movementQuantity": "Cant. a devolver",
-        "orderQuantity": "Cant. entregada original"
+        "orderQuantity": "Cant. entregada original",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "sourceShipmentDocNo": "Source Shipment",
         "movementQuantity": "Return Qty",
-        "orderQuantity": "Original Delivered Qty"
+        "orderQuantity": "Original Delivered Qty",
+        "C_UOM_ID": "Unit"
       }
     }
   },
