@@ -274,6 +274,21 @@ Field editability in the top section:
   `AccountsHeaderTable.jsx` is being rewritten on the ETP-5140 branch and was left untouched here
   to avoid a conflict.
 
+  **Server-side advisory (ETP-5805).** The same rule now also runs in the backend, so agents
+  (MCP) and REST callers get the warning the SPA banner shows: a `PUT`/`PATCH` of
+  `pSD2ImportFromDate` on `financial-account/account` and `POST import-settings` still save, and
+  the response carries a `messages: [{type: "warning", text}]` entry when `importFrom < today − N`
+  (strict, same boundary as the banner; the PUT path compares the calendar day sent in the request,
+  never the stored `Date`, so the server time zone cannot shift it). It is computed by
+  `FinancialAccountBankConnectionSupport.findImportFromBeyondFetchInterval` from the same N as
+  `GET status` → `maxFetchInterval`; no UI change, the SPA keeps its live as-you-type banner.
+  `import-settings` evaluates the resulting from-date (also when only `importToDate` is sent), while
+  the PUT branch is gated on the field being sent and skipped on a failed write.
+  Placement: MCP puts `messages` inside core's `response` wrapper (flattened to the top level for the
+  agent); REST puts it at the body root — for `import-settings`, whose body is `{"response":{"data":…}}`,
+  that is next to `response`. There is no `warnings[]` key. Silent when there is no active connection,
+  no declared limit, or the request date is unparseable.
+
   Caveat worth knowing: `fetchAndRegisterProvider` upserts a **hard-coded 90** when the Salt Edge
   provider-details call fails, so the advisory can confidently cite 90 for a bank that actually
   offers more. Pre-existing, and shared with `AisConnectionCallback` in the PSD2 module, so both
