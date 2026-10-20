@@ -492,6 +492,18 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 )}
               </div>
 
+              {/* ETP-5716 — the conformity check (390) comes first, right after the presenter
+                  fields, so "Validar sin presentar" and what it reveals follow it with no gap. */}
+              {adapter.requireConformity && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 12 }}>
+                  <CheckboxField
+                    checked={conform}
+                    onToggle={val => setConform(val)}
+                    data-testid="AeatSubmitFlow__conformity" />
+                  {t('fm.present.conformity')}
+                </label>
+              )}
+
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 12 }}>
                 <CheckboxField
                   checked={testMode}
@@ -504,9 +516,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                   modal's height. `visibility: hidden` (not `display: none`) keeps
                   its exact box — the reserved space always matches the real
                   banner, whatever the locale/wrapping. Hidden from assistive tech
-                  while unchecked so screen readers never announce it. */}
+                  while unchecked so screen readers never announce it. With the conformity check
+                  above it (390) the slot is the last row, so it collapses instead
+                  (`--collapsible`): reserved space there is only blank space. */}
               <div
-                className={`fm-aeat-testmode-slot${testMode ? ' fm-aeat-testmode-slot--visible' : ''}`}
+                className={`fm-aeat-testmode-slot${testMode ? ' fm-aeat-testmode-slot--visible' : ''}${adapter.requireConformity ? ' fm-aeat-testmode-slot--collapsible' : ''}`}
                 aria-hidden={!testMode}
                 data-testid="AeatSubmitFlow__testModeSlot"
               >
@@ -516,16 +530,6 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                   title={t('fm.aeat.test_mode.warning') ?? 'This option only validates the file with the AEAT. The declaration is not filed.'}
                   data-testid="Banner__aeatTestWarning" />
               </div>
-
-              {adapter.requireConformity && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginTop: 12 }}>
-                  <CheckboxField
-                    checked={conform}
-                    onToggle={val => setConform(val)}
-                    data-testid="AeatSubmitFlow__conformity" />
-                  {t('fm.present.conformity')}
-                </label>
-              )}
 
               {connError && (
                 <div style={{ marginTop: 12 }}>

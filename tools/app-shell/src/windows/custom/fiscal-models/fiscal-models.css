@@ -1534,6 +1534,8 @@
    toggles, so the reserved space is exactly the banner's own height. */
 .fm-aeat-testmode-slot { visibility: hidden; }
 .fm-aeat-testmode-slot--visible { visibility: visible; }
+/* 390 (conformity check above): collapsed while unchecked — the slot is the last row. */
+.fm-aeat-testmode-slot--collapsible:not(.fm-aeat-testmode-slot--visible) { display: none; }
 
 /* ─── ETP-5716 — Modelo 390 ───────────────────────────────────────────────── */
 /* Catalog: SII confirmation under the card (a full-width row of the card's flex box). */

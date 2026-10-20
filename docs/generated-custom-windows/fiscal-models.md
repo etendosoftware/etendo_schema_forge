@@ -3934,7 +3934,10 @@ names, no conformity check), so the 303 page passes nothing and is unchanged. A 
 disabled whenever it is (`submitDisabled`: submitting, or the conformity check unticked — the
 `fm-btn--save-pill--active` modifier only when enabled, as "Crear declaración") and its `title`
 says what is missing (`fm.aeat.submit_hint.conformity`, "Marca la declaración de conformidad para
-enviar"); same component and look for the 303. `PresentModal` has the same two manual paths for
+enviar"); same component and look for the 303. With `requireConformity` (390) the conformity
+check comes first, right after the presenter fields, then "Validar sin presentar" and its warning,
+whose slot collapses while unchecked (`.fm-aeat-testmode-slot--collapsible`); the 303 keeps the
+reserved slot (ETP-5584 P7). `PresentModal` has the same two manual paths for
 every model; the AEAT path confirms with "Continuar".
 
 ## List page toolbar (`FmListPage`)

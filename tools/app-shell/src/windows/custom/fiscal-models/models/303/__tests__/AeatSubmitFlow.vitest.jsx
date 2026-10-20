@@ -940,6 +940,19 @@ describe('AeatSubmitFlow — model adapters (ETP-5716)', () => {
     expect(submit.getAttribute('title')).toBeNull();
   });
 
+  it('390: the conformity check comes before "Validar sin presentar", whose slot collapses while unchecked', () => {
+    render390();
+    const conformity = screen.getByTestId('AeatSubmitFlow__conformity');
+    const testMode = screen.getByTestId('AeatSubmitFlow__testMode');
+    expect(conformity.compareDocumentPosition(testMode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('AeatSubmitFlow__testModeSlot').className).toContain('fm-aeat-testmode-slot--collapsible');
+  });
+
+  it('303: the test-mode slot keeps its reserved space (not collapsible)', () => {
+    renderFlow();
+    expect(screen.getByTestId('AeatSubmitFlow__testModeSlot').className).not.toContain('--collapsible');
+  });
+
   it('303: the enabled submit button keeps the active look and has no hint', () => {
     renderFlow();
     const submit = screen.getByTestId('AeatSubmitFlow__submit');
