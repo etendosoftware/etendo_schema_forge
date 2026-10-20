@@ -3567,3 +3567,38 @@ restart — but it argues for running this fix close to a restart.
   subscription-backfill` wrote a ledger row under the SHORT id, which matches no catalog `fixId`, so
   the watermark and `--list-clients` ignored it (OPT-IN stayed 0/1). Now resolved to the full
   `fix_id` exactly like `--fix`, and an unknown id is rejected.
+- **2026-10-19 — Table name is `c_taxcategory` (no underscore before "category"), NOT `c_tax_category`.**
+  `FinancialMgmtTaxCategory` (AD entity) maps to `C_TaxCategory` (AD_Table 252), confirmed via
+  `information_schema.tables` — a first guess at `c_tax_category` returns "relation does not exist".
+  Sibling tables: `c_taxcategory_trl` (348), `c_bp_taxcategory` (800193). **Apply:** always verify
+  the exact table name via `ad_table`/`information_schema` before writing SQL for a `FinancialMgmt*`
+  entity; don't infer it by inserting underscores at every word boundary.
+- **2026-10-19 — `C_TaxCategory` is AccessLevel 7 ("All"), so a System-owned row (`ad_client_id='0'`)
+  is a legitimate, standard shape for shared fiscal reference data** — same pattern as O1's
+  `AEATSII_CAUSE_EXEMPTION` (R40). Module `com.etendoerp.go.localization.es.data`
+  ("Etendo Go - Spanish Fiscal Taxes Data") ships its `FinancialMgmtTaxCategory`/`FinancialMgmtTaxRate`
+  catalog entirely at `ad_client_id='0'` via `referencedata/standard/Spanish_Fiscal_Taxes_Go.xml` (a
+  **standard** reference-data file, imported once at module install/update — confirmed NOT reapplied
+  to an already-provisioned instance by `update.database` on its own, same "referencedata not
+  reapplied" pattern as H1/N6). **Apply:** when a gap's anchor row is already `ad_client_id='0'` in
+  live DB, don't force a per-tenant `.sql` shape — use the System-pseudo-tenant convention
+  (`sql/README.md` § "Fixes that target the System pseudo-tenant") and run it once via
+  `--fix <id> --client 0`.
+- **2026-10-19 — `com.etendoerp.go.localization.es.data` is a SEPARATE git repo**
+  (`etendosoftware/com.etendoerp.go.localization.es.data`, sibling checkout at
+  `{etendo_root}/modules/com.etendoerp.go.localization.es.data`), **not part of `com.etendoerp.go`**,
+  even though both ship under the `com.etendoerp.go*` namespace and a task may describe the fix as
+  "in com.etendoerp.go". Its default branch is `main` (not `develop`), and `main` was ahead of
+  `develop` at the time of checking (carried 3 unmerged `ETP-4944` commits touching this exact XML
+  file). **Apply:** before editing Spanish-fiscal reference data, `find` for the actual module
+  directory — don't assume it lives inside the `com.etendoerp.go` worktree a task names.
+- **2026-10-19 — Prior art before editing `Spanish_Fiscal_Taxes_Go.xml`: read `git log` on the file
+  first.** ETP-4944 (Sep 2026, commits `6ac024c`/`5ba6bf3` reverted then redone as `613005a`→`34f86b4`)
+  already cleaned up the Spanish tax-RATE catalog and specifically kept the "IVA Normal - Standard"
+  `FinancialMgmtTaxRate` (id `867FFFAC82CC44069FE6497E4C5C6348`) **inactive-but-undeleted** because a
+  live invoice already referenced it ("Keep IVA Normal, live invoice reference found", commit
+  `0e27a0f`) — it never touched the TAX CATEGORY itself. ETP-5802's gap (the category
+  `828E8E40DD3C4FA6A4F531569D26A6AF`, "OLD IVA Normal", left `active='Y'` with a stale `es_ES`
+  translation) is the piece ETP-4944 left behind. **Apply:** confirms deactivate-don't-delete is the
+  established convention for this file — never delete a `FinancialMgmtTax*` row, only flip `active`.
+
