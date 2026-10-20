@@ -264,9 +264,9 @@ describe.each([
     // What the grow columns are told is already spoken for MUST equal what the header
     // actually reserves — this single number is the misalignment: every px missing here
     // is silently split among the grow columns, pushing later columns to the right.
-    // ETP-5833: a grid with no elastic column (Costo: amount + 2 fixed dates) has no calc() at
-    // all — every <col> is a literal px, so the literal total is the budget.
-    expect(addRowLayout.calcFixedPx ?? addRowLayout.fixedPx).toBe(headerLayout.fixedPx);
+    // ETP-5833: the lines absorber guarantees a growing column, so a calc() is always emitted;
+    // dropping the absorber would make this null and fail loudly.
+    expect(addRowLayout.calcFixedPx).toBe(headerLayout.fixedPx);
   });
 
   it('grows the same columns from the same bases as the header strip', () => {

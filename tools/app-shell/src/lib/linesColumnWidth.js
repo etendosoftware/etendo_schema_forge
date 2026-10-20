@@ -15,7 +15,7 @@ import { isPostedStatusColumn } from './postedStatus.js';
 // the shared basis is derived.
 //
 // ETP-5833 — per-type default sizing AND expansion. Only DESCRIPTIVE columns (`string`/`text`,
-// the leading selector) absorb leftover width; every other type is fixed (`0 0 <basis>`), so a
+// the leading selector) absorb leftover width when the grid has one (else the first unpinned column does, see `absorberIndex`); every other type is fixed (`0 0 <basis>`), so a
 // date, a number or a status never stretches to the width of a description. Bases are constants
 // per type, never measured from content, so sorting or paging cannot move a column.
 //  - `date` (176): the value (dd/mm/yyyy ~80px + due-date dot) needs far less, but a LIST header
