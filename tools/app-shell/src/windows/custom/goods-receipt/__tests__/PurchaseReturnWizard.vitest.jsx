@@ -1,3 +1,4 @@
+// @covers artifacts/goods-receipt/custom/PurchaseReturnWizard.jsx
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
@@ -50,7 +51,7 @@ describe('PurchaseReturnWizard', () => {
     expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
   });
 
-  it('renders step 1 with product lines', () => {
+  it('renders the product lines', () => {
     renderWizard();
     expect(screen.getByText('Product A')).toBeInTheDocument();
     expect(screen.getByText('Product B')).toBeInTheDocument();
@@ -61,23 +62,18 @@ describe('PurchaseReturnWizard', () => {
     expect(screen.getByText(/ALB-001/)).toBeInTheDocument();
   });
 
-  it('calls onClose when Cancel is clicked in step 1', () => {
+  it('calls onClose when Cancel is clicked', () => {
     const onClose = vi.fn();
     renderWizard({ onClose });
     fireEvent.click(screen.getByText('cancel'));
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('advances to step 2 when Next is clicked with lines selected', () => {
+  // ETP-5729 CP-15 — the shared CreateReturnWizard has a single step: Create return is on the
+  // first screen, with no Next/Back.
+  it('shows Create return directly, with no Next step', () => {
     renderWizard();
-    fireEvent.click(screen.getByText('next'));
-    expect(screen.getByText('followingDocumentsWillBeCreated')).toBeInTheDocument();
-  });
-
-  it('goes back to step 1 when Back is clicked from step 2', () => {
-    renderWizard();
-    fireEvent.click(screen.getByText('next'));
-    fireEvent.click(screen.getByText('back'));
-    expect(screen.getByText('Product A')).toBeInTheDocument();
+    expect(screen.queryByText('next')).not.toBeInTheDocument();
+    expect(screen.getByText('createReturn')).toBeInTheDocument();
   });
 });
