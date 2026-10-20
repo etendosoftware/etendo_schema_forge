@@ -2,21 +2,15 @@ import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
 /**
- * ETP-5091 — Logistics section visible for Expense/Resource product types.
+ * ETP-5091 / ETP-5696 — stock flags hidden for Expense/Resource product types.
  *
- * Twin bug of ETP-4943 (Service). `ProductAdditionalInfoPanel.jsx` only hides
- * the `Logistics` row (weight/UOM, "Almacenable"/"Retornable") when
- * `productType === 'S'`; `ProductSidebar.jsx` only hides the stock widget
- * under the same condition (ETP-4606). Neither treats `productType === 'E'`
- * (Gasto) or `'R'` (Recurso) the same way, even though both have no physical
- * existence and cannot be stocked — matching the ticket's own wording.
+ * The unified product sheet (ETP-5696) shows `Almacenable`/`Retornable` in the main form only
+ * when `productType === 'I'` (`displayLogicJs` in decisions.json); `ProductSidebar.jsx` hides the
+ * stock widget for the non-stockable types (`S`, `E`, `R`, ETP-4606 / ETP-5091).
  *
- * This spec reproduces the ticket's reported steps end-to-end (real
- * DetailView + real ProductAdditionalInfoPanel/ProductSidebar, only the
- * network layer mocked): create/open a product of type Gasto or Recurso and
- * confirm the Logistics section and stock sidebar are gone, the same way
- * they already are for Service. It also pins the control case (type
- * Artículo, 'I') so a future regression on Service/Article is caught too.
+ * This spec reproduces the ticket's steps end-to-end (real DetailView + ProductSidebar, only the
+ * network layer mocked): open a product of type Gasto or Recurso and confirm the stock flags are
+ * gone, the same way they are for Service. It also pins the control case (type Artículo, 'I').
  */
 
 function buildProduct(id, productType, productTypeLabel) {
@@ -77,36 +71,34 @@ async function mockStockAndTransactions(page) {
   });
 }
 
-async function openProductAdditionalInfo(page, product) {
+async function openProduct(page, product) {
   await login(page);
   await mockProductDetail(page, product);
   await mockStockAndTransactions(page);
   await page.goto(`/product/${product.id}`);
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  await page.getByRole('button', { name: 'Información adicional' }).click();
 }
 
 for (const [code, label] of [['E', 'Gasto'], ['R', 'Recurso']]) {
-  test.describe(`Product Logistics section — hidden for ${label} (ETP-5091)`, () => {
+  test.describe(`Product stock flags — hidden for ${label} (ETP-5091)`, () => {
     test.beforeEach(async ({ page }) => {
-      await openProductAdditionalInfo(page, PRODUCTS[code]);
+      await openProduct(page, PRODUCTS[code]);
     });
 
-    test(`hides the Logistics section (Almacenable/Retornable) for ${label}`, async ({ page }) => {
-      await expect(page.getByText('Logística')).not.toBeVisible();
+    test(`hides the stock flags (Almacenable/Retornable) for ${label}`, async ({ page }) => {
+      await expect(page.getByText('Gestión de stock')).not.toBeVisible();
       await expect(page.getByTestId('field-stocked')).not.toBeVisible();
       await expect(page.getByTestId('field-returnable')).not.toBeVisible();
     });
   });
 }
 
-test.describe('Product Logistics section — control case, Artículo stays stockable', () => {
+test.describe('Product stock flags — control case, Artículo stays stockable', () => {
   test.beforeEach(async ({ page }) => {
-    await openProductAdditionalInfo(page, PRODUCTS.I);
+    await openProduct(page, PRODUCTS.I);
   });
 
-  test('keeps the Logistics section visible for Artículo', async ({ page }) => {
-    await expect(page.getByText('Logística')).toBeVisible();
+  test('keeps the stock flags visible for Artículo', async ({ page }) => {
     await expect(page.getByTestId('field-stocked')).toBeVisible();
     await expect(page.getByTestId('field-returnable')).toBeVisible();
   });

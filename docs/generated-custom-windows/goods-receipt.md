@@ -694,6 +694,20 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. movida** and before **Cant. pedido**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 3 (all four grid columns now carry an explicit `gridOrder`: product 1, movementQuantity 2, uOM 3, orderQuantity 4)`, `gridReadOnly: true`, `display: "tag"` — it had no visibility declared (`form: false`). The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as the product is chosen: this window's line callout answers `uOM` with an empty object, so the unit is taken from the selected item's `_aux` (`_UOM`, serialised as `UOM(<id>) (name: <name>)`) by `lib/auxReference.js`; the backend then stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft receipt; confirm `Unidad` sits between Cant. movida and Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
 ## Return to vendor from the receipt (`createPurchaseReturn`) — ETP-5711
 
 `createPurchaseReturn` is now declared to MCP by `GoodsReceiptHeaderHandler.actionContracts()` (after
@@ -709,3 +723,37 @@ now works. Cap rule and error shape: `return-to-vendor-shipment.md` and neo-head
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Import order lines into a draft goods receipt over MCP — ETP-5713
+
+An agent fills a DRAFT goods receipt from purchase orders, the way the window's "Add from order" modal does, with three declared
+actions on `goodsReceipt` (`GoodsReceiptHeaderHandler` through `ImportOrderLinesIntoInOutHandler`): `availableOrders` lists the
+completed purchase orders of the goods receipt's business partner and currency that still have quantity to receive; `availableOrderLines`
+(`{orderId}`) lists an order's pending lines with their `pendingQuantity`; `importOrderLines`
+(`{orderId, lines?:[{sourceLineId, quantity}]}`) adds them. The `id` of every call is the draft goods receipt.
+`lines` omitted imports everything still pending; given, exactly those lines (a line listed twice counts both).
+
+- **Cap = pending including drafts.** pending = ordered - delivered - what any DRAFT goods receipt (this one included) already
+  holds. More than that on any line is a 422 `importQuantityExceedsPending` (naming the product, the requested and the
+  pending quantity) and **nothing is created**; the same order line can be imported again while it stays under the cap.
+  The order's delivered quantity only moves when the goods receipt is completed, so an import lowers the pending, not the delivered.
+- **Preconditions (422, before anything is written):** the goods receipt must be a draft (`importTargetNotDraft`), the order
+  completed (`importSourceNotCompleted`), of the same business partner (`importBusinessPartnerMismatch`), currency
+  (`importCurrencyMismatch`) and direction (`importDirectionMismatch`). A stockable line needs an active storage bin in
+  the goods receipt's warehouse (`importNoStorageBin`).
+- **Header link.** The goods receipt's `salesOrder` is set when every line it holds comes from that one order (the order's
+  Documents panel finds the goods receipt through it) and left empty when several orders are mixed; a link set by an earlier
+  import is cleared when a second order joins. The answer reports `headerLinked` and `salesOrder`.
+- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
+- The classic `Create Lines From` button is redirected to `importOrderLines` through `MCP_CONFIG`. `createGoodsReceipt` on the purchase order remains the
+  one-step alternative. The spec prompt (`agent-prompts/goods-receipt/spec.md`) describes the flow.
+
+The window itself is unchanged: its modal still posts one line at a time through the lines CRUD (uncapped by the server).
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34.
+
+Discovery and edge cases of the goods receipt import (ETP-5713 review):
+- `availableOrders` is a bounded scan: the 200 most recent completed purchase orders of the partner, client and currency, at most 50 returned. Every `available*` answer carries `hasMore`, `limit` and `scanLimit`; `hasMore:true` means the list may be incomplete (a purchase order not listed can still be imported when its id is known).
+- An over-delivered order line (ordered 5, delivered 7) is neither listed nor imported (its "pending" would be -2); a negative order line keeps its negative pending. The one-step `createGoodsReceipt` shares the underlying factory and still has that flip (follow-up).
+- `headerLinked` / `salesOrder` report the truth: if the header already links purchase order X and the lines come only from purchase order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
+- A goods receipt or purchase order of another client answers 404 exactly like a missing one.
+- The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.

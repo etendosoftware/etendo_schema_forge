@@ -220,6 +220,14 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-order/lines/selectors/uOM"
+    },
+    {
+      "entity": "lines",
       "field": "currency",
       "column": "C_Currency_ID",
       "reference": "Currency",
@@ -434,14 +442,16 @@ export const api = {
       "InvoiceStatus": "Estado de facturación",
       "EM_ETGO_Delivery_Status": "Estado de entrega",
       "EM_ETGO_Invoice_Status": "Estado de facturación",
-      "PriceList": "Precio"
+      "PriceList": "Precio",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
       "DeliveryStatus": "Delivery Status",
       "InvoiceStatus": "Invoicing Status",
       "EM_ETGO_Delivery_Status": "Delivery Status",
-      "EM_ETGO_Invoice_Status": "Invoicing Status"
+      "EM_ETGO_Invoice_Status": "Invoicing Status",
+      "C_UOM_ID": "Unit"
     }
   }
 };

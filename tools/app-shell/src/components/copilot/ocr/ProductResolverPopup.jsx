@@ -49,6 +49,11 @@ function normalizeText(value) {
  *   token          — bearer token
  *   onSubmit       — receives a map { [idx]: productId | null } (null = explicitly skipped)
  *   onCancel       — discards the import entirely
+ *   onBack         — steps back to the lines review
+ *   onStateChange  — receives the current selections right before onSubmit/onBack fire
+ *   initialSelections — selections of an earlier visit (ETP-5654), restored when the user
+ *                    comes back from the lines review. A product created from this popup
+ *                    persists, so it comes back as a plain selected product and is never created twice.
  */
 function SelectorOption({ option, selected, onPick, sizing = 'compact' }) {
   const base = 'flex w-full items-center gap-2 text-left hover:bg-muted';
@@ -66,12 +71,26 @@ function SelectorOption({ option, selected, onPick, sizing = 'compact' }) {
   );
 }
 
+// Keeps only the earlier selections whose row is still unmatched: after the lines were edited a
+// row can drop out of the popup, and its stale selection must not leak into the submit map.
+function restoreSelections(initial, unmatched) {
+  if (!initial) return {};
+  const out = {};
+  for (const row of unmatched) {
+    if (initial[row.idx]) out[row.idx] = initial[row.idx];
+  }
+  return out;
+}
+
 export default function ProductResolverPopup({
   unmatched = [],
   selectorUrl,
   productSpecUrl,
   token,
+  initialSelections = null,
   onSubmit,
+  onBack,
+  onStateChange,
   onCancel,
 }) {
   const ui = useUI();
@@ -82,15 +101,10 @@ export default function ProductResolverPopup({
   const apiFetch = useApiFetch('');
 
   // selections: { [idx]: { id, label } | SKIPPED } — a missing key means undecided.
-  // Rows carrying a suggestion start preselected (decided); the user can still change, search, create or skip.
-  const [selections, setSelections] = useState(() => {
-    const seeded = {};
-    for (const row of unmatched) {
-      if (row.suggestion?.id) seeded[row.idx] = { id: row.suggestion.id, label: row.suggestion.name };
-    }
-    return seeded;
-  });
-  const hasPreselected = unmatched.some((row) => row.suggestion?.id);
+  // Every row starts undecided. A row's name-similarity suggestion is only offered as a one-click
+  // chip: it is never a selection until the user accepts it, so Continue cannot let it through unreviewed.
+  const [selections, setSelections] = useState(() => restoreSelections(initialSelections, unmatched));
+  const hasSuggested = unmatched.some((row) => row.suggestion?.id);
   const hasUnsuggested = unmatched.length === 0 || unmatched.some((row) => !row.suggestion?.id);
   const undecidedCount = unmatched.filter((row) => !selections[row.idx]).length;
   const canContinue = undecidedCount === 0;
@@ -103,6 +117,7 @@ export default function ProductResolverPopup({
       const selection = selections[row.idx];
       out[row.idx] = isProduct(selection) ? selection.id : null;
     }
+    onStateChange?.(selections);
     onSubmit?.(out);
   };
 
@@ -118,7 +133,7 @@ export default function ProductResolverPopup({
           </button>
         </div>
 
-        {hasPreselected && (
+        {hasSuggested && (
           <div className="px-5 pt-3">
             <InfoBanner
               tone="warning"
@@ -137,7 +152,8 @@ export default function ProductResolverPopup({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+        {/* Capped to ~3 rows (a row with its suggestion chip is ~120px) so the popup stays compact; the rest scrolls. */}
+        <div className="flex-1 max-h-[25rem] overflow-y-auto px-5 py-3 space-y-3">
           {unmatched.map((row) => (
             <ProductRow
               key={row.idx}
@@ -158,6 +174,18 @@ export default function ProductResolverPopup({
             <span id={incompleteHintId} className="mr-auto text-xs text-muted-foreground" data-testid="ocr-product-incomplete-hint">
               {ui('ocrProductResolverIncomplete')}
             </span>
+          )}
+          {onBack && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                onStateChange?.(selections);
+                onBack();
+              }}
+              className={canContinue ? 'mr-auto' : undefined}
+              data-testid="Button__b3ae11_back">
+              {ui('back')}
+            </Button>
           )}
           <Button variant="outline" onClick={cancel} data-testid="Button__b3ae11_cancel">
             {ui('cancel')}
@@ -211,14 +239,27 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, api
           ui={ui}
           data-testid="InlineSelector__b3ae11" />
         {/* Fixed-height slot: the button appearing/disappearing never shifts the row layout. */}
-        <div className="mt-1 flex h-8 justify-end">
+        <div className="mt-1 flex h-8 items-center justify-between gap-2">
+          {!selection && row.suggestion?.id && (
+            <button
+              type="button"
+              onClick={() => onSelect({ id: row.suggestion.id, label: row.suggestion.name })}
+              className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border-subtle px-2.5 py-1 text-xs hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-focus-ring"
+              title={row.suggestion.name}
+              data-testid={`ocr-product-suggestion-${row.idx}`}
+            >
+              <Check size={12} className="shrink-0 text-status-info-foreground" data-testid="Check__b3ae11" />
+              <span className="shrink-0 text-muted-foreground">{ui('ocrProductSuggested')}</span>
+              <span className="truncate font-medium text-status-info-foreground">{row.suggestion.name}</span>
+            </button>
+          )}
           {isProduct(selection) && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => onSelect(SKIPPED)}
-              className="text-muted-foreground hover:text-foreground"
+              className="ml-auto text-muted-foreground hover:text-foreground"
               data-testid={`ocr-product-skip-${row.idx}`}
             >
               <Ban data-testid="Ban__b3ae11" />
@@ -591,14 +632,19 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
   const [defaultsFailed, setDefaultsFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // Client-side validation message: cleared as soon as the user edits any field.
+  // Server errors live in `error` and are not cleared by typing.
+  const [validationError, setValidationError] = useState(null);
 
   const handleNameChange = (value) => {
     setName(value);
+    setValidationError(null);
     if (!skTouched) setSearchKey(deriveSearchKey(value));
   };
 
   const handleSearchKeyChange = (value) => {
     setSearchKey(value);
+    setValidationError(null);
     setSkTouched(true);
   };
 
@@ -669,7 +715,8 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
   const submit = async () => {
     setError(null);
     const v = validate();
-    if (v) { setError(v); return; }
+    setValidationError(v);
+    if (v) return;
     setSubmitting(true);
     try {
       const body = {
@@ -767,9 +814,9 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
                 data-testid="ChevronDown__b3ae11" />
             </button>
           </div>
-          {error && (
+          {(validationError || error) && (
             <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
-              {error}
+              {validationError || error}
             </div>
           )}
           {defaultsFailed && (
@@ -801,7 +848,7 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
           apiFetch={apiFetch}
           token={token}
           currentId={uom?.id || null}
-          onPick={(value) => { setUom(value); setPicker(null); }}
+          onPick={(value) => { setUom(value); setValidationError(null); setPicker(null); }}
           onClose={() => setPicker(null)}
           ui={ui}
           data-testid="SelectorDialog__b3ae11" />
@@ -815,7 +862,7 @@ function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch
           apiFetch={apiFetch}
           token={token}
           currentId={taxCategory?.id || null}
-          onPick={(value) => { applyCategory('user', value); setPicker(null); }}
+          onPick={(value) => { applyCategory('user', value); setValidationError(null); setPicker(null); }}
           onClose={() => setPicker(null)}
           ui={ui}
           data-testid="SelectorDialog__b3ae11" />

@@ -2,6 +2,9 @@
 // @covers artifacts/sales-quotation/custom/QuotationConfirmModal.jsx
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
+// @covers artifacts/sales-quotation/custom/SendToEvaluationModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -10,10 +13,11 @@ import { login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../../helpers/inventory-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
-import { createDraftWithFirstLine } from '../../helpers/purchase-helpers.js';
+import { createDraftWithFirstLine, findNegativeLineRow } from '../../helpers/purchase-helpers.js';
 
 /**
  * Sales Quotation — Full flow: Presupuesto → Pedido de venta → Albarán →
@@ -84,10 +88,7 @@ async function slow(page) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
-  const spinner = page.getByText(/cargando|loading/i);
-  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
-    await expect(spinner).toBeHidden({ timeout: 15_000 });
-  }
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 });
 }
 
 function expectSaveResponse(page) {
@@ -154,47 +155,6 @@ async function readDocumentTotals(page) {
 }
 
 /**
- * Locate the line row (rendered by the shared InlineLinesPanel —
- * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
- * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
- * `qtyFieldKey` cell holds a negative value, and return a locator bound to
- * that row's PRODUCT. The purchase and sales full-flow specs carry identical
- * copies of this helper — keep them in sync.
- *
- * What is guaranteed:
- *   - The quantity and the product are read from the SAME DOM snapshot (one
- *     `evaluateAll` over every row), so the product returned is the one whose
- *     quantity was negative — a re-render that reorders the table between two
- *     separate reads can no longer pair the negative quantity with the
- *     positive line's product.
- *   - The scan is retried, so the detail view's reload flash (0 rows, cells
- *     not rendered yet) does not make it wrongly conclude there is none.
- *   - The returned locator is matched by product, not by position, so it
- *     keeps pointing at that line however the table reorders afterwards.
- *
- * What is NOT guaranteed: that the row's cells still hold the same values when
- * the caller reads them. Callers must read them with retrying assertions
- * (`toHaveText`, `readSettledCellAmount`), never a one-shot `textContent()`.
- * Reading the cell value (rather than pattern-matching the row's text) avoids
- * false positives from unrelated hyphens in a product name/description.
- */
-async function findNegativeLineRow(page, qtyFieldKey) {
-  const rows = page.locator('[data-testid^="line-row-"]');
-  let productName = null;
-  await expect(async () => {
-    const cells = await rows.evaluateAll((els, key) => els.map((el) => ({
-      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
-      product: el.querySelector('[data-cell-key="product"]')?.textContent?.trim() ?? '',
-    })), qtyFieldKey);
-    productName = cells.find((c) => c.product && parseAmount(c.qty) < 0)?.product ?? null;
-    expect(productName,
-      `No line row with a negative "${qtyFieldKey}" was found (rows: ${JSON.stringify(cells)})`,
-    ).toBeTruthy();
-  }).toPass({ timeout: 15_000 });
-  return rows.filter({ has: page.locator('[data-cell-key="product"]', { hasText: productName }) });
-}
-
-/**
  * Read a line-row cell's amount, first waiting for it to render a settled
  * (non-blank, digit-bearing) value. Guards against a transient race right
  * after a line is added/converted — a callout (product/qty) can resolve
@@ -234,8 +194,7 @@ async function waitForLinesSettled(page, count, message) {
     message || `Lines count should reach ${count}`,
   ).toBeVisible({ timeout: 15_000 });
 
-  const spinner = page.getByText(/cargando|loading/i);
-  await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   await expect(linesBtn,

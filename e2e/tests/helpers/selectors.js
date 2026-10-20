@@ -113,6 +113,33 @@ export function byTestId(page, testId) {
 }
 
 /**
+ * Every VISIBLE "Cargando…" / "Loading…" indicator on the page.
+ *
+ * A detail page routinely shows several at once: the detail view's own
+ * placeholder plus one per panel that loads independently (the "Documentos"
+ * related-documents panel, the sales-invoice payment-status badge, …). A bare
+ * `getByText(/cargando|loading/i)` is therefore NOT a single element, and any
+ * strict call on it (`toBeHidden()`, `isVisible()`, `waitFor()`) throws a
+ * strict-mode violation the moment two indicators overlap — and `.first()`
+ * waits for only one of them. Count the visible ones instead.
+ */
+export function loadingIndicators(page) {
+  return page.getByText(/cargando|loading/i).filter({ visible: true });
+}
+
+/**
+ * Wait until no loading indicator is visible on the page (passes at once when
+ * none is shown). Strict-safe: it waits for ALL of them, however many render
+ * concurrently. Throws on timeout — a caller that tolerates a stuck indicator
+ * chains its own `.catch(() => {})`.
+ */
+export async function waitForLoadingIndicatorsGone(page, { timeout = 15_000 } = {}) {
+  await expect(loadingIndicators(page),
+    'Every loading indicator should disappear',
+  ).toHaveCount(0, { timeout });
+}
+
+/**
  * Click the last checkbox on the page via a genuine DOM `.click()` call.
  *
  * ImportLinesModal's Checkbox renders a sr-only native `<input>` (role=checkbox)

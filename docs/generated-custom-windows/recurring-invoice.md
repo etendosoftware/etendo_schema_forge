@@ -15,7 +15,7 @@ The available fields make this look like a recurring-template maintenance screen
 
 ## Interaction model
 - **Route:** `/recurring-invoice` for the list and `/recurring-invoice/:recordId` for direct record access.
-- **Visibility:** Route-only in current evidence. `tools/app-shell/src/menu.json` marks the item as hidden, so it is not expected to appear in the visible Finance menu, but `tools/app-shell/src/windows/registry.js` still registers the slug for direct navigation.
+- **Visibility:** Route-only (ETP-5795). `menu.json` marks the item `hidden: true` with `"routeOnly": true`, so it stays out of the sidebar but remains reachable by URL (`/recurring-invoice`). Without `routeOnly` or `redirect` a hidden item is not registered and resolves to "Window not found".
 - **Implementation type:** Generated window using the shared app-shell `ListView` and `DetailView`, backed by generated `RecurringInvoiceTable.jsx` and `RecurringInvoiceForm.jsx`.
 - **Window shape:** Single-entity window for `recurringInvoice`. No master-child structure, child tabs, or related line entities are visible in the contract or generated UI.
 
