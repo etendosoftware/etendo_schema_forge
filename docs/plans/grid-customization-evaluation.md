@@ -19,13 +19,14 @@
 | `DataTable` has ~15 custom consumers (per-window `*HeaderTable.jsx`, `AttachmentsTable`, module pages). | `windows/custom/*`, `artifacts/*/custom/*HeaderTable.jsx` |
 | Ownership: the table components are in this functional repo; `ui/table.jsx` and the filter builder are in `schema_forge_core` (`app-shell-core`). Anything that moves to core follows `docs/repo-topology.md`. | paths above |
 
-ETP-5833 (default width policy per field type) is independent and not in the tree. **Precedence rule adopted by this proposal: stored user width > ETP-5833 type default > fallback.** No widths are prescribed here.
+ETP-5833 (default width policy per field type) is independent and not in the tree. **Precedence rule proposed (pending §8): stored user width > ETP-5833 type default > fallback.** No widths are prescribed here.
 
 ## 2. Options compared
 
 - **A — Extend the current table.** Add a column-state layer (width, order, visibility keyed by `col.key`) plus resize/reorder handles to `DataTable` and the lines grid.
 - **B — TanStack Table (`@tanstack/react-table`) as headless state engine.** Keep our markup and cell renderers; use its controlled `columnSizing / columnOrder / columnVisibility` state. Vendor: "headless table library … full control over markup, styles, and behavior", MIT, "server-side friendly" (github.com/TanStack/table, 2026-10-20). Whether its sizing/ordering APIs fit our two renderers is *unverified* — vendor docs pages for them returned 404 when fetched.
 - **C — AG Grid.** Community is MIT and includes client-side and infinite row models; the server-side row model is Enterprise (ag-grid.com row-models, 2026-10-20). Column resize/move/hide in Community: *unverified* on a vendor page (the community-vs-enterprise page lists "row and column configurations" without naming them).
+- **Other candidates screened out** (react-data-grid, Glide Data Grid, Handsontable and similar): the criteria were inline editing with our own renderers, incremental migration and licence; canvas or spreadsheet-style grids replace the renderer exactly as C and D do, so they share their rejection reason and were not compared cell by cell.
 - **D — MUI X DataGrid.** Column reordering is Pro ("The Data Grid Pro lets users drag and drop columns to reorder them", mui.com column-ordering, 2026-10-20); column pinning is Pro (licensing page); resizing is on by default in the column-dimensions page with no plan badge, so it appears to be in the free tier (the licensing page lists it under Pro — the two pages disagree: *unverified*).
 
 ## 3. Matrix
@@ -55,7 +56,7 @@ The matrix separates the options on one axis: C and D replace the renderer, whic
 2. **One vs several.** v1: one personal view per (user, window, entity), with "reset to default". Named views later, reusing the preset naming pattern.
 3. **Content.** `{ version, order[], widths{key:px}, hidden[] }` only. Filters and sort are **not** part of the view; they stay in the existing named filter presets, so the two features coexist and neither implies the other.
 4. **Identity/isolation.** Key = user + window spec name (kebab-case) + entity (`header`/line entity). Never shared across users. Team/shared views are out of scope unless approved separately.
-5. **Persistence.** Explicit save ("Save view") with a local unsaved draft; the server is the source of truth, so the view follows the user across devices. Recovery: on any unknown, stale or excluded key, drop it silently and fall back to the default layout; an unreadable payload means default layout, never an error screen.
+5. **Persistence.** Explicit save ("Save view") with a local unsaved draft; the server is the source of truth, so the view follows the user across devices. Recovery: unknown, stale or excluded keys are dropped one by one and the valid entries are kept; permitted columns missing from the stored `order` are appended at their default position. Full fallback to the default layout happens only when the payload is unreadable or has an unsupported `version`, never an error screen.
 6. **Permission rule (hard).** At read time intersect `order`, `widths` **and** `hidden` with the server-permitted columns of the current contract; a stored view can never add, reveal or reorder a column the contract excludes (`discarded`/`system`/not authorised). The stored payload is untrusted input.
 7. **Storage.** Open choice for the human: new key in `AD_Preference` modelled on `NeoFiltersService` (consistent, per user) vs a dedicated table. Payload size bounded like the presets (`BoundedJsonParser`).
 
@@ -81,5 +82,7 @@ A PoC is **not justified**: the uncertainties that decide the choice (permission
 | Identity | user + window + entity | — |
 | Persistence | explicit save, server-side, drop unknown keys | — |
 | Approach | A shaped after B's state model | — |
+| Storage | `AD_Preference` key like the presets vs a dedicated table (§5.7) | — |
+| Width precedence vs ETP-5833 | stored user width > type default > fallback | — |
 
 Comment text for Jira, to be posted by a human or by the pipeline if it is authorised: "ETP-5834 evaluation ready in `docs/plans/grid-customization-evaluation.md` (PR). Needs a decision on §5 and §8 before ETP-5835 can start."
