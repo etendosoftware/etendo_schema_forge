@@ -30,7 +30,7 @@ The list uses `WarehouseCustomTable` in place of the default generated table. Co
 | **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. Not sortable. |
 | **Products** | Dynamic count cell (`WarehouseProductCountCell`): fetches storageBins then binContents per warehouse row, aggregates via `aggregateProducts`, displays count of products with `qty != 0` (includes negative stock, excludes exact zero — see "Stock filtering semantics" below). Shows `—` while loading or on error. Not sortable. |
 
-Print and Link buttons are hidden (`hidePrint`, `hideLink`). The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order` (ETP-5601). List toolbar and table use 8 px horizontal/vertical padding throughout (`listbarPaddingX="px-2"`, `tablePaddingX="px-2"`, etc.).
+Print and Link buttons are hidden (`hidePrint`, `hideLink`). The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order` (ETP-5601). The list toolbar inherits the generic `ListView` padding (8 px, 56 px bar) with no window-level override (ETP-5603); the table uses 8 px padding (`tablePaddingX="px-2"`, etc.).
 
 Search filters on `searchKey` and `name`.
 
@@ -295,6 +295,8 @@ panel reads the stored columns like any other field and `binContents` no longer 
 ## Accounting subtab (`accounting` entity)
 
 Added by ETP-4565 (scope-expanded follow-up to ETP-4402 — "Contabilidad tab: single record + non-deletable" across 8 master-data windows). The native AD `Warehouse and Storage Bins` window (`AD_Window_ID = 139`) has an "Accounting" tab (`ad_tab_id = 209`, table `M_Warehouse_Acct`); it is now wired into the custom warehouse window as a `secondaryTabs` entry, the same pattern used by `product`/`asset-group`.
+
+**Role gate (ETP-5648).** The custom `index.jsx` builds its own `secondaryTabs` list, so it declares `visibleWhenCapability: ACCOUNTING_CAPABILITY` on the `accounting` entry itself (the generated page's flag never reaches it). Without the `showAccountingFields` capability (e.g. the Inventory template role) the tab is hidden and its rows are never fetched; the server refuses `warehouse/accounting` with `403` anyway.
 
 The Accounting tab maps to `M_Warehouse_Acct` and exposes exactly one visible field:
 

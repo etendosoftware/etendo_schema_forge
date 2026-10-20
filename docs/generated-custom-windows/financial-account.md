@@ -3662,8 +3662,11 @@ offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo
   `bank-statements` actions and reconciled with the `bank-reconciliation` actions. The PSD2 buttons
   (`pSD2GetBankstatement`, `pSD2GetConsent`, `psd2ReconnectFa`, `psd2GetConnections`,
   `psd2RefreshConnections`) are excluded too: consent and reconnection need a person to authorize at
-  the bank (SCA). The account's own create, update and delete stay — the SPA uses them, and an agent
-  creates accounts with the same server-side rules (country required, see above).
+  the bank (SCA). Disconnecting the bank IS exposed, as the declared actions `disconnectBank`
+  (soft) and `deleteBankConnection` (permanent, the agent must ask the user first) — see
+  `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8. The account's own create, update and delete
+  stay — the SPA uses them, and an agent creates accounts with the same server-side rules (country
+  required, see above).
 - **`transaction` — read-only through MCP.** Create, update and delete answer 405 (its
   `view:"create"` had no field, and the UI never writes a movement through this entity: deposits,
   withdrawals and transfers go through the account's movement flow, the
@@ -3751,3 +3754,7 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - Kept on purpose: the Reactivar / Eliminar confirmation dialogs still say the accounting entry will be removed (a consequence of an action the user may take).
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The new movement, the movement row kebab (Contabilizar, Confirmar, Reactivar — including a reconciled movement, whose core refusal used to arrive as a raw `@ETPR_PeriodClosedForUnRemovePayment@`), the funds transfer modal and the cash close (Conciliación tab) offer **Ir al calendario**. Cash close: a close-date refusal is dated by the close; a marked movement in a closed period keeps its own sentence naming the movement and is dated by that movement (`error.periodDate`). See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

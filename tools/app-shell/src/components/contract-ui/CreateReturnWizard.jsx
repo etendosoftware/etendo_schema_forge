@@ -11,9 +11,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
+import { formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+
+// ETP-5729 (CP-12) — the createReturn refusals (com.etendoerp.go ReturnableQuantity, 422) that mean
+// the quantities this dialog offered are no longer returnable: another return, a draft one
+// included, took them since the dialog loaded. Retrying cannot succeed, so the dialog closes.
+const STALE_RETURN_ERROR_CODES = new Set(['returnQuantityExceedsAvailable', 'nothingLeftToReturn']);
 
 // Same shape as ImportLinesModal's classifyQtyDraft — a draft is valid when it
 // parses to a finite magnitude in (0, maxQty]. Duplicated locally rather than
@@ -59,81 +64,54 @@ function MiniCheck({ checked, onChange }) {
   );
 }
 
-const RETURN_RECEIPT_ICON = (
-  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5" />
-    <path d="M12 15l-3 3 3 3" />
-    <path d="M9 18h8" />
-  </svg>
-);
-
-function StepIndicator({ current, total }) {
-  const ui = useUI();
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-      {Array.from({ length: total }, (_, i) => (
-        <span
-          key={`step-${i}`}
-          className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: i + 1 === current ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)' }}
-        />
-      ))}
-      <span className="ml-1">{ui('stepOf').replace('{step}', current).replace('{total}', total)}</span>
-    </div>
-  );
-}
-
+/**
+ * Single-step "Create return" dialog shared by the sales (goods-shipment) and purchase
+ * (goods-receipt) return flows.
+ *
+ * ETP-5729 (CP-15): there used to be a second, read-only confirmation step listing the
+ * document to be created and, on the sales side, an amount per line priced from the linked
+ * order. That price was resolved per PRODUCT, so an order with the same product on two lines
+ * at different prices showed the wrong amount — and the step added nothing the action needs:
+ * the request is built only from the lines, quantities and reason chosen here. The step was
+ * removed; the button on this step creates the return directly. Prices only matter on the
+ * credit note, which the backend prices per line.
+ */
 export default function CreateReturnWizard({
   open,
   onClose,
   sourceData,
   lines = [],
+  // Optional. `true` while the caller is still fetching `lines`; `false` once it has its answer.
+  // Left undefined by a caller that does not report it, which keeps the previous rendering
+  // (no loading row, no empty state) — see showEmpty below.
+  linesLoading,
   base,
   headers,
   onSuccess,
   onError,
   titleKey,
   refLabelKey,
-  docTypeLabelKey,
-  docTypeDescriptionKey,
   createActionUrl,
-  showAmountColumn = false,
-  fetchPrices,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch(base);
-  const [step, setStep] = useState(1);
   const [selected, setSelected] = useState(() => new Set());
   const [quantities, setQuantities] = useState({});
   const [qtyDrafts, setQtyDrafts] = useState({});
   const [reason, setReason] = useState('');
-  const [prices, setPrices] = useState({});
-  const [currency, setCurrency] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Reset state every time the dialog opens
   useEffect(() => {
     if (open && lines.length > 0) {
-      setStep(1);
       setSelected(new Set(lines.map((l) => l.id)));
       const q = {};
       for (const l of lines) q[l.id] = Math.abs(Number(l.movementQuantity) || 0);
       setQuantities(q);
       setQtyDrafts({});
       setReason('');
-      setPrices({});
-      setCurrency('');
-
-      if (showAmountColumn && fetchPrices) {
-        fetchPrices({ base, sourceData })
-          .then(({ priceMap, currency: cur } = {}) => {
-            if (priceMap) setPrices(priceMap);
-            if (cur) setCurrency(cur);
-          })
-          .catch(() => {});
-      }
     }
-  }, [open, lines, sourceData, base, showAmountColumn, fetchPrices]);
+  }, [open, lines]);
 
   const toggleLine = useCallback((id) => {
     setSelected((prev) => {
@@ -153,13 +131,6 @@ export default function CreateReturnWizard({
   }, []);
 
   const selectedLines = lines.filter((l) => selected.has(l.id));
-  const totalReturnQty = selectedLines.reduce((sum, l) => sum + (quantities[l.id] || 0), 0);
-  const effectiveCurrency = currency || sourceData?.['currency$_identifier'] || '';
-
-  const getLinePrice = (line) => prices[line.product] ?? 0;
-  const getLineAmount = (line) => (quantities[line.id] || 0) * getLinePrice(line);
-  const totalAmount = selectedLines.reduce((sum, l) => sum + getLineAmount(l), 0);
-  const fmtAmount = (val) => formatCurrency(effectiveCurrency, typeof val === 'string' ? parseFloat(val) : val);
 
   const documentNo = sourceData?.documentNo || '';
   const bpName = sourceData?.['businessPartner$_identifier'] || sourceData?.businessPartner$_identifier || '';
@@ -180,21 +151,34 @@ export default function CreateReturnWizard({
       if (!res.ok) {
         // `body?.error?.message` covers the standard `NeoResponse.error(int, String)` envelope
         // (`{"error":{"message","status"}}`) used by most NEO action handlers — same fallback
-        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "A
-        // return already exists for shipment: ...") is silently dropped for the generic HTTP
-        // reason phrase.
+        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "Cannot
+        // return 5 of Agua: only 4 can still be returned ...", a 422 returnQuantityExceedsAvailable)
+        // is silently dropped for the generic HTTP reason phrase.
         const rawMessage = body?.error?.message ?? body?.response?.error?.message
           ?? body?.response?.message ?? body?.message ?? `Request failed (${res.status})`;
-        throw new Error(translateBackendError(rawMessage, ui, { messageKeys: extractBackendMessageKeys(body) }));
+        const error = new Error(translateBackendError(rawMessage, ui, {
+          messageKeys: extractBackendMessageKeys(body),
+        }));
+        error.code = body?.error?.code;
+        throw error;
       }
       onClose();
       if (onSuccess) onSuccess(body?.response?.data);
     } catch (err) {
+      // A stale-quantity refusal closes the dialog instead of leaving the user in front of a
+      // button that keeps failing; reopening it reloads the quantities still returnable. Any
+      // other error keeps it open so the user can adjust and retry.
+      if (STALE_RETURN_ERROR_CODES.has(err?.code)) onClose();
       if (onError) onError(err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  // Only a caller that reported loading can say "nothing to return": an unreported state may
+  // still be an in-flight fetch, and flashing «nothing left» over it would be a false answer.
+  const showLoading = linesLoading === true && lines.length === 0;
+  const showEmpty = linesLoading === false && lines.length === 0;
 
   const canProceed = selectedLines.length > 0 && selectedLines.every((l) => quantities[l.id] > 0);
 
@@ -211,7 +195,6 @@ export default function CreateReturnWizard({
         data-testid="DialogContent__955eac">
         {/* Header */}
         <div className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--border-subtle))', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
-          <StepIndicator current={step} total={2} data-testid="StepIndicator__955eac" />
           <DialogHeader data-testid="DialogHeader__955eac">
             <DialogTitle className="text-base font-semibold" data-testid="DialogTitle__955eac">{ui(titleKey)}</DialogTitle>
             <DialogDescription
@@ -222,205 +205,125 @@ export default function CreateReturnWizard({
           </DialogHeader>
         </div>
 
-        {/* Step 1: Review items */}
-        {step === 1 && (
-          <div className="px-6 pb-4 border-b border-border">
-            <div className="max-h-[280px] overflow-y-auto" style={{ marginTop: 16 }}>
-              <table className="w-full" style={{ fontSize: 13, tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: 32 }} />
-                  <col style={{ width: '50%' }} />
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '25%' }} />
-                </colgroup>
-                <thead>
-                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
-                    <th className="text-left px-1" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>
-                      <MiniCheck
-                        checked={selected.size === lines.length && lines.length > 0}
-                        onChange={() => { selected.size === lines.length ? deselectAll() : selectAll(); }}
-                        data-testid="MiniCheck__955eac" />
-                    </th>
-                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
-                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('delivered')}</th>
-                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('returnQty')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => {
-                    const isSelected = selected.has(line.id);
-                    const maxQty = Math.abs(Number(line.movementQuantity) || 0);
-                    const currentQty = quantities[line.id] ?? maxQty;
-                    const draft = qtyDrafts[line.id];
-                    const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
-                    return (
-                      <tr key={line.id} className={isSelected ? '' : 'opacity-40'}>
-                        <td className="px-1" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6 }}>
-                          <MiniCheck
-                            checked={isSelected}
-                            onChange={() => toggleLine(line.id)}
-                            data-testid="MiniCheck__955eac" />
-                        </td>
-                        <td className="px-2 text-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {line['product$_identifier'] || line.product$_identifier || '—'}
-                        </td>
-                        <td className="px-2 text-right tabular-nums text-muted-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6 }}>
-                          {formatPlainDecimal(maxQty)}
-                        </td>
-                        <td style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, textAlign: 'right', paddingLeft: 8, paddingRight: 8 }}>
-                          <span
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ display: 'inline-block', width: 70, marginLeft: 'auto' }}>
-                            <MaskedAmountInput
-                              bare
-                              grouping={false}
-                              value={currentQty}
-                              onChange={(raw) => setQtyDrafts((prev) => ({ ...prev, [line.id]: raw }))}
-                              onCommit={(_parsed, raw) => {
-                                const check = classifyQtyDraft(raw, maxQty);
-                                if (check.valid) {
-                                  setQuantities((prev) => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
-                                } else if (check.tooHigh) {
-                                  toast.error(ui('qtyMaxAllowed', { max: maxQty }));
-                                } else {
-                                  toast.error(ui('qtyMustBePositive'));
-                                }
-                                setQtyDrafts((prev) => { const n = { ...prev }; delete n[line.id]; return n; });
-                              }}
-                              disabled={!isSelected}
-                              className={`w-full border rounded tabular-nums bg-muted/20 focus:bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent text-[13px] py-1 px-1 border-[0.5px] ${draftInvalid ? 'border-destructive' : 'border-border'}`}
-                              data-testid="CreateReturnWizard__qtyInput" />
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Reason field */}
-            <div className="mt-4">
-              <label className="block text-xs text-muted-foreground mb-1">{ui('reasonForReturn')}</label>
-              <input
-                type="text"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder={ui('optional')}
-                className="w-full text-sm border rounded px-3 py-2 bg-background text-foreground placeholder:text-muted-foreground/50"
-                style={{ borderWidth: '0.5px' }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Confirm */}
-        {step === 2 && (
-          <div className="px-6 pb-4 border-b border-border">
-            <p className="text-sm text-muted-foreground mb-4" style={{ paddingTop: 16 }}>
-              {ui('followingDocumentsWillBeCreated')}
+        {/* Lines to return */}
+        <div className="px-6 pb-4 border-b border-border">
+          {showLoading && (
+            <p className="text-sm text-muted-foreground" style={{ marginTop: 16 }} data-testid="CreateReturnWizard__loading">
+              {ui('loading')}
             </p>
-
-            <div className="flex flex-col mb-5" style={{ gap: 8 }}>
-              <div
-                className="flex items-center gap-3"
-                style={{ border: '1px solid hsl(var(--border-subtle))', borderRadius: 8, padding: 12 }}
-              >
-                <span className="shrink-0 flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'var(--status-info-bg)' }}>
-                  <span className="text-status-info-foreground">{RETURN_RECEIPT_ICON}</span>
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-foreground">{ui(docTypeLabelKey)}</p>
-                  <p className="text-xs text-muted-foreground">{ui(docTypeDescriptionKey)}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-b border-border mb-4" />
-
-            <div className="max-h-[180px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
-                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
-                    <th className="text-right px-2 w-20" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('qty')}</th>
-                    {showAmountColumn && <th className="text-right px-2 w-32" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('amount')}</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedLines.map((line) => (
-                    <tr key={line.id}>
-                      <td className="py-2 px-2 text-foreground" style={cellStyle}>
+          )}
+          {showEmpty && (
+            <p className="text-sm text-muted-foreground" style={{ marginTop: 16 }} data-testid="CreateReturnWizard__empty">
+              {ui('backendError.returnNothingLeft')}
+            </p>
+          )}
+          {!showLoading && !showEmpty && (
+          <div className="max-h-[280px] overflow-y-auto" style={{ marginTop: 16 }}>
+            <table className="w-full" style={{ fontSize: 13, tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 32 }} />
+                {/* Product takes the remaining width (its cells truncate); the
+                    numeric columns are sized so their headers fit on one line. */}
+                <col />
+                <col style={{ width: 200 }} />
+                <col style={{ width: 150 }} />
+              </colgroup>
+              <thead>
+                <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
+                  <th className="text-left px-1" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>
+                    <MiniCheck
+                      checked={selected.size === lines.length && lines.length > 0}
+                      onChange={() => { selected.size === lines.length ? deselectAll() : selectAll(); }}
+                      data-testid="MiniCheck__955eac" />
+                  </th>
+                  <th className="text-left px-2 whitespace-nowrap" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
+                  <th className="text-right px-2 whitespace-nowrap" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('availableToReturn')}</th>
+                  <th className="text-right px-2 whitespace-nowrap" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('returnQty')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => {
+                  const isSelected = selected.has(line.id);
+                  const maxQty = Math.abs(Number(line.movementQuantity) || 0);
+                  const currentQty = quantities[line.id] ?? maxQty;
+                  const draft = qtyDrafts[line.id];
+                  const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
+                  return (
+                    <tr key={line.id} className={isSelected ? '' : 'opacity-40'}>
+                      <td className="px-1" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6 }}>
+                        <MiniCheck
+                          checked={isSelected}
+                          onChange={() => toggleLine(line.id)}
+                          data-testid="MiniCheck__955eac" />
+                      </td>
+                      <td className="px-2 text-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {line['product$_identifier'] || line.product$_identifier || '—'}
                       </td>
-                      <td className="py-2 px-2 text-right tabular-nums" style={cellStyle}>
-                        {formatPlainDecimal(quantities[line.id] || 0)}
+                      <td className="px-2 text-right tabular-nums text-muted-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6 }}>
+                        {formatPlainDecimal(maxQty)}
                       </td>
-                      {showAmountColumn && (
-                        <td className="py-2 px-2 text-right tabular-nums" style={cellStyle}>
-                          {getLinePrice(line) ? fmtAmount(getLineAmount(line)) : '—'}
-                        </td>
-                      )}
+                      <td style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, textAlign: 'right', paddingLeft: 8, paddingRight: 8 }}>
+                        <span
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ display: 'inline-block', width: 70, marginLeft: 'auto' }}>
+                          <MaskedAmountInput
+                            bare
+                            grouping={false}
+                            value={currentQty}
+                            onChange={(raw) => setQtyDrafts((prev) => ({ ...prev, [line.id]: raw }))}
+                            onCommit={(_parsed, raw) => {
+                              const check = classifyQtyDraft(raw, maxQty);
+                              if (check.valid) {
+                                setQuantities((prev) => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
+                              } else if (check.tooHigh) {
+                                toast.error(ui('qtyMaxAllowed', { max: maxQty }));
+                              } else {
+                                toast.error(ui('qtyMustBePositive'));
+                              }
+                              setQtyDrafts((prev) => { const n = { ...prev }; delete n[line.id]; return n; });
+                            }}
+                            disabled={!isSelected}
+                            className={`w-full border rounded tabular-nums bg-muted/20 focus:bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent text-[13px] py-1 px-1 border-[0.5px] ${draftInvalid ? 'border-destructive' : 'border-border'}`}
+                            data-testid="CreateReturnWizard__qtyInput" />
+                        </span>
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="font-medium">
-                    <td className="py-2 px-2 text-foreground">{ui('total')}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{formatPlainDecimal(totalReturnQty)}</td>
-                    {showAmountColumn && (
-                      <td className="py-2 px-2 text-right tabular-nums">{totalAmount > 0 ? fmtAmount(totalAmount) : '—'}</td>
-                    )}
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {reason && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                <span className="font-medium">{ui('reason')}</span> {reason}
-              </p>
-            )}
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
+          )}
+
+          {/* Reason field */}
+          <div className="mt-4">
+            <label className="block text-xs text-muted-foreground mb-1">{ui('reasonForReturn')}</label>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={ui('optional')}
+              className="w-full text-sm border rounded px-3 py-2 bg-background text-foreground placeholder:text-muted-foreground/50"
+              style={{ borderWidth: '0.5px' }}
+            />
+          </div>
+        </div>
 
         {/* Footer */}
         <DialogFooter
           className="px-6 pt-5 pb-4"
           style={{ backgroundColor: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}
           data-testid="DialogFooter__955eac">
-          {step === 1 && (
-            <>
-              <Button variant="ghost" size="sm" onClick={onClose} data-testid="Button__955eac">
-                {ui('cancel')}
-              </Button>
-              <Button
-                size="sm"
-                disabled={!canProceed}
-                onClick={() => setStep(2)}
-                data-testid="Button__955eac">
-                {ui('next')}
-              </Button>
-            </>
-          )}
-          {step === 2 && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStep(1)}
-                data-testid="Button__955eac">
-                {ui('back')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleConfirm}
-                disabled={loading}
-                data-testid="Button__955eac">
-                {loading ? ui('creating') : ui('createReturn')}
-              </Button>
-            </>
-          )}
+          <Button variant="ghost" size="sm" onClick={onClose} data-testid="Button__955eac">
+            {ui('cancel')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleConfirm}
+            disabled={!canProceed || loading}
+            data-testid="Button__955eac">
+            {loading ? ui('creating') : ui('createReturn')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

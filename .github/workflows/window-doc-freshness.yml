@@ -1,9 +1,10 @@
 name: Window Doc Freshness
 
+# Pull requests only: the result is a PR comment, and on a push it ran with nowhere to report
+# (and once more for every push to a branch with an open PR).
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
-  push:
 
 permissions:
   contents: read
@@ -22,27 +23,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Resolve diff range
-        id: range
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const isPullRequest = context.eventName === 'pull_request';
-            const base = isPullRequest
-              ? context.payload.pull_request.base.sha
-              : context.payload.before;
-            const head = isPullRequest
-              ? context.payload.pull_request.head.sha
-              : context.sha;
-
-            core.setOutput('base', base || '');
-            core.setOutput('head', head || '');
-
       - name: Check affected window docs
         id: check
         run: |
           REPORT_FILE="$(mktemp)"
-          if node scripts/check-window-docs.js --base "${{ steps.range.outputs.base }}" --head "${{ steps.range.outputs.head }}" >"$REPORT_FILE" 2>&1; then
+          if node scripts/check-window-docs.js --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" >"$REPORT_FILE" 2>&1; then
             echo "missing=false" >> "$GITHUB_OUTPUT"
           else
             echo "missing=true" >> "$GITHUB_OUTPUT"
@@ -58,7 +43,6 @@ jobs:
           cat "$REPORT_FILE"
 
       - name: Publish latest warning comment
-        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
           WINDOW_DOC_MISSING: ${{ steps.check.outputs.missing }}

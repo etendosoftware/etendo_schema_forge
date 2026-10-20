@@ -4,7 +4,8 @@ import GeneratedApp from '@generated/internal-consumption/generated/web/internal
 import BulkDocumentAction, { buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { extractErrorMessage, PROCESS_FAILURE_TOAST_DURATION_MS } from '@/hooks/useEntity.js';
+import { extractErrorMessage, readMessageKeys, PROCESS_FAILURE_TOAST_DURATION_MS } from '@/hooks/useEntity.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
 
 // ETP-5445 — the form's draftMode "Confirmar" is not a DocAction: it POSTs the
@@ -100,8 +101,12 @@ export default function InternalConsumptionWindow(props) {
       if (!res.ok) {
         // Same extractor and toast duration the form's Save & Confirm uses (the extractor
         // routes through translateBackendError).
+        const messageKeys = await readMessageKeys(res);
         const message = await extractErrorMessage(res, ui);
-        toast.error(message || ui('actionFailed'), { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+        toast.error(message || ui('actionFailed'), {
+          duration: PROCESS_FAILURE_TOAST_DURATION_MS,
+          ...periodNotAvailableToastOptions(messageKeys, ui, { date: documentPeriodDate(row) }),
+        });
         refresh();
         return { success: false, message };
       }

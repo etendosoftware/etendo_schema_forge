@@ -163,13 +163,16 @@ export const api = {
   },
   "labelOverrides": {
     "en_US": {
-      "M_Locator_ID": "Warehouse"
+      "M_Locator_ID": "Warehouse",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
-      "M_Locator_ID": "Almacén"
+      "M_Locator_ID": "Almacén",
+      "C_UOM_ID": "Unidad"
     },
     "es_AR": {
-      "M_Locator_ID": "Almacén"
+      "M_Locator_ID": "Almacén",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

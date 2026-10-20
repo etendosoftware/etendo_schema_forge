@@ -129,7 +129,7 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
   const canSendToSif = invoiceData?.documentStatus === 'CO' && hasPendingTargets;
   const sifBodyKey = getSifBodyKey(specName, pendingTargets);
-  // ETP-5700 — system-specific caption ("Envío SII" / "Envío TBAI" / ...), not "Enviar a SIF".
+  // ETP-5700 — system-specific caption ("Enviar a SII" / "Enviar a TicketBAI" / ...), not "Enviar a SIF".
   const sifLabelKey = getSifButtonLabelKey(specName, pendingTargets);
 
   const closeSifModal = useCallback(() => setShowSifModal(false), []);

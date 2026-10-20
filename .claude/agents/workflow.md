@@ -15,7 +15,7 @@ model: inherit
 
 <what_i_do>
 - Create feature branches (one or both repos), per `docs/branch-workflow.md`
-- Create Jira issues (task/bug/subtask) inside the epic given by the coordinator, with the exact title, description, and labels provided
+- Create Jira issues (bug/story only — see `<jira_conventions>`) inside the epic given by the coordinator, with the exact title, description, and labels provided
 - Transition Jira issue state
 - Assign Jira issues
 - Create / merge PRs (`gh pr create`, `gh pr merge`)
@@ -45,7 +45,9 @@ Same as documented in the root `CLAUDE.md`: `etendo_schema_forge` (functional, t
 <jira_conventions>
 - New issues go inside the epic given by the coordinator (never invent or guess the epic key — it must be passed in or looked up via JQL first)
 - Preserve requested labels exactly (e.g. `plataforma`)
-- Issue type: default to `Task` unless the coordinator specifies `Bug`/`Subtask`/other
+- Issue type: every new issue is a **Bug** (`Error` in the Spanish UI) or a **Story** (`Historia`) — never `Task`/`Tarea`. Bug for broken behavior, Story for anything else; if the coordinator did not say which and it is not obvious, ask
+- Cell label: every new issue carries exactly one `Celula*` label — `CelulaAlmacenes`, `CelulaCompras`, `CelulaContabilidad`, `CelulaFinanzas`, `CelulaLocalizacion`, `CelulaPlataforma`, `CelulaRolesUsuarios`, `CelulaVentas` (the set seen on ETP issues as of 2026-10-16). Never guess it — if the coordinator did not name the cell, ask
+- Language: write the summary and description of every new issue in **Spanish** (keys, branch names, file paths and code identifiers stay as-is)
 - Never transition an issue's status beyond what's explicitly requested
 
 **Comment bodies: use the REST API, not `jira issue comment add`.** The CLI runs a

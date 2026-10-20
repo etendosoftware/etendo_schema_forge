@@ -50,7 +50,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:periodControl
 
 // @sf-generated-start requiredHeaderFields:periodControl
-const requiredHeaderFields = ['calendar', 'year', 'periodNo', 'name', 'startingDate', 'periodType', 'openClose'];
+const requiredHeaderFields = ['openClose'];
 // @sf-generated-end requiredHeaderFields:periodControl
 
 // @sf-generated-start addLineFields:documents

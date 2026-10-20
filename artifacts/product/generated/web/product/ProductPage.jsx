@@ -9,7 +9,6 @@ import CostingForm from './CostingForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
 import ProductStockDefaultsWatcher from '@/windows/custom/product/ProductStockDefaultsWatcher';
-import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import ProductCostBanner from '@/windows/custom/product/ProductCostBanner';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
@@ -45,7 +44,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:product
 
 // @sf-generated-start requiredHeaderFields:product
-const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'active', 'returnable'];
+const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'productType', 'stocked', 'active', 'returnable'];
 // @sf-generated-end requiredHeaderFields:product
 
 
@@ -512,10 +511,12 @@ export const api = {
       "M_Product_Category_ID": "Categoría",
       "ProductType": "Tipo",
       "Value": "Código",
+      "IsStocked": "Almacenable",
       "DateFrom": "Fecha de inicio",
       "DateTo": "Fecha de expiración"
     },
     "es_AR": {
+      "IsStocked": "Almacenable",
       "DateFrom": "Fecha de inicio",
       "DateTo": "Fecha de expiración"
     }
@@ -563,10 +564,6 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 500, visibleWhenCapability: 'showAccountingFields' },
         ]}
         formFooter={ProductStockDefaultsWatcher}
-        primaryTabs={[
-          { key: 'general', label: 'General' },
-          { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
-        ]}
         hidePrint
         hideMoreMenu
         noHeaderBorder
@@ -576,7 +573,6 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         autoSaveOnBlur
         sidebarClassName="w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
         tabsBarPaddingX="px-2"
-        primaryTabsVariant="pill"
         toolbarPaddingX="px-2"
         contentBg="bg-card"
         formCardPadding="px-2"
@@ -607,7 +603,6 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       galleryRenderer={(gProps) => <ProductGallery {...gProps} />}
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideMoreMenu

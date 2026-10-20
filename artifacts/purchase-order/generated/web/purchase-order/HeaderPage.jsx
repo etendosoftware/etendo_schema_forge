@@ -21,8 +21,6 @@ const breadcrumb = 'Purchases / Purchase Order';
 // @sf-generated-start summary:header
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
@@ -50,7 +48,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['businessPartner', 'documentNo', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'warehouse', 'paymentTerms', 'priceList', 'grandTotalAmount', 'summedLineAmount', 'currency'];
+const requiredHeaderFields = ['businessPartner', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'warehouse', 'paymentTerms', 'priceList', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -741,7 +739,8 @@ export const api = {
       "InvoiceStatus": "Estado de facturación",
       "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
       "EM_ETGO_Invoice_Status": "Estado de facturación",
-      "PriceList": "Precio"
+      "PriceList": "Precio",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
@@ -749,7 +748,8 @@ export const api = {
       "DeliveryStatusPurchase": "Reception Status",
       "InvoiceStatus": "Invoicing Status",
       "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-      "EM_ETGO_Invoice_Status": "Invoicing Status"
+      "EM_ETGO_Invoice_Status": "Invoicing Status",
+      "C_UOM_ID": "Unit"
     }
   }
 };

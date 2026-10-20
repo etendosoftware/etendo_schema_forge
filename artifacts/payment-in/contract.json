@@ -1,8 +1,8 @@
 {
   "version": "0.14.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-10-05T16:17:51.586Z",
-  "checksum": "712fca8accf0da85",
+  "updatedAt": "2026-10-16T17:29:24.321Z",
+  "checksum": "2094cb3dcd79cf4a",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -65,6 +65,9 @@
       "detailEntity": null,
       "summaryFields": [],
       "salesTheme": false,
+      "listViewOptions": {
+        "defaultDatePreset": "last30"
+      },
       "dateFilterKey": "paymentDate",
       "statusEnumLabels": {
         "RPAP": "statusDraft",
@@ -1013,6 +1016,9 @@
       "detailEntity": null,
       "summaryFields": [],
       "salesTheme": false,
+      "listViewOptions": {
+        "defaultDatePreset": "last30"
+      },
       "dateFilterKey": "paymentDate",
       "statusEnumLabels": {
         "RPAP": "statusDraft",

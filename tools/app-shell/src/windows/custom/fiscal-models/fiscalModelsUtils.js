@@ -527,6 +527,19 @@ function applyComplementariaParams(params, identChecks) {
 
 export function applyIdentParams(params, identChecks) {
   applyMappedIdentParams(params, identChecks);
+  // ETP-5725 (reopened QA review, Blocker B1) — a DEDICATED, unambiguous flag for the backend's
+  // corrective/ordinaria consistency guard (FiscalDeclCrudHandler#checkCorrectiveConsistency,
+  // read via Fiscal303BoxesHandler#dispatch's GENERATE branch AND, as of this fix,
+  // Fiscal303SubmissionSupport#handleSubmit — the real AEAT telematic submit endpoint).
+  // Deliberately set here, in the SHARED param builder every 303 request that can file/generate
+  // goes through (`generate303File` AND `AeatSubmitFlow.jsx`'s own submit request), not in one
+  // caller — the original version of this fix set it only inside `generate303File`, which is
+  // exactly how `AeatSubmitFlow.jsx`'s submit request missed it and left the real filing
+  // endpoint unguarded (review B1). `applyRectificativaParams` below also sets
+  // `IsComplementary=Y`, but that param is shared with the UNRELATED legacy "complementaria"
+  // checkbox (`applyComplementariaParams`), so it cannot be trusted server-side to mean "this is
+  // a rectificativa" — this one always means exactly that, only ever "Y" or absent.
+  if (identChecks?.rectificativa) params.set('Rectificativa', 'Y');
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
   // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
@@ -675,7 +688,18 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
       method: 'PUT',
       body: JSON.stringify(body),
     });
-    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    if (!res.ok) {
+      // ETP-5725 (reopened QA fix, UX follow-up) — on a reactivation blocked by a sibling
+      // declaration (FiscalDeclCrudHandler#rejectReactivationWithSibling), the 409 alone cannot
+      // tell the caller WHY: this same status also covers re-presenting an already-submitted
+      // declaration (rejectRepresentation) and the plain draft-sibling case. The backend tags
+      // its message with a stable `[reason=...]` marker precisely so this layer doesn't have to
+      // guess — see that guard's own `reactivationBlockReason` doc for the exact values.
+      const raw = await res.text().catch(() => '');
+      const message = parseServerMessage(raw);
+      const reasonMatch = message ? message.match(/\[reason=([a-z_]+)\]/) : null;
+      return { ok: false, error: `http_${res.status}`, reason: reasonMatch?.[1] };
+    }
     const snapshot = await readSubmittedSnapshot(res);
     return snapshot ? { ok: true, submittedSnapshot: snapshot } : { ok: true };
   } catch (_) {

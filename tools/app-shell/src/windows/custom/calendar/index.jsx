@@ -7,6 +7,7 @@ import YearCloseStatusBadge from './YearCloseStatusBadge.jsx';
 import YearTableWithCloseStatus from './YearTableWithCloseStatus.jsx';
 import { useYearCloseStatus } from './useYearCloseStatus.js';
 import { useYearHasPeriods } from './useYearHasPeriods.js';
+import { useCalendarReview } from '@/pages/first-steps/useCalendarReview.js';
 import CloseYearModal from '@/windows/custom/fiscal-calendar/CloseYearModal';
 import UndoCloseYearModal from '@/windows/custom/fiscal-calendar/UndoCloseYearModal';
 
@@ -43,6 +44,15 @@ const CREATE_PERIODS_PROCESS = {
     },
   ],
 };
+
+function withFiscalYearStartDefault(fiscalYearStart) {
+  if (!fiscalYearStart) return CREATE_PERIODS_PROCESS;
+  return {
+    ...CREATE_PERIODS_PROCESS,
+    params: CREATE_PERIODS_PROCESS.params.map((param) => (param.key === 'FISCALYEARSTART'
+      ? { ...param, defaultValue: fiscalYearStart } : param)),
+  };
+}
 
 /**
  * The `calendar` custom window has no backing NEO spec of its own (ETP-4478 rework — the
@@ -132,9 +142,13 @@ export default function CalendarWindow(props) {
   // from outside). While the existence check is still loading (`undefined`) or failed (`null`),
   // default to showing the button — the common case (a not-yet-populated year) — rather than
   // hiding a valid action on a transient fetch hiccup.
+  //
+  // ETP-5577 (H1): the range preselects the start month of the calendar's current fiscal year,
+  // because a new year with a different start would overlap it (the backend answers 409).
+  const { fiscalYearStart } = useCalendarReview();
   const processesForCalendar = useMemo(
-    () => (hasPeriods === true ? [] : [CREATE_PERIODS_PROCESS]),
-    [hasPeriods]
+    () => (hasPeriods === true ? [] : [withFiscalYearStartDefault(fiscalYearStart)]),
+    [hasPeriods, fiscalYearStart]
   );
 
   const menuActionsForCalendar = useCallback(({ data }) => {

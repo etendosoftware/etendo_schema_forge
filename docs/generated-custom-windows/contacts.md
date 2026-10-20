@@ -1525,3 +1525,14 @@ with and without the sidebar variants.
 At narrower widths (browser zoom, side panel open) fewer than 4 tabs may fit; the strip then moves
 the extra tabs into "Más" and never overlaps the side panel. Manual check: zoom the browser in
 until a tab would not fit and confirm "Más" count grows and nothing overlaps.
+
+## ETP-5795 — "+ New Contact" on the Contacts overview points to /contacts
+
+The default action of the Contacts overview page (`artifacts/contacts/aggregate-contract.json`,
+`actions[0]`, label "+ New Contact") used to route to `/business-partner`. That path is the
+hidden raw Business Partner window, which is no longer reachable through URL routing (it is
+redirected through the menu, see `RedirectWindow`), so the button now routes to `/contacts`, the
+window this guide describes.
+
+Manual verification: open the Contacts overview, click "+ New Contact" and confirm the app lands
+on the Contacts window (`/contacts`), not on a Business Partner page or a redirect.
