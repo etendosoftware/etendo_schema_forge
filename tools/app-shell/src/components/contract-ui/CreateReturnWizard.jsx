@@ -146,9 +146,8 @@ export default function CreateReturnWizard({
       if (!res.ok) {
         // `body?.error?.message` covers the standard `NeoResponse.error(int, String)` envelope
         // (`{"error":{"message","status"}}`) used by most NEO action handlers — same fallback
-        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "A
-        // return already exists for shipment: ...") is silently dropped for the generic HTTP
-        // reason phrase.
+        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "No
+        // valid lines to return") is silently dropped for the generic HTTP reason phrase.
         const rawMessage = body?.error?.message ?? body?.response?.error?.message
           ?? body?.response?.message ?? body?.message ?? `Request failed (${res.status})`;
         const error = new Error(translateBackendError(rawMessage, ui, {
@@ -161,10 +160,11 @@ export default function CreateReturnWizard({
       onClose();
       if (onSuccess) onSuccess(body?.response?.data);
     } catch (err) {
-      // ETP-5729 (CP-12) — a 409 means the source document's state rules the return out (e.g. a
-      // return already exists for this shipment): retrying cannot succeed, so the dialog closes
-      // instead of leaving the user in front of a button that keeps failing. Any other error
-      // keeps it open so the user can adjust the lines and retry, or cancel.
+      // ETP-5729 (CP-12) — a 409 means the source document's state rules the return out (e.g.
+      // another return, a draft one included, already took the quantity these lines offered, so
+      // this dialog is stale): retrying cannot succeed, so the dialog closes instead of leaving
+      // the user in front of a button that keeps failing; reopening it reloads the quantities
+      // still returnable. Any other error keeps it open so the user can adjust and retry.
       if (err?.status === 409) onClose();
       if (onError) onError(err.message);
     } finally {

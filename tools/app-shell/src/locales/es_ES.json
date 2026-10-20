@@ -25543,7 +25543,7 @@
     "documentSequencePurchaseInvoice": "Factura de compra",
     "documentSequencePurchaseCorrectiveInvoice": "Factura de compra rectificativa",
     "backendError.returnInvoiceAlreadyExists": "Ya existe una factura rectificativa para este documento de devolución.",
-    "backendError.returnAlreadyExistsForShipment": "Ya existe una devolución para el albarán {documentNo}.",
+    "backendError.returnQtyExceedsShipped": "No se pueden devolver {requested} de {product}: de lo enviado ({shipped}) solo quedan {available} por devolver, contando también las devoluciones en borrador.",
     "backendError.rectifiedInvoiceRequired": "Selecciona al menos una factura a rectificar: sin ella la factura rectificativa no se puede confirmar.",
     "invoiceToRectifyLabel": "Factura a rectificar",
     "noInvoicesToRectify": "No hay facturas confirmadas que rectificar para este documento de devolución.",

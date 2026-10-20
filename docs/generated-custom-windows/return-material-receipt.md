@@ -576,3 +576,28 @@ and verify the title, the «Completada» badge and that «Ver factura» opens th
 `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/index.test.js`,
 `e2e/tests/flows/purchases/return-material-receipt.mocked.spec.js`,
 `e2e/tests/flows/return-row-confirm-rectify.mocked.spec.js`.
+
+## Returnable quantity is enforced on import and on line edits — ETP-5729
+
+A goods shipment can be returned several times (the goods-shipment "a return already exists" 409
+was removed — see `goods-shipment.md`, ETP-5729). What protects it is quantity: per shipment line,
+returnable = shipped − every non-voided return line pointing at it (`Canceled_InOutLine_ID`),
+**draft returns included**. `availableShipmentLines` already listed exactly that; com.etendoerp.go
+`ReturnableQuantityGuard` now enforces it on this window's write paths, on every channel (REST,
+batch, MCP):
+
+- `importShipmentLines` — the requested quantities, summed per source line, are checked before any
+  line is written.
+- Line create/edit (`ReturnMaterialReceiptLineHandler`, `POST`/`PUT`/`PATCH` carrying
+  `movementQuantity`) — the line's source shipment line is checked, excluding the line's own
+  current quantity, so editing a draft return replaces its quantity instead of adding to it. A
+  line not linked to a shipment line has nothing to check.
+
+An excess is a 409 `RETURN_QTY_EXCEEDS_SHIPPED` with `messageKeys = ["ETGO_ReturnQtyExceedsShipped"]`,
+rendered by `backendErrors.js` as `backendError.returnQtyExceedsShipped` ("No se pueden devolver
+{requested} de {product}: de lo enviado ({shipped}) solo quedan {available} por devolver, contando
+también las devoluciones en borrador."). A DB failure while checking is a 500, never an unchecked
+write.
+
+Manual check: on a draft return created from a 5-unit shipment line whose other returns already
+take 3, set the line's quantity to 3 → refused with that message; set it to 2 → saved.

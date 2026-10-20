@@ -60,7 +60,7 @@ Use this window to register and complete outbound customer shipments. The functi
 
 ## Gap assessment
 
-- **Resolved by ETP-5429** — the return workflow is fully backed by stable observed behavior: `createReturn` (called from the now-shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx`, wrapped by `ReturnWizard.jsx`) creates a real `return-material-receipt` document end-to-end, and a genuine backend 409 conflict when a second return is attempted on an already-returned shipment (since ETP-5729 the conflict names the shipment by document number and is translated — see the ETP-5729 section below). The amount-column pricing of the old step 2 was removed in ETP-5729. The related-documents tab also correctly surfaces the created return receipt back on the source shipment (`RelatedDocuments.jsx`'s `returnReceipts` chip, confirmed populated by the backend). No longer a gap.
+- **Resolved by ETP-5429** — the return workflow is fully backed by stable observed behavior: `createReturn` (called from the now-shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx`, wrapped by `ReturnWizard.jsx`) creates a real `return-material-receipt` document end-to-end, and, since ETP-5729, a second return of the same shipment allowed for the quantity that remains, with a translated 409 only when the request exceeds it (see the ETP-5729 section below). The amount-column pricing of the old step 2 was removed in ETP-5729. The related-documents tab also correctly surfaces the created return receipt back on the source shipment (`RelatedDocuments.jsx`'s `returnReceipts` chip, confirmed populated by the backend). No longer a gap.
 - Batch invoice creation posts to the same `createDraftInvoice` endpoint as the single-shipment flow and, since ETP-5381, produces a confirmed invoice rather than a draft. Current evidence only proves source shape and endpoint usage, not a browser-tested logistics scenario. It should be treated as supported-by-code with limited automated proof.
 - The documented shipment-to-invoice relationship is order-centric: the related-documents tab resolves invoices through the linked sales order, not by directly querying invoices from the shipment id. If the business expects shipment-specific invoice traceability independent of the order link, that remains an open ambiguity.
 - **Resolved (2026-09):** the top-bar single-shipment gate (`GoodsShipmentActions.jsx`) already used `invoiceStatus >= 100`. The bulk selection-bar gate (`BulkInvoiceFromShipment.jsx`) used to check `r.completelyInvoiced !== true` instead — a no-op, since `completelyInvoiced` (`Iscompletelyinvoiced`) is renamed to `invoiced` with `grid: false, form: false` in `decisions.json` and never reaches a grid row at all. Fixed to `parseFloat(r.invoiceStatus ?? 0) < 100`, the same field and same threshold the single-record gate already used — the two are now consistent.
@@ -428,7 +428,7 @@ toolbar row with clear space between "Filtros" and the sort button; narrow the w
 and confirm the filter buttons wrap onto a second line while the actions stay on the right with
 the same gap.
 
-## Create return — single step and the duplicate-return message — ETP-5729
+## Create return — single step and repeat returns by quantity — ETP-5729
 
 **One step (QA CP-15).** The shared `CreateReturnWizard.jsx` used to have a read-only step 2
 (the "Return receipt" document card plus an amount per line). That amount was priced by
@@ -442,21 +442,35 @@ the backend per line. `fetchPrices`, `showAmountColumn`, `docTypeLabelKey` and
 `docTypeDescriptionKey` are gone from the wizard API. **The wizard is shared with goods-receipt
 (`PurchaseReturnWizard.jsx`), so the purchase return dialog lost its step 2 too.**
 
-**Second return from the same shipment (QA CP-12).** `NeoReturnReceiptService` (com.etendoerp.go)
-still refuses it with 409 — the guard is unchanged — but the body no longer leaks the internal
-shipment ID. It is structured: `error.code = "RETURN_ALREADY_EXISTS"`,
-`error.messageKeys = ["ETGO_ReturnAlreadyExists"]`,
-`error.messageParams = { documentNo, returnDocumentNo }` and the English
-`error.message = "A return (1000006) already exists for shipment 1000035."`, which is also what an
-MCP agent reads (same handler on every channel). The SPA renders it from the key:
-`backendErrors.js` maps `ETGO_ReturnAlreadyExists` → `backendError.returnAlreadyExistsForShipment`
-("Ya existe una devolución para el albarán {documentNo}." / "A return already exists for shipment
-{documentNo}."), and the key route now interpolates `messageParams` into any mapped key. On a 409
-the dialog **closes** and the toast shows the message — retrying cannot succeed. Any other error
-keeps the dialog open so the user can adjust the lines or cancel.
+**Second return from the same shipment (QA CP-12) — allowed, capped by quantity.** The
+"a return already exists" 409 is gone (`findExistingReturnDocumentNo` / `ETGO_ReturnAlreadyExists`
+removed from `NeoReturnReceiptService`, and `backendError.returnAlreadyExistsForShipment` from the
+SPA). A shipment is returned like it is invoiced: as many times as needed, for whatever quantity
+remains. Per shipment line, returnable = shipped − every non-voided return line pointing at it
+(**draft returns count**, voided ones never do) — the rule `canCreateReturn` and the wizard's
+`availableShipmentLines` quantities already displayed. Since ETP-5729 the backend enforces it, in
+com.etendoerp.go `ReturnableQuantityGuard`, on every sales-return write path and every channel
+(REST, batch, MCP): the goods-shipment `createReturn` action, return-material-receipt
+`importShipmentLines`, and a return-line create/edit (editing a draft return line excludes the
+line's own current quantity). An excess answers 409 `error.code = "RETURN_QTY_EXCEEDS_SHIPPED"`,
+`messageKeys = ["ETGO_ReturnQtyExceedsShipped"]`, `messageParams = { product, requested,
+available, shipped, sourceLineId }`; `backendErrors.js` maps it to
+`backendError.returnQtyExceedsShipped` ("No se pueden devolver {requested} de {product}: de lo
+enviado ({shipped}) solo quedan {available} por devolver, contando también las devoluciones en
+borrador." / "Cannot return {requested} of {product}: of the {shipped} shipped, only {available}
+can still be returned, counting draft returns too."). `createReturn` also refuses a request with
+no line of the shipment (400 "No valid lines to return") before creating the header, so a refused
+request never leaves an empty return. On a 409 the dialog **closes** and the toast shows the
+message — its quantities were stale, and reopening it reloads what is still returnable. Any other
+error keeps the dialog open so the user can adjust the lines or cancel.
 
-Manual check: on a shipment that already has a return, Crear Devolución → pick a line → Crear
-Devolución: the dialog closes and a Spanish toast names the shipment's document number.
+Manual checks: (1) return 2 of 5 from a completed shipment and leave the return in draft → Crear
+Devolución again offers 3; return 3 → created. (2) With returns covering all 5 (a draft one
+included) the Crear Devolución button is hidden (`canCreateReturn = false`). (3) Open the wizard,
+then in another tab create a return for the remaining quantity, then confirm the first wizard →
+dialog closes with the Spanish over-return toast and no new return is created. (4) On the draft
+return, edit a line's quantity above what remains → the save is refused with the same message.
+(5) Void a return → its quantity becomes returnable again.
 
 **After the return is created — result modal, no auto-navigation.** Sales now behaves like
 Purchases (`GoodsReceiptActions.jsx`). `GoodsShipmentActions.jsx` used to navigate straight to

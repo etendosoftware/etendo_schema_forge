@@ -25305,7 +25305,7 @@
     "documentSequencePurchaseInvoice": "Purchase Invoice",
     "documentSequencePurchaseCorrectiveInvoice": "Corrective Purchase Invoice",
     "backendError.returnInvoiceAlreadyExists": "A rectificative invoice already exists for this return document.",
-    "backendError.returnAlreadyExistsForShipment": "A return already exists for shipment {documentNo}.",
+    "backendError.returnQtyExceedsShipped": "Cannot return {requested} of {product}: of the {shipped} shipped, only {available} can still be returned, counting draft returns too.",
     "backendError.rectifiedInvoiceRequired": "Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.",
     "invoiceToRectifyLabel": "Invoice to rectify",
     "noInvoicesToRectify": "There are no confirmed invoices to rectify for this return document.",

@@ -289,31 +289,31 @@ describe('CreateReturnWizard', () => {
       globalThis.fetch = vi.fn(() => Promise.resolve({
         ok: false,
         status: 409,
-        json: () => Promise.resolve({ error: { message: 'A return already exists for shipment: DOC-001', status: 409 } }),
+        json: () => Promise.resolve({ error: { message: 'Cannot return 2 of Product A.', status: 409 } }),
       }));
 
       const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
-      expect(props.onError).toHaveBeenCalledWith('A return already exists for shipment: DOC-001');
+      expect(props.onError).toHaveBeenCalledWith('Cannot return 2 of Product A.');
       expect(props.onError).not.toHaveBeenCalledWith(expect.stringContaining('Request failed'));
       expect(props.onSuccess).not.toHaveBeenCalled();
     });
 
-    // ETP-5729 CP-12: the second return from the same shipment came back as an English sentence
-    // carrying the internal shipment ID, and the dialog stayed open in front of a button that
-    // could only fail again. The backend now sends a stable key plus the document numbers.
-    it('translates the duplicate-return 409 from messageKeys/messageParams and closes the dialog', async () => {
+    // ETP-5729 CP-12: a second return of the same shipment is allowed for what remains, so the
+    // only conflict left is quantity — another return (a draft one too) already took what this
+    // dialog offered. The backend sends a stable key plus the numbers; retrying cannot succeed.
+    it('translates the over-return 409 from messageKeys/messageParams and closes the dialog', async () => {
       globalThis.fetch = vi.fn(() => Promise.resolve({
         ok: false,
         status: 409,
         json: () => Promise.resolve({
           error: {
             status: 409,
-            code: 'RETURN_ALREADY_EXISTS',
-            message: 'A return (1000006) already exists for shipment 1000035.',
-            messageKeys: ['ETGO_ReturnAlreadyExists'],
-            messageParams: { documentNo: '1000035', returnDocumentNo: '1000006' },
+            code: 'RETURN_QTY_EXCEEDS_SHIPPED',
+            message: 'Cannot return 2 of Product A: only 0 of the 5 shipped can still be returned (draft and completed returns count).',
+            messageKeys: ['ETGO_ReturnQtyExceedsShipped'],
+            messageParams: { product: 'Product A', requested: '2', available: '0', shipped: '5' },
           },
         }),
       }));
@@ -322,7 +322,7 @@ describe('CreateReturnWizard', () => {
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
       expect(props.onError).toHaveBeenCalledWith(
-        'backendError.returnAlreadyExistsForShipment:{"documentNo":"1000035","returnDocumentNo":"1000006"}',
+        'backendError.returnQtyExceedsShipped:{"product":"Product A","requested":"2","available":"0","shipped":"5"}',
       );
       expect(props.onClose).toHaveBeenCalledTimes(1);
       expect(props.onSuccess).not.toHaveBeenCalled();

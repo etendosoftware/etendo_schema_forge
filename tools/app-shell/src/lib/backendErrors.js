@@ -424,12 +424,13 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
-  // ETP-5729 — com.etendoerp.go NeoReturnReceiptService refuses a second return from the same
-  // goods shipment with a 409 carrying this identity plus `messageParams.documentNo` (the
-  // shipment's document number). Not an AD_MESSAGE: the backend sends plain English, so this is
-  // the only place the refusal becomes Spanish. The params reach the key through
-  // translateByMessageKey below.
-  ETGO_ReturnAlreadyExists: 'backendError.returnAlreadyExistsForShipment',
+  // ETP-5729 — com.etendoerp.go ReturnableQuantityGuard refuses a sales return (createReturn,
+  // importShipmentLines or a return-line edit) that would send back more than is still returnable
+  // on a shipment line — shipped minus every non-voided return, drafts included. The 409 carries
+  // this identity plus `messageParams` product / requested / available / shipped. Not an
+  // AD_MESSAGE: the backend sends plain English, so this is the only place the refusal becomes
+  // Spanish. The params reach the key through translateByMessageKey below.
+  ETGO_ReturnQtyExceedsShipped: 'backendError.returnQtyExceedsShipped',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
