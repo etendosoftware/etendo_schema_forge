@@ -61,9 +61,7 @@ vi.mock('../useOrg390Identity.js', () => ({
     ...orgIdentityMock,
   }),
 }));
-vi.mock('../../../FmCommon.jsx', async (importOriginal) => ({
-  // The real shared banner (the cuadre with the 303s renders through it).
-  Banner: (await importOriginal()).Banner,
+vi.mock('../../../FmCommon.jsx', () => ({
   KpiWidget: ({ value, label, badge }) => React.createElement(
     'div', { className: 'test-kpi390', 'data-label': label },
     React.createElement('span', { className: 'test-kpi390-value' }, value),
@@ -269,10 +267,12 @@ describe('FmModel390Page — skeleton', () => {
     ] });
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     const ident = await screen.findByTestId('FmBoxes390__nameTruncated');
-    expect(ident.querySelectorAll('li')).toHaveLength(1);
+    // One system warning banner per cut name.
+    expect(ident.querySelectorAll('[data-testid="FmBoxes390__nameTruncated_item"]')).toHaveLength(1);
+    expect(ident.querySelector('[data-testid="FmBoxes390__nameTruncated_item"]').className).toContain('bg-status-warning');
     expect(ident.textContent).toContain('fm.m390.ident.truncated');
     goToBlock('representante');
-    expect(screen.getByTestId('FmBoxes390__repNameTruncated').querySelectorAll('li')).toHaveLength(1);
+    expect(screen.getByTestId('FmBoxes390__repNameTruncated').querySelectorAll('[data-testid="FmBoxes390__repNameTruncated_item"]')).toHaveLength(1);
     expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(false);
   });
 
@@ -336,9 +336,12 @@ describe('FmModel390Page — skeleton', () => {
       year: 2025, missingPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
     }));
     render(<FmModel390Page decl={makeDecl({ year: 2025, _precomputed: null })} {...props()} />);
-    const empty = await screen.findByTestId('FmModel390Page__empty');
-    await waitFor(() => expect(empty.textContent).toContain('fm.m390.incomplete_year.all'));
-    expect(empty.textContent).not.toContain('org=X');
+    // A system warning banner above the empty state, with the calendar action.
+    const banner = await screen.findByTestId('FmModel390Page__computeError');
+    expect(banner.textContent).toContain('fm.m390.incomplete_year.all');
+    expect(banner.textContent).not.toContain('org=X');
+    expect(banner.className).toContain('bg-status-warning');
+    expect(screen.getByTestId('FmModel390Page__empty').textContent).not.toContain('org=X');
     fireEvent.click(screen.getByTestId('FmModel390Page__goToFiscalCalendar'));
     expect(navigateMock).toHaveBeenCalledWith('/calendar');
     // Calcular again: a toast with the same text and the calendar action.
@@ -724,8 +727,12 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     await waitFor(() => expect(screen.getByTestId('Settlements303Table390__row_T1')).toBeTruthy());
     expect(screen.getByTestId('Settlements303Table390__result_T1').textContent).toBe('300');
     expect(screen.getByTestId('Settlements303Table390__row_T4').textContent).toContain('fm.m390.preload.source_live');
-    expect(screen.getByTestId('Settlements303Table390__missing')).toBeTruthy();
-    expect(screen.getByTestId('Settlements303Table390__warning_DRAFT_303')).toBeTruthy();
+    // Every notice of the block is a system warning banner; the missing-303 one leads in bold.
+    const missing = screen.getByTestId('Settlements303Table390__missing');
+    expect(missing.className).toContain('bg-status-warning');
+    expect(missing.querySelector('strong').textContent).toBe('fm.m390.new_decl.missing_303_lead');
+    expect(missing.textContent).toContain('fm.m390.new_decl.missing_303_body');
+    expect(screen.getByTestId('Settlements303Table390__warning_DRAFT_303').className).toContain('bg-status-warning');
     await act(async () => { fireEvent.click(screen.getByTestId('Settlements303Table390__open_T1')); });
     await waitFor(() => expect(onOpenDeclaration).toHaveBeenCalledWith(target));
   });
@@ -735,8 +742,9 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     const { unmount } = render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__ok')).toBeTruthy());
     expect(screen.getByTestId('Reconciliation390__ok').textContent).toContain('fm.m390.reconcile.ok_title');
-    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner__sub').textContent).toContain('fm.m390.reconcile.ok_sub');
-    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner--rich.fm-banner--success')).toBeTruthy();
+    expect(screen.getByTestId('Reconciliation390__sub').textContent).toContain('fm.m390.reconcile.ok_sub');
+    // The system notice banner (InfoBanner), success tone.
+    expect(screen.getByTestId('Reconciliation390__banner').className).toContain('bg-status-success');
     expect(screen.queryByTestId('Reconciliation390__missing')).toBeNull();
     // A full-width banner between the KPI cards and the tabs.
     const banner = screen.getByTestId('Reconciliation390');
@@ -749,8 +757,8 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__difference')).toBeTruthy());
     expect(screen.getByTestId('Reconciliation390__difference').textContent).toContain('fm.m390.reconcile.difference_title');
-    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner__sub').textContent).toContain('fm.m390.reconcile.difference');
-    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner--rich.fm-banner--warn')).toBeTruthy();
+    expect(screen.getByTestId('Reconciliation390__sub').textContent).toContain('fm.m390.reconcile.difference');
+    expect(screen.getByTestId('Reconciliation390__banner').className).toContain('bg-status-warning');
     expect(screen.getByTestId('Reconciliation390__missing')).toBeTruthy();
     // non-blocking: Generar stays enabled
     expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(false);
@@ -766,6 +774,14 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     await waitFor(() => expect(extra.querySelector('[data-testid="Settlements303Table390__row_T1"]')).toBeTruthy());
   });
 
+  it('the 303 block shows "No hay Modelos 303" as an info banner when the year has none', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('resultado_liquidaciones');
+    const empty = await screen.findByTestId('Settlements303Table390__empty');
+    expect(empty.className).toContain('bg-status-info');
+    expect(screen.getByTestId('Settlements303Table390__missing').className).toContain('bg-status-warning');
+  });
+
   it('renders no cuadre banner while the preload is loading', async () => {
     fetchPreload390.mockReturnValue(new Promise(() => {}));
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
@@ -777,7 +793,7 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     // The shared info banner, without the "Ver detalle por trimestre" action.
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__no303')).toBeTruthy());
-    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner--rich.fm-banner--info')).toBeTruthy();
+    expect(screen.getByTestId('Reconciliation390__banner').className).toContain('bg-status-info');
     expect(screen.queryByTestId('Reconciliation390__viewDetail')).toBeNull();
     fireEvent.click(screen.getByTestId('FmModel390Page__save'));
     await waitFor(() => expect(persistManualData).toHaveBeenCalled());

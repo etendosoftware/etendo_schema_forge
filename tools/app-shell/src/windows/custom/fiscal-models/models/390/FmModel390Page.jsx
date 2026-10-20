@@ -37,7 +37,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
-  Calculator, CalendarDays, CircleCheck, ClipboardCheck, Download, FileCheck, Loader2, OctagonAlert, RefreshCw, Save,
+  Calculator, CalendarDays, CircleAlert, CircleCheck, ClipboardCheck, Download, FileCheck, Loader2, OctagonAlert, RefreshCw, Save,
   TrendingDown, TrendingUp, TriangleAlert, ReceiptText,
 } from 'lucide-react';
 import { KpiWidget, Tabs } from '../../FmCommon.jsx';
@@ -74,6 +74,7 @@ import { nameWarningsFromIncidents390, normalizeIncidents390 } from './incidents
 import usePreload390 from './usePreload390.js';
 import { applyPreload390, reconcile390, restorePreloaded390 } from './preload390.js';
 import Reconciliation390 from './Reconciliation390.jsx';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import {
   FISCAL_CALENDAR_ROUTE, GO_TO_FISCAL_CALENDAR_KEY, incompleteFiscalYearOf, incompleteFiscalYearText,
 } from './incompleteYear390.js';
@@ -855,24 +856,37 @@ export default function FmModel390Page({
                 sub={t('fm.m390.empty.sub')}
                 data-testid="FmModel390Page__computing" />
             )}
+            {!hasBoxes && !computing && computeError && (
+              // Why the boxes could not be computed: the system notice banner (never the raw
+              // backend text for an exercise without calendar periods — incompleteYear390.js).
+              <div className="fm-390-notices fm-390-notices--gutter">
+                <InfoBanner
+                  tone={incompleteYear ? 'warning' : 'danger'}
+                  icon={incompleteYear ? TriangleAlert : CircleAlert}
+                  dismissible={false}
+                  role="alert"
+                  data-testid="FmModel390Page__computeError"
+                  action={incompleteYear && (
+                    <button type="button" className="fm-btn fm-btn--cancel-pill fm-390-reconcile__btn" onClick={goToFiscalCalendar} data-testid="FmModel390Page__goToFiscalCalendar">
+                      <CalendarDays size={14} strokeWidth={1.75} data-testid="CalendarDays__empty390" />
+                      {t(GO_TO_FISCAL_CALENDAR_KEY)}
+                    </button>
+                  )}
+                >
+                  {computeError}
+                </InfoBanner>
+              </div>
+            )}
             {!hasBoxes && !computing && (
               <FmEmptyState
                 icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__empty390" />}
                 title={t('fm.m390.empty.title', { year: decl.year })}
-                sub={computeError || t('fm.m390.empty.sub')}
+                sub={t('fm.m390.empty.sub')}
                 cta={!isSubmitted && (
-                  <div className="fm-390-empty-actions">
-                    {incompleteYear && (
-                      <FmDetailButton onClick={goToFiscalCalendar} data-testid="FmModel390Page__goToFiscalCalendar">
-                        <CalendarDays size={16} strokeWidth={1.75} data-testid="CalendarDays__empty390" />
-                        {t(GO_TO_FISCAL_CALENDAR_KEY)}
-                      </FmDetailButton>
-                    )}
-                    <FmDetailButton onClick={handleCompute} disabled={busy} data-testid="FmModel390Page__emptyCompute">
-                      <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__emptyCta390" />
-                      {t('fm.action.compute')}
-                    </FmDetailButton>
-                  </div>
+                  <FmDetailButton onClick={handleCompute} disabled={busy} data-testid="FmModel390Page__emptyCompute">
+                    <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__emptyCta390" />
+                    {t('fm.action.compute')}
+                  </FmDetailButton>
                 )}
                 data-testid="FmModel390Page__empty" />
             )}

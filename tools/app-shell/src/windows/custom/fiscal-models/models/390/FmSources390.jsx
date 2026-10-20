@@ -8,7 +8,8 @@
 // and paging happen on the backend: with a box filter, `totals.box` is the sum of every row's
 // contribution to that box, which equals the box value.
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, Loader2, ReceiptText, Search, CircleCheck, TriangleAlert, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Download, Loader2, ReceiptText, Search, CircleAlert, CircleCheck, TriangleAlert, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { toast } from 'sonner';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { EmptyState } from '../../FmCommon.jsx';
@@ -212,7 +213,9 @@ export default function FmSources390({
       </div>
 
       {error && (
-        <p className="fm-390-inline-error" role="alert" style={{ padding: '0 20px' }} data-testid="FmSources390__error">{error}</p>
+        <div className="fm-390-notices fm-390-notices--gutter">
+          <InfoBanner tone="danger" icon={CircleAlert} dismissible={false} role="alert" data-testid="FmSources390__error">{error}</InfoBanner>
+        </div>
       )}
 
       {!error && data && count === 0 && !hasSourcesFilter(current) ? (
@@ -280,22 +283,22 @@ export default function FmSources390({
         </div>
       )}
 
-      <div className="fm-390-sources__footer">
-        {boxSelected && data && boxTotal != null && (
-          sameCents(boxTotal, boxValue ?? 0)
+      {boxSelected && data && boxTotal != null && (
+        <div className="fm-390-notices fm-390-notices--gutter">
+          {sameCents(boxTotal, boxValue ?? 0)
             ? (
-              <span className="fm-390-sources__match" data-testid="FmSources390__boxMatch">
-                <CircleCheck size={14} strokeWidth={1.75} data-testid="CircleCheck__fmSources390" />
+              <InfoBanner tone="success" icon={CircleCheck} dismissible={false} data-testid="FmSources390__boxMatch">
                 {t('fm.m390.sources.box_matches', { box: boxLabel(current.box), amount: formatAmount(parseAmount(boxValue ?? 0)) })}
-              </span>
+              </InfoBanner>
             )
             : (
-              <span className="fm-390-sources__mismatch" role="status" data-testid="FmSources390__boxMismatch">
-                <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__fmSources390" />
+              <InfoBanner tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid="FmSources390__boxMismatch">
                 {t('fm.m390.sources.box_mismatch', { box: boxLabel(current.box), amount: formatAmount(parseAmount(boxValue ?? 0)) })}
-              </span>
-            )
-        )}
+              </InfoBanner>
+            )}
+        </div>
+      )}
+      <div className="fm-390-sources__footer">
         <span className="fm-toolbar__space" />
         <Pager page={page} pages={pages} onPage={setPage} t={t} />
       </div>

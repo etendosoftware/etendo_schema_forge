@@ -3,12 +3,15 @@
 // with a link that opens each 303. Data: `GET /fiscal390/preload` (preload390.js). The amounts it
 // preloads into block 9 are the period results [69] (the full result of a rectificativa too).
 import React from 'react';
-import { ExternalLink, Loader2, TriangleAlert } from 'lucide-react';
+import { CircleAlert, ExternalLink, Info, Loader2, TriangleAlert } from 'lucide-react';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { FmStatusChip, formatDeclPeriod } from '../../FmDetailChrome.jsx';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
 import { SETTLEMENT_KIND_KEY_390, missingPeriodsLabel } from './preload390.js';
 
 // Preload warnings shown under the table (MISSING_303 is shown as the shared missing-303 notice).
+// Every notice of the block (empty, error, territory, missing 303s, preload warnings) is the
+// system notice banner (`@/components/InfoBanner.jsx`); only the intro hint stays muted text.
 const WARNING_KEY = Object.freeze({
   DRAFT_303: 'fm.m390.preload.warning.draft',
   PRIOR_CARRY_UNKNOWN: 'fm.m390.preload.warning.prior_carry_unknown',
@@ -43,9 +46,19 @@ export default function Settlements303Table390({ preload, loading, error, year, 
           {t('fm.m390.preload.loading')}
         </p>
       )}
-      {error && <p className="fm-390-inline-error" role="alert" data-testid="Settlements303Table390__error">{t('fm.m390.preload.error', { message: error })}</p>}
-      {!loading && !error && rows.length === 0 && (
-        <p className="fm-390-hint" data-testid="Settlements303Table390__empty">{t('fm.m390.preload.empty', { year })}</p>
+      {(error || (!loading && rows.length === 0)) && (
+        <div className="fm-390-notices">
+          {error && (
+            <InfoBanner tone="danger" icon={CircleAlert} dismissible={false} role="alert" data-testid="Settlements303Table390__error">
+              {t('fm.m390.preload.error', { message: error })}
+            </InfoBanner>
+          )}
+          {!loading && !error && rows.length === 0 && (
+            <InfoBanner tone="info" icon={Info} dismissible={false} data-testid="Settlements303Table390__empty">
+              {t('fm.m390.preload.empty', { year })}
+            </InfoBanner>
+          )}
+        </div>
       )}
       {rows.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
@@ -94,22 +107,34 @@ export default function Settlements303Table390({ preload, loading, error, year, 
           </table>
         </div>
       )}
-      {preload?.territory && (
-        <p className="fm-390-hint" data-testid="Settlements303Table390__territory">
-          {t('fm.m390.preload.territory_hint', { period: preload.lastPeriod ?? '', common: formatPercent(Number(preload.inputs?.COMMON_TERRITORY ?? 0)) })}
-        </p>
+      {(preload?.territory || missing || warnings.length > 0) && (
+        <div className="fm-390-notices">
+          {preload?.territory && (
+            <InfoBanner tone="info" icon={Info} dismissible={false} data-testid="Settlements303Table390__territory">
+              {t('fm.m390.preload.territory_hint', { period: preload.lastPeriod ?? '', common: formatPercent(Number(preload.inputs?.COMMON_TERRITORY ?? 0)) })}
+            </InfoBanner>
+          )}
+          {missing && (
+            <InfoBanner tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid="Settlements303Table390__missing">
+              <strong className="fm-390-notice__lead">{t('fm.m390.new_decl.missing_303_lead', { year, periods: missing })}</strong>
+              {' '}
+              {t('fm.m390.new_decl.missing_303_body', { year, periods: missing })}
+            </InfoBanner>
+          )}
+          {warnings.map((w, i) => (
+            <InfoBanner
+              key={`${w.code}-${i}`}
+              tone="warning"
+              icon={TriangleAlert}
+              dismissible={false}
+              role="status"
+              data-testid={`Settlements303Table390__warning_${w.code}`}
+            >
+              {t(WARNING_KEY[w.code], { periods: periodsLabel(w.periods) })}
+            </InfoBanner>
+          ))}
+        </div>
       )}
-      {missing && (
-        <p className="fm-390-inline-warning" role="status" data-testid="Settlements303Table390__missing">
-          <TriangleAlert size={13} strokeWidth={1.75} style={{ verticalAlign: 'middle', marginRight: 4 }} data-testid="TriangleAlert__settlements390" />
-          {t('fm.m390.new_decl.missing_303', { year, periods: missing })}
-        </p>
-      )}
-      {warnings.map((w, i) => (
-        <p key={`${w.code}-${i}`} className="fm-390-inline-warning" role="status" data-testid={`Settlements303Table390__warning_${w.code}`}>
-          {t(WARNING_KEY[w.code], { periods: periodsLabel(w.periods) })}
-        </p>
-      ))}
     </div>
   );
 }

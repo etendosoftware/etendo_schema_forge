@@ -3491,6 +3491,36 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
   Incidencias (`Incidents390Tab.jsx`,
   see "Incidents"), Justificante (shared `AttachmentsTab`).
 
+### Notices of the 390 screen — the system `InfoBanner` (ETP-5716)
+
+Every message of the 390 screen is the **system notice banner**, `InfoBanner`
+(`tools/app-shell/src/components/InfoBanner.jsx` — the one fiscal-config, product, contacts,
+`BlockingBpBanner`, `ListModalWindow`, `CloneOrderModal`, the OCR popups and payment entry use):
+Tailwind `status-*` tokens (`bg-status-<tone>`, `border-status-<tone>-border`,
+`text-status-<tone>-foreground`, i.e. the core `--status-*-bg/-fg/-border` variables, dark mode
+included), a 2px left accent, the icon and the text in the tone's foreground. Tones: `info`,
+`warning`, `success`, `danger`; the 390 passes `dismissible={false}` (the notices reflect state).
+`InfoBanner` takes an optional `action` node (added for the 390, generic, absent for every older
+caller). Consecutive banners are grouped in `.fm-390-notices` (8px apart; `--gutter` for the
+tabs' 20px side gutter); a bold lead is `.fm-390-notice__lead`, a second line `.fm-390-notice__line`.
+
+| Where | Notice | Tone |
+|---|---|---|
+| Under the KPI cards | cuadre with the 303s (match / difference / no 303 of the year) | success / warning / info |
+| Casillas, before computing | why it could not be computed (incomplete fiscal year with "Ir a Calendario fiscal"; other errors) | warning / danger |
+| Casillas, above the block | backend calculator warnings (`UNSUPPORTED_RATE`, `NO_BOX`), one banner each | warning |
+| Identificación / Representante | names the file will cut, one banner each | warning |
+| Tributación por territorio | percentages do not add up to 100 % | danger |
+| Resultado de las liquidaciones | cross-input checks (DEVOLVER_12 with [97] → danger; [98] with [96]/[97] → warning) | danger / warning |
+| Year's 303s (block 9) | "No hay Modelos 303 de <año>"; load error; territory preloaded; missing 303s (bold lead "Faltan Modelos 303 de <año> (…)." + rest); preload warnings | info; danger; info; warning; warning |
+| Facturas | load error; box total matches / does not match the box | danger; success / warning |
+
+Muted text is kept only for explanatory hints (block notes, the 303 table intro, empty cards)
+and field-level validation under an input (`.fm-390-inline-error`). The fiscal-models
+`FmCommon` `Banner` (`.fm-banner*`) uses the same `--status-*` palette (through `--fm-*` aliases)
+but a different shape — full 1px border, 10px radius, the sub-line in muted grey — so it is not
+used on the 390 screen.
+
 ### "Casillas" tab (`FmBoxes390.jsx` + `fm390Layouts.js`)
 
 Declarative layout, one block at a time with a sticky index of the 11 blocks (folded into the
@@ -3604,7 +3634,7 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
 - **No design-year note:** `taxReport.fallback` / `layoutYear` stay in the boxes payload (the
   layout is picked from `layoutYear`), but the toolbar no longer shows a "Diseño de registro
   <year>" note.
-- **Backend warnings** (`UNSUPPORTED_RATE`, `NO_BOX`) are listed in an amber note above the block
+- **Backend warnings** (`UNSUPPORTED_RATE`, `NO_BOX`) are listed as warning banners above the block
   (they make the classic file fail or differ) and are also incidents: `UNSUPPORTED_RATE` blocking,
   `NO_BOX` a warning.
 - **"Ver facturas":** a calculated cell whose box is in the payload's `invoiceBoxes` (the boxes
@@ -3685,24 +3715,24 @@ files to several administrations.
   Nueva declaración notice's full sentence, `fm.m390.new_decl.missing_303`) and the preload warnings (draft 303s,
   unknown [110] carry, refund without monthly register, compute failed, last period missing).
 - **Cuadre** (`Reconciliation390`, a full-width banner between the KPI cards and the tabs, with
-  the cards' 20px gutter — the shared rich `Banner` of `FmCommon.jsx`, no colours of its own):
+  the cards' 20px gutter — the system notice banner `InfoBanner`, see "Notices of the 390 screen"):
   `reconcile390(result on screen,
   preload)` — the result shown on the Resultado card ([86], or [94] in territory mode) against
   `expectedResult` = [95] − [96] − [97] − [98] − [662] of the 303s.
   - Within `RECONCILIATION_TOLERANCE_390` (1,00 €, named constant — the business rule is pending
-    confirmation): `Banner tone="success"` with `CircleCheck`, "El resultado coincide
+    confirmation): `InfoBanner tone="success"` with `CircleCheck`, "El resultado coincide
     con la suma de tus Modelos 303" and the muted "Es informativo: el ingreso o la devolución ya se
     gestionaron en el último 303 (casillas 97 y 98)." (`Reconciliation390__ok`).
-  - Beyond it: non-blocking `Banner tone="warn"` with `TriangleAlert`, "El resultado no
+  - Beyond it: non-blocking `InfoBanner tone="warning"` with `TriangleAlert`, "El resultado no
     coincide con la suma de tus Modelos 303" and "Diferencia con los 303: ±D (según los 303: X;
     tolerancia 1,00 €)" (`Reconciliation390__difference`).
   - Both: the missing-303 notice as a second subtitle line when periods are missing, and the
-    outlined pill "Ver detalle por trimestre →" in the banner's `actions` slot
+    outlined pill "Ver detalle por trimestre →" in the banner's `action` slot
     (`Reconciliation390__viewDetail`), which opens the
     Casillas tab at block 9 and scrolls to / highlights the year's 303s for 2.5 s (`FmBoxes390`
     `goToBlock` → `FmBoxes390__extra_<blockId>`, `.fm-390-block-extra--highlight`).
-  - No 303 of the year (preload loaded, `reconcile390` → `no303`): the shared
-    `Banner tone="info"` "Sin Modelos 303 de <año> con los que cuadrar"
+  - No 303 of the year (preload loaded, `reconcile390` → `no303`):
+    `InfoBanner tone="info"` "Sin Modelos 303 de <año> con los que cuadrar"
     (`Reconciliation390__no303`), without the action. Nothing is rendered while the preload
     loads or before the boxes are computed. Neither state blocks Generar nor Presentar. Why these boxes: backend doc,
     "Cuadre".
@@ -3862,8 +3892,9 @@ backend text** for it (that text names the organization id):
   periodos en el calendario fiscal (faltan: Noviembre, Diciembre). Créalos antes de calcular el
   Modelo 390." (`fm.m390.incomplete_year.months`, month names from `fm.m390.month.NN`), or
   "… (faltan todos los meses) …" (`fm.m390.incomplete_year.all`) when the 12 are missing.
-- **Casillas empty state:** that text as the subtitle plus **Ir a Calendario fiscal**
-  (`FmModel390Page__goToFiscalCalendar`) next to Calcular. **Calcular / Generar:** the same text
+- **Casillas empty state:** that text in a warning `InfoBanner` above the empty state
+  (`FmModel390Page__computeError`; any other compute error is a danger one) with **Ir a
+  Calendario fiscal** (`FmModel390Page__goToFiscalCalendar`) in its action slot. **Calcular / Generar:** the same text
   as an error toast with the "Ir a Calendario fiscal" action. **Facturas tab:** the same text as
   its error. **Incidencias:** the incident reads the same text and offers the same action.
   **Presentar** (AEAT flow): `fm.aeat.error.incompleteFiscalYear` (`resolveErrorCodeKey`).

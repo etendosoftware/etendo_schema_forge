@@ -8,10 +8,11 @@
 // cells grey and read-only, manual cells white with a pencil, totals in bold.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  TrendingUp, TrendingDown, Pencil, RotateCcw, Search, ChevronLeft, ChevronRight, TriangleAlert,
+  TrendingUp, TrendingDown, Pencil, RotateCcw, Search, ChevronLeft, ChevronRight, TriangleAlert, CircleAlert,
   ReceiptText, Star,
 } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
@@ -319,18 +320,15 @@ function NameTruncationWarnings({ ctx, fields, testId }) {
   const warnings = (ctx.nameWarnings ?? []).filter(w => fields.has(w.field));
   if (warnings.length === 0) return null;
   return (
-    <div className="fm-390-warnings" role="status" data-testid={testId}>
-      <TriangleAlert size={14} strokeWidth={1.75} />
-      <ul>
-        {warnings.map((w, i) => (
-          <li key={`${w.field}-${i}`}>
-            {ctx.t('fm.m390.ident.truncated', {
-              field: ctx.t(`fm.m390.ident.field.${w.field}`, { name: w.label ?? '' }),
-              limit: w.limit,
-            })}
-          </li>
-        ))}
-      </ul>
+    <div className="fm-390-notices" data-testid={testId}>
+      {warnings.map((w, i) => (
+        <InfoBanner key={`${w.field}-${i}`} tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid={`${testId}_item`}>
+          {ctx.t('fm.m390.ident.truncated', {
+            field: ctx.t(`fm.m390.ident.field.${w.field}`, { name: w.label ?? '' }),
+            limit: w.limit,
+          })}
+        </InfoBanner>
+      ))}
     </div>
   );
 }
@@ -523,6 +521,7 @@ function BoxesBlock({ block, boxes, ctx }) {
   const visible = !block.toggle || open || hasTerritoryValues || revealHighlight;
   const percentSum = territoryPercentSum(ctx.inputs);
   const showSumError = block.toggle && isTerritoryMode(ctx.inputs) && Math.abs(percentSum - 100) > 0.001;
+  const blockMessages = (ctx.messages ?? []).filter(m => m.blockId === block.id);
 
   const toggle = (next) => {
     setOpen(next);
@@ -542,20 +541,26 @@ function BoxesBlock({ block, boxes, ctx }) {
           {block.items.map(item => (item.type === 'rates'
             ? <RateGroup key={item.id} group={item} boxes={boxes} ctx={ctx} columns={block.columns} />
             : <BoxRow key={item.id} row={item} boxes={boxes} ctx={ctx} columns={block.columns} />))}
-          {showSumError && (
-            <p className="fm-390-inline-error" role="alert" data-testid="FmBoxes390__territorySumError">
-              {ctx.t('fm.m390.territory.sum_error', { sum: formatPercent(percentSum) })}
-            </p>
+          {(showSumError || blockMessages.length > 0) && (
+            <div className="fm-390-notices">
+              {showSumError && (
+                <InfoBanner tone="danger" icon={CircleAlert} dismissible={false} role="alert" data-testid="FmBoxes390__territorySumError">
+                  {ctx.t('fm.m390.territory.sum_error', { sum: formatPercent(percentSum) })}
+                </InfoBanner>
+              )}
+              {blockMessages.map(m => (
+                <InfoBanner
+                  key={m.id}
+                  tone={m.level === 'error' ? 'danger' : 'warning'}
+                  icon={m.level === 'error' ? CircleAlert : TriangleAlert}
+                  dismissible={false}
+                  role={m.level === 'error' ? 'alert' : 'status'}
+                  data-testid={`FmBoxes390__check_${m.id}`}>
+                  {ctx.t(m.key)}
+                </InfoBanner>
+              ))}
+            </div>
           )}
-          {(ctx.messages ?? []).filter(m => m.blockId === block.id).map(m => (
-            <p
-              key={m.id}
-              className={m.level === 'error' ? 'fm-390-inline-error' : 'fm-390-inline-warning'}
-              role={m.level === 'error' ? 'alert' : 'status'}
-              data-testid={`FmBoxes390__check_${m.id}`}>
-              {ctx.t(m.key)}
-            </p>
-          ))}
         </>
       )}
     </>
@@ -739,17 +744,14 @@ export default function FmBoxes390({
           <BoxSearch onSearch={onSearch} notFound={notFound} t={t} />
         </div>
         {Array.isArray(warnings) && warnings.length > 0 && (
-          <div className="fm-390-warnings" role="status" data-testid="FmBoxes390__warnings">
-            <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__fm390" />
-            <ul>
-              {warnings.map((w, i) => (
-                <li key={`${w.code}-${w.parameter}-${i}`}>
-                  {t(w.code === 'UNSUPPORTED_RATE' ? 'fm.m390.warning.unsupported_rate' : 'fm.m390.warning.no_box', {
-                    parameter: w.parameter ?? '', rate: w.rate != null ? formatPercent(parseAmount(w.rate)) : '',
-                  })}
-                </li>
-              ))}
-            </ul>
+          <div className="fm-390-notices" data-testid="FmBoxes390__warnings">
+            {warnings.map((w, i) => (
+              <InfoBanner key={`${w.code}-${w.parameter}-${i}`} tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid="FmBoxes390__warnings_item">
+                {t(w.code === 'UNSUPPORTED_RATE' ? 'fm.m390.warning.unsupported_rate' : 'fm.m390.warning.no_box', {
+                  parameter: w.parameter ?? '', rate: w.rate != null ? formatPercent(parseAmount(w.rate)) : '',
+                })}
+              </InfoBanner>
+            ))}
           </div>
         )}
         <section className="fm-aeat-section fm-aeat-section--compact" data-testid={`FmBoxes390__block_${block.id}`}>
