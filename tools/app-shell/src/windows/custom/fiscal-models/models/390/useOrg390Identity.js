@@ -22,7 +22,7 @@ import { useEffect, useState } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import {
-  sortByLineNo, isEtendoTrue, MODELO_390_REPRESENTATIVE_LIMIT,
+  sortByLineNo, isEtendoTrue, activeRepresentatives, MODELO_390_REPRESENTATIVE_LIMIT,
 } from '@/windows/custom/organization/representanteLegal.js';
 import { formatIaeEpigraph390 } from './fm390Layouts.js';
 
@@ -118,9 +118,13 @@ export function toActivities(rows) {
     });
 }
 
-/** Legal representative row → `{ id, nif, name, powerDate, notary }` (first 3 by line). */
+/**
+ * Legal representative rows → `{ id, nif, name, powerDate, notary }`: the first 3 ACTIVE rows by
+ * line, exactly what classic writes (`AEAT390ReportDao.getOrgRepresentatives` reads them through
+ * OBCriteria, which filters on active by default) and what the Organization grid marks "390".
+ */
 export function toRepresentatives(rows) {
-  return sortByLineNo(rows).slice(0, MODELO_390_REPRESENTATIVE_LIMIT).map(r => ({
+  return activeRepresentatives(sortByLineNo(rows)).slice(0, MODELO_390_REPRESENTATIVE_LIMIT).map(r => ({
     id: r.id,
     nif: r.taxID ?? '',
     name: legalRepresentativeName(r),

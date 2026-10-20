@@ -9,7 +9,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 const mockApiFetch = vi.fn();
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 
-import useOrg390Identity, { taxpayerName390, toActivities } from '../useOrg390Identity.js';
+import useOrg390Identity, { taxpayerName390, toActivities, toRepresentatives } from '../useOrg390Identity.js';
 
 const long = (n) => 'A'.repeat(n);
 
@@ -110,5 +110,23 @@ describe('useOrg390Identity', () => {
     await waitFor(() => expect(result.current.loaded).toBe(true));
     expect(result.current.isPerson).toBe(true);
     expect(result.current.name).toBe('Pérez Ana');
+  });
+});
+
+// Classic reads the first 3 ACTIVE representatives by line (OBCriteria filters on active), so the
+// card lists exactly those: an inactive row among the first 3 is skipped and the 4th takes its place.
+describe('toRepresentatives', () => {
+  const rep = (id, lineNo, extra = {}) => ({ id, lineNo, taxID: `NIF-${id}`, firstName: id, ...extra });
+
+  it('takes the first 3 active rows by line, skipping inactive ones', () => {
+    const reps = toRepresentatives([
+      rep('d', 40), rep('b', 20, { active: false }), rep('a', 10), rep('c', 30), rep('e', 50, { active: 'N' }),
+    ]);
+    expect(reps.map(r => r.id)).toEqual(['a', 'c', 'd']);
+    expect(reps[0]).toEqual({ id: 'a', nif: 'NIF-a', name: 'a', powerDate: null, notary: '' });
+  });
+
+  it('is empty for no rows', () => {
+    expect(toRepresentatives(undefined)).toEqual([]);
   });
 });

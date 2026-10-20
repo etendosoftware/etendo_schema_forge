@@ -311,10 +311,12 @@ A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 
   create, so a new representative always goes last.
   - **Inactive rows:** GO never deactivates a representative (`active` is a system field, default
     `Y`), but a row deactivated in Classic still comes back in the list. It gets no marker
-    (`activeRepresentatives` / `isActiveRepresentative`). **Known divergence:** the classic 390
-    generator does NOT filter inactive rows (`AEAT390ReportDao`), so with an inactive row among the
-    first 3 by line the file can carry a representative the grid does not mark. The 390 page's
-    read-only "Representante" block lists what Classic reads (first 3 by line, inactive included).
+    (`activeRepresentatives` / `isActiveRepresentative`). Classic reads the first 3 **active**
+    representatives by line: `AEAT390ReportDao.getOrgRepresentatives` uses
+    `OBDal.createCriteria(RepresentativeInfo.class)`, and OBCriteria filters on active by default.
+    The grid's "390" marker and the 390 page's read-only "Representante" card
+    (`toRepresentatives`, `useOrg390Identity.js`) follow the same rule, so there is no divergence:
+    an inactive row is skipped and the next active one by line takes its place.
   - **No representative with a NIF:** an amber hint (`orgRepLegalEntityHint`, "Las personas
     jurídicas deben indicar al menos un representante legal con NIF: sin él no se puede generar ni
     presentar el Modelo 390") when none of the first 3 active rows by line has a `taxID`
