@@ -52,7 +52,7 @@ import { login } from '../../helpers/auth.js';
  * footer row (their totals live in the header), so there the trailing `grossAmount` /
  * `lineGrossAmount` amount column is the checked edge. No standard inline lines grid renders a
  * `date` column (dates only appear in forms and in the product costing sub-tabs), so the `date`
- * 0 0 130 tier has no lines-grid E2E here; it is covered at unit level in
+ * 0 0 176 tier has no lines-grid E2E here; it is covered at unit level in
  * `linesAddRowColumnAlignment.vitest.jsx` and on the list in
  * `sales-quotation-list-column-widths.mocked.spec.js`.
  *
@@ -77,7 +77,7 @@ const VIEWPORT = { width: 1280, height: 800 };
 // `linesColumnWidth.js`'s ELASTIC_BASIS_PX / selector-at-idx0 rules:
 //   - selector/search/foreignKey at idx 0            -> basis 192
 //   - string/text/enum/select (any idx)               -> basis 224
-//   - date (any idx)                                   -> basis 130
+//   - date (any idx)                                   -> basis 176
 //   - any column with an explicit `minWidth`           -> basis = minWidth
 // A selector/search column at idx > 0 (e.g. `tax`) is FIXED (`0 0 192px`),
 // not elastic, so it is deliberately excluded here — it was never shrinkable

@@ -13,7 +13,7 @@ import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
-import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, listTableMinWidthPx } from '@/lib/linesColumnWidth.js';
+import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
@@ -3310,7 +3310,9 @@ export function DataTable({
     // ETP-5510 — plain list only (the lines/add-row modes size from columnFlex and must stay
     // aligned with InlineLinesPanel): guarantee one width-less column to absorb leftover
     // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
-    return hideHeader || linesLayout === 'inlineEditable' ? base : withImplicitGrowColumn(base);
+    // ETP-5833 — the lines/add-row modes get the lines-side absorber, applied to the same
+    // `visibleColumns` InlineLinesPanel derives, so header, rows and add-row agree on it.
+    return hideHeader || linesLayout === 'inlineEditable' ? withLinesAbsorberColumn(base) : withImplicitGrowColumn(base);
   }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,

@@ -64,7 +64,7 @@ One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands
 |---|---|---|---|
 | `string`, `text` | 224 | **yes** (`1 0`) | descriptive: absorb the leftover width |
 | leading `selector`/`search`/`foreignKey` (idx 0) | 192 | yes | the product/identity column; selectors at idx > 0 are fixed |
-| `date` | 130 | no (`0 0`) | dd/mm/yyyy (~80) + due-date dot + 24 cell padding; the translated header wraps and the sort icon sits beside the label |
+| `date` | 176 | no (`0 0`) | list headers never wrap (nowrap + ellipsis): sized for the longest representative translated header ("Fecha de presupuesto", ~129px) + 24 padding + sort icon; the value itself needs ~120 |
 | `amount` / `price` / `quantity` / `integer` / `decimal` / `number` / `signedDelta` | 172 (`amount`), 152 (rest) | no | `number` is the type the generator emits for every numeric field; it used to fall to the 120 default |
 | `percent` | 152 lines / 104 list | no | compact progress circle |
 | `status` | 184 | no | the pill ("Cobro depositado") clips below it; same in lines and list |
@@ -80,7 +80,7 @@ Overrides win over the type: `col.minWidth` (decisions `columnWidth`; elastic by
 
 **Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `simple-g-l-journal`; custom `minWidth` in `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
 
-Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the Playwright geometry specs named in the ETP-5833 PR.
+Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the geometry specs `e2e/tests/flows/sales/sales-quotation-list-column-widths.mocked.spec.js` (list) and `e2e/tests/flows/platform/lines-grid-narrow-viewport.mocked.spec.js` (lines), and the `linesAddRowColumnAlignment.vitest.jsx` cases. The implicit absorber is `withImplicitGrowColumn` (list) / `withLinesAbsorberColumn` (lines + add-row): always a descriptive column, never a fixed date/number or a `tag` pill.
 
 ---
 

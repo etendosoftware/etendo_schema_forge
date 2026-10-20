@@ -14,12 +14,12 @@ import { login } from '../../helpers/auth.js';
  * file next to the other sales-quotation specs.
  *
  * Columns (windows/custom/sales-quotation/index.jsx `buildQuotationColumns`): orderDate and
- * validUntil `date` (0 0 130), documentNo `string` (1 0 224), businessPartner `selector` (192),
+ * validUntil `date` (0 0 176), documentNo `string` (1 0 224), businessPartner `selector` (192),
  * documentStatus `status` (0 0 184), grandTotalAmount `amount` (172). The app runs in es-ES here,
  * so the headers are the long translated labels ("Fecha de presupuesto", ...).
  *
  * Covered:
- *  - tiers at 1280px: dates ~130 and far narrower than the descriptive columns, status 184,
+ *  - tiers at 1280px: dates ~176 and far narrower than the descriptive columns, status 184,
  *    amount 172;
  *  - widths identical after a sort click and after infinite-scroll loads the next page
  *    (ETP-5182 regression: `table-layout: fixed` must hold the bases);
@@ -69,6 +69,8 @@ async function installMocks(page) {
 async function openList(page, viewport = { width: 1280, height: 800 }) {
   await login(page);
   await installMocks(page);
+  // Force the locale: the translated-header test is only meaningful in Spanish.
+  await page.addInitScript(() => { localStorage.setItem('schema-forge-locale', 'es_ES'); });
   await page.setViewportSize(viewport);
   await page.goto('/sales-quotation');
   await expect(page.getByTestId('column-header-grandTotalAmount')).toBeVisible({ timeout: 15_000 });
@@ -94,20 +96,20 @@ const SCROLL_HOST = `(() => {
 })()`;
 
 test.describe('Sales quotation list — per-type default column widths (mocked)', () => {
-  test('a validUntil date column holds ~130px, narrower than any descriptive column', async ({ page }) => {
+  test('a validUntil date column holds ~176px, narrower than the widest descriptive column', async ({ page }) => {
     await openList(page);
     const date = await headerWidth(page, 'validUntil');
-    expect(Math.abs(date - 130)).toBeLessThanOrEqual(4);
+    expect(Math.abs(date - 176)).toBeLessThanOrEqual(4);
     const descriptive = Math.max(await headerWidth(page, 'documentNo'), await headerWidth(page, 'businessPartner'));
     expect(descriptive - date).toBeGreaterThanOrEqual(60);
   });
 
-  test('every date column holds ~130px, including the leading one', async ({ page }) => {
+  test('every date column holds ~176px, including the leading one', async ({ page }) => {
     await openList(page);
-    // orderDate is the FIRST column: `withImplicitGrowColumn` marks it `grow` when the window
-    // declares none, so it is currently stretched (320px) instead of staying a fixed date.
+    // orderDate is the FIRST column and the window declares no `grow` column: the implicit grow
+    // column (`withImplicitGrowColumn`) must skip a leading date and pick a descriptive one.
     const date = await headerWidth(page, 'orderDate');
-    expect(Math.abs(date - 130)).toBeLessThanOrEqual(4);
+    expect(Math.abs(date - 176)).toBeLessThanOrEqual(4);
   });
 
   test('status holds 184px and amount 172px', async ({ page }) => {
@@ -141,9 +143,14 @@ test.describe('Sales quotation list — per-type default column widths (mocked)'
 
   test('translated (es-ES) headers keep label and sort icon inside their column and clear of the next header', async ({ page }) => {
     await openList(page);
+    // The locale really is Spanish: both date headers carry their translated label.
+    await expect(page.getByTestId('column-header-orderDate')).toContainText(/Fecha/i);
+    await expect(page.getByTestId('column-header-validUntil')).toContainText(/V[áa]lid/i);
     const boxes = await page.locator('thead th[data-testid^="column-header-"]').evaluateAll((ths) =>
       ths.map((th) => {
         const t = th.getBoundingClientRect();
+        // No label wrapper may clip its own text (scrollWidth <= clientWidth).
+        const clipped = [...th.querySelectorAll('*')].some((e) => e.clientWidth > 0 && e.scrollWidth > e.clientWidth + 1);
         const inner = [...th.querySelectorAll('*')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
         return {
           key: th.getAttribute('data-testid'),
@@ -152,12 +159,14 @@ test.describe('Sales quotation list — per-type default column widths (mocked)'
           innerMin: Math.min(...inner.map((r) => r.left)),
           innerMax: Math.max(...inner.map((r) => r.right)),
           text: th.textContent.trim(),
+          clipped,
         };
       }));
     expect(boxes.length).toBeGreaterThanOrEqual(6);
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
       expect(b.text.length, b.key).toBeGreaterThan(0);
+      expect(b.clipped, `${b.key} label clipped`).toBe(false);
       expect(b.innerMin, `${b.key} content left`).toBeGreaterThanOrEqual(b.left - 1);
       expect(b.innerMax, `${b.key} content right`).toBeLessThanOrEqual(b.right + 1);
       if (i < boxes.length - 1) expect(b.right, `${b.key} vs next`).toBeLessThanOrEqual(boxes[i + 1].left + 1);

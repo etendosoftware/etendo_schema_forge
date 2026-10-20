@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 // @covers tools/app-shell/src/lib/linesColumnWidth.js
 import {
-  columnFlex, columnMinWidthPx, withImplicitGrowColumn, listTableMinWidthPx, GROW_COLUMN_MIN_PX,
+  columnFlex, columnMinWidthPx, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, GROW_COLUMN_MIN_PX,
 } from '../linesColumnWidth.js';
 
 // Helper — extract the flex-basis px from a CSS flex shorthand like "0 0 172px"
@@ -63,9 +63,9 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'select' }, 1), '0 0 224px');
     });
 
-    it('date columns → 0 0 130px (fixed: a date must not stretch like a description)', () => {
-      assert.equal(columnFlex({ type: 'date' }, 0), '0 0 130px');
-      assert.equal(columnFlex({ type: 'date' }, 1), '0 0 130px');
+    it('date columns → 0 0 176px (fixed: a date must not stretch like a description)', () => {
+      assert.equal(columnFlex({ type: 'date' }, 0), '0 0 176px');
+      assert.equal(columnFlex({ type: 'date' }, 1), '0 0 176px');
     });
 
     it('number columns (the generator numeric type) → 0 0 152px, same tier as quantity', () => {
@@ -211,7 +211,7 @@ describe('linesColumnWidth', () => {
         [{ type: 'foreignKey' },  1, 192],
         [{ type: 'enum' },        1, 224],
         [{ type: 'select' },      1, 224],
-        [{ type: 'date' },        1, 130],
+        [{ type: 'date' },        1, 176],
         [{ type: 'number' },      1, 152],  // ETP-5833
         [{ type: 'status' },      1, 184],  // ETP-5833: lines and list agree
         [{ type: 'string' },      0, 224],  // idx=0 no longer special — same as idx=1+
@@ -313,8 +313,8 @@ describe('linesColumnWidth', () => {
     // ETP-5833 — a date WITH time has no tier (no list/lines column carries one): an ISO
     // datetime value in a `date` column sizes exactly like a date.
     it('a date column sizes the same whatever value it carries (no datetime tier)', () => {
-      assert.equal(columnMinWidthPx({ type: 'date', key: 'orderDate' }), 130);
-      assert.equal(basis(columnFlex({ type: 'date', key: 'orderDate' }, 1)), 130);
+      assert.equal(columnMinWidthPx({ type: 'date', key: 'orderDate' }), 176);
+      assert.equal(basis(columnFlex({ type: 'date', key: 'orderDate' }, 1)), 176);
     });
 
     it('multiField columns get a 240px basis in a list and keep the 120px generic basis in lines', () => {
@@ -382,6 +382,29 @@ describe('linesColumnWidth', () => {
     it('falls back to the first unpinned column when none is descriptive', () => {
       const cols = [{ key: 'd', type: 'date' }, { key: 'a', type: 'amount' }];
       assert.deepEqual(withImplicitGrowColumn(cols).map(c => !!c.grow), [true, false]);
+    });
+  });
+
+  describe('absorber rules (ETP-5833)', () => {
+    it('never picks a display:tag pill as the absorber', () => {
+      const cols = [{ key: 'u', type: 'selector', display: 'tag' }, { key: 's', type: 'string' }];
+      assert.deepEqual(withImplicitGrowColumn(cols).map(c => !!c.grow), [false, true]);
+    });
+
+    it('lines grid with no growing column (amount + two dates, Product > Costo) gets exactly one absorber', () => {
+      const cols = [{ key: 'cost', type: 'amount' }, { key: 'a', type: 'date' }, { key: 'b', type: 'date' }];
+      const out = withLinesAbsorberColumn(cols);
+      assert.equal(out.filter((c, i) => columnFlex(c, i).startsWith('1')).length, 1);
+    });
+
+    it('lines grid that already grows is returned unchanged (same reference)', () => {
+      const cols = [{ key: 'p', type: 'selector' }, { key: 'd', type: 'date' }];
+      assert.equal(withLinesAbsorberColumn(cols), cols);
+    });
+
+    it('lines absorber prefers a descriptive column over a fixed one', () => {
+      const cols = [{ key: 'd', type: 'date' }, { key: 'e', type: 'enum' }, { key: 'n', type: 'selector' }];
+      assert.deepEqual(withLinesAbsorberColumn(cols).map(c => !!c.grow), [false, false, true]);
     });
   });
 });

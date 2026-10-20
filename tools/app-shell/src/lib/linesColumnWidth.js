@@ -18,8 +18,10 @@ import { isPostedStatusColumn } from './postedStatus.js';
 // the leading selector) absorb leftover width; every other type is fixed (`0 0 <basis>`), so a
 // date, a number or a status never stretches to the width of a description. Bases are constants
 // per type, never measured from content, so sorting or paging cannot move a column.
-//  - `date` (130): dd/mm/yyyy (~80px) + the due-date dot + 24px cell padding; the translated
-//    header wraps (header cells wrap, ETP-5133) and the sort icon sits beside the wrapped label.
+//  - `date` (176): the value (dd/mm/yyyy ~80px + due-date dot) needs far less, but a LIST header
+//    never wraps (`whitespace-nowrap` + ellipsis), so the basis is sized for the longest
+//    representative translated header ("Fecha de presupuesto", ~129px) + 24px padding + the sort icon.
+//    Measured in the browser at 130px the label was cut at 106px.
 //  - `number` (152): the type the generator emits for every integer/decimal/quantity/price field
 //    (`mapFieldType`); it used to fall to the generic 120px while `quantity` got 152.
 //  - `status` (184): StatusTag pill ("Cobro depositado" is ~153px + padding, ETP-5510). Lines and
@@ -39,7 +41,7 @@ const FIXED_BASIS_PX = {
   number: 152,
   percent: 152,
   signedDelta: 152,
-  date: 130,
+  date: 176,
   status: 184,
   enum: 224,
   select: 224,
@@ -193,6 +195,18 @@ export function columnMinWidthPx(col) {
   return ELASTIC_BASIS_PX[col.type] ?? FIXED_BASIS_PX[col.type] ?? 120;
 }
 
+// ETP-5833 — the column that absorbs leftover width must be DESCRIPTIVE (string/text, a
+// selector, a multiField), never a fixed date/number: a leading `date` (Sales Quotation) stretched
+// to the 320px grow floor once dates became fixed. A `display: 'tag'` pill stays fixed. Falls back
+// to the first unpinned column (`headClass`/`cellClass` pin their own width) when none qualifies.
+function absorberIndex(columns) {
+  const unpinned = c => !c.headClass && !c.cellClass;
+  const descriptive = c => unpinned(c) && c.display !== 'tag'
+    && (c.type in ELASTIC_BASIS_PX || SELECTOR_TYPES.has(c.type) || c.type === 'multiField');
+  const idx = columns.findIndex(descriptive);
+  return idx === -1 ? columns.findIndex(unpinned) : idx;
+}
+
 /**
  * ETP-5510 — a plain list always needs exactly one width-less column to absorb the leftover
  * space; otherwise `table-layout: fixed` stretches EVERY <col> proportionally (the 40px
@@ -202,13 +216,7 @@ export function columnMinWidthPx(col) {
  */
 export function withImplicitGrowColumn(columns) {
   if (columns.length === 0 || columns.some(c => c.grow)) return columns;
-  // ETP-5833 — the absorber must be a DESCRIPTIVE column: a leading `date` (Sales Quotation)
-  // stretched to the 320px grow floor once dates became fixed. Falls back to the first
-  // unpinned column when the list has no descriptive one.
-  const unpinned = c => !c.headClass && !c.cellClass;
-  const descriptive = c => unpinned(c) && (c.type in ELASTIC_BASIS_PX || SELECTOR_TYPES.has(c.type) || c.type === 'multiField');
-  let idx = columns.findIndex(descriptive);
-  if (idx === -1) idx = columns.findIndex(unpinned);
+  const idx = absorberIndex(columns);
   if (idx === -1) return columns;
   return columns.map((c, i) => (i === idx ? { ...c, grow: true } : c));
 }
@@ -227,4 +235,20 @@ export function listTableMinWidthPx(columns, fixedSlotsPx = 0) {
     const basis = columnMinWidthPx(col);
     return sum + (col.grow ? Math.max(basis, GROW_COLUMN_MIN_PX) : basis);
   }, fixedSlotsPx);
+}
+
+/**
+ * ETP-5833 — lines-grid counterpart of `withImplicitGrowColumn`. With dates, numbers, statuses and
+ * enum/select now fixed, a lines grid can end up with NO growing column (Product > Costo: amount +
+ * two dates). `InlineLinesPanel` would then leave blank space on the right, and the add-row
+ * `<table style="table-layout: fixed">`, whose `<col>`s would all be literal px, would spread the
+ * surplus across every `<col>` and drift away from the header (ETP-5245). Both renderers run their
+ * `visibleColumns` through this, so they keep agreeing on one absorber.
+ */
+export function withLinesAbsorberColumn(columns) {
+  if (columns.length === 0) return columns;
+  if (columns.some((c, i) => columnFlex(c, i).startsWith('1'))) return columns;
+  const idx = absorberIndex(columns);
+  if (idx === -1) return columns;
+  return columns.map((c, i) => (i === idx ? { ...c, grow: true } : c));
 }
