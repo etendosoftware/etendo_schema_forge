@@ -222,9 +222,11 @@ export default function CreateReturnWizard({
             <table className="w-full" style={{ fontSize: 13, tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 32 }} />
-                <col style={{ width: '50%' }} />
-                <col style={{ width: '25%' }} />
-                <col style={{ width: '25%' }} />
+                {/* Product takes the remaining width (its cells truncate); the
+                    numeric columns are sized so their headers fit on one line. */}
+                <col />
+                <col style={{ width: 200 }} />
+                <col style={{ width: 150 }} />
               </colgroup>
               <thead>
                 <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
@@ -234,9 +236,9 @@ export default function CreateReturnWizard({
                       onChange={() => { selected.size === lines.length ? deselectAll() : selectAll(); }}
                       data-testid="MiniCheck__955eac" />
                   </th>
-                  <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
-                  <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('availableToReturn')}</th>
-                  <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('returnQty')}</th>
+                  <th className="text-left px-2 whitespace-nowrap" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
+                  <th className="text-right px-2 whitespace-nowrap" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('availableToReturn')}</th>
+                  <th className="text-right px-2 whitespace-nowrap" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('returnQty')}</th>
                 </tr>
               </thead>
               <tbody>
