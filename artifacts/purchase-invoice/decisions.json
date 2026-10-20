@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Invoice",
+    "agentPrompt": "#REF#agent-prompts/purchase-invoice/spec.md",
     "documentDateField": "invoiceDate",
     "selectorPriceCurrency": "org",
     "sendDocument": {

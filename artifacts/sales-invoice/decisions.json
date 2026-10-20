@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Invoice",
+    "agentPrompt": "#REF#agent-prompts/sales-invoice/spec.md",
     "documentDateField": "invoiceDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,

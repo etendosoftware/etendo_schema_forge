@@ -1,8 +1,8 @@
 {
-  "version": "0.93.0",
-  "generatedAt": "2026-09-17T15:12:05.781Z",
-  "updatedAt": "2026-10-19T17:33:12.923Z",
-  "contractChecksum": "e7ac9f3dcbb935ee",
+  "version": "0.92.0",
+  "generatedAt": "2026-10-19T17:29:21.531Z",
+  "updatedAt": "2026-10-20T12:04:14.314Z",
+  "contractChecksum": "54952efceac14b13",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1536,7 +1536,8 @@
     "knownLimitations": [],
     "dangerousOperations": [
       "tbaiVoidxmlgenerator"
-    ]
+    ],
+    "agentPrompt": "Sales invoices: customer invoices. Entity `header` is the invoice, `lines` its lines. Two ways to put order or shipment lines on an invoice. FAST PATH, one document in one step: etendo_action `createDraftInvoice` on a completed sales order (spec sales-order) or goods shipment (spec goods-shipment) creates AND completes an invoice with its pending lines. FILLING A DRAFT INVOICE, which also lets one invoice take lines from several documents of the same customer and currency, in this order: (1) create the header with etendo_create on `header` (businessPartner and the rest are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) from sales orders: etendo_action `availableOrders` on the invoice id lists the customer's completed orders that still have quantity to invoice, `availableOrderLines` with {orderId} lists their pending lines, and `importOrderLines` with {orderId} (everything pending) or {orderId, lines:[{sourceLineId, quantity}]} (exactly those) adds them; from goods shipments: `availableShipments`, `availableShipmentLines` with {shipmentId} and `importShipmentLines` with {shipmentId, lines?} do the same; repeat for each document; (3) complete the invoice with the DocAction button (action documentAction, docAction CO) — importing never completes it. The invoice must be a draft and the source completed, of the same customer and currency. What is pending subtracts what completed invoices AND draft invoices hold, this one included: asking for more answers 422 importQuantityExceedsPending (naming the product, the requested and the pending quantity) and adds nothing. Price, tax and discount are copied from the order line; the order's invoiced quantity only moves when the invoice is completed. From an order, the quantity of a line goes first to its completed shipments not yet invoiced (oldest first, each up to its own pending, linked to the shipment so it shows as invoiced) and the rest, ordered and not delivered or already taken by another draft, is invoiced against the order line alone, so an invoice can be filled from the order or from the shipment (importShipmentLines) alike, whatever the shipment was already invoiced in a draft, and the two never take the same quantity (the pending of an order line counts every draft invoice). The invoice's order reference is set when every line comes from one order and left empty when several are mixed. The classic Create From buttons are redirected to the import actions. etendo_schema with view:\"actions\" returns each action's parameters."
   },
-  "checksum": "874bd2d3b9699b20"
+  "checksum": "439f4672d326c2af"
 }
