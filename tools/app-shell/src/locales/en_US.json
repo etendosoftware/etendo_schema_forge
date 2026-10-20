@@ -20695,6 +20695,7 @@
     "backendError.shipmentNotFound": "Shipment not found: {id}.",
     "backendError.accountAlreadyExists": "Account {code} already exists.",
     "backendError.costNotCalculated": "The product cost has not been calculated yet. The system calculates it automatically; please try posting the document again in a few minutes. To avoid blocks, make sure all your products have an initial cost configured.",
+    "backendError.costCalculationStalled": "Cost calculation looks stalled, so posting this document again will not help. Please ask an administrator to review the costing process and the transactions waiting for a cost.",
     "backendError.periodClosedForUnposting": "The period is closed. A document in a closed period cannot be unposted; reopen the period first.",
     "backendError.recordBeingPosted": "This record is being posted by another process. If the problem persists, refresh the record; it may already be posted.",
     "backendError.periodNotAvailable": "The accounting period of the document's date is not open.",
