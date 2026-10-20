@@ -3427,3 +3427,26 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
     assert.equal(await parseBackendErrorMessage(jsonResponse(fenceBody)), fenceBody.error.message);
   });
 });
+
+// ── ETP-5669: G/L journal period mismatch, translated by identity with its params ──
+describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const prose = "Period 'Apr-26' does not contain the accounting date 2026-06-20. Update the period (or the date) and complete again.";
+  const options = {
+    messageKeys: ['ETGO_GLJournalPeriodMismatch'],
+    messageParams: { period: 'Apr-26', accountingDate: '2026-06-20' },
+  };
+
+  it('names the stored period and the date in the UI locale', () => {
+    const esText = translateBackendError(prose, es, options);
+    const enText = translateBackendError(prose, en, options);
+    assert.match(esText, /período del asiento \(Apr-26\).*\(2026-06-20\)/);
+    assert.match(enText, /period \(Apr-26\).*\(2026-06-20\)/);
+    assert.notEqual(esText, enText);
+  });
+
+  it('is not worded as "period not open"', () => {
+    assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
+  });
+});

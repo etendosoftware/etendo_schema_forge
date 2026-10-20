@@ -459,6 +459,11 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
+  // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
+  // same case maps to "period not open", which sends the user to open a period they do not need.
+  // `messageParams` { period, accountingDate }.
+  ETGO_GLJournalPeriodMismatch: 'backendError.glJournalPeriodMismatch',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
