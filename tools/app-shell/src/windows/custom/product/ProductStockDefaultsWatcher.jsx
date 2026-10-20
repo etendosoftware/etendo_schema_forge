@@ -2,48 +2,60 @@ import { useEffect, useRef } from 'react';
 
 const NON_STOCKABLE_PRODUCT_TYPES = new Set(['S', 'E', 'R']);
 
+// ETP-5696: the sheet no longer exposes Sale/Purchase ("Availability"); they are always saved as true.
+const ALWAYS_TRUE_FIELDS = ['sale', 'purchase'];
+// The fields the unified sheet lets the user edit. A change to any of them is a user edit; other keys
+// of `data` (stock, prices, ...) also change on their own after load and must not count as one.
+const EDITABLE_FIELDS = [
+  'searchKey', 'name', 'productType', 'productCategory', 'uOM', 'taxCategory',
+  'stocked', 'returnable', 'active', 'description', 'image',
+];
+
+const isTrue = v => v === true || v === 'Y' || v === 'true';
+
 /**
- * ETP-5091 follow-up: invisible logic-only component wired as this window's
- * `formFooter` (`window.headerExtra.customForm` in decisions.json) — the one
- * custom-component slot that stays mounted continuously (CSS-hidden, never
- * unmounted, while a different primary tab is active — see DetailView.jsx's
- * `buildHeaderFooter` and `getDetailContentContainerClassName`).
+ * Invisible logic-only component wired as this window's `formFooter`
+ * (`window.headerExtra.customForm` in decisions.json). It stays mounted for the whole
+ * lifetime of the sheet and owns the product-level invariants the form itself cannot
+ * express because they depend on a *change*, not on a value:
  *
- * `ProductAdditionalInfoPanel`, by contrast, is DetailView's custom PRIMARY TAB
- * Panel: it fully unmounts whenever "Información adicional" isn't the active
- * tab. `productType` itself lives on the General tab, so every edit to it
- * happens while that panel is unmounted — an effect living there can never
- * observe a live productType transition; every mount starts fresh with
- * "previous === current" by construction, so it can force stocked/returnable
- * to false (a stateless invariant check) but never restore them to true on
- * the reverse transition, and even the false direction only self-corrects
- * lazily once the user happens to open that tab afterward.
+ * - ETP-5091: when `productType` flips between stockable (Item) and non-stockable
+ *   (Service/Expense/Resource), force `stocked`/`returnable` to match — false for
+ *   Service/Expense/Resource (no physical existence), true for Item. The two fields are only
+ *   shown for Item (`displayLogicJs` in decisions.json), so the user can never fix them by hand.
+ * - ETP-5696: `sale`/`purchase` are hidden and always saved as true. A new record gets them from the
+ *   field defaults; a legacy product saved with either false is corrected the first time the user
+ *   edits it from the sheet. Merely opening a record never dirties it.
  *
- * This component watches `data.productType` for the SAME mounted record and,
- * the instant it actually changes, force-sets `stocked`/`returnable` to
- * match: false for Service/Expense/Resource (no physical existence), true
- * otherwise (Artículo) — regardless of which tab is on screen. Renders
- * nothing.
+ * Renders nothing.
  */
 export default function ProductStockDefaultsWatcher({ data, onChange }) {
-  const prevRef = useRef({ id: data?.id, productType: data?.productType });
+  const prevRef = useRef({ id: data?.id, snapshot: null, productType: data?.productType });
 
   useEffect(() => {
     const prev = prevRef.current;
     const currId = data?.id;
     const currType = data?.productType;
-    prevRef.current = { id: currId, productType: currType };
+    const snapshot = EDITABLE_FIELDS.map(k => data?.[k]);
+    prevRef.current = { id: currId, snapshot, productType: currType };
 
     if (prev.id !== currId) return; // different record loaded, not a live edit
-    if (prev.productType === currType) return; // productType itself didn't change
 
-    const wasNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(prev.productType);
-    const isNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(currType);
-    if (wasNonStockable === isNonStockable) return; // "stockable-ness" didn't flip
+    if (prev.productType !== currType) {
+      const wasNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(prev.productType);
+      const isNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(currType);
+      if (wasNonStockable !== isNonStockable) {
+        onChange?.('stocked', !isNonStockable);
+        onChange?.('returnable', !isNonStockable);
+      }
+    }
 
-    onChange?.('stocked', !isNonStockable);
-    onChange?.('returnable', !isNonStockable);
-  }, [data?.id, data?.productType, onChange]);
+    const edited = prev.snapshot !== null && snapshot.some((v, i) => v !== prev.snapshot[i]);
+    if (!edited) return;
+    for (const key of ALWAYS_TRUE_FIELDS) {
+      if (data?.[key] !== undefined && !isTrue(data[key])) onChange?.(key, true);
+    }
+  }, [data, onChange]);
 
   return null;
 }

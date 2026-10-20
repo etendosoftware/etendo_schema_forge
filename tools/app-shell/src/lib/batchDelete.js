@@ -35,7 +35,16 @@ import { translateBackendError } from '@/lib/backendErrors.js';
  * @template T
  */
 export async function runBatchDelete(items, deleteOneFn) {
-  const results = await Promise.allSettled(items.map((item) => deleteOneFn(item)));
+  // A `deleteOneFn` that throws synchronously (rather than returning a rejected promise) is
+  // recorded as that item's failure instead of escaping before `allSettled` runs — the dialog
+  // owner (`useBatchDeleteDialog`) relies on this function never rejecting.
+  const results = await Promise.allSettled(items.map((item) => {
+    try {
+      return deleteOneFn(item);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }));
   const succeeded = [];
   const failed = [];
   const errors = [];
@@ -50,18 +59,31 @@ export async function runBatchDelete(items, deleteOneFn) {
 }
 
 /**
- * Deletes selected child rows using the detail entity's configured endpoint.
- * Selection state and outcome handling remain with the calling component.
+ * Per-row `deleteOneFn` for a document's child rows (primary lines or a secondary tab), using the
+ * entity's configured `api.crud[entityKey].detailUrl` when present and `{apiBaseUrl}/{entityKey}/{id}`
+ * otherwise. Meant to be handed to `useBatchDeleteDialog`'s `requestBatchDelete(rows, { deleteOneFn })`
+ * (ETP-5758 — replaces the former `deleteSelectedChildRows`, which ran the batch itself after a
+ * confirm prompt that had already closed).
+ *
+ * A failure rejects with the backend's own message (via `extractErrorMessage`) AND the HTTP
+ * status, the shape `toastBatchDeleteOutcome` needs to name the reason of a one-row refusal.
+ *
+ * @param {{ api?: object, entityKey: string, apiBaseUrl: string, token?: string,
+ *           extractErrorMessage?: (res: Response) => Promise<string> }} deps
+ * @returns {(row: {id: string}) => Promise<{id: string}>}
  */
-export function deleteSelectedChildRows({ selectedChildRows, api, detailEntity, apiBaseUrl, token }) {
-  return runBatchDelete(selectedChildRows, (row) => {
-    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
-      || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-    return apiFetch(childUrl, { method: 'DELETE', baseUrl: '', token }).then(res => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+export function buildChildRowDeleteFn({ api, entityKey, apiBaseUrl, token, extractErrorMessage }) {
+  return (row) => {
+    const childUrl = api?.crud?.[entityKey]?.detailUrl?.replace('{id}', row.id)
+      || `${apiBaseUrl}/${entityKey}/${row.id}`;
+    return apiFetch(childUrl, { method: 'DELETE', baseUrl: '', token }).then(async (res) => {
+      if (!res.ok) {
+        const message = extractErrorMessage ? await extractErrorMessage(res) : null;
+        throw Object.assign(new Error(message || `HTTP ${res.status}`), { status: res.status });
+      }
       return row;
     });
-  });
+  };
 }
 
 /** A bare `HTTP 409` / `409 Conflict` tells the user nothing they can act on, so it never qualifies

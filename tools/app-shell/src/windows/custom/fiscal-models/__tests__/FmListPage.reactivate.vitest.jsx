@@ -254,6 +254,57 @@ describe('FmListPage — Reactivar confirm dialog flow', () => {
     expect(screen.getByTestId('FmRowActions__reactivate')).toBeInTheDocument();
   });
 
+  // ETP-5725 (reopened QA fix, UX follow-up) — `persistDeclarationStatus` now parses the
+  // backend's `[reason=...]`-tagged 409 message (FiscalDeclCrudHandler#rejectReactivationWithSibling)
+  // and returns it as `result.reason`; `handleConfirmReactivate` branches on it for a more
+  // specific toast than the generic fallback.
+  it('shows the specific "corrective sibling presented" toast when reason=corrective_sibling_presented', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    persistDeclarationStatus.mockResolvedValue({
+      ok: false, error: 'http_409', reason: 'corrective_sibling_presented',
+    });
+    render(<FmListPage declarations={[makeDecl({ id: 'react-5', status: 'submitted' })]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('FmRowActions__reactivate'));
+    fireEvent.click(screen.getByTestId('fm-reactivate-confirm'));
+
+    const { toast } = await import('sonner');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.reactivate_failed_corrective_exists'));
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.reactivate_failed');
+  });
+
+  it('shows the specific "sibling exists" toast when reason=sibling_exists', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    persistDeclarationStatus.mockResolvedValue({
+      ok: false, error: 'http_409', reason: 'sibling_exists',
+    });
+    render(<FmListPage declarations={[makeDecl({ id: 'react-6', status: 'submitted' })]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('FmRowActions__reactivate'));
+    fireEvent.click(screen.getByTestId('fm-reactivate-confirm'));
+
+    const { toast } = await import('sonner');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.reactivate_failed_sibling_exists'));
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.reactivate_failed');
+  });
+
+  it('falls back to the generic toast when no reason is present (e.g. a network error)', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    persistDeclarationStatus.mockResolvedValue({ ok: false, error: 'network' });
+    render(<FmListPage declarations={[makeDecl({ id: 'react-7', status: 'submitted' })]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('FmRowActions__reactivate'));
+    fireEvent.click(screen.getByTestId('fm-reactivate-confirm'));
+
+    const { toast } = await import('sonner');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.reactivate_failed'));
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.reactivate_failed_corrective_exists');
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.reactivate_failed_sibling_exists');
+  });
+
   it('closing the confirm dialog without confirming never calls persistDeclarationStatus', async () => {
     globalThis.fetch = mockCatalogFetch();
     render(<FmListPage declarations={[makeDecl({ id: 'react-4', status: 'submitted' })]} {...withCatalogProps} />);

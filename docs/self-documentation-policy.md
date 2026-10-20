@@ -9,14 +9,18 @@ Any change to:
 - **CLI tools** (new tool, renamed tool, changed inputs/outputs, removed tool) in `cli/src/`
 - **Repository structure** (new directories, moved files, renamed folders)
 - **Data flow** (new data sources, changed artifact formats, new webhook endpoints)
-- **Runtime components** (new NeoHandler, changed URL patterns, new DB tables)
+- **Runtime components** (new NeoHandler, changed URL patterns, new DB tables or columns)
+- **HTTP contracts** (a status code, error body or response field a client parses — e.g. the 402 `ENVIRONMENT_ACCESS_DENIED` body): document it where that endpoint family's errors are described, in the repo that owns the endpoint, and update the doc of the client code that parses it
+- **Feature flags** (new, retired, re-targeted, or a changed default/polarity): the flag's `flags-registry.json` entry plus the topic doc of the feature it gates, and for a backend flag `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`. `docs/feature-flags.md` covers the flag framework only (since ETP-5605 it holds no per-flag sections): touch it for a framework change, or to add/remove a row in its *Backend-only flags* list
+- **Data-fixes** (a new or edited file under `cli/src/data-fixes/sql/`, including a change to what it writes or to its deploy-order prerequisite): the gap row in `docs/etendo-ad/onboarding-gaps.md` and `docs/etendo-ad/onboarding-and-datafixes-map.md`
+- **Operational behaviour** (anything an operator must do or know at deploy time, a kill switch, a new way a tenant can be blocked): the one operator-facing page for that feature, not only the design doc or the test guide
 - **Architecture** (new loops, changed integration points, new external dependencies)
 - **Validator rules** (adding a new rule F11+, changing severity, changing detection signal) in `cli/src/validate-pipeline.js`
 
 ## Window-specific rule
 
 If a change touches `artifacts/<window>/...` or `tools/app-shell/src/windows/custom/<window>/...`, update the matching `docs/generated-custom-windows/<window>.md` file in the same change.
-The CI check `.github/workflows/window-doc-freshness.yml` reviews this diff-based rule through `cli/src/check-window-docs.js` and leaves a warning comment on pull requests when the window doc is missing.
+The CI check `.github/workflows/window-doc-freshness.yml` reviews this diff-based rule through `scripts/check-window-docs.js` and leaves a warning comment on pull requests when the window doc is missing.
 
 ## What must be updated
 
@@ -45,6 +49,11 @@ When a trigger fires, check and update **all** of the following that reference t
 | `docs/index.md` | If new docs were added |
 | `docs/testing/test-reuse-policy.md` | If test-authoring rules, the `@covers` format, `make find-tests` or the `test-hygiene` CI checks changed |
 | `docs/pipeline-validator-reference.md` | Adding a new validator rule (F11+): update the rules table in the same PR |
+| `flags-registry.json` + the feature's topic doc | A feature flag was added, retired or changed |
+| `docs/feature-flags.md` | The flag framework changed (provider, identity, exposure, layout rule), or a backend-only flag was added or retired (its one-line list) |
+| `docs/etendo-ad/onboarding-gaps.md`, `docs/etendo-ad/onboarding-and-datafixes-map.md` | A data-fix was added or edited |
+| `com.etendoerp.go` `docs/open-and-notable-topics.md` | Anything in the recurring-billing block (ETP-5045…5053): a decision taken, a constraint added, a topic settled (settled topics are deleted, section numbers stay stable) |
+| `docs/plans/*` design docs of an earlier ticket | Behaviour the design describes changed: add a short "extended by ETP-XXXX" pointer, do not rewrite it |
 
 ## Rules for volatile data
 

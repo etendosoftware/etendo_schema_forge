@@ -211,6 +211,39 @@ describe('ImportFromOrderModal — buildLineBody', () => {
     const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
     assert.equal(Object.hasOwn(result, 'cOrderlineId'), false);
   });
+
+  // ETP-5710: an order line without a list price (e.g. created by an agent) but with a
+  // discount used to post U == L + etgoDiscount, which the server reads as "not yet
+  // discounted" and discounts a second time.
+  it('reconstructs the list price when the order line has none and a discount', async () => {
+    const discounted = { ...line, unitPrice: 90, listPrice: 0, discount: 10 };
+    const result = await buildLineBody({ line: discounted, qty: 1, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result.unitPrice, 90);
+    assert.equal(result.listPrice, 100);
+    assert.equal(result.etgoDiscount, 10);
+  });
+
+  it('keeps the order line list price when it has one', async () => {
+    const withList = { ...line, unitPrice: 90, listPrice: 100, discount: 10 };
+    const result = await buildLineBody({ line: withList, qty: 1, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result.listPrice, 100);
+  });
+
+  it('falls back to the unit price without a discount or with a 100 percent discount', async () => {
+    const plain = await buildLineBody({
+      line: { ...line, unitPrice: 10, listPrice: 0 }, qty: 1, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(plain.listPrice, 10);
+    const free = await buildLineBody({
+      line: { ...line, unitPrice: 0, listPrice: 0, discount: 100 }, qty: 1, invoiceId: 'inv1',
+      lineNo: 10 });
+    assert.equal(free.listPrice, 0);
+  });
+
+  it('rounds the reconstructed list price to 6 decimals', async () => {
+    const odd = { ...line, unitPrice: 10, listPrice: 0, discount: 3 };
+    const result = await buildLineBody({ line: odd, qty: 1, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result.listPrice, 10.309278);
+  });
 });
 
 describe('ImportFromOrderModal — duplicate detection via the order line FK', () => {

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * DataTable — `balanceFooter` totals row in its hidden add-row-only companion
  * mode (ETP-5210 follow-up to "Fix totals row order when add-row is active").
@@ -137,5 +138,25 @@ describe('DataTable — add-row companion mode renders balanceFooter after the a
       />,
     );
     expect(screen.queryByTestId('balance-footer-row')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5771 — the companion only hosts the add-row form, so the generic
+// per-amount-column footer must stay off even when the caller leaves
+// showFooterTotals on and spreads the full lines list in as `data` (the
+// generated inlineEditable LinesTable does exactly that). The rendering
+// counterpart for a normal table (no hideDataRows) is asserted by
+// DataTable.render.vitest.jsx › footer totals › "renders sum of amount
+// columns in footer".
+describe('DataTable — add-row companion mode never renders the generic footer totals (ETP-5771)', () => {
+  const ROWS = [
+    { id: 'L1', account: 'A1', amtSourceDr: '30.5', amtSourceCr: '0' },
+    { id: 'L2', account: 'A2', amtSourceDr: '117.36', amtSourceCr: '0' },
+  ];
+
+  it('renders no tfoot with hideDataRows + amount rows + showFooterTotals and no balanceFooter', () => {
+    const { container } = renderAddRowCompanion({ data: ROWS, showFooterTotals: true });
+    expect(screen.getByTestId('inline-add-row')).toBeInTheDocument();
+    expect(container.querySelector('tfoot')).toBeNull();
   });
 });

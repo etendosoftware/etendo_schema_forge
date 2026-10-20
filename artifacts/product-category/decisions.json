@@ -4,6 +4,7 @@
     "category": "inventory",
     "name": "Product Category",
     "detailEntity": "accounting",
+    "detailVisibleWhenCapability": "showAccountingFields",
     "linesLayout": "inlineEditable",
     "formCardPadding": "p-2",
     "toolbarPaddingX": "px-2",
@@ -15,7 +16,6 @@
     "autoSaveOnBlur": true,
     "hidePrint": true,
     "hideLink": true,
-    "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2",
     "maxDetailLines": 1
   },

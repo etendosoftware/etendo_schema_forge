@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * Behavior-lock tests for DataTable's internal `renderCellValue`.
  *
@@ -405,8 +406,10 @@ describe('renderCellValue — truncated-fallback', () => {
     const long = 'x'.repeat(40);
     renderTable(columns, [{ id: '1', name: 'Alpha', note: long }]);
     const cell = screen.getByTestId('cell-1-note');
-    const inner = cell.querySelector('span.truncate');
+    // ETP-5510 — 2-line clamp (not the 1-line `truncate`) for non-first long strings.
+    const inner = cell.querySelector('span.break-words');
     expect(inner).toBeTruthy();
+    expect(inner.style.webkitLineClamp).toBe('2');
     // ETP-5268 follow-up — swapped the native `title` tooltip for `TruncatedText`
     // (styled, only opens when genuinely clipped — see components/ui/truncated-text.jsx
     // and its own test suite), so the trigger span no longer carries a `title` attribute.

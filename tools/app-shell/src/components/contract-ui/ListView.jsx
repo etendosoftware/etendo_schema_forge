@@ -18,6 +18,7 @@ import { ListExportButton } from './ListExportButton.jsx';
 import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
+import { buildDatePresetFilter } from './datePresetFilter.js';
 import { ListSortPopover } from './ListSortPopover.jsx';
 import { ListProgressBar } from './ListProgressBar.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
@@ -737,10 +738,22 @@ export function ListView({
     return (item) => fns.every(fn => fn(item));
   }, [subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices, rowFilter]);
 
+  // The window's own default grid. `listViewOptions.defaultDatePreset` seeds the
+  // date column (`dateFilterKey`) from a preset recomputed at mount, unless a URL
+  // deep-link or the window's own `initialColumnFilters` already provides one.
+  // Computed once so the persistence effect compares against a stable default.
+  const [defaultColumnFilters] = useState(() => {
+    const base = initialColumnFilters ?? {};
+    const presetId = listViewOptions?.defaultDatePreset;
+    if (!presetId || !dateFilterKey || initialFiltersFromUrl || base[dateFilterKey]) return base;
+    const presetFilter = buildDatePresetFilter(presetId);
+    return presetFilter ? { ...base, [dateFilterKey]: presetFilter } : base;
+  });
+
   const [columnFilters, setColumnFilters] = useState(() => {
     const saved = restoredListState?.columnFilters;
     if (saved && typeof saved === 'object') return saved;
-    return initialColumnFilters ?? {};
+    return defaultColumnFilters;
   });
   const columnDefs = useMemo(
     () => Object.fromEntries(tableColumns.map(c => [c.key, c])),
@@ -873,7 +886,7 @@ export function ListView({
         // would land on an unfiltered list. Compare against the empty grid instead: the
         // deep-linked view is persisted, so it is what comes back, and the filter the
         // user had before the deep-link is overwritten rather than resurrected.
-        columnFilters: initialFiltersFromUrl ? {} : (initialColumnFilters ?? {}),
+        columnFilters: initialFiltersFromUrl ? {} : defaultColumnFilters,
         advancedFilter: initialFiltersFromUrl ? null : (initialAdvancedFilter ?? null),
         subsetIndex: subsetFilters?.length ? defaultSubsetIndex : null,
         quickFilterIndices: defaultQuickFilterIndices,
@@ -883,7 +896,7 @@ export function ListView({
     );
   }, [
     listStateScope, columnFilters, advancedFilter, activeSubsetIndex, activeFilterIndices,
-    hook.sortColumn, hook.sortDirection, initialColumnFilters, initialAdvancedFilter,
+    hook.sortColumn, hook.sortDirection, defaultColumnFilters, initialAdvancedFilter,
     initialFiltersFromUrl,
     subsetFilters, defaultSubsetIndex, defaultQuickFilterIndices,
     initialSortColumn, initialSortDirection,

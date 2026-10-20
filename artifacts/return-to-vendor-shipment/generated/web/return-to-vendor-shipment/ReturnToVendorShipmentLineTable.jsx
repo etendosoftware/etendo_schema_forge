@@ -5,6 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', readOnly: true },
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', labels: {"es_ES":"Cant. a devolver","en_US":"Return Qty"}, label: 'Movement Quantity', required: true, grow: true },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', display: 'tag', required: true, readOnly: true },
   { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', labels: {"es_ES":"Cant. recibida orig.","en_US":"Original Received Qty"}, label: 'Order Quantity', grow: true, readOnly: true },
 ];
 // @sf-generated-end columns:returnToVendorShipmentLine

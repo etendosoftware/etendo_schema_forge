@@ -39,7 +39,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:sincronización
 
 // @sf-generated-start requiredHeaderFields:sincronización
-const requiredHeaderFields = ['active', 'invoice'];
+const requiredHeaderFields = ['active'];
 // @sf-generated-end requiredHeaderFields:sincronización
 
 // @sf-generated-start addLineFields:resultadoValidación

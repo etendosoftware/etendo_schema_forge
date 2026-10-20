@@ -1,5 +1,9 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -7,8 +11,9 @@ import { login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { ensureStockOnHand } from '../../helpers/inventory-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
-import { pickRectifiableInvoice } from '../../helpers/purchase-helpers.js';
+import { createDraftWithFirstLine, openGeneratedDocument, pickRectifiableInvoice } from '../../helpers/purchase-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 
 /**
  * Sales Order → Shipment → Return → Rectificative Invoice — full live-backend
@@ -20,7 +25,7 @@ import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
  *
  * Flow:
  *   1. Login with onboarding credentials
- *   2. Create a Sales Order, add one line, save as draft
+ *   2. Create a Sales Order, save it as draft with Guardar, then add one line
  *   3. Confirm the order — check "Crear albarán" ONLY (no invoice) so
  *      confirming only generates the Sales Shipment ("Albarán de Venta")
  *   4. Navigate (via the confirm result modal's "Ver albarán") to the
@@ -63,19 +68,10 @@ async function slow(page) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
-  // Wait for any loading indicator to disappear (covers late-appearing spinners)
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
-}
-
-function expectSaveResponse(page) {
-  return page.waitForResponse(
-    (resp) =>
-      resp.url().includes('/sws/neo/') &&
-      ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) &&
-      resp.status() < 400,
-    { timeout: 20_000 },
-  );
+  // Wait for EVERY loading indicator to disappear (covers late-appearing spinners
+  // and panels that load concurrently). Passes at once when none is shown; a
+  // still-visible indicator after the budget is tolerated, as before.
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 test.describe('Sales Order → Return → Rectificative Invoice (integration)', () => {
@@ -158,69 +154,11 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
         .toBeVisible({ timeout: 10_000 });
       const warehouseName = (await warehouseChip.textContent())?.trim();
 
-      // Save as draft
-      const saveDraftBtn = page.getByTestId('action-save-draft')
-        .or(page.getByRole('button', { name: /guardar|save/i }));
-      const savePromise = expectSaveResponse(page);
-      await saveDraftBtn.click();
-      await savePromise;
-      await slow(page);
-
-      await expect(page).toHaveURL(/\/sales-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-
-      // Add a single line
-      await waitForDetailReady(page);
-
-      const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
-        .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
-
-      await expect(async () => {
-        await emptyStateBtn.click({ timeout: 3_000 });
-        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-      }).toPass({ timeout: 15_000 });
-
-      const productField = page.getByTestId('inline-add-field-product');
-      const searchDrawer = page.getByTestId('product-search-drawer');
-
-      await expect(async () => {
-        await productField.click({ timeout: 3_000 });
-        await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
-      }).toPass({ timeout: 15_000 });
-      await slow(page);
-
-      const searchInput = page.getByTestId('product-search-input');
-      await searchInput.fill(productFixture.name);
-      await page.waitForTimeout(1000);
-
-      // Filter by name as well as searching: the search is a backend query, and
-      // matching the option client-side too keeps this from silently binding to
-      // whatever else the drawer happens to return first.
-      const productOption = page.locator('[data-testid^="product-search-option-"]')
-        .filter({ hasText: productFixture.name }).first();
-      await expect(productOption,
-        `Product "${productFixture.name}" should appear in the search drawer`,
-      ).toBeVisible({ timeout: 15_000 });
-
-      const productCalloutResponse = page.waitForResponse(
-        (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
-        { timeout: 15_000 },
-      );
-      await productOption.click();
-      await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
-      await productCalloutResponse;
-      await slow(page);
-
-      const lineAddPromise = expectSaveResponse(page);
-      await page.keyboard.press('Enter');
-      await lineAddPromise;
-      await slow(page);
-
-      // The lines grid is InlineLinesPanel.jsx (shared across all windows), which renders
-      // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
-      // <table>/<tbody>/<tr> on the page belongs to the hidden (display:none) attachments
-      // panel, so a bare 'tbody tr' locator always resolves to that invisible element
-      // instead of this order's actual line row.
-      await expect(page.locator('[data-testid^="line-row-"]')).toHaveCount(1, { timeout: 10_000 });
+      // Manual "Guardar" before the first line — the creation path this spec keeps
+      // covered; the other sales-order specs go straight from the empty state.
+      await createDraftWithFirstLine(page, {
+        spec: 'sales-order', via: 'save', productName: productFixture.name,
+      });
 
       // Guarantee enough on-hand stock for the fixture product at this order's warehouse
       // BEFORE the shipment gets confirmed later in this flow — confirming a shipment
@@ -316,11 +254,8 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
       await slow(page);
 
-      const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
-      await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-      await nextBtn.click();
-      await slow(page);
-
+      // One-step wizard: lines, quantities and reason share the single screen, so
+      // "Crear Devolución" submits directly once the pre-selected lines enable it.
       const returnConfirmPromise = page.waitForResponse(
         (resp) =>
           resp.url().includes('/action/createReturn') &&
@@ -329,10 +264,13 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
         { timeout: 20_000 },
       );
       const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
-      await expect(createReturnConfirmBtn).toBeVisible({ timeout: 10_000 });
+      await expect(createReturnConfirmBtn).toBeEnabled({ timeout: 10_000 });
       await createReturnConfirmBtn.click();
       await returnConfirmPromise;
       await slow(page);
+
+      // ETP-5729: a sales return is announced as such («Ver devolución»).
+      await openGeneratedDocument(page, { title: /^(Devolución de venta creada|Sales return created)$/ });
 
       await expect(page).toHaveURL(/\/return-material-receipt\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);

@@ -46,6 +46,16 @@ vi.mock('../useDemoDataTransfer.js', () => ({
   useDemoDataTransfer: () => transferHook.value,
 }));
 
+/**
+ * ETP-5577 — the calendar review read, mocked like the transfer. Default: the tenant has no
+ * review marker (every tenant onboarded before ETP-5577), so the row is absent.
+ */
+const NO_REVIEW = Object.freeze({ required: false, reviewed: false, loading: false });
+const reviewHook = vi.hoisted(() => ({ value: null }));
+vi.mock('../useCalendarReview.js', () => ({
+  useCalendarReview: () => reviewHook.value ?? NO_REVIEW,
+}));
+
 const tenantPlan = vi.hoisted(() => ({ plan: 'productive', loading: false }));
 vi.mock('@/hooks/useTenantPlan.js', () => ({
   useTenantPlan: () => tenantPlan,
@@ -82,6 +92,7 @@ beforeEach(() => {
   tenantPlan.plan = PLAN_PRODUCTIVE;
   tenantPlan.loading = false;
   transferHook.value = FLAG_OFF_TRANSFER;
+  reviewHook.value = null;
 });
 
 describe('FirstStepsProvider', () => {
@@ -254,6 +265,32 @@ describe('the demo data transfer row (flag demo-data-transfer, ETP-5443)', () =>
 
   it('holds the checklist loading until the transfer status read answers', () => {
     transferHook.value = { ...FLAG_OFF_TRANSFER, status: 'LOADING', loading: true };
+    render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
+    expect(screen.getByTestId('steps')).toHaveTextContent('true|7|');
+  });
+});
+
+describe('the calendar review row (ETP-5577)', () => {
+  function Steps() {
+    const { loading, total, steps } = useFirstStepsState();
+    return <span data-testid="steps">{`${loading}|${total}|${steps.map((step) => step.id).join(',')}`}</span>;
+  }
+
+  it('is spliced in right after the fiscal step when the tenant must review its calendar', () => {
+    reviewHook.value = { ...NO_REVIEW, required: true };
+    render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
+    expect(screen.getByTestId('steps')).toHaveTextContent('false|8|');
+    expect(screen.getByTestId('steps')).toHaveTextContent('fiscal-config,calendar-review,products');
+  });
+
+  it('counts as done once the server says the calendar is reviewed', () => {
+    reviewHook.value = { ...NO_REVIEW, required: true, reviewed: true };
+    render(<FirstStepsProvider><Badge /></FirstStepsProvider>);
+    expect(screen.getByTestId('badge')).toHaveTextContent('2/8');
+  });
+
+  it('holds the checklist loading until the review read answers', () => {
+    reviewHook.value = { ...NO_REVIEW, loading: true };
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
     expect(screen.getByTestId('steps')).toHaveTextContent('true|7|');
   });

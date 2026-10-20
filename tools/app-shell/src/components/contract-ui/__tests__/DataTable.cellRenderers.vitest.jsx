@@ -66,6 +66,7 @@ import {
   renderDefaultCell,
   renderEnumCell,
   renderMultiFieldCell,
+  renderNeutralTagCell,
   renderPercentCell,
   renderSignedDeltaCell,
   renderStatusCell,
@@ -465,8 +466,11 @@ describe('renderDefaultCell', () => {
     // (styled, only opens when genuinely clipped — see components/ui/truncated-text.jsx),
     // so the trigger span no longer carries a `title` attribute; the tooltip's own
     // open/close behavior is covered by truncated-text's own test, not re-tested here.
-    const truncated = container.querySelector('span.truncate');
+    // ETP-5510 — non-first long strings clamp to 2 lines (inline -webkit-line-clamp) instead of 1.
+    const truncated = container.querySelector('span.break-words');
     expect(truncated).toBeTruthy();
+    expect(truncated).toHaveClass('block', 'w-full', 'whitespace-normal');
+    expect(truncated.style.webkitLineClamp).toBe('2');
     expect(truncated).not.toHaveAttribute('title');
     expect(truncated).toHaveTextContent(long);
   });
@@ -487,7 +491,9 @@ describe('renderMultiFieldCell', () => {
     }));
 
     const title = screen.getByText('Widget A');
-    expect(title.className).toBe('text-sm font-semibold text-[hsl(var(--foreground))] leading-5');
+    // ETP-5510 — the title is a 1-line TruncatedText (ellipsis + tooltip when clipped).
+    expect(title).toHaveClass('block', 'w-full', 'truncate', 'text-sm', 'font-semibold', 'leading-5');
+    expect(title.style.webkitLineClamp).toBe('');
     expect(container.querySelector('.flex.items-center.gap-3')).toBeTruthy();
   });
 
@@ -500,8 +506,10 @@ describe('renderMultiFieldCell', () => {
     }));
 
     const chip = screen.getByText('SKU-1');
-    expect(chip.className).toBe(
-      'inline-flex items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit',
+    // ETP-5510 — the pill is the max-w-full wrapper; its label sits in a truncating inner span.
+    expect(chip).toHaveClass('min-w-0', 'truncate');
+    expect(chip.parentElement.className).toBe(
+      'inline-flex max-w-full items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit',
     );
   });
 
@@ -558,5 +566,36 @@ describe('renderMultiFieldCell', () => {
     expect(box).toBeTruthy();
     expect(screen.getByTestId('box-icon')).toBeInTheDocument();
     expect(box.querySelector('img')).toBeNull();
+  });
+});
+
+describe('renderNeutralTagCell / display: tag', () => {
+  it.each(['Unit', 'Completed', 'Cancelled', 'Draft'])('renders %s as a neutral pill whatever the text', (value) => {
+    renderCell(renderNeutralTagCell(value));
+    const tag = screen.getByTestId('status-tag');
+    expect(tag).toHaveTextContent(value);
+    expect(tag).toHaveAttribute('data-tone', 'neutral');
+  });
+
+  it.each([null, undefined, ''])('renders nothing for %p', (value) => {
+    const { container } = renderCell(renderNeutralTagCell(value));
+    expect(screen.queryByTestId('status-tag')).toBeNull();
+    expect(container.querySelector('[data-testid="cell"]')).toBeEmptyDOMElement();
+  });
+
+  it('renderDefaultCell with col.display "tag" routes the display value to the neutral pill', () => {
+    renderCell(renderDefaultCell({ ...baseContext, col: { key: 'uOM', display: 'tag' }, display: 'Completed' }));
+    expect(screen.getByTestId('status-tag')).toHaveAttribute('data-tone', 'neutral');
+  });
+
+  it('renderDefaultCell with col.display "tag" and an empty display renders no pill', () => {
+    renderCell(renderDefaultCell({ ...baseContext, col: { key: 'uOM', display: 'tag' }, display: '' }));
+    expect(screen.queryByTestId('status-tag')).toBeNull();
+  });
+
+  it('renderDefaultCell without display "tag" is unchanged (plain text, no pill)', () => {
+    renderCell(renderDefaultCell({ ...baseContext, display: 'Unit' }));
+    expect(screen.queryByTestId('status-tag')).toBeNull();
+    expect(screen.getByTestId('cell')).toHaveTextContent('Unit');
   });
 });

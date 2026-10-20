@@ -17,6 +17,7 @@ const TYPE_CONFIG = {
   pedidoVenta:          { labelKey: 'confirmResultModal.docType.pedidoVenta',          titleKey: 'confirmResultModal.title.pedido',               viewKey: 'sqViewOrder',    Icon: FileText,    gender: 'masculine' },
   // Purchases-side returns (return-to-vendor shipment and its rectificative invoice).
   devolucionCompra:           { labelKey: 'confirmResultModal.docType.devolucionCompra',           titleKey: 'confirmResultModal.title.devolucionCompra',           viewKey: 'confirmResultModal.view.devolucion', Icon: Truck,       gender: 'feminine' },
+  devolucionVenta:            { labelKey: 'confirmResultModal.docType.devolucionVenta',            titleKey: 'confirmResultModal.title.devolucionVenta',            viewKey: 'confirmResultModal.view.devolucion', Icon: Truck,       gender: 'feminine' },
   facturaRectificativaCompra: { labelKey: 'confirmResultModal.docType.facturaRectificativaCompra', titleKey: 'confirmResultModal.title.facturaRectificativaCompra', viewKey: 'poViewInvoice',                     Icon: ReceiptText, gender: 'feminine' },
 };
 

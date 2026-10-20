@@ -15,7 +15,7 @@ Maintain a business partner header record and its attached location records in o
 ## Interaction model
 
 - Route: list route `/business-partner`; detail route `/business-partner/:recordId`.
-- Visibility: route-only. `menu.json` marks the window hidden, so users should expect direct navigation or deep links instead of side-menu discovery.
+- Visibility: retired route (ETP-5795). `menu.json` marks the window `hidden: true` with `"redirect": "/contacts"`, so `/business-partner` and `/business-partner/:recordId` replace the URL with `/contacts`; the improved `contacts` window is the only supported entry point.
 - Implementation type: generated window using `ListView` for the header list and `DetailView` for the header-plus-location detail screen.
 - Window shape: master-child. The master entity is `businessPartner`; the child entity is `bpLocation`. The list route shows only header records, while the detail route opens the header form with the embedded locations table/form.
 - Header interaction: the header form exposes editable business partner fields, while `creditUsed` and `active` are rendered read-only in the generated form and summary.

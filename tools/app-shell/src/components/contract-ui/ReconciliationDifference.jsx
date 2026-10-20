@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, BookText, Check } from 'lucide-react';
 import { useUI } from '@/i18n';
 import {
@@ -145,14 +145,20 @@ export function DifferenceModal({
   const [glItem, setGlItem] = useState(defaultGlItem ?? null);
   const [description, setDescription] = useState('');
 
-  // Re-seed on every open: the account default may have changed, and a previous run's description
-  // must not leak into the next line's adjustment.
+  // Re-seed only on the closed -> open transition: the account default may have changed, and a
+  // previous run's description must not leak into the next line's adjustment. `defaultGlItem` is
+  // deliberately NOT a dependency: hosts build it as an inline object literal, so its identity
+  // changes on every host re-render (e.g. a polling hook) and would wipe what the user typed or
+  // picked while the modal is open (ETP-5770). The latest value is read at the open transition.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
       setGlItem(defaultGlItem ?? null);
       setDescription('');
     }
-  }, [open, defaultGlItem]);
+    wasOpenRef.current = open;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above: re-seed on open only
+  }, [open]);
 
   const confirm = useCallback(() => {
     onConfirm({ glItemId: glItem?.id ?? '', description: description.trim() });
@@ -165,7 +171,12 @@ export function DifferenceModal({
       open={open}
       onOpenChange={(v) => { if (!v) onClose(); }}
       data-testid="Dialog__recon-difference">
-      <DialogContent className="max-w-lg bg-card" data-testid="recon-difference-dialog">
+      <DialogContent
+        className="max-w-lg bg-card"
+        // Radix would focus the first focusable element (the concept picker), and the picker opens
+        // its dropdown on focus. Keep focus out so the user opens it deliberately (ETP-5770).
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        data-testid="recon-difference-dialog">
         <DialogHeader data-testid="DialogHeader__recon-difference">
           <DialogTitle data-testid="DialogTitle__recon-difference">
             {ui('financeReconcileDiffModalTitle')}

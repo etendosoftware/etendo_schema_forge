@@ -33,6 +33,7 @@ export default function ConfirmGoodsReceiptModal({ data, base, recordId, onConfi
         total: data?.grandTotalAmount,
         currency: data?.['currency$_identifier'],
       }}
+      periodDate={data?.movementDate}
       infoRowPre={ui('goodsReceipt.confirmModal.infoRowPre')}
       infoRowBold={ui('goodsReceipt.confirmModal.infoRowBold')}
       infoRowPost={ui('goodsReceipt.confirmModal.infoRowPost')}
