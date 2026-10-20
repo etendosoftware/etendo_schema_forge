@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import {
   extractBackendMessageKeys,
   extractBackendMessageParams,
+  extractBackendErrorCode,
   translateBackendError,
   parseBackendErrorMessage,
   parseBackendError,
@@ -3368,6 +3369,7 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
       message: fenceBody.error.message,
       messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
       messageParams: { fields: ['accountingDate'] },
+      code: fenceBody.error.code,
     });
   });
 
@@ -3448,5 +3450,50 @@ describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () 
 
   it('is not worded as "period not open"', () => {
     assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
+  });
+});
+
+
+describe('classified NEO failures', () => {
+  const es = JSON.parse(readFileSync(new URL('../../locales/es_ES.json', import.meta.url))).genericLabels;
+  const ui = (key) => es[key] ?? key;
+  it('keeps a nested discriminator with its AD identity', async () => {
+    const parsed = await parseBackendError({ json: async () => ({ error: {
+      code: 'record_in_use', message: 'Cannot remove this linked record.',
+      messageKeys: ['CustomConstraint'], messageParams: { name: 'Invoice' },
+    } }) });
+    assert.equal(parsed.code, 'record_in_use');
+    assert.deepEqual(parsed.messageKeys, ['CustomConstraint']);
+    assert.deepEqual(parsed.messageParams, { name: 'Invoice' });
+  });
+  it('translates generic refusals without replacing a specific business explanation', () => {
+    assert.equal(translateBackendError('A value sent is not valid.', ui, { code: 'invalid_value' }),
+      'Uno de los valores enviados no es válido.');
+    const specific = 'No se puede eliminar una cuenta con movimientos pendientes.';
+    assert.equal(translateBackendError(specific, ui, { code: 'record_in_use' }), specific);
+  });
+  it('retains a legacy flat discriminator', async () => {
+    const parsed = await parseBackendError({ json: async () => ({
+      error: 'stale_record', message: 'Record changed',
+    }) });
+    assert.equal(parsed.code, 'stale_record');
+  });
+});
+
+describe('extractBackendErrorCode (ETP-5782)', () => {
+  it('reads the nested and the flat discriminator', () => {
+    assert.equal(extractBackendErrorCode({ error: { code: 'duplicate_key', message: 'x' } }), 'duplicate_key');
+    assert.equal(extractBackendErrorCode({ error: 'stale_record' }), 'stale_record');
+  });
+  it('returns undefined for a body without a code or with a prose error', () => {
+    assert.equal(extractBackendErrorCode({ error: { message: 'x' } }), undefined);
+    assert.equal(extractBackendErrorCode({ error: 'Something went wrong.' }), undefined);
+    assert.equal(extractBackendErrorCode(null), undefined);
+  });
+  it('translates service_unavailable by code and leaves an unknown code untouched', () => {
+    const es = JSON.parse(readFileSync(new URL('../../locales/es_ES.json', import.meta.url))).genericLabels;
+    const t = (key) => es[key] ?? key;
+    assert.match(translateBackendError('Internal error.', t, { code: 'service_unavailable' }), /no está disponible/);
+    assert.equal(translateBackendError('A value sent is not valid.', t, { code: 'weird' }), 'A value sent is not valid.');
   });
 });
