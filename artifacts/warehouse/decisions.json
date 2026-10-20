@@ -85,7 +85,6 @@
     },
     "binContents": {
       "name": "binContents",
-      "javaQualifier": "binContentsHandler",
       "fields": {
         "etgoCost": {
           "grid": true,

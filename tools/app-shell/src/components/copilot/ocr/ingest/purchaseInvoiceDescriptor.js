@@ -38,7 +38,7 @@ export function toIsoDate(value) {
  * callout recognizes — which isn't reliable through /batch. So we resolve it
  * client-side and embed it in the header body.
  */
-async function findBpLocation({ token, apiBaseUrl, bpId }) {
+export async function findBpLocation({ token, apiBaseUrl, bpId }) {
   const { locationId } = await lookupBpLocation({ token, apiBaseUrl, bpId });
   return locationId;
 }
@@ -228,71 +228,60 @@ export function classifyProductMatch(description, match) {
 }
 
 /**
- * Build a single search term for a tax line. The PDF can show:
- *   - a textual label only ("Exento", "IVA 21%", "IVA Compras 21%")
- *   - a numeric rate only ("21%", "12")
- *   - both at once
+ * Preselect the purchase tax of a line from the backend `defaultTax` action (ETP-5585),
+ * which resolves it from the vendor's location, the invoice date and the printed rate.
+ * Never a similarity search: that picked an arbitrary tax.
  *
- * We prefer the label because it carries more signal for trigram similarity.
- * Falling back to "<rate>%" still produces a usable search term for plain
- * percentages because pg_trgm matches the "<digits>%" tail against tax
- * identifiers like "IVA Compras 21%".
+ * Returns `{ id, label, rate }`, or null whenever there is nothing to preselect (no rate
+ * read from the PDF, no partner address, non-OK answer, no tax, network error). Null never
+ * blocks the flow: the line is sent without `tax` and the callout decides.
  *
- * Exported for testing.
+ * One request per distinct rate and OCR run: the promise is memoized in `taxContext.cache`.
+ * A successful answer with no tax records the rate in `taxContext.noMatch` so the lines
+ * modal can hint "no purchase tax at that rate".
  */
-export function buildTaxSearchTerm(line) {
-  const label = String(line?.tax_label ?? '').trim();
-  if (label) return label;
-  const rateRaw = line?.tax_rate;
-  // Number(null) is 0, so guard against null/undefined before coercing.
-  if (rateRaw == null) return null;
-  const rate = Number(rateRaw);
+export async function findDefaultTax({ token, apiBaseUrl, extracted, taxContext }) {
+  const rawRate = extracted?.tax_rate;
+  if (rawRate == null || String(rawRate).trim() === '') return null;
+  const rate = Number(rawRate);
   if (!Number.isFinite(rate)) return null;
-  return `${rate}%`;
+  const partnerAddressId = taxContext?.partnerAddressId;
+  if (!partnerAddressId) return null;
+
+  const cache = taxContext.cache;
+  if (cache?.has(rate)) return cache.get(rate);
+  const pending = requestDefaultTax({ token, apiBaseUrl, taxContext, partnerAddressId, rate });
+  cache?.set(rate, pending);
+  return pending;
 }
 
-export async function findTax({ token, value, extracted }) {
-  const term = String(value ?? extracted?.tax_label ?? '').trim();
-  if (!term) return null;
-  const matches = await simSearch({
-    token,
-    entityName: 'FinancialMgmtTaxRate',
-    items: [term],
-    minSimPercent: 50,
-    qtyResults: 1,
-  });
-  const match = matches?.[0];
-  return match?.id ? { id: match.id, label: match.name || term } : null;
-}
-
-/**
- * Resolve the C_Tax_ID for each invoice line via simSearch on
- * FinancialMgmtTaxRate. The webhook runs through OBDal/OBContext, so client
- * and organization filters are inherited from the user session — no need to
- * pass them explicitly.
- *
- * Returns an array of length lines.length with one entry per line: the
- * matched tax id or null. Lines without any tax info also return null.
- *
- * minSimPercent intentionally raised to 50 to reduce false positives from
- * unrelated rate-only queries ("21%" must look like a real tax identifier
- * in the catalog before we accept the match).
- */
-export async function resolveTaxesForLines({ token, lines }) {
-  if (!Array.isArray(lines) || lines.length === 0) return [];
-  const terms = lines.map(buildTaxSearchTerm);
-  if (terms.every(t => !t)) return Array(lines.length).fill(null);
-  // simSearch returns one slot per requested item; empty terms produce no match.
-  const items = terms.map(t => t || '');
-  const matches = await simSearch({
-    token,
-    entityName: 'FinancialMgmtTaxRate',
-    items,
-    minSimPercent: 50,
-    qtyResults: 1,
-  });
-  // Normalise to id-or-null array indexed by line idx.
-  return matches.map(m => m?.id || null);
+async function requestDefaultTax({ token, apiBaseUrl, taxContext, partnerAddressId, rate }) {
+  const body = { partnerAddressId, rate };
+  if (nonBlank(taxContext.invoiceDate)) body.invoiceDate = toIsoDate(taxContext.invoiceDate);
+  const url = `${deriveSpecBase(apiBaseUrl, 'purchase-invoice')}/lines/new/action/defaultTax`;
+  try {
+    const res = await apiFetch(url, {
+      baseUrl: '',
+      token,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.warn('[OCR][findDefaultTax] non-OK', res.status, url);
+      return null;
+    }
+    const json = await res.json().catch(() => null);
+    const data = json?.response?.data;
+    if (!data?.taxId) {
+      if (data) taxContext.noMatch?.add(rate);
+      return null;
+    }
+    return { id: data.taxId, label: data.identifier || data.taxId, rate: data.rate ?? rate };
+  } catch (e) {
+    console.warn('[OCR][findDefaultTax] fetch failed', e);
+    return null;
+  }
 }
 
 /**
@@ -378,6 +367,9 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
       suggestion: suggestion ?? null,
       quantity: nonBlank(line?.quantity) ? Number(line.quantity) : null,
       unitPrice: nonBlank(line?.unit_price) ? Number(line.unit_price) : null,
+      // The tax the line carries from the lines review (preselected or picked), so the
+      // create-product form can prefill that tax's category. Null on "Autocompletar".
+      taxId: line?._tax_id || null,
     });
   });
   if (needsUserPick.length === 0 || typeof askUserForProducts !== 'function') {
@@ -462,12 +454,9 @@ export async function buildPurchaseInvoiceBatch(extracted, ctx) {
     };
   });
 
-  // Run product + tax simSearch in parallel — both hit the same webhook and
-  // are independent of the BP resolution path.
-  const [productMatches, taxIds] = await Promise.all([
-    runProductSimSearch({ token, lines }),
-    resolveTaxesForLines({ token, lines }),
-  ]);
+  // Product simSearch is independent of the BP resolution path. Taxes are NOT searched here:
+  // the lines modal preselects them via `findDefaultTax`; an unresolved one is omitted below.
+  const productMatches = await runProductSimSearch({ token, lines });
 
   // Vendor: prefer the review modal's resolution; fall back to the legacy
   // ContactCreatePopup branch when the modal isn't in play.
@@ -497,13 +486,11 @@ export async function buildPurchaseInvoiceBatch(extracted, ctx) {
   if (productResolution.cancelled) return { cancelled: true };
   const { productByIdx } = productResolution;
 
-  // Map idx → tax id: user's explicit pick from the lines modal wins,
-  // simSearch result is the fallback.
+  // Map idx → tax id: only what the lines modal holds (preselected by `findDefaultTax` or
+  // picked by the user). Empty means `tax` is omitted and NEO's callout decides.
   const taxByIdx = {};
   lines.forEach((line, idx) => {
-    const explicit = line?._tax_id;
-    if (explicit) taxByIdx[idx] = explicit;
-    else if (taxIds[idx]) taxByIdx[idx] = taxIds[idx];
+    if (line?._tax_id) taxByIdx[idx] = line._tax_id;
   });
 
   const ops = [];

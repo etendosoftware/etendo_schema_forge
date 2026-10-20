@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { X, Check, Save, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
 import TabStripButton from './TabStripButton.jsx';
+import DetailTabStrip from './DetailTabStrip.jsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
@@ -3213,29 +3214,16 @@ export function DetailView({
                       onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
                     >
                       <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
-                        <div className="flex items-center gap-0">
-                          {tabs.map((tab, idx) => {
-                            const tabIndicatorCls = linesLayout === 'inlineEditable'
-                              ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
-                              : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
-                            return (
-                              <TabStripButton
-                                key={tab.key}
-                                iconKey={tab.key}
-                                label={tab.label}
-                                count={tab.count}
-                                isActive={activeTab === idx}
-                                onClick={() => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
-                                paddingY={secondaryTabsPaddingY}
-                                showHoverLine={secondaryTabsShowHoverLine}
-                                indicatorCls={tabIndicatorCls}
-                                tMenu={tMenu}
-                                testId={`tab-${tab.key}`}
-                                disabledHint={tab.saveFirstHint}
-                                data-testid="TabStripButton__fa3275" />
-                            );
-                          })}
-                        </div>
+                        <DetailTabStrip
+                          tabs={tabs}
+                          activeIndex={activeTab}
+                          onSelect={(idx) => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
+                          tMenu={tMenu}
+                          getIndicatorCls={() => (linesLayout === 'inlineEditable'
+                            ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
+                            : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full')}
+                          buttonProps={{ paddingY: secondaryTabsPaddingY, showHoverLine: secondaryTabsShowHoverLine }}
+                          data-testid="DetailTabStrip__fa3275" />
                       </div>
 
                       {/* Tab content: Lines.

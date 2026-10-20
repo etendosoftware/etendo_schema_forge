@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js
-import { classifyProductMatch, nonBlank, toIsoDate, buildTaxSearchTerm, buildLineOps, findBp, resolveTaxesForLines, findTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
+import { classifyProductMatch, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
 
-// Mock simSearch to test findBp/resolveTaxesForLines without network
+// Mock simSearch to test findBp without network
 vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
   simSearch: vi.fn().mockResolvedValue([]),
 }));
@@ -54,33 +54,6 @@ describe('purchaseInvoiceDescriptor', () => {
 
     it('returns unparseable strings as-is', () => {
       expect(toIsoDate('not a date')).toBe('not a date');
-    });
-  });
-
-  describe('buildTaxSearchTerm', () => {
-    it('returns tax_label when present', () => {
-      expect(buildTaxSearchTerm({ tax_label: 'IVA 21%', tax_rate: 21 })).toBe('IVA 21%');
-    });
-
-    it('returns rate% when label is empty', () => {
-      expect(buildTaxSearchTerm({ tax_label: '', tax_rate: 21 })).toBe('21%');
-    });
-
-    it('returns null when no label or rate', () => {
-      expect(buildTaxSearchTerm({})).toBeNull();
-      expect(buildTaxSearchTerm({ tax_label: '', tax_rate: null })).toBeNull();
-    });
-
-    it('handles zero rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: 0 })).toBe('0%');
-    });
-
-    it('returns null for NaN rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: 'abc' })).toBeNull();
-    });
-
-    it('trims label whitespace', () => {
-      expect(buildTaxSearchTerm({ tax_label: '  Exento  ' })).toBe('Exento');
     });
   });
 
@@ -213,100 +186,6 @@ describe('purchaseInvoiceDescriptor', () => {
     });
   });
 
-  describe('resolveTaxesForLines', () => {
-    // ETP-4576 — a missing token is not a reason to skip the lookup: under the cookie scheme
-    // no client holds one, so this returned empty for every authenticated user.
-    it('still resolves when no token is held', async () => {
-      expect(await resolveTaxesForLines({ lines: [{}] })).not.toEqual([]);
-    });
-
-    it('returns empty for empty lines', async () => {
-      expect(await resolveTaxesForLines({ token: 'tk', lines: [] })).toEqual([]);
-    });
-
-    it('returns null-filled array when all terms are empty', async () => {
-      const result = await resolveTaxesForLines({ token: 'tk', lines: [{ tax_label: '', tax_rate: null }] });
-      expect(result).toEqual([null]);
-    });
-
-    it('returns empty when lines is not an array', async () => {
-      expect(await resolveTaxesForLines({ token: 'tk', lines: 'not-array' })).toEqual([]);
-    });
-
-    it('returns empty when lines is null', async () => {
-      expect(await resolveTaxesForLines({ token: 'tk', lines: null })).toEqual([]);
-    });
-
-    it('calls simSearch and maps results to ids when terms exist', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-21' }, null, { id: 'TAX-0' }]);
-      const lines = [
-        { tax_label: 'IVA 21%' },
-        { tax_label: '', tax_rate: null },
-        { tax_rate: 0 },
-      ];
-      const result = await resolveTaxesForLines({ token: 'tk', lines });
-      expect(result).toEqual(['TAX-21', null, 'TAX-0']);
-      expect(simSearch).toHaveBeenCalledWith(expect.objectContaining({
-        entityName: 'FinancialMgmtTaxRate',
-        items: ['IVA 21%', '', '0%'],
-        minSimPercent: 50,
-      }));
-    });
-
-    it('returns null for entries where simSearch match has no id', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ name: 'no-id-field' }]);
-      const result = await resolveTaxesForLines({ token: 'tk', lines: [{ tax_label: 'Exento' }] });
-      expect(result).toEqual([null]);
-    });
-  });
-
-  describe('findTax', () => {
-    it('returns null when no token', async () => {
-      expect(await findTax({ token: null, value: 'IVA' })).toBeNull();
-    });
-
-    it('returns null when no term', async () => {
-      expect(await findTax({ token: 'tk', value: '', extracted: {} })).toBeNull();
-    });
-
-    it('returns matched tax with id and label when simSearch finds a match', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-21', name: 'IVA Compras 21%' }]);
-      const result = await findTax({ token: 'tk', value: 'IVA 21%' });
-      expect(result).toEqual({ id: 'TAX-21', label: 'IVA Compras 21%' });
-    });
-
-    it('uses value term for label when match has no name', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-21' }]);
-      const result = await findTax({ token: 'tk', value: 'IVA 21%' });
-      expect(result).toEqual({ id: 'TAX-21', label: 'IVA 21%' });
-    });
-
-    it('returns null when simSearch returns empty match', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([null]);
-      const result = await findTax({ token: 'tk', value: 'IVA' });
-      expect(result).toBeNull();
-    });
-
-    it('returns null when simSearch returns match without id', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ name: 'something' }]);
-      const result = await findTax({ token: 'tk', value: 'IVA' });
-      expect(result).toBeNull();
-    });
-
-    it('falls back to extracted.tax_label when value is null', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-EX', name: 'Exento' }]);
-      const result = await findTax({ token: 'tk', value: null, extracted: { tax_label: 'Exento' } });
-      expect(result).toEqual({ id: 'TAX-EX', label: 'Exento' });
-    });
-  });
-
   describe('buildLineOps — null/undefined field edge cases', () => {
     it('handles line with null description', () => {
       const lines = [{ description: null, quantity: 3, unit_price: 10 }];
@@ -358,32 +237,6 @@ describe('purchaseInvoiceDescriptor', () => {
 
     it('converts mixed separator dd/mm/yyyy', () => {
       expect(toIsoDate('31/12/2025')).toBe('2025-12-31');
-    });
-  });
-
-  describe('buildTaxSearchTerm — edge cases', () => {
-    it('returns rate% for negative rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: -5 })).toBe('-5%');
-    });
-
-    it('returns null for Infinity rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: Infinity })).toBeNull();
-    });
-
-    it('returns null for -Infinity rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: -Infinity })).toBeNull();
-    });
-
-    it('returns null for undefined line', () => {
-      expect(buildTaxSearchTerm(undefined)).toBeNull();
-    });
-
-    it('returns null for null line', () => {
-      expect(buildTaxSearchTerm(null)).toBeNull();
-    });
-
-    it('returns rate% for string numeric rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: '10.5' })).toBe('10.5%');
     });
   });
 
@@ -627,6 +480,49 @@ describe('purchaseInvoiceDescriptor', () => {
       }));
     });
 
+    // ETP-5585 — the popup rows carry the line's tax so the create form can prefill its category.
+    describe('popup rows carry the line tax id', () => {
+      const runWith = async (lines, reviewedLines, simResult = []) => {
+        globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+        simSearchMock.mockImplementation(async ({ entityName }) => (entityName === 'Product' ? simResult : []));
+        const askUserForProducts = vi.fn(async () => ({}));
+        await buildPurchaseInvoiceBatch(
+          { line_items: lines },
+          {
+            token: 'tok',
+            apiBaseUrl: 'http://test/neo/purchase-invoice',
+            reviewedHeader: { vendor: { bpId: 'bp-1' } },
+            reviewedLines,
+            askUserForProducts,
+          },
+        );
+        return askUserForProducts.mock.calls[0][0].unmatched;
+      };
+
+      it('uses the tax id held by the lines review (preselected or manually changed)', async () => {
+        const unmatched = await runWith(
+          [{ description: 'A' }, { description: 'B' }],
+          [{ tax_id: 'TAX10' }, { tax_id: 'TAX21' }],
+        );
+        expect(unmatched.map((row) => row.taxId)).toEqual(['TAX10', 'TAX21']);
+      });
+
+      it('is null when the line stayed on "Autocompletar" or there was no lines review', async () => {
+        expect((await runWith([{ description: 'A' }], [{ tax_id: null }]))[0].taxId).toBeNull();
+        expect((await runWith([{ description: 'A' }], undefined))[0].taxId).toBeNull();
+      });
+
+      it('also carries it on suggestion rows', async () => {
+        const unmatched = await runWith(
+          [{ description: 'Servicio de desarrollo y mantenimiento web' }],
+          [{ tax_id: 'TAX10' }],
+          [{ id: 'p-mw', name: 'Mantenimiento Web', similarityPercent: 55, candidates: [{ id: 'p-mw', name: 'Mantenimiento Web' }] }],
+        );
+        expect(unmatched[0].suggestion).toEqual({ id: 'p-mw', name: 'Mantenimiento Web' });
+        expect(unmatched[0].taxId).toBe('TAX10');
+      });
+    });
+
     describe('product matching (no silent partial matches)', () => {
       const run = async (description, simResult) => {
         globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
@@ -790,7 +686,7 @@ describe('purchaseInvoiceDescriptor', () => {
       expect(header.body.businessPartner).toBe('$ref:bp');
     });
 
-    it('uses tax from simSearch when no reviewedLine _tax_id', async () => {
+    it('omits tax (callout decides) when the lines modal holds no tax id, never a simSearch one', async () => {
       globalThis.fetch.mockImplementation(async (url) => {
         if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'A' }]);
         return { ok: true, json: async () => ({ response: { data: [] } }) };
@@ -813,40 +709,166 @@ describe('purchaseInvoiceDescriptor', () => {
       );
 
       const lineOp = result.ops.find(o => o.entity === 'Lines');
-      expect(lineOp.body.tax).toBe('tax-sim');
+      expect('tax' in lineOp.body).toBe(false);
+    });
+
+    it('never runs a tax similarity search and posts the tax id held by the lines modal', async () => {
+      globalThis.fetch.mockImplementation(async (url) => {
+        if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'A' }]);
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+      simSearchMock.mockImplementation(async ({ entityName }) => (
+        entityName === 'Product' ? [{ id: 'prod-1', name: 'Widget' }, { id: 'prod-1', name: 'Widget' }] : [{ id: 'tax-sim' }]
+      ));
+
+      const result = await buildPurchaseInvoiceBatch(
+        {
+          vendor_name: 'A', tax_id: 'B1',
+          line_items: [
+            { description: 'Widget', quantity: 1, tax_rate: 21 },
+            { description: 'Widget', quantity: 1, tax_rate: 10 },
+          ],
+        },
+        {
+          token: 'tok',
+          apiBaseUrl: 'http://test/neo/purchase-invoice',
+          reviewedLines: [
+            { description: 'Widget', quantity: 1, tax_id: 'tax-21' },
+            { description: 'Widget', quantity: 1, tax_id: null },
+          ],
+        },
+      );
+
+      expect(simSearchMock.mock.calls.every(([arg]) => arg.entityName === 'Product')).toBe(true);
+      const [first, second] = result.ops.filter(o => o.entity === 'Lines');
+      expect(first.body.tax).toBe('tax-21');
+      expect('tax' in second.body).toBe(false);
     });
   });
 
-  describe('resolveTaxesForLines — simSearch returns objects without .id', () => {
-    it('returns null for entries where match has no .id property', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([
-        { name: 'IVA 21%' },          // no .id
-        { similarity: 0.8 },           // no .id
-        { id: 'TAX-OK', name: 'OK' }, // has .id
-      ]);
-      const lines = [
-        { tax_label: 'IVA 21%' },
-        { tax_rate: 10 },
-        { tax_label: 'Exento' },
-      ];
-      const result = await resolveTaxesForLines({ token: 'tk', lines });
-      expect(result).toEqual([null, null, 'TAX-OK']);
+  // ETP-5585 — the line tax comes from the backend `defaultTax` read action, never a simSearch.
+  describe('findDefaultTax', () => {
+    const base = 'http://test/neo/purchase-invoice';
+    const newCtx = (over = {}) => ({
+      partnerAddressId: 'loc-1', invoiceDate: '2026-03-04', cache: new Map(), noMatch: new Set(), ...over,
+    });
+    const call = (taxContext, ...rest) => findDefaultTax({
+      token: 'tok', apiBaseUrl: base, extracted: { tax_rate: rest.length ? rest[0] : 21 }, taxContext,
+    });
+    const answer = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
+
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
-    it('returns null for undefined match entries', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([undefined, null]);
-      const lines = [
-        { tax_label: 'Missing' },
-        { tax_rate: 5 },
-      ];
-      const result = await resolveTaxesForLines({ token: 'tk', lines });
-      expect(result).toEqual([null, null]);
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('POSTs the partner address, invoice date and rate (no product) to the lines defaultTax action', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-21', identifier: 'IVA 21%', rate: 21 }));
+
+      const result = await call(newCtx());
+
+      expect(result).toEqual({ id: 'TAX-21', label: 'IVA 21%', rate: 21 });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = globalThis.fetch.mock.calls[0];
+      expect(String(url)).toBe(`${base}/lines/new/action/defaultTax`);
+      expect(init.method).toBe('POST');
+      expect(new Headers(init.headers).get('Content-Type')).toBe('application/json');
+      expect(JSON.parse(init.body)).toEqual({ partnerAddressId: 'loc-1', invoiceDate: '2026-03-04', rate: 21 });
+    });
+
+    it('normalizes the invoice date and falls back to the id and the asked rate', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-X' }));
+
+      const result = await call(newCtx({ invoiceDate: '04/03/2026' }), '10');
+
+      expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toEqual({
+        partnerAddressId: 'loc-1', invoiceDate: '2026-03-04', rate: 10,
+      });
+      expect(result).toEqual({ id: 'TAX-X', label: 'TAX-X', rate: 10 });
+    });
+
+    it.each([null, undefined, '', '  ', 'abc', NaN, Infinity])('makes no request for the rate %s', async (rate) => {
+      expect(await call(newCtx(), rate)).toBeNull();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('makes no request without a partner address or a tax context', async () => {
+      expect(await call(newCtx({ partnerAddressId: null }))).toBeNull();
+      expect(await call(undefined)).toBeNull();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('accepts a zero rate', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-0', identifier: 'Exento', rate: 0 }));
+      expect(await call(newCtx(), 0)).toEqual({ id: 'TAX-0', label: 'Exento', rate: 0 });
+    });
+
+    it('memoizes per rate: one request for two lines at 21, two for 21 and 10', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-21', identifier: 'IVA', rate: 21 }));
+      const ctx = newCtx();
+
+      const [a, b] = await Promise.all([call(ctx, 21), call(ctx, 21)]);
+      expect(a).toEqual(b);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      await call(ctx, 10);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('records the rate in noMatch only when the backend answered without a tax', async () => {
+      globalThis.fetch.mockResolvedValueOnce(answer({ taxId: null }));
+      const ctx = newCtx();
+      expect(await call(ctx, 21)).toBeNull();
+      expect([...ctx.noMatch]).toEqual([21]);
+    });
+
+    it('returns null without recording noMatch on a non-OK answer', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+      const ctx = newCtx();
+      expect(await call(ctx, 21)).toBeNull();
+      expect(ctx.noMatch.size).toBe(0);
+    });
+
+    it('returns null without recording noMatch on a network error, and never throws', async () => {
+      globalThis.fetch.mockRejectedValue(new Error('network'));
+      const ctx = newCtx();
+      await expect(call(ctx, 21)).resolves.toBeNull();
+      expect(ctx.noMatch.size).toBe(0);
+    });
+
+    it('returns null without recording noMatch when the body is unreadable', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => { throw new Error('bad'); } });
+      const ctx = newCtx();
+      expect(await call(ctx, 21)).toBeNull();
+      expect(ctx.noMatch.size).toBe(0);
     });
   });
 
-  // ETP-5654 — same vendor + same supplier document number warns about a duplicate upload.
+  describe('findBpLocation', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('is exported and returns the first address id of the vendor', async () => {
+      globalThis.fetch.mockResolvedValue(selectorItems([{ id: 'loc-9', label: 'c' }]));
+      expect(await findBpLocation({ token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1' })).toBe('loc-9');
+    });
+
+    it('returns null without a vendor id and when the vendor has no address', async () => {
+      expect(await findBpLocation({ token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: null })).toBeNull();
+      globalThis.fetch.mockResolvedValue(selectorItems([]));
+      expect(await findBpLocation({ token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1' })).toBeNull();
+    });
+  });
+
   describe('findDuplicatePurchaseInvoices', () => {
     const ctx = { token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1', documentNo: ' ABC-1 ' };
     const crudRows = (data) => ({ ok: true, json: async () => ({ response: { data } }) });

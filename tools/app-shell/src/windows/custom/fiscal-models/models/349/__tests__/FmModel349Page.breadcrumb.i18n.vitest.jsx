@@ -27,6 +27,8 @@ const realUiEn = makeRealUI(enUS);
 let activeUi = realUiEs;
 let activeLocale = 'es_ES';
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({
   useUI: () => activeUi,
   useLocaleSwitch: () => ({ locale: activeLocale }),

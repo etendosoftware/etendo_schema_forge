@@ -21,7 +21,7 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup, useBPartnerLookup, useDimensionLookup } from '@/hooks/useMovementLookups';
 import { Field, DateInput, MaskedAmountInput, ChipSelect } from '@/components/forms/fields';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
-import { todayISO } from './NewMovementWizard/movementWizardData';
+import { todayCalendarISO as todayISO } from '@/lib/dateOnly.js';
 
 const BTN_PRIMARY =
   'inline-flex h-9 items-center gap-2 rounded-lg bg-[hsl(var(--text-primary))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground disabled:opacity-45 disabled:pointer-events-none';

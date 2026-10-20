@@ -174,15 +174,11 @@ export default function AttachmentsTab({
 
   // ── Multi-select (ETP-5526) ───────────────────────────────────────────────
   // This tab owns the selection; AttachmentsTable only renders it (see its
-  // "Selection is an opt-in capability" note). Same split as
-  // MovementsTab → StatementsTable, including who renders the SelectionToolbar.
+  // "Selection is an opt-in, caller-owned capability" note), the same split as
+  // NotPostedDocumentsPage → DataTable, including who renders the SelectionToolbar.
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-  const toggleRow = useCallback((id) => setSelectedIds((prev) => {
-    const next = new Set(prev);
-    if (!next.delete(id)) next.add(id);
-    return next;
-  }), []);
+  // AttachmentsTable (DataTable underneath) reports the whole new selection on every change.
   const replaceSelection = useCallback((ids) => setSelectedIds(new Set(ids)), []);
 
   // A selection must never outlive the record it was made on: DetailView keeps
@@ -271,8 +267,7 @@ export default function AttachmentsTab({
         onDownload={download}
         onDelete={effectiveReadOnly ? undefined : setDeletingAttachment}
         selectedIds={selectedIds}
-        onToggleRow={toggleRow}
-        onToggleAll={replaceSelection}
+        onSelectionChange={replaceSelection}
         formatBytes={formatBytes}
         data-testid="AttachmentsTable__281340" />
       {/* The system's own bulk-selection pill (SelectionToolbar) — the same shell
