@@ -216,6 +216,150 @@ function SubstitutiveBanner({ identification, concurso, onChange, disabled, show
   );
 }
 
+/**
+ * The result card's colours and label, and the cuadre with the year's 303s (Reconciliation390).
+ * The 390 result is informative (resultKind390): its badge shows only the sign, in neutral
+ * colours — the payment / offset / refund was settled by the last 303 ([97] / [98]).
+ */
+function resultView390(payload, summary, preload, t) {
+  const hasBoxes = Boolean(payload?.boxes);
+  const resultKind = hasBoxes
+    ? resultKind390(summary.result, { hasActivity: summary.accrued !== 0 || summary.deductible !== 0 })
+    : null;
+  return {
+    resultColors: resolveResultColors(resultKind),
+    resultLabel: resultKind ? t(RESULT_LABEL_KEY_390[resultKind]) : t('fm.m303.summary.result_sub'),
+    // Cuadre of the result on screen with the year's 303s (Reconciliation390).
+    reconciliation: hasBoxes ? reconcile390(summary.result, preload) : null,
+  };
+}
+
+/**
+ * The detail header's right-hand actions: "Crear declaración sustitutiva" on a presented
+ * declaration; Calcular / Generar / Guardar / Presentar on a draft. `pending` carries which action
+ * is running (its spinner).
+ */
+function DetailActions390({
+  isSubmitted, hasBoxes, busy, pending, ruleBlocking, blockedTitle,
+  onCreateSubstitute, onCompute, onGenerate, onSave, onPresent, t,
+}) {
+  return isSubmitted ? (
+    <FmDetailButton onClick={onCreateSubstitute} disabled={busy} data-testid="FmModel390Page__createSubstitute">
+      {pending.creatingSubstitute
+        ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__substitute390" />
+        : <RefreshCw size={16} strokeWidth={1.75} data-testid="RefreshCw__substitute390" />}
+      {t('fm.m390.substitute.action')}
+    </FmDetailButton>
+  ) : (
+    <>
+      <FmDetailButton onClick={onCompute} disabled={busy} data-testid="FmModel390Page__compute">
+        {pending.computing
+          ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__compute390" />
+          : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__compute390" />}
+        {pending.computing ? t('fm.action.computing') : t('fm.action.compute')}
+      </FmDetailButton>
+      {/* Like the 303: a blocked Generar / Presentar stays clickable and says why in a
+          toast (openGenerate / openPresent); the Download icon turns red while blocked. */}
+      <FmDetailButton
+        onClick={onGenerate}
+        disabled={busy || !hasBoxes}
+        title={blockedTitle}
+        data-testid="FmModel390Page__generate"
+      >
+        {pending.generating
+          ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__generate390" />
+          : (
+            <Download
+              size={16}
+              strokeWidth={1.75}
+              style={{ color: ruleBlocking > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+              data-testid="Download__generate390" />
+          )}
+        {t('fm.action.gen390')}
+      </FmDetailButton>
+      <FmDetailButton onClick={onSave} disabled={busy} aria-label={t('fm.action.save')} data-testid="FmModel390Page__save">
+        {pending.saving
+          ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save390" />
+          : <Save size={16} strokeWidth={1.75} data-testid="Save__save390" />}
+        {t('fm.action.save')}
+      </FmDetailButton>
+      <FmDetailButton
+        primary
+        onClick={onPresent}
+        disabled={busy || !hasBoxes}
+        data-testid="FmModel390Page__present"
+      >
+        <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__present390" />
+        {t('fm.action.submit')}
+      </FmDetailButton>
+    </>
+  );
+}
+
+/**
+ * The Casillas tab: while there are no boxes yet, the computing / error / empty states (the
+ * error is the system notice banner, never the raw backend text for an exercise without calendar
+ * periods — incompleteYear390.js); then `children` (the boxes).
+ */
+function BoxesTabBody390({
+  hasBoxes, computing, computeError, incompleteYear, isSubmitted, busy, year, onCompute,
+  onGoToFiscalCalendar, t, children,
+}) {
+  return (
+    <>
+      {!hasBoxes && computing && (
+        <FmEmptyState
+          icon={<Loader2 size={20} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__empty390" />}
+          title={t('fm.m390.empty.computing_title', { year })}
+          sub={t('fm.m390.empty.sub')}
+          data-testid="FmModel390Page__computing" />
+      )}
+      {!hasBoxes && !computing && computeError && (
+        // Why the boxes could not be computed: the system notice banner (never the raw
+        // backend text for an exercise without calendar periods — incompleteYear390.js).
+        <div className="fm-390-notices fm-390-notices--gutter">
+          <InfoBanner
+            tone={incompleteYear ? 'warning' : 'danger'}
+            icon={incompleteYear ? TriangleAlert : CircleAlert}
+            dismissible={false}
+            role="alert"
+            data-testid="FmModel390Page__computeError"
+            action={incompleteYear && (
+              <button type="button" className="fm-btn fm-btn--cancel-pill fm-390-reconcile__btn" onClick={onGoToFiscalCalendar} data-testid="FmModel390Page__goToFiscalCalendar">
+                <CalendarDays size={14} strokeWidth={1.75} data-testid="CalendarDays__empty390" />
+                {t(GO_TO_FISCAL_CALENDAR_KEY)}
+              </button>
+            )}
+          >
+            {computeError}
+          </InfoBanner>
+        </div>
+      )}
+      {!hasBoxes && !computing && (
+        <FmEmptyState
+          icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__empty390" />}
+          title={t('fm.m390.empty.title', { year })}
+          sub={t('fm.m390.empty.sub')}
+          cta={!isSubmitted && (
+            <FmDetailButton onClick={onCompute} disabled={busy} data-testid="FmModel390Page__emptyCompute">
+              <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__emptyCta390" />
+              {t('fm.action.compute')}
+            </FmDetailButton>
+          )}
+          data-testid="FmModel390Page__empty" />
+      )}
+      {children}
+    </>
+  );
+}
+
+/** The Incidencias card icon: an octagon while something blocks, a triangle otherwise. */
+function IncidentsKpiIcon({ blocking }) {
+  return blocking > 0
+    ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__fm390" />
+    : <TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__fm390kpi" />;
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function FmModel390Page({
@@ -373,15 +517,7 @@ export default function FmModel390Page({
     return deriveInputBoxes(payload.boxes, payload.inputs ?? {}, aeatInputs);
   }, [payload, aeatInputs, isSubmitted]);
   const summary = summaryOf(display.boxes, display.mode);
-  // The 390 result is informative (resultKind390): its badge shows only the sign, in neutral
-  // colours — the payment / offset / refund was settled by the last 303 ([97] / [98]).
-  const resultKind = payload?.boxes
-    ? resultKind390(summary.result, { hasActivity: summary.accrued !== 0 || summary.deductible !== 0 })
-    : null;
-  const resultColors = resolveResultColors(resultKind);
-  const resultLabel = resultKind ? t(RESULT_LABEL_KEY_390[resultKind]) : t('fm.m303.summary.result_sub');
-  // Cuadre of the result on screen with the year's 303s (Reconciliation390).
-  const reconciliation = payload?.boxes ? reconcile390(summary.result, preload) : null;
+  const { resultColors, resultLabel, reconciliation } = resultView390(payload, summary, preload, t);
 
   // ── Edits ─────────────────────────────────────────────────────────────────
   function markDirty() { dirtyRef.current = true; }
@@ -688,6 +824,9 @@ export default function FmModel390Page({
   ];
 
   const hasBoxes = payload?.boxes != null;
+  // A presented declaration shows its frozen inputs and offers no "Ver facturas".
+  const viewInvoicesIfDraft = isSubmitted ? undefined : viewInvoicesForBox;
+  const boxesInputs = isSubmitted ? { ...aeatInputs, ...(payload?.inputs ?? {}) } : aeatInputs;
 
   // "Abrir" on a 303 of block 9: pending changes are saved first (the page is left), then the 303
   // opens through the parent (FiscalModelsPage).
@@ -747,56 +886,21 @@ export default function FmModel390Page({
                 data-testid="DeclarationTypeControl__74d2aa" />
             </>
           )}
-          right={isSubmitted ? (
-            <FmDetailButton onClick={handleCreateSubstitute} disabled={busy} data-testid="FmModel390Page__createSubstitute">
-              {creatingSubstitute
-                ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__substitute390" />
-                : <RefreshCw size={16} strokeWidth={1.75} data-testid="RefreshCw__substitute390" />}
-              {t('fm.m390.substitute.action')}
-            </FmDetailButton>
-          ) : (
-            <>
-              <FmDetailButton onClick={handleCompute} disabled={busy} data-testid="FmModel390Page__compute">
-                {computing
-                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__compute390" />
-                  : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__compute390" />}
-                {computing ? t('fm.action.computing') : t('fm.action.compute')}
-              </FmDetailButton>
-              {/* Like the 303: a blocked Generar / Presentar stays clickable and says why in a
-                  toast (openGenerate / openPresent); the Download icon turns red while blocked. */}
-              <FmDetailButton
-                onClick={openGenerate}
-                disabled={busy || !hasBoxes}
-                title={blockedTitle}
-                data-testid="FmModel390Page__generate"
-              >
-                {generating
-                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__generate390" />
-                  : (
-                    <Download
-                      size={16}
-                      strokeWidth={1.75}
-                      style={{ color: ruleBlocking > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
-                      data-testid="Download__generate390" />
-                  )}
-                {t('fm.action.gen390')}
-              </FmDetailButton>
-              <FmDetailButton onClick={handleSave} disabled={busy} aria-label={t('fm.action.save')} data-testid="FmModel390Page__save">
-                {saving
-                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save390" />
-                  : <Save size={16} strokeWidth={1.75} data-testid="Save__save390" />}
-                {t('fm.action.save')}
-              </FmDetailButton>
-              <FmDetailButton
-                primary
-                onClick={openPresent}
-                disabled={busy || !hasBoxes}
-                data-testid="FmModel390Page__present"
-              >
-                <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__present390" />
-                {t('fm.action.submit')}
-              </FmDetailButton>
-            </>
+          right={(
+            <DetailActions390
+              isSubmitted={isSubmitted}
+              hasBoxes={hasBoxes}
+              busy={busy}
+              pending={{ creatingSubstitute, computing, generating, saving }}
+              ruleBlocking={ruleBlocking}
+              blockedTitle={blockedTitle}
+              onCreateSubstitute={handleCreateSubstitute}
+              onCompute={handleCompute}
+              onGenerate={openGenerate}
+              onSave={handleSave}
+              onPresent={openPresent}
+              t={t}
+              data-testid="DetailActions390__74d2aa" />
           )}
           data-testid="FmDetailActionBar__74d2aa" />
       </FmDetailHeader>
@@ -819,9 +923,7 @@ export default function FmModel390Page({
         <div className="fm-390-kpis">
           {/* Incidencias — the 303 card: total + severity badge; a click opens the tab. */}
           <KpiWidget
-            icon={blocking > 0
-              ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__fm390" />
-              : <TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__fm390kpi" />}
+            icon={<IncidentsKpiIcon blocking={blocking} data-testid="IncidentsKpiIcon__74d2aa" />}
             iconColor={incidentVariants.iconColor}
             label={t('fm.tab.incidents')}
             onClick={() => setActiveTab('incidents')}
@@ -882,74 +984,46 @@ export default function FmModel390Page({
 
         {activeTab === 'boxes' && (
           <div className="fm-390-tab" data-testid="FmModel390Page__boxesTab">
-            {!hasBoxes && computing && (
-              <FmEmptyState
-                icon={<Loader2 size={20} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__empty390" />}
-                title={t('fm.m390.empty.computing_title', { year: decl.year })}
-                sub={t('fm.m390.empty.sub')}
-                data-testid="FmModel390Page__computing" />
-            )}
-            {!hasBoxes && !computing && computeError && (
-              // Why the boxes could not be computed: the system notice banner (never the raw
-              // backend text for an exercise without calendar periods — incompleteYear390.js).
-              <div className="fm-390-notices fm-390-notices--gutter">
-                <InfoBanner
-                  tone={incompleteYear ? 'warning' : 'danger'}
-                  icon={incompleteYear ? TriangleAlert : CircleAlert}
-                  dismissible={false}
-                  role="alert"
-                  data-testid="FmModel390Page__computeError"
-                  action={incompleteYear && (
-                    <button type="button" className="fm-btn fm-btn--cancel-pill fm-390-reconcile__btn" onClick={goToFiscalCalendar} data-testid="FmModel390Page__goToFiscalCalendar">
-                      <CalendarDays size={14} strokeWidth={1.75} data-testid="CalendarDays__empty390" />
-                      {t(GO_TO_FISCAL_CALENDAR_KEY)}
-                    </button>
-                  )}
-                >
-                  {computeError}
-                </InfoBanner>
-              </div>
-            )}
-            {!hasBoxes && !computing && (
-              <FmEmptyState
-                icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__empty390" />}
-                title={t('fm.m390.empty.title', { year: decl.year })}
-                sub={t('fm.m390.empty.sub')}
-                cta={!isSubmitted && (
-                  <FmDetailButton onClick={handleCompute} disabled={busy} data-testid="FmModel390Page__emptyCompute">
-                    <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__emptyCta390" />
-                    {t('fm.action.compute')}
-                  </FmDetailButton>
-                )}
-                data-testid="FmModel390Page__empty" />
-            )}
-            {hasBoxes && (
-              <FmBoxes390
-                layout={layout}
-                boxes={display.boxes}
-                inputs={isSubmitted ? { ...aeatInputs, ...(payload.inputs ?? {}) } : aeatInputs}
-                preloaded={preloaded}
-                identification={identification}
-                orgIdentity={orgIdentity}
-                warnings={payload.warnings}
-                year={decl.year}
-                readOnly={isSubmitted}
-                onInputChange={handleInputChange}
-                onRestore={handleRestore}
-                onFlagChange={handleFlagChange}
-                onClearTerritory={handleClearTerritory}
-                onEditOrganization={() => navigate('/organization')}
-                goToBox={goToBox}
-                goToBlock={goToBlock}
-                nameWarnings={nameWarnings}
-                invoiceBoxes={payload.invoiceBoxes}
-                onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
-                onViewSettlements={viewSettlements}
-                blockExtras={blockExtras}
-                t={t}
-                bcpLocale={bcpLocale}
-                data-testid="FmBoxes390__74d2aa" />
-            )}
+            <BoxesTabBody390
+              hasBoxes={hasBoxes}
+              computing={computing}
+              computeError={computeError}
+              incompleteYear={incompleteYear}
+              isSubmitted={isSubmitted}
+              busy={busy}
+              year={decl.year}
+              onCompute={handleCompute}
+              onGoToFiscalCalendar={goToFiscalCalendar}
+              t={t}
+              data-testid="BoxesTabBody390__74d2aa">
+              {hasBoxes && (
+                <FmBoxes390
+                  layout={layout}
+                  boxes={display.boxes}
+                  inputs={boxesInputs}
+                  preloaded={preloaded}
+                  identification={identification}
+                  orgIdentity={orgIdentity}
+                  warnings={payload.warnings}
+                  year={decl.year}
+                  readOnly={isSubmitted}
+                  onInputChange={handleInputChange}
+                  onRestore={handleRestore}
+                  onFlagChange={handleFlagChange}
+                  onClearTerritory={handleClearTerritory}
+                  onEditOrganization={() => navigate('/organization')}
+                  goToBox={goToBox}
+                  goToBlock={goToBlock}
+                  nameWarnings={nameWarnings}
+                  invoiceBoxes={payload.invoiceBoxes}
+                  onViewInvoices={viewInvoicesIfDraft}
+                  onViewSettlements={viewSettlements}
+                  blockExtras={blockExtras}
+                  t={t}
+                  bcpLocale={bcpLocale}
+                  data-testid="FmBoxes390__74d2aa" />
+              )}
+            </BoxesTabBody390>
           </div>
         )}
         {activeTab === 'sources' && (
@@ -973,7 +1047,7 @@ export default function FmModel390Page({
             <Incidents390Tab
               incidents={incidents}
               onGoToBox={goToBoxOfIncident}
-              onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
+              onViewInvoices={viewInvoicesIfDraft}
               onViewSettlements={viewSettlements}
               onNavigate={handleNavigateAway}
               t={t}

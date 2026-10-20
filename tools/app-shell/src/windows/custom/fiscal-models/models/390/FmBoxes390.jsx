@@ -235,13 +235,13 @@ function BoxRow({ row, boxes, ctx, label, displayLabel, columns }) {
           {row.formula && <span className="fm-aeat-row__formula"> {row.formula}</span>}
         </span>
       </span>
-      {row.cells.map((cell, i) => (
+      {cellSlots(row.cells, columns).map(({ key, cell, column }) => (
         <Cell
-          key={i}
+          key={key}
           cell={cell}
           boxes={boxes}
           ctx={ctx}
-          ariaLabel={columns?.length > 1 ? `${text} · ${ctx.t(columns[i])}` : text}
+          ariaLabel={columns?.length > 1 ? `${text} · ${ctx.t(column)}` : text}
           data-testid="Cell__94e446" />
       ))}
     </div>
@@ -374,13 +374,25 @@ const REPRESENTATIVE_NAME_FIELDS = new Set(['personRepresentative', 'legalRepres
  * Non-blocking notice for the identity texts classic cuts in the file (`nameWarnings`: the
  * backend's NAME_TRUNCATED incidents, filtered to the fields of one block).
  */
+/**
+ * A row's cells with their column and a stable key: the cell's box or input key, or the position
+ * for an empty cell (the layout is positional and never reorders).
+ */
+function cellSlots(cells, columns) {
+  return cells.map((cell, position) => ({
+    cell,
+    column: columns?.[position],
+    key: String(cellBox(cell) ?? cellInput(cell)?.input ?? `empty-${position}`),
+  }));
+}
+
 function NameTruncationWarnings({ ctx, fields, testId }) {
   const warnings = (ctx.nameWarnings ?? []).filter(w => fields.has(w.field));
   if (warnings.length === 0) return null;
   return (
     <div className="fm-390-notices" data-testid={testId}>
-      {warnings.map((w, i) => (
-        <InfoBanner key={`${w.field}-${i}`} tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid={`${testId}_item`}>
+      {warnings.map(w => (
+        <InfoBanner key={`${w.field}-${w.limit}-${w.label ?? ''}`} tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid={`${testId}_item`}>
           {ctx.t('fm.m390.ident.truncated', {
             field: ctx.t(`fm.m390.ident.field.${w.field}`, { name: w.label ?? '' }),
             limit: w.limit,

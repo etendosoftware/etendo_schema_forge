@@ -123,5 +123,6 @@ export function buildSources390Csv(rows, t, { box = null } = {}) {
 
 /** Download name of the CSV: `facturas_390_<year>[_casilla_<box>].csv`. */
 export function sourcesCsvFileName(year, box = null) {
-  return `facturas_390_${year}${box != null ? `_casilla_${boxLabel(box)}` : ''}.csv`;
+  const boxSuffix = box != null ? `_casilla_${boxLabel(box)}` : '';
+  return `facturas_390_${year}${boxSuffix}.csv`;
 }

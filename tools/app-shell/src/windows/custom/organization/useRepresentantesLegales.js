@@ -44,7 +44,8 @@ export function useRepresentantesLegales(orgId, apiBaseUrl) {
 
   const createRow = useCallback(async (payload) => {
     // Defensive: whatever the caller passes, the server owns the line number.
-    const { lineNo: _ignored, ...body } = payload ?? {};
+    const body = { ...payload };
+    delete body.lineNo;
     const res = await repApiFetch('/representanteLegal', {
       method: 'POST',
       body: JSON.stringify({ ...body, parentId: orgId }),
