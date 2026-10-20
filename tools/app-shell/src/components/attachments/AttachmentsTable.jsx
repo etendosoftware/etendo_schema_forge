@@ -245,6 +245,10 @@ export default function AttachmentsTable({
       key: 'uploadedAt',
       label: ui('attachmentsUploadedAt'),
       type: 'date',
+      // ETP-5833 — explicit width: this table lives in a narrow side panel and its labels are
+      // short, so it keeps the compact 130px instead of the 176px date tier (which pushed the
+      // row's download action out of reach).
+      minWidth: 130,
       dot: false,
       render: (row) => (row.uploading ? null : formatAttachmentDate(row.uploadedAt, locale)),
     },
@@ -252,6 +256,10 @@ export default function AttachmentsTable({
       key: 'updatedAt',
       label: ui('attachmentsUpdatedAt'),
       type: 'date',
+      // ETP-5833 — explicit width: this table lives in a narrow side panel and its labels are
+      // short, so it keeps the compact 130px instead of the 176px date tier (which pushed the
+      // row's download action out of reach).
+      minWidth: 130,
       dot: false,
       render: (row) => (row.uploading ? null : formatAttachmentDate(row.updatedAt, locale)),
     },
