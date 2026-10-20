@@ -1,13 +1,17 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
 import {
-  loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  addProductLine, ensureVendorSetup, dismissSuccessModal, openGeneratedDocument,
+  loadCredentials, slow, waitForDetailReady, selectVendorBP,
+  createDraftWithFirstLine, ensureVendorSetup, dismissSuccessModal, openGeneratedDocument,
   expectStatusPill, expectDocumentStatus, pickRectifiableInvoice,
   VENDOR_FIXTURE_NAME,
 } from '../../helpers/purchase-helpers.js';
@@ -41,7 +45,8 @@ import {
  *   1. Login with onboarding credentials
  *   2. Ensure the first contact has isVendor = true (required for PO business
  *      partner selection — see `ensureVendorSetup` in purchase-helpers.js)
- *   3. Create a Purchase Order, add one line, save as draft
+ *   3. Create a Purchase Order and add one line straight from the empty state,
+ *      which saves the header (no manual save)
  *   4. Confirm the order — check "Crear albarán de proveedor" ONLY (no
  *      invoice) so confirming only generates the Goods Receipt
  *   5. Navigate (via the confirm result modal's "Ver albarán") to the
@@ -122,12 +127,11 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       // PO Payment Terms/Method set, required later by createReturnInvoice. Selecting
       // "whichever vendor is first" (selectVendorBP's default) offers no such guarantee.
       await selectVendorBP(page, { name: VENDOR_FIXTURE_NAME });
-      await saveDraft(page);
 
-      await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-      await waitForDetailReady(page);
-
-      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+      // No Guardar first: "+ Añadir líneas" saves the header itself, the path a user takes.
+      await createDraftWithFirstLine(page, {
+        spec: 'purchase-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
 
       // The lines grid is InlineLinesPanel.jsx (shared across all windows), which renders
       // rows as data-testid="line-row-<ID>" divs, not a semantic <table>. The only literal
@@ -135,7 +139,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       // panel, so a bare 'tbody tr' locator never matches this window's grid.
       //
       // That is why the wait below has to be generous, and why it is the FIRST real
-      // gate on the line existing at all: addProductLine() ends on
+      // gate on the line existing at all: the line helper once ended on
       // `expect(page.locator('tbody tr').first()).toBeVisible()`, which for this window
       // is satisfied by an unrelated table and therefore returns before the line has
       // rendered here. The observed flake was this assertion timing out with the
@@ -146,8 +150,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await expect(rectLines,
         'The saved line should render in the InlineLinesPanel grid',
       ).toHaveCount(1, { timeout: 45_000 });
-      await page.getByText(/cargando|loading/i)
-        .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+      await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
       await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
       await expect(rectLines,
         'Line count should still read 1 after related panels finish loading',
@@ -239,11 +242,8 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
       await slow(page);
 
-      const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
-      await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-      await nextBtn.click();
-      await slow(page);
-
+      // One-step wizard: lines, quantities and reason share the single screen, so
+      // "Crear Devolución" submits directly once the pre-selected lines enable it.
       const returnConfirmPromise = page.waitForResponse(
         (resp) =>
           resp.url().includes('/action/createPurchaseReturn') &&
@@ -252,7 +252,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
         { timeout: 20_000 },
       );
       const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
-      await expect(createReturnConfirmBtn).toBeVisible({ timeout: 10_000 });
+      await expect(createReturnConfirmBtn).toBeEnabled({ timeout: 10_000 });
       await createReturnConfirmBtn.click();
       await returnConfirmPromise;
       await slow(page);

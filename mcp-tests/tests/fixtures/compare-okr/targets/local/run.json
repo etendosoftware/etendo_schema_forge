@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 5,
+  "runId": "run-local",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "target": {
+    "name": "local",
+    "url": "https://local.example/mcp"
+  },
+  "serverBuild": null,
+  "server": {
+    "serverInfo": {
+      "name": "local",
+      "version": "1.0.0"
+    },
+    "protocolVersion": "2025-06-18",
+    "catalogue": {
+      "sha": "sha-local",
+      "toolCount": 28,
+      "bytes": 2000
+    },
+    "error": null
+  },
+  "harness": {
+    "commit": "abc123",
+    "dirty": false
+  },
+  "provider": "openai",
+  "model": "openai/gpt-5.2",
+  "temperature": 0,
+  "promptVersion": 4,
+  "maxSteps": 25,
+  "maxResultChars": 20000,
+  "repeat": 3,
+  "suites": [
+    {
+      "file": "okr.yaml",
+      "sha": "deadbeef"
+    }
+  ]
+}

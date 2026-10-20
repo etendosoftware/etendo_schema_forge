@@ -198,6 +198,7 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
         toolbarPaddingX="px-2"
         formCardPadding="p-2"
         formScrollPaddingX="px-2"
+        detailVisibleWhenCapability="showAccountingFields"
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product_Category", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}
@@ -215,7 +216,6 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideLink

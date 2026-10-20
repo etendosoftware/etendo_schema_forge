@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * DataTable — `summable` opt-out and per-row currency (ETP-5245).
  *
@@ -39,7 +40,8 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
 }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',

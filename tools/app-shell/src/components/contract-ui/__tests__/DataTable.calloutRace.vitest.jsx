@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 import { describe, it, expect, vi } from 'vitest';
 import { allIconsAs } from '@/test/lucideIconMock.js';
 
@@ -31,7 +32,8 @@ vi.mock('@/components/ui/tag', () => ({ Tag: () => null }));
 vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: () => '' }));
 vi.mock('@/lib/resolveColumnLabel.js', () => ({ resolveColumnLabel: (c) => c.key }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v) }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnMinWidthPx: () => 80,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));

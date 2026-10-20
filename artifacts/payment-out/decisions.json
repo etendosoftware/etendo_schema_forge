@@ -6,6 +6,9 @@
     "relatedDocuments": false,
     "notesField": "description",
     "dateFilterKey": "paymentDate",
+    "listViewOptions": {
+      "defaultDatePreset": "last30"
+    },
     "detailEntity": null,
     "customTabsAfterBottom": true,
     "summaryFields": [],

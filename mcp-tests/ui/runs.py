@@ -53,8 +53,7 @@ def list_runs(runs_dir: Path) -> list[RunSummary]:
         except (OSError, ValueError):
             # A run killed before its header landed is still a run worth listing.
             pass
-        probes = entry / "probes"
-        count = len(list(probes.glob("*.json"))) if probes.exists() else 0
+        count = len(probe_files(entry))
         out.append(RunSummary(run_id=entry.name, path=entry, header=header, probe_count=count))
     return out
 
@@ -100,10 +99,24 @@ class ProbeProgress:
         return "running"
 
 
+def progress_key(probe_id: str, attempt: Any, repeat: int) -> str:
+    """How the live view names one attempt (D43).
+
+    The bare probe id while a run is one attempt per probe, so a REPEAT=1 run
+    looks exactly as before; `<id> · a<n>` as soon as there can be more than
+    one — REPEAT > 1, or a replacement for a harness-errored attempt.
+    """
+    if not isinstance(attempt, int) or (repeat <= 1 and attempt == 1):
+        return probe_id
+    return f"{probe_id} · a{attempt}"
+
+
 @dataclass
 class LiveState:
     run_id: str | None = None
+    #: Planned attempts (probes × repeat). Replacements may add to it.
     expected_probes: int = 0
+    repeat: int = 1
     max_steps: int = 0
     probes: dict[str, ProbeProgress] = field(default_factory=dict)
     finished: dict[str, Any] | None = None
@@ -122,15 +135,17 @@ def live_state(events: Iterable[dict[str, Any]]) -> LiveState:
         probe_id = event.get("probe")
         if kind == "run_started":
             state.run_id = event.get("runId")
-            state.expected_probes = int(event.get("probes") or 0)
+            state.repeat = int(event.get("repeat") or 1)
+            state.expected_probes = int(event.get("probes") or 0) * state.repeat
             state.max_steps = int(event.get("maxSteps") or 0)
         elif kind == "run_finished":
             state.finished = event
             state.current = None
         elif probe_id:
-            progress = state.probes.setdefault(probe_id, ProbeProgress(probe_id))
+            key = progress_key(probe_id, event.get("attempt"), state.repeat)
+            progress = state.probes.setdefault(key, ProbeProgress(key))
             if kind == "probe_started":
-                state.current = probe_id
+                state.current = key
             elif kind == "tool_call":
                 progress.calls.append({**event, "result": None})
             elif kind == "tool_result":
@@ -177,18 +192,96 @@ def pending_authorization(log_text: str) -> str | None:
     return urls[-1] if urls else None
 
 
-def load_probe(run_dir: Path, probe_id: str) -> dict[str, Any] | None:
+#: First run schema version that writes one file per attempt (D43):
+#: `probes/<id>/attempt-<n>.json`. Older runs hold one `probes/<id>.json` per
+#: probe and are never rewritten (D14), so both layouts are read.
+ATTEMPTS_SCHEMA_VERSION = 5
+
+_ATTEMPT_FILE = re.compile(r"^attempt-(\d+)\.json$")
+
+
+#: Layout per run directory, once known from the header. Every helper below
+#: asks, and a run detail view asks once per probe and attempt.
+_LAYOUT_BY_RUN: dict[Path, bool] = {}
+
+
+def uses_attempt_layout(run_dir: Path) -> bool:
+    """Which layout a run wrote, keyed on `run.json.schemaVersion`.
+
+    A run killed before its header landed has no version to read; then what is
+    on disk decides (a probe DIRECTORY only exists in the attempts layout).
+    Only a header answer is cached: a header never changes once written, while
+    the on-disk guess can (the live view polls a run that is still writing).
+    """
+    key = run_dir.resolve()
+    if key in _LAYOUT_BY_RUN:
+        return _LAYOUT_BY_RUN[key]
     try:
-        return json.loads((run_dir / "probes" / f"{probe_id}.json").read_text(encoding="utf-8"))
+        version = json.loads((run_dir / "run.json").read_text(encoding="utf-8")).get("schemaVersion")
+    except (OSError, ValueError, AttributeError):
+        version = None
+    if isinstance(version, int):
+        _LAYOUT_BY_RUN[key] = version >= ATTEMPTS_SCHEMA_VERSION
+        return _LAYOUT_BY_RUN[key]
+    probes = run_dir / "probes"
+    return probes.is_dir() and any(p.is_dir() for p in probes.iterdir())
+
+
+def probe_files(run_dir: Path) -> list[str]:
+    """Every probe id the run wrote a record for, in either layout."""
+    probes = run_dir / "probes"
+    if not probes.exists():
+        return []
+    if uses_attempt_layout(run_dir):
+        return sorted(p.name for p in probes.iterdir() if p.is_dir() and attempt_numbers(run_dir, p.name))
+    return sorted(p.stem for p in probes.glob("*.json"))
+
+
+def attempt_numbers(run_dir: Path, probe_id: str) -> list[int]:
+    """The attempts on file for a probe, ascending. A pre-v5 probe is attempt 1."""
+    if not uses_attempt_layout(run_dir):
+        return [1] if (run_dir / "probes" / f"{probe_id}.json").exists() else []
+    folder = run_dir / "probes" / probe_id
+    if not folder.is_dir():
+        return []
+    found = (_ATTEMPT_FILE.match(p.name) for p in folder.iterdir())
+    return sorted(int(m.group(1)) for m in found if m)
+
+
+def load_probe(run_dir: Path, probe_id: str, attempt: int = 1) -> dict[str, Any] | None:
+    """One attempt's record; `None` when it is missing or unreadable.
+
+    For a pre-v5 run only attempt 1 exists, and it is the probe file itself.
+    """
+    if uses_attempt_layout(run_dir):
+        path = run_dir / "probes" / probe_id / f"attempt-{attempt}.json"
+    elif attempt == 1:
+        path = run_dir / "probes" / f"{probe_id}.json"
+    else:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
 
-def probe_files(run_dir: Path) -> list[str]:
-    probes = run_dir / "probes"
-    if not probes.exists():
-        return []
-    return sorted(p.stem for p in probes.glob("*.json"))
+def record_v4(probe: dict[str, Any]) -> dict[str, Any] | None:
+    """The fields run schema v4 added to a probe file, or None before v4.
+
+    Old runs are never rewritten (D14), so a v3 file is not "a v4 file with
+    nulls": it never recorded an answer or a token count, and a view that
+    rendered `None` there would claim the agent said nothing and cost nothing.
+    """
+    if not isinstance(probe.get("schemaVersion"), int) or probe["schemaVersion"] < 4:
+        return None
+    usage = probe.get("usage") or {}
+    return {
+        "finalAnswer": probe.get("finalAnswer"),
+        "loop": usage.get("loop"),
+        "report": usage.get("report"),
+        "servedModel": probe.get("servedModel"),
+        "silentWrong": probe.get("silentWrong"),
+    }
 
 
 def outcome_badge(probe: dict[str, Any]) -> str:

@@ -15,10 +15,12 @@ import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryA
  * `showSend` IS wired here (defect fix, ETP-5260 follow-up): the DF puts
  * "Enviar por email" in the Copy link -> Clone -> Send order, to the LEFT of
  * Save/Confirm, same as every other document window. Only the payment-status
- * badge (and the fiscal `SendToSifButton`) stays inside
+ * badge stays inside
  * `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`, nested INSIDE
  * `SalesInvoiceTopbar` (topbarRight) — by the DF the badge belongs at the
- * extreme right, after Save/Confirm. Do NOT move the badge here.
+ * extreme right, after Save/Confirm. Do NOT move the badge here. The fiscal
+ * send action is not a topbar button any more (ETP-5700): in the form view it
+ * lives only in the kebab (`SifSendMenuItem`).
  *
  * Clicking Send here does not own a modal (this component has no client-
  * rendered PDF context) — it dispatches a window CustomEvent that

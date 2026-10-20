@@ -265,7 +265,7 @@ export function MultiFieldCell({ row, col, token, apiBaseUrl }) {
   const subtitleValue = col.subtitle ? row[col.subtitle] : undefined;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       {media && (
         <div className="w-10 h-10 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center overflow-hidden flex-shrink-0">
           {imgSrc
@@ -274,11 +274,15 @@ export function MultiFieldCell({ row, col, token, apiBaseUrl }) {
           }
         </div>
       )}
-      <div className="flex flex-col justify-center gap-0.5">
-        <span className="text-sm font-semibold text-[hsl(var(--foreground))] leading-5">{titleValue}</span>
+      <div className="flex min-w-0 flex-col justify-center gap-0.5">
+        {/* ETP-5510 — the title stays on ONE line (identifier chip below); long names ellipsise
+            and reveal the full text in a tooltip instead of growing the row. */}
+        {typeof titleValue === 'string'
+          ? <TruncatedText text={titleValue} className="text-sm font-semibold text-[hsl(var(--foreground))] leading-5" data-testid="TruncatedText__a91437" />
+          : <span className="text-sm font-semibold text-[hsl(var(--foreground))] leading-5">{titleValue}</span>}
         {subtitleValue && (
-          <span className="inline-flex items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit">
-            {subtitleValue}
+          <span className="inline-flex max-w-full items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit">
+            <span className="min-w-0 truncate">{subtitleValue}</span>
           </span>
         )}
       </div>
@@ -297,7 +301,21 @@ export function renderMultiFieldCell({ row, col, token, apiBaseUrl }) {
   );
 }
 
+/**
+ * `display: 'tag'` (decisions.json) on a foreign-key / text column: the value is shown as the
+ * same pill the "Estado doc." column uses (`StatusTag`), always in the NEUTRAL (grey) tone —
+ * never `getStatusTone(value)`, which would colour it by whatever code happens to match (ETP-5696,
+ * the unit of measure of a document line). An empty value renders nothing, so a line with no
+ * product shows an empty cell instead of an empty pill.
+ */
+export function renderNeutralTagCell(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const label = String(value);
+  return <StatusTag status={label} label={label} tone="neutral" data-testid="StatusTag__neutral-tag" />;
+}
+
 export function renderDefaultCell({ row, col, display, visibleColumns }) {
+  if (col.display === 'tag') return renderNeutralTagCell(display);
   // ETP-5281 capped every text cell at 200px so a long value truncates instead of
   // overflowing into the next column — correct for a fixed-basis column, but it also
   // clobbered a `col.grow` column's whole reason for existing: `columnFlex()` already
@@ -339,7 +357,8 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
   }
   const val = display;
   if (typeof val === 'string' && val.length > 30) {
-    return <TruncatedText text={val} className={capClass} data-testid="TruncatedText__a91437" />;
+    // ETP-5510 — up to 2 lines then ellipsis (tooltip only when actually clipped).
+    return <TruncatedText text={val} lines={2} className={capClass} data-testid="TruncatedText__a91437" />;
   }
   return val;
 }

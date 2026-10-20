@@ -300,6 +300,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"defaultDatePreset":"last30"}}
       dateFilterKey="paymentDate"
       hidePrint
       hideCreate

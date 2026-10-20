@@ -43,6 +43,7 @@
  *                   because sending the user off to the list view just to find the same
  *                   button is a detour, not a step;
  *   - `'dataTransfer'` shows the server-owned demo transfer status and a retry on failure;
+ *   - `'calendarReview'` the accounting calendar summary with Confirm / Modify (ETP-5577);
  *   - `null`        nothing to do — the row is informational.
  *
  * `keepActionWhenDone` keeps a completed row's controls live. Ticking a step normally locks its
@@ -88,11 +89,19 @@
  * backend exposes the transfer. Every helper that sizes or walks the list therefore takes the
  * transfer state (`demoDataTransferStepState(...)`) as an optional trailing argument, defaulting
  * to `NO_DEMO_DATA_TRANSFER` — the catalogue as it was before ETP-5364.
+ *
+ * ## The calendar review row (ETP-5577)
+ *
+ * Same pattern: `calendarReviewStep.js`, spliced in only when the backend says this tenant must
+ * review its accounting calendar, done when the server says it is reviewed. The helpers take its
+ * state (`calendarReviewStepState(...)`) as a second optional trailing argument, defaulting to
+ * `NO_CALENDAR_REVIEW`.
  */
 import {
   NO_DEMO_DATA_TRANSFER,
   withDemoDataTransferStep,
 } from './demoDataTransferStep.js';
+import { NO_CALENDAR_REVIEW, withCalendarReviewStep } from './calendarReviewStep.js';
 
 /** The plan value that unlocks `productiveOnly` steps. Mirrors TenantPlanService.PLAN_PRODUCTIVE. */
 export const PLAN_PRODUCTIVE = 'productive';
@@ -213,15 +222,18 @@ export function isProductivePlan(plan) {
  * component should iterate: `FIRST_STEPS` is the full catalogue and includes rows a trial
  * tenant must not be offered.
  */
-export function visibleFirstSteps(plan, transfer = NO_DEMO_DATA_TRANSFER) {
+export function visibleFirstSteps(plan, transfer = NO_DEMO_DATA_TRANSFER,
+  calendar = NO_CALENDAR_REVIEW) {
   const productive = isProductivePlan(plan);
   const steps = productive ? FIRST_STEPS : FIRST_STEPS.filter((step) => !step.productiveOnly);
-  return withDemoDataTransferStep(steps, transfer, productive);
+  return withCalendarReviewStep(withDemoDataTransferStep(steps, transfer, productive), calendar,
+    productive);
 }
 
 /** Number of steps in the progress counter (`x/TOTAL`) for this plan. Derived, never hardcoded. */
-export function firstStepsTotal(plan, transfer = NO_DEMO_DATA_TRANSFER) {
-  return visibleFirstSteps(plan, transfer).length;
+export function firstStepsTotal(plan, transfer = NO_DEMO_DATA_TRANSFER,
+  calendar = NO_CALENDAR_REVIEW) {
+  return visibleFirstSteps(plan, transfer, calendar).length;
 }
 
 /**
@@ -240,9 +252,14 @@ export function toggleableStepIds(plan) {
     .map((step) => step.id);
 }
 
-/** True when the step renders as completed — always-done, user-completed, or transfer-done. */
-export function isStepDone(step, completed, transfer = NO_DEMO_DATA_TRANSFER) {
+/**
+ * True when the step renders as completed — always-done, user-completed, or done by the server
+ * (transfer finished, calendar reviewed).
+ */
+export function isStepDone(step, completed, transfer = NO_DEMO_DATA_TRANSFER,
+  calendar = NO_CALENDAR_REVIEW) {
   if (step.action === 'dataTransfer') return transfer.done;
+  if (step.action === 'calendarReview') return calendar.done;
   return step.alwaysDone || (Array.isArray(completed) && completed.includes(step.id));
 }
 
@@ -253,14 +270,17 @@ export function isStepDone(step, completed, transfer = NO_DEMO_DATA_TRANSFER) {
  * then had its plan read back as free would otherwise count a row that is not on screen, and
  * the badge would claim 6/5.
  */
-export function countCompletedSteps(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
-  return visibleFirstSteps(plan, transfer)
-    .filter((step) => isStepDone(step, completed, transfer)).length;
+export function countCompletedSteps(completed, plan, transfer = NO_DEMO_DATA_TRANSFER,
+  calendar = NO_CALENDAR_REVIEW) {
+  return visibleFirstSteps(plan, transfer, calendar)
+    .filter((step) => isStepDone(step, completed, transfer, calendar)).length;
 }
 
 /** True once every visible step reads as complete — the "all set" final state. */
-export function areAllStepsDone(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
-  return countCompletedSteps(completed, plan, transfer) === firstStepsTotal(plan, transfer);
+export function areAllStepsDone(completed, plan, transfer = NO_DEMO_DATA_TRANSFER,
+  calendar = NO_CALENDAR_REVIEW) {
+  return countCompletedSteps(completed, plan, transfer, calendar)
+    === firstStepsTotal(plan, transfer, calendar);
 }
 
 /**
@@ -270,9 +290,10 @@ export function areAllStepsDone(completed, plan, transfer = NO_DEMO_DATA_TRANSFE
  *
  * Returns `null` when everything is done (the all-set state collapses every row).
  */
-export function findExpandedStepId(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
-  const next = visibleFirstSteps(plan, transfer)
-    .find((step) => !step.alwaysDone && !isStepDone(step, completed, transfer));
+export function findExpandedStepId(completed, plan, transfer = NO_DEMO_DATA_TRANSFER,
+  calendar = NO_CALENDAR_REVIEW) {
+  const next = visibleFirstSteps(plan, transfer, calendar)
+    .find((step) => !step.alwaysDone && !isStepDone(step, completed, transfer, calendar));
   return next ? next.id : null;
 }
 

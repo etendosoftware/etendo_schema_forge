@@ -13,10 +13,16 @@
 # Buckets (repo-root-relative):
 #   npm            ← package.json, package-lock.json
 #   testid         ← tools/app-shell/src/**, the data-testid checker
-#   tests          ← app-shell src+test, cli/**, **/__tests__/**, sonar-project.properties
+#   tests          ← app-shell src+test, cli/**, **/__tests__/**, sonar-project.properties,
+#                    package.json, package-lock.json (a dependency bump, e.g. the core's)
 #   regen / xml    ← artifacts/**, cli/**, package-lock.json
-#   pw-mocked      ← app-shell/src (UI), *.mocked.spec.js, shared e2e infra
-#   pw-integration ← app-shell/src (UI), any non-mocked spec, shared e2e infra
+#   pw-mocked      ← app-shell/src (UI), *.mocked.spec.js, shared e2e infra, e2e/quarantine.json,
+#                    package.json, package-lock.json
+#   pw-integration ← app-shell/src (UI), any non-mocked spec, shared e2e infra, package.json,
+#                    package-lock.json
+#
+#   relevance_mocked_specs : the changed *.mocked.spec.js files when they alone call for the mocked
+#                      suite, so the pre-push runs just those; nothing when the whole suite must run.
 #   RUN-ALL (.githooks/**, run-sonar.sh) or any UNRECOGNISED file → all of them.
 #   SAFE (docs, images, Makefile, .gitignore) → nothing.
 # Generated code lives under artifacts/<window>/generated/, so tools/app-shell/src
@@ -26,7 +32,7 @@ RELEVANCE_RE_RUN_ALL='^\.githooks/|^run-sonar\.sh$'
 RELEVANCE_RE_SAFE='(^|/)[^/]*\.md$|^docs/|(^|/)LICENSE|^\.gitignore$|^\.gitattributes$|\.(png|jpe?g|gif|svg|ico|webp)$|^Makefile$'
 RELEVANCE_RE_NPM='^package\.json$|^package-lock\.json$'
 RELEVANCE_RE_TESTID='^tools/app-shell/src/|^scripts/check-add-data-testid\.sh$'
-RELEVANCE_RE_TESTS='^tools/app-shell/src/|^tools/app-shell/test/|^cli/|/__tests__/|^sonar-project\.properties$'
+RELEVANCE_RE_TESTS='^tools/app-shell/src/|^tools/app-shell/test/|^cli/|/__tests__/|^sonar-project\.properties$|^package\.json$|^package-lock\.json$'
 RELEVANCE_RE_REGEN='^artifacts/|^cli/|^package-lock\.json$'
 RELEVANCE_RE_XML='^artifacts/|^cli/|^package-lock\.json$'
 RELEVANCE_RE_E2E='^e2e/'
@@ -57,14 +63,31 @@ relevance_checks() {
   # own suite (integration owns every non-mocked spec); shared e2e infra → both.
   local mocked=0 integ=0
   printf '%s\n' "$files" | grep -Eq '^tools/app-shell/src/' && { mocked=1; integ=1; }
+  # A dependency change (a core bump above all) can break anything the app renders.
+  printf '%s\n' "$files" | grep -Eq "$RELEVANCE_RE_NPM" && { mocked=1; integ=1; }
   printf '%s\n' "$files" | grep -qE '^e2e/.*\.mocked\.spec\.js$' && mocked=1
   # Any non-mocked e2e spec → integration. The trailing `grep -q .` is required:
   # on empty input (no e2e spec at all) BSD grep's `-qv` returns 0 (false positive),
   # so we instead demand at least one line actually survive the inverse filter.
   printf '%s\n' "$files" | grep -E '^e2e/.*\.spec\.js$' | grep -vE '\.mocked\.spec\.js$' | grep -q . && integ=1
   printf '%s\n' "$files" | grep -qE '^e2e/(playwright\.config\.js|package\.json|tests/helpers/)' && { mocked=1; integ=1; }
+  # The quarantine list changes which mocked tests gate (docs/testing/flaky-tests.md).
+  printf '%s\n' "$files" | grep -qE '^e2e/quarantine\.json$' && mocked=1
   [ "$mocked" = 1 ] && out="$out pw-mocked"
   [ "$integ" = 1 ]  && out="$out pw-integration"
 
   printf '%s' "${out# }"
+}
+
+# relevance_mocked_specs < changed-files-on-stdin → the changed *.mocked.spec.js paths, one per line,
+# when nothing but them calls for the mocked suite; nothing at all when the whole suite must run
+# (UI source, e2e infrastructure, the quarantine list, dependencies, tooling or an unknown file).
+relevance_mocked_specs() {
+  local files
+  files="$(grep -Ev '^[[:space:]]*$' || true)"
+  [ -n "$files" ] || return 0
+  printf '%s\n' "$files" | grep -Evq "$RELEVANCE_RE_KNOWN" && return 0
+  printf '%s\n' "$files" | grep -Eq "$RELEVANCE_RE_RUN_ALL|$RELEVANCE_RE_NPM|^tools/app-shell/src/" && return 0
+  printf '%s\n' "$files" | grep -Eq '^e2e/(playwright\.config\.js|package\.json|tests/helpers/|quarantine\.json$)' && return 0
+  printf '%s\n' "$files" | grep -E '^e2e/.*\.mocked\.spec\.js$' || true
 }

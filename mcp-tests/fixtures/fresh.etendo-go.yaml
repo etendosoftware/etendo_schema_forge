@@ -1,0 +1,40 @@
+# Freshness checklist for Etendo GO targets (plan §5.9, D50). Read through the MCP only.
+#
+# documents   every list here must hold 0 rows on a fresh, seeded tenant (check 1).
+# masterData  rows must be exactly the baseline records named in `baseline` plus `allow` — what
+#             initialization itself creates, identified by `key` (check 2). Captured with
+#             `make mcp-seed TARGET=<t> CAPTURE=1` on a freshly initialized, NOT yet seeded tenant.
+# Each entity names its list tool; the LIVE tools/list decides at preflight. A tool the catalogue
+# does not offer makes that entity `unverified` ("tool not offered"), never a failed run.
+#
+# allowlistCaptured: false until that capture has been pasted and reviewed. While false, a
+# master-data row nobody explains is `unverified` (not `dirty`): the checklist cannot judge it, so
+# no target using it can be `fresh` — honest, and the reason no run is official before S8.
+schemaVersion: 1
+platform: etendo-go
+allowlistCaptured: false
+
+documents:
+  - { name: sales-order,      tool: etendo_list, args: { spec: sales-order, entity: header } }
+  - { name: sales-quotation,  tool: etendo_list, args: { spec: sales-quotation, entity: header } }
+  - { name: sales-invoice,    tool: etendo_list, args: { spec: sales-invoice, entity: header } }
+  - { name: purchase-order,   tool: etendo_list, args: { spec: purchase-order, entity: header } }
+  - { name: purchase-invoice, tool: etendo_list, args: { spec: purchase-invoice, entity: header } }
+  - { name: goods-shipment,   tool: etendo_list, args: { spec: goods-shipment, entity: header } }
+  - { name: goods-receipt,    tool: etendo_list, args: { spec: goods-receipt, entity: header } }
+  - { name: payment-in,       tool: etendo_list, args: { spec: payment-in, entity: header } }
+  - { name: payment-out,      tool: etendo_list, args: { spec: payment-out, entity: header } }
+
+masterData:
+  - name: business-partner
+    tool: etendo_list
+    args: { spec: business-partner, entity: header }
+    key: name
+    baseline: [customer-paridad, supplier-paridad]
+    allow: []
+  - name: product
+    tool: etendo_list
+    args: { spec: product, entity: header }
+    key: searchKey
+    baseline: [product-servicio]
+    allow: []

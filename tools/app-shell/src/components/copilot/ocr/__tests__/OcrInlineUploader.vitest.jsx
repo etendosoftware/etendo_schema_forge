@@ -12,6 +12,7 @@ let mockFlowReturn = {
   result: null,
   loading: false,
   pendingModal: null,
+  clearResult: vi.fn(),
 };
 
 vi.mock('@/i18n', () => ({
@@ -106,6 +107,7 @@ describe('OcrInlineUploader', () => {
       result: null,
       loading: false,
       pendingModal: null,
+      clearResult: vi.fn(),
     };
     // Mock URL.createObjectURL and revokeObjectURL
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:test-url');
@@ -362,6 +364,83 @@ describe('OcrInlineUploader', () => {
     // when a file is selected (it is inside the file-selected branch).
     // When no file, the drop zone is shown instead. Verify drop zone is present.
     expect(screen.getByText('ocrSidePanelDropTitle')).toBeInTheDocument();
+  });
+
+  // ETP-5654 — the blocking receiver-tax-id mismatch is shown inline, like an extraction error.
+  describe('blocking validation message (result.blocked)', () => {
+    const BLOCKED = 'ocrReceiverTaxIdMismatch:{"receiver":"A99999999"}';
+
+    function selectPdf(container, name = 'invoice.pdf') {
+      fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [createPdfFile(name)] } });
+    }
+
+    it('renders the message inline with the alert icon and no retry button', () => {
+      mockFlowReturn.result = { committed: false, blocked: BLOCKED };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      selectPdf(container);
+
+      const block = screen.getByTestId('ocr-blocked-message');
+      expect(block).toHaveTextContent(BLOCKED);
+      expect(block.className).toContain('text-destructive');
+      expect(block.querySelector('svg')).toBeTruthy();
+      expect(screen.queryByTestId('ocr-retry')).toBeNull();
+      expect(screen.queryByText('ocrDone')).toBeNull();
+    });
+
+    it('does not render an inline message for a failure without `blocked`', () => {
+      mockFlowReturn.result = { committed: false, error: 'Empty batch' };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      selectPdf(container);
+
+      expect(screen.queryByTestId('ocr-blocked-message')).toBeNull();
+      expect(screen.queryByText('Empty batch')).toBeNull();
+    });
+
+    it('hides the message while a run is being applied', () => {
+      mockFlowReturn.result = { committed: false, blocked: BLOCKED };
+      mockFlowReturn.loading = true;
+      render(<OcrInlineUploader {...defaultProps} />);
+
+      expect(screen.queryByTestId('ocr-blocked-message')).toBeNull();
+    });
+
+    it('clears the flow result when another file is picked', () => {
+      mockFlowReturn.result = { committed: false, blocked: BLOCKED };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      selectPdf(container);
+      mockFlowReturn.clearResult.mockClear();
+
+      selectPdf(container, 'other.pdf');
+      expect(mockFlowReturn.clearResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the flow result when a non-PDF is picked', () => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [createNonPdfFile()] } });
+      expect(mockFlowReturn.clearResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the flow result when the file is removed', () => {
+      mockFlowReturn.result = { committed: false, blocked: BLOCKED };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      selectPdf(container);
+      mockFlowReturn.clearResult.mockClear();
+
+      fireEvent.click(screen.getByLabelText('cancel'));
+      expect(mockFlowReturn.clearResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the flow result when a new extraction starts, before extracting', async () => {
+      const order = [];
+      mockFlowReturn.clearResult = vi.fn(() => order.push('clear'));
+      mockExtractionReturn.extract = vi.fn(async () => { order.push('extract'); return {}; });
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      selectPdf(container);
+      order.length = 0;
+
+      fireEvent.click(screen.getByText('ocrExtractFill'));
+      await waitFor(() => expect(order).toEqual(['clear', 'extract']));
+    });
   });
 
   it('renders pendingModal from useOcrFlow', () => {

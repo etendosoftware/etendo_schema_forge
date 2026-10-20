@@ -28,6 +28,12 @@
  * so returning to it — the back button, a Related Documents chip — refetches it instead of
  * showing the pre-completion status for `recordStaleTime`.
  *
+ * ETP-5729 — the shipment shows values derived from its customer returns: `canCreateReturn`
+ * (the «Crear devolución» button) and the `returnReceipts` Related Documents chips. Deleting,
+ * editing or completing a return therefore marks the shipment stale, so going back to it no
+ * longer shows the deleted return and a hidden button for `recordStaleTime`. The Purchase side
+ * (`return-to-vendor-shipment` → `goods-receipt`) is owned by the Purchase cell.
+ *
  * ETP-5571 adds a second map, `WRITE_INVALIDATES_ENTITIES`, for caches keyed by entity rather
  * than by spec — see its own comment below.
  */
@@ -35,6 +41,7 @@ export const WRITE_INVALIDATES_SPECS = Object.freeze({
   'goods-shipment': Object.freeze(['sales-order', 'sales-invoice']),
   'sales-invoice': Object.freeze(['sales-order']),
   'goods-receipt': Object.freeze(['purchase-invoice']),
+  'return-material-receipt': Object.freeze(['goods-shipment']),
 });
 
 /**

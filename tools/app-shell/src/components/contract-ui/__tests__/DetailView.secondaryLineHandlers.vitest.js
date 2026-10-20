@@ -64,12 +64,27 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: v
 
 // The REAL production factory under test.
 import { buildSecondaryLineHandlers } from '../DetailView.jsx';
+import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { toast } from 'sonner';
+
+// ETP-5758 — `onDelete` no longer awaits a confirm prompt and runs the batch itself; it hands the
+// rows plus a per-request `deleteOneFn`/`onOutcome` to `useBatchDeleteDialog`'s
+// `requestBatchDelete`. This stand-in plays the part of a user who CONFIRMS that dialog: the same
+// shared triage + outcome toast the hook runs, then the caller's `onOutcome`.
+function confirmingRequestBatchDelete(ui) {
+  return vi.fn(async (items, { deleteOneFn, onOutcome }) => {
+    const { succeeded, failed, errors } = await runBatchDelete(items, deleteOneFn);
+    toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: items.length });
+    onOutcome(succeeded, failed);
+  });
+}
 
 // Build a complete deps object (all 20 keys the factory destructures) with
 // vi.fn() mocks for setters/hooks and plain values for everything else.
 // `secondaryInlineLinesRefs` mirrors the production ref-of-refs shape:
 //   secondaryInlineLinesRefs.current[st.key].current.clearSelection()
+const defaultUi = (key, vars) => (vars ? `${key}:${JSON.stringify(vars)}` : key);
+
 function makeDeps(overrides = {}) {
   const stKey = overrides.st?.key ?? 'rate';
   const clearSelection = overrides.__clearSelection ?? vi.fn();
@@ -88,7 +103,7 @@ function makeDeps(overrides = {}) {
     }],
     ui: (key, vars) => (vars ? `${key}:${JSON.stringify(vars)}` : key),
     extractErrorMessage: vi.fn(async () => 'server-error'),
-    confirmDelete: vi.fn(async () => true),
+    requestBatchDelete: confirmingRequestBatchDelete(overrides.ui ?? defaultUi),
     secondaryInlineLinesRefs: { current: { [stKey]: { current: { clearSelection } } } },
     selectedSecondaryLine: null,
     secondaryLineEdits: null,
@@ -98,7 +113,6 @@ function makeDeps(overrides = {}) {
     setSelectedSecondaryLine: vi.fn(),
     setSecondaryLineEdits: vi.fn(),
     setSecondaryLineEditColumns: vi.fn(),
-    setSecondaryDeleting: vi.fn(),
     setSecondarySelectedRows: vi.fn(),
     ...overrides,
   };
@@ -245,18 +259,21 @@ describe('buildSecondaryLineHandlers.onSaveLine', () => {
 // onDelete — Promise.allSettled multi-row delete batch
 // ===========================================================================
 describe('buildSecondaryLineHandlers.onDelete', () => {
-  it('aborts entirely when confirmDelete resolves false (no fetch, no state change)', async () => {
+  it('only REQUESTS the delete: nothing is sent until the dialog is confirmed', async () => {
     global.fetch = vi.fn();
     const deps = makeDeps({
-      confirmDelete: vi.fn(async () => false),
+      requestBatchDelete: vi.fn(),
       secondarySelectedRows: { rate: [{ id: 'a' }] },
     });
     const { onDelete } = buildSecondaryLineHandlers(deps);
 
     await onDelete();
 
+    expect(deps.requestBatchDelete).toHaveBeenCalledWith(
+      [{ id: 'a' }],
+      expect.objectContaining({ deleteOneFn: expect.any(Function), onOutcome: expect.any(Function) }),
+    );
     expect(global.fetch).not.toHaveBeenCalled();
-    expect(deps.setSecondaryDeleting).not.toHaveBeenCalled();
     expect(deps.secondaryHooks[0].handleDeleteChild).not.toHaveBeenCalled();
   });
 
@@ -283,8 +300,6 @@ describe('buildSecondaryLineHandlers.onDelete', () => {
     expect(toast.success).toHaveBeenCalledWith('bulkDeleteAllSucceeded:{"count":2}');
     expect(toast.warning).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
-    // Deleting flag toggled on then off.
-    expect(deps.setSecondaryDeleting).toHaveBeenCalledTimes(2);
   });
 
   it('mixed batch (one ok, one http-fail, one rejected): only successes removed, ONE combined warning toast fired', async () => {

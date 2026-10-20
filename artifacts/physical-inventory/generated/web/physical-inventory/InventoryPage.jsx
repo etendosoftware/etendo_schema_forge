@@ -208,10 +208,12 @@ export const api = {
   },
   "labelOverrides": {
     "en_US": {
-      "Processed": "Status"
+      "Processed": "Status",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
-      "Processed": "Estado"
+      "Processed": "Estado",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

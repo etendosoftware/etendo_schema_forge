@@ -51,6 +51,7 @@ vi.mock('@/hooks/useEntity.js', async (importOriginal) => ({
 import { render, screen, act } from '@testing-library/react';
 import { toast } from 'sonner';
 import { PROCESS_FAILURE_TOAST_DURATION_MS } from '@/hooks/useEntity.js';
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import InternalConsumptionWindow, {
   buildConfirmActions, confirmRowFilter, isConfirmableRow,
 } from '../index.jsx';
@@ -378,6 +379,26 @@ describe('InternalConsumptionWindow (ETP-5445)', () => {
       expect(toast.success).not.toHaveBeenCalled();
       expect(result).toEqual({ success: false, message: 'Stock insuficiente' });
       expect(lastAppProps().refreshTrigger).toBe(1);
+    });
+
+    it('ETP-5577: a period refusal offers the calendar for the row movement date', async () => {
+      const go = vi.fn();
+      setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+      const body = { status: 'error', messageKeys: ['PeriodNotAvailable'] };
+      mockApiFetch.mockResolvedValue({ ok: false, status: 400, clone: () => ({ json: async () => body }) });
+      mockExtractErrorMessage.mockResolvedValue('periodo cerrado');
+      render(<InternalConsumptionWindow />);
+      const row = { ...CONFIRMABLE, movementDate: '2026-10-15' };
+
+      try {
+        await act(async () => { await confirmEntry(row).onClick({ row }); });
+        const options = toast.error.mock.calls[0][1];
+        expect(options.action.label).toBe('periodNotAvailableOpenCalendar');
+        options.action.onClick();
+        expect(go).toHaveBeenCalledWith('2026-10-15');
+      } finally {
+        setPeriodRecovery(null);
+      }
     });
 
     it('falls back to actionFailed when extractErrorMessage yields nothing', async () => {

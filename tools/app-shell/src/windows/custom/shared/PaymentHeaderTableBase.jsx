@@ -6,6 +6,8 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import PaymentEditModalLauncher from './PaymentEditModalLauncher';
+import { AmountText, CurrencyBreakdown, InfoTooltipButton, buildBalanceDisplay } from '@/components/currency-summary';
+import { buildPeriodSubtitle } from './paymentSummaryPeriod.js';
 import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE } from './paymentStatuses';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -211,61 +213,25 @@ function WidgetCard({ iconSlot, label, badgeText, badgeStyle, count, countStyle 
   );
 }
 
-// ─── computeSidebarStats ──────────────────────────────────────────────────────
-
-function computeSidebarStats(rows) {
-  const now = new Date();
-  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  let thisMonth = 0;
-  let thisMonthCount = 0;
-  let pending = 0;
-  let pendingCount = 0;
-  let draftCount = 0;
-  let currency = 'EUR';
-  const methodMap = {};
-
-  (rows || []).forEach(r => {
-    if (r['currency$_identifier']) currency = r['currency$_identifier'];
-    const amt = parseFloat(r.amount ?? 0);
-    const isDeposited = DEPOSITED_STATUSES.has(r.status || '');
-    if (isDeposited) {
-      if ((r.paymentDate || '').startsWith(ym)) {
-        thisMonth += amt;
-        thisMonthCount += 1;
-      }
-      const methodId = r['paymentMethod$_identifier'] || 'other';
-      if (!methodMap[methodId]) methodMap[methodId] = 0;
-      methodMap[methodId] += amt;
-    } else {
-      pending += amt;
-      pendingCount += 1;
-      draftCount += 1;
-    }
-  });
-
-  const methods = Object.entries(methodMap).map(([label, amount]) => ({ label, amount }));
-  return { thisMonth, thisMonthCount, pending, pendingCount, draftCount, currency, methods };
-}
-
-function fmtMonthSub(thisMonthCount, isIn, ui) {
-  const now = new Date();
-  const monthName = now.toLocaleDateString(undefined, { month: 'long' });
-  const monthCap = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-  const noun = ui(isIn ? 'cobrosNoun' : 'pagosNoun');
-  return `${monthCap} ${now.getFullYear()} · ${thisMonthCount} ${noun}`;
-}
-
 // ─── PaymentSidebar ───────────────────────────────────────────────────────────
 
-function PaymentSidebar({ dir, data, ui }) {
+/**
+ * Summary panel of the list (ETP-5778). Every figure comes from `meta.summary`, which the
+ * backend computes over the WHOLE filtered set (not just the loaded page), converted to the
+ * organization currency at today's rate. `summary === null` (not loaded yet, or a backend
+ * that does not send it) renders the skeleton: the rows are never added up client-side,
+ * because they may be in different currencies.
+ */
+function PaymentSidebar({ dir, summary, dateFilter, ui }) {
   const isIn = dir === 'in';
+  const loaded = summary != null;
+  const orgIso = summary?.orgCurrencyIso || 'EUR';
+  const total = summary?.total ?? {};
+  const pending = summary?.pending ?? {};
+  const methods = Array.isArray(summary?.byMethod) ? summary.byMethod : [];
+  const byCurrency = Array.isArray(summary?.byCurrency) ? summary.byCurrency : [];
+  const missingRate = Array.isArray(total.missingRateCurrencies) ? total.missingRateCurrencies : [];
 
-  const { thisMonth, thisMonthCount, pending, pendingCount, draftCount, currency, methods } = useMemo(
-    () => computeSidebarStats(data),
-    [data]
-  );
-
-  const heroLabel = isIn ? ui('cobradoEsteMes') : ui('pagadoEsteMes');
   return (
     <aside
       style={{
@@ -294,33 +260,65 @@ function PaymentSidebar({ dir, data, ui }) {
         alignSelf: 'stretch',
       }}>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2, height: 28 }}>
-          <span style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 20, lineHeight: '28px', color: 'hsl(var(--foreground))' }}>{heroLabel}</span>
+          <span data-testid="payment-summary-title" style={{ fontFamily: 'Inter', fontWeight: 600, fontSize: 20, lineHeight: '28px', color: 'hsl(var(--foreground))' }}>
+            {ui(isIn ? 'paymentSummaryCollected' : 'paymentSummaryPaid')}
+          </span>
+          <InfoTooltipButton
+            label={ui(isIn ? 'paymentSummaryCollectedInfo' : 'paymentSummaryPaidInfo')}
+            testId="payment-summary-info-button"
+            contentTestId="payment-summary-info-tooltip"
+            data-testid="InfoTooltipButton__743b1b" />
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 4, height: 16 }}>
           {IC_CALENDAR}
-          <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>
-            {data ? fmtMonthSub(thisMonthCount, isIn, ui) : '—'}
+          <span data-testid="payment-summary-subtitle" style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>
+            {loaded ? buildPeriodSubtitle(dateFilter, summary.rowCount ?? 0, dir, ui) : '—'}
           </span>
         </div>
       </div>
       {/* Hero importe */}
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', padding: '0 12px', gap: 8, alignSelf: 'stretch', height: 32 }}>
-        {data === null ? (
-          <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
-        ) : (
-          <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-            {fmtAmt(thisMonth, currency)}
+        {loaded ? (
+          // Bounded by the 292px aside: a long (especially approximate) amount ellipsises instead of
+          // forcing a horizontal scrollbar, and the exact value stays available on hover (title).
+          <span
+            className="tabular-nums"
+            title={buildBalanceDisplay(orgIso, total.amount ?? 0, { approximate: total.approximate === true }).text}
+            style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', minWidth: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <AmountText
+              iso={orgIso}
+              amount={total.amount}
+              approximate={total.approximate === true}
+              testId="payment-summary-total"
+              data-testid="AmountText__743b1b" />
           </span>
+        ) : (
+          <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         )}
       </div>
+      {loaded && missingRate.length > 0 ? (
+        <p
+          className="px-3 pt-1 text-xs font-normal leading-4 text-[var(--status-warning-fg)]"
+          data-testid="payment-summary-missing-rate"
+        >
+          {ui('financeAccountsBalanceMissingRate', { currencies: missingRate.join(', ') })}
+        </p>
+      ) : null}
       {/* Widgets */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: 12, gap: 12, alignSelf: 'stretch' }}>
         <WidgetCard
           iconSlot={IC_CLOCK}
           label={ui('sinDepositar')}
-          badgeText={data === null ? '—' : `${pendingCount} ${ui('porVencer')}`}
+          badgeText={loaded ? `${pending.count ?? 0} ${ui('porVencer')}` : '—'}
           badgeStyle={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' }}
-          count={data === null ? '—' : fmtAmt(pending, currency)}
+          count={loaded
+            ? <AmountText
+            iso={orgIso}
+            amount={pending.amount}
+            approximate={pending.approximate === true}
+            testId="payment-summary-pending"
+            data-testid="AmountText__743b1b" />
+            : '—'}
           countStyle={{ color: 'var(--status-warning-fg)' }}
           data-testid="WidgetCard__743b1b" />
         <WidgetCard
@@ -328,7 +326,7 @@ function PaymentSidebar({ dir, data, ui }) {
           label={ui('sinConfirmar')}
           badgeText={ui('borrador')}
           badgeStyle={{ background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' }}
-          count={data === null ? '—' : draftCount}
+          count={loaded ? (summary.draftCount ?? 0) : '—'}
           countStyle={{ color: 'hsl(var(--foreground))' }}
           data-testid="WidgetCard__743b1b" />
       </div>
@@ -341,11 +339,16 @@ function PaymentSidebar({ dir, data, ui }) {
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, alignSelf: 'stretch' }}>
               {methods.map((m, i) => (
-                <div key={m.label} style={{ width: '100%' }}>
+                <div key={m.id ?? m.label} style={{ width: '100%' }} data-testid={`payment-summary-method-${m.id ?? m.label}`}>
                   <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, alignSelf: 'stretch', height: 20 }}>
                     <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>{m.label}</span>
                     <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 14, lineHeight: '20px', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtAmt(m.amount || 0, currency)}
+                      <AmountText
+                        iso={orgIso}
+                        amount={m.amount}
+                        approximate={m.approximate === true}
+                        testId={`payment-summary-method-${m.id ?? m.label}-amount`}
+                        data-testid="AmountText__743b1b" />
                     </span>
                   </div>
                   {i < methods.length - 1 && (
@@ -355,6 +358,17 @@ function PaymentSidebar({ dir, data, ui }) {
               ))}
             </div>
           </div>
+        </div>
+      )}
+      {/* Detalle por moneda — informational only: real (unconverted) amounts, never "≈". */}
+      {loaded && (
+        <div style={{ padding: '0 12px 12px', alignSelf: 'stretch' }} data-testid="payment-summary-by-currency">
+          <CurrencyBreakdown
+            rows={byCurrency}
+            primaryIso={orgIso}
+            title={ui('paymentSummaryByCurrency')}
+            testIdPrefix="payment-summary-currency"
+            data-testid="CurrencyBreakdown__743b1b" />
         </div>
       )}
     </aside>
@@ -478,18 +492,61 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
       scrollEl = scrollEl.parentElement;
     }
     if (!scrollEl) return;
-    const update = () => { root.style.minHeight = scrollEl.clientHeight + 'px'; };
+    // ETP-5510 — the root must fill the scroller (so the sidebar divider reaches the bottom with
+    // few rows) WITHOUT forcing overflow: min-height = scroller clientHeight
+    //   - its own padding-top/bottom
+    //   - the height (+ margins) of every sibling that shares the scroller with the root, at any
+    //     level between the root and the scroller (the "all records loaded" footer, the
+    //     "loading more" row). Using the bare clientHeight made the content always taller than
+    //     the pane, giving a needless scrollbar. Never negative.
+    const siblingsOf = () => {
+      const out = [];
+      for (let node = root; node && node !== scrollEl; node = node.parentElement) {
+        const parent = node.parentElement;
+        if (!parent) break;
+        for (const sib of parent.children) if (sib !== node) out.push(sib);
+      }
+      return out;
+    };
+    const outerHeight = (el) => {
+      const cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.position === 'absolute' || cs.position === 'fixed') return 0;
+      return el.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+    };
+    const update = () => {
+      const cs = window.getComputedStyle(scrollEl);
+      const padding = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const others = siblingsOf().reduce((sum, el) => sum + outerHeight(el), 0);
+      root.style.minHeight = Math.max(0, scrollEl.clientHeight - padding - others) + 'px';
+    };
     update();
-    const obs = new ResizeObserver(update);
-    obs.observe(scrollEl);
-    return () => obs.disconnect();
+    // Observes the scroller and the siblings (their size never depends on the root's min-height,
+    // so setting it cannot retrigger this), and the ancestors' child lists so a sibling that
+    // appears/disappears (footer, spinner) is picked up and observed too.
+    const resizeObs = new ResizeObserver(update);
+    const watchSiblings = () => {
+      resizeObs.disconnect();
+      resizeObs.observe(scrollEl);
+      siblingsOf().forEach((el) => resizeObs.observe(el));
+    };
+    watchSiblings();
+    const mutationObs = new MutationObserver(() => { watchSiblings(); update(); });
+    for (let node = root; node && node !== scrollEl; node = node.parentElement) {
+      if (node.parentElement) mutationObs.observe(node.parentElement, { childList: true });
+    }
+    return () => { resizeObs.disconnect(); mutationObs.disconnect(); };
   }, []);
 
   // ETP-5601 — ListView's list toolbar no longer draws a bottom border (Figma: 56px, no line),
   // but these windows keep the toolbar/body separator, so the body draws it as its top edge.
   return (
     <div ref={rootRef} style={{ display: 'flex', minHeight: '100%', overflow: 'hidden', borderTop: '1px solid hsl(var(--border-subtle))' }}>
-      <PaymentSidebar dir={dir} data={data} ui={ui} data-testid="PaymentSidebar__743b1b" />
+      <PaymentSidebar
+        dir={dir}
+        summary={props.meta?.summary ?? null}
+        dateFilter={props.columnFilters?.paymentDate}
+        ui={ui}
+        data-testid="PaymentSidebar__743b1b" />
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <DataTable
           {...props}

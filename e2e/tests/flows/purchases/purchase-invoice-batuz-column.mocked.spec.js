@@ -36,10 +36,9 @@ import {
  *  - Columns are addressed through DataTable's generic testids
  *    (`column-header-{key}` / `cell-{rowId}-{key}`), NOT through the
  *    `data-testid="FiscalStatusBadge__…"` props the codemod added on the two
- *    `<FiscalStatusBadge>` call sites: `FiscalStatusBadge` destructures only
- *    `{ status, loading }` and never spreads the rest, so those testids are
- *    dropped and never reach the DOM. Reported, not fixed here (this spec must
- *    not touch production code).
+ *    `<FiscalStatusBadge>` call sites. Since ETP-5700 `FiscalStatusBadge`
+ *    forwards `data-testid` to its root, but those ids repeat on every row,
+ *    so the per-row DataTable cell testids remain the stable locator.
  *  - Cell text is asserted against the real i18n labels resolved by `t()` — note
  *    `Recibido` renders as "Aceptado" in es_ES, so a literal-string assertion
  *    would be wrong.

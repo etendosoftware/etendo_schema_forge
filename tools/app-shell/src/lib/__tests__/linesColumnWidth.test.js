@@ -1,6 +1,10 @@
+// @covers tools/app-shell/src/lib/linesColumnWidth.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { columnFlex, columnMinWidthPx } from '../linesColumnWidth.js';
+// @covers tools/app-shell/src/lib/linesColumnWidth.js
+import {
+  columnFlex, columnMinWidthPx, withImplicitGrowColumn, listTableMinWidthPx, GROW_COLUMN_MIN_PX,
+} from '../linesColumnWidth.js';
 
 // Helper — extract the flex-basis px from a CSS flex shorthand like "0 0 172px"
 function basis(flex) {
@@ -239,6 +243,93 @@ describe('linesColumnWidth', () => {
         assert.equal(columnMinWidthPx(col), 240);
         assert.equal(columnMinWidthPx(col), basis(columnFlex(col, 1)));
       });
+    });
+    describe('display: tag basis', () => {
+      it('is fixed at 144px and never elastic', () => {
+        assert.equal(columnFlex({ type: 'selector', display: 'tag' }, 1), '0 0 144px');
+        assert.equal(columnFlex({ type: 'foreignKey', display: 'tag' }, 0), '0 0 144px');
+        assert.equal(columnFlex({ type: 'string', display: 'tag' }, 0), '0 0 144px');
+      });
+
+      it('columnMinWidthPx is 144 and matches the flex basis', () => {
+        const col = { type: 'selector', display: 'tag' };
+        assert.equal(columnMinWidthPx(col), 144);
+        assert.equal(columnMinWidthPx(col), basis(columnFlex(col, 1)));
+      });
+
+      it('an explicit minWidth sets the pixel basis but stays 0 0', () => {
+        const col = { type: 'selector', display: 'tag', minWidth: 200 };
+        assert.equal(columnFlex(col, 0), '0 0 200px');
+        assert.equal(columnMinWidthPx(col), 200);
+      });
+
+      it('a non-tag selector column is unchanged (192px, elastic at idx 0)', () => {
+        assert.equal(columnMinWidthPx({ type: 'selector' }), 192);
+        assert.equal(columnFlex({ type: 'selector' }, 0), '1 0 192px');
+        assert.equal(columnFlex({ type: 'selector' }, 1), '0 0 192px');
+      });
+    });
+  });
+
+  describe('list-only bases (status, multiField)', () => {
+    it('status columns get a 184px basis in a list and keep the 120px generic basis in lines', () => {
+      assert.equal(columnMinWidthPx({ type: 'status' }), 184);
+      assert.equal(columnFlex({ type: 'status' }, 1), '0 0 120px');
+    });
+
+    it('multiField columns get a 240px basis in a list and keep the 120px generic basis in lines', () => {
+      assert.equal(columnMinWidthPx({ type: 'multiField' }), 240);
+      assert.equal(columnFlex({ type: 'multiField' }, 1), '0 0 120px');
+    });
+
+    it('an explicit minWidth still wins over the list basis', () => {
+      assert.equal(columnMinWidthPx({ type: 'status', minWidth: 90 }), 90);
+    });
+  });
+
+  describe('withImplicitGrowColumn', () => {
+    it('returns the same array when a column already grows', () => {
+      const cols = [{ key: 'a' }, { key: 'b', grow: true }];
+      assert.equal(withImplicitGrowColumn(cols), cols);
+    });
+
+    it('marks the first column that does not pin its width as grow', () => {
+      const cols = [{ key: 'a', headClass: 'w-[80px]' }, { key: 'b', cellClass: 'w-10' }, { key: 'c' }, { key: 'd' }];
+      const out = withImplicitGrowColumn(cols);
+      assert.deepEqual(out.map(c => !!c.grow), [false, false, true, false]);
+      assert.equal(cols[2].grow, undefined, 'input is not mutated');
+    });
+
+    it('returns the columns unchanged when every column pins its width', () => {
+      const cols = [{ key: 'a', headClass: 'w-10' }, { key: 'b', cellClass: 'w-10' }];
+      assert.equal(withImplicitGrowColumn(cols), cols);
+    });
+
+    it('returns an empty list unchanged', () => {
+      const cols = [];
+      assert.equal(withImplicitGrowColumn(cols), cols);
+    });
+  });
+
+  describe('listTableMinWidthPx', () => {
+    it('floors the grow column at GROW_COLUMN_MIN_PX (320) and adds the fixed slots', () => {
+      assert.equal(GROW_COLUMN_MIN_PX, 320);
+      const cols = [{ type: 'string', grow: true }, { type: 'amount' }];
+      assert.equal(listTableMinWidthPx(cols, 40), 320 + 172 + 40);
+    });
+
+    it('keeps a grow column that is already wider than the floor at its own basis', () => {
+      assert.equal(listTableMinWidthPx([{ type: 'string', grow: true, minWidth: 500 }]), 500);
+    });
+
+    it('excludes columns that pin their width with headClass', () => {
+      const cols = [{ type: 'string', grow: true }, { type: 'amount', headClass: 'w-[100px]' }];
+      assert.equal(listTableMinWidthPx(cols), 320);
+    });
+
+    it('is the fixed slots alone for an empty list', () => {
+      assert.equal(listTableMinWidthPx([], 80), 80);
+      assert.equal(listTableMinWidthPx([]), 0);
     });
   });
 });
