@@ -24,7 +24,7 @@ import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
 import { LastSyncLabel } from '@/components/financial-accounts/LastSyncLabel.jsx';
 import { normalizeIban } from '@/lib/validateIban.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
 import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
@@ -1311,7 +1311,9 @@ export function EditAccountModal({
     // discriminator; the status is not.
     if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
       setError(ui('financeAccountsEditStaleRecord'));
-    } else if (err.status === 409) {
+    } else if (isDuplicateConflict(err.status, err.code)) {
+      // ETP-5782: only `duplicate_key` (or a legacy code-less 409) means "name taken"; any other
+      // 409 (record in use, retryable conflict) falls through to the server's own message.
       setError(ui('financeAccountsNewNameExists'));
     } else {
       // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
@@ -1320,7 +1322,7 @@ export function EditAccountModal({
       // useAccountFields' own pre-check is meant to catch these BEFORE the request fires; this
       // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
       // another tab, an API/MCP-shaped body).
-      toast.error(translateBackendError(err.message, ui) || ui('financeAccountsEditError'));
+      toast.error(translateBackendError(err.message, ui, { code: err.code }) || ui('financeAccountsEditError'));
     }
   };
 
