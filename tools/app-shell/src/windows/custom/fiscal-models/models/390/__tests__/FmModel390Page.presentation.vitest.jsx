@@ -1,10 +1,9 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/FmModel390Page.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/submission390.js
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/SubmissionCard390.jsx
-// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/RegisterSubmitted390Modal.jsx
 //
-// ETP-5716 — Modelo 390 presentation: "Presentar" offers the AEAT telematic filing and
-// "Registrar como presentada"; both save pending changes first. A telematic success mirrors the
+// ETP-5716 — Modelo 390 presentation: "Presentar" offers the AEAT telematic filing and the same
+// manual paths as the 303 ("Con / Sin acuse de recibo"); both save pending changes first. A telematic success mirrors the
 // backend's submitted_ack + filing data; an AEAT error keeps the draft. A manual registration
 // saves manualData.submission in its own PUT, then sets the 303/349 manual-register status
 // (submitted_ack + manual_ack with the PDF, submitted + manual_no_receipt without). AEAT answers
@@ -57,7 +56,8 @@ vi.mock('../../../FmOverlays.jsx', () => ({
     presentProps.current = p;
     return React.createElement('div', null,
       React.createElement('button', { type: 'button', 'data-testid': 'PresentModal-aeat', onClick: () => p.onConfirm({ status: 'aeat_telematic' }) }, 'aeat'),
-      React.createElement('button', { type: 'button', 'data-testid': 'PresentModal-register', onClick: () => p.onConfirm({ status: 'manual_register' }) }, 'register'));
+      React.createElement('button', { type: 'button', 'data-testid': 'PresentModal-ack', onClick: () => p.onConfirm({ status: 'submitted_ack', acuseFile: { name: 'j.pdf' } }) }, 'ack'),
+      React.createElement('button', { type: 'button', 'data-testid': 'PresentModal-noAck', onClick: () => p.onConfirm({ status: 'submitted', acuseFile: null }) }, 'no-ack'));
   },
 }));
 const flowProps = vi.hoisted(() => ({ current: null }));
@@ -67,12 +67,7 @@ vi.mock('../../303/AeatSubmitFlow.jsx', () => ({
     return React.createElement('div', { 'data-testid': 'AeatSubmitFlow-stub' });
   },
 }));
-vi.mock('../RegisterSubmitted390Modal.jsx', () => ({
-  default: ({ onConfirm }) => React.createElement('button', {
-    type: 'button', 'data-testid': 'Register-confirm',
-    onClick: () => onConfirm({ justificante: '3901234567890', date: '2027-01-10', file: { name: 'j.pdf' } }),
-  }, 'register-confirm'),
-}));
+
 vi.mock('../FileGenModal390.jsx', () => ({ default: () => null }));
 const uploadMock = vi.hoisted(() => vi.fn());
 vi.mock('@/components/attachments', () => ({
@@ -139,12 +134,11 @@ function editIdentifier() {
 }
 
 describe('FmModel390Page — Presentar', () => {
-  it('offers the AEAT path and a single "Registrar como presentada" path', () => {
+  it('offers the AEAT path and the 303 manual paths (no 390-specific register paths)', () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     fireEvent.click(screen.getByTestId('FmModel390Page__present'));
     expect(presentProps.current.showAeatPath).toBe(true);
-    expect(presentProps.current.registerPaths.map(p => p.id)).toEqual(['manual_register']);
-    expect(presentProps.current.registerPaths[0].continues).toBe(true);
+    expect(presentProps.current.registerPaths).toBeUndefined();
   });
 
   it('telematic: pending changes are saved BEFORE the AEAT flow opens, with the 390 adapter', async () => {
@@ -201,15 +195,15 @@ describe('FmModel390Page — Presentar', () => {
     expect(p.onSubmittedRemotely).not.toHaveBeenCalled();
   });
 
-  it('manual: saves manualData.submission in its own PUT, uploads the PDF, then sets submitted_ack / manual_ack', async () => {
+  it('"Con acuse": saves manualData.submission in its own PUT, uploads the acuse, then sets submitted_ack / manual_ack', async () => {
     const p = props();
     render(<FmModel390Page decl={makeDecl()} {...p} />);
     fireEvent.click(screen.getByTestId('FmModel390Page__present'));
-    fireEvent.click(screen.getByTestId('PresentModal-register'));
-    fireEvent.click(await screen.findByTestId('Register-confirm'));
+    fireEvent.click(screen.getByTestId('PresentModal-ack'));
     await waitFor(() => expect(p.onStatusChange).toHaveBeenCalledWith('decl-390', 'submitted_ack', 'manual_ack'));
     const saved = persistManualData.mock.calls.at(-1)[1];
-    expect(saved.submission).toMatchObject({ method: 'manual', justificante: '3901234567890', presentationDate: '2027-01-10', user: 'ayelen' });
+    expect(saved.submission).toMatchObject({ method: 'manual', justificante: '', user: 'ayelen' });
+    expect(saved.submission.presentationDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(saved.aeatInputs.LIQANUAL_VAT_IMPORT).toBe('5');
     expect(persistManualData.mock.invocationCallOrder.at(-1)).toBeLessThan(p.onStatusChange.mock.invocationCallOrder[0]);
     expect(uploadMock).toHaveBeenCalledWith({ name: 'j.pdf' });
@@ -217,13 +211,21 @@ describe('FmModel390Page — Presentar', () => {
     expect(screen.getByTestId('SubmissionCard390__method').textContent).toBe('fm.m390.submission.method_manual');
   });
 
+  it('"Sin acuse": submitted / manual_no_receipt, nothing uploaded', async () => {
+    const p = props();
+    render(<FmModel390Page decl={makeDecl()} {...p} />);
+    fireEvent.click(screen.getByTestId('FmModel390Page__present'));
+    fireEvent.click(screen.getByTestId('PresentModal-noAck'));
+    await waitFor(() => expect(p.onStatusChange).toHaveBeenCalledWith('decl-390', 'submitted', 'manual_no_receipt'));
+    expect(uploadMock).not.toHaveBeenCalled();
+  });
+
   it('manual: a failed save changes no status', async () => {
     const p = props();
     persistManualData.mockResolvedValue({ ok: false });
     render(<FmModel390Page decl={makeDecl()} {...p} />);
     fireEvent.click(screen.getByTestId('FmModel390Page__present'));
-    fireEvent.click(screen.getByTestId('PresentModal-register'));
-    fireEvent.click(await screen.findByTestId('Register-confirm'));
+    fireEvent.click(screen.getByTestId('PresentModal-ack'));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.action.save_error'));
     expect(p.onStatusChange).not.toHaveBeenCalled();
   });
@@ -249,9 +251,9 @@ describe('FmModel390Page — Presentar', () => {
     await waitFor(() => expect(fetchDeclarationIncidents.mock.calls.length).toBe(before + 1));
   });
 
-  it('manual without PDF: submitted / manual_no_receipt (reactivatable, like 303/349)', () => {
-    expect(manualRegistrationStatus(null)).toEqual({ status: 'submitted', submissionMethod: 'manual_no_receipt' });
-    expect(manualRegistrationStatus({ name: 'j.pdf' })).toEqual({ status: 'submitted_ack', submissionMethod: 'manual_ack' });
+  it('manual paths map to the 303/349 status and method (both reactivatable)', () => {
+    expect(manualRegistrationStatus('submitted')).toEqual({ status: 'submitted', submissionMethod: 'manual_no_receipt' });
+    expect(manualRegistrationStatus('submitted_ack')).toEqual({ status: 'submitted_ack', submissionMethod: 'manual_ack' });
   });
 
   it('ruleBlockingCount ignores warnings and AEAT- rows', () => {
@@ -335,30 +337,5 @@ describe('submission390 / card / register helpers', () => {
     expect(presentationDateLabel({ presentationDate: '2027-01-10' }, 'es-ES')).toBe('10/01/2027');
     expect(presentationDateLabel({ presentationDate: '15/01/2027 10:20' })).toBe('15/01/2027 10:20');
     expect(presentationDateLabel({})).toBe('—');
-  });
-
-  it('registerFormError: 13 digits, a past date and the conformity check are all required', async () => {
-    const { registerFormError } = await vi.importActual('../RegisterSubmitted390Modal.jsx');
-    const ok = { justificante: '3901234567890', date: '2027-01-10', conform: true, today: '2027-01-20' };
-    expect(registerFormError(ok)).toBeNull();
-    expect(registerFormError({ ...ok, justificante: '39012' })).toBe('fm.m390.register.justificante_invalid');
-    expect(registerFormError({ ...ok, date: '' })).toBe('fm.m390.register.date_required');
-    expect(registerFormError({ ...ok, date: '2027-02-01' })).toBe('fm.m390.register.date_future');
-    expect(registerFormError({ ...ok, conform: false })).toBe('fm.m390.register.conformity_required');
-  });
-
-  it('RegisterSubmitted390Modal: Confirmar stays disabled until the justificante and conformity are set', async () => {
-    const { default: Modal } = await vi.importActual('../RegisterSubmitted390Modal.jsx');
-    const onConfirm = vi.fn();
-    render(<Modal onConfirm={onConfirm} onClose={vi.fn()} />);
-    const confirm = screen.getByTestId('RegisterSubmitted390Modal__confirm');
-    expect(confirm.disabled).toBe(true);
-    fireEvent.change(screen.getByTestId('RegisterSubmitted390Modal__justificante'), { target: { value: '390-1234567890' } });
-    expect(screen.getByTestId('RegisterSubmitted390Modal__justificante').value).toBe('3901234567890');
-    expect(confirm.disabled).toBe(true);
-    fireEvent.click(screen.getByTestId('RegisterSubmitted390Modal__conformity'));
-    expect(confirm.disabled).toBe(false);
-    fireEvent.click(confirm);
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ justificante: '3901234567890', file: null }));
   });
 });

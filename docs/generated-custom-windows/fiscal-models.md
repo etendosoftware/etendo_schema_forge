@@ -461,7 +461,7 @@ Modelo 349:
 them — the only component that could ever set them (`StatusPillMenu`/`StatusMenu` in
 `FmCommon.jsx`) was never wired into any real page and has been deleted.
 
-Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (on 349 "Registrar presentación" since ETP-5584 P14; renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`'s default paths; `submitted_ext` itself is still a valid, fully-rendered status (color, label). The Modelo 390 "Registrar como presentada" path (`registerPaths`) does NOT use it: it sets the same `submitted`/`submitted_ack` + manual method as the 303/349 manual register.
+Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (on 349 "Registrar presentación" since ETP-5584 P14; renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`'s default paths; `submitted_ext` itself is still a valid, fully-rendered status (color, label). The Modelo 390 offers the same two manual paths as the 303 (since ETP-5716) and sets the same `submitted`/`submitted_ack` + manual method.
 
 ### `submissionMethod` — telling apart the 3 paths that lead to "Presentado" (ETP-4755)
 
@@ -3462,9 +3462,9 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
   Generar or Registrar/Presentar stays clickable: with blocking RULE incidents a click shows the toast
   `fm.m390.blocked_by_incidents` and opens nothing, and the Generar download icon is red (see
   "Incidents"). Both are disabled only while nothing is computed or the page is busy.
-- **Registrar/Presentar** opens the shared `PresentModal` with the AEAT path and, as its left
-  column, the single path **Registrar como presentada** (`registerPaths`, sentinel id
-  `manual_register`) — see "Presentation" below.
+- **Registrar/Presentar** opens the shared `PresentModal` exactly as the 303: the AEAT path and,
+  as its left column, **Con acuse de recibo** (`submitted_ack`, the acuse PDF picked in the modal)
+  / **Sin acuse de recibo** (`submitted`) — see "Presentation" below.
 - **Sustitutiva** shows the amber banner (shared `.fm-substitutive-banner`, same as 349) with
   **Identificador declaración anterior** (digits only, `sanitizeFormerStatementInput`; inline error
   `fm.m390.substitutive.id_invalid` until it has exactly 13 digits, the shared
@@ -3769,14 +3769,14 @@ the backend forwards them to the classic generator: ordinary → `ISSUPPLEMENTAR
 | Calcular | `GET /fiscal390/preload` (applied to the unmodified inputs), then `GET /fiscal390/boxes` with the on-screen inputs as query params (the backend overrides the stored ones with them), then `PUT manualData` when dirty |
 | Generar fichero 390 | `PUT manualData` when dirty (a failed save aborts) → `GET /fiscal390/generate` (reads the STORED inputs; body read as a Blob, ISO-8859-1 untouched; default name `390_0A_<año>.txt`, editable in `FileGenModal390`) |
 | Presentar a la AEAT | `PUT manualData` when dirty (a failed save aborts) → `AeatSubmitFlow` → `POST /fiscal390/submit` (the backend files the STORED inputs and freezes the snapshot from them) |
-| Registrar como presentada | `PUT manualData` with `submission` (and the pending inputs) → upload of the PDF → a SEPARATE `PUT status` (`submitted_ack`/`manual_ack` with the PDF, `submitted`/`manual_no_receipt` without) — never the same PUT: the backend freezes the submission snapshot from the stored inputs before applying a same-request manualData |
+| Con / Sin acuse de recibo | `PUT manualData` with `submission` (and the pending inputs) → upload of the acuse (con acuse) → a SEPARATE `PUT status` (`submitted_ack`/`manual_ack` con acuse, `submitted`/`manual_no_receipt` sin acuse) — never the same PUT: the backend freezes the submission snapshot from the stored inputs before applying a same-request manualData |
 
 Every successful save invalidates the list's session cache for the declaration
 (`invalidateFiscalComputeCache`), patches the list (`onManualDataSaved`) and recomputes the
 incidents (`POST /fiscal390/validate`, see "Incidents"); Calcular with nothing to save recomputes
 them too (the invoices may have changed).
 
-### Presentation (`submission390.js`, `RegisterSubmitted390Modal.jsx`, `SubmissionCard390.jsx`)
+### Presentation (`submission390.js`, `SubmissionCard390.jsx`)
 
 Backend contract: `aeat-390-endpoints.md`, "POST /fiscal390/submit". Both paths start from
 `PresentModal` (opened only without blocking RULE incidents and with a valid substitute identifier),
@@ -3801,14 +3801,16 @@ esta declaración son conformes"** (`fm.present.conformity`).
   `BLOCKING_INCIDENTS` guard evaluates the rules, not the stored rows — so a stored AEAT error never
   blocks the retry that fixes it, as in 303 (which does not gate its filing on stored incidents at
   all).
-- **Registrar como presentada** — `RegisterSubmitted390Modal`: **Número de justificante** (13
-  digits), **Fecha de presentación** (default today, not in the future), optional PDF (same types
-  as the Justificante tab) and the conformity check. Then `PUT manualData` with
-  `submission = { method: 'manual_ext', justificante, presentationDate, user, submittedAt }`,
-  upload of the PDF, and the SAME status and method as the 303/349 manual register
-  (`manualRegistrationStatus`): `submitted_ack` + `manual_ack` with the PDF, `submitted` +
-  `manual_no_receipt` without it — chip "Presentado" with the method sub-label. A failed status PUT
-  rolls the chip back.
+- **Con / Sin acuse de recibo** (ETP-5716: aligned to the 303, the former 390-only "Registrar
+  como presentada" step with justificante number / date / conformity was removed) — the shared
+  `PresentModal` paths; "Con acuse" requires the acuse PDF in the modal. Then `PUT manualData` with
+  `submission = { method: 'manual', justificante: '', presentationDate: <today>, user,
+  submittedAt }`, upload of the acuse, and the SAME status and method as the 303/349
+  (`manualRegistrationStatus(path)`): `submitted_ack` + `manual_ack` / `submitted` +
+  `manual_no_receipt` — chip "Presentado" with the method sub-label; both reactivatable (only a
+  telematic filing is not). A failed status PUT rolls the chip back. No justificante number is
+  asked any more, so a substitute created from a manual registration asks for the former
+  identifier itself (`formerStatementFrom` leaves it empty).
 
 ### Presented declaration
 
@@ -3926,9 +3928,8 @@ names, no conformity check), so the 303 page passes nothing and is unchanged. A 
 disabled whenever it is (`submitDisabled`: submitting, or the conformity check unticked — the
 `fm-btn--save-pill--active` modifier only when enabled, as "Crear declaración") and its `title`
 says what is missing (`fm.aeat.submit_hint.conformity`, "Marca la declaración de conformidad para
-enviar"); same component and look for the 303. `PresentModal` likewise takes an
-optional `registerPaths` (default: the 303/349 "con / sin acuse" paths); a path with
-`continues: true` confirms with "Continuar".
+enviar"); same component and look for the 303. `PresentModal` has the same two manual paths for
+every model; the AEAT path confirms with "Continuar".
 
 ## List page toolbar (`FmListPage`)
 
@@ -4575,7 +4576,6 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `models/390/incompleteYear390.js` | Modelo 390 — exercise without fiscal-calendar periods: recognise `INCOMPLETE_FISCAL_YEAR`, its translated text, the fiscal calendar route |
 | `models/390/Incidents390Tab.jsx` | Modelo 390 "Incidencias" tab — Bloqueantes / Advertencias with "Ir a la casilla", "Ver facturas", "Editar en Organización" |
 | `models/390/submission390.js` | Presentation (ETP-5716): `AEAT_SUBMIT_390` adapter, `manualData.submission` helpers, `createSubstitute390` / `substituteManualData` |
-| `models/390/RegisterSubmitted390Modal.jsx` | "Registrar como presentada" step 2: justificante, date, PDF, conformity check |
 | `models/390/SubmissionCard390.jsx` | "Presentación en la AEAT" card of a presented 390 |
 | `models/390/useOrg390Identity.js` | Organization data of the read-only blocks (session, organization header, information, IAE activities, legal representatives); the file's taxpayer name and the name-truncation notices |
 | `models/390/newDeclWarning390.js` | "Nueva declaración" notice: 303s of the year missing |
@@ -4584,7 +4584,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `useOrgSiiStatus.js` | Is the selected organization in the SII (catalog warning for 390) |
 | `FmDetailChrome.jsx` | Detail-page chrome shared by 303/349 (ETP-5584): `useFmDetailPageMeta` + `buildDeclTitle` (TopBar title/breadcrumb/badge/kebab), `FmDetailHeader`/`FmDetailActionBar`/`FmDetailButton`, `FmStatusChip` + `statusLabelKey`, `tabCount`/`incidentsTabBadge`, `FmEmptyState` |
 | `FmCommon.jsx` | Shared components: `KpiWidget`, `Tabs`, `NumberedStepper`, `ResultPill`, `SummaryCard`, `EmptyState` (re-export of `FmEmptyState`) |
-| `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths — or `registerPaths` — + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
+| `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
 | `FmRowActions.jsx` | Row hover Edit/Delete icons for draft declarations (ETP-5187) — window-local, lighter counterpart to the generic `RowQuickActions` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |
 

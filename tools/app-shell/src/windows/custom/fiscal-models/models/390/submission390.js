@@ -1,5 +1,5 @@
 // Modelo 390 — presentation (ETP-5716): the AEAT telematic filing adapter for AeatSubmitFlow, the
-// filing data kept in `manualData.submission`, the manual "Registrar como presentada" record and
+// filing data kept in `manualData.submission`, the manual "Con / Sin acuse de recibo" record and
 // "Crear declaración sustitutiva".
 //
 // `manualData.submission` (written by the backend on a telematic filing, by the page on a manual
@@ -20,18 +20,21 @@ import { buildManualData390, isSubstitutive } from './fm390Layouts.js';
 export const SUBMISSION_KEY = 'submission';
 /** `manualData.submission.method` of a manual registration. */
 export const SUBMISSION_RECORD_MANUAL = 'manual';
-/** PresentModal path id of "Registrar como presentada" (a sentinel, never a status). */
-export const REGISTER_PATH = 'manual_register';
+/**
+ * PresentModal's manual paths — the same two as the 303/349 (`REGISTER_PATHS` of
+ * FmOverlays.jsx): "Con acuse de recibo" and "Sin acuse de recibo". Their ids are the statuses.
+ */
+export const MANUAL_REGISTER_PATHS = Object.freeze(['submitted_ack', 'submitted']);
 /** Code prefix of the incidents stored from an AEAT answer (backend AEAT_INCIDENT_CODE_PREFIX). */
 export const AEAT_INCIDENT_PREFIX = 'AEAT-';
 
 /**
- * Status and submissionMethod of a manual registration — the 303/349 manual register values:
- * with the justificante PDF `submitted_ack` / `manual_ack`, without it `submitted` /
- * `manual_no_receipt`.
+ * Status and submissionMethod of a manual registration — the 303/349 values for the path picked
+ * in PresentModal: "Con acuse" `submitted_ack` / `manual_ack`, "Sin acuse" `submitted` /
+ * `manual_no_receipt`. Both can be reactivated; only a telematic filing cannot.
  */
-export function manualRegistrationStatus(file) {
-  return file
+export function manualRegistrationStatus(path) {
+  return path === 'submitted_ack'
     ? { status: 'submitted_ack', submissionMethod: 'manual_ack' }
     : { status: 'submitted', submissionMethod: 'manual_no_receipt' };
 }
@@ -59,8 +62,9 @@ export function submissionOf(manualData) {
 }
 
 /**
- * The `manualData.submission` of a manual registration: the justificante number and date the user
- * typed, who registered it and when.
+ * The `manualData.submission` of a manual registration: the presentation date, who registered it
+ * and when. The 303-aligned flow asks no justificante number (`justificante` stays empty unless
+ * given), so a substitute asks for the former identifier itself.
  */
 export function buildManualSubmission({ justificante, date, user, now = new Date() } = {}) {
   return {

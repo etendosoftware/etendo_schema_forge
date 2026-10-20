@@ -173,25 +173,22 @@ function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, 
 // The underlying `path` selection state and `canConfirm`/`handleConfirm`
 // logic are unchanged from the single-column version — only the visual
 // grouping changed.
-// `registerPaths` (optional, ETP-5716): replaces the left column's 2 manual paths — the 390
-// registers a filing made elsewhere as one path (`manual_register`, "Registrar como presentada")
-// whose details are asked in a step of its own. A path with `continues: true` confirms with
-// "Continuar" (its caller opens that next step). Omitted, the column is exactly as before.
-const DEFAULT_REGISTER_PATHS = [
+// The same 2 manual paths for every model (303, 349 and, since ETP-5716, the 390). The AEAT path
+// confirms with "Continuar" (its caller opens the AEAT flow next).
+const REGISTER_PATHS = [
   { id: 'submitted_ack', titleKey: 'fm.present.path.acuse',     descKey: 'fm.present.path.acuse_desc' },
   { id: 'submitted',     titleKey: 'fm.present.path.sin_acuse', descKey: 'fm.present.path.sin_acuse_desc' },
 ];
 
-export function PresentModal({ decl, onConfirm, onClose, showAeatPath, registerPaths = DEFAULT_REGISTER_PATHS }) {
+export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const ui = useUI();
   const t = ui;
   const [path, setPath] = useState(null);
   const [acuseFile, setAcuseFile] = useState(null);
   const fileRef = useRef(null);
 
-  const REGISTER_PATHS = registerPaths;
   const isRegisterPath = REGISTER_PATHS.some(p => p.id === path);
-  const continues = path === 'aeat_telematic' || REGISTER_PATHS.some(p => p.id === path && p.continues);
+  const continues = path === 'aeat_telematic';
   const canConfirm = path === 'aeat_telematic' || (isRegisterPath && (path !== 'submitted_ack' || !!acuseFile));
 
   function handleConfirm() {

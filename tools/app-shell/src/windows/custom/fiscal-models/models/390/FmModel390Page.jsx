@@ -15,9 +15,10 @@
 //
 // Presentar (ETP-5716): PresentModal offers the AEAT telematic filing (AeatSubmitFlow with the
 // 390 adapter, `POST /fiscal390/submit` — the backend sets submitted_ack + the filing data) and
-// "Registrar como presentada" (RegisterSubmitted390Modal: justificante, date, PDF → PUT
-// manualData.submission, then PUT status — the 303/349 manual-register status and method). Both save pending changes first and both
-// ask "Declaro que los datos … son conformes". A submitted 390 shows the "Presentación en la
+// the same two manual paths as the 303 — "Con acuse de recibo" (the acuse PDF picked in the modal,
+// `submitted_ack` / `manual_ack`) and "Sin acuse de recibo" (`submitted` / `manual_no_receipt`):
+// PUT manualData.submission (date + user), the PDF uploaded, then PUT status. Both save pending
+// changes first; the AEAT flow asks "Declaro que los datos … son conformes". A submitted 390 shows the "Presentación en la
 // AEAT" card and "Crear declaración sustitutiva" (submission390.js).
 //
 // 303 preload (ETP-5716, preload390.js): `GET /fiscal390/preload` gives the year's 303s and the
@@ -47,10 +48,9 @@ import {
 } from '../../FmDetailChrome.jsx';
 import { PresentModal } from '../../FmOverlays.jsx';
 import AeatSubmitFlow from '../303/AeatSubmitFlow.jsx';
-import RegisterSubmitted390Modal from './RegisterSubmitted390Modal.jsx';
 import SubmissionCard390 from './SubmissionCard390.jsx';
 import {
-  AEAT_SUBMIT_390, REGISTER_PATH, SUBMISSION_KEY, manualRegistrationStatus, ruleBlockingCount,
+  AEAT_SUBMIT_390, MANUAL_REGISTER_PATHS, SUBMISSION_KEY, manualRegistrationStatus, ruleBlockingCount,
   buildManualSubmission, createSubstitute390, submissionFromResponse, submissionOf,
 } from './submission390.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
@@ -91,12 +91,14 @@ const MODEL_ID = '390';
 const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack']);
 const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
-/** PresentModal's left column for the 390: one "Registrar como presentada" path (step 2 follows). */
-const REGISTER_PATHS_390 = [
-  { id: REGISTER_PATH, titleKey: 'fm.m390.present.path.register', descKey: 'fm.m390.present.path.register_desc', continues: true },
-];
 
 // ── Pure helpers (exported for their unit tests) ─────────────────────────────
+
+/** Today as a date-only `yyyy-MM-dd` in local time (the registration's presentation date). */
+function todayDateOnly(now = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
 
 /** The payload the backend froze when the declaration was presented, or `null`. */
 export function submittedSnapshotOf(decl) {
@@ -253,7 +255,6 @@ export default function FmModel390Page({
   const [showFilegen, setShowFilegen] = useState(false);
   const [showPresent, setShowPresent] = useState(false);
   const [showAeatFlow, setShowAeatFlow] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
   const [creatingSubstitute, setCreatingSubstitute] = useState(false);
   // The filing data (`manualData.submission`) — local so the card shows at once after filing.
   const [submission, setSubmission] = useState(() => submissionOf(decl.manualData));
@@ -568,11 +569,16 @@ export default function FmModel390Page({
     setShowPresent(true);
   }
 
-  // PresentModal's choice. Pending changes are saved FIRST (the backend files / freezes from the
-  // stored inputs); a failed save stops here. Then the next step opens: the AEAT flow, or the
-  // registration form.
-  async function handlePresentPath({ status: path }) {
-    if (path !== 'aeat_telematic' && path !== REGISTER_PATH) return;
+  // PresentModal's choice — the same paths as the 303: the AEAT flow, or a manual registration
+  // "Con acuse de recibo" (submitted_ack, the acuse PDF picked in the modal) / "Sin acuse de
+  // recibo" (submitted). Pending changes are saved FIRST (the backend files / freezes from the
+  // stored inputs); a failed save stops here.
+  async function handlePresentPath({ status: path, acuseFile }) {
+    if (MANUAL_REGISTER_PATHS.includes(path)) {
+      await handleRegister(path, acuseFile);
+      return;
+    }
+    if (path !== 'aeat_telematic') return;
     setPresenting(true);
     try {
       const saved = await persistIfDirty();
@@ -580,8 +586,7 @@ export default function FmModel390Page({
         toast.error(t('fm.action.save_error'));
         return;
       }
-      if (path === 'aeat_telematic') setShowAeatFlow(true);
-      else setShowRegister(true);
+      setShowAeatFlow(true);
     } finally {
       setPresenting(false);
     }
@@ -602,12 +607,13 @@ export default function FmModel390Page({
     onSubmittedRemotely?.(decl.id, 'submitted_ack');
   }
 
-  // "Registrar como presentada": the filing data is saved in its OWN PUT (with the inputs), the
-  // PDF uploaded, then the status changes in a second PUT (the backend freezes the snapshot).
-  async function handleRegister({ justificante, date, file }) {
+  // Manual registration ("Con / Sin acuse de recibo"): the filing data (date + user) is saved in
+  // its OWN PUT (with the inputs), the acuse PDF uploaded, then the status changes in a second PUT
+  // (the backend freezes the snapshot) — the 303 status and method for each path.
+  async function handleRegister(path, file) {
     setPresenting(true);
     try {
-      const filed = buildManualSubmission({ justificante, date, user: auth?.username });
+      const filed = buildManualSubmission({ date: todayDateOnly(), user: auth?.username });
       const manualData = { ...currentManualData(), [SUBMISSION_KEY]: filed };
       const saved = await persistManualData(decl.id, manualData, { token, apiBaseUrl });
       if (!saved.ok) {
@@ -620,7 +626,7 @@ export default function FmModel390Page({
       onManualDataSaved?.(decl.id, manualData);
       if (file) uploadReceipt?.(file);
       const previous = { status, submissionMethod };
-      const next = manualRegistrationStatus(file);
+      const next = manualRegistrationStatus(path);
       setStatus(next.status);
       setSubmissionMethod(next.submissionMethod);
       const result = await onStatusChange?.(decl.id, next.status, next.submissionMethod);
@@ -631,7 +637,6 @@ export default function FmModel390Page({
         return;
       }
       setSubmission(filed);
-      setShowRegister(false);
       if (result?.submittedSnapshot?.boxes != null) setPayload(result.submittedSnapshot);
     } finally {
       setPresenting(false);
@@ -977,8 +982,7 @@ export default function FmModel390Page({
           decl={decl}
           onConfirm={handlePresentPath}
           onClose={() => setShowPresent(false)}
-          showAeatPath
-          registerPaths={REGISTER_PATHS_390} />
+          showAeatPath />
       )}
       {showAeatFlow && (
         <AeatSubmitFlow
@@ -993,12 +997,6 @@ export default function FmModel390Page({
           onAttached={() => listReceipts?.()}
           onIncidentsChanged={() => setIncidentsVersion(v => v + 1)}
           onClose={() => setShowAeatFlow(false)} />
-      )}
-      {showRegister && (
-        <RegisterSubmitted390Modal
-          busy={presenting}
-          onConfirm={handleRegister}
-          onClose={() => setShowRegister(false)} />
       )}
     </div>
   );
