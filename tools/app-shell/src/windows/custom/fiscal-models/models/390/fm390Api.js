@@ -161,7 +161,7 @@ export async function fetchSources390(decl, { token, apiBaseUrl, params } = {}) 
 /**
  * `GET /fiscal390/preload` — the year's Modelo 303 declarations and the 390 inputs they preload:
  * `{ year, periodicity, monthlyReturn, declarations: [...], missingPeriods, lastPeriod, inputs,
- * totals, territory, carryOverKnown, expectedResult, tolerance, warnings }` (preload390.js).
+ * totals, territory, carryOverKnown, expectedResult, warnings }` (preload390.js).
  * `monthlyReturn` (the on-screen ISMONTHLYRETURN) decides where refunds go; omitted, the backend
  * reads the stored one. No timeout: a draft 303 is computed live, up to 12 of them.
  * Throws on a failed request (message in `error.message`).

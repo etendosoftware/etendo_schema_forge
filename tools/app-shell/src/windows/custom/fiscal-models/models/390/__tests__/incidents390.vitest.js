@@ -66,7 +66,7 @@ describe('incidentText390', () => {
   });
 
   it('formats amounts and rates, and names the truncated field', () => {
-    const diff = incidentText390({ origin: 'DIFF_303', params: { difference: '2.00', expected: '100.00', result: '102.00', tolerance: '1.00' } }, t);
+    const diff = incidentText390({ origin: 'DIFF_303', params: { difference: '2.00', expected: '100.00', result: '102.00' } }, t);
     expect(diff).toMatch(/^fm\.m390\.incident\.DIFF_303\|/);
     expect(diff).toContain('2,00');
     const cut = incidentText390({ origin: 'NAME_TRUNCATED', params: { field: 'legalRepresentative', limit: 36, label: '123Z' } }, t);
@@ -221,7 +221,7 @@ describe('fm390Api — incidents requests', () => {
 
 describe('block 9 incidents (AEAT PAR016, ETP-5716)', () => {
   it('format their amounts and offer "Ver detalle por trimestre"', () => {
-    const item = { origin: 'BLOCK9_MISMATCH', severity: 'block', params: { difference: '-2.00', block9: '502.00', result: '500.00', tolerance: '1.00', box: 86 }, action: { type: 'settlements' } };
+    const item = { origin: 'BLOCK9_MISMATCH', severity: 'block', params: { difference: '-2.00', block9: '502.00', result: '500.00', box: 86 }, action: { type: 'settlements' } };
     const text = incidentText390(item, t);
     expect(text).toContain('fm.m390.incident.BLOCK9_MISMATCH');
     // block9 is formatted as an amount like difference / result (never the raw "502.00").

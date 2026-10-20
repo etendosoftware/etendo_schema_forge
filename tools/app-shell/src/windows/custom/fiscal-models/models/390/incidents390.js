@@ -54,7 +54,7 @@ export function groupIncidents390(items) {
 /** Params of an incident formatted for its text (amounts, percentages, the truncated field). */
 function displayParams(item, t) {
   const p = { ...(item?.params ?? {}) };
-  ['difference', 'expected', 'result', 'tolerance', 'block9'].forEach((k) => {
+  ['difference', 'expected', 'result', 'block9'].forEach((k) => {
     if (p[k] != null) p[k] = formatAmount(parseAmount(p[k]) ?? 0);
   });
   if (p.rate != null && p.rate !== '') p.rate = formatPercent(parseAmount(p.rate));

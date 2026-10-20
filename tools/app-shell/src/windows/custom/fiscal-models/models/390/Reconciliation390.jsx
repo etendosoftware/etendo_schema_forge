@@ -3,8 +3,8 @@
 // Compares the 390 result on screen ([86], or [94] in territory mode) with the result of the year's
 // Modelo 303s, `expectedResult` = [95] − [96] − [97] − [98] − [662] computed from the 303s by the
 // backend (definition and justification: com.etendoerp.go docs/aeat-390-endpoints.md,
-// "GET /fiscal390/preload"). Within RECONCILIATION_TOLERANCE_390 a success banner; beyond it a
-// warning one (non-blocking) with the difference. Both carry "Ver detalle por trimestre", which
+// "GET /fiscal390/preload"). Equal at cent precision → a success banner; any difference (no
+// tolerance: the AEAT publishes none) → a warning one (non-blocking) with the difference. Both carry "Ver detalle por trimestre", which
 // opens the year's 303s (Settlements303Table390, block "Resultado de las liquidaciones").
 // No 303 of the year: an info banner "Sin Modelos 303 de <año> con los que cuadrar".
 // Nothing while the preload loads or the boxes are not computed.
@@ -15,7 +15,7 @@ import React from 'react';
 import { ArrowRight, CircleCheck, Info, TriangleAlert } from 'lucide-react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { formatAmount } from '../../fiscalModelsUtils.js';
-import { RECONCILIATION_TOLERANCE_390, missingPeriodsLabel } from './preload390.js';
+import { missingPeriodsLabel } from './preload390.js';
 
 /**
  * @param {object}   props.reconciliation `reconcile390()` result
@@ -67,7 +67,6 @@ export default function Reconciliation390({ reconciliation, preload, year, onVie
             : t('fm.m390.reconcile.difference', {
               difference: formatAmount(reconciliation.difference),
               expected: formatAmount(reconciliation.expected),
-              tolerance: formatAmount(RECONCILIATION_TOLERANCE_390),
             })}
         </span>
         {missing && (

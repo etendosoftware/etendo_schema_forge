@@ -11,12 +11,6 @@
 // user changed, and compares the 390 result with the expected one.
 import { parseAmount, sanitizeAeatInputs390 } from './fm390Layouts.js';
 
-/**
- * Largest |390 result − result of the 303s| still shown as "cuadra" (Jira ETP-5716: a difference
- * of more than 1,00 € raises a non-blocking warning; the business rule is pending confirmation).
- * Mirrors `Fiscal390PreloadAggregator.RECONCILIATION_TOLERANCE` in com.etendoerp.go.
- */
-export const RECONCILIATION_TOLERANCE_390 = 1;
 
 const cents = (v) => Math.round((parseAmount(v) ?? 0) * 100);
 const isBlank = (v) => v == null || String(v).trim() === '';
@@ -82,8 +76,8 @@ export function restorePreloaded390(inputs, preloaded, key) {
  * The cuadre of the 390 `annualResult` ([86], or [94] in territory mode) with the 303s:
  *   `{ status: 'no303' }`                    no 303 of the year to compare with;
  *   `{ status: 'ok' | 'difference', expected, difference }` with `difference = annualResult −
- *   expected`, `difference` beyond `RECONCILIATION_TOLERANCE_390` in absolute value.
- * Amounts are numbers rounded to cents.
+ *   expected`: any difference at cent precision — no tolerance, the AEAT publishes none (as
+ *   `Fiscal390PreloadAggregator.reconcile` in com.etendoerp.go). Amounts are numbers rounded to cents.
  */
 export function reconcile390(annualResult, preload) {
   const expected = parseAmount(preload?.expectedResult);
@@ -92,7 +86,7 @@ export function reconcile390(annualResult, preload) {
   }
   const difference = (cents(annualResult) - cents(expected)) / 100;
   return {
-    status: Math.abs(difference) > RECONCILIATION_TOLERANCE_390 ? 'difference' : 'ok',
+    status: difference !== 0 ? 'difference' : 'ok',
     expected: cents(expected) / 100,
     difference,
   };

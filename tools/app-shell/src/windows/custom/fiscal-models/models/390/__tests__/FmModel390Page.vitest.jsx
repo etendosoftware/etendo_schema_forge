@@ -127,7 +127,6 @@ const PRELOAD = {
   lastPeriod: 'T4',
   inputs: { INGRESAR_03: '300.00', INGRESAR_06: '0.00', INGRESAR_09: '0.00', INGRESAR_12: '60.00', TOTAL_LASTPERIOD: '0.00', TOTAL_LASTPERIOD_DEVOLVER: '0.00', LIQANUAL_COMPENSATION: '0.00', LIQANUAL_ENDCOMPENSATION: '0.00' },
   expectedResult: '360.00',
-  tolerance: '1.00',
   warnings: [{ code: 'DRAFT_303', periods: 'T4' }],
 };
 
@@ -753,8 +752,8 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     await waitFor(() => expect(onOpenDeclaration).toHaveBeenCalledWith(target));
   });
 
-  it('the cuadre is OK within 1,00 € of the 303s and a warning beyond it', async () => {
-    fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '359.50', missingPeriods: [] });
+  it('the cuadre is OK only when equal at cents (no tolerance) and a warning otherwise', async () => {
+    fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '360.00', missingPeriods: [] });
     const { unmount } = render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__ok')).toBeTruthy());
     expect(screen.getByTestId('Reconciliation390__ok').textContent).toContain('fm.m390.reconcile.ok_title');
@@ -781,7 +780,7 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
   });
 
   it('"Ver detalle por trimestre" opens the block of the year\'s 303s and highlights the table', async () => {
-    fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '359.50', missingPeriods: [] });
+    fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '360.00', missingPeriods: [] });
     render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     fireEvent.click(await screen.findByTestId('Reconciliation390__viewDetail'));
     expect(screen.getByTestId('FmBoxes390__block_resultado_liquidaciones')).toBeTruthy();

@@ -4,7 +4,7 @@
 // change, Restaurar, the cuadre threshold and the incident candidates.
 import { describe, it, expect } from 'vitest';
 import {
-  RECONCILIATION_TOLERANCE_390, isUnmodified, applyPreload390, restorePreloaded390, reconcile390,
+  isUnmodified, applyPreload390, restorePreloaded390, reconcile390,
   missingPeriodsLabel, preloadIncidents390,
 } from '../preload390.js';
 
@@ -69,10 +69,10 @@ describe('restorePreloaded390', () => {
 });
 
 describe('reconcile390', () => {
-  it('is ok within the 1,00 € tolerance and a difference beyond it', () => {
-    expect(RECONCILIATION_TOLERANCE_390).toBe(1);
-    expect(reconcile390(101, PRELOAD)).toEqual({ status: 'ok', expected: 100, difference: 1 });
-    expect(reconcile390(98.99, PRELOAD)).toEqual({ status: 'difference', expected: 100, difference: -1.01 });
+  it('compares at cent precision with no tolerance (the AEAT publishes none)', () => {
+    expect(reconcile390(100.004, PRELOAD)).toEqual({ status: 'ok', expected: 100, difference: 0 });
+    expect(reconcile390(100.01, PRELOAD)).toEqual({ status: 'difference', expected: 100, difference: 0.01 });
+    expect(reconcile390(99.99, PRELOAD)).toEqual({ status: 'difference', expected: 100, difference: -0.01 });
   });
   it('has nothing to compare with when the year has no 303', () => {
     expect(reconcile390(10, null)).toEqual({ status: 'no303' });
