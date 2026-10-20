@@ -566,10 +566,12 @@ canceled, or when a demo's trial runs out — the tenant is **blocked**.
 Blocked means every request into the tenant's data is refused with HTTP 402, whatever the door:
 the web app's API (NEO), an AI agent over MCP, the smaller tenant endpoints and the endpoint that
 hands out a login token. The customer can still enter the environment, sees a screen that explains
-why and offers the way out — *Manage subscription* (the Stripe Customer Portal on `/account`) or
-*Upgrade plan* (`/upgrade`) — and both pages keep working, because blocking the pay path would
-lock the customer out for good. Paying clears the block with the next `invoice.paid`; a canceled
-subscription is replaced by a new purchase.
+why and offers the way out — *Manage subscription* (the Stripe Customer Portal on `/account`) for
+an unpaid invoice, *Reactivar suscripción* (straight to Stripe Checkout, owner only) for a canceled
+subscription, or *Upgrade plan* (`/upgrade`) for a demo — and those paths keep working, because
+blocking the pay path would lock the customer out for good. Paying clears the block with the next
+`invoice.paid`; a canceled subscription is re-subscribed on the same environment, with its data
+(ETP-5742; `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` §3).
 
 Operations has one lever: a backend-only kill switch, `environment-access-enforcement-off`, which
 lets blocked tenants in (for one tenant or for all) during an incident and logs what it would have

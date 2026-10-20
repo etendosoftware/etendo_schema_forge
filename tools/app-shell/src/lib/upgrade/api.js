@@ -41,6 +41,10 @@ export const UPGRADE_ERROR_CODES = {
   // ETP-5548: the account already has a productive environment with this company name. Refused
   // before the provider is contacted, because a paid checkout fixes its name.
   tenantNameInUse: 'upgradeTenantNameInUse',
+  // ETP-5742: refusals of the re-subscription. Only the owner may re-subscribe, and only an
+  // environment whose subscription was canceled has one to re-subscribe.
+  reactivationOwnerRequired: 'blockedAccessSubscriptionCanceledMemberMessage',
+  reactivationNotAvailable: 'blockedAccessReactivateFailed',
   failed: 'upgradeGenericError',
 };
 
@@ -173,6 +177,45 @@ function billingPurchaseError(response, data) {
   }
   return buildError(checkoutFailureCode(response, data), data?.error?.message || data?.message,
     response.status);
+}
+
+/**
+ * ETP-5742 — re-subscribes the environment of the current session after its subscription was
+ * canceled. The body is empty on purpose: the environment is the session's, the plan is the one
+ * the canceled subscription had, and neither is the browser's to name.
+ *
+ * Resolves to `{ requestId, checkoutUrl }` to send the buyer to the provider, or to
+ * `{ requestId, status: 'paid' }` when the re-subscription is already paid and only waiting for the
+ * payment confirmation to be applied.
+ */
+export async function createSubscriptionReactivation(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/reactivation', {
+    method: 'POST',
+    baseUrl,
+    on401: 'ignore',
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(reactivationFailureCode(response, data),
+      data?.error?.message || data?.message, response.status);
+  }
+  if (data?.status === 'paid' && data?.requestId) {
+    return { requestId: data.requestId, status: 'paid' };
+  }
+  if (!data?.checkoutUrl || !data?.requestId) {
+    throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
+  }
+  return { requestId: data.requestId, checkoutUrl: data.checkoutUrl };
+}
+
+function reactivationFailureCode(response, data) {
+  if (data?.error?.code === 'REACTIVATION_OWNER_REQUIRED') {
+    return UPGRADE_ERROR_CODES.reactivationOwnerRequired;
+  }
+  if (data?.error?.code === 'REACTIVATION_NOT_AVAILABLE') {
+    return UPGRADE_ERROR_CODES.reactivationNotAvailable;
+  }
+  return checkoutFailureCode(response, data);
 }
 
 export async function getCheckoutStatus(baseUrl, requestId) {
