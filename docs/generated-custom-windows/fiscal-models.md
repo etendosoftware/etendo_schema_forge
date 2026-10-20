@@ -3655,7 +3655,12 @@ the sum of the lines filtered by it equals the box value** (contract and inclusi
 filtered and paged):
 
 - **Columns:** the 303 ones (Fecha factura, Fecha contable, N° documento, Tipo, Contacto, Base,
-  Cuota, Total, Casillas) plus **Impuesto**; Tipo is Venta/Compra (`type: sales|purchase`). With a
+  Cuota, Total, Casillas) plus **Impuesto**; **Tipo** is, as in the 303, the side of the
+  declaration the row's boxes belong to — "IVA Devengado" / "IVA Deducible" (the 303 keys
+  `fm.sources.type.accrued|deductible`, from the row's backend `sides`; an intra-EU acquisition
+  feeds both and shows "IVA Devengado · IVA Deducible" in one row; `rowSides` / `rowTypeLabel` of
+  `sources390.js`, falling back to the invoice side when `sides` is absent). The Tipo filter uses
+  the same values (`accrued` / `deductible`, matched server-side against `sides`). With a
   box filter a last column "Importe casilla [nn]" shows each line's contribution to that box (the
   base for a base box, the cuota for a cuota box).
 - **Filters:** Tipo and Impuesto selects (Impuesto options from the payload's unfiltered

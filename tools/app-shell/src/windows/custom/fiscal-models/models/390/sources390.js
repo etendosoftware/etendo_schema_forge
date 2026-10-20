@@ -10,8 +10,11 @@ import { csvField } from '@etendosoftware/app-shell-core/lib/csv/csvSerializer.j
 /** Rows per page of the tab. */
 export const SOURCES_PAGE_SIZE = 25;
 
-/** Machine values of the "Tipo" filter / the row `type`. */
-export const SOURCE_TYPES = ['sales', 'purchase'];
+/**
+ * Machine values of the "Tipo" filter and of a row's `sides` (ETP-5716): the side of the
+ * declaration its boxes belong to, as the 303's Tipo — IVA Devengado / IVA Deducible.
+ */
+export const SOURCE_TYPES = ['accrued', 'deductible'];
 
 /** The tab with no filter. */
 export function emptySourcesFilter() {
@@ -65,11 +68,28 @@ export function rowBoxAmount(row, box) {
   return v ?? null;
 }
 
-/** The translated "Tipo" of a row. */
+/** The translated "Tipo" value — the 303's keys ("IVA Devengado" / "IVA Deducible"). */
 export function sourceTypeLabel(type, t) {
-  if (type === 'sales') return t('fm.m390.sources.type.sales');
-  if (type === 'purchase') return t('fm.m390.sources.type.purchase');
+  if (type === 'accrued') return t('fm.sources.type.accrued');
+  if (type === 'deductible') return t('fm.sources.type.deductible');
   return type ?? '';
+}
+
+/**
+ * The sides of a row: the backend's `sides` (an intra-EU acquisition has both), or — a payload
+ * without it — the invoice's side (`type`: a sale is accrued, a purchase deductible).
+ */
+export function rowSides(row) {
+  const sides = Array.isArray(row?.sides) ? row.sides.filter(s => SOURCE_TYPES.includes(s)) : [];
+  if (sides.length > 0) return sides;
+  if (row?.type === 'sales') return ['accrued'];
+  if (row?.type === 'purchase') return ['deductible'];
+  return [];
+}
+
+/** The "Tipo" cell of a row: its side(s) translated, "IVA Devengado · IVA Deducible" for both. */
+export function rowTypeLabel(row, t) {
+  return rowSides(row).map(side => sourceTypeLabel(side, t)).join(' · ');
 }
 
 /**
@@ -91,7 +111,7 @@ export function buildSources390Csv(rows, t, { box = null } = {}) {
   const lines = [header.map(csvField).join(',')];
   for (const r of rows ?? []) {
     const cells = [
-      r.date ?? '', r.accountingDate ?? '', r.ref ?? '', sourceTypeLabel(r.type, t), r.party ?? '',
+      r.date ?? '', r.accountingDate ?? '', r.ref ?? '', rowTypeLabel(r, t), r.party ?? '',
       r.tax ?? '', r.rate ?? '', r.base ?? '', r.vat ?? '', r.total ?? '',
       String(r.boxes ?? '').split(',').filter(Boolean).map(boxLabel).join(' '),
     ];

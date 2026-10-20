@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   SOURCES_PAGE_SIZE, emptySourcesFilter, sourcesFilterForBox, hasSourcesFilter, sourcesQueryParams,
-  pageCount, boxLabel, rowBoxAmount, sourceTypeLabel, buildSources390Csv,
+  pageCount, boxLabel, rowBoxAmount, sourceTypeLabel, rowSides, rowTypeLabel, buildSources390Csv,
   sourcesCsvFileName,
 } from '../sources390.js';
 
@@ -72,8 +72,16 @@ describe('paging and boxes', () => {
     expect(rowBoxAmount(ROW, null)).toBeNull();
   });
   it('sourceTypeLabel translates the type', () => {
-    expect(sourceTypeLabel('sales', t)).toBe('fm.m390.sources.type.sales');
-    expect(sourceTypeLabel('purchase', t)).toBe('fm.m390.sources.type.purchase');
+    // ETP-5716: the 303's Tipo (IVA Devengado / IVA Deducible), not sale / purchase.
+    expect(sourceTypeLabel('accrued', t)).toBe('fm.sources.type.accrued');
+    expect(sourceTypeLabel('deductible', t)).toBe('fm.sources.type.deductible');
+  });
+  it('rowSides / rowTypeLabel: the backend sides (both for an intra-EU acquisition), else the invoice side', () => {
+    expect(rowSides({ sides: ['accrued', 'deductible'], type: 'purchase' })).toEqual(['accrued', 'deductible']);
+    expect(rowTypeLabel({ sides: ['accrued', 'deductible'] }, t)).toBe('fm.sources.type.accrued · fm.sources.type.deductible');
+    expect(rowSides({ type: 'sales' })).toEqual(['accrued']);
+    expect(rowSides({ type: 'purchase', sides: [] })).toEqual(['deductible']);
+    expect(rowSides({})).toEqual([]);
   });
 });
 
@@ -83,7 +91,7 @@ describe('buildSources390Csv', () => {
     expect(csv.startsWith('﻿')).toBe(true);
     const [header, line] = csv.slice(1).trim().split('\r\n');
     expect(header.split(',')).toContain('fm.m390.sources.col.tax');
-    expect(line).toBe('2026-01-15,2026-01-16,F001,fm.m390.sources.type.sales,Acme,IVA 21%,21,1000.00,210.00,1210.00,05 06 99');
+    expect(line).toBe('2026-01-15,2026-01-16,F001,fm.sources.type.accrued,Acme,IVA 21%,21,1000.00,210.00,1210.00,05 06 99');
   });
 
   it('adds the box contribution column with a box filter', () => {

@@ -71,7 +71,7 @@ describe('FmSources390 — rows and totals', () => {
     await screen.findByTestId('FmSources390__row_IT1');
     expect(screen.getByText('fm.m390.sources.col.tax')).toBeTruthy();
     expect(screen.getByTestId('FmSources390__row_IT2').textContent).toContain('IVA 10%');
-    expect(screen.getByTestId('FmSources390__row_IT2').textContent).toContain('fm.m390.sources.type.purchase');
+    expect(screen.getByTestId('FmSources390__row_IT2').textContent).toContain('fm.sources.type.deductible');
     expect(screen.getByTestId('FmSources390__row_IT1').textContent).toContain('05, 06');
     expect(screen.getByTestId('FmSources390__totalBase').textContent).toBe('200');
     expect(screen.getByTestId('FmSources390__totalVat').textContent).toBe('42');
@@ -98,6 +98,18 @@ describe('FmSources390 — rows and totals', () => {
     expect((await screen.findByTestId('FmSources390__error')).textContent).toBe('No tax report');
   });
 
+  // ETP-5716 — Tipo as the 303 (IVA Devengado / IVA Deducible); an intra-EU line shows both.
+  it('shows the declaration side as Tipo, both for an intra-EU acquisition', async () => {
+    fetchSources390.mockResolvedValue(response({
+      rows: [row('IT1', { sides: ['accrued'] }), row('IT9', { type: 'purchase', sides: ['accrued', 'deductible'] })],
+    }));
+    render(<Harness />);
+    expect((await screen.findByTestId('FmSources390__type_IT1')).textContent).toBe('fm.sources.type.accrued');
+    expect(screen.getByTestId('FmSources390__type_IT9').textContent).toBe('fm.sources.type.accrued · fm.sources.type.deductible');
+    const options = [...screen.getByTestId('FmSources390__typeFilter').options].map(o => o.value);
+    expect(options).toEqual(['', 'accrued', 'deductible']);
+  });
+
   it('explains an exercise without calendar periods instead of the server text', async () => {
     fetchSources390.mockRejectedValue(Object.assign(new Error('x'), {
       serverMessage: 'org=X raw', code: 'INCOMPLETE_FISCAL_YEAR', year: 2025, missingPeriods: [12],
@@ -118,14 +130,14 @@ describe('FmSources390 — filters', () => {
 
   it('a box filter shows a removable "Casilla [nn]" tag that clears only the box', async () => {
     const onChange = vi.fn();
-    render(<Harness initial={{ box: 21, type: 'sales', tax: 'S21', q: '' }} onChange={onChange} />);
+    render(<Harness initial={{ box: 21, type: 'accrued', tax: 'S21', q: '' }} onChange={onChange} />);
     const tag = await screen.findByTestId('FmSources390__boxTag');
     expect(tag.textContent).toContain('fm.m390.sources.box_tag:{"box":"21"}');
     expect(tag.getAttribute('aria-label')).toBe('fm.m390.sources.box_tag_clear:{"box":"21"}');
     await waitFor(() => expect(lastParams().box).toBe('21'));
     fireEvent.click(tag);
-    expect(onChange).toHaveBeenLastCalledWith({ box: null, type: 'sales', tax: 'S21', q: '' });
-    await waitFor(() => expect(lastParams()).toMatchObject({ type: 'sales', tax: 'S21' }));
+    expect(onChange).toHaveBeenLastCalledWith({ box: null, type: 'accrued', tax: 'S21', q: '' });
+    await waitFor(() => expect(lastParams()).toMatchObject({ type: 'accrued', tax: 'S21' }));
     expect(lastParams().box).toBeUndefined();
     expect(screen.queryByTestId('FmSources390__boxTag')).toBeNull();
   });
@@ -134,10 +146,10 @@ describe('FmSources390 — filters', () => {
     render(<Harness initial={sourcesFilterForBox(99)} />);
     await screen.findByTestId('FmSources390__row_IT1');
     await waitFor(() => expect(lastParams().box).toBe('99'));
-    fireEvent.change(screen.getByTestId('FmSources390__typeFilter'), { target: { value: 'purchase' } });
-    await waitFor(() => expect(lastParams().type).toBe('purchase'));
+    fireEvent.change(screen.getByTestId('FmSources390__typeFilter'), { target: { value: 'deductible' } });
+    await waitFor(() => expect(lastParams().type).toBe('deductible'));
     fireEvent.change(screen.getByTestId('FmSources390__taxFilter'), { target: { value: 'P10' } });
-    await waitFor(() => expect(lastParams()).toMatchObject({ box: '99', type: 'purchase', tax: 'P10' }));
+    await waitFor(() => expect(lastParams()).toMatchObject({ box: '99', type: 'deductible', tax: 'P10' }));
   });
 
   it('the search is sent after typing (debounced) and on Enter', async () => {
@@ -152,7 +164,7 @@ describe('FmSources390 — filters', () => {
 
   it('"Limpiar filtros" resets every filter and the search box', async () => {
     const onChange = vi.fn();
-    render(<Harness initial={{ box: 5, type: 'sales', tax: 'S21', q: 'acme' }} onChange={onChange} />);
+    render(<Harness initial={{ box: 5, type: 'accrued', tax: 'S21', q: 'acme' }} onChange={onChange} />);
     fireEvent.click(await screen.findByTestId('FmSources390__clear'));
     expect(onChange).toHaveBeenLastCalledWith(emptySourcesFilter());
     await waitFor(() => expect(screen.getByTestId('FmSources390__search').value).toBe(''));
@@ -189,8 +201,8 @@ describe('FmSources390 — pagination', () => {
     expect(screen.getByTestId('FmSources390__prev').disabled).toBe(true);
     fireEvent.click(screen.getByTestId('FmSources390__next'));
     await waitFor(() => expect(lastParams().page).toBe('2'));
-    fireEvent.change(screen.getByTestId('FmSources390__typeFilter'), { target: { value: 'sales' } });
-    await waitFor(() => expect(lastParams()).toMatchObject({ type: 'sales', page: '1' }));
+    fireEvent.change(screen.getByTestId('FmSources390__typeFilter'), { target: { value: 'accrued' } });
+    await waitFor(() => expect(lastParams()).toMatchObject({ type: 'accrued', page: '1' }));
   });
 
   it('has no pager for a single page', async () => {

@@ -19,7 +19,7 @@ import { parseAmount } from './fm390Layouts.js';
 import { incompleteFiscalYearOf, incompleteFiscalYearText } from './incompleteYear390.js';
 import {
   SOURCES_PAGE_SIZE, SOURCE_TYPES, boxLabel, buildSources390Csv, hasSourcesFilter, pageCount,
-  rowBoxAmount, sourceTypeLabel, sourcesCsvFileName, sourcesQueryParams, emptySourcesFilter,
+  rowBoxAmount, rowTypeLabel, sourceTypeLabel, sourcesCsvFileName, sourcesQueryParams, emptySourcesFilter,
 } from './sources390.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -256,7 +256,7 @@ export default function FmSources390({
                   <td className="strong">{fmtDate(r.date)}</td>
                   <td>{fmtDate(r.accountingDate)}</td>
                   <td>{r.ref}</td>
-                  <td>{sourceTypeLabel(r.type, t)}</td>
+                  <td data-testid={`FmSources390__type_${r.id}`}>{rowTypeLabel(r, t) || '—'}</td>
                   <td>{r.party}</td>
                   <td>{r.tax}</td>
                   <td className="num">{formatAmount(parseAmount(r.base))}</td>
