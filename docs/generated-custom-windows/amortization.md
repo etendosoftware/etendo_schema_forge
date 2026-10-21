@@ -683,3 +683,7 @@ Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show A
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The **Confirmar amortización** modal shows the refusal under its error with an **Ir al calendario** link, dated by the amortization's accounting date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Read-only role tier — ETP-5830
+
+The amortization-lines `CustomLines` receive `editing=false` when the role tier is `read-only`. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
