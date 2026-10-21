@@ -309,6 +309,19 @@ Field editability in the top section:
   published no countdown) stays informational rather than guessing at urgency. The two banners share
   `BANNER_TONE_CLASSES`, whose entries are whole literal class strings — Tailwind's scanner only
   sees literals, so a `bg-[var(--status-${tone}-bg)]` template would emit no CSS at all.
+- **Stale connection banner** (ETP-5089, ported to Etendo GO in ETP-5836). Salt Edge can keep a
+  connection `active` while every fetch attempt fails at the bank (e.g. an expired PSU token), so
+  the data freezes and the status alone never says so. `GET status` therefore also carries
+  **`stale`** (`SaltEdgeAccountLinkHelper.isConnectionStale`: the last failed fetch is newer than
+  the last success, or it failed and never succeeded) and, when the bank gave one, the failure text
+  as **`staleMessage`**. A stale connection reuses `bank-connection-edit-reauth-banner` and its
+  "Re-autorizar" action, which runs the ordinary reconnect flow. It **outranks the consent
+  countdown** (an expiry is a future failure; this one already stopped the sync) and is **always
+  amber**. Copy: `financeAccountsBankConnectionStaleBanner` with the bank text as `{reason}`, its own
+  closing period stripped because the copy supplies one, or `…StaleBannerNoReason` when there is no
+  text. The account stays **connected**: being stale is not being deactivated, so nothing here
+  touches `reconnectable` (see *Three connection states* below). The reconnect callback refreshes
+  the connection health, which is what makes the banner disappear right after reconnecting.
 - **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
   `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
   calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced
@@ -750,6 +763,8 @@ native app-shell UI; only the bank login is an external popup.
   `tools/app-shell/src/lib/backendErrors.js` (`translateBackendError`), covering
   `PSD2_TransactionsObtained`, `PSD2_NoNewTransactionsFound`, the bank-error wrapper,
   `PSD2_ConnectionWentInactive`, `PSD2_ConsentExpiredReconnect`,
+  `PSD2_ConnectionStaleReconnect` (ETP-5089 — two slots, the account and the bank's own failure
+  text; a missing text switches to the reason-less key instead of rendering an empty slot),
   `PSD2_ImportDateBeyondMaxInterval` and `PSD2_NoActiveConnectionForAccount`. Two consequences worth
   knowing before touching either side: those English strings are a **de facto wire contract** —
   rewording one on the Java side silently un-translates the toast — and because the helper can
@@ -836,6 +851,12 @@ It is a separate flag rather than a tri-state `bankConnected` because several SP
 `bankConnected === true`.
 
 - connected → sync, import settings, Desconectar / Borrar conexión
+- connected but stale (`bankConnectionStale`, ETP-5089) → the connected actions **plus Reconectar**
+  (`account-row-menu-reconnect-stale-{id}`), and the stale banner in Editar Cuenta. It is a fourth
+  flag, never folded into `bankReconnectable`: the account is still linked, so it keeps sync and
+  disconnect and its transfers are not blocked. The list reads it from an `EXISTS` appended as the
+  last column of `ACCOUNTS_SQL`, with the same rule as `isConnectionStale` and the Classic header's
+  Reconnect logic (`AD_AUXILIARINPUT`) — change one, change the three.
 - deactivated (`bankReconnectable`) → **Reconectar** + Borrar conexión. Offering a from-scratch
   "Conectar banco" here would create a second connection and orphan the surviving one.
 - no link → Conectar banco

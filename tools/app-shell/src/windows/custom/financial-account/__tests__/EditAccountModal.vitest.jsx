@@ -513,6 +513,66 @@ describe('EditAccountModal', () => {
       expect(banner).toHaveTextContent('financeAccountsBankConnectionReauthExpired');
     });
 
+    // ETP-5089: still connected, but the connection stopped refreshing. It reuses the re-auth
+    // banner slot and its "Re-autorizar" action, and outranks the consent countdown: that one is a
+    // future failure, this one has already stopped the sync.
+    describe('stale connection (ETP-5089)', () => {
+      const echoParams = (key, params) => (params
+        ? `${key}:${Object.entries(params).map(([k, v]) => `${k}=${v}`).join(',')}`
+        : key);
+      const STALE_STATUS = {
+        connected: true,
+        providerName: 'BBVA',
+        // A calm, far-off consent: on its own it would be a blue informational banner.
+        consentExpiresAt: '2026-12-31',
+        daysUntilExpires: 60,
+        stale: true,
+        staleMessage: 'Error interno del banco.',
+      };
+
+      it('shows the stale copy with the bank reason, in amber, instead of the countdown', async () => {
+        uiMock.mockImplementation(echoParams);
+        fetchStatus.mockResolvedValue(STALE_STATUS);
+        renderModal({ account: CONNECTED_ACCOUNT });
+
+        const banner = await screen.findByTestId('bank-connection-edit-reauth-banner');
+        // The bank's own closing period is dropped: the copy supplies the sentence's period.
+        expect(banner).toHaveTextContent(
+          'financeAccountsBankConnectionStaleBanner:reason=Error interno del banco',
+        );
+        expect(banner).not.toHaveTextContent('financeAccountsBankConnectionReauthBanner');
+        expect(banner).toHaveAttribute('data-tone', 'warning');
+      });
+
+      it('uses the reason-less copy when the bank gave no message', async () => {
+        fetchStatus.mockResolvedValue({ ...STALE_STATUS, staleMessage: undefined });
+        renderModal({ account: CONNECTED_ACCOUNT });
+
+        const banner = await screen.findByTestId('bank-connection-edit-reauth-banner');
+        expect(banner).toHaveTextContent('financeAccountsBankConnectionStaleBannerNoReason');
+      });
+
+      it('reconnects from the stale banner', async () => {
+        const user = userEvent.setup();
+        fetchStatus.mockResolvedValue(STALE_STATUS);
+        renderModal({ account: CONNECTED_ACCOUNT });
+
+        await user.click(await screen.findByTestId('bank-connection-edit-reauth-link'));
+
+        await waitFor(() => expect(launchSaltEdgePopup).toHaveBeenCalled());
+        await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionReauthDone'));
+      });
+
+      it('keeps the plain countdown when the connection is healthy', async () => {
+        fetchStatus.mockResolvedValue({ ...STALE_STATUS, stale: false });
+        renderModal({ account: CONNECTED_ACCOUNT });
+
+        const banner = await screen.findByTestId('bank-connection-edit-reauth-banner');
+        expect(banner).toHaveTextContent('financeAccountsBankConnectionReauthBanner');
+        expect(banner).toHaveAttribute('data-tone', 'info');
+      });
+    });
+
     it('toasts an error when reconnect fails', async () => {
       const user = userEvent.setup();
       fetchStatus.mockResolvedValue({
