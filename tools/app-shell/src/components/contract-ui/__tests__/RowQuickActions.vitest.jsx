@@ -44,11 +44,15 @@ vi.mock('sonner', () => ({
 vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
   (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
 
-// Stub the Iconic trash on top of the real custom-icons module: makes the rendered icon
-// observable and keeps the file independent of the core version that ships it.
+// Stub the Iconic trash and edit icons on top of the real custom-icons module: makes the
+// rendered icons observable and keeps the file independent of the core version that ships them.
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
+  IconicCopyIcon: (props) => <svg data-icon="iconic-copy" {...props} />,
+  IconicMailIcon: (props) => <svg data-icon="iconic-mail" {...props} />,
+  IconicDotsVerticalIcon: (props) => <svg data-icon="iconic-dots-vertical" {...props} />,
 }));
 
 import RowQuickActions from '../RowQuickActions.jsx';
@@ -167,32 +171,51 @@ describe('RowQuickActions', () => {
     ];
     setup({ menuActions });
     const more = screen.getByTestId('row-quick-action-more');
-    expect(more).toBeTruthy();
+    expect(within(more).getByTestId('MoreVertical__ec6673')).toHaveAttribute('data-icon', 'iconic-dots-vertical');
     await user.click(more);
     expect(screen.getByText('Action A')).toBeTruthy();
     expect(screen.queryByText('Action B')).toBeNull();
     expect(screen.getByText('Action C')).toBeTruthy();
   });
 
-  it('calls onEdit when Edit is clicked', async () => {
+  it('renders Edit with the Iconic edit icon (stable testid) and calls onEdit', async () => {
     const user = userEvent.setup();
     const { onEdit } = setup();
-    await user.click(screen.getByTestId('row-quick-action-edit'));
+    const btn = screen.getByTestId('row-quick-action-edit');
+    expect(within(btn).getByTestId('Pencil__ec6673')).toHaveAttribute('data-icon', 'iconic-edit');
+    await user.click(btn);
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(onEdit).toHaveBeenCalledWith(DRAFT_ROW);
+  });
+
+  // Figma "Sticky Acciones": the band is exactly its cell (DataTable reserves >= 100px), padding 0 12px,
+  // buttons flush right with a 2px gap, the transparent -> row-hover gradient, no border/shadow.
+  it('renders the actions band with the Figma Sticky Acciones geometry and gradient', () => {
+    setup();
+    const tokens = screen.getByTestId('row-quick-actions').className.split(/\s+/);
+    expect(tokens).toEqual(expect.arrayContaining([
+      'absolute', 'right-0', 'min-w-full', 'px-3', 'justify-end', 'gap-0.5',
+      'bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)]',
+    ]));
+    expect(tokens).not.toContain('gap-0');
+    expect(tokens.some((t) => /(^|:)(border|shadow)(-|$)/.test(t))).toBe(false);
   });
 
   it('calls onClone when Clone is clicked', async () => {
     const user = userEvent.setup();
     const { onClone } = setup();
-    await user.click(screen.getByTestId('row-quick-action-clone'));
+    const btn = screen.getByTestId('row-quick-action-clone');
+    expect(within(btn).getByTestId('Copy__ec6673')).toHaveAttribute('data-icon', 'iconic-copy');
+    await user.click(btn);
     expect(onClone).toHaveBeenCalledTimes(1);
   });
 
   it('calls onEmail when Email is clicked (with documentPreview)', async () => {
     const user = userEvent.setup();
     const { onEmail } = setup({ documentPreview: true });
-    await user.click(screen.getByTestId('row-quick-action-email'));
+    const btn = screen.getByTestId('row-quick-action-email');
+    expect(within(btn).getByTestId('Mail__ec6673')).toHaveAttribute('data-icon', 'iconic-mail');
+    await user.click(btn);
     expect(onEmail).toHaveBeenCalledTimes(1);
   });
 
