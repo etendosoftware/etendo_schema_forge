@@ -6,6 +6,24 @@
 - **Repos touched:** `com.etendoerp.go` (webhooks, endpoints), `etendo_schema_forge` (Account settings UI)
 - **Implements part of:** [`2026-08-27-recurring-billing-and-resource-limits-prd.md`](2026-08-27-recurring-billing-and-resource-limits-prd.md)
 
+> **Extended by ETP-5046 and ETP-5047 — this design is kept as written.** Where it describes
+> *storage*, *correlation* or *enforcement*, the current behaviour is:
+>
+> - **Storage (§3.3, §3.4, §9):** for a tenant with an `ETGO_SUBSCRIPTION` row the status, the
+>   grace anchor (`GRACE_ANCHOR`) and the ordering watermark (`LAST_EVENT_AT`) live on the row;
+>   the `ETGO_Subscription*` preferences are written only for a tenant with no row (and the
+>   watermark preference is read as a fallback while a row's `LAST_EVENT_AT` is NULL).
+> - **Correlation (§4.2):** the open row carrying the event's Stripe subscription id comes first;
+>   the checkout-request / customer walk below is the fallback.
+> - **Cancellation (§4.3):** `EXPIRED` also closes the row (`END_DATE`); a late event for it is
+>   ignored and a later purchase opens a fresh row.
+> - **Enforcement (§3.3 "runs at ERP login"):** the access decision is checked on every request —
+>   NEO, MCP, the `JwtAuthUtils` servlets and `GET /sws/go/login` — through `EnvironmentAccessGuard`,
+>   with a structured 402 body and a backend-only kill switch (`environment-access-enforcement-off`).
+>
+> Current reference: `com.etendoerp.go` `docs/open-and-notable-topics.md` §3.7–§3.11, and
+> [`../stripe-local-testing.md`](../stripe-local-testing.md) §1.
+
 ---
 
 ## 1. Summary
@@ -83,7 +101,8 @@ environment. That is why `/upgrade` already survives the paywall, and the same h
 ### 3.3 Stored state, live display detail
 
 Webhooks write **only** what the access policy needs: `ETGO_SubscriptionStatus` and
-`ETGO_SubscriptionDueAt`. Both already exist.
+`ETGO_SubscriptionDueAt`. Both already exist. *(Since ETP-5046/5047: `STATUS` and `GRACE_ANCHOR`
+on the tenant's `ETGO_SUBSCRIPTION` row — see the note at the top.)*
 
 Everything the page merely displays — plan name, amount, currency, renewal date,
 cancellation-at-period-end — is read live from Stripe when the page loads.
@@ -99,7 +118,8 @@ Stripe does not guarantee delivery order, and a `FAILED` row is retried later on
 own schedule — so a `past_due` event created before the `CURRENT` a later `invoice.paid`
 already applied must not be allowed to overwrite it just because it happens to arrive after.
 
-A new `AD_Preference` attribute, `ETGO_SubscriptionEventAt`, stores the Stripe `created`
+*(Since ETP-5047 the watermark is `ETGO_SUBSCRIPTION.LAST_EVENT_AT` for a tenant with a row — see
+the note at the top.)* A new `AD_Preference` attribute, `ETGO_SubscriptionEventAt`, stores the Stripe `created`
 instant (event-envelope level, not the nested object) of the last **applied** lifecycle
 event for the client. Before interpreting an event,
 `SubscriptionLifecycleApplier.evaluate(type, event, stored)` compares the event's own
@@ -162,6 +182,9 @@ customer.subscription.*    → object.id
      ↓ CheckoutRequest.createdClient
      ↓ TenantEnvironmentLifecycleService
 ```
+
+*(Since ETP-5047 the open `ETGO_SUBSCRIPTION` row carrying the subscription id is tried first; the
+chain above is the fallback — see the note at the top.)*
 
 **Unresolvable events are ignored, never blocking.** `markIgnored(eventId, "unresolved
 subscription")` records them in `ETGO_BILLING_EVENT` so they remain findable. This follows

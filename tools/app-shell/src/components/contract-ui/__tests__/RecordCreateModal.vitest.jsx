@@ -465,11 +465,11 @@ describe('RecordCreateModal', () => {
     expect(screen.getByTestId('record-create-panel-general')).toHaveClass('hidden');
   });
 
-  it('falls back to a single General tab when the target declares none', async () => {
+  it('falls back to a single General panel, with no tab strip, when the target declares no tabs (ETP-5696)', async () => {
     const tabless = { ...TARGET, tabs: undefined };
     await renderModal(baseProps({ target: tabless }));
-    const triggers = within(screen.getByTestId('record-create-tabs')).getAllByRole('button');
-    expect(triggers.map(b => b.textContent)).toEqual(['General']);
+    // One panel is not a tab group: the strip is only rendered for two or more tabs.
+    expect(screen.queryByTestId('record-create-tabs')).not.toBeInTheDocument();
     expect(screen.getByTestId('record-create-panel-general')).not.toHaveClass('hidden');
     expect(screen.queryByTestId('record-create-panel-additionalInfo')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-form-other')).not.toBeInTheDocument();

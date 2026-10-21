@@ -1,6 +1,9 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -8,8 +11,9 @@ import { login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { ensureStockOnHand } from '../../helpers/inventory-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
-import { createDraftWithFirstLine, pickRectifiableInvoice } from '../../helpers/purchase-helpers.js';
+import { createDraftWithFirstLine, openGeneratedDocument, pickRectifiableInvoice } from '../../helpers/purchase-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 
 /**
  * Sales Order → Shipment → Return → Rectificative Invoice — full live-backend
@@ -64,9 +68,10 @@ async function slow(page) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
-  // Wait for any loading indicator to disappear (covers late-appearing spinners)
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
+  // Wait for EVERY loading indicator to disappear (covers late-appearing spinners
+  // and panels that load concurrently). Passes at once when none is shown; a
+  // still-visible indicator after the budget is tolerated, as before.
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 test.describe('Sales Order → Return → Rectificative Invoice (integration)', () => {
@@ -249,11 +254,8 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
       await slow(page);
 
-      const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
-      await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-      await nextBtn.click();
-      await slow(page);
-
+      // One-step wizard: lines, quantities and reason share the single screen, so
+      // "Crear Devolución" submits directly once the pre-selected lines enable it.
       const returnConfirmPromise = page.waitForResponse(
         (resp) =>
           resp.url().includes('/action/createReturn') &&
@@ -262,10 +264,13 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
         { timeout: 20_000 },
       );
       const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
-      await expect(createReturnConfirmBtn).toBeVisible({ timeout: 10_000 });
+      await expect(createReturnConfirmBtn).toBeEnabled({ timeout: 10_000 });
       await createReturnConfirmBtn.click();
       await returnConfirmPromise;
       await slow(page);
+
+      // ETP-5729: a sales return is announced as such («Ver devolución»).
+      await openGeneratedDocument(page, { title: /^(Devolución de venta creada|Sales return created)$/ });
 
       await expect(page).toHaveURL(/\/return-material-receipt\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);

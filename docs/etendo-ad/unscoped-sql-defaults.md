@@ -25,7 +25,15 @@ that evaluates the SQL as-is (NEO, MCP) can resolve **another tenant's row**.
   period. The sequence bump runs in the INSERT's transaction and rolls back with it, so every retry
   computes the same number.
 - Collateral: the foreign `C_DocType_ID` is carried into `Fact_Acct` when the journal is posted,
-  and foreign tenants' sequences get gaps.
+  together with the foreign `GL_Category_ID` (posting takes both from the document type), and
+  foreign tenants' sequences get gaps.
+
+## Corrective data-fix (ETP-5719)
+
+Journals stored before the ETP-5682 fix are repaired by `R50-gl-journal-foreign-doctype`
+(`cli/src/data-fixes/sql/`): it advances the tenant's own GLJ sequences past the numbers it already
+uses, repoints the posted facts (doctype and GL category) and then the journal to the tenant's own
+GLJ document type. Full description: `docs/etendo-ad/onboarding-gaps.md`, gap A10.
 
 ## Same shape elsewhere
 
@@ -34,8 +42,9 @@ that evaluates the SQL as-is (NEO, MCP) can resolve **another tenant's row**.
 - `ETGO_SF_FIELD` default of `returnToVendorShipment.documentType` (`DocBaseType='MMR'`, Etendo GO's
   own override) — had no client filter either, and ended in `ORDER BY IsDefault DESC LIMIT 1`, which
   hands the generic guard a single (foreign) row. Fixed in ETP-5682 with a client-scoped
-  `defaultExpr` in `artifacts/return-to-vendor-shipment/decisions.json`. Saving was never affected:
-  the create handler injects a client-scoped return document type.
+  `defaultExpr` in `artifacts/return-to-vendor-shipment/decisions.json`. A second path still leaks
+  a foreign `MMR` doctype: `CreatePurchaseReturnHandler.findRtvShipmentDocType` queries without a
+  client filter — tracked in ETP-5801 (code fix + its own data-fix).
 - Not affected: `C_BP_Group_ID`, `M_Product_Category_ID` (filter by `AD_Client_ID`),
   `M_InventoryLine.M_Locator_ID` (scoped by `M_Warehouse_ID`).
 

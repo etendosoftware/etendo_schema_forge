@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
@@ -194,16 +195,17 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       }).toPass({ timeout: 15_000 });
 
       await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
-      const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
-      await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-      await nextBtn.click();
+      // One-step wizard: the lines and quantities are already on screen, so
+      // "Crear Devolución" submits straight away once it is enabled.
+      const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
+      await expect(createReturnConfirmBtn).toBeEnabled({ timeout: 10_000 });
 
       const returnCreated = page.waitForResponse(
         (r) => r.url().includes('/action/createPurchaseReturn')
           && r.request().method() === 'POST' && r.status() < 400,
         { timeout: 20_000 },
       );
-      await returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true }).click();
+      await createReturnConfirmBtn.click();
       await returnCreated;
 
       // ETP-5674: a purchase return is announced as such («Ver devolución»).

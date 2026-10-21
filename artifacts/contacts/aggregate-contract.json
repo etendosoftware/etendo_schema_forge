@@ -55,7 +55,7 @@
     ]
   },
   "actions": [
-    { "label": "+ New Contact", "route": "/business-partner", "default": true }
+    { "label": "+ New Contact", "route": "/contacts", "default": true }
   ],
   "mockData": {
     "kpis": {

@@ -27,6 +27,13 @@
  * human's attention, without the runner needing any fix-specific knowledge. A fix with no `@report`
  * section behaves exactly as before (`detail` stays `null` on success).
  *
+ * An OPTIONAL `-- @optIn: true` header marks a fix that a full run never applies: no `@check`, no
+ * `@apply`, no ledger row, and its ledger rows never move a tenant's watermark. It runs only when
+ * an operator names it with `--fix <id>`, and then only for a tenant whose chain is already current
+ * up to the fix's own date (see run.js `optInChainGate`). For a switch an environment makes once,
+ * at a moment the operator chooses — e.g. R37-tenant-subscription-backfill. Absent (or `false`) =>
+ * an ordinary chain fix. Any other value is rejected, so a typo never silently re-enters the chain.
+ *
  * The `fix_id` is the file name without the `.sql` extension (the leading
  * `<YYYYMMDDThhmmssZ>` prefix makes lexical sort == chronological order).
  */
@@ -39,6 +46,18 @@ const SECTION_MARKER = /^--\s*@(check|apply|report)\s*$/i;
 // backtracking (S5852). The captured value is `.trim()`-ed below, so leading
 // whitespace is dropped anyway — the regex stays linear and behavior is identical.
 const HEADER_LINE = /^--\s*@([A-Za-z_]+)\s*:(.*)$/;
+
+/**
+ * Parse the optional `@optIn` header. Absent => false. Only `true` / `false` (any case) are
+ * accepted: a value like `yes` throws instead of silently leaving the fix in the full-run chain.
+ */
+function parseOptIn(raw, fixId) {
+  if (raw == null || raw === '') return false;
+  const v = raw.toLowerCase();
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  throw new Error(`${fixId}: invalid @optIn "${raw}" (expected true|false)`);
+}
 
 function validations(type, check, fixId, apply, meta) {
   if (type === 'sql') {
@@ -57,7 +76,7 @@ function validations(type, check, fixId, apply, meta) {
  * @returns {{
  *   fixId: string, id: string, gap: string|null, risk: string|null,
  *   type: 'sql'|'webhook', description: string|null,
- *   webhook: string|null, check: string, apply: string, report: string
+ *   webhook: string|null, optIn: boolean, check: string, apply: string, report: string
  * }}
  */
 export function parseFix(text, fixId) {
@@ -98,8 +117,13 @@ export function parseFix(text, fixId) {
   const report = reportLines.join('\n').trim();
 
   validations(type, check, fixId, apply, meta);
-
-
+  // Header keys are lower-cased on capture, so `@optIn` lands in `meta.optin`.
+  const optIn = parseOptIn(meta.optin, fixId);
+  // The run gate of an opt-in fix is its own date (run.js optInChainGate): without a
+  // parseable <YYYYMMDDThhmmssZ> prefix it could never be gated, so refuse it outright.
+  if (optIn && !parseFixTimestamp(fixId)) {
+    throw new Error(`${fixId}: an @optIn fix needs a <YYYYMMDDThhmmssZ>__ timestamp prefix in its file name`);
+  }
 
   return {
     fixId,
@@ -109,6 +133,7 @@ export function parseFix(text, fixId) {
     type,
     description: meta.description || null,
     webhook: meta.webhook || null,
+    optIn,
     check,
     apply,
     report,

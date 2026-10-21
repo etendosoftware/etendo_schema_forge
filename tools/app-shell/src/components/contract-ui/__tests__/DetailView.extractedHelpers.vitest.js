@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { describe, it, expect, vi } from 'vitest';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
@@ -155,6 +156,7 @@ import {
   buildLineRowClickHandler,
   mergeLineEdits,
   hasUnsavedEdits,
+  getTabStripBleedClassName,
 } from '../DetailView.jsx';
 
 describe('mergeSelectorContextFields', () => {
@@ -556,6 +558,41 @@ describe('getDetailContentContainerClassName', () => {
     });
     expect(cls).toContain('px-10');
     expect(cls).not.toContain('px-6');
+  });
+
+  it('keeps px-2 pb-2 for an inlineEditable window with a sidebar when no sidebar override is given', () => {
+    const cls = getDetailContentContainerClassName({
+      linesLayout: 'inlineEditable', sidePanel: () => null, activePrimaryTab: 'general',
+      formScrollPaddingX: '',
+    });
+    expect(cls).toContain('px-2 pb-2');
+  });
+
+  it('sidebarFormScrollPaddingX replaces the sidebar padding, including an empty string', () => {
+    const base = { linesLayout: 'inlineEditable', sidePanel: () => null, activePrimaryTab: 'general' };
+    const none = getDetailContentContainerClassName({ ...base, sidebarFormScrollPaddingX: '' });
+    expect(none).not.toMatch(/\bpx-2\b|\bpb-2\b/);
+    expect(getDetailContentContainerClassName({ ...base, sidebarFormScrollPaddingX: 'px-4' })).toContain('px-4');
+  });
+
+  it('sidebarFormScrollPaddingX is ignored when the window has no sidebar', () => {
+    const cls = getDetailContentContainerClassName({
+      linesLayout: 'readOnly', activePrimaryTab: 'general', sidebarFormScrollPaddingX: '',
+    });
+    expect(cls).toContain('px-6');
+  });
+});
+
+describe('getTabStripBleedClassName sidebar override', () => {
+  it('emits no bleed when the sidebar padding is overridden to empty', () => {
+    expect(getTabStripBleedClassName({
+      linesLayout: 'inlineEditable', sidePanel: () => null, sidebarFormScrollPaddingX: '',
+    })).toBe('');
+  });
+
+  it('still bleeds px-2 for a sidebar window without the override', () => {
+    expect(getTabStripBleedClassName({ linesLayout: 'inlineEditable', sidePanel: () => null }))
+      .toContain('-mx-2 px-2');
   });
 });
 

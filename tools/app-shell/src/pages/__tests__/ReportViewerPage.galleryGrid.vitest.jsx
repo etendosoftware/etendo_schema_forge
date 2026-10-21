@@ -7,7 +7,7 @@
 // jsdom does no layout: the real column count per viewport / rail state is guarded by
 // e2e/tests/flows/platform/gallery-min-width.mocked.spec.js.
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { mockFullReportAccess } from './reportViewerTestHelpers.js';
 
 let mockSearchParams = new URLSearchParams();
@@ -152,5 +152,38 @@ describe('ReportViewerPage — report gallery grid (ETP-5516)', () => {
     localStorage.setItem(VIEW_MODE_KEY, 'list');
     await renderCatalog(SALES_REPORTS);
     expect(screen.queryByTestId('gallery-grid')).not.toBeInTheDocument();
+  });
+
+  // ETP-5516 (QA): a title clipped by the minimum card width reveals itself in a tooltip.
+  // jsdom does no layout, so the test stamps the scrollWidth/clientWidth pair TruncatedText reads.
+  describe('truncated title tooltip', () => {
+    const LONG_REPORT = [{
+      id: 'gg-long-1', title: { en_US: 'Balance de Sumas y Saldos' }, type: 'listing',
+      category: 'finance', outputs: ['pdf'],
+    }];
+    const setMetrics = (el, scrollWidth, clientWidth) => {
+      Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scrollWidth });
+      Object.defineProperty(el, 'clientWidth', { configurable: true, value: clientWidth });
+    };
+
+    it('shows the full title in a tooltip when it is clipped', async () => {
+      await renderCatalog(LONG_REPORT);
+      const title = screen.getByTestId('ReportCard__title');
+      setMetrics(title, 260, 190);
+
+      fireEvent.focus(title);
+
+      expect(screen.getByTestId('ReportCard__title-tooltip')).toHaveTextContent('Balance de Sumas y Saldos');
+    });
+
+    it('stays silent when the title fits', async () => {
+      await renderCatalog(LONG_REPORT);
+      const title = screen.getByTestId('ReportCard__title');
+      setMetrics(title, 150, 190);
+
+      fireEvent.focus(title);
+
+      expect(screen.queryByTestId('ReportCard__title-tooltip')).toBeNull();
+    });
   });
 });

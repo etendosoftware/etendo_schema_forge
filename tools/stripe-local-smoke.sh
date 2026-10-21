@@ -71,6 +71,11 @@ fi
 }
 
 FORWARD_URL="${BASE_URL}${WEBHOOK_PATH}"
+# Stripe CLI 1.53+ refuses `stripe listen` without an event list. Name exactly
+# the events the checkout webhook handles (docs/stripe-local-testing.md §1);
+# keep this list in sync with STRIPE_LISTEN_EVENTS in
+# tools/stripe-subscription-past-due.sh.
+STRIPE_LISTEN_EVENTS="checkout.session.completed,checkout.session.async_payment_succeeded,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.dispute.created"
 LISTENER_LOG="${TMPDIR:-/tmp}/stripe-local-listen.$$.log"
 RESPONSE_FILE="${TMPDIR:-/tmp}/stripe-local-response.$$.json"
 LISTENER_PID=""
@@ -82,7 +87,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "==> Starting Stripe listener -> $FORWARD_URL"
-stripe listen --forward-to "$FORWARD_URL" >"$LISTENER_LOG" 2>&1 &
+stripe listen --events "$STRIPE_LISTEN_EVENTS" --forward-to "$FORWARD_URL" >"$LISTENER_LOG" 2>&1 &
 LISTENER_PID=$!
 for _ in {1..30}; do
   grep -Eq "Ready.*whsec_[A-Za-z0-9]+" "$LISTENER_LOG" && break

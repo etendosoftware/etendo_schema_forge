@@ -225,6 +225,31 @@ export function formatPlainDecimal(value) {
   return String(value).split('.').join(decimalSeparator);
 }
 
+/**
+ * Formats a plain (non-monetary) number WITH thousands grouping, using the same instance-wide
+ * separators and half-up rounding as `formatCurrency` but no currency symbol — e.g. a whole
+ * variation percent: 9999 -> "9.999" under the shipped es-ES config. Use it wherever a grouped
+ * count or ratio is shown; never a hand-rolled `toLocaleString`/`Intl.NumberFormat`.
+ * `formatPlainDecimal` is the ungrouped counterpart for field values.
+ *
+ * @param {number|string|null|undefined} value
+ * @param {object} [options]
+ * @param {number} [options.minimumFractionDigits=0]
+ * @param {number} [options.maximumFractionDigits=0]
+ * @returns {string} the grouped number, or '' for null/blank/non-finite input
+ */
+export function formatGroupedNumber(value, { minimumFractionDigits = 0, maximumFractionDigits = 0 } = {}) {
+  if (value == null || value === '') return '';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '';
+  const minFrac = Number.isInteger(minimumFractionDigits) ? Math.max(0, Math.min(20, minimumFractionDigits)) : 0;
+  const maxFrac = Number.isInteger(maximumFractionDigits)
+    ? Math.max(minFrac, Math.min(20, maximumFractionDigits))
+    : minFrac;
+  const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
+  return groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalSeparator);
+}
+
 export function formatCurrency(currencyCode, value, {
   compact = false,
   minimumFractionDigits = 2,

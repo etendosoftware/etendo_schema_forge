@@ -278,12 +278,14 @@ export const api = {
     "es_ES": {
       "sourceShipmentDocNo": "Albarán origen",
       "movementQuantity": "Cant. a devolver",
-      "orderQuantity": "Cant. entregada original"
+      "orderQuantity": "Cant. entregada original",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "sourceShipmentDocNo": "Source Shipment",
       "movementQuantity": "Return Qty",
-      "orderQuantity": "Original Delivered Qty"
+      "orderQuantity": "Original Delivered Qty",
+      "C_UOM_ID": "Unit"
     }
   }
 };

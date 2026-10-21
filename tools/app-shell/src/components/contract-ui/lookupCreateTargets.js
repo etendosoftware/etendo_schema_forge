@@ -248,21 +248,14 @@ export const LOOKUP_CREATE_TARGETS = {
       },
       es_ES: {
         M_Product_Category_ID: 'Categoría', ProductType: 'Tipo', Value: 'Código',
+        IsStocked: 'Almacenable',
         DateFrom: 'Fecha de inicio', DateTo: 'Fecha de expiración',
       },
-      es_AR: { DateFrom: 'Fecha de inicio', DateTo: 'Fecha de expiración' },
+      es_AR: { IsStocked: 'Almacenable', DateFrom: 'Fecha de inicio', DateTo: 'Fecha de expiración' },
     },
-    // Mirrors `window.primaryTabs` in decisions.json (key and label verbatim, so the menu
-    // dictionary translates them exactly as the window does), plus the EntityForm section
-    // each tab renders. The popup reproduces the window's split rather than showing one
-    // long scroll. `other` cannot be dropped: `taxCategory` lives there, is required, and
-    // has no static default.
-    tabs: [
-      { key: 'general', label: 'General', section: 'principal' },
-      { key: 'additionalInfo', label: 'Additional Info', section: 'other' },
-    ],
-    // The Products window renders its primary tabs with `primaryTabsVariant="pill"`.
-    tabsVariant: 'pill',
+    // ETP-5696: the Products window is a single unified sheet (no `window.primaryTabs`), so
+    // the popup declares no `tabs` either — RecordCreateModal falls back to one `principal`
+    // panel and renders no tab strip. A drift test keeps the two in sync.
     /**
      * Tabs shown AFTER the record is saved, mirroring the `customTabs` ProductPage hands
      * to DetailView (same components, same extra props) so the popup's second phase is the
