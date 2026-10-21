@@ -50,3 +50,19 @@ export function getIncidentIndicator(incidents, t) {
   }
   return null;
 }
+
+/**
+ * ETP-5716 — the Incidencias KPI card of a detail page (303, 390): the `getIncidentIndicator`
+ * variant as the card's icon colour and badge; no incidents → disabled icon and no badge.
+ * `tone` is `null` when there is nothing to report.
+ */
+export function incidentKpiVariants(incidents, t) {
+  const indicator = getIncidentIndicator(incidents, t);
+  if (!indicator) {
+    return { tone: null, iconColor: 'hsl(var(--text-disabled))', badge: null };
+  }
+  return {
+    tone: indicator.tone, iconColor: indicator.iconColor, badge: indicator.label,
+    badgeBg: indicator.badgeBg, badgeColor: indicator.badgeColor,
+  };
+}
