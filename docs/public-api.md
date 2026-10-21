@@ -610,7 +610,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `GET /api/v1/contacts/{id}` calls `/sws/neo/contacts/businessPartner/{id}` ([4.2](#42-routes))
 - [ ] Flat and JSON:API request bodies are both accepted; a JSON:API body with only `relationships` (no `attributes`) is accepted ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] A relationship sent as an attribute returns `400`; a wrong `type` or a different `id` returns `409` ([4.3](#43-fields-and-fail-closed-filtering), [4.6](#46-relationships))
-- [ ] A single-record `GET`, `POST`, `PUT` and `PATCH` return `data` as one object; a collection returns an array; an empty single answer is `404` ([4.3](#43-fields-and-fail-closed-filtering))
+- [ ] A single-record `GET`, `POST`, `PUT` and `PATCH` return `data` as one object; a collection returns an array; an empty read is `404`; an empty write answer, or several records, is `502` ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] Responses are `application/vnd.api+json` without parameters; `Accept` that excludes JSON returns `406`; an unsupported body type returns `415` ([4.7](#47-content-negotiation))
 - [ ] Etendo's `400`, `401`, `402`, `403`, `404`, `409`, `422` reach the integrator with Etendo's message; `5xx` returns `502` with no Etendo internals ([4.8](#48-success-and-error-documents-and-statuses))
 - [ ] `DELETE` answers `204` with no body, as the OpenAPI documents ([4.8](#48-success-and-error-documents-and-statuses))
