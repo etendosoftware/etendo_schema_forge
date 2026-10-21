@@ -2056,9 +2056,6 @@ the rule is generic, so it applies to every window, declarative or custom.
   Natural widths come from an invisible probe row rendered inside the strip (same box classes as `TabStripButton`, shared via `tabStripButtonBaseCls`; labels and counters are drawn with CSS `::after{content:attr(data-text)}`, so the probe adds no text nodes, test ids or focusable elements to the DOM); a `ResizeObserver`
   on the strip and the probe re-measures on resize, sidebar open/close, zoom and font changes.
   Without layout (jsdom, no `ResizeObserver`, zero width) it falls back to the count-only rule.
-- **Sub-pixel measurement (CP-10).** Tab and strip widths are read with `getBoundingClientRect()`
-  (integer `offsetWidth`/`clientWidth` only as fallback where there is no layout), because summing
-  integer-rounded widths overshoots the real layout by a few px and used to evict a tab that fit.
 - **Never left scrolled (CP-3).** The strip is clipped, not scrollable. The probe row lives in its
   own `overflow-hidden` clip box so it never counts as scrollable overflow of the strip (a wider
   absolutely positioned row used to inflate `scrollWidth`, so a focus/`scrollIntoView` on the More
