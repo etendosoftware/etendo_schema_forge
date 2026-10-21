@@ -2033,9 +2033,9 @@ const NO_GATE_EXCLUSIONS = Object.freeze([]);
  * Extracted from inline JSX to avoid the nested-ternary anti-pattern Sonar
  * S3358 was flagging inside the className templates.
  */
-function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
+function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null, sidebarPaddingOverride = null) {
   const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
+  if (hasSidebar) return sidebarPaddingOverride ?? ((isInline || compact) ? 'px-2 pb-2' : 'pr-2');
   if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
   return isInline ? '' : (paddingXOverride ?? 'px-6');
 }
@@ -2059,14 +2059,14 @@ export function getTabStripBleedClassName({
   sidebarContent,
   sidebarAboveTabsOnly,
   compactSidebarPadding,
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
 } = {}) {
   const padding = detailContentPadding(
     linesLayout,
     !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
     'content',
     compactSidebarPadding,
-    formScrollPaddingX,
+    formScrollPaddingX, sidebarFormScrollPaddingX,
   );
   return padding
       .split(/\s+/)
@@ -2621,12 +2621,12 @@ export function getDetailContentContainerClassName({
   compactSidebarPadding,
   primaryTabs,
   activePrimaryTab,
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
   contentOverflow = 'auto',
 } = {}) {
   const defaultOverflowCls = contentOverflow === 'hidden' ? 'overflow-hidden' : 'overflow-auto pb-2';
   const overflowCls = linesLayout === 'inlineEditable' ? 'flex flex-col overflow-y-auto' : defaultOverflowCls;
-  return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
+  return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
 }
 
 export function getLinesTabsSectionClassName(linesLayout) {

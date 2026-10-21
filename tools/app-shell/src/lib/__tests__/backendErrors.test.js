@@ -3224,6 +3224,11 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
     ['ETGO_InvoiceFieldsLockedSiiSent', 'backendError.invoiceSiiSentReferenceLocked',
       "This purchase invoice has already been sent to the SII, so orderReference (the supplier's invoice number) can no longer be changed."],
     ['PostedDocument', 'backendError.documentAlreadyPosted', 'Document already Posted.'],
+    // ETP-5714: costing is stalled, so retrying will not help (the retryable 409 is NotCalculatedCost).
+    ['ETGO_CostCalculationStalled', 'backendError.costCalculationStalled',
+      'Cost calculation looks stalled: transactions have been waiting for their cost for a long time, so repeating the post will not help. An administrator must check the Costing Background process and the pending transactions.'],
+    ['NotCalculatedCost', 'backendError.costNotCalculated',
+      'Cost has not yet been calculated for all products in the document.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {
@@ -3243,6 +3248,12 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
     assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
     assert.match(es('backendError.invoicePostedExchangeRateLocked'), /contabilizada.*Descontabil/);
     assert.match(es('backendError.invoiceUnpostNotPosted'), /asientos/);
+  });
+
+  it('tells the user a stalled costing is not worth retrying, and who to ask', () => {
+    assert.match(es('backendError.costCalculationStalled'), /administrador/);
+    assert.match(en('backendError.costCalculationStalled'), /administrator/);
+    assert.doesNotMatch(es('backendError.costCalculationStalled'), /unos minutos/);
   });
 
   it('keeps the backend prose when the locale has no entry (never the raw key)', () => {
@@ -3449,4 +3460,29 @@ describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () 
   it('is not worded as "period not open"', () => {
     assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
   });
+});
+
+// ── ETP-5693: posting-account refusals on accounting fields, translated by identity ──
+describe('translateBackendError — posting-account refusals (ETP-5693)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const cases = [
+    ['ETGO_AccountIsSummary', 'backendError.accountIsSummary'],
+    ['ETGO_AccountIsInactive', 'backendError.accountIsInactive'],
+    ['ETGO_AccountWrongLedger', 'backendError.accountWrongLedger'],
+    ['ETGO_LedgerNotUpdatable', 'backendError.ledgerNotUpdatable'],
+  ];
+
+  for (const [key, label] of cases) {
+    it(`${key} becomes the generic sentence of the UI locale`, () => {
+      const prose = 'warehouseDifferences: the account 4300 - Customers is not valid here.';
+      const esText = translateBackendError(prose, es, { messageKeys: [key] });
+      const enText = translateBackendError(prose, en, { messageKeys: [key] });
+      assert.equal(esText, es(label));
+      assert.equal(enText, en(label));
+      assert.notEqual(esText, label, 'the es_ES key must exist');
+      assert.notEqual(enText, label, 'the en_US key must exist');
+      assert.notEqual(esText, enText);
+    });
+  }
 });

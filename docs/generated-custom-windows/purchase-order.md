@@ -635,3 +635,16 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The invoice step of **Gestionar factura** (create invoice and confirm-with-invoice modals) shows the refusal with an **Ir al calendario** link, dated today (the invoice is dated today). See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+- `etendo_schema(spec, entity, view:"actions", id:<purchase order id>)` says `availableNow` / `unavailableReason` per action for that
+  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes `CL` or `RE`.
+  `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
+  behind the UI's `hasLinkedDocuments` flag. Advice only: nothing is blocked by it.
+- `createGoodsReceipt` and `createPurchaseInvoice` applies to a completed order only.
+- The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
+  they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
+- `hasLinkedDocuments`, `needsPrimaryDoc` and `needsInvoiceDoc` are declared response keys.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.

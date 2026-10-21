@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/general-ledger-configuration/useGeneralLedgerConfig.js
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
@@ -183,3 +184,24 @@ describe('useGeneralLedgerConfig — save() payload', () => {
     expect(posted).toBe(false);
   });
 });
+
+describe('useGeneralLedgerConfig — save failure (ETP-5693)', () => {
+  it('rejects with the backend message and the response body attached', async () => {
+    mockSelectedOrg = { id: 'ES', name: 'España S.A.' };
+    const { result } = renderHook(() => useGeneralLedgerConfig('/sws/neo/general-ledger-configuration'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.setGeneralField('name', 'Updated name'));
+
+    const body = { error: { message: 'bankAsset: summary account', messageKeys: ['ETGO_AccountIsSummary'] } };
+    mockApiFetch.mockResolvedValueOnce({ ok: false, status: 400, json: async () => body });
+
+    let error;
+    await act(async () => {
+      error = await result.current.save().catch((e) => e);
+    });
+
+    expect(error.message).toBe('bankAsset: summary account');
+    expect(error.body).toEqual(body);
+  });
+});
+
