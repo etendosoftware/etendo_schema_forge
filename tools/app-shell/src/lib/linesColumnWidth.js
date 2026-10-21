@@ -224,53 +224,75 @@ function listTypeBasisPx(col) {
 export const LIST_HEADER_CHROME_PX = 42;
 // The ComputedFreshnessHint clock (h-3.5 = 14px) plus the label's `gap-1` (4px).
 const COMPUTED_HINT_PX = 18;
-// Deterministic estimate used where no canvas exists (jsdom, node): ~7px per character is the
-// upper end of Inter 600 at 12px ("Fecha de presupuesto" measures 128.6px / 20 chars = 6.4px).
+// Deterministic estimate used where no canvas can measure (jsdom, node, a browser without
+// OffscreenCanvas): ~7px per character is the upper end of Inter 600 at 12px ("Fecha de
+// presupuesto" measures 128.6px / 20 chars = 6.4px), so the estimate errs wide, never narrow.
 const FALLBACK_CHAR_PX = 7;
 const HEADER_FONT_WEIGHT_SIZE = '600 12px';
 
 const labelWidthCache = new Map();
 let measureContext;
 
+// `OffscreenCanvas` is feature-detected rather than a DOM <canvas>: jsdom implements <canvas>
+// without a 2D context and reports "Not implemented" through its virtual console (no exception),
+// whereas it has no OffscreenCanvas at all, so tests take the estimate silently.
 function canvasContext() {
   if (measureContext !== undefined) return measureContext;
   measureContext = null;
-  // jsdom implements <canvas> without a 2D context and logs "Not implemented" when asked for one.
-  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
-  if (typeof document === 'undefined' || isJsdom) return measureContext;
+  if (typeof OffscreenCanvas === 'undefined') return measureContext;
   try {
-    measureContext = document.createElement('canvas').getContext('2d') ?? null;
+    measureContext = new OffscreenCanvas(1, 1).getContext('2d') ?? null;
   } catch {
     measureContext = null;
   }
   return measureContext;
 }
 
-function headerFont() {
+/**
+ * The CSS font of a list header label (`text-xs font-semibold` in the body font family). Reads
+ * the computed style once per call — resolve it once per render pass and pass it to
+ * `listHeaderMinWidthPx`, not once per column.
+ */
+export function listHeaderFont() {
   const family = (typeof document !== 'undefined' && document.body
     && globalThis.getComputedStyle?.(document.body)?.fontFamily) || 'Inter, sans-serif';
   return `${HEADER_FONT_WEIGHT_SIZE} ${family}`;
 }
 
+// True once the header font is really usable for measuring. While a web font is still swapping
+// in (Inter, `display=swap`), canvas measures the FALLBACK face under the same family string, so
+// such a width must not be cached: DataTable re-measures when `document.fonts.ready` resolves.
+function fontReady(font) {
+  const fonts = typeof document === 'undefined' ? undefined : document.fonts;
+  if (!fonts?.check) return true;
+  try {
+    return fonts.check(font);
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Width in px of a header label rendered with the list header font (`text-xs font-semibold`).
- * Canvas `measureText` in a browser; a deterministic per-character estimate where no canvas
- * exists (jsdom tests, node). Results are cached per font + label.
+ * Canvas `measureText` where an OffscreenCanvas 2D context exists; a deterministic per-character
+ * estimate otherwise (jsdom tests, node) or when the canvas measures 0. Widths are cached per
+ * font + label, but only once the font has loaded (see `fontReady`).
  */
-export function measureHeaderLabelPx(label) {
+export function measureHeaderLabelPx(label, font = listHeaderFont()) {
   // A React node (custom header markup) cannot be measured as text: it keeps the type basis.
   if (typeof label !== 'string' && typeof label !== 'number') return 0;
   const text = String(label);
   if (text === '') return 0;
+  const estimate = Math.ceil(text.length * FALLBACK_CHAR_PX);
   const ctx = canvasContext();
-  if (!ctx) return Math.ceil(text.length * FALLBACK_CHAR_PX);
-  const font = headerFont();
+  if (!ctx) return estimate;
   const cacheKey = `${font}|${text}`;
   const cached = labelWidthCache.get(cacheKey);
   if (cached !== undefined) return cached;
   ctx.font = font;
-  const width = Math.ceil(ctx.measureText(text).width);
-  labelWidthCache.set(cacheKey, width);
+  const measured = Math.ceil(ctx.measureText(text)?.width ?? 0);
+  const width = measured > 0 ? measured : estimate;
+  if (measured > 0 && fontReady(font)) labelWidthCache.set(cacheKey, width);
   return width;
 }
 
@@ -280,15 +302,25 @@ export function measureHeaderLabelPx(label) {
  * renders). 0 when the header does not render on one line from a label: `headClass` pins its own
  * width, and a `headerWrap` header (default for `percent`) wraps onto two lines by design.
  * `label` is the label the header shows (see `resolveColumnLabel`); for a `multiField` column,
- * the joined part labels.
+ * the joined part labels. `font` defaults to `listHeaderFont()`; pass it in when sizing many
+ * columns at once.
  */
-export function listHeaderMinWidthPx(col, label) {
+export function listHeaderMinWidthPx(col, label, font) {
   if (col.headClass) return 0;
   if (col.headerWrap ?? col.type === 'percent') return 0;
-  const textPx = measureHeaderLabelPx(label);
+  const textPx = measureHeaderLabelPx(label, font);
   if (textPx === 0) return 0;
   const deferredComputed = col.computed?.mode === 'stored' && col.computed?.refresh !== 'synchronous';
   return textPx + LIST_HEADER_CHROME_PX + (deferredComputed ? COMPUTED_HINT_PX : 0);
+}
+
+/**
+ * Test seam: drops the cached canvas context and label widths so a test can install (or remove)
+ * an `OffscreenCanvas` / `document.fonts` double and measure again from scratch.
+ */
+export function resetHeaderMeasureCache() {
+  labelWidthCache.clear();
+  measureContext = undefined;
 }
 
 // ETP-5833 — the column that absorbs leftover width must be DESCRIPTIVE (string/text, a

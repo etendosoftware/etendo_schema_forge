@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 // @covers tools/app-shell/src/lib/linesColumnWidth.js
 import {
   columnFlex, columnMinWidthPx, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, GROW_COLUMN_MIN_PX,
-  listHeaderMinWidthPx, measureHeaderLabelPx, LIST_HEADER_CHROME_PX,
+  listHeaderMinWidthPx, measureHeaderLabelPx, LIST_HEADER_CHROME_PX, resetHeaderMeasureCache,
 } from '../linesColumnWidth.js';
 
 // Helper — extract the flex-basis px from a CSS flex shorthand like "0 0 172px"
@@ -325,6 +325,54 @@ describe('linesColumnWidth', () => {
       assert.equal(measureHeaderLabelPx(''), 0);
       assert.equal(measureHeaderLabelPx(null), 0);
       assert.equal(measureHeaderLabelPx({ type: 'span' }), 0, 'a React node is not measured');
+    });
+
+    // Canvas path, with OffscreenCanvas / document.fonts doubles (node has neither).
+    describe('canvas measurement and the font-loading cache', () => {
+      let pxPerChar;
+      let fontLoaded;
+      const FONT = '600 12px Inter, sans-serif';
+      function install() {
+        pxPerChar = 5;
+        fontLoaded = false;
+        globalThis.OffscreenCanvas = class {
+          getContext() { return { font: '', measureText: (t) => ({ width: t.length * pxPerChar }) }; }
+        };
+        globalThis.document = { fonts: { check: () => fontLoaded } };
+        resetHeaderMeasureCache();
+      }
+      function uninstall() {
+        delete globalThis.OffscreenCanvas;
+        delete globalThis.document;
+        resetHeaderMeasureCache();
+      }
+
+      it('measures with the canvas when one exists', () => {
+        install();
+        try {
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 40);
+        } finally { uninstall(); }
+      });
+
+      it('does not cache a width measured before the web font loaded (fallback face)', () => {
+        install();
+        try {
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 40);
+          pxPerChar = 6; // Inter is in: same family string, wider glyphs
+          fontLoaded = true;
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 48, 'the fallback width was not cached');
+          pxPerChar = 9;
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 48, 'a width measured with the font loaded is cached');
+        } finally { uninstall(); }
+      });
+
+      it('falls back to the estimate when the canvas measures 0', () => {
+        install();
+        try {
+          pxPerChar = 0;
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 8 * 7);
+        } finally { uninstall(); }
+      });
     });
 
     it('is label width + chrome (padding, reserved sort arrow, slack)', () => {
