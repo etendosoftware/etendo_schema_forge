@@ -316,8 +316,8 @@ async function editSavedLineQuantity(page, row, quantity) {
   expect(saved?.orderedQuantity,
     `PATCH response should echo the persisted orderedQuantity ${quantity}`,
   ).toBe(Number(quantity));
-  // Leave the hover state the mouseover above opened: a hovered row swaps its
-  // last cell (the line gross amount) for the line-actions buttons.
+  // Leave the hover state the mouseover above opened: a hovered row pins its
+  // line-actions buttons over the visible right edge of the lines grid.
   await row.dispatchEvent('mouseout');
   await slow(page);
   return patchResp;
