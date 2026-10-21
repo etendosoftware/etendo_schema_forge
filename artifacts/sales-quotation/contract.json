@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.30.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-10-05T19:24:13.071Z",
-  "checksum": "bfd80f66609db10e",
+  "updatedAt": "2026-10-19T17:33:13.275Z",
+  "checksum": "52c5cf2585125d4c",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -68,12 +68,14 @@
           "C_BPartner_ID": "Contacto",
           "C_Reject_Reason_ID": "Razón de rechazo",
           "DateOrdered": "Fecha de presupuesto",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
           "C_Reject_Reason_ID": "Reject Reason",
-          "DateOrdered": "Quotation Date"
+          "DateOrdered": "Quotation Date",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -547,9 +549,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "gridOrder": 6,
             "validation": {
               "required": true,
@@ -566,9 +567,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "validation": {
               "required": true,
               "maxLength": 22
@@ -814,7 +814,7 @@
             "form": true,
             "sourceRequired": true,
             "columnType": "amount",
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -848,7 +848,7 @@
               "source": "0"
             },
             "defaultValue": "0",
-            "gridOrder": 5,
+            "gridOrder": 6,
             "min": 0,
             "max": 100,
             "validation": {
@@ -884,7 +884,7 @@
               "grossUnitPrice",
               "lineNetAmount"
             ],
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -926,13 +926,40 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 7,
+            "gridOrder": 8,
             "validation": {
               "maxLength": 2
             },
             "displayLogic": {
               "raw": "@GROSSPRICE@='Y'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "label": "UOM",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "UOM",
+            "inputMode": "selector",
+            "display": "tag",
+            "gridOrder": 4,
+            "gridReadOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
+            "readOnlyLogic": {
+              "raw": "@UomManagement@='Y'",
+              "evaluable": true,
+              "js": "record['uomManagement'] === 'Y'"
             }
           },
           {
@@ -1081,12 +1108,14 @@
           "C_BPartner_ID": "Contacto",
           "C_Reject_Reason_ID": "Razón de rechazo",
           "DateOrdered": "Fecha de presupuesto",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
           "C_Reject_Reason_ID": "Reject Reason",
-          "DateOrdered": "Quotation Date"
+          "DateOrdered": "Quotation Date",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -2081,7 +2110,7 @@
             "apiKey": "uOM",
             "column": "C_UOM_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2794,6 +2823,14 @@
             }
           ]
         }
+      },
+      {
+        "entity": "quotationLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-quotation/quotationLine/selectors/uOM"
       }
     ],
     "actions": [
@@ -3001,12 +3038,14 @@
         "C_BPartner_ID": "Contacto",
         "C_Reject_Reason_ID": "Razón de rechazo",
         "DateOrdered": "Fecha de presupuesto",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "C_Reject_Reason_ID": "Reject Reason",
-        "DateOrdered": "Quotation Date"
+        "DateOrdered": "Quotation Date",
+        "C_UOM_ID": "Unit"
       }
     }
   },
@@ -3523,6 +3562,14 @@
         "description": "Field 'unitPrice' should be present in quotationLine"
       },
       {
+        "id": "t-field-presence-quotationLine-uOM",
+        "category": "field-presence",
+        "entity": "quotationLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should be present in quotationLine"
+      },
+      {
         "id": "t-field-type-quotation-businessPartner",
         "category": "field-type",
         "entity": "quotation",
@@ -3731,6 +3778,14 @@
         "description": "Field 'unitPrice' should have type 'number' in quotationLine"
       },
       {
+        "id": "t-field-type-quotationLine-uOM",
+        "category": "field-type",
+        "entity": "quotationLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should have type 'string' in quotationLine"
+      },
+      {
         "id": "t-readonlylogic-evaluable-quotation-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "quotation",
@@ -3875,6 +3930,14 @@
         "description": "Read-only logic for 'unitPrice' in quotationLine should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-quotationLine-uOM",
+        "category": "readonlylogic-evaluable",
+        "entity": "quotationLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in quotationLine should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-valid-quotation-businessPartner",
         "category": "readonlylogic-valid",
         "entity": "quotation",
@@ -4017,6 +4080,14 @@
         "field": "unitPrice",
         "runner": "node",
         "description": "Read-only logic for 'unitPrice' in quotationLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-quotationLine-uOM",
+        "category": "readonlylogic-valid",
+        "entity": "quotationLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in quotationLine should be valid JS"
       },
       {
         "id": "t-rule-declared-BP-AutoFill-Address",
@@ -4193,6 +4264,14 @@
         "field": "tax",
         "runner": "node",
         "description": "Selector endpoint for 'tax' in quotationLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-quotationLine-uOM",
+        "category": "selector-endpoint",
+        "entity": "quotationLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'uOM' in quotationLine should exist"
       },
       {
         "id": "t-system-field-quotation-accountingDate",
@@ -5395,14 +5474,6 @@
         "description": "System field 'taxableAmount' should exist in backend but not frontend for quotationLine"
       },
       {
-        "id": "t-system-field-quotationLine-uOM",
-        "category": "system-field",
-        "entity": "quotationLine",
-        "field": "uOM",
-        "runner": "node",
-        "description": "System field 'uOM' should exist in backend but not frontend for quotationLine"
-      },
-      {
         "id": "t-system-field-quotationLine-updated",
         "category": "system-field",
         "entity": "quotationLine",
@@ -5450,25 +5521,25 @@
       }
     ],
     "summary": {
-      "total": 306,
+      "total": 310,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 26,
-        "field-type": 26,
-        "readonlylogic-evaluable": 18,
-        "readonlylogic-valid": 18,
+        "field-presence": 27,
+        "field-type": 27,
+        "readonlylogic-evaluable": 19,
+        "readonlylogic-valid": 19,
         "rule-declared": 8,
         "searchable-filters": 6,
-        "selector-endpoint": 9,
-        "system-field": 155,
+        "selector-endpoint": 10,
+        "system-field": 154,
         "visibility": 2
       },
       "byRunner": {
-        "node": 306,
+        "node": 310,
         "junit": 0
       }
     }

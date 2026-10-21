@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/hooks/useServiceWorker.js
+
 import { renderHook, act } from '@testing-library/react';
 import { useServiceWorker } from '../useServiceWorker';
 
@@ -5,17 +7,24 @@ import { useServiceWorker } from '../useServiceWorker';
  * Regression tests for ETP-4176: a service-worker controllerchange event used
  * to reload the page out from under a user who was mid-typing (e.g. on the
  * login/onboarding form), wiping their input and stealing focus. The hook now
- * has two guards:
+ * has three guards:
  *   Guard 1 — ignore the first-install claim (no controller at mount).
  *   Guard 2 — defer the reload while the user is editing, then flush on focusout.
+ *   Guard 3 — skip the reload while a full-page navigation is in flight
+ *             (ETP-4426): OnboardingFlow dispatches 'etendo-go:navigating' right
+ *             before assigning window.location.href, and a reload() there would
+ *             race and cancel the post-login redirect.
  */
 describe('useServiceWorker', () => {
   let swListeners;
   let docListeners;
+  let winListeners;
   let originalServiceWorker;
   let originalReload;
   let originalAddEventListener;
   let originalRemoveEventListener;
+  let originalWindowAddEventListener;
+  let originalWindowRemoveEventListener;
   let registrationUpdate;
 
   // Fire a captured serviceWorker event by type.
@@ -31,6 +40,7 @@ describe('useServiceWorker', () => {
   beforeEach(() => {
     swListeners = {};
     docListeners = {};
+    winListeners = {};
     registrationUpdate = vi.fn();
 
     originalServiceWorker = Object.getOwnPropertyDescriptor(
@@ -68,6 +78,20 @@ describe('useServiceWorker', () => {
       return originalRemoveEventListener.call(document, type, cb, opts);
     });
 
+    // Same capture for window listeners, but delegating to the real methods so a
+    // real `window.dispatchEvent(new Event('etendo-go:navigating'))` — exactly
+    // what OnboardingFlow does — still reaches the hook (Guard 3).
+    originalWindowAddEventListener = window.addEventListener;
+    originalWindowRemoveEventListener = window.removeEventListener;
+    window.addEventListener = vi.fn((type, cb, opts) => {
+      (winListeners[type] = winListeners[type] || []).push(cb);
+      return originalWindowAddEventListener.call(window, type, cb, opts);
+    });
+    window.removeEventListener = vi.fn((type, cb, opts) => {
+      winListeners[type] = (winListeners[type] || []).filter((l) => l !== cb);
+      return originalWindowRemoveEventListener.call(window, type, cb, opts);
+    });
+
     // window.location.reload is non-configurable in jsdom — replace location.
     originalReload = window.location;
     delete window.location;
@@ -77,6 +101,8 @@ describe('useServiceWorker', () => {
   afterEach(() => {
     document.addEventListener = originalAddEventListener;
     document.removeEventListener = originalRemoveEventListener;
+    window.addEventListener = originalWindowAddEventListener;
+    window.removeEventListener = originalWindowRemoveEventListener;
 
     if (originalServiceWorker) {
       Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
@@ -149,6 +175,49 @@ describe('useServiceWorker', () => {
     });
 
     expect(window.location.reload).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it('Guard 3: skips the reload when a full-page navigation is already in flight', () => {
+    const onUpdateAvailable = vi.fn();
+
+    const { unmount } = renderHook(() => useServiceWorker({ onUpdateAvailable }));
+
+    // OnboardingFlow signals the pending window.location.href redirect first…
+    act(() => {
+      window.dispatchEvent(new Event('etendo-go:navigating'));
+    });
+
+    // …then a new SW takes over and would normally reload the page.
+    act(() => {
+      fireSwEvent('controllerchange');
+    });
+
+    // reload() must not race (and cancel) the in-flight navigation.
+    expect(window.location.reload).not.toHaveBeenCalled();
+    expect(onUpdateAvailable).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('Guard 3 control: the same controllerchange reloads when the navigation event never fired', () => {
+    const { unmount } = renderHook(() => useServiceWorker());
+
+    act(() => {
+      fireSwEvent('controllerchange');
+    });
+
+    expect(window.location.reload).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it('Guard 3: the navigating event on its own never triggers a reload', () => {
+    const { unmount } = renderHook(() => useServiceWorker());
+
+    act(() => {
+      window.dispatchEvent(new Event('etendo-go:navigating'));
+    });
+
+    expect(window.location.reload).not.toHaveBeenCalled();
     unmount();
   });
 
@@ -469,17 +538,19 @@ describe('useServiceWorker', () => {
     unmount();
   });
 
-  it('cleanup: unmount removes controllerchange, focusout, and visibilitychange listeners', () => {
+  it('cleanup: unmount removes controllerchange, focusout, visibilitychange, and navigating listeners', () => {
     const { unmount } = renderHook(() => useServiceWorker());
 
     expect(swListeners.controllerchange?.length).toBe(1);
     expect(docListeners.focusout?.length).toBe(1);
     expect(docListeners.visibilitychange?.length).toBe(1);
+    expect(winListeners['etendo-go:navigating']?.length).toBe(1);
 
     unmount();
 
     expect(swListeners.controllerchange?.length || 0).toBe(0);
     expect(docListeners.focusout?.length || 0).toBe(0);
     expect(docListeners.visibilitychange?.length || 0).toBe(0);
+    expect(winListeners['etendo-go:navigating']?.length || 0).toBe(0);
   });
 });

@@ -7,8 +7,6 @@ export default function PurchaseReturnWizard({ receiptData, ...props }) {
       sourceData={receiptData}
       titleKey="createReturnFromReceipt"
       refLabelKey="receiptRef"
-      docTypeLabelKey="purchaseReturnReceipt"
-      docTypeDescriptionKey="returnStockToVendor"
       createActionUrl={(base, id) => `${base}/goods-receipt/goodsReceipt/${id}/action/createPurchaseReturn`}
     />
   );

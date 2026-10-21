@@ -129,6 +129,10 @@ export function resolveErrorCodeKey(errorCode) {
   if (errorCode === 'MISSING_PRESENTER') return 'fm.aeat.error.missingPresenter';
   if (errorCode === 'NO_CERTIFICATE') return 'fm.aeat.error.noCertificate';
   if (errorCode === 'ALREADY_SUBMITTED') return 'fm.aeat.error.alreadySubmitted';
+  // Modelo 390 only (ETP-5716): the backend refuses a filing with blocking incidents.
+  if (errorCode === 'BLOCKING_INCIDENTS') return 'fm.aeat.error.blockingIncidents';
+  // Modelo 390 only (ETP-5716): the exercise has no periods in the fiscal calendar.
+  if (errorCode === 'INCOMPLETE_FISCAL_YEAR') return 'fm.aeat.error.incompleteFiscalYear';
   return null;
 }
 
@@ -153,6 +157,85 @@ function resolveDeclTypeLabel(declarationType, t) {
   if (key) return t(key);
   return declarationType;
 }
+
+// ── Model adapters (ETP-5716) ──────────────────────────────────────────────
+//
+// The flow (confirm → POST submit → result screen) is the same for every model filed through the
+// AEAT direct-presentation service; what differs per model lives in an adapter, passed as the
+// `adapter` prop. The default is the Modelo 303 adapter below, which is exactly the logic this
+// component always had inline — a 303 page passes nothing and behaves as before. The 390 adapter
+// lives next to its page (models/390/submission390.js).
+//
+// Adapter shape:
+//   buildLocalData({ decl, orgIdent, identChecks, summary })  → confirm-screen data
+//   showNrc(localData)                     → whether the NRC field applies (and is required)
+//   declTypeLabel(localData, t)            → "Tipo de declaración" row value
+//   preflight(ctx)                         → null | { stop: true } | { error: message }
+//   submitPath({ decl, localData, identChecks, manualOverrides }) → NEO path of the POST
+//   pdfName(decl, kind)                    → download name, kind = 'justificante' | 'borrador'
+//   requireConformity                      → the "Declaro que los datos … son conformes" check
+
+function tipoOf(localData, decl) {
+  return localData.declarationType || decl?.result?.kind || 'N';
+}
+
+/** The Modelo 303 adapter — the default, unchanged rules of this flow. */
+export const AEAT_SUBMIT_303 = Object.freeze({
+  buildLocalData: buildLocalDeclarationData,
+  showNrc: localData => localData.declarationType === DECLARATION_TYPE_INGRESO,
+  declTypeLabel: (localData, t) => resolveDeclTypeLabel(localData.declarationType, t),
+  requireConformity: false,
+  async preflight({ decl, selectedOrg, apiFetch, t, navigate, localData, identChecks, liveBoxes, nrc, nrcRequired }) {
+    // ETP-4975 pre-flight guard — see checkMissingIaeGuard's docstring for
+    // the full rationale (fail-open semantics, why it only runs on the last
+    // period, etc.). ETP-5432 pt.10 follow-up — feedback is the same
+    // `showIaeActivityReminder` toast used everywhere else this check
+    // appears (page mount, "Generar fichero 303"), not the `connError`
+    // banner below: that banner is shared with IBAN/NRC/connection errors,
+    // but user feedback was specifically that THIS message must never be a
+    // fixed inline banner. The hard block (`return` before submitting) is
+    // unchanged.
+    const iaeGuard = await checkMissingIaeGuard({ decl, selectedOrg, apiFetch, t });
+    if (iaeGuard.blocked) {
+      showIaeActivityReminder(t, navigate, { severity: 'error' });
+      return { stop: true };
+    }
+    const tipo = tipoOf(localData, decl);
+    // Mirrors fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN` (ETP-5393 [B1] re-review fix): the
+    // bank section — and its required bank_iban field — is shown whenever tipo_declaracion is
+    // U/D/X, OR rectificativa is checked AND box 111 (Rectificación - Importe) is non-zero.
+    // This pre-flight guard must fire under the exact same condition, otherwise (a) a
+    // rectificativa filed under e.g. tipo 'I' with a non-zero box 111 shows the IBAN field as
+    // required but lets the user submit with it empty, round-tripping to the backend for an
+    // untranslated AEAT303_section_bank_empty 500 instead of failing fast with the existing
+    // translated fm.aeat.error.ibanRequired message; or (b) — the bug this fixes — a
+    // rectificativa with box 111 === 0 blocks submission over a field that isn't even shown,
+    // because the old check ignored box 111 entirely.
+    const ibanRequired = isBankIbanRequired(tipo, withBox111NonZeroFlag(identChecks ?? {}, liveBoxes));
+    if (ibanRequired && !identChecks?.bank_iban?.trim()) {
+      return { error: t('fm.aeat.error.ibanRequired') ?? 'IBAN is required to submit this declaration type. Fill in the IBAN field in the Identification section.' };
+    }
+    // Same shape as the IBAN guard above, but driven by the shared `nrcRequired`
+    // expression (see its declaration above for why it uses the strict
+    // `localData.declarationType` and why test mode lifts it). Without the guard an empty
+    // NRC round-trips to the AEAT and fails there with an untranslated error (ETP-5027).
+    if (nrcRequired && !nrc?.trim()) {
+      return { error: t('fm.aeat.error.nrcRequired') ?? 'The NRC is required to file a declaration with an amount due.' };
+    }
+    return null;
+  },
+  submitPath({ decl, localData, identChecks, manualOverrides }) {
+    const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo: tipoOf(localData, decl), id: decl.id });
+    if (identChecks) applyIdentParams(params, identChecks);
+    // ETP-5431 — mirrors generate303File (fiscalModelsUtils.js): without this, any
+    // manually-overridden box (111, 70, 108, 109, ...) reached "Generar fichero 303" but
+    // never the actual AEAT telematic submission, so the file the user reviewed and the
+    // file AEAT actually received could silently diverge.
+    if (manualOverrides) applyBoxParams(params, manualOverrides, identChecks);
+    return `/fiscal303/submit?${params}`;
+  },
+  pdfName: (decl, kind) => `303_${kind}_${decl.year}_${decl.period}.pdf`,
+});
 
 // ETP-5584 P7 — full-width field (label above, input spanning the modal body),
 // matching the app's standard form layout. The inputs themselves are the shared
@@ -214,8 +297,12 @@ function Banner({ tone, icon, title, body, children }) {
 //             The backend replaces the declaration's persisted AEAT incidents on EVERY submission
 //             attempt (test mode included), so the "Incidencias" tab must re-fetch after every
 //             attempt, not just on success — see ETP-4456, `Fiscal303BoxesHandler#handleSubmit`.
+// onResult:   called with the parsed response body whenever the backend returned a structured
+//             result (any `data.status`) — lets a page keep the filing data (justificante, CSV)
+//             without re-reading the declaration (ETP-5716, Modelo 390).
+// adapter:    the per-model rules (see "Model adapters" above); defaults to AEAT_SUBMIT_303.
 // onClose:    called to dismiss the flow (any step)
-export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes, manualOverrides, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
+export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes, manualOverrides, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onResult, adapter = AEAT_SUBMIT_303, onClose }) {
   const ui = useUI();
   const t = ui;
   const navigate = useNavigate();
@@ -227,7 +314,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   // for `useNavigate()` above.
   const { selectedOrg } = useAuth();
 
-  const localData = buildLocalDeclarationData({ decl, orgIdent, identChecks, summary });
+  const localData = adapter.buildLocalData({ decl, orgIdent, identChecks, summary });
 
   const [step, setStep] = useState('confirm'); // 'confirm' | 'result'
   const [submitting, setSubmitting] = useState(false);
@@ -238,6 +325,14 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   const [nrc, setNrc] = useState('');
   const [presenterNif, setPresenterNif] = useState(orgIdent?.nif ?? '');
   const [presenterName, setPresenterName] = useState(orgIdent?.nombre ?? '');
+  // "Declaro que los datos de esta declaración son conformes" — only for an adapter that asks
+  // for it (390); the submit button stays disabled until it is checked.
+  const [conform, setConform] = useState(false);
+  const conformityMissing = !!adapter.requireConformity && !conform;
+  // "Enviar a la AEAT" looks disabled whenever it is (the `--active` modifier only when enabled,
+  // as NewDeclModal's Crear), and its title says what is missing.
+  const submitDisabled = submitting || conformityMissing;
+  const submitHint = conformityMissing ? t('fm.aeat.submit_hint.conformity') : null;
 
   // Single source of truth for "the NRC must be filled": drives BOTH the required asterisk
   // on the field and the pre-flight guard in handleSubmit. Keeping them on one expression is
@@ -250,61 +345,24 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   // against a field the user cannot see, blocking submission with no way to satisfy it.
   // Excluded in test mode: "Validar sin presentar" only validates the file, nothing is actually
   // paid, so no NRC exists yet — the field stays visible but stops being required.
-  const nrcRequired = !testMode && localData.declarationType === DECLARATION_TYPE_INGRESO;
+  const nrcShown = adapter.showNrc(localData);
+  const nrcRequired = !testMode && nrcShown;
 
   async function handleSubmit() {
     setSubmitting(true);
     setConnError(null);
     try {
-      // ETP-4975 pre-flight guard — see checkMissingIaeGuard's docstring for
-      // the full rationale (fail-open semantics, why it only runs on the last
-      // period, etc.). ETP-5432 pt.10 follow-up — feedback is the same
-      // `showIaeActivityReminder` toast used everywhere else this check
-      // appears (page mount, "Generar fichero 303"), not the `connError`
-      // banner below: that banner is shared with IBAN/NRC/connection errors,
-      // but user feedback was specifically that THIS message must never be a
-      // fixed inline banner. The hard block (`return` before submitting) is
-      // unchanged.
-      const iaeGuard = await checkMissingIaeGuard({ decl, selectedOrg, apiFetch, t });
-      if (iaeGuard.blocked) {
-        showIaeActivityReminder(t, navigate, { severity: 'error' });
+      const guard = await adapter.preflight({ decl, selectedOrg, apiFetch, t, navigate, localData, identChecks, liveBoxes, nrc, nrcRequired });
+      if (guard?.stop) {
         setSubmitting(false);
         return;
       }
-      const tipo = localData.declarationType || decl?.result?.kind || 'N';
-      // Mirrors fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN` (ETP-5393 [B1] re-review fix): the
-      // bank section — and its required bank_iban field — is shown whenever tipo_declaracion is
-      // U/D/X, OR rectificativa is checked AND box 111 (Rectificación - Importe) is non-zero.
-      // This pre-flight guard must fire under the exact same condition, otherwise (a) a
-      // rectificativa filed under e.g. tipo 'I' with a non-zero box 111 shows the IBAN field as
-      // required but lets the user submit with it empty, round-tripping to the backend for an
-      // untranslated AEAT303_section_bank_empty 500 instead of failing fast with the existing
-      // translated fm.aeat.error.ibanRequired message; or (b) — the bug this fixes — a
-      // rectificativa with box 111 === 0 blocks submission over a field that isn't even shown,
-      // because the old check ignored box 111 entirely.
-      const ibanRequired = isBankIbanRequired(tipo, withBox111NonZeroFlag(identChecks ?? {}, liveBoxes));
-      if (ibanRequired && !identChecks?.bank_iban?.trim()) {
-        setConnError(t('fm.aeat.error.ibanRequired') ?? 'IBAN is required to submit this declaration type. Fill in the IBAN field in the Identification section.');
+      if (guard?.error) {
+        setConnError(guard.error);
         setSubmitting(false);
         return;
       }
-      // Same shape as the IBAN guard above, but driven by the shared `nrcRequired`
-      // expression (see its declaration above for why it uses the strict
-      // `localData.declarationType` and why test mode lifts it). Without the guard an empty
-      // NRC round-trips to the AEAT and fails there with an untranslated error (ETP-5027).
-      if (nrcRequired && !nrc?.trim()) {
-        setConnError(t('fm.aeat.error.nrcRequired') ?? 'The NRC is required to file a declaration with an amount due.');
-        setSubmitting(false);
-        return;
-      }
-      const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo, id: decl.id });
-      if (identChecks) applyIdentParams(params, identChecks);
-      // ETP-5431 — mirrors generate303File (fiscalModelsUtils.js): without this, any
-      // manually-overridden box (111, 70, 108, 109, ...) reached "Generar fichero 303" but
-      // never the actual AEAT telematic submission, so the file the user reviewed and the
-      // file AEAT actually received could silently diverge.
-      if (manualOverrides) applyBoxParams(params, manualOverrides, identChecks);
-      const res = await apiFetch(`/fiscal303/submit?${params}`, {
+      const res = await apiFetch(adapter.submitPath({ decl, localData, identChecks, manualOverrides }), {
         method: 'POST',
         body: JSON.stringify(buildAeatSubmitBody({ testMode, nrc, presenterNif, presenterName })),
       });
@@ -323,6 +381,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
       }
       setResponse(data);
       setStep('result');
+      onResult?.(data);
       // Fired for SUCCESS, TEST_SUCCESS and ERROR alike — the backend replaces the persisted
       // AEAT incidents on every attempt (delete-then-reinsert, empty on success), so the
       // "Incidencias" tab needs a fresh fetch regardless of outcome, not just on success.
@@ -378,7 +437,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                   data-testid="InfoRow__fc2aac" />
                 <InfoRow
                   label={t('fm.aeat.confirm.decl_type') ?? 'Declaration type'}
-                  value={resolveDeclTypeLabel(localData.declarationType, t)}
+                  value={adapter.declTypeLabel(localData, t)}
                   data-testid="InfoRow__fc2aac" />
                 <InfoRow
                   label={t('fm.aeat.confirm.result') ?? 'Result'}
@@ -416,7 +475,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                     onChange={e => setPresenterName(e.target.value)}
                     data-testid="AeatSubmitFlow__presenterName" />
                 </Field>
-                {localData.declarationType === DECLARATION_TYPE_INGRESO && (
+                {nrcShown && (
                   <Field
                     label={t('fm.aeat.nrc.label') ?? 'NRC'}
                     required={nrcRequired}
@@ -433,6 +492,18 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 )}
               </div>
 
+              {/* ETP-5716 — the conformity check (390) comes first, right after the presenter
+                  fields, so "Validar sin presentar" and what it reveals follow it with no gap. */}
+              {adapter.requireConformity && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 12 }}>
+                  <CheckboxField
+                    checked={conform}
+                    onToggle={val => setConform(val)}
+                    data-testid="AeatSubmitFlow__conformity" />
+                  {t('fm.present.conformity')}
+                </label>
+              )}
+
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 12 }}>
                 <CheckboxField
                   checked={testMode}
@@ -445,9 +516,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                   modal's height. `visibility: hidden` (not `display: none`) keeps
                   its exact box — the reserved space always matches the real
                   banner, whatever the locale/wrapping. Hidden from assistive tech
-                  while unchecked so screen readers never announce it. */}
+                  while unchecked so screen readers never announce it. With the conformity check
+                  above it (390) the slot is the last row, so it collapses instead
+                  (`--collapsible`): reserved space there is only blank space. */}
               <div
-                className={`fm-aeat-testmode-slot${testMode ? ' fm-aeat-testmode-slot--visible' : ''}`}
+                className={`fm-aeat-testmode-slot${testMode ? ' fm-aeat-testmode-slot--visible' : ''}${adapter.requireConformity ? ' fm-aeat-testmode-slot--collapsible' : ''}`}
                 aria-hidden={!testMode}
                 data-testid="AeatSubmitFlow__testModeSlot"
               >
@@ -516,7 +589,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                   style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   onClick={() => triggerBase64Download(
                     response.pdfBase64,
-                    `303_justificante_${decl.year}_${decl.period}.pdf`,
+                    adapter.pdfName(decl, 'justificante'),
                   )}
                 >
                   <Download size={14} data-testid="Download__aeatPdf" />
@@ -549,7 +622,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                   style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   onClick={() => triggerBase64Download(
                     response.pdfBase64,
-                    `303_borrador_${decl.year}_${decl.period}.pdf`,
+                    adapter.pdfName(decl, 'borrador'),
                   )}
                 >
                   <Download size={14} data-testid="Download__aeatDraftPdf" />
@@ -618,9 +691,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
           </button>
           {step === 'confirm' && (
             <button
-              className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
-              disabled={submitting}
+              className={`fm-btn fm-btn--save-pill${submitDisabled ? '' : ' fm-btn--save-pill--active'}`}
+              disabled={submitDisabled}
+              title={submitHint || undefined}
               onClick={handleSubmit}
+              data-testid="AeatSubmitFlow__submit"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               {submitting

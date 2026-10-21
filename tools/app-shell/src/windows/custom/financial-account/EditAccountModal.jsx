@@ -24,7 +24,12 @@ import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
 import { LastSyncLabel } from '@/components/financial-accounts/LastSyncLabel.jsx';
 import { normalizeIban } from '@/lib/validateIban.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import {
+  stripTrailingPeriods,
+  translateBackendError,
+  extractBackendMessageKeys,
+  extractBackendMessageParams,
+} from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
 import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
@@ -185,8 +190,30 @@ export function isDeleteMode(account) {
   return account?.active !== false && account?.deletable === true;
 }
 
-/** Localized re-auth banner text, or '' when no consent expiry should be shown. */
+/**
+ * ETP-5089. Whether the live status reports a connection that is still linked but has stopped
+ * refreshing: Salt Edge says active, yet its last failed fetch is newer than its last success, so
+ * the data is frozen. Only meaningful while connected — a deactivated account has its own state.
+ */
+function isStaleConnection(status) {
+  return status?.connected === true && status?.stale === true;
+}
+
+/**
+ * Localized re-auth banner text, or '' when there is nothing to show.
+ *
+ * A stale connection takes precedence over the consent countdown: it is a failure that already
+ * happened and has already stopped the sync, whereas the countdown is a future one. Both share the
+ * banner's "Re-autorizar" action, which runs the same reconnect flow either way.
+ */
 function buildReauthMessage(status, locale, ui) {
+  if (isStaleConnection(status)) {
+    // The bank's text usually carries its own closing period and the copy supplies another.
+    const reason = stripTrailingPeriods(status.staleMessage);
+    return reason
+      ? ui('financeAccountsBankConnectionStaleBanner', { reason })
+      : ui('financeAccountsBankConnectionStaleBannerNoReason');
+  }
   if (status?.connected !== true || !status?.consentExpiresAt) {
     return '';
   }
@@ -220,6 +247,8 @@ function buildReauthMessage(status, locale, ui) {
 const REAUTH_WARNING_DAYS = 7;
 
 function buildReauthTone(status) {
+  // A stale connection is already failing, so it is always something to act on (ETP-5089).
+  if (isStaleConnection(status)) return 'warning';
   const days = status?.daysUntilExpires;
   if (typeof days !== 'number') return 'info';
   return days <= REAUTH_WARNING_DAYS ? 'warning' : 'info';
@@ -1320,7 +1349,10 @@ export function EditAccountModal({
       // useAccountFields' own pre-check is meant to catch these BEFORE the request fires; this
       // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
       // another tab, an API/MCP-shaped body).
-      toast.error(translateBackendError(err.message, ui) || ui('financeAccountsEditError'));
+      toast.error(translateBackendError(err.message, ui, {
+        messageKeys: extractBackendMessageKeys(err.body),
+        messageParams: extractBackendMessageParams(err.body),
+      }) || ui('financeAccountsEditError'));
     }
   };
 

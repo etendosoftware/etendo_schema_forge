@@ -4,6 +4,16 @@ import { InfoBanner } from '../InfoBanner.jsx';
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 
 describe('InfoBanner', () => {
+  it('renders the optional action next to the text, and nothing extra without it', () => {
+    const { container } = render(
+      <InfoBanner dismissible={false} action={<button type="button">Ver detalle</button>}>msg</InfoBanner>,
+    );
+    expect(screen.getByText('Ver detalle')).toBeTruthy();
+    expect(container.firstChild.children).toHaveLength(3); // icon, text, action
+    const { container: plain } = render(<InfoBanner dismissible={false}>msg</InfoBanner>);
+    expect(plain.firstChild.children).toHaveLength(2); // icon, text
+  });
+
   it('renders children text', () => {
     render(<InfoBanner>Hello banner</InfoBanner>);
     expect(screen.getByText('Hello banner')).toBeTruthy();

@@ -1,10 +1,12 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { navigateTo } from '../../helpers/auth.js';
 import {
-  waitForDetailReady, ensureVendorSetup, selectVendorBP, saveDraft, addProductLine,
+  waitForDetailReady, ensureVendorSetup, selectVendorBP, createDraftWithFirstLine,
   dismissSuccessModal, openGeneratedDocument, slow,
 } from '../../helpers/purchase-helpers.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
@@ -57,11 +59,10 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       await waitForDetailReady(page);
 
       await selectVendorBP(page);
-      await saveDraft(page);
-      await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 20_000 });
-      await waitForDetailReady(page);
-
-      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+      // No Guardar first: "+ Añadir líneas" saves the header itself, the path a user takes.
+      await createDraftWithFirstLine(page, {
+        spec: 'purchase-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
       await slow(page);
     });
 
@@ -116,11 +117,11 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       await waitForDetailReady(page);
 
       await selectVendorBP(page);
-      await saveDraft(page);
-      await expect(page).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 20_000 });
-      await waitForDetailReady(page);
-
-      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+      // Manual "Guardar" before the first line, so the manual-save path stays covered
+      // next to the empty-state one of the test above.
+      await createDraftWithFirstLine(page, {
+        spec: 'purchase-order', via: 'save', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
       await slow(page);
     });
 
@@ -194,16 +195,17 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       }).toPass({ timeout: 15_000 });
 
       await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
-      const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
-      await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-      await nextBtn.click();
+      // One-step wizard: the lines and quantities are already on screen, so
+      // "Crear Devolución" submits straight away once it is enabled.
+      const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
+      await expect(createReturnConfirmBtn).toBeEnabled({ timeout: 10_000 });
 
       const returnCreated = page.waitForResponse(
         (r) => r.url().includes('/action/createPurchaseReturn')
           && r.request().method() === 'POST' && r.status() < 400,
         { timeout: 20_000 },
       );
-      await returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true }).click();
+      await createReturnConfirmBtn.click();
       await returnCreated;
 
       // ETP-5674: a purchase return is announced as such («Ver devolución»).

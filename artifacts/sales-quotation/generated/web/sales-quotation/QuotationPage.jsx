@@ -21,8 +21,6 @@ const breadcrumb = 'Sales / Sales Quotation';
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'rejectReason', column: 'C_Reject_Reason_ID', type: 'selector' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
@@ -57,7 +55,7 @@ const draftMode = {
 // @sf-generated-end draftMode:quotation
 
 // @sf-generated-start requiredHeaderFields:quotation
-const requiredHeaderFields = ['currency', 'priceList', 'documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'grandTotalAmount', 'summedLineAmount'];
+const requiredHeaderFields = ['currency', 'priceList', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms'];
 // @sf-generated-end requiredHeaderFields:quotation
 
 // @sf-generated-start addLineFields:quotationLine
@@ -225,6 +223,14 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "quotationLine",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-quotation/quotationLine/selectors/uOM"
     }
   ],
   "actions": [
@@ -432,12 +438,14 @@ export const api = {
       "C_BPartner_ID": "Contacto",
       "C_Reject_Reason_ID": "Razón de rechazo",
       "DateOrdered": "Fecha de presupuesto",
-      "PriceList": "Precio"
+      "PriceList": "Precio",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
       "C_Reject_Reason_ID": "Reject Reason",
-      "DateOrdered": "Quotation Date"
+      "DateOrdered": "Quotation Date",
+      "C_UOM_ID": "Unit"
     }
   }
 };

@@ -123,7 +123,6 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 - No real selector/catalog reads yet
 - `Guardar cambios` is still a frontend stub over mock state
 - **Cuentas generales — a balancing switch can be saved on with no account (ETP-5682 QA, tracked in ETP-5724).** Classic parity: nothing requires `suspenseBalancing` / `currencyBalancingAcct` while its switch is on. Proposed: make the account required while its switch is on.
-- **Account ids are not checked against the tenant on save (pre-existing, tracked in ETP-5722).** `GeneralLedgerConfigurationHandler.resolveAccountingCombination` accepts a `C_ValidCombination` id of another client. Not reachable from the UI, only through a hand-written API request.
 
 After the backend wiring lands, remember the Etendo step:
 
@@ -196,3 +195,24 @@ posted to. Local check: 662 → 661 accounts (the `640` heading gone, `64000000`
 
 Manual check: open **Valores por defecto**, click any account field → a centered popup with full
 names; typing a code (`572`) or a word (`puente`) filters; no summary heading (e.g. `640`) is offered.
+
+## Tenant-scoped ids on save — ETP-5722
+
+`GET`/`POST /general-ledger-configuration/General` (REST and MCP) only accept ids of the caller's own
+tenant, or of client 0. This covers every account in `generalAccounts` and `defaults`, `general.currency`,
+and `selectedOrgId` (query, or POST body). An id of another tenant gets the same 400 as a missing one:
+*Accounting combination / Currency / Organization not found: &lt;id&gt;*. Before, these ids were written
+into the other tenant's ledger setup. The UI never sends such ids, because its selectors are already
+tenant-scoped, so nothing changes on screen.
+
+Any 400/500 from this endpoint now rolls back the whole request, so a body is never half-saved.
+Before, a valid `general.name` plus a bad account answered 400 and still renamed the ledger.
+
+Backend detail: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` (example "tenant-scoped
+ids (ETP-5722)").
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Defaults and General Accounts tabs now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `GeneralLedgerConfigurationHandler` (aggregate save, rolled back on refusal) and the `@NeoExtension` handlers of the generic `Valores por defecto` / `Cuentas generales` entities (`com.etendoerp.go`, see `neo-headless.md`).
+
+Error display: a failed save used to show nothing (the page had no `catch`). `useGeneralLedgerConfig.save` now throws with the backend message and body (`throwHttpError`), and `GeneralLedgerConfigPage` shows it as a toast translated by `messageKeys` (any backend error, not only these).

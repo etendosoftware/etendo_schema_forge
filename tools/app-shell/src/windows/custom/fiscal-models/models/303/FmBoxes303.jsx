@@ -6,7 +6,7 @@ import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
 import { getLayout303, matchesVisibility, isFieldRequired, resolveFieldLabelKey, isOptionDisabled, getInvalidSelectedOption, resolveOptionDisabledReasonKey } from './fm303Layouts.js';
-import { formatAmount, formatPercent, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPercent, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits, isUnparseableDraft } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
   iva_devengado: <TrendingUp
@@ -147,7 +147,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   // commit attempt (whether it fired or not) so the NEXT edit session for this box starts clean
   // too — see startEditingCell/clearPendingValue above.
   const commitCellEdit = (boxNum, isPercent = false) => {
-    if (Object.prototype.hasOwnProperty.call(pendingValues, boxNum)) {
+    // ETP-5716 (review W3) — a draft with no number in it (a lone "-" or decimal separator left
+    // behind) parses to null, and committing null would silently delete the stored value: the
+    // edit is dropped and the previous value stays. A deliberate clear ('') still commits.
+    if (Object.prototype.hasOwnProperty.call(pendingValues, boxNum)
+        && !isUnparseableDraft(pendingValues[boxNum])) {
       const raw = pendingValues[boxNum];
       onBoxChange?.(boxNum, isPercent ? clampPercentValue(raw) : raw);
     }

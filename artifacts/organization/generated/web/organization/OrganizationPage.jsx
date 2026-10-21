@@ -8,6 +8,8 @@ import InformationTable from './InformationTable';
 import InformationForm from './InformationForm';
 import ActividadesDelIaeTable from './ActividadesDelIaeTable';
 import ActividadesDelIaeForm from './ActividadesDelIaeForm';
+import RepresentanteLegalTable from './RepresentanteLegalTable';
+import RepresentanteLegalForm from './RepresentanteLegalForm';
 import catalogs from './mockCatalogs';
 
 
@@ -48,6 +50,12 @@ const addLineFields = {
     { key: 'locationAddress', column: 'C_Location_ID', type: 'search', required: true, lookup: true, label: 'Location / Address', reference: 'Location', inputMode: 'search' },
     { key: 'taxID', column: 'TaxID', type: 'text', required: true, label: 'Tax ID' },
     { key: 'yourCompanyDocumentImage', column: 'Your_Company_Document_Image', type: 'text', label: 'Your Company Document Image' },
+    { key: 'aeat390Isperson', column: 'EM_Aeat390_Isperson', type: 'checkbox', required: true, label: 'Persona Física 390' },
+    { key: 'aeat390Firstname', column: 'EM_Aeat390_Firstname', type: 'text', label: 'Nombre' },
+    { key: 'aeat390Surname1', column: 'EM_Aeat390_Surname1', type: 'text', label: 'Primer Apellido' },
+    { key: 'aeat390Surname2', column: 'EM_Aeat390_Surname2', type: 'text', label: 'Segundo Apellido' },
+    { key: 'aeat390RepNif', column: 'EM_Aeat390_Rep_Nif', type: 'text', label: 'NIF del Representante Legal' },
+    { key: 'aeat390RepName', column: 'EM_Aeat390_Rep_Name', type: 'text', label: 'Nombre del Representante Legal' },
     { key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'text', label: 'Email' },
     { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'text', label: 'Phone' },
     { key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'text', label: 'Web' },
@@ -62,8 +70,8 @@ const addLineFields = {
 // @sf-generated-end addLineFields:information
 
 export const api = {
-  "specName": "organizaci-n",
-  "baseUrl": "/sws/neo/organizaci-n",
+  "specName": "organization",
+  "baseUrl": "/sws/neo/organization",
   "crud": {
     "organization": {
       "get": true,
@@ -72,8 +80,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/organizaci-n/organization",
-      "detailUrl": "/sws/neo/organizaci-n/organization/{id}",
+      "listUrl": "/sws/neo/organization/organization",
+      "detailUrl": "/sws/neo/organization/organization/{id}",
       "supportedFilters": []
     },
     "information": {
@@ -83,8 +91,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/organizaci-n/information",
-      "detailUrl": "/sws/neo/organizaci-n/information/{id}",
+      "listUrl": "/sws/neo/organization/information",
+      "detailUrl": "/sws/neo/organization/information/{id}",
       "supportedFilters": []
     },
     "actividadesDelIae": {
@@ -94,8 +102,19 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/organizaci-n/actividadesDelIae",
-      "detailUrl": "/sws/neo/organizaci-n/actividadesDelIae/{id}",
+      "listUrl": "/sws/neo/organization/actividadesDelIae",
+      "detailUrl": "/sws/neo/organization/actividadesDelIae/{id}",
+      "supportedFilters": []
+    },
+    "representanteLegal": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/organization/representanteLegal",
+      "detailUrl": "/sws/neo/organization/representanteLegal/{id}",
       "supportedFilters": []
     }
   },
@@ -106,7 +125,7 @@ export const api = {
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/organization/selectors/currency"
+      "url": "/sws/neo/organization/organization/selectors/currency"
     },
     {
       "entity": "information",
@@ -114,7 +133,7 @@ export const api = {
       "column": "C_Location_ID",
       "reference": "Location",
       "inputMode": "search",
-      "url": "/sws/neo/organizaci-n/information/selectors/locationAddress"
+      "url": "/sws/neo/organization/information/selectors/locationAddress"
     },
     {
       "entity": "actividadesDelIae",
@@ -122,7 +141,7 @@ export const api = {
       "column": "Epiae_Epigraph_ID",
       "reference": "EPIAE_Epigraph",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epgrafeIAE"
+      "url": "/sws/neo/organization/actividadesDelIae/selectors/epgrafeIAE"
     },
     {
       "entity": "actividadesDelIae",
@@ -130,7 +149,7 @@ export const api = {
       "column": "Epiae_Type_ID",
       "reference": "epiae_type",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeType"
+      "url": "/sws/neo/organization/actividadesDelIae/selectors/epiaeType"
     },
     {
       "entity": "actividadesDelIae",
@@ -138,7 +157,7 @@ export const api = {
       "column": "Epiae_Code_ID",
       "reference": "EPIAE_Code",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeCode"
+      "url": "/sws/neo/organization/actividadesDelIae/selectors/epiaeCode"
     }
   ],
   "actions": [
@@ -146,7 +165,7 @@ export const api = {
       "entity": "organization",
       "field": "ready",
       "column": "IsReady",
-      "url": "/sws/neo/organizaci-n/organization/{id}/action/ready",
+      "url": "/sws/neo/organization/organization/{id}/action/ready",
       "processId": "53863D4359114ADE92133F772135AEEB",
       "processType": "classic"
     },
@@ -154,7 +173,7 @@ export const api = {
       "entity": "organization",
       "field": "etsgAddCertificate",
       "column": "EM_Etsg_Add_Certificate",
-      "url": "/sws/neo/organizaci-n/organization/{id}/action/etsgAddCertificate",
+      "url": "/sws/neo/organization/organization/{id}/action/etsgAddCertificate",
       "processId": "77AAF82CC5344022AAD6ECBC9925E574",
       "processType": "obuiapp"
     }
@@ -214,6 +233,14 @@ export default function OrganizationPage({ windowName, recordId, ...props }) {
           { key: 'epiaeCode', column: 'Epiae_Code_ID', type: 'selector', label: 'Código', reference: 'EPIAE_Code', inputMode: 'selector' },
           { key: 'default', column: 'Isdefault', type: 'checkbox', required: true, label: 'Valor por defecto' },
           ], derived: [], hidden: [] }, tabOrder: 10 },
+          { key: 'representanteLegal', label: 'Representante Legal', Table: RepresentanteLegalTable, Form: RepresentanteLegalForm, addLineFields: { entry: [
+          { key: 'taxID', column: 'Taxid', type: 'text', required: true, label: 'CIF/NIF' },
+          { key: 'firstName', column: 'Firstname', type: 'text', required: true, label: 'Nombre' },
+          { key: 'lastname1', column: 'Lastname1', type: 'text', required: true, label: 'Primer Apellido' },
+          { key: 'lastname2', column: 'Lastname2', type: 'text', label: 'Segundo Apellido' },
+          { key: 'powerDate', column: 'Power_Date', type: 'date', required: true, label: 'Fecha Poder' },
+          { key: 'notaryName', column: 'Notary_Name', type: 'text', required: true, label: 'Notaría' },
+          ], derived: [], hidden: [] }, tabOrder: 20 },
         ]}
         requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}

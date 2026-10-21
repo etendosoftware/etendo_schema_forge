@@ -1,7 +1,7 @@
 ---
 description: "qa -- Pixel UI. You are Pixel, the UI unit test engineer of the etendo-ui-dev team."
 mode: subagent
-color: "#EAB308"
+color: "yellow"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/pixel-ui.md - Regenerate: make sync-agents

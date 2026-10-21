@@ -11,7 +11,7 @@ Users should be able to browse warehouses, open one warehouse record, and then a
 ## Interaction model
 
 - Route: `/warehouse-storage-bins`, `/warehouse-storage-bins/:recordId`
-- Visibility: Route-only. `menu.json` marks the window as hidden, so it does not appear in the visible Inventory menu.
+- Visibility: Route-only (ETP-5795). `menu.json` marks the item `hidden: true` with `"routeOnly": true`, so it stays out of the sidebar but remains reachable by URL (`/warehouse-storage-bins`). Without `routeOnly` or `redirect` a hidden item is not registered and resolves to "Window not found".
 - Implementation type: Generated
 - Window shape: Master-child. The list level is `warehouse`, and the detail child rows are `locator`. On `/warehouse-storage-bins`, the user sees a warehouse list. On `/warehouse-storage-bins/:recordId`, the page renders a warehouse header with locator rows underneath.
 
