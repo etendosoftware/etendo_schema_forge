@@ -1955,7 +1955,8 @@ export function shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnoth
 }
 
 /** Reactive wrapper: calls `handleNew()` exactly when {@link shouldResetEditingForNewRoute} says to. */
-export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew, accessReadOnly = false, onReadOnlyNew }) {
+export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew, accessReadOnly: roleReadOnly = false, embedded = false, onReadOnlyNew }) {
+  const accessReadOnly = roleReadOnly && !embedded; // an embedded form is never redirected
   const prevRecordIdRef = useRef(recordId);
   useEffect(() => {
     const arrivedFromAnotherRecord = prevRecordIdRef.current !== recordId;
@@ -1971,6 +1972,15 @@ export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew, a
   useEffect(() => {
     if (isNew && accessReadOnly) onReadOnlyNewRef.current?.();
   }, [isNew, accessReadOnly]);
+}
+
+/**
+ * ETP-5830 — the `editing` record a custom Panel / CustomLines receives: `false` when the role
+ * only reads the window, so the panel locks its writes; the record itself otherwise. Lives here
+ * to keep DetailView's own cognitive complexity flat.
+ */
+export function panelEditing(windowReadOnly, editing) {
+  return windowReadOnly ? false : editing;
 }
 
 /**

@@ -65,6 +65,7 @@ import {
   getProcessButtonVariant,
   getDangerIconClass,
   isDangerProcess,
+  panelEditing,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -1262,5 +1263,20 @@ describe('useNewRouteEditingReset — read-only role on the creation route (ETP-
     run({ isNew: true, accessReadOnly: false, onReadOnlyNew });
     run({ isNew: false, recordId: 'R1', accessReadOnly: true, onReadOnlyNew });
     expect(onReadOnlyNew).not.toHaveBeenCalled();
+  });
+  it('never redirects an embedded form, and runs its defaults fetch as usual', () => {
+    const onReadOnlyNew = vi.fn();
+    const handleNew = vi.fn();
+    run({ isNew: true, accessReadOnly: true, embedded: true, onReadOnlyNew, handleNew });
+    expect(onReadOnlyNew).not.toHaveBeenCalled();
+    expect(handleNew).toHaveBeenCalled();
+  });
+});
+
+describe('panelEditing (ETP-5830)', () => {
+  it('locks a custom panel for a read-only role and passes the record through otherwise', () => {
+    const record = { id: 'R1' };
+    expect(panelEditing(true, record)).toBe(false);
+    expect(panelEditing(false, record)).toBe(record);
   });
 });
