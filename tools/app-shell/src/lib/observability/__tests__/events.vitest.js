@@ -163,3 +163,36 @@ describe('import_completed event', () => {
   });
 });
 
+// ETP-5808 — account_id (the Client-level SaaS tenant identifier, sourced from
+// getSessionIdentity().clientId in useSurveyEngine.js) was added to the per-event
+// `properties` allowlist of the 4 survey events. pickEventProperties() gates on this
+// allowlist independently of the SAFE_EVENT_PROPERTY_KEYS sanitizer in payload.js (which
+// already allowed 'account_id') — a key present in one but not the other is silently
+// dropped with no error anywhere, which is exactly the bug this guards against.
+describe('survey events — account_id allowlist (ETP-5808)', () => {
+  const SURVEY_EVENTS = [
+    OBSERVABILITY_EVENTS.SURVEY_SHOWN,
+    OBSERVABILITY_EVENTS.SURVEY_SCORE_SELECTED,
+    OBSERVABILITY_EVENTS.SURVEY_RESPONDED,
+    OBSERVABILITY_EVENTS.SURVEY_DISMISSED,
+  ];
+
+  it('declares account_id in the properties allowlist of every survey event', () => {
+    for (const event of SURVEY_EVENTS) {
+      expect(event.properties).toContain(OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID);
+    }
+  });
+
+  it('keeps account_id through buildObservabilityEvent for every survey event instead of '
+    + 'silently dropping it', () => {
+    for (const event of SURVEY_EVENTS) {
+      const { properties } = buildObservabilityEvent(event, {
+        account_id: 'client-77',
+        source: 'survey-1',
+        type: 'nps',
+      });
+      expect(properties).toHaveProperty('account_id', 'client-77');
+    }
+  });
+});
+
