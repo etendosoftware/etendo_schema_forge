@@ -456,3 +456,55 @@ test('runAction passes an Etendo refusal through and does not re-read', async ()
   );
   assert.equal(calls.length, 1);
 });
+
+test('runAction answers 502 with a hint when the connection to Etendo fails', async () => {
+  const fn = (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch;
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  await assert.rejects(
+    () => controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt' } as any),
+    (error: any) => {
+      const e = error.getResponse().errors[0];
+      return error instanceof HttpException && error.getStatus() === 502
+        && /may have been applied/.test(e.meta.hint) && !/Retry later/.test(e.detail);
+    },
+  );
+});
+
+test('runAction passes the exact NEO 422 business_rule body through with its message', async () => {
+  const body = { status: 'error', message: 'Cannot complete an empty order', messageKeys: ['k1'],
+    error: { status: 422, code: 'business_rule', message: 'Cannot complete an empty order', messageKeys: ['k1'] } };
+  const { fn } = actionFetch(() => new Response(JSON.stringify(body), { status: 422 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  await assert.rejects(
+    () => controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt' } as any),
+    (error: any) => error.getStatus() === 422 && error.getResponse().errors[0].detail.includes('Cannot complete an empty order'),
+  );
+});
+
+test('runAction passes a 403 insufficient scope through as 403', async () => {
+  const { fn } = actionFetch(() => new Response(JSON.stringify({ error: { status: 403, message: 'Insufficient scope: this request requires etendo:process' } }), { status: 403 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  await assert.rejects(
+    () => controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt' } as any),
+    (error: unknown) => error instanceof HttpException && error.getStatus() === 403,
+  );
+});
+
+test('runAction merges action meta into the re-read document meta', async () => {
+  const { fn } = actionFetch(() => new Response(JSON.stringify({ message: 'Done' }), { status: 200 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  const result = (await controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt' } as any)) as any;
+  assert.equal(result.meta.message, 'Done');
+});
+
+test('refuses the ids "." and ".." with 404 on actions and plain reads, without calling Etendo', async () => {
+  const { calls, fn } = actionFetch(() => new Response('{}', { status: 200 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  for (const id of ['.', '..', ' ']) {
+    await assert.rejects(() => controller.runAction('salesDoc', id, 'complete', { neoJwt: 'jwt' } as any),
+      (e: unknown) => e instanceof HttpException && e.getStatus() === 404);
+    await assert.rejects(() => controller.get('salesDoc', id, { neoJwt: 'jwt' } as any),
+      (e: unknown) => e instanceof HttpException && e.getStatus() === 404);
+  }
+  assert.equal(calls.length, 0);
+});

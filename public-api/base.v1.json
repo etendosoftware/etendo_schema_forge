@@ -1823,17 +1823,6 @@
           "body": {
             "docAction": "CO"
           }
-        },
-        {
-          "action": "process-receipt",
-          "name": "Process Receipt",
-          "method": "POST",
-          "path": "/returnMaterialReceipt/:id/action/documentAction",
-          "entity": "returnMaterialReceipt",
-          "columnName": "documentAction",
-          "params": [],
-          "preconditions": [],
-          "steps": 0
         }
       ],
       "functional": {

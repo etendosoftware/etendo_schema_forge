@@ -127,35 +127,23 @@ function openApiType(fieldType) {
   }
 }
 
-/** kebab-case public action name for a process label ("Process Receipt" -> "process-receipt"). */
-function actionName(label) {
-  return String(label)
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase();
-}
-
 /**
  * Public actions of a top-level resource (POST /<resource>/:id/actions/<action>).
- * Structural: `complete` comes from the window's draftMode completion flow
- * (only the document-action column, whose body NEO reads as `docAction`);
- * declared processEndpoints keep their fields and gain a public `action` name.
+ * Structural: v1 exposes only `complete`, derived from the window's draftMode
+ * completion flow (the document-action column, whose body NEO reads as
+ * `docAction`). Declared processEndpoints are not public actions.
  */
-function buildProcesses({ backend, source, entityName }) {
-  const processes = (backend.processEndpoints ?? [])
-    .filter((process) => process.entity === entityName)
-    .map((process) => ({ action: actionName(process.name), ...process }));
+function buildProcesses({ source, entityName }) {
   const draft = source?.draftMode;
   if (draft?.enabled && draft.processField === 'documentAction' && draft.processValue) {
-    processes.unshift({
+    return [{
       action: 'complete',
       method: 'POST',
       path: `/${entityName}/:id/action/${draft.processField}`,
       body: { docAction: draft.processValue },
-    });
+    }];
   }
-  return processes;
+  return [];
 }
 
 function buildEntity({ specName, entityName, contract, functional, parent, rawEntity }) {
@@ -256,7 +244,7 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
     ...(readOnlyFiscalMonitor ? { group: 'Fiscal Monitors' } : {}),
     operations,
     fields,
-    processes: readOnlyFiscalMonitor || parent ? [] : buildProcesses({ backend, source, entityName }),
+    processes: readOnlyFiscalMonitor || parent ? [] : buildProcesses({ source, entityName }),
     ...(parent ? {
       parent: {
         resource: parent.resource,

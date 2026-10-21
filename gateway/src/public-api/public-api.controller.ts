@@ -200,12 +200,21 @@ export class PublicApiController {
       (process) => process.action === action && process.method?.toUpperCase() === 'POST',
     );
     if (!declared) throw new NotFoundException(`Unknown action ${action} for ${entityName}`);
+    this.assertRecordId(id);
     const url = `${this.neoBaseUrl}/sws/neo/${entity.specName}${declared.path.replace(':id', encodeURIComponent(id))}`;
-    const response = await this.fetchImpl(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${req.neoJwt}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(declared.body ?? {}),
-    });
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${req.neoJwt}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(declared.body ?? {}),
+      });
+    } catch {
+      // No answer at all: the action may or may not have been applied.
+      throw badGateway('Etendo did not answer the action request. Check meta.hint before retrying.', {
+        hint: 'The action may have been applied. Read the record before retrying.',
+      });
+    }
     if (!response.ok) {
       throw upstreamException(response.status, await response.json().catch(() => null));
     }
@@ -216,7 +225,7 @@ export class PublicApiController {
     // The action is already committed: a failed re-read must not turn it into an error.
     try {
       const document = (await this.forward(entityName, req, 'GET', undefined, id)) as Record<string, unknown>;
-      return { ...document, meta };
+      return { ...document, meta: { ...(document.meta as Record<string, unknown> | undefined), ...meta } };
     } catch {
       return {
         meta: { ...meta, hint: 'The action succeeded but the record could not be read back. Read the record to see its current state.' },
@@ -238,6 +247,13 @@ export class PublicApiController {
     }) as (PublicApiEntity & { publicName: string; parent: { resource: string; pathSegment: string } }) | undefined;
     if (!child) throw new NotFoundException(`Unknown child resource: ${parentName}/${childPath}`);
     return child;
+  }
+
+  /** A path-segment id (`.`/`..` would be normalised by URL resolution into another NEO route) must be a real id. */
+  private assertRecordId(id: string | undefined) {
+    if (id !== undefined && (id.trim() === '' || id === '.' || id === '..')) {
+      throw new NotFoundException('The record does not exist');
+    }
   }
 
   private assertTopLevel(entityName: string) {
@@ -333,6 +349,7 @@ export class PublicApiController {
     id?: string,
     parentId?: string,
   ) {
+    this.assertRecordId(id);
     const entity = this.entityOrThrow(entityName);
     const internalEntityName = entity.entityName ?? entityName;
     const query = parentId ? `?parentId=${encodeURIComponent(parentId)}` : '';

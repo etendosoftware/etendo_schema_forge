@@ -51,10 +51,10 @@ test('derives the complete action from the draft-mode completion flow, never for
     body: { docAction: 'CO' },
   });
   assert.ok(manifest.entities['sales-invoice'].processes.some((p: any) => p.action === 'complete'));
-  const receipt = manifest.entities['return-material-receipt'].processes.map((p: any) => p.action);
-  assert.deepEqual(receipt, ['complete', 'process-receipt']);
+  // v1 exposes only the derived complete action, never declared processEndpoints.
+  assert.deepEqual(manifest.entities['return-material-receipt'].processes.map((p: any) => p.action), ['complete']);
   for (const [name, entity] of Object.entries(manifest.entities) as Array<[string, any]>) {
     if (entity.parent || entity.group === 'Fiscal Monitors') assert.deepEqual(entity.processes, [], name);
-    for (const process of entity.processes) assert.ok(process.action, `${name} process without a public action name`);
+    for (const process of entity.processes) assert.equal(process.action, 'complete', name);
   }
 });

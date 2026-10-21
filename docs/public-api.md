@@ -238,14 +238,14 @@ The route table is fixed controller code; resource and child lookup use the mani
 
 - **Declared actions.** `complete` exists on every resource whose window has a completion flow
   (`draftMode` with `processField: documentAction`); the generator derives it structurally and sends
-  `{"docAction": "<processValue>"}` to `POST /sws/neo/{specName}{path}`. Declared `processEndpoints`
-  keep their fields and get a kebab-case `action` name (for example `process-receipt`). Fiscal
-  monitors and child resources declare none.
+  `{"docAction": "<processValue>"}` to `POST /sws/neo/{specName}{path}`. In v1 `complete` is the only
+  public action: declared `processEndpoints` are not exposed. Fiscal monitors and child resources
+  declare none.
 - **Request.** No body is needed; a body is accepted and ignored in v1. An action the resource does not declare, or a child resource, answers `404`.
 - **Permission.** The key needs `public-api:process`. A key with only `public-api:write` is refused by Etendo with `403`.
-- **Response.** `200` with the record re-read after the action (the normal single-record document, so `documentStatus` shows the new state) plus `meta.message` with Etendo's message. If the record was already in the target status, `meta.alreadyApplied` is `true` and nothing was run again, so retrying is safe. If the action succeeded but the re-read failed, the answer is still `200` with only `meta` and `meta.hint` ("read the record to see its current state"); a committed action is never reported as an error.
+- **Response.** `200` with the record re-read after the action (the normal single-record document, so `documentStatus` shows the new state) plus `meta.message` with Etendo's message. If the record was already in the target status, `meta.alreadyApplied` is `true` and nothing was run again, so retrying is safe. If the action succeeded but the re-read failed, the answer is still `200` with only `meta` and `meta.hint` ("read the record to see its current state"); a committed action is never reported as an error. The re-read is a plain `GET` of the same record, so it needs `public-api:read`: a process-only key always gets the hint.
 - **Refusals.** A document rule that refuses the action (for example completing an empty order) passes through with Etendo's status and message (`422`, `403`, ...).
-- **Synchronous.** The action completes within the request; there is no status endpoint in v1. If it times out the answer is `502` with `meta.hint`; read the record before retrying.
+- **Synchronous.** The action completes within the request; there is no status endpoint in v1. If the connection fails or times out the answer is `502` with `meta.hint` ("The action may have been applied. Read the record before retrying."); read the record before retrying. The ids `.` and `..` are refused with `404`.
 
 Upstream mapping: the gateway calls
 `{NEO_BASE_URL}/sws/neo/{specName}/{entityName}[/{id}][?parentId=...]` with the token from the
