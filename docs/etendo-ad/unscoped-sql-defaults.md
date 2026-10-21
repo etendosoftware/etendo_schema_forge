@@ -42,9 +42,10 @@ GLJ document type. Full description: `docs/etendo-ad/onboarding-gaps.md`, gap A1
 - `ETGO_SF_FIELD` default of `returnToVendorShipment.documentType` (`DocBaseType='MMR'`, Etendo GO's
   own override) — had no client filter either, and ended in `ORDER BY IsDefault DESC LIMIT 1`, which
   hands the generic guard a single (foreign) row. Fixed in ETP-5682 with a client-scoped
-  `defaultExpr` in `artifacts/return-to-vendor-shipment/decisions.json`. A second path still leaks
-  a foreign `MMR` doctype: `CreatePurchaseReturnHandler.findRtvShipmentDocType` queries without a
-  client filter — tracked in ETP-5801 (code fix + its own data-fix).
+  `defaultExpr` in `artifacts/return-to-vendor-shipment/decisions.json`. A second path leaked
+  a foreign `MMR` doctype: `CreatePurchaseReturnHandler.findRtvShipmentDocType` queried without a
+  client filter — code fix in ETP-5711; rows stored before it are repaired by
+  `R50-inout-foreign-return-doctype` (ETP-5801).
 - Not affected: `C_BP_Group_ID`, `M_Product_Category_ID` (filter by `AD_Client_ID`),
   `M_InventoryLine.M_Locator_ID` (scoped by `M_Warehouse_ID`).
 
