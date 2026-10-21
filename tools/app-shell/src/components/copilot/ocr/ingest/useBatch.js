@@ -3,16 +3,34 @@ import { useCallback, useMemo, useState } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 
-/** Seconds between polls of a running job. */
+/** Milliseconds between polls of a running job. */
 const JOB_POLL_INTERVAL_MS = 2000;
 /** Consecutive failed polls tolerated before the answer is reported unknown. */
 const MAX_CONSECUTIVE_POLL_FAILURES = 5;
-/** Resubmits after a 429 before giving up. */
-const MAX_SUBMIT_RETRIES = 12;
 /** Longest wait between resubmits, whatever `Retry-After` says. */
 const MAX_RETRY_WAIT_MS = 30000;
+/**
+ * Total time a submit keeps waiting out 429s. The rows were never created, so giving up after this
+ * answers with the 429 body (a definite, retryable failure) rather than hanging the import.
+ */
+const MAX_SUBMIT_WAIT_MS = 15 * 60 * 1000;
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** The error a stopped wait throws; the import engine reads any rejection as "outcome unknown". */
+function abortError() {
+  const err = new Error('Batch wait aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
+/** Sleeps `ms`, rejecting as soon as `signal` aborts so a closed dialog stops polling at once. */
+function sleep(ms, signal) {
+  if (signal?.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => { clearTimeout(timer); reject(abortError()); };
+    const timer = setTimeout(() => { signal?.removeEventListener?.('abort', onAbort); resolve(); }, ms);
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+  });
+}
 
 function parseJson(text) {
   if (!text) return null;
@@ -39,22 +57,24 @@ async function postJson(apiFetch, url, payload) {
  * Submits an async batch. A 429 means the user already has the maximum of active jobs (or the
  * server queue is full): wait the advertised time and resubmit instead of failing the rows.
  */
-async function submitWithBackoff(apiFetch, url, payload, pollIntervalMs) {
-  for (let attempt = 0; ; attempt += 1) {
+async function submitWithBackoff(apiFetch, url, payload, { pollIntervalMs, signal }) {
+  let waited = 0;
+  for (;;) {
+    if (signal?.aborted) throw abortError();
     const out = await postJson(apiFetch, url, payload);
-    if (out.res.status !== 429 || attempt >= MAX_SUBMIT_RETRIES) return out;
+    if (out.res.status !== 429 || waited >= MAX_SUBMIT_WAIT_MS) return out;
     const advertised = Number(out.res.headers?.get?.('Retry-After'));
     const waitMs = Number.isFinite(advertised) && advertised > 0
       ? Math.min(advertised * 1000, MAX_RETRY_WAIT_MS)
       : Math.max(pollIntervalMs, 1000);
-    await sleep(waitMs);
+    await sleep(waitMs, signal);
+    waited += waitMs;
   }
 }
 
 /** The error a caller already knows how to classify (`importErrorServerFailure`). */
-function jobError(status, message, raw) {
+function jobError(status, message) {
   const err = new Error(message);
-  err.raw = raw;
   err.messageKey = 'importErrorServerFailure';
   err.params = { status };
   return err;
@@ -81,32 +101,33 @@ function envelopeFromJob(job) {
  * on the server — but five in a row throw, which the import engine reads as "outcome unknown"
  * (rows are never resent, so nothing is duplicated). A 404 means the job is gone.
  */
-async function pollJob(apiFetch, url, { onProgress, pollIntervalMs }) {
+async function pollJob(apiFetch, url, { onProgress, pollIntervalMs, signal }) {
   let failures = 0;
   for (;;) {
+    if (signal?.aborted) throw abortError();
     let res;
     try {
       res = await apiFetch(url, { baseUrl: '', method: 'GET' });
     } catch (e) {
       failures += 1;
       if (failures >= MAX_CONSECUTIVE_POLL_FAILURES) throw e;
-      await sleep(pollIntervalMs);
+      await sleep(pollIntervalMs, signal);
       continue;
     }
     const job = await readJson(res);
-    if (res.status === 404) throw jobError(404, `Batch job not found (${res.status})`, undefined);
+    if (res.status === 404) throw jobError(404, `Batch job not found (${res.status})`);
     if (!res.ok || !job) {
       failures += 1;
       if (failures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-        throw jobError(res.status, `Batch job status failed (${res.status})`, undefined);
+        throw jobError(res.status, `Batch job status failed (${res.status})`);
       }
-      await sleep(pollIntervalMs);
+      await sleep(pollIntervalMs, signal);
       continue;
     }
     failures = 0;
     onProgress?.({ processedRows: job.processedRows ?? 0, totalRows: job.totalRows ?? 0 });
     if (job.done) return envelopeFromJob(job);
-    await sleep(pollIntervalMs);
+    await sleep(pollIntervalMs, signal);
   }
 }
 
@@ -142,9 +163,12 @@ async function pollJob(apiFetch, url, { onProgress, pollIntervalMs }) {
  *   - otherwise → `{ committed: false, partial: true, state, rows, error?, failedAt?, hint? }`, where
  *     `rows[]` says per row (`ids`, `committed`, `operations` | `error`) what exists. No `atomic`
  *     key: some rows may exist, so a caller that predates `rows` must not treat it as a rollback.
+ * `signal` (an `AbortSignal`) stops the wait — the 429 back-off and the polling — at once; the job
+ * itself keeps running on the server and the caller reads the rejection as "outcome unknown".
  * `onProgress({ processedRows, totalRows })` is called after every poll. A server that does not know
  * `async` answers synchronously; that answer is returned as it is. A 429 (too many active jobs) is
- * waited out with the server's `Retry-After` and resubmitted — it never becomes a row error.
+ * waited out with the server's `Retry-After` and resubmitted (for up to 15 minutes, then the 429 body
+ * is returned as the definite, retryable failure it is — the rows were never created).
  */
 export function useBatch({ token }) {
   const [loading, setLoading] = useState(false);
@@ -169,6 +193,7 @@ export function useBatch({ token }) {
     async: asyncMode = false,
     onProgress,
     pollIntervalMs = JOB_POLL_INTERVAL_MS,
+    signal,
   } = {}) => {
     setError(null);
     setLoading(true);
@@ -181,12 +206,13 @@ export function useBatch({ token }) {
       if (skipRedundantCallouts) payload._skipRedundantCallouts = true;
       if (asyncMode) payload.async = true;
       const { res, json, text } = asyncMode
-        ? await submitWithBackoff(apiFetch, batchUrl, payload, pollIntervalMs)
+        ? await submitWithBackoff(apiFetch, batchUrl, payload, { pollIntervalMs, signal })
         : await postJson(apiFetch, batchUrl, payload);
       if (asyncMode && json?.jobId && !('committed' in json)) {
         return await pollJob(apiFetch, `${batchUrl}/jobs/${encodeURIComponent(json.jobId)}`, {
           onProgress,
           pollIntervalMs,
+          signal,
         });
       }
       if (!res.ok && !json) {

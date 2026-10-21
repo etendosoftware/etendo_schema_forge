@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLabel, useUI } from '@/i18n';
 import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
@@ -52,12 +52,22 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // ETP-5677 — and it runs as an async job: a long chunk can outlive the proxy in front of Tomcat
   // and lose its answer for rows the server did commit. The job returns at once, commits row by row
   // and is polled; `onProgress` (passed by the import engine) feeds the dialog's progress bar.
+  //
+  // The wait (429 back-off, polling) stops when the owner of this hook unmounts: the controller is
+  // created inside the effect so React StrictMode's mount/cleanup/mount cycle gets a fresh one.
+  const abortRef = useRef(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    return () => controller.abort();
+  }, []);
   const postBatch = useCallback(
     (operations, { onProgress } = {}) => runBatch(operations, {
       onlyReturnIds: true,
       skipRedundantCallouts: true,
       async: true,
       onProgress,
+      signal: abortRef.current?.signal,
     }),
     [runBatch],
   );

@@ -440,6 +440,66 @@ describe('useBatch — async job mode (ETP-5677)', () => {
     expect(globalThis.fetch.mock.calls[1][1].method).toBe('POST');
   });
 
+  it('stops polling the moment the signal aborts, and a rejection is what the engine reads as unknown', async () => {
+    const controller = new AbortController();
+    script(accepted,
+      reply(200, { jobId: 'J1', state: 'RUNNING', done: false, processedRows: 0, totalRows: 2, rows: [] }),
+      reply(200, { jobId: 'J1', state: 'RUNNING', done: false, processedRows: 0, totalRows: 2, rows: [] }));
+    const onProgress = vi.fn(() => controller.abort());
+
+    const { thrown, result } = await run({ signal: controller.signal, onProgress, pollIntervalMs: 50 });
+
+    expect(thrown.name).toBe('AbortError');
+    expect(result.current.error).toBe(thrown);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // the submit and ONE poll
+  });
+
+  it('stops waiting out a 429 when the signal aborts, without resubmitting', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    script(reply(429, { error: { message: 'Too many' } }, { 'Retry-After': '30' }), accepted);
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let thrown;
+    await act(async () => {
+      const pending = result.current.runBatch(ops, { async: true, signal: controller.signal })
+        .catch((e) => { thrown = e; });
+      await vi.advanceTimersByTimeAsync(5000);
+      controller.abort();
+      await pending;
+    });
+
+    expect(thrown.name).toBe('AbortError');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to start when the signal is already aborted', async () => {
+    script(accepted);
+    const controller = new AbortController();
+    controller.abort();
+
+    const { thrown } = await run({ signal: controller.signal });
+
+    expect(thrown.name).toBe('AbortError');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('after 15 minutes of 429 answers with the 429 body — a definite, retryable failure, not a hang', async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(async () => reply(429, { error: { status: 429, message: 'Too many' } }, { 'Retry-After': '30' }));
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let out;
+    await act(async () => {
+      const pending = result.current.runBatch(ops, { async: true });
+      await vi.advanceTimersByTimeAsync(16 * 60 * 1000);
+      out = await pending;
+    });
+
+    expect(out.error.status).toBe(429);
+    expect(globalThis.fetch.mock.calls.length).toBeGreaterThan(20);
+  });
+
   it('returns a synchronous answer as it is when the server does not know async', async () => {
     const sync = { committed: true, operations: [{ id: 'r0.product', ok: true, recordId: 'P-1' }] };
     script(reply(200, sync));
