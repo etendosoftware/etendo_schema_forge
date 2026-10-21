@@ -45,6 +45,7 @@ describe('ConfirmResultModal', () => {
       ['facturaRectificativaCompra', 'title.facturaRectificativaCompra', 'poViewInvoice', 'completedFeminine'],
       ['pedidoVenta', 'title.pedido', 'sqViewOrder', 'completedMasculine'],
       ['devolucionCompra', 'title.devolucionCompra', 'confirmResultModal.view.devolucion', 'completedFeminine'],
+      ['devolucionVenta', 'title.devolucionVenta', 'confirmResultModal.view.devolucion', 'completedFeminine'],
       ['unknownType', 'title.factura', 'poViewInvoice', 'completedFeminine', 'facturaCompra'],
     ])('a completed %s gets its own title, label, view button and gendered badge', (type, titleKey, viewKey, statusKey, labelType = type) => {
       renderModal({ docs: [{ type, num: 'X-1', documentStatus: 'CO', route: '/x/1' }] });

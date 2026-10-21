@@ -2512,3 +2512,27 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 - **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
 
 **Manual verification:** open a draft sales invoice; confirm `Unidad` sits after Cant. facturada; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## "A favor" topbar chip shows the whole amount — ETP-5729
+
+QA CP-14: the "A favor" chip next to Save truncated a 4-digit balance to "A favor 1.452,0…"
+because the amount sat in a fixed `w-[72px]` box. Both invoice topbars (sales
+`artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`, purchase
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx`) now render the amount
+through the shared `tools/app-shell/src/windows/custom/shared/BadgeAmount.jsx`: content-sized up to
+`max-w-[8.5rem]`, enough for 7 integer digits plus decimals and the symbol ("1.234.567,00 €").
+Longer values still ellipsise with the full amount in a tooltip. The list-column badges in the
+header tables keep their fixed width on purpose (row-to-row alignment) and were not changed.
+
+**Narrow topbars.** At ~1280px wide the chip used to overflow the topbar (the "€" fell off-screen
+and "A favor" wrapped onto two lines) because nothing in the flex chain could shrink: DetailView's
+right-hand action group (`flex items-center gap-2`) → chip → amount were all at their content
+width. Now the action group in `tools/app-shell/src/components/contract-ui/DetailView.jsx` carries
+`min-w-0`, the chip carries `BADGE_CHIP_FIT_CLASS` (`min-w-0 shrink-[999] whitespace-nowrap`,
+exported by `BadgeAmount.jsx`) and the amount is `min-w-0 shrink`. When room runs out the chip
+absorbs the overflow before the fixed-size icon buttons, the label stays on one line and the
+amount ellipsises (full value in the tooltip); with room it still sizes to content. The
+`DetailView` `min-w-0` only changes a toolbar whose actions already overflowed (they were clipped
+by the card's `overflow-hidden`). **Verify:** at 1280x720 open a completed credit with a large
+balance (e.g. "2.420.100,10 €"): the chip ends inside the card, the amount shows "2…" with the
+full value on hover, no horizontal scroll.

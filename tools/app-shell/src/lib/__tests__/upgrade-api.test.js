@@ -17,6 +17,7 @@ import {
   getCheckoutStatus,
   getSubscription,
   createPortalSession,
+  createSubscriptionReactivation,
   runPaidOnboarding,
 } from '../upgrade/api.js';
 import { minorUnitsToAmount } from '../upgrade/currency.js';
@@ -149,6 +150,7 @@ describe('the module surface', () => {
       'createBillingPurchase',
       'createCheckoutSession',
       'createPortalSession',
+      'createSubscriptionReactivation',
       'fetchPlans',
       'getBillingOffer',
       'getBillingOverview',
@@ -683,6 +685,73 @@ describe('createBillingPurchase', () => {
       () => createBillingPurchase('', {}),
       (error) => error.code === UPGRADE_ERROR_CODES.checkoutUnavailable,
     );
+  });
+});
+
+// ETP-5742 — re-subscribing the session's own canceled environment. The body names nothing: the
+// environment is the session's and the plan the canceled subscription's, neither the browser's.
+describe('createSubscriptionReactivation', () => {
+  it('posts an empty write with the proof under the cookie scheme', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-1', checkoutUrl: 'https://checkout.test/s' },
+      { status: 201 }));
+
+    const result = await createSubscriptionReactivation('');
+
+    assert.deepEqual(result, { requestId: 'req-1', checkoutUrl: 'https://checkout.test/s' });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0][0], /\/sws\/go\/billing\/reactivation$/);
+    assert.equal(calls[0][1].method, 'POST');
+    assert.equal(calls[0][1].body, undefined);
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+    assert.equal(headersOf().authorization, undefined);
+    assert.deepEqual(storageWrites, []);
+  });
+
+  it('reports a re-subscription already paid instead of a checkout URL', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-1', status: 'paid' }));
+
+    assert.deepEqual(await createSubscriptionReactivation(''),
+      { requestId: 'req-1', status: 'paid' });
+  });
+
+  it('maps the owner-only refusal onto the copy that sends the member to the owner', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { code: 'REACTIVATION_OWNER_REQUIRED', message: 'owner' } },
+      { ok: false, status: 403 }));
+
+    await assert.rejects(createSubscriptionReactivation(''), (error) => {
+      assert.equal(error.code, UPGRADE_ERROR_CODES.reactivationOwnerRequired);
+      assert.equal(error.status, 403);
+      return true;
+    });
+  });
+
+  it('maps an environment with nothing to re-subscribe onto its own code', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { code: 'REACTIVATION_NOT_AVAILABLE' } },
+      { ok: false, status: 409 }));
+
+    await assert.rejects(createSubscriptionReactivation(''),
+      (error) => error.code === UPGRADE_ERROR_CODES.reactivationNotAvailable);
+  });
+
+  it('keeps the checkout refusals of a purchase', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { code: 'PLAN_NOT_AVAILABLE' } },
+      { ok: false, status: 400 }));
+
+    await assert.rejects(createSubscriptionReactivation(''),
+      (error) => error.code === UPGRADE_ERROR_CODES.planNotAvailable);
+  });
+
+  it('rejects a response that carries neither a hosted URL nor a paid status', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-1' }, { status: 201 }));
+
+    await assert.rejects(createSubscriptionReactivation(''),
+      (error) => error.code === UPGRADE_ERROR_CODES.checkoutUnavailable);
   });
 });
 

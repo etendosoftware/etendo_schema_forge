@@ -11,6 +11,7 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 - Create and review journal headers with a focused 6-field form, in order: Accounting Date, Period, Description, Currency (read-only), Opening, and Multi-Ledger. (Document Date is hidden — see below.)
 - **Single date:** the form exposes only **Accounting Date** ("Fecha"). Document Date is hidden (`system`); `GlJournalHeaderHandler` mirrors `accountingDate` into `documentDate` on every CRUD write (ETP-5611), so both DB columns always carry the date the user chose.
 - **Reactivate** a completed, not-yet-posted journal back to Draft (ETP-5611).
+- Get a translated refusal when completing a journal whose **Period** does not contain its **Accounting Date**: the backend returns `ETGO_GLJournalPeriodMismatch` with `messageParams {period, accountingDate}`, mapped to `backendError.glJournalPeriodMismatch` (ETP-5669). The journal stays in Draft.
 - **Post** only a completed journal, and **Delete** only a draft one (ETP-5611). There is no Print action.
 - Start from an empty lines state ("Sin líneas todavía") that offers "+ Añadir líneas" once the header is saved (ETP-5611).
 - Add one or more journal lines under a header, each with an account, a debit amount, and a credit amount. **Lines no longer carry their own Description field** (ETP-5210, revised scope — see "Line description column removed" below); the journal's header `Description` remains the single place to annotate the entry.

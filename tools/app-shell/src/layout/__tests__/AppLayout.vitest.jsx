@@ -69,6 +69,24 @@ vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
 }));
 
+// ETP-5742 — the re-subscription widgets have their own suite (SubscriptionReactivation.vitest.jsx);
+// here only the blocked screen's choice between them is under test, so they are inert stand-ins
+// that expose the props the screen hands them.
+vi.mock('@/components/access/SubscriptionReactivation.jsx', () => ({
+  ReactivateSubscriptionButton: ({ onPaid }) => (
+    <button type="button" data-testid="blocked-access-reactivate" onClick={() => onPaid('REQ-PAID')}>
+      reactivate
+    </button>
+  ),
+  ReactivationPendingNotice: ({ requestId }) => (
+    <div data-testid="blocked-access-reactivating">{requestId}</div>
+  ),
+}));
+vi.mock('@/components/copilot/copilotApi.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectBaseUrl: () => 'http://api.test',
+}));
+
 // ETP-4576 — NoAccessScreen's role list now comes from the session (`useAuthOptional()?.roleList`)
 // rather than from `sf_auth_rolelist` in localStorage. That key is in LEGACY_AUTH_KEYS, so
 // `purgeLegacyAuthStorage` deletes it and the read answered "[]" for every user: `hasRole` was
@@ -1243,6 +1261,109 @@ describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
+  });
+
+  // ETP-5742 — a SUBSCRIPTION_REQUIRED environment whose subscription was CANCELED (not left
+  // unpaid) is re-subscribed by its owner from this screen; "Manage subscription" has nothing to
+  // fix there.
+  describe('a canceled subscription (ETP-5742)', () => {
+    const CANCELED = {
+      ...CURRENT, environmentType: 'PRODUCTIVE', subscriptionStatus: 'EXPIRED', plan: 'free',
+    };
+
+    function blockedBySubscription() {
+      vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+      vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    }
+
+    afterEach(() => {
+      vi.mocked(useSearchParams).mockImplementation(() => [new URLSearchParams(), vi.fn()]);
+    });
+
+    it('offers the owner to reactivate the subscription instead of managing it', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-title'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionCanceledTitle);
+      expect(screen.getByTestId('blocked-access-message'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionCanceledMessage);
+      expect(screen.getByTestId('blocked-access-reactivate')).toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+    });
+
+    it('tells an invited member to ask the owner, with nothing to click', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: false }]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-message'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionCanceledMemberMessage);
+      expect(screen.queryByTestId('blocked-access-reactivate')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+    });
+
+    it('keeps the payment portal for a subscription left unpaid', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, subscriptionStatus: 'PAST_DUE', ownedByAccount: true }]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-title'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionRequiredTitle);
+      expect(screen.getByTestId('blocked-access-cta'))
+        .toHaveTextContent(LABELS.blockedAccessManageSubscriptionCta);
+      expect(screen.queryByTestId('blocked-access-reactivate')).not.toBeInTheDocument();
+    });
+
+    it('tells neither story until the environment list has arrived', () => {
+      blockedBySubscription();
+      withEnvironments([], { loading: true });
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-loading')).toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-title')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+    });
+
+    it('waits for the re-subscription the provider sent the browser back with', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+      vi.mocked(useSearchParams).mockImplementation(
+        () => [new URLSearchParams('reactivation=success&requestId=REQ-1'), vi.fn()]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-reactivating')).toHaveTextContent('REQ-1');
+      expect(screen.queryByTestId('blocked-access-reactivate')).not.toBeInTheDocument();
+    });
+
+    it('offers the re-subscription again after a cancelled checkout', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+      vi.mocked(useSearchParams).mockImplementation(
+        () => [new URLSearchParams('reactivation=cancelled&requestId=REQ-1'), vi.fn()]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.queryByTestId('blocked-access-reactivating')).not.toBeInTheDocument();
+      expect(screen.getByTestId('blocked-access-reactivate')).toBeInTheDocument();
+    });
+
+    it('waits for a re-subscription that turns out to be paid already', async () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+      const user = userEvent.setup();
+
+      render(<AppLayout {...defaultProps} />);
+      await user.click(screen.getByTestId('blocked-access-reactivate'));
+
+      expect(screen.getByTestId('blocked-access-reactivating')).toHaveTextContent('REQ-PAID');
+    });
   });
 });
 

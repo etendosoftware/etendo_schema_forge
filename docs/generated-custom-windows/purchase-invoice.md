@@ -2748,6 +2748,10 @@ The `purchase-invoice:document-created` event is the `refreshEvent`. See `docs/u
 
 ## Header layout at 1280x720 — ETP-5513
 
+- The form's scroll container has no extra padding next to the OCR side panel (`sidebarFormScrollPaddingX=""` in `windows/custom/purchase-invoice/index.jsx`, ETP-5756), so its margins match `/sales-invoice`. `formScrollPaddingX` alone does not apply when a sidebar is present.
+
+- Footer (Docs / Notes / Totals) does not overlap at 1280x720 (ETP-5756). The 320 px sidebar leaves the main area ~690 px; the shared `LinesBottomSection` Totals column now shrinks from 520 px to a 320 px floor only when the footer row leaves the left column under 469 px (`min(520px, max(320px, calc(100% - 469px)))`), and `DocumentTotalsPanel`'s `pr-12` collapses to 0 as the block narrows. The Docs/Notes rows wrap their content under the DOCUMENTOS/NOTAS label when it would get under 20rem, so the chips get the full row and the Notes placeholder stays on one line. Each chip is a single-line pill: only its title truncates (with a `title` tooltip); the status badge always stays beside it. Windows without a side panel keep 520 px / 48 px unchanged. Covered by `components/contract-ui/__tests__/LinesBottomSection.vitest.jsx` (CSS contract; jsdom has no layout, so no pixel check).
+
 - The OCR side panel is a fixed 320 px (`sidePanelStyle={{ width: 320 }}` in
   `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`; it was 360 px).
 - The header form follows the shared responsive rules of `EntityForm` (see
@@ -2854,3 +2858,11 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 - **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
 
 **Manual verification:** open a draft purchase invoice; confirm `Unidad` sits after Cant. facturada; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## "A favor" topbar chip shows the whole amount — ETP-5729
+
+QA CP-14 applied here too: `PurchaseInvoiceTopbar.jsx` now renders the "A favor" balance through the
+shared `BadgeAmount` (with the chip class `BADGE_CHIP_FIT_CLASS`), so a large credit balance is no longer
+cut at "1.452,0…" and, on a narrow ~1280px topbar, the chip shrinks inside the card instead of pushing
+the "€" off-screen. The component, the flex-chain fix in `DetailView.jsx` and the manual check are
+described once in [`sales-invoice.md` — A favor topbar chip, ETP-5729](sales-invoice.md#a-favor-topbar-chip-shows-the-whole-amount--etp-5729).

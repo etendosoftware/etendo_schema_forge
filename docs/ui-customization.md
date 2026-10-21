@@ -271,6 +271,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
+| `sidebarFormScrollPaddingX` | `sidebarFormScrollPaddingX=""` (DetailView prop, opt-in, hand-built windows only) | Replaces the detail content column's padding when the window HAS a side panel / sidebar (default there: `px-2 pb-2` inline/compact, `pr-2` otherwise). `""` removes it. Ignored without a sidebar; independent of `formScrollPaddingX`. | — (string) |
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
 | `newRecordComponent` | `onNew={() => setShowNewModal(true)}` on `ListView`, plus `{showNewModal && <X … />}` after it | Replaces the list toolbar's New button flow (a modal instead of the generic create form). Needs `hideCreate: false`; ListView still hides New for a read-only window | `token`, `apiBaseUrl`, `windowName`, `onClose` — nothing else, so any page state it needs (a selected row, loaded data) must come from a shared store or the URL |
 
@@ -664,7 +665,45 @@ launch several batches over the same rows. It now uses the generic action,
 whose dialog stays open and read-only (buttons disabled, no Esc/overlay close)
 until the batch settles, while the toolbar button is `disabled={bulkDeleting}`.
 A window that opts out with `hideBulkDelete` and rolls its own bulk delete must
-give it the same in-flight guard.
+give it the same in-flight guard — in practice, by building it on
+`useBatchDeleteDialog` (below) rather than by hand.
+
+**One implementation for every bulk delete (ETP-5758).** `useBatchDeleteDialog`
+(`tools/app-shell/src/hooks/useBatchDeleteDialog.jsx`) + `DeleteConfirmDialog`
+are the app's single "selection → confirm-with-count → batch delete → one outcome
+toast" implementation. `useBulkRowDelete` is now a thin wrapper over it that only
+supplies the per-row `DELETE /{entity}/{id}` (with the backend message and the
+HTTP status on failure) and the `bulk-delete` testid scope; its public shape
+(`requestBulkDelete`, `bulkDeleteDialog`, `deleting`) is unchanged. Every
+multi-record delete goes through the generic hook:
+
+| Surface | How |
+|---|---|
+| `ListView` / `ListModalWindow` "Delete selected" (every generated grid, Contacts, Cuentas financieras…) | `useBulkRowDelete` → `useBatchDeleteDialog`, testids `bulk-delete-*` |
+| Financial Account → Movimientos / Extractos importados | `useBatchDeleteDialog` directly, testids `batch-delete-*` |
+| `DetailView` lines bulk delete — primary lines (classic toolbar **and** inlineEditable toolbar) and every secondary table tab | ONE `useBatchDeleteDialog` per DetailView; each request carries its own `deleteOneFn` (`buildChildRowDeleteFn` in `lib/batchDelete.js`) and `onOutcome`, testids `lines-bulk-delete-*` |
+| `amortization` lines table, `assets` Amortización panel | `useBatchDeleteDialog` directly, testids `batch-delete-*` |
+
+`requestBatchDelete(items, { deleteOneFn, onOutcome })` — the optional second
+argument overrides the hook-level functions for that request only, which is how
+one DetailView dialog serves the primary lines and every secondary tab.
+
+**The in-progress state lives in `DeleteConfirmDialog` (ETP-5758).** After the
+user confirms, the dialog does **not** close: the destructive button turns into
+a 14px spinner + *"Eliminando…"* (`bulkDeleteInProgress`), the description
+becomes *"Eliminando {count} registro(s). Esto puede tardar unos segundos."*
+(`bulkDeleteInProgressMessage`), Cancel is disabled, the corner X is hidden,
+Escape / overlay clicks are swallowed, and the dialog content carries
+`aria-busy="true"`. It closes only once the whole batch has settled, and then the
+single outcome toast fires. A double click on confirm cannot start a second batch
+(ref-guarded in the hook, not just `disabled`), and a `requestBatchDelete` made while a
+batch is running is ignored. If the host's `onOutcome` throws, the hook logs it, shows the
+generic `networkError` toast and still closes the dialog and releases the lock. Before ETP-5758 the DetailView
+lines bulk delete (primary + secondary tabs) went through the promise-based
+`confirmDelete` prompt, which closed **before** the DELETEs ran — the same bug
+Contacts had; `confirmDelete` now only serves single-line deletes. The
+amortization lines table and the assets Amortización panel deleted with **no
+confirmation at all**; they now ask first.
 
 **`listViewOptions.hideListBar` gates only the IDLE list bar — never the
 selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
@@ -823,8 +862,10 @@ carries `status`. Two hooks do both — `useBatchDeleteDialog` (Financial Accoun
 Extractos importados tabs) has since ETP-5085, and the generic **`useBulkRowDelete`** since ETP-5111
 (it previously threw a bare `new Error(extractErrorMessage(...))` and omitted `errors`, so every
 `ListView` grid multi-select — Cuentas included — degraded a single-row refusal to the counter
-message and discarded the server's own 409). Callers that build the toast themselves (`DetailView`,
-`contacts`, `AmortizationLinesTable`) pass no `errors` at all and are unaffected either way. So
+message and discarded the server's own 409). Since ETP-5758 no caller builds the toast itself any
+more: `DetailView`'s lines bulk delete (`buildChildRowDeleteFn`), `AmortizationLinesTable` and
+`AssetsAmortizationPanel` all go through `useBatchDeleteDialog` and reject with `status`, so a
+one-row refusal there names the backend's reason too. So
 ETP-5111's narrowing has one blast radius (`useBatchDeleteDialog`, which could previously show a
 reason for a multi-row batch) while its `useBulkRowDelete` fix *adds* the single-row reason to every
 generic grid that never had it.
@@ -1247,6 +1288,15 @@ and a bulk delete of the same record are not two dialogs that merely resemble ea
 this component, rendered twice. The hook now renders it (output byte-identical), and the Movimientos
 row kebab renders it directly with `count={1}`.
 
+Props: `open`, `count`, `deleting`, `onConfirm`, `onClose`, and `testIdScope` (ETP-5758, default
+`batch-delete`). The scope prefixes every testid — `Dialog__<scope>`, `DialogContent__<scope>`,
+`DialogTitle__<scope>`, `DialogDescription__<scope>`, `Button__<scope>-cancel`, `<scope>-confirm`,
+`<scope>-spinner` — so `useBulkRowDelete` keeps publishing the `bulk-delete-*` family ListView's
+specs use while the financial-account surfaces keep `batch-delete-*`. While `deleting` is true it
+renders the in-progress state described in §9c (spinner + *"Eliminando…"*, progress description,
+`aria-busy`, not dismissible) — a single-record caller such as the Movimientos kebab or Modelos
+fiscales gets it too, with `count={1}`.
+
 It is deliberately **presentational**: no selection state, no delete call, no outcome toast. The
 caller owns what confirming means. That is what lets the row kebab keep its own per-row success
 message and still show the identical dialog.
@@ -1410,6 +1460,8 @@ export default function MyBottomPanel(props) {
   );
 }
 ```
+
+**Footer layout (`LinesBottomSection`, ETP-5756).** The Totals column is `min(520px, max(320px, calc(100% - 469px)))` wide: a flat 520 px whenever the footer row leaves the left column at least 469 px (16 p-2 + 1 divider + 24 px-3 + 96 label + 12 gap + 320 content; every window without a side panel), shrinking to a 320 px floor only when the footer area itself is narrow (e.g. purchase-invoice's 320 px OCR sidebar at 1280x720). `%` follows the real container, not the viewport. `DocumentTotalsPanel` collapses its `pr-12` the same way (`clamp(0px, calc(100% - 456px), 48px)`: 48 px at the full width, 0 when narrow). The Docs and Notes rows are `flex-wrap`; their content has a 20rem (320 px) minimum, so when it no longer fits beside the 96 px label it drops under it instead of being squeezed (chips wrap, the Notes placeholder keeps its width). `DocChip` stays a single-line pill (`max-w-full`): the title is `min-w-0 truncate` (full text in its `title` attribute) while icon, amount and status badge are `shrink-0`, so the badge never drops to a second line.
 
 Gate the trigger on `lines.length > 0` (with no lines, the empty state already shows its own import button) plus the trigger's own visibility conditions (draft status + business partner above), so completed documents don't render an empty strip. **Known limitations** of this path: `DetailView`'s `bottomSection` contract passes no refresh callback and no save-header hook (`onSave`), so the trigger cannot save a dirty header before importing and must refresh via `window.location.reload()` after a successful import.
 
