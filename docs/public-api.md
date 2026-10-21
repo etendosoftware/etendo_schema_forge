@@ -222,7 +222,7 @@ The route table is fixed controller code; resource and child lookup use the mani
 | GET | `/api/v1/{resource}/{id}` | Read one. |
 | POST | `/api/v1/{resource}` | Create. |
 | PUT, PATCH | `/api/v1/{resource}/{id}` | Update. Requires `If-Match` on versioned resources ([4.5](#45-optimistic-concurrency-etag-and-if-match)). |
-| DELETE | `/api/v1/{resource}/{id}` | Delete. |
+| DELETE | `/api/v1/{resource}/{id}` | Delete. Answers `204 No Content` with no body ([4.8](#48-success-and-error-documents-and-statuses)). |
 | GET, POST | `/api/v1/{parent}/{parentId}/{child}` | Child collection. `parentId` is sent upstream as the query parameter `parentId`; on POST it is also set in the body as `parentId`. |
 | GET, PUT, PATCH, DELETE | `/api/v1/{parent}/{parentId}/{child}/{id}` | Child item. PUT and PATCH require `If-Match` on versioned resources. |
 
@@ -237,16 +237,16 @@ guard. Example: `GET /api/v1/contacts/ABC` calls `GET /sws/neo/contacts/business
 ### 4.3 Fields and fail-closed filtering
 
 - **Outbound:** each upstream record is projected through `filterOutboundRecord` (`core: packages/api-gateway-core/src/filter/field-filter.ts`): only manifest fields whose `internalPath` is present in the record are emitted, under their public name. A field absent from the manifest never appears in a response.
-- **Inbound (write bodies):** every attribute must be a manifest field with direction `in` or `inout`; otherwise `400 Field "x" is not writable by the public API`. Attributes are mapped to their `internalPath`. A relationship key must be a field that has a `relationship` and a write direction; otherwise `400 Relationship "x" is not writable by the public API`.
-- A body may be flat (`{"name": "..."}`) or JSON:API (`{"data": {"attributes": {...}, "relationships": {...}}}`).
-- Responses use a JSON:API-like envelope: `{ "data": <resource> }` for one record and `{ "data": [ <resource>, ... ] }` for a collection. A resource is built as follows:
+- **Inbound (write bodies):** every attribute must be a manifest field with direction `in` or `inout`; otherwise `400 Field "x" is not writable by the public API`. Attributes are mapped to their `internalPath`. An attribute that is a relationship (a foreign key) is refused with `400 "x" is a relationship: send it under "relationships"`, so a link is never written, or read back, in two places. A relationship key must be a field that has a `relationship` and a write direction; otherwise `400 Relationship "x" is not writable by the public API`.
+- A body is JSON:API (`{"data": {"type": "<resource>", "id": "<id>", "attributes": {...}, "relationships": {...}}}`) or flat (`{"name": "..."}`, attributes only). In a JSON:API body `attributes` and `relationships` are **each optional**: a body that carries only relationships is valid. `type` and `id` are resource members, never attributes. A `type` that is not the resource's, or an `id` that differs from the URL id, returns `409 Conflict`. `data` that is not a single resource object returns `400`.
+- Responses use the JSON:API envelope: `{ "data": <resource> }` for a single record (read, create or update) and `{ "data": [ <resource>, ... ] }` for a collection. Etendo wraps a single record in a one-element array; the gateway unwraps it, so `data` of a single-record response is always one resource object (an empty answer to a read is `404`; an empty answer to a write, or an answer with several records, is `502`, because it says nothing reliable about the write). A resource is built as follows:
   - `type` is the public resource name; `id` is the record's `id` (or the id in the request path) and is removed from `attributes`.
   - A field that has a `relationship` and is present in the upstream record is removed from `attributes` and returned under `relationships.<field>`: `{ "data": { "type": "<related resource>", "id": "<id>" }, "links": { "related": "/api/v1/<related resource>/<id>" } }`. A relationship field absent from the upstream record is omitted from `relationships` entirely.
   - When the value is an object, the related id is its `id`, else its `identifier`, else its `_id`; otherwise the scalar value itself is the id. When the value is null, or an object carrying none of those three keys, the result is `{ "data": null }` without `links`.
   - The ids inside `links.related` and `links.self` are URL-encoded.
   - `links.self` (`/api/v1/<resource>/<id>`) is present only when an id exists.
   - `meta.etag` is present on resources of versioned entities whose record carries `updated` ([4.5](#45-optimistic-concurrency-etag-and-if-match)), including the items of a list.
-- On a write, a `relationships.<field>.data.id` value is mapped to the field's internal path; a missing `data` maps to `null`.
+- On a write, a relationship is `{ "data": { "type": "<related resource>", "id": "<id>" } }`; `{ "data": null }` clears it. The `type` must be the related resource, else `409`. A relationship object without a `data` member, or with an array (to-many is not supported) or an identifier without a string `id`, returns `400`.
 
 Example response (values illustrative):
 
@@ -269,6 +269,8 @@ used on `/sws/neo/*` (see [section 8](#8-authentication-and-token-flow)).
 
 ### 4.5 Optimistic concurrency: `ETag` and `If-Match`
 
+> **Status:** the `ETag`/`If-Match` behavior below (and `meta.etag`, `412`, `428`) is delivered by ETP-5766 (PR #1869). Until that PR is merged, `develop`'s gateway does not implement it: updates carry Etendo's `updated` value as before and a stale value returns `409`. The 412/428 OpenAPI responses are added by whichever of ETP-5766 and ETP-5369 merges second.
+
 Applies to versioned resources: those whose manifest entity publishes `updated`
 ([Field rules](#field-rules-applied-by-the-manifest-generator)). For resources without `updated` the gateway
 does not require `If-Match` and returns no `ETag`.
@@ -281,7 +283,7 @@ does not require `If-Match` and returns no `ETag`.
 | `PUT` or `PATCH` with an `If-Match` that is not a strong, quoted ETag whose decoded value is a timestamp (weak, unquoted or malformed) | `412 Precondition Failed`; nothing is sent to Etendo. |
 | `PUT` or `PATCH` with an ETag of a version that is no longer current | `412 Precondition Failed`; the record is not changed. |
 | `PUT` or `PATCH` with the current ETag | The update is applied and the response carries the new `ETag`. |
-| `DELETE` | Does not use `If-Match`. |
+| `DELETE` | Does not use `If-Match`. Etendo does not check `updated` on delete today; revisit whether DELETE should require `If-Match` when it does. |
 
 - The ETag is a strong, opaque, quoted value derived from the record's `updated`; it is issued only when `updated` is an ISO-8601 timestamp with a time zone. Clients must treat it as opaque and send it back unchanged.
 - No other response carries an `ETag` header.
@@ -296,6 +298,66 @@ Content-Type: application/json
 
 {"data":{"attributes":{"order_date":"2026-10-14"}}}
 ```
+
+### 4.6 Relationships
+
+A foreign key is a JSON:API relationship, never an attribute. A relationship appears only under `relationships`, with `type` + `id` linkage, in responses and in write bodies. The manifest (`public-api/base.v1.json`) declares each one with `relationship: { resource, cardinality, foreignKey }`; the compliance tests ([4.9](#49-automated-compliance-checks)) check every relationship of the manifest, whatever it contains.
+
+- **Product category (foreign key).** `product.category` points to `product-category`.
+
+```json
+{ "data": { "type": "product", "id": "8F2A...",
+            "attributes": { "name": "Widget" },
+            "relationships": { "category": { "data": { "type": "product-category", "id": "5C1D..." },
+                                             "links": { "related": "/api/v1/product-category/5C1D..." } } } } }
+```
+
+  Create a product linked to a category with a body that carries only the relationship (no `attributes`), or both; clear it with `{ "data": null }`:
+
+```http
+POST /api/v1/product HTTP/1.1
+Content-Type: application/vnd.api+json
+
+{"data":{"type":"product","attributes":{"name":"Widget"},"relationships":{"category":{"data":{"type":"product-category","id":"5C1D..."}}}}}
+```
+
+- **Master-child documents (lines).** A child resource is addressed through its master (`/api/v1/{master}/{masterId}/{child}`), for example `sales-order/{id}/lines`. The master foreign key (for example `salesOrder`) is never an attribute and is not part of the body: the gateway takes it from the URL and sends it to Etendo as `parentId`. A child resource's `type` is its own public name (`sales-order-lines`).
+- **Contacts.** `contacts` publishes no relationship fields today; if the manifest gains one it is exposed and validated exactly as above.
+- Linkage types are validated on write: a relationship whose `type` is not the related resource returns `409`.
+
+### 4.7 Content negotiation
+
+- Responses (success and error) are `Content-Type: application/vnd.api+json`, with no media-type parameters. `204` has no body and no `Content-Type`. `/api/v1/openapi.json`, `/api` and `/docs` are not part of the resource API and keep their own types.
+- `Accept` may be absent, `*/*`, `application/*`, `application/json` or `application/vnd.api+json`. `406 Not Acceptable` is returned only when no entry is acceptable, including when every `application/vnd.api+json` entry carries a media-type parameter other than `ext` or `profile`.
+- A request body must be `application/vnd.api+json` or `application/json`. `415 Unsupported Media Type` is returned for another type and for `application/vnd.api+json` with a parameter other than `ext` or `profile`.
+- Both checks run after authentication, so a missing key is still `401`.
+
+### 4.8 Success and error documents and statuses
+
+| Operation | Success |
+|-----------|---------|
+| `GET` collection | `200 { "data": [ ... ] }` |
+| `GET` one | `200 { "data": { ... } }` |
+| `POST` | `201 { "data": { ... } }` |
+| `PUT`, `PATCH` | `200 { "data": { ... } }`; if Etendo answers `204`, `200 { "meta": { "status": "updated" } }` (JSON:API: only top-level meta, never `null`) |
+| `DELETE` | `204`, empty body (whatever success status Etendo answered) |
+
+Every failure is an error document, built from Etendo's answer when Etendo refused the request:
+
+```json
+{ "errors": [ { "status": "409", "code": "stale_record", "title": "Conflict",
+                "detail": "<Etendo's message>",
+                "meta": { "detail": "<Etendo's explanation>", "hint": "<what to do>" } } ] }
+```
+
+- `status` is the HTTP status as a string; `title` its standard name; `detail` is Etendo's message; `code`, `meta.hint`, `meta.detail` and `meta.field` appear when Etendo provides them. A gateway-originated error (unknown resource, not writable, `401 Missing API key`) has the same shape without `code`.
+- Statuses Etendo answers are passed through: `400`, `401`, `402` (blocked tenant), `403`, `404`, `409`, `412`, `422`, `428`, `429`, and `503` (Etendo's transient `service_unavailable`: database timeout or lost connection; retrying is right). Any other upstream status (every other `5xx`, an unexpected `4xx`) becomes `502 Bad Gateway` with a generic `detail` and `meta.upstreamStatus`; Etendo's text and stack are logged server side, never returned. The one exception is Etendo's `hint`: when a failure happens after the main write committed, Etendo's `500` carries a hint ("The record may already be saved. Read it before re-sending the request."); the `502` then returns it in `meta.hint` with the `detail` "Check meta.hint before retrying." instead of "Retry later". Read the record before re-sending, or the write may be duplicated.
+- An unexpected gateway failure is `500` with `detail: "Unexpected error."`.
+- The OpenAPI document lists these responses on every operation (`400`, `401`, `402`, `403`, `404`, `406`, `502`, `503`, plus `409`, `415` and `422` on writes; DELETE has no `415`/`422`).
+
+### 4.9 Automated compliance checks
+
+`gateway/test/json-api-compliance.test.ts` reads the real manifest and the generated OpenAPI and fails when: a relationship is duplicated inside `attributes`; a relationship lacks `type` + `id` linkage or points to an unknown resource; a child's master foreign key is an attribute; `id` is an attribute; a single-record response documents `data` as an array; an operation lacks its error responses; DELETE documents anything but `204`; a runtime document carries a top-level member other than `data`, `errors`, `meta`, `links`, `jsonapi`, `included`; or a relationship is writable as an attribute. `gateway/test/json-api-http.test.ts` exercises media-type negotiation, the error document and the `Content-Type` over real HTTP, and that routes outside the controller keep their own shape. Run with `cd gateway && npm test`.
 
 ---
 
@@ -434,6 +496,8 @@ require an administrator role and is not affected by the flag.
 
 Two independent OpenAPI documents exist; neither contains the other's routes.
 
+The gateway document lists, on every operation, the JSON:API error responses of [4.8](#48-success-and-error-documents-and-statuses) (`application/vnd.api+json` and `application/json`), documents `DELETE` as `204`, and describes request bodies as a JSON:API document with a required `data` member and optional `attributes`/`relationships`. `ETag`, `If-Match`, `412` and `428` appear in it only once ETP-5766 is merged ([4.5](#45-optimistic-concurrency-etag-and-if-match)).
+
 | | Etendo-side document | Gateway document |
 |---|---|---|
 | Generated by | `NeoOpenAPIEndpoint` (`go: schemaforge/NeoOpenAPIEndpoint.java`), a class implementing the `OpenAPIEndpoint` interface of the `com.etendoerp.openapi` module | `@nestjs/swagger` `SwaggerModule.createDocument`, after which `document.paths` is replaced by `buildPerEntityOpenApiPaths(schema)` (`gateway/src/main.ts`, `gateway/src/openapi/build-per-entity-paths.ts`) |
@@ -544,11 +608,18 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Unknown resource, unknown child, operation not exposed and child at top level return `404` with the documented message texts ([4.2](#42-routes))
 - [ ] Child routes forward `parentId` upstream, and POST sets it in the body ([4.2](#42-routes))
 - [ ] `GET /api/v1/contacts/{id}` calls `/sws/neo/contacts/businessPartner/{id}` ([4.2](#42-routes))
-- [ ] Flat and JSON:API request bodies are both accepted ([4.3](#43-fields-and-fail-closed-filtering))
+- [ ] Flat and JSON:API request bodies are both accepted; a JSON:API body with only `relationships` (no `attributes`) is accepted ([4.3](#43-fields-and-fail-closed-filtering))
+- [ ] A relationship sent as an attribute returns `400`; a wrong `type` or a different `id` returns `409` ([4.3](#43-fields-and-fail-closed-filtering), [4.6](#46-relationships))
+- [ ] A single-record `GET`, `POST`, `PUT` and `PATCH` return `data` as one object; a collection returns an array; an empty read is `404`; an empty write answer, or several records, is `502` ([4.3](#43-fields-and-fail-closed-filtering))
+- [ ] Responses are `application/vnd.api+json` without parameters; `Accept` that excludes JSON returns `406`; an unsupported body type returns `415` ([4.7](#47-content-negotiation))
+- [ ] Etendo's `400`, `401`, `402`, `403`, `404`, `409`, `422` reach the integrator with Etendo's message; `503` passes through; other `5xx` return `502` with no Etendo internals (only `meta.hint`, when Etendo sends one) ([4.8](#48-success-and-error-documents-and-statuses))
+- [ ] `DELETE` answers `204` with no body, as the OpenAPI documents ([4.8](#48-success-and-error-documents-and-statuses))
+- [ ] Every operation of the OpenAPI document lists its error responses ([4.8](#48-success-and-error-documents-and-statuses))
+- [ ] `cd gateway && npm test` passes, including the compliance checks ([4.9](#49-automated-compliance-checks))
 - [ ] Response resources: `id` is removed from `attributes`; relationship fields present upstream appear under `relationships` with `data` and `links.related`, absent ones are omitted ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] Relationship id resolution: object value uses `id`, else `identifier`, else `_id`; scalar value is the id; null or an object with none of them gives `data: null` without `links`; ids in links are URL-encoded ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] `links.self` is present only when an id exists ([4.3](#43-fields-and-fail-closed-filtering))
-- [ ] A write with `relationships.<field>.data.id` sets the field's internal path; a missing `data` sets `null` ([4.3](#43-fields-and-fail-closed-filtering))
+- [ ] A write with `relationships.<field>.data` `{ type, id }` sets the field's internal path; `{ data: null }` clears it; a relationship without `data` returns `400` ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] On a versioned resource, a single-record `GET`, `POST`, `PUT` and `PATCH` return an `ETag` header equal to `meta.etag`, and list items carry `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `PUT` or `PATCH` without `If-Match`, or with `*`, returns `428` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `PUT` or `PATCH` with a stale ETag returns `412` and leaves the record unchanged; with a malformed one returns `412`, never `500` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
