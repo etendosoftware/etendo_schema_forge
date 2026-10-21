@@ -239,7 +239,7 @@ guard. Example: `GET /api/v1/contacts/ABC` calls `GET /sws/neo/contacts/business
 - **Outbound:** each upstream record is projected through `filterOutboundRecord` (`core: packages/api-gateway-core/src/filter/field-filter.ts`): only manifest fields whose `internalPath` is present in the record are emitted, under their public name. A field absent from the manifest never appears in a response.
 - **Inbound (write bodies):** every attribute must be a manifest field with direction `in` or `inout`; otherwise `400 Field "x" is not writable by the public API`. Attributes are mapped to their `internalPath`. An attribute that is a relationship (a foreign key) is refused with `400 "x" is a relationship: send it under "relationships"`, so a link is never written, or read back, in two places. A relationship key must be a field that has a `relationship` and a write direction; otherwise `400 Relationship "x" is not writable by the public API`.
 - A body is JSON:API (`{"data": {"type": "<resource>", "id": "<id>", "attributes": {...}, "relationships": {...}}}`) or flat (`{"name": "..."}`, attributes only). In a JSON:API body `attributes` and `relationships` are **each optional**: a body that carries only relationships is valid. `type` and `id` are resource members, never attributes. A `type` that is not the resource's, or an `id` that differs from the URL id, returns `409 Conflict`. `data` that is not a single resource object returns `400`.
-- Responses use the JSON:API envelope: `{ "data": <resource> }` for a single record (read, create or update) and `{ "data": [ <resource>, ... ] }` for a collection. Etendo wraps a single record in a one-element array; the gateway unwraps it, so `data` of a single-record response is always one resource object (an empty answer is `404`, an answer with several records is `502`). A resource is built as follows:
+- Responses use the JSON:API envelope: `{ "data": <resource> }` for a single record (read, create or update) and `{ "data": [ <resource>, ... ] }` for a collection. Etendo wraps a single record in a one-element array; the gateway unwraps it, so `data` of a single-record response is always one resource object (an empty answer to a read is `404`; an empty answer to a write, or an answer with several records, is `502`, because it says nothing reliable about the write). A resource is built as follows:
   - `type` is the public resource name; `id` is the record's `id` (or the id in the request path) and is removed from `attributes`.
   - A field that has a `relationship` and is present in the upstream record is removed from `attributes` and returned under `relationships.<field>`: `{ "data": { "type": "<related resource>", "id": "<id>" }, "links": { "related": "/api/v1/<related resource>/<id>" } }`. A relationship field absent from the upstream record is omitted from `relationships` entirely.
   - When the value is an object, the related id is its `id`, else its `identifier`, else its `_id`; otherwise the scalar value itself is the id. When the value is null, or an object carrying none of those three keys, the result is `{ "data": null }` without `links`.
@@ -268,6 +268,8 @@ The gateway itself does not evaluate capabilities. They are enforced by Etendo w
 used on `/sws/neo/*` (see [section 8](#8-authentication-and-token-flow)).
 
 ### 4.5 Optimistic concurrency: `ETag` and `If-Match`
+
+> **Status:** the `ETag`/`If-Match` behavior below (and `meta.etag`, `412`, `428`) is delivered by ETP-5766 (PR #1869). Until that PR is merged, `develop`'s gateway does not implement it: updates carry Etendo's `updated` value as before and a stale value returns `409`. The 412/428 OpenAPI responses are added by whichever of ETP-5766 and ETP-5369 merges second.
 
 Applies to versioned resources: those whose manifest entity publishes `updated`
 ([Field rules](#field-rules-applied-by-the-manifest-generator)). For resources without `updated` the gateway
@@ -493,6 +495,8 @@ require an administrator role and is not affected by the flag.
 ## 7. OpenAPI sources and endpoint matrix
 
 Two independent OpenAPI documents exist; neither contains the other's routes.
+
+The gateway document lists, on every operation, the JSON:API error responses of [4.8](#48-success-and-error-documents-and-statuses) (`application/vnd.api+json` and `application/json`), documents `DELETE` as `204`, and describes request bodies as a JSON:API document with a required `data` member and optional `attributes`/`relationships`. `ETag`, `If-Match`, `412` and `428` appear in it only once ETP-5766 is merged ([4.5](#45-optimistic-concurrency-etag-and-if-match)).
 
 | | Etendo-side document | Gateway document |
 |---|---|---|
