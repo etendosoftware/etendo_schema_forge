@@ -1,6 +1,6 @@
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import {
-  DEFAULT_PAGE_SIZE, MAX_FILTERS, MAX_PAGE_SIZE, MAX_SORT_FIELDS, filterOperatorsFor, isReadable, kindOf,
+  DEFAULT_PAGE_SIZE, MAX_FILTERS, MAX_PAGE_SIZE, MAX_SORT_FIELDS, filterOperatorsFor, isReadable, isSortable, kindOf,
 } from '../public-api/json-api-query.ts';
 
 type JsonSchema = {
@@ -151,7 +151,7 @@ function listQueryParameters(entity: PublicApiEntity): OpenApiParameter[] {
     { name: 'page[size]', in: 'query', required: false, description: `Records per page (maximum ${MAX_PAGE_SIZE}).`, schema: { type: 'integer', minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE } },
     {
       name: 'sort', in: 'query', required: false,
-      description: `Comma-separated field names, a leading "-" for descending (for example "name,-id"); up to ${MAX_SORT_FIELDS}. Sortable fields: ${readable.map(([name]) => name).join(', ') || 'none'}.`,
+      description: `Comma-separated field names, a leading "-" for descending (for example "name,-id"); up to ${MAX_SORT_FIELDS}. Sortable fields: ${Object.entries(entity.fields).filter(([, field]) => isSortable(field as never)).map(([name]) => name).join(', ') || 'none'}.`,
       schema: { type: 'string' },
     },
   ];

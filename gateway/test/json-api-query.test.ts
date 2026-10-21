@@ -117,12 +117,11 @@ test('sort maps public names to NEO property names, keeps direction and ties bre
   assert.equal(parseListQuery(entity, { sort: 'name' }).sortBy, 'name,id');
   assert.equal(parseListQuery(entity, { sort: '-credit,name' }).sortBy, '-creditLimit,name,id');
   assert.equal(parseListQuery(entity, { sort: '-id' }).sortBy, '-id');
-  assert.equal(parseListQuery(entity, { sort: 'category' }).sortBy, 'productCategory,id');
   assert.equal(parseListQuery(entity, {}).sortBy, undefined);
 });
 
 test('sort refuses unknown, write-only, duplicated, empty and too many fields', () => {
-  for (const sort of ['nope', 'secret', 'name,name', 'name,-name', '', 'name,', ',name', '-', 'internalPath', 'productCategory', 'blob', 'a,b,c,d,e,f']) {
+  for (const sort of ['nope', 'secret', 'name,name', 'name,-name', '', 'name,', ',name', '-', 'internalPath', 'productCategory', 'blob', 'category', 'a,b,c,d,e,f']) {
     assert.equal(refusal({ sort }).parameter, 'sort', JSON.stringify(sort));
   }
   assert.equal(refusal({ sort: ['name', 'id'] }).parameter, 'sort');

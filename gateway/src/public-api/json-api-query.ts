@@ -9,6 +9,9 @@ import { invalidQueryParameter, isRecord } from './json-api-http.ts';
 // manifest, values are parsed against the field's data type, and anything that
 // does not fit is a 400 naming the parameter (fail closed).
 
+// The bracket syntax (`page[number]`, `filter[x][op]`) arrives here already nested because
+// Express 4's default "extended" query parser (`qs`) builds objects from it; json-api-http.test.ts
+// goes through that parser over real HTTP.
 export const DEFAULT_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 100;
 export const MAX_FILTERS = 20;
@@ -76,6 +79,12 @@ export interface ListQuery {
   linkParams: Array<[string, string]>;
 }
 
+/** Whether a field can be sorted by: filterable type, and not a relationship. */
+export function isSortable(field: QueryField): boolean {
+  const kind = kindOf(field);
+  return isReadable(field) && Boolean(kind) && kind !== 'relationship';
+}
+
 const text = (value: unknown): value is string => typeof value === 'string';
 
 function parsePositiveInteger(raw: unknown, parameter: string, max: number): number {
@@ -115,7 +124,9 @@ function parseSort(entity: PublicApiEntity, sort: unknown): string | undefined {
     const descending = item.startsWith('-');
     const name = descending ? item.slice(1) : item;
     const field = name ? fieldOf(entity, name) : undefined;
-    if (!field || !kindOf(field)) throw invalidQueryParameter('sort', `Cannot sort by "${name}": unknown or not readable field.`);
+    // A relationship would sort by the foreign key id, which means nothing to a client.
+    const kind = field ? kindOf(field) : undefined;
+    if (!field || !kind || kind === 'relationship') throw invalidQueryParameter('sort', `Cannot sort by "${name}": unknown, not readable or not sortable field.`);
     if (seen.has(name)) throw invalidQueryParameter('sort', `Field "${name}" is listed twice in sort.`);
     seen.add(name);
     sortBy.push(`${descending ? '-' : ''}${field.internalPath}`);

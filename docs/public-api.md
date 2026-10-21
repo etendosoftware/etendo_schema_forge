@@ -386,7 +386,7 @@ A list (`GET /api/v1/{resource}` and `GET /api/v1/{parent}/{parentId}/{child}`) 
 |-----------|---------|--------|
 | `page[number]` | Page to read, starting at 1 (default 1) | positive integer |
 | `page[size]` | Records per page (default 50) | 1 to 100 |
-| `sort` | Comma-separated public field names; a leading `-` is descending | up to 5 fields, no repeats; only fields the client can read |
+| `sort` | Comma-separated public field names; a leading `-` is descending | up to 5 fields, no repeats; only readable scalar fields (not relationships: they would sort by the foreign key id) |
 | `filter[<field>]=<value>` | Equals | up to 20 filters in total (each `field`+operator counts one) |
 | `filter[<field>][<operator>]=<value>` | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`, `in` | see the table below |
 
@@ -403,7 +403,7 @@ Values are parsed against the field's data type before anything is forwarded:
 | boolean | `eq`, `ne` | `true` or `false` |
 | date and date-time | `eq`, `gt`, `gte`, `lt`, `lte` | calendar date `yyyy-MM-dd` that exists (`2026-02-30` is refused) |
 
-`in` takes a comma-separated list (up to 100 values, none empty); a value cannot contain a comma. Dates are whole calendar days with no timezone: `filter[updated][gte]=2026-10-01` means from that day on, and `filter[updated]=2026-10-01` is the whole day, on date and date-time fields alike (the same day-level semantics as the Etendo grids). A timestamp with a time or an offset is refused. Date-time fields are not filterable at second precision in v1.
+`contains` is case-insensitive and matches anywhere in the text; `%`, `_` and `|` are literal (NEO escapes them), but each space in the value matches any run of characters (`acme corp` matches `Acme Holding Corp`). `in` takes a comma-separated list (up to 100 values, none empty); a value cannot contain a comma. Dates are whole calendar days with no timezone: `filter[updated][gte]=2026-10-01` means from that day on, and `filter[updated]=2026-10-01` is the whole day, on date and date-time fields alike (the same day-level semantics as the Etendo grids). A timestamp with a time or an offset is refused. Date-time fields are not filterable at second precision in v1.
 
 Examples (brackets are shown unencoded; clients may percent-encode them):
 
@@ -419,7 +419,7 @@ GET /api/v1/contacts/{id}/contacts?filter[phone][contains]=555
 
 `contacts` is used above because its fields (`name`, `search_key`, `tax_id`) are published today; the OpenAPI document lists the filterable fields of every resource, with the operators each accepts.
 
-**Sort stability.** When `sort` is given the gateway appends `id` as a tie-breaker, so records with equal keys do not move between pages. Without `sort`, the order is NEO's default for the resource.
+**Sort stability.** When `sort` is given the gateway appends `id` as a tie-breaker, so records with equal keys do not move between pages. Without `sort`, the gateway sends no order: a top-level list uses NEO's default (by `id`, stable). A child list (for example `lines`) follows the document's own order (the tab's order such as the line number); NEO applies that default only when no sort is sent, so the gateway does not add `id` there, because that would replace the natural line order. Such an order can contain ties, so to page a child list reliably send an explicit `sort` that includes a unique field (the `id` tie-breaker is then added for you).
 
 **Response.**
 
@@ -444,14 +444,14 @@ GET /api/v1/contacts/{id}/contacts?filter[phone][contains]=555
 
 ### 4.11 Rate limiting
 
-The gateway limits requests **per API key**: 100 requests per 60 seconds by default. The key is the `clientId` of the `Authorization: Bearer <clientId>:<clientSecret>` header, counted only after `PublicApiKeyGuard` accepted the key, so a client cannot spend another key's quota by sending its id. All routes under `/api/v1` share one quota per key (reads, writes and actions alike); `/api`, `/docs`, `/healthz` and the OpenAPI document are not limited.
+The gateway limits requests **per API key**: 100 requests per 60 seconds by default. The key is the `clientId` of the `Authorization: Bearer <clientId>:<clientSecret>` header, counted only after `PublicApiKeyGuard` accepted the key, so a client cannot spend another key's quota by sending its id. The window is sliding: each request counts for 60 seconds from the moment it was made, and a refused key is accepted again as soon as its oldest request leaves the window (there is no extra penalty period). All routes under `/api/v1` share one quota per key (reads, writes and actions alike, whichever handler serves them); `/api`, `/docs`, `/healthz` and the OpenAPI document are not limited.
 
 | Header | On | Meaning |
 |--------|----|---------|
 | `X-RateLimit-Limit` | every response to an authenticated request, 429 included | requests allowed per window |
 | `X-RateLimit-Remaining` | every such response | requests left in the current window (0 on a 429) |
-| `X-RateLimit-Reset` | every such response | **seconds** until the window resets (not an epoch timestamp) |
-| `Retry-After` | `429` only | seconds to wait before retrying |
+| `X-RateLimit-Reset` | every such response | **seconds** until all requests counted so far have left the window, i.e. the quota is fully restored (not an epoch timestamp) |
+| `Retry-After` | `429` only | seconds to wait before the next request is accepted (until the oldest counted request leaves the window) |
 
 A request refused for a missing, malformed or invalid key is `401` without these headers and does not use any key's quota.
 

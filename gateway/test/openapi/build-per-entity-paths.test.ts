@@ -220,15 +220,17 @@ test('a list operation documents page, sort and one filter per readable filterab
   rich.entities.product.fields.active = { publicApi: true, direction: 'inout', internalPath: 'isActive', type: 'passthrough', dataType: { type: 'boolean' } };
   rich.entities.product.fields.created = { publicApi: true, direction: 'out', internalPath: 'created', type: 'passthrough', dataType: { type: 'string', format: 'date-time' } };
   rich.entities.product.fields.secret = { publicApi: true, direction: 'in', internalPath: 'secret', type: 'passthrough', dataType: { type: 'string' } };
+  rich.entities.product.fields.rel = { publicApi: true, direction: 'inout', internalPath: 'rel', type: 'passthrough', dataType: { type: 'string' }, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'rel' } };
   rich.entities.product.fields.blob = { publicApi: true, direction: 'out', internalPath: 'blob', type: 'passthrough', dataType: { type: 'object' } };
   const parameters = buildPerEntityOpenApiPaths(rich)['/api/v1/product'].get.parameters as any[];
   const byName = Object.fromEntries(parameters.map((parameter) => [parameter.name, parameter]));
-  assert.deepEqual(Object.keys(byName), ['page[number]', 'page[size]', 'sort', 'filter[searchKey]', 'filter[name]', 'filter[active]', 'filter[created]']);
+  assert.deepEqual(Object.keys(byName), ['page[number]', 'page[size]', 'sort', 'filter[searchKey]', 'filter[name]', 'filter[active]', 'filter[created]', 'filter[rel]']);
   for (const parameter of parameters) assert.deepEqual([parameter.in, parameter.required], ['query', false]);
   assert.deepEqual(byName['page[size]'].schema, { type: 'integer', minimum: 1, maximum: 100, default: 50 });
   assert.deepEqual(byName['page[number]'].schema, { type: 'integer', minimum: 1, default: 1 });
   assert.match(byName.sort.description, /Sortable fields: searchKey, name, active, created\./);
   assert.doesNotMatch(byName.sort.description, /secret|blob/);
+  assert.doesNotMatch(byName.sort.description, /rel/);
   assert.match(byName['filter[name]'].description, /eq, ne, contains, in/);
   assert.match(byName['filter[active]'].description, /true or false/);
   assert.match(byName['filter[created]'].description, /yyyy-MM-dd/);

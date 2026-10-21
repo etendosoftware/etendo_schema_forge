@@ -127,6 +127,7 @@ const schema: PublicApiSchema = {
       specName: 'product',
       operations: ['GET', 'LIST', 'POST', 'DELETE'],
       fields: {
+        id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
         name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
       },
     },
@@ -274,6 +275,7 @@ test('HTTP: routes outside the public controller keep their own shape and conten
 });
 
 // ---- Query parameters through the real Express query parser ----------------
+// (the bracket syntax relies on Express 4's extended `qs` parser)
 
 const NEO_LIST = { response: { startRow: 10, endRow: 11, totalRows: 12, data: [{ id: 'p-11', name: 'A' }, { id: 'p-12', name: 'B' }] } };
 
@@ -281,20 +283,21 @@ test('HTTP: filter, sort and page parameters are parsed and reach NEO as criteri
   neoStatus = 200;
   neoBody = NEO_LIST;
   neoUrls.length = 0;
-  const result = await call('/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&sort=-name&page[number]=2&page[size]=10');
+  const result = await call('/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&filter[id][in]=p-1,p-2&sort=-name&page[number]=2&page[size]=10');
   assert.equal(result.status, 200);
   const params = new URL(neoUrls[0]).searchParams;
   assert.equal(params.get('_startRow'), '10');
   assert.equal(params.get('_endRow'), '19');
-  assert.equal(params.get('_sortBy'), '-name');
+  assert.equal(params.get('_sortBy'), '-name,id');
   assert.deepEqual(JSON.parse(params.get('criteria')!), [
     { fieldName: 'name', operator: 'iContains', value: 'wid' },
     { fieldName: 'name', operator: 'notEqual', value: 'x' },
+    { fieldName: 'id', operator: 'inSet', value: 'p-1,p-2' },
   ]);
   assert.deepEqual(result.json.meta, { page: { number: 2, size: 10, total: 12 } });
-  assert.equal(result.json.links.self, '/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&sort=-name&page[number]=2&page[size]=10');
+  assert.equal(result.json.links.self, '/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&filter[id][in]=p-1,p-2&sort=-name&page[number]=2&page[size]=10');
   assert.equal(result.json.links.next, null);
-  assert.equal(result.json.links.prev, '/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&sort=-name&page[number]=1&page[size]=10');
+  assert.equal(result.json.links.prev, '/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&filter[id][in]=p-1,p-2&sort=-name&page[number]=1&page[size]=10');
 });
 
 test('HTTP: a bad query is a 400 JSON:API error with source.parameter and never reaches NEO', async () => {
@@ -393,6 +396,53 @@ test('HTTP: the quota comes back when the window ends', async () => {
     assert.equal((await hit()).status, 429);
     await new Promise((resolve) => setTimeout(resolve, 1_150));
     assert.equal((await hit()).status, 200);
+  } finally {
+    await limited.instance.close();
+  }
+});
+
+test('HTTP: one quota per key is shared by every route (list, read, create, child) and Remaining never resets on a route change', async () => {
+  const limited = await startApp(4, 60_000);
+  neoStatus = 200;
+  neoBody = NEO_LIST;
+  try {
+    const as = (path: string, init: RequestInit = {}) =>
+      realFetch(`${limited.url}${path}`, { ...init, headers: { Authorization: 'Bearer key-s:secret', ...(init.headers as Record<string, string> | undefined) } });
+    const remaining = async (response: Response) => response.headers.get('x-ratelimit-remaining');
+    assert.equal(await remaining(await as('/api/v1/product')), '3');
+    assert.equal(await remaining(await as('/api/v1/product/p-1')), '2');
+    assert.equal(await remaining(await as('/api/v1/product', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"name":"x"}' })), '1');
+    assert.equal(await remaining(await as('/api/v1/product')), '0');
+    // Every handler is now refused, not just the one that was used most.
+    for (const [path, init] of [['/api/v1/product/p-1', {}], ['/api/v1/product', {}], ['/api/v1/product', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }], ['/api/v1/product/p-1', { method: 'DELETE' }]] as Array<[string, RequestInit]>) {
+      assert.equal((await as(path, init)).status, 429, `${init.method ?? 'GET'} ${path}`);
+    }
+  } finally {
+    await limited.instance.close();
+  }
+});
+
+test('HTTP: a refused key is accepted again as soon as its oldest request leaves the window, and Reset is when all have', async () => {
+  const limited = await startApp(2, 2_000);
+  neoStatus = 200;
+  neoBody = NEO_LIST;
+  try {
+    const hit = () => realFetch(`${limited.url}/api/v1/product`, { headers: { Authorization: 'Bearer key-t:secret' } });
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    assert.equal((await hit()).status, 200); // t=0
+    await sleep(1_500);
+    const second = await hit(); // t=1.5, window holds both
+    assert.equal(second.status, 200);
+    assert.equal(second.headers.get('x-ratelimit-remaining'), '0');
+    assert.equal(second.headers.get('x-ratelimit-reset'), '2', 'all counted hits expire 2 s after the latest one');
+    const blocked = await hit(); // t=1.5+, refused
+    assert.equal(blocked.status, 429);
+    assert.equal(blocked.headers.get('retry-after'), '1', 'the oldest hit expires at t=2');
+    assert.equal(blocked.headers.get('x-ratelimit-reset'), '2');
+    await sleep(700); // t=2.2: the first hit expired. A penalty block would still refuse until t=3.5+.
+    const again = await hit();
+    assert.equal(again.status, 200);
+    assert.equal(again.headers.get('x-ratelimit-remaining'), '0');
   } finally {
     await limited.instance.close();
   }

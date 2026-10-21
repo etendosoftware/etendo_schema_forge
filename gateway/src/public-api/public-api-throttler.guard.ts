@@ -1,5 +1,5 @@
 import { Injectable, type ExecutionContext } from '@nestjs/common';
-import { ThrottlerGuard, type ThrottlerLimitDetail } from '@nestjs/throttler';
+import { ThrottlerGuard, type ThrottlerLimitDetail, type ThrottlerRequest } from '@nestjs/throttler';
 import { rateLimited } from './json-api-http.ts';
 
 /**
@@ -20,14 +20,49 @@ export class PublicApiThrottlerGuard extends ThrottlerGuard {
     return `key:${credential.split(':')[0]}`;
   }
 
+  /**
+   * One bucket per key for every route. The library's default key also hashes the
+   * controller class and handler name, which would give each handler its own quota.
+   */
+  protected generateKey(_context: ExecutionContext, tracker: string, throttlerName: string): string {
+    return `${throttlerName}:${tracker}`;
+  }
+
+  /**
+   * The library counts hits in a sliding window (each hit expires `ttl` after it was made;
+   * `blockDuration` is 0 so a refused key is never held longer than that). Its own
+   * `X-RateLimit-Reset` marks a fixed window that can end before the last counted hit
+   * expires, so it is replaced by the exact time until every counted hit has expired.
+   */
+  protected async handleRequest(props: ThrottlerRequest): Promise<boolean> {
+    const allowed = await super.handleRequest({ ...props, blockDuration: 0 });
+    const { req, res } = this.getRequestResponse(props.context);
+    const tracker = await props.getTracker(req, props.context);
+    const key = props.generateKey(props.context, tracker, props.throttler.name ?? 'default');
+    const restore = this.secondsUntilRestored(key, props.throttler.name ?? 'default');
+    if (restore !== undefined) res.header('X-RateLimit-Reset', String(restore));
+    return allowed;
+  }
+
   protected async throwThrottlingException(context: ExecutionContext, detail: ThrottlerLimitDetail): Promise<void> {
     const res = context.switchToHttp().getResponse();
+    // Retry-After: until the oldest counted request expires, i.e. the next request is accepted.
     const retryAfter = Math.max(1, detail.timeToBlockExpire || detail.timeToExpire);
+    const restore = this.secondsUntilRestored(detail.key, 'default') ?? retryAfter;
     res.header('X-RateLimit-Limit', String(detail.limit));
     res.header('X-RateLimit-Remaining', '0');
-    res.header('X-RateLimit-Reset', String(retryAfter));
+    res.header('X-RateLimit-Reset', String(Math.max(restore, retryAfter)));
     res.header('Retry-After', String(retryAfter));
     throw rateLimited(retryAfter);
+  }
+
+  /** Seconds until all hits counted for the key have expired (reads the in-memory storage; undefined if unavailable). */
+  private secondsUntilRestored(key: string, throttlerName: string): number | undefined {
+    const hits = (this.storageService as unknown as { hitExpirations?: Map<string, Map<string, number[]>> }).hitExpirations
+      ?.get(key)?.get(throttlerName);
+    if (!hits) return undefined;
+    const latest = Math.max(0, ...hits);
+    return Math.max(0, Math.ceil((latest - Date.now()) / 1000));
   }
 }
 
