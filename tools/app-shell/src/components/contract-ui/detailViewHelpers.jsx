@@ -751,6 +751,7 @@ export function SecondaryPanelTab(props) {
         token={props.token}
         apiBaseUrl={props.apiBaseUrl}
         onCount={props.onCount}
+        readOnly={props.readOnly === true}
     />
   </div>;
 }
@@ -1949,13 +1950,18 @@ export function shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnoth
 }
 
 /** Reactive wrapper: calls `handleNew()` exactly when {@link shouldResetEditingForNewRoute} says to. */
-export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew }) {
+export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew, accessReadOnly = false, onReadOnlyNew }) {
   const prevRecordIdRef = useRef(recordId);
   useEffect(() => {
     const arrivedFromAnotherRecord = prevRecordIdRef.current !== recordId;
     prevRecordIdRef.current = recordId;
     if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
   }, [isNew, recordId, editing, handleNew]);
+  // ETP-5830 — a read-only role reaching the creation route by URL (the list already hides
+  // "Nuevo") is sent back to the list instead of a form whose save the backend rejects.
+  useEffect(() => {
+    if (isNew && accessReadOnly) onReadOnlyNew?.();
+  }, [isNew, accessReadOnly, onReadOnlyNew]);
 }
 
 /**

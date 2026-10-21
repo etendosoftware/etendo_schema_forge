@@ -162,8 +162,8 @@ export function getTabStripBleedClassName({
  *  3. Inline-editable tabs → no row click handler. Editing happens in place via
  *     the pencil action; opening a side panel would defeat that UX.
  */
-function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout }) {
-  if (st.customAddModal) return openCustomModal;
+function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout, readOnly }) {
+  if (st.customAddModal) return readOnly ? undefined : openCustomModal; // ETP-5830: the popup has no read-only mode
   if (st.Form && linesLayout !== 'inlineEditable') return openSecondaryLine;
   return undefined;
 }
@@ -359,7 +359,7 @@ export function SecondaryFormTab(props) {
   return <div className="flex-1 min-w-0">
     <props.st.Form
         data={props.data ?? {}}
-        readOnly={!props.hook.editing}
+        readOnly={!props.hook.editing || props.windowReadOnly === true}
         onChange={props.onChange}
         entity={props.st.key}
         catalogs={props.catalogs}
@@ -390,7 +390,7 @@ function secondaryDetailSidebar(props) {
       </div>
       <props.st.Form
           data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
-          readOnly={!props.hook.editing}
+          readOnly={!props.hook.editing || props.windowReadOnly === true}
           onChange={props.onChange}
           entity={props.st.key}
           catalogs={props.catalogs}
@@ -400,7 +400,7 @@ function secondaryDetailSidebar(props) {
           excludeFields={props.st.key === "contact" ? ["active"] : []}
           labelOverrides={props.labelOverrides}
       />
-      {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
+      {props.hook.editing && props.windowReadOnly !== true && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
           <div className="flex gap-2 mt-4">
             {props.secondaryLineEdits && (
                 <>
@@ -505,11 +505,10 @@ function secondaryAddLineBar(props) {
 }
 
 export function SecondaryTableTab(props) {
-  // Evaluates the tab's own readOnlyLogic (if declared) against the current
-  // header record — independent of the document-wide isDocumentReadOnly, which
-  // only governs the primary lines table. Most tabs declare no readOnlyLogic
-  // and this stays false, preserving today's behavior everywhere else.
-  const tabReadOnly = evalTabReadOnly(props.st, props.hook.selected);
+  // Read-only when the role only has read access to the window (ETP-5830) or the tab's own
+  // readOnlyLogic matches the header record. Deliberately NOT the document-wide
+  // isDocumentReadOnly, which only governs the primary lines table.
+  const tabReadOnly = props.windowReadOnly === true || evalTabReadOnly(props.st, props.hook.selected);
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
   const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
@@ -556,11 +555,11 @@ export function SecondaryTableTab(props) {
               onRowClick={resolveSecondaryRowClickHandler(props.st, {
                 openCustomModal: props.openCustomModal,
                 openSecondaryLine: props.openSecondaryLine,
-                linesLayout: props.linesLayout,
+                linesLayout: props.linesLayout, readOnly: tabReadOnly,
               })}
               // Pencil action for customAddModal tabs (Dirección) opens
               // the popup editor — rows are not editable in place.
-              onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
+              onEditRow={tabReadOnly ? undefined : getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
               onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st, props.enableSecondaryRowDelete)}
               onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
@@ -1854,7 +1853,7 @@ export function DetailView({
 
   // ETP-4830 clears a stale OTHER record's `editing`; ETP-5002 keeps it from firing
   // mid-save and duplicating the record. Full reasoning in the helper.
-  useNewRouteEditingReset({ isNew, recordId, editing: hook.editing, handleNew: hook.handleNew });
+  useNewRouteEditingReset({ isNew, recordId, editing: hook.editing, handleNew: hook.handleNew, accessReadOnly: menuActionsReadOnly && !embedded, onReadOnlyNew: () => navigate(`/${windowName}`, { replace: true }) });
 
   // Auto-open add-line form after header auto-save navigation (openAddLine flag in route state).
   useEffect(() => {
@@ -2651,7 +2650,7 @@ export function DetailView({
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          api={api} isDocumentReadOnly={isDocumentReadOnly}
+          api={api} isDocumentReadOnly={isDocumentReadOnly} accessReadOnly={menuActionsReadOnly}
           isActive={isActive}
           isNew={isNew}
           onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
@@ -3027,7 +3026,7 @@ export function DetailView({
               const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
               return activeTab?.Panel ? (
                 <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX)}`}>
-                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} onPersisted={hook.applyPersistedFields} />
+                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={windowReadOnly ? false : hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} onPersisted={hook.applyPersistedFields} />
                 </div>
               ) : null;
             })() : null}
@@ -3648,7 +3647,7 @@ export function DetailView({
                               token={token}
                               apiBaseUrl={apiBaseUrl}
                               api={api}
-                              editing={hook.editing}
+                              editing={windowReadOnly ? false : hook.editing}
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
@@ -3689,13 +3688,13 @@ export function DetailView({
                               <SecondaryFormTab data={data} hook={hook} onChange={(key, val, column) => {
                                 setSecondaryLineEdits(prev => ({...(prev ?? {}), [key]: val}));
                                 if (column) setSecondaryLineEditColumns(prev => ({...prev, [key]: column}));
-                              }} st={st} catalogs={catalogs} token={token} apiBaseUrl={apiBaseUrl}
+                              }} st={st} catalogs={catalogs} token={token} apiBaseUrl={apiBaseUrl} windowReadOnly={windowReadOnly}
                                                 selectorContextByEntity={selectorContextByEntity}
                                                 labelOverrides={labelOverrides}
                                                 data-testid="SecondaryFormTab__fa3275" />
                             );
                               if (st.Panel) return (
-                              <SecondaryPanelTab st={st} data={data} token={token} apiBaseUrl={apiBaseUrl}
+                              <SecondaryPanelTab st={st} data={data} token={token} apiBaseUrl={apiBaseUrl} readOnly={windowReadOnly}
                                                  onCount={(n) => setPanelCounts(prev => ({...prev, [st.key]: n}))}
                                                  data-testid="SecondaryPanelTab__fa3275" />
                             );
@@ -3714,7 +3713,7 @@ export function DetailView({
                                 api={api}
                                 crud={api?.crud}
                                 ui={ui}
-                                hook={hook}
+                                hook={hook} windowReadOnly={windowReadOnly}
                                 labelOverrides={labelOverrides}
                                 extractErrorMessage={extractErrorMessage}
                                 enableSecondaryRowDelete={enableSecondaryRowDelete}

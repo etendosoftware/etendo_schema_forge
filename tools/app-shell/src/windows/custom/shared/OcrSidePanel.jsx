@@ -22,7 +22,7 @@ function FileTab(props) {
   // that was captured by hand (ETP-4855 Error 3): OcrInlineUploader — the only
   // thing that dispatches the extraction event — is never mounted in edit mode.
   // DocumentView below can attach a file but never triggers extraction.
-  if (props.isNew) {
+  if (props.isNew && !props.readOnly) { // ETP-5830: a read-only tier never gets the OCR uploader
     return (
       <div className="flex h-full flex-col gap-3">
         <div>
