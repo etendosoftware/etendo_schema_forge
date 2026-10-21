@@ -34,7 +34,7 @@ vi.mock('@/components/contract-ui', () => ({
   },
 }));
 
-import YearTableWithCloseStatus from '../YearTableWithCloseStatus.jsx';
+import YearTableWithCloseStatus, { CurrentFiscalYearContext } from '../YearTableWithCloseStatus.jsx';
 
 const YEARS = [
   { id: 'y1', fiscalYear: '2026', description: 'FY26' },
@@ -102,24 +102,30 @@ describe('YearTableWithCloseStatus', () => {
   });
 
   // ETP-5577 tour: step "open the year" must target the current year, not the first row.
-  it('marks only the current fiscal year (the one the review card shows) for the guided tour', async () => {
-    global.fetch = vi.fn((url) => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve(url.includes('calendar-review')
-        ? { required: true, reviewed: false, year: '2026' } : { data: [] }),
-    }));
+  it('marks only the current fiscal year (provided by the window) for the guided tour', () => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
     // Newest first, like the grid: 2027 has no periods, 2026 is the current year.
-    render(<YearTableWithCloseStatus data={[YEARS[1], YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />);
+    render(
+      <CurrentFiscalYearContext.Provider value="2026">
+        <YearTableWithCloseStatus data={[YEARS[1], YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />
+      </CurrentFiscalYearContext.Provider>
+    );
 
-    await waitFor(() => expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(1));
+    expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(1);
     expect(screen.getByTestId('col-fiscalYear-y1').querySelector('[data-current-fiscal-year]')).not.toBeNull();
     expect(screen.getByTestId('col-fiscalYear-y2').querySelector('[data-current-fiscal-year]')).toBeNull();
   });
 
-  it('marks no year when the current year is unknown', () => {
+  it.each([[null], ['1999']])('falls back to the first row when the current year is %s', (year) => {
     global.fetch = vi.fn(() => new Promise(() => {}));
-    render(<YearTableWithCloseStatus data={YEARS} apiBaseUrl="https://api.test/fiscal-calendar" />);
-    expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(0);
+    render(
+      <CurrentFiscalYearContext.Provider value={year}>
+        <YearTableWithCloseStatus data={[YEARS[1], YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />
+      </CurrentFiscalYearContext.Provider>
+    );
+
+    expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(1);
+    expect(screen.getByTestId('col-fiscalYear-y2').querySelector('[data-current-fiscal-year]')).not.toBeNull();
   });
 
   it('still renders the standard fiscalYear/description columns', () => {
