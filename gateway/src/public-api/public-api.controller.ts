@@ -1,8 +1,5 @@
 import {
-  BadGatewayException,
-  BadRequestException,
   Body,
-  ConflictException,
   Controller,
   Delete,
   Get,
@@ -32,11 +29,16 @@ import {
   JsonApiExceptionFilter,
   JsonApiNegotiationGuard,
   JsonApiResponseInterceptor,
+  badGateway,
   upstreamException,
 } from './json-api-http.ts';
+import { mapAttributes, mapRelationships, resolveResourceObject } from './json-api-request.ts';
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+/** NeoServlet answers a record, a list or nothing: always hand back a list of records. */
+function asRecords(data: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(data)) return data as Array<Record<string, unknown>>;
+  return data === null || data === undefined ? [] : [data as Record<string, unknown>];
+}
 
 @Controller()
 @UseGuards(PublicApiKeyGuard, JsonApiNegotiationGuard)
@@ -207,70 +209,11 @@ export class PublicApiController {
     }
   }
 
-  /**
-   * Maps a write body to NeoServlet's internal field paths. A body is either
-   * JSON:API (`{ data: { type?, id?, attributes?, relationships? } }`, where
-   * `attributes` and `relationships` are both optional) or flat
-   * (`{ field: value }`). `type` and `id` are resource members, never
-   * attributes; when they disagree with the URL the answer is 409, as
-   * JSON:API prescribes.
-   */
+  /** Maps a write body (JSON:API or flat) to NeoServlet's internal field paths ([json-api-request.ts]). */
   private filterWritable(entityName: string, body: Record<string, unknown>, urlId?: string) {
     const entity = this.entityOrThrow(entityName);
-    if (!isRecord(body)) throw new BadRequestException('The request body must be a JSON object');
-    let input: Record<string, unknown> = body;
-    if ('data' in body) {
-      if (!isRecord(body.data)) throw new BadRequestException('"data" must be a single resource object');
-      input = body.data;
-      if (input.type !== undefined && input.type !== entityName) {
-        throw new ConflictException(`Resource type "${String(input.type)}" does not match "${entityName}"`);
-      }
-      if (urlId !== undefined && input.id !== undefined && String(input.id) !== urlId) {
-        throw new ConflictException(`Resource id "${String(input.id)}" does not match the id in the URL`);
-      }
-    }
-    const jsonApiResource = 'data' in body || 'attributes' in input || 'relationships' in input;
-    const attributes = jsonApiResource ? input.attributes ?? {} : input;
-    const relationships = jsonApiResource ? input.relationships ?? {} : {};
-    if (!isRecord(attributes)) throw new BadRequestException('"attributes" must be an object');
-    if (!isRecord(relationships)) throw new BadRequestException('"relationships" must be an object');
-    const mapped: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(attributes)) {
-      const field = entity.fields[key] as (PublicApiField & { direction?: string; relationship?: unknown }) | undefined;
-      if (!field || !['in', 'inout'].includes(field.direction ?? '')) {
-        throw new BadRequestException(`Field "${key}" is not writable by the public API`);
-      }
-      // A foreign key lives under `relationships`; accepting it here would let
-      // the same link be written (and read back) in two places.
-      if (field.relationship) {
-        throw new BadRequestException(`"${key}" is a relationship: send it under "relationships" as { "data": { "type": "...", "id": "..." } }`);
-      }
-      mapped[field.internalPath] = value;
-    }
-    for (const [key, relationship] of Object.entries(relationships)) {
-      const field = entity.fields[key] as (PublicApiField & { direction?: string; relationship?: { resource: string } }) | undefined;
-      if (!field?.relationship || !['in', 'inout'].includes(field.direction ?? '')) {
-        throw new BadRequestException(`Relationship "${key}" is not writable by the public API`);
-      }
-      mapped[field.internalPath] = this.relationshipId(key, relationship, field.relationship.resource);
-    }
-    return mapped;
-  }
-
-  /** Reads the `{ type, id }` linkage of a to-one relationship; `{ data: null }` clears it. */
-  private relationshipId(name: string, relationship: unknown, resource: string): string | null {
-    if (!isRecord(relationship) || !('data' in relationship)) {
-      throw new BadRequestException(`Relationship "${name}" must carry a "data" member: { "data": { "type": "${resource}", "id": "..." } } or { "data": null }`);
-    }
-    const linkage = relationship.data;
-    if (linkage === null) return null;
-    if (!isRecord(linkage) || typeof linkage.id !== 'string' || !linkage.id) {
-      throw new BadRequestException(`Relationship "${name}" data must be a single resource identifier with a string "id" (to-many relationships are not supported)`);
-    }
-    if (linkage.type !== resource) {
-      throw new ConflictException(`Relationship "${name}" expects type "${resource}", got "${String(linkage.type)}"`);
-    }
-    return linkage.id;
+    const { attributes, relationships } = resolveResourceObject(body, entityName, urlId);
+    return { ...mapAttributes(entity, attributes), ...mapRelationships(entity, relationships) };
   }
 
   private toJsonApiResource(entityName: string, record: Record<string, unknown>, id?: string) {
@@ -310,18 +253,30 @@ export class PublicApiController {
    * response is a single resource object, even though NeoServlet wraps a
    * single record in a one-element array.
    */
-  private toJsonApi(entityName: string, data: unknown, id: string | undefined, single: boolean) {
-    if (!single) {
-      const records = Array.isArray(data) ? data : data === null || data === undefined ? [] : [data];
-      return { data: records.map((record) => this.toJsonApiResource(entityName, record as Record<string, unknown>)) };
+  private toJsonApi(entityName: string, data: unknown, id: string | undefined, single: boolean, method: string) {
+    if (!single) return { data: asRecords(data).map((record) => this.toJsonApiResource(entityName, record)) };
+    const records = asRecords(data);
+    if (records.length > 1) throw badGateway('Etendo answered several records for a single-record request.');
+    if (records.length === 0) {
+      // An empty read is a missing record; an empty write answer says nothing about the write.
+      if (method === 'GET') throw new NotFoundException('The record does not exist');
+      throw badGateway('Etendo answered without the written record.');
     }
-    let record = data;
-    if (Array.isArray(data)) {
-      if (data.length > 1) throw new BadGatewayException({ errors: [{ status: '502', title: 'Bad Gateway', detail: 'Etendo answered several records for a single-record request.' }] });
-      record = data[0];
+    return { data: this.toJsonApiResource(entityName, records[0], id) };
+  }
+
+  /** The document for a successful NeoServlet answer (status already known to be 2xx). */
+  private async toSuccessDocument(response: Response, entityName: string, method: string, id?: string) {
+    // DELETE answers 204 without a body whatever Etendo returned on success.
+    if (method === 'DELETE') return undefined;
+    if (response.status === 204) {
+      // JSON:API: a successful update with nothing to show answers 200 with only top-level meta.
+      if (method === 'PUT' || method === 'PATCH') return { meta: { status: 'updated' } };
+      throw badGateway('Etendo answered without content.');
     }
-    if (record === null || record === undefined) throw new NotFoundException('The record does not exist');
-    return { data: this.toJsonApiResource(entityName, record as Record<string, unknown>, id) };
+    const json = (await response.json()) as { response?: { data?: unknown } };
+    const data = json.response && 'data' in json.response ? json.response.data : json;
+    return this.toJsonApi(entityName, data, id, !(method === 'GET' && id === undefined), method);
   }
 
   private async forward(
@@ -347,15 +302,6 @@ export class PublicApiController {
     if (!response.ok) {
       throw upstreamException(response.status, await response.json().catch(() => null));
     }
-    // DELETE answers 204 without a body whatever Etendo returned on success.
-    if (method === 'DELETE') return undefined;
-    if (response.status === 204) {
-      // JSON:API: a successful update with nothing to show answers 200 with only top-level meta.
-      if (method === 'PUT' || method === 'PATCH') return { meta: { status: 'updated' } };
-      throw new BadGatewayException({ errors: [{ status: '502', title: 'Bad Gateway', detail: 'Etendo answered without content.' }] });
-    }
-    const json = (await response.json()) as { response?: { data?: unknown } };
-    const data = json.response && 'data' in json.response ? json.response.data : json;
-    return this.toJsonApi(entityName, data, id, !(method === 'GET' && id === undefined));
+    return this.toSuccessDocument(response, entityName, method, id);
   }
 }

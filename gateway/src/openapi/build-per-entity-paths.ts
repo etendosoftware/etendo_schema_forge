@@ -89,9 +89,10 @@ const ERROR_DESCRIPTIONS: Record<string, string> = {
 const READ_ERRORS = ['400', '401', '402', '403', '404', '406', '502'];
 const WRITE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '415', '422', '502'];
 const DELETE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '502'];
+const ERRORS_BY_METHOD: Record<string, string[]> = { get: READ_ERRORS, delete: DELETE_ERRORS };
 
 function errorResponsesFor(method: string): OpenApiOperation['responses'] {
-  const statuses = method === 'get' ? READ_ERRORS : method === 'delete' ? DELETE_ERRORS : WRITE_ERRORS;
+  const statuses = ERRORS_BY_METHOD[method] ?? WRITE_ERRORS;
   return Object.fromEntries(statuses.map((status) => [
     status,
     { description: ERROR_DESCRIPTIONS[status], content: mediaContent(ERROR_DOCUMENT_SCHEMA) },

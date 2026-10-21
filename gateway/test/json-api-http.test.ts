@@ -16,6 +16,7 @@ import { CachedTokenExchangeService, PUBLIC_API_SCHEMA, type PublicApiSchema } f
 import { PublicApiController } from '../src/public-api/public-api.controller.ts';
 import {
   acceptsJsonApi,
+  configureJsonApiBodyParser,
   isSupportedContentType,
   parseUpstreamError,
   toErrorDocument,
@@ -45,6 +46,12 @@ test('Content-Type: JSON and bare JSON:API are read; a JSON:API type with parame
   for (const type of ['text/plain', 'application/x-www-form-urlencoded', 'application/vnd.api+json; charset=utf-8', 'application/vnd.api+json; version=2']) {
     assert.equal(isSupportedContentType(type), false, type);
   }
+});
+
+test('configureJsonApiBodyParser makes the JSON parser read application/vnd.api+json too', () => {
+  const calls: unknown[][] = [];
+  configureJsonApiBodyParser({ useBodyParser: (...args: unknown[]) => calls.push(args) } as any);
+  assert.deepEqual(calls, [['json', { type: ['application/json', 'application/vnd.api+json'] }]]);
 });
 
 test('parseUpstreamError reads the nested and the flat Etendo shapes and tolerates garbage', () => {
@@ -126,7 +133,7 @@ process.env.NEO_BASE_URL = 'http://neo.local/etendo';
 class TestModule {}
 
 const app = await NestFactory.create(TestModule, { bodyParser: false });
-(app as any).useBodyParser('json', { type: ['application/json', 'application/vnd.api+json'] });
+configureJsonApiBodyParser(app as any);
 app.setGlobalPrefix('api/v1');
 app.getHttpAdapter().get('/healthz', (_req: unknown, res: { json(body: unknown): void }) => res.json({ status: 'ok' }));
 await app.listen(0);

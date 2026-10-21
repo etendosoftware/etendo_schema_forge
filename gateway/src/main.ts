@@ -6,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import { AppModule } from './app.module.ts';
 import { buildPerEntityOpenApiPaths } from './openapi/build-per-entity-paths.ts';
+import { configureJsonApiBodyParser } from './public-api/json-api-http.ts';
 
 const gettingStartedDescription = `
 ## Getting started
@@ -102,7 +103,7 @@ async function bootstrap() {
   // are read like application/json. Anything else is refused with 415 by the
   // public controller's negotiation guard before the body is used.
   const app = await NestFactory.create(AppModule, { bodyParser: false });
-  (app as unknown as NestExpressApplication).useBodyParser('json', { type: ['application/json', 'application/vnd.api+json'] });
+  configureJsonApiBodyParser(app as unknown as NestExpressApplication);
   app.setGlobalPrefix('api/v1');
 
   const config = new DocumentBuilder()

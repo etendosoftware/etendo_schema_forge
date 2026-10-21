@@ -1,4 +1,5 @@
 // @covers gateway/src/public-api/public-api.controller.ts
+// @covers gateway/src/public-api/json-api-request.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HttpException } from '@nestjs/common';
@@ -367,4 +368,11 @@ test('a single-record read of a missing record is 404 and an ambiguous answer is
     (await statusAndErrors(controllerAnswering(200, { response: { data: [{ id: 'a' }, { id: 'b' }] } }).get('product', 'a', request))).status,
     502,
   );
+});
+
+test('an empty answer to a write is a 502, never a 404 that would deny a possibly successful write', async () => {
+  const empty = { response: { data: [] } };
+  assert.equal((await statusAndErrors(controllerAnswering(200, empty).create('product', { name: 'x' }, request))).status, 502);
+  assert.equal((await statusAndErrors(controllerAnswering(200, empty).patch('product', 'p-1', { name: 'x' }, request))).status, 502);
+  assert.equal((await statusAndErrors(controllerAnswering(200, empty).update('product', 'p-1', { name: 'x' }, request))).status, 502);
 });

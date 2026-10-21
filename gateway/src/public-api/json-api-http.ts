@@ -26,6 +26,13 @@ const JSON_MEDIA_TYPE = 'application/json';
 const ALLOWED_JSON_API_PARAMETERS = new Set(['ext', 'profile']);
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 
+type JsonBodyParserHost = { useBodyParser(type: 'json', options: { type: string[] }): unknown };
+
+/** Makes the JSON body parser read application/vnd.api+json like application/json (bootstrap and tests share it). */
+export function configureJsonApiBodyParser(app: JsonBodyParserHost): void {
+  app.useBodyParser('json', { type: [JSON_MEDIA_TYPE, JSON_API_MEDIA_TYPE] });
+}
+
 type MediaRange = { type: string; params: Record<string, string> };
 
 function parseMediaRanges(header: string): MediaRange[] {
@@ -154,7 +161,7 @@ function titleFor(status: number): string {
 // the integrator can do nothing about it and must not see Etendo's internals.
 const PASS_THROUGH_STATUSES = new Set([400, 401, 402, 403, 404, 409, 412, 422, 428, 429]);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown): string | undefined =>
   (typeof value === 'string' && value.trim() ? value : undefined);
@@ -180,20 +187,20 @@ export function parseUpstreamError(body: unknown): { code?: string; message?: st
 
 const log = new Logger('PublicApi');
 
+/** A 502 whose document carries no Etendo internals. */
+export function badGateway(detail: string, meta?: Record<string, unknown>): BadGatewayException {
+  return new BadGatewayException({
+    errors: [{ status: '502', title: titleFor(502), detail, ...(meta ? { meta } : {}) } satisfies JsonApiError],
+  });
+}
+
 /** Builds the gateway's exception for an unsuccessful NeoServlet answer. */
 export function upstreamException(status: number, body: unknown): HttpException {
   const upstream = parseUpstreamError(body);
   if (!PASS_THROUGH_STATUSES.has(status)) {
     // The upstream text stays in the server log; the integrator gets no internals.
     log.warn(`NeoServlet answered ${status}: ${upstream.message ?? upstream.detail ?? 'no message'}`);
-    return new BadGatewayException({
-      errors: [{
-        status: '502',
-        title: titleFor(502),
-        detail: 'Etendo could not complete the request. Retry later; contact support if it persists.',
-        meta: { upstreamStatus: status },
-      } satisfies JsonApiError],
-    });
+    return badGateway('Etendo could not complete the request. Retry later; contact support if it persists.', { upstreamStatus: status });
   }
   const meta: Record<string, unknown> = {};
   if (upstream.message && upstream.detail) meta.detail = upstream.detail;
