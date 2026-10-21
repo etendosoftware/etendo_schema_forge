@@ -278,6 +278,7 @@ export class PublicApiController {
     @Param('id') id: string,
     @Param('action') action: string,
     @Req() req: { neoJwt: string },
+    @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     this.assertTopLevel(entityName);
     const entity = this.entityOrThrow(entityName);
@@ -309,7 +310,7 @@ export class PublicApiController {
     if (answer?.alreadyApplied === true) meta.alreadyApplied = true;
     // The action is already committed: a failed re-read must not turn it into an error.
     try {
-      const document = (await this.forward(entityName, req, 'GET', undefined, id)) as Record<string, unknown>;
+      const document = (await this.forward(entityName, req, 'GET', undefined, id, undefined, res)) as Record<string, unknown>;
       return { ...document, meta: { ...(document.meta as Record<string, unknown> | undefined), ...meta } };
     } catch {
       return {
