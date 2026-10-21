@@ -85,4 +85,13 @@ describe('useFittingTabCount', () => {
     unmount();
     expect(live.disconnect).toHaveBeenCalled();
   });
+
+  // CP-3 (ETP-5515 QA): a clipped strip must not stay scrolled after a re-measure.
+  it('resets a scrolled strip to 0 when measuring', () => {
+    installResizeObserver();
+    const refs = makeRefs({ wrapperWidth: 1000, childWidths: WIDTHS });
+    refs.wrapperRef.current.scrollLeft = 168;
+    run(refs);
+    expect(refs.wrapperRef.current.scrollLeft).toBe(0);
+  });
 });

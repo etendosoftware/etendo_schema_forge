@@ -19,6 +19,9 @@ export default function useFittingTabCount({ wrapperRef, measureRef, tabs, activ
     const wrapper = wrapperRef.current;
     const row = measureRef.current;
     if (!wrapper || !row) return;
+    // The strip is clipped (overflow-hidden), so it must never stay scrolled: a focus or
+    // scrollIntoView on a tab/the More trigger would otherwise leave the first tab cut off.
+    if (wrapper.scrollLeft) wrapper.scrollLeft = 0;
     const widths = Array.from(row.children, (el) => el.offsetWidth);
     const moreWidth = widths.pop() ?? 0;
     setCount(computeFittingTabCount({
