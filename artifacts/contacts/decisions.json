@@ -429,7 +429,8 @@
           "label": "Vendor",
           "grid": true,
           "form": false,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md"
         },
         "purchasePricelist": {
           "visibility": "editable",
@@ -475,7 +476,8 @@
           "label": "Customer",
           "grid": true,
           "form": false,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md"
         },
         "priceList": {
           "visibility": "editable",

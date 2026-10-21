@@ -1602,6 +1602,34 @@ defines nothing and is not inherited from.
   `contactCategoryNotVendor` / `contactCategoryNotCustomer` message and does not POST. Same rules:
   unknown flags and a category with neither flag pass.
 
+### MCP schema hints
+
+`businessPartner.vendor` and `businessPartner.customer` declare a field `agentPrompt`
+(`agent-prompts/contacts/business-partner.vendor.md` / `business-partner.customer.md`, persisted to
+`ETGO_SF_FIELD.AGENT_PROMPT`). `etendo_schema` returns it on both fields: omit the flag on create so
+it is inherited from the category, send it only to override, and at least one type must end up true.
+
+`etendo_schema view:"create"` lists `vendor` under `optional`. `IsVendor` is mandatory in AD with no
+AD default, so `McpSchemaFieldBuilder.addVisibility` would compute `userRequired: true`; the
+`ETGO_SF_FIELD` row of `contacts/businessPartner.vendor` carries
+`MCP_CONFIG = {"fields":{"userRequired":false,"reason":…}}` (com.etendoerp.go sourcedata), the generic
+override described in `neo-headless.md` §4.12.6. `customer` is optional with `serverDefaulted: true`
+because of its AD default `'Y'`. The raw `required` key (AD NOT NULL) is unchanged on both.
+
+### Category change through the API / MCP (parity with the form)
+
+An update of `businessPartner` that changes `businessPartnerCategory` to a different category and
+carries **neither** `customer` nor `vendor` gets **both** flags from the new category on the
+backend (`ContactTypeRules.inheritOnCategoryChangeAndValidateUpdate`), on REST PATCH/PUT and MCP
+`etendo_update` alike. A category with neither flag leaves them as they are. A request that carries
+either flag decides the type itself and nothing is inherited — the two travel together. The form is
+unaffected: `useContactCategoryTypeSync` already writes the differing flags with `onChange`, so its
+PATCH (a diff against the saved record) carries at least one flag whenever the category changes the
+type; a flag the user restores by hand to its saved value is dropped from the diff, and the
+"either flag" rule is what keeps the backend from overwriting it. The one case the backend cannot
+tell apart: the user changes the category and then restores **both** boxes by hand to their saved
+values — the PATCH then carries only the category and the backend applies the new category's flags.
+
 ## ETP-5795 — "+ New Contact" on the Contacts overview points to /contacts
 
 The default action of the Contacts overview page (`artifacts/contacts/aggregate-contract.json`,

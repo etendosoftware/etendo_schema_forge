@@ -72,6 +72,7 @@
           "seq": 5,
           "span": 4,
           "customRenderer": "ContactTypeField",
+          "agentPrompt": "#REF#agent-prompts/business-partner-category/category.etgo-iscustomer.md",
           "badge": true,
           "badgeLabels": {
             "true": {
@@ -93,6 +94,7 @@
           "form": false,
           "grid": true,
           "gridOrder": 3,
+          "agentPrompt": "#REF#agent-prompts/business-partner-category/category.etgo-isvendor.md",
           "badge": true,
           "badgeLabels": {
             "true": {

@@ -1,0 +1,1 @@
+Whether contacts of this category are customers; new contacts created in this category inherit it as their customer flag. At least one of etgoIscustomer and etgoIsvendor must be true: both default to false, so a create that omits both is rejected (ETGO_BPGroupContactTypeRequired). Set the one(s) that match the category.
