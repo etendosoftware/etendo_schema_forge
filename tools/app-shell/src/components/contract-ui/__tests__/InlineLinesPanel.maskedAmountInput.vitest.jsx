@@ -25,6 +25,7 @@ import { createRef } from 'react';
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -61,11 +62,10 @@ vi.mock('../SelectorInput.jsx', () => ({
 vi.mock('../ProductSearchDrawer.jsx', () => ({ default: () => null }));
 vi.mock('./quickActionsStyle.js', () => ({ QUICK_ACTIONS_PILL_CLASS: 'pill' }));
 
-// ETP-5107 test note: InlineLinesPanel hides the TRAILING column entirely while
-// the hover/edit action strip shows (`renderLineCell`'s `isTrailing && showActions`
-// guard) — mirrors every real window's layout (Sales/Purchase Order etc. always
-// have a computed total AFTER the price column), so `unitPrice` must not be the
-// last column here or its EditCell would never be reachable in this test.
+// ETP-5107 test note: the fixture mirrors every real window's layout (Sales/Purchase
+// Order etc. always have a computed total AFTER the price column). It once had to,
+// because the trailing column was hidden while the action strip showed; since ETP-5600
+// an editable table reserves the strip's own slot and no cell is hidden.
 const COLUMNS = [
   { key: 'product', label: 'Product', type: 'string', column: 'M_Product_ID' },
   { key: 'unitPrice', label: 'Price', type: 'amount', min: 1, max: 1000 },

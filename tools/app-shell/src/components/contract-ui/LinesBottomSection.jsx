@@ -10,6 +10,26 @@ function fmt(val, curr) {
   return formatCurrency(curr, val);
 }
 
+// Totals column width. 520px whenever the footer has room (the left column keeps
+// at least LEFT_MIN_PX); only when the footer area itself is narrow (e.g. a window
+// with a 320px side panel) it gives space back to Docs/Notes, down to a 320px floor.
+// `%` resolves against the footer row, so this follows the real available width,
+// not the viewport (ETP-5756).
+//
+// Invariant: Totals must give space back BEFORE the Docs/Notes rows wrap. LEFT_MIN_PX
+// is the left-column width at which a row (label + content) still fits unwrapped,
+// derived from the real box math: left column p-2 (16) + divider border-l (1) +
+// row px-3 (24) + label w-24 (96) + gap-x-3 (12) + FOOTER_CONTENT_MIN_PX (320) = 469.
+const TOTALS_FULL_PX = 520;
+const TOTALS_MIN_PX = 320;
+const FOOTER_CONTENT_MIN_PX = 320;
+const LEFT_MIN_PX = 16 + 1 + 24 + 96 + 12 + FOOTER_CONTENT_MIN_PX;
+export const TOTALS_COLUMN_WIDTH = `min(${TOTALS_FULL_PX}px, max(${TOTALS_MIN_PX}px, calc(100% - ${LEFT_MIN_PX}px)))`;
+
+// Content beside a footer label: takes the remaining row, but drops under its
+// label (flex-wrap on the row) instead of being squeezed below 20rem (320px).
+const FOOTER_CONTENT_CLASS = 'flex-1 min-w-[20rem]';
+
 /**
  * Shared bottom-section layout for documents using the inline-editable lines
  * layout (Sales Quotation, Sales Invoice, Sales Order, etc.). Renders the
@@ -17,7 +37,8 @@ function fmt(val, curr) {
  *
  *   - Left:  Docs (window-specific `RelatedDocuments` component, passed in via
  *            `relatedDocuments` prop) + optional Notes textarea.
- *   - Right: `DocumentTotalsPanel` with the shared 520px fixed width and a
+ *   - Right: `DocumentTotalsPanel` with the shared 520px width (shrinks to 320px
+ *            only when the footer area is narrow, see TOTALS_COLUMN_WIDTH) and a
  *            soft `minHeight: 200` floor so the panel keeps a stable visual
  *            rhythm but is free to grow with its content. The previous rigid
  *            pixel-height clamp acted as a floor on the whole bottom section
@@ -95,11 +116,11 @@ export default function LinesBottomSection({
             column doesn't claim, so Docs+Notes stays wide on most screens. */}
         <div className="flex-1 min-w-0 p-2">
           {RelatedDocumentsComponent && (
-            <div className="flex items-center gap-3 px-3 pb-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-3" data-testid="lines-bottom-docs-row">
               <span className="text-[11px] font-medium text-foreground uppercase shrink-0 w-24" style={{ letterSpacing: '0.04em' }}>
                 {ui('docs')}
               </span>
-              <div className="flex-1">
+              <div className={FOOTER_CONTENT_CLASS}>
                 <RelatedDocumentsComponent
                   recordId={recordId}
                   data={data}
@@ -115,12 +136,13 @@ export default function LinesBottomSection({
 
           {notesField && (
             <div
-              className={`flex items-start gap-3 px-3 ${RelatedDocumentsComponent ? 'mt-3 border-t border-border-subtle pt-3' : ''}`}
+              data-testid="lines-bottom-notes-row"
+              className={`flex flex-wrap items-start gap-x-3 gap-y-1 px-3 ${RelatedDocumentsComponent ? 'mt-3 border-t border-border-subtle pt-3' : ''}`}
             >
               <span className="text-[11px] font-medium text-foreground uppercase shrink-0 w-24 pt-1.5" style={{ letterSpacing: '0.04em' }}>
                 {ui('notes')}
               </span>
-              <div className="flex-1" data-testid="notes-textarea">
+              <div className={FOOTER_CONTENT_CLASS} data-testid="notes-textarea">
                 {notesFocused && !windowReadOnly ? (
                   <textarea
                     value={data?.[notesField] || ''}
@@ -172,7 +194,10 @@ export default function LinesBottomSection({
                 row expands). The previous rigid pixel-height clamp acted as a
                 floor on the whole bottom section and crushed the lines table
                 on viewports near 1366×768. */}
-            <div className="w-[520px] shrink-0 p-2 flex flex-col justify-start" style={{ minHeight: 200 }}>
+            <div
+              className="shrink-0 p-2 flex flex-col justify-start"
+              style={{ width: TOTALS_COLUMN_WIDTH, minHeight: 200 }}
+              data-testid="lines-bottom-totals-column">
               <DocumentTotalsPanel
                 lines={lines ?? []}
                 pendingLine={pendingLine ?? null}

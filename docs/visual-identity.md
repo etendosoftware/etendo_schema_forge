@@ -16,6 +16,6 @@ This document records the Etendo AI visual identity implementation from the 30 S
 
 ## Implementation boundary
 
-The implementation is centralized in the app-shell semantic tokens in `tools/app-shell/src/index.css`, which keeps generated windows and per-window artifacts unchanged while making the identity survive pipeline regeneration. The official logo extracted from the supplied Dashboard reference is `tools/app-shell/public/logo-etendo-ai.png` and is used by the expanded and collapsed Navigation Rail plus the company switcher.
+The implementation is centralized in the app-shell semantic tokens in `tools/app-shell/src/index.css`, which keeps generated windows and per-window artifacts unchanged while making the identity survive pipeline regeneration. The official logo extracted from the supplied Dashboard reference is `tools/app-shell/public/logo-etendo-ai.png` and is used by the expanded and collapsed Navigation Rail, the company switcher, and the ValerIA support chat icon (`ValerIATile.jsx`, consumed by `SupportChatWidget.jsx`, `ConversationView.jsx`, and `TicketList.jsx`).
 
 The source references are the [Confluence brand manual](https://etendoproject.atlassian.net/wiki/spaces/PYPI/pages/5268111361/Manual+de+marca+Etendo+etendo.ai), its `ManualdeMarcaEtendoV4.pdf` attachment, the email screenshots, and the [Etendo AI Figma file](https://www.figma.com/design/6cMWBbmrAt65GwZCT5YIF1/Etendo-AI-2026?node-id=2205-36210).

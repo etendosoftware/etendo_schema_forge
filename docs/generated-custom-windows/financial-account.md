@@ -3692,7 +3692,11 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
 - **Source:** one column, `FIN_Financial_Account.EM_PSD2_Last_Sync_Date` (psd2 module). It is
   stamped only by a sync that finished OK, including one that brought 0 new transactions. It is NOT
   stamped on an error, an expired consent, a connection that went inactive during the sync, a
-  missing API key, an `Import To Date` skip, or when the account has no active connection.
+  **stale** connection that brought nothing (ETP-5089: Salt Edge still says active but its last
+  failed fetch is newer than its last success — stamping it would show a fresh sync over frozen
+  data), a missing API key, an `Import To Date` skip, or when the account has no active connection.
+  The same rule holds on every path: the Classic button and Etendo GO "Sync now"
+  (`fetchAccountTransactions`) and the scheduled process (`BankStatementsSyncService`).
 - **Where it is exposed:**
   - `financial-accounts-page` (page endpoint): `accounts[].lastSyncDate`, see `financial-accounts-page.md`.
   - `GET bank-connection?action=status` and the `sync` response: `lastSyncDate`.
@@ -3758,3 +3762,9 @@ Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show A
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The new movement, the movement row kebab (Contabilizar, Confirmar, Reactivar — including a reconciled movement, whose core refusal used to arrive as a raw `@ETPR_PeriodClosedForUnRemovePayment@`), the funds transfer modal and the cash close (Conciliación tab) offer **Ir al calendario**. Cash close: a close-date refusal is dated by the close; a marked movement in a closed period keeps its own sentence naming the movement and is dated by that movement (`error.periodDate`). See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `FinancialAccountAccountingHandler` (now rolled back on refusal, including a row it had just created) (`com.etendoerp.go`, see `neo-headless.md`).
+
+Error display: `EditAccountModal` now passes the response's `messageKeys` / `messageParams` to `translateBackendError`, so every keyed backend refusal of this window is shown in the UI locale.
