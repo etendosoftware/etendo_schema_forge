@@ -161,3 +161,31 @@ describe('FmBoxes303 — percent cells are exempt from the amount hard-stop (ETP
     expect(input.value).toBe('150,999');
   });
 });
+
+// ETP-5716 (review W3) — an edit with no number in it (a lone "-" or decimal separator, what
+// MaskedAmountInput reports mid-typing) parses to null: committing it must not delete the stored
+// value. Only a deliberately emptied cell clears the box.
+describe('FmBoxes303 — draft with no number in it', () => {
+  it.each(['-', ',', '-,'])('drops "%s" on blur instead of clearing the box', (typed) => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 77: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    const input = openEditor(container, 77);
+    fireEvent.change(input, { target: { value: typed } });
+    fireEvent.blur(input);
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
+
+  it('still commits a parseable value (and a deliberate clear)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 77: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    const input = openEditor(container, 77);
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(77, '');
+  });
+});
+

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Generate Codex and OpenCode subagent definitions from .claude/agents/*.md.
+"""Generate Codex, OpenCode and omp subagent definitions from .claude/agents/*.md.
 
 Subagents are the one layer of agent configuration with no shared standard:
-Claude uses Markdown + YAML frontmatter, Codex uses TOML, OpenCode uses
-Markdown with a different schema. Instructions (AGENTS.md) and skills
-(SKILL.md) converged; this did not. So the Claude files stay the single
-source and the other two are generated, with every dropped field recorded in
-the generated file itself.
+Claude uses Markdown + YAML frontmatter, Codex uses TOML, OpenCode and
+oh-my-pi (omp) use Markdown with different schemas. Instructions (AGENTS.md)
+and skills (SKILL.md) converged; this did not. So the Claude files stay the
+single source and the others are generated, with every dropped field recorded
+in the generated file itself.
 
-Usage: lib-gen-agents.py <src-dir> <codex-out-dir> <opencode-out-dir>
+Usage: lib-gen-agents.py <src-dir> <codex-out-dir> <opencode-out-dir> <omp-out-dir>
 """
 import json
 import pathlib
@@ -37,12 +37,36 @@ def toml_multiline(value):
     return '"""\n' + value + '"""'
 
 
-def main(src_dir, codex_dir, opencode_dir):
+# Claude tool names -> omp tool names. omp discovers project subagents only in
+# .omp/agents/*.md (it skips .claude/agents, .codex/agents and .opencode/agents).
+OMP_TOOLS = {
+    "read": "read",
+    "write": "write",
+    "edit": "edit",
+    "bash": "bash",
+    "grep": "grep",
+    "glob": "glob",
+}
+
+
+def omp_tools(value):
+    names = value if isinstance(value, list) else str(value).split(",")
+    out = []
+    for raw in names:
+        n = raw.strip().lower()
+        if n:
+            out.append(OMP_TOOLS.get(n, n))
+    return out
+
+
+def main(src_dir, codex_dir, opencode_dir, omp_dir):
     src = pathlib.Path(src_dir)
     codex = pathlib.Path(codex_dir)
     opencode = pathlib.Path(opencode_dir)
+    omp = pathlib.Path(omp_dir)
     codex.mkdir(parents=True, exist_ok=True)
     opencode.mkdir(parents=True, exist_ok=True)
+    omp.mkdir(parents=True, exist_ok=True)
 
     count = 0
     for path in sorted(src.glob("*.md")):
@@ -104,10 +128,35 @@ def main(src_dir, codex_dir, opencode_dir):
         (opencode / f"{name}.md").write_text(
             "\n".join(fm) + "\n\n" + "\n".join(note) + "\n\n" + body
         )
+
+        # --- omp: .omp/agents/<name>.md --------------------------------------
+        # `model: inherit` is Claude-only (omitting model makes omp inherit the
+        # parent's); `color` has no omp equivalent. Omitted `tools` selects omp's
+        # default toolset, like Claude's.
+        dropped_omp = []
+        if meta.get("model"):
+            dropped_omp.append(f"model: {meta['model']} (Claude-specific; omp inherits the parent model)")
+        if meta.get("color"):
+            dropped_omp.append("color (no omp equivalent)")
+        ofm = [
+            "---",
+            f"name: {json.dumps(name, ensure_ascii=False)}",
+            f"description: {json.dumps(description, ensure_ascii=False)}",
+        ]
+        if meta.get("tools"):
+            ofm.append(f"tools: {', '.join(omp_tools(meta['tools']))}")
+        ofm.append("---")
+        onote = [f"<!-- GENERATED MIRROR - DO NOT EDIT. Source: {rel} - {REGEN}"]
+        for d in dropped_omp:
+            onote.append(f"     Dropped in translation: {d}")
+        onote.append("-->")
+        (omp / f"{name}.md").write_text(
+            "\n".join(ofm) + "\n\n" + "\n".join(onote) + "\n\n" + body
+        )
         count += 1
 
     print(count)
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:5])

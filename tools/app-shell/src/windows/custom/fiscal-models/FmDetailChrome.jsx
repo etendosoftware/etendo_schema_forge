@@ -1,6 +1,7 @@
 import React from 'react';
 import { useUI } from '@/i18n';
 import { getIncidentIndicator } from './incidentSeverity.js';
+import { isAnnualPeriod } from './fiscalPeriods.js';
 import { Button } from '@/components/ui/button.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -139,8 +140,10 @@ export function FmStatusChip({ status, submissionMethod, t, variant = 'list' }) 
 // 2026/T1", "Modelo 349 - 2026/T4". A monthly period (2-digit "10") shows its month name in the
 // app's UI locale — `bcpLocale` must be passed explicitly ("es-ES"/"en-US"), never left to
 // Intl's runtime default (an es-language OS would otherwise show "octubre" under en_US, see
-// ETP-5338). Quarters ("T1".."T4") and anything else are shown as-is.
+// ETP-5338). Quarters ("T1".."T4") and anything else are shown as-is. An annual declaration
+// (period '0A', ETP-5716) is the exercise alone: "Modelo 390 - 2026".
 export function formatDeclPeriod(decl, bcpLocale) {
+  if (isAnnualPeriod(decl?.period)) return `${decl?.year}`;
   const monthNum = /^\d{2}$/.test(String(decl?.period ?? '')) ? parseInt(decl.period, 10) : null;
   const period = monthNum
     ? new Intl.DateTimeFormat(bcpLocale, { month: 'long' }).format(new Date(2000, monthNum - 1, 1))
