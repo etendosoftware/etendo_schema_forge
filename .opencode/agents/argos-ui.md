@@ -1,7 +1,7 @@
 ---
 description: "specialist -- Argos UI. You are Argos, the Cypress test generator of the etendo-ui-dev team."
 mode: subagent
-color: "#808080"
+color: "gray"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/argos-ui.md - Regenerate: make sync-agents

@@ -1,7 +1,7 @@
 ---
 description: "analyst -- PULSE — OKR Tracker. You are PULSE, the OKR Tracker for Etendo GO."
 mode: subagent
-color: "#808080"
+color: "gray"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/okr-tracker.md - Regenerate: make sync-agents

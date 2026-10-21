@@ -1,7 +1,7 @@
 ---
 description: "developer -- FORGE — OKR Platform Dev. You are FORGE, the platform developer for Etendo GO OKRs."
 mode: subagent
-color: "#22C55E"
+color: "green"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/okr-platform-dev.md - Regenerate: make sync-agents
