@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { readFileSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import { AppModule } from './app.module.ts';
@@ -60,7 +61,9 @@ Each resource corresponds to a business window in Etendo. The resource page expl
 
 ### 5. Create and update records
 
-Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo.
+Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one; it answers \`204 No Content\` without a body. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo.
+
+Send bodies as JSON:API: \`{"data": {"type": "<resource>", "attributes": {...}, "relationships": {"<name>": {"data": {"type": "<related-resource>", "id": "<id>"}}}}}\`. \`attributes\` and \`relationships\` are each optional, so a body may carry only relationships. A foreign key is always a relationship, never an attribute; \`{"data": null}\` clears it. A \`type\` or \`id\` that does not match the URL is refused with \`409\`. The \`Content-Type\` is \`application/vnd.api+json\` (or \`application/json\`); responses are \`application/vnd.api+json\`. A single-record response carries one resource object in \`data\`; a collection carries an array.
 
 Updates use optimistic concurrency. Include the \`updated\` value returned by a previous read when the resource requires it; a stale value returns \`409 Conflict\`.
 
@@ -70,13 +73,18 @@ Document lines are addressed through their master resource: \`/api/v1/{master}/{
 
 ### Responses and errors
 
-- \`2xx\`: request completed successfully.
+Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...", "title": "Not Found", "detail": "<Etendo's message>", "meta": {"hint": "..."}}]}\`. \`detail\` carries Etendo's own message; \`code\` and \`meta.hint\` appear when Etendo provides them.
+
+- \`200\` / \`201\`: the request completed; \`204\`: a record was deleted (no body).
 - \`400\`: invalid input, unsupported field, or invalid operation payload.
 - \`401\`: missing, malformed, or invalid credentials.
+- \`402\`: the tenant is blocked.
 - \`403\`: the credential does not have the required scope or organization access.
 - \`404\`: the resource or record does not exist.
-- \`409\`: the record changed since it was read.
-- \`502\`: Etendo could not complete the upstream request.
+- \`406\` / \`415\`: the \`Accept\` or \`Content-Type\` header is not JSON:API (or JSON).
+- \`409\`: the record changed since it was read, or the \`type\`/\`id\` does not match.
+- \`422\`: Etendo refused the request (validation).
+- \`502\`: Etendo failed (any 5xx); no internal details are returned.
 
 ### Versioning
 
@@ -90,7 +98,11 @@ This guide is English-only for the first release. The documentation model is pre
 `;
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // The body parser is registered by hand so JSON:API bodies (application/vnd.api+json)
+  // are read like application/json. Anything else is refused with 415 by the
+  // public controller's negotiation guard before the body is used.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  (app as unknown as NestExpressApplication).useBodyParser('json', { type: ['application/json', 'application/vnd.api+json'] });
   app.setGlobalPrefix('api/v1');
 
   const config = new DocumentBuilder()

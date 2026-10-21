@@ -2,9 +2,11 @@ import {
   BadGatewayException,
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
+  HttpCode,
   Inject,
   NotFoundException,
   Optional,
@@ -13,8 +15,9 @@ import {
   Post,
   Put,
   Req,
-  UnauthorizedException,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   PUBLIC_API_SCHEMA,
@@ -25,8 +28,20 @@ import {
   type PublicApiSchema,
 } from '@etendosoftware/api-gateway-core';
 
+import {
+  JsonApiExceptionFilter,
+  JsonApiNegotiationGuard,
+  JsonApiResponseInterceptor,
+  upstreamException,
+} from './json-api-http.ts';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 @Controller()
-@UseGuards(PublicApiKeyGuard)
+@UseGuards(PublicApiKeyGuard, JsonApiNegotiationGuard)
+@UseFilters(JsonApiExceptionFilter)
+@UseInterceptors(JsonApiResponseInterceptor)
 export class PublicApiController {
   constructor(
     @Inject(PUBLIC_API_SCHEMA) private readonly schema: PublicApiSchema,
@@ -94,7 +109,7 @@ export class PublicApiController {
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'PUT');
-    return this.forward(child.publicName, req, 'PUT', this.filterWritable(child.publicName, body), id, parentId);
+    return this.forward(child.publicName, req, 'PUT', this.filterWritable(child.publicName, body, id), id, parentId);
   }
 
   @Patch(':parentName/:parentId/:childName/:id')
@@ -108,10 +123,11 @@ export class PublicApiController {
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'PATCH');
-    return this.forward(child.publicName, req, 'PATCH', this.filterWritable(child.publicName, body), id, parentId);
+    return this.forward(child.publicName, req, 'PATCH', this.filterWritable(child.publicName, body, id), id, parentId);
   }
 
   @Delete(':parentName/:parentId/:childName/:id')
+  @HttpCode(204)
   async removeChild(
     @Param('parentName') parentName: string,
     @Param('parentId') parentId: string,
@@ -142,17 +158,18 @@ export class PublicApiController {
   async update(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'PUT');
-    return this.forward(entityName, req, 'PUT', this.filterWritable(entityName, body), id);
+    return this.forward(entityName, req, 'PUT', this.filterWritable(entityName, body, id), id);
   }
 
   @Patch(':entityName/:id')
   async patch(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'PATCH');
-    return this.forward(entityName, req, 'PATCH', this.filterWritable(entityName, body), id);
+    return this.forward(entityName, req, 'PATCH', this.filterWritable(entityName, body, id), id);
   }
 
   @Delete(':entityName/:id')
+  @HttpCode(204)
   async remove(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: { neoJwt: string }) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'DELETE');
@@ -190,18 +207,43 @@ export class PublicApiController {
     }
   }
 
-  private filterWritable(entityName: string, body: Record<string, unknown>) {
+  /**
+   * Maps a write body to NeoServlet's internal field paths. A body is either
+   * JSON:API (`{ data: { type?, id?, attributes?, relationships? } }`, where
+   * `attributes` and `relationships` are both optional) or flat
+   * (`{ field: value }`). `type` and `id` are resource members, never
+   * attributes; when they disagree with the URL the answer is 409, as
+   * JSON:API prescribes.
+   */
+  private filterWritable(entityName: string, body: Record<string, unknown>, urlId?: string) {
     const entity = this.entityOrThrow(entityName);
-    const input = body.data && typeof body.data === 'object'
-      ? body.data as { attributes?: Record<string, unknown>; relationships?: Record<string, { data?: { id?: string } | null }> }
-      : body;
-    const attributes = 'attributes' in input ? (input.attributes ?? {}) : input as Record<string, unknown>;
-    const relationships = 'relationships' in input ? (input.relationships ?? {}) : {};
+    if (!isRecord(body)) throw new BadRequestException('The request body must be a JSON object');
+    let input: Record<string, unknown> = body;
+    if ('data' in body) {
+      if (!isRecord(body.data)) throw new BadRequestException('"data" must be a single resource object');
+      input = body.data;
+      if (input.type !== undefined && input.type !== entityName) {
+        throw new ConflictException(`Resource type "${String(input.type)}" does not match "${entityName}"`);
+      }
+      if (urlId !== undefined && input.id !== undefined && String(input.id) !== urlId) {
+        throw new ConflictException(`Resource id "${String(input.id)}" does not match the id in the URL`);
+      }
+    }
+    const jsonApiResource = 'data' in body || 'attributes' in input || 'relationships' in input;
+    const attributes = jsonApiResource ? input.attributes ?? {} : input;
+    const relationships = jsonApiResource ? input.relationships ?? {} : {};
+    if (!isRecord(attributes)) throw new BadRequestException('"attributes" must be an object');
+    if (!isRecord(relationships)) throw new BadRequestException('"relationships" must be an object');
     const mapped: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(attributes)) {
-      const field = entity.fields[key] as (PublicApiField & { direction?: string }) | undefined;
+      const field = entity.fields[key] as (PublicApiField & { direction?: string; relationship?: unknown }) | undefined;
       if (!field || !['in', 'inout'].includes(field.direction ?? '')) {
         throw new BadRequestException(`Field "${key}" is not writable by the public API`);
+      }
+      // A foreign key lives under `relationships`; accepting it here would let
+      // the same link be written (and read back) in two places.
+      if (field.relationship) {
+        throw new BadRequestException(`"${key}" is a relationship: send it under "relationships" as { "data": { "type": "...", "id": "..." } }`);
       }
       mapped[field.internalPath] = value;
     }
@@ -210,9 +252,25 @@ export class PublicApiController {
       if (!field?.relationship || !['in', 'inout'].includes(field.direction ?? '')) {
         throw new BadRequestException(`Relationship "${key}" is not writable by the public API`);
       }
-      mapped[field.internalPath] = relationship.data?.id ?? null;
+      mapped[field.internalPath] = this.relationshipId(key, relationship, field.relationship.resource);
     }
     return mapped;
+  }
+
+  /** Reads the `{ type, id }` linkage of a to-one relationship; `{ data: null }` clears it. */
+  private relationshipId(name: string, relationship: unknown, resource: string): string | null {
+    if (!isRecord(relationship) || !('data' in relationship)) {
+      throw new BadRequestException(`Relationship "${name}" must carry a "data" member: { "data": { "type": "${resource}", "id": "..." } } or { "data": null }`);
+    }
+    const linkage = relationship.data;
+    if (linkage === null) return null;
+    if (!isRecord(linkage) || typeof linkage.id !== 'string' || !linkage.id) {
+      throw new BadRequestException(`Relationship "${name}" data must be a single resource identifier with a string "id" (to-many relationships are not supported)`);
+    }
+    if (linkage.type !== resource) {
+      throw new ConflictException(`Relationship "${name}" expects type "${resource}", got "${String(linkage.type)}"`);
+    }
+    return linkage.id;
   }
 
   private toJsonApiResource(entityName: string, record: Record<string, unknown>, id?: string) {
@@ -247,9 +305,23 @@ export class PublicApiController {
     };
   }
 
-  private toJsonApi(entityName: string, data: unknown, id?: string) {
-    if (Array.isArray(data)) return { data: data.map((record) => this.toJsonApiResource(entityName, record as Record<string, unknown>)) };
-    return { data: this.toJsonApiResource(entityName, data as Record<string, unknown>, id) };
+  /**
+   * Builds the top-level document. A collection read is an array; any other
+   * response is a single resource object, even though NeoServlet wraps a
+   * single record in a one-element array.
+   */
+  private toJsonApi(entityName: string, data: unknown, id: string | undefined, single: boolean) {
+    if (!single) {
+      const records = Array.isArray(data) ? data : data === null || data === undefined ? [] : [data];
+      return { data: records.map((record) => this.toJsonApiResource(entityName, record as Record<string, unknown>)) };
+    }
+    let record = data;
+    if (Array.isArray(data)) {
+      if (data.length > 1) throw new BadGatewayException({ errors: [{ status: '502', title: 'Bad Gateway', detail: 'Etendo answered several records for a single-record request.' }] });
+      record = data[0];
+    }
+    if (record === null || record === undefined) throw new NotFoundException('The record does not exist');
+    return { data: this.toJsonApiResource(entityName, record as Record<string, unknown>, id) };
   }
 
   private async forward(
@@ -273,15 +345,17 @@ export class PublicApiController {
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-      const message = errorBody?.error?.message ?? `NeoServlet request failed with status ${response.status}`;
-      if (response.status === 400 || response.status === 409) throw new BadRequestException(message);
-      if (response.status === 401 || response.status === 403) throw new UnauthorizedException(message);
-      throw new BadGatewayException(message);
+      throw upstreamException(response.status, await response.json().catch(() => null));
     }
-    if (response.status === 204) return null;
+    // DELETE answers 204 without a body whatever Etendo returned on success.
+    if (method === 'DELETE') return undefined;
+    if (response.status === 204) {
+      // JSON:API: a successful update with nothing to show answers 200 with only top-level meta.
+      if (method === 'PUT' || method === 'PATCH') return { meta: { status: 'updated' } };
+      throw new BadGatewayException({ errors: [{ status: '502', title: 'Bad Gateway', detail: 'Etendo answered without content.' }] });
+    }
     const json = (await response.json()) as { response?: { data?: unknown } };
-    const data = json.response?.data ?? json;
-    return this.toJsonApi(entityName, data, id);
+    const data = json.response && 'data' in json.response ? json.response.data : json;
+    return this.toJsonApi(entityName, data, id, !(method === 'GET' && id === undefined));
   }
 }
