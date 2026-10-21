@@ -1,3 +1,4 @@
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -424,11 +425,20 @@ describe('GoodsShipmentActions', () => {
       );
     });
 
-    it('calls onRefresh (not a reload) as the ReturnWizard onSuccess fallback when the created return has no id to navigate to', () => {
+    // ETP-5729 — the shipment refreshes the moment the return exists, whatever the user does with
+    // the result modal afterwards (close it, or open the return). Behaviour covered by the real
+    // render in tools/app-shell/src/windows/custom/goods-shipment/__tests__/GoodsShipmentActions.vitest.jsx.
+    it('refreshes in the wizard onSuccess, before announcing the created return (no auto-navigation)', () => {
       assert.match(
         src,
-        /if\s*\(returnData\?\.id\)\s*\{\s*navigate\(`\/return-material-receipt\/\$\{returnData\.id\}`\);\s*\}\s*else\s*\{\s*[\s\S]*?onRefresh\?\.\(\);\s*\}/,
+        /onSuccess=\{\(returnData\) => \{\s*setWizardOpen\(false\);[\s\S]*?onRefresh\?\.\(\);[\s\S]*?if\s*\(returnData\?\.id\)\s*setReturnedDoc\(returnData\);/,
       );
+      assert.doesNotMatch(src, /navigate\(`\/return-material-receipt\/\$\{returnData\.id\}`\)/);
+    });
+
+    it('does not refresh again when the return-result modal closes', () => {
+      assert.match(src, /onClose=\{\(\) => setReturnedDoc\(null\)\}/);
+      assert.doesNotMatch(src, /setReturnedDoc\(null\);\s*setTimeout/);
     });
   });
 

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/hooks/useSurveyEngine.js
+// @covers tools/app-shell/src/lib/sessionIdentity.js
 import { renderHook, act } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
@@ -64,8 +66,14 @@ vi.mock('@/lib/observability/events.js', () => observabilityEventsMocks);
 
 // ---------------------------------------------------------------------------
 // Import the hook AFTER mocks are registered
+//
+// sessionIdentity.js is NOT mocked here: it is a plain in-memory singleton
+// (no network, no browser API), and the existing convention for it
+// (health-events.vitest.js) exercises the real module via
+// setSessionIdentity/clearSessionIdentity rather than a vi.mock.
 // ---------------------------------------------------------------------------
 import { useSurveyEngine } from '../useSurveyEngine.js';
+import { setSessionIdentity, clearSessionIdentity } from '../../lib/sessionIdentity.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -112,6 +120,9 @@ describe('useSurveyEngine', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    // sessionIdentity is a real, module-level singleton (not mocked) — reset it so a
+    // clientId set by one test never leaks into the next.
+    clearSessionIdentity();
   });
 
   // -------------------------------------------------------------------------
@@ -806,6 +817,143 @@ describe('useSurveyEngine', () => {
         expect.not.objectContaining({
           userId: expect.anything(),
           accountId: expect.anything(),
+          orgId: expect.anything(),
+        }),
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // userProps — account_id (ETP-5808): the Client-level SaaS tenant identifier,
+  // sourced from getSessionIdentity().clientId, snake_case `account_id` — distinct from
+  // the camelCase `accountId` key asserted absent above (GDPR remediation, unrelated key).
+  // -------------------------------------------------------------------------
+
+  describe('userProps — account_id from session identity (ETP-5808)', () => {
+    it('includes account_id with the session clientId in the payload of all 4 survey events', () => {
+      setSessionIdentity({ clientId: 'client-77' });
+      const survey = makeSurvey();
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice' }));
+      selectNextSurvey.mockReturnValue(survey);
+
+      const { result } = renderHook(() => useSurveyEngine());
+      // SURVEY_SHOWN — fired by the login timer.
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      act(() => {
+        result.current.handleScoreSelected(8);
+        result.current.handleRespond(8, 'nice', []);
+        result.current.handleDismiss();
+      });
+
+      for (const eventDef of [
+        OBSERVABILITY_EVENTS.SURVEY_SHOWN,
+        OBSERVABILITY_EVENTS.SURVEY_SCORE_SELECTED,
+        OBSERVABILITY_EVENTS.SURVEY_RESPONDED,
+        OBSERVABILITY_EVENTS.SURVEY_DISMISSED,
+      ]) {
+        expect(buildObservabilityEvent).toHaveBeenCalledWith(
+          eventDef,
+          expect.objectContaining({ account_id: 'client-77' }),
+        );
+      }
+    });
+
+    it('omits account_id from the payload when the session has no clientId (signed-out/default state)', () => {
+      clearSessionIdentity();
+      const survey = makeSurvey();
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice' }));
+      selectNextSurvey.mockReturnValue(survey);
+
+      const { result } = renderHook(() => useSurveyEngine());
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      act(() => {
+        result.current.handleScoreSelected(8);
+        result.current.handleRespond(8, 'nice', []);
+        result.current.handleDismiss();
+      });
+
+      for (const eventDef of [
+        OBSERVABILITY_EVENTS.SURVEY_SHOWN,
+        OBSERVABILITY_EVENTS.SURVEY_SCORE_SELECTED,
+        OBSERVABILITY_EVENTS.SURVEY_RESPONDED,
+        OBSERVABILITY_EVENTS.SURVEY_DISMISSED,
+      ]) {
+        expect(buildObservabilityEvent).toHaveBeenCalledWith(
+          eventDef,
+          expect.not.objectContaining({ account_id: expect.anything() }),
+        );
+      }
+    });
+
+    // QA REJECT repro (BUG-1, now fixed): userProps used to be a useMemo keyed on
+    // [username, selectedOrg?.id]. getSessionIdentity().clientId was read only at the
+    // moment that memo first computed — if clientId resolved asynchronously afterwards
+    // (a plain module-level mutation, triggers no re-render), the memo never recomputed
+    // and account_id stayed absent for the rest of the mount's life. The fix reads
+    // getSessionIdentity() fresh, inline, at each event's track call (getUserProps()).
+    it('BUG-1 regression — account_id reaches a later event even though clientId resolved only after an earlier event fired, with no re-render in between', () => {
+      clearSessionIdentity();
+      const survey = makeSurvey();
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'alice' }));
+      selectNextSurvey.mockReturnValue(survey);
+
+      const { result } = renderHook(() => useSurveyEngine());
+      // SURVEY_SHOWN fires via the login timer, before clientId has resolved — correct,
+      // there is no identity data yet.
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      expect(buildObservabilityEvent).toHaveBeenCalledWith(
+        OBSERVABILITY_EVENTS.SURVEY_SHOWN,
+        expect.not.objectContaining({ account_id: expect.anything() }),
+      );
+
+      // Identity resolves asynchronously AFTER that first event (e.g. useAccountIdentity's
+      // async reset flow) — a plain module-level mutation, not a prop/state change, so
+      // the hook is never re-rendered and username/selectedOrg?.id never change.
+      setSessionIdentity({ clientId: 'client-resolved-later' });
+
+      act(() => { result.current.handleDismiss(); });
+
+      expect(buildObservabilityEvent).toHaveBeenCalledWith(
+        OBSERVABILITY_EVENTS.SURVEY_DISMISSED,
+        expect.objectContaining({ account_id: 'client-resolved-later' }),
+      );
+    });
+
+    it('includes orgId and account_id together in the same payload when selectedOrg and the session clientId are both set', () => {
+      setSessionIdentity({ clientId: 'client-77' });
+      const survey = makeSurvey();
+      useAuth.mockReturnValue(
+        makeAuth({ isAuthenticated: true, username: 'alice', selectedOrg: { id: 'org-1' } }),
+      );
+      selectNextSurvey.mockReturnValue(survey);
+
+      renderHook(() => useSurveyEngine());
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      expect(buildObservabilityEvent).toHaveBeenCalledWith(
+        OBSERVABILITY_EVENTS.SURVEY_SHOWN,
+        expect.objectContaining({ orgId: 'org-1', account_id: 'client-77' }),
+      );
+    });
+
+    it('omits both orgId and account_id when username is falsy, even with a stale clientId left over from a previous session', () => {
+      setSessionIdentity({ clientId: 'stale-client' });
+      const survey = makeSurvey();
+      useAuth.mockReturnValue(
+        makeAuth({ isAuthenticated: true, username: null, selectedOrg: { id: 'org-1' } }),
+      );
+      selectNextSurvey.mockReturnValue(survey);
+
+      renderHook(() => useSurveyEngine());
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      expect(buildObservabilityEvent).toHaveBeenCalledWith(
+        OBSERVABILITY_EVENTS.SURVEY_SHOWN,
+        expect.not.objectContaining({
+          account_id: expect.anything(),
           orgId: expect.anything(),
         }),
       );

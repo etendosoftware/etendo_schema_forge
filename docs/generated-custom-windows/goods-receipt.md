@@ -41,7 +41,7 @@ A user should be able to:
 - **Clone result verification (ETP-5547):** clone results are verified per row by the shared `CloneOrderModal` — a clone that cannot be found is shown as a failed row instead of a link. See `docs/ui-customization.md` §3b, "Clone result verification".
 - **Draft status chips** (`GoodsReceiptDraftChips.jsx`): custom chip set shown in the draft-mode banner, providing at-a-glance receipt progress indicators while the document is in draft.
 - **Invoiced progress badge:** the `Invoiced <N>%` badge in `artifacts/goods-receipt/custom/GoodsReceiptDraftChips.jsx` is a thin wrapper over the shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/ProgressFieldBadge.jsx`, rendered with `DocumentStatusPill` and a 16px `ProgressRing` passed through its `icon` prop, tone from `getProgressTone`: 0% neutral, 1-99% neutral, 100% success) as a single label `<Label> <N>%`. It is shown when the document is completed (`documentStatus === 'CO'`), including at 0% (neutral), or in any other status (e.g. a draft) when `invoiceStatus > 0` (`showWhenPositive`); it is hidden otherwise or when `invoiceStatus` is missing (`data-testid="goods-receipt-invoice-badge"` preserved).
-- **Purchase Return Wizard** (`PurchaseReturnWizard.jsx`): 2-step wizard for initiating a purchase return from a completed receipt, launched from the primary "Crear devolución" topbar button (see the Button order entry above — NOT a menu action, correcting a stale claim here). Since ETP-5429 it is a thin wrapper around the shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx` (unified with `ReturnWizard.jsx` on goods-shipment); `createPurchaseReturn` is a confirmed-working live action, verified end-to-end.
+- **Purchase Return Wizard** (`PurchaseReturnWizard.jsx`): single-step dialog (step 2 removed in ETP-5729 — the shared wizard creates the return straight from the lines screen; see `goods-shipment.md` → *Create return — single step*) for initiating a purchase return from a completed receipt, launched from the primary "Crear devolución" topbar button (see the Button order entry above — NOT a menu action, correcting a stale claim here). Since ETP-5429 it is a thin wrapper around the shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx` (unified with `ReturnWizard.jsx` on goods-shipment); `createPurchaseReturn` is a confirmed-working live action, verified end-to-end. Since the ETP-5729 follow-up the shared wizard's quantity column reads «Disponible para devolver» / "Available to return" (`availableToReturn`) instead of «Entregado»: the value is `movementQuantity` from `availableReceiptLines`, i.e. received minus what non-voided returns (drafts included) already hold. The wizard also accepts an optional `linesLoading` prop (loading row / *nothing left to return* empty state); `GoodsReceiptActions.jsx` does not pass it yet, so the purchase dialog renders as before. Open on the Purchase side (reported, not changed): the receipt is refreshed only when the return-result modal is closed, not when the user opens the return, and `return-to-vendor-shipment` writes do not invalidate the cached `goods-receipt` record — the same stale-button pattern fixed for Sales (see `goods-shipment.md` → *Stale shipment after a return*).
 
 In practice, the header behaves like the receipt execution record and the child area behaves like the intake workspace. The custom implementation narrows the visible line table to receipt-focused columns and adds receipt-specific actions for line import and related-document navigation.
 
@@ -757,3 +757,35 @@ Discovery and edge cases of the goods receipt import (ETP-5713 review):
 - `headerLinked` / `salesOrder` report the truth: if the header already links purchase order X and the lines come only from purchase order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
 - A goods receipt or purchase order of another client answers 404 exactly like a missing one.
 - The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.
+
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a goods receipt allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<goods receipt id>)` lists every action and, for that record, says `availableNow`
+  (true or false) and, when false, `unavailableReason`; `documentAction` also carries `availableValuesNow`. Unavailable
+  actions stay listed (never hidden). **Advice only**: it never blocks a call; the handlers still validate everything.
+  Without `id` each action shows when it applies (`availableWhen`, `valuesByStatus`).
+- `documentAction` on the record is the document's next default action (what its Process button would run); `--` means none,
+  the document is in a final state.
+- A draft takes `CO` only. A completed goods receipt cannot be reactivated or voided through MCP: `documentAction` offers CO alone, a
+  `docAction` of RE or RC answers 422 saying so, and the document is corrected with a return (`createPurchaseReturn`).
+- Applies to a draft: the import actions. Applies to a completed document: `createPurchaseInvoice`, `createPurchaseReturn`.
+- Response keys the window adds to a record (`invoiceStatus` and `returnStatus` percentages, `linkedInvoices`, `linkedReturns`, `linkedOrders`) are declared, so `fields:[…]` projections do not list them under
+  `unknownFields`.
+- Posting a just-completed document (`post`) can answer **409 `costNotCalculated`** with `retryAfterSeconds: 30`: cost is
+  calculated in the background about every 30 seconds, nothing was posted (`posted` stays as Etendo set it, `NC`), and the same
+  post succeeds a moment later. The SPA reads the same flat `message` / `messageKeys`; REST also sends `Retry-After`.
+- The tool accepts entity names with other capitals (`Header` is routed as `header`), and a refusal keyed 20501 ("Documento ya
+  procesado") carries a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35. The spec prompt (`agent-prompts/<window>/spec.md`) says the same to the agent.
+
+### Booking the goods receipt over MCP: `post` / `unpost`, never `Posted` — ETP-5714
+
+The goods receipt's accounting is booked with the `post` and `unpost` actions, exactly what the window's Post / Unpost buttons call. They are
+listed in `etendo_schema(view:"actions")`: `post` applies to a completed document that is not posted, `unpost` to a completed one that
+is (`availableNow` says so for a given record). A `post` right after completing can answer **409 `costNotCalculated`** (wait
+`retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
+`Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
+
