@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Pencil, Copy, Mail, MoreVertical, Loader2 } from 'lucide-react';
-import { IconicTrashIcon } from '@/components/ui/custom-icons';
+import { Loader2 } from 'lucide-react';
+// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash are the Iconic set on
+// the 20x20 frame (core custom-icons), so the band never mixes icon families.
+import { IconicCopyIcon, IconicDotsVerticalIcon, IconicEditIcon, IconicMailIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -11,7 +13,7 @@ import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { filterPostingActions } from '@/lib/capabilityVisibility.js';
-import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } from './rowVisuals.js';
+import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE, ROW_STICKY_ACTIONS } from './rowVisuals.js';
 
 // Resolves whether an action should render, given its actionsConfig entry
 // (decisions.json → window.rowQuickActions.actions.<key>) and an optional fallback
@@ -381,22 +383,16 @@ export default function RowQuickActions({
       // opacity. Since this pill is narrower than the cell's own reserved
       // width, that mismatch painted as a seam INSIDE one cell — solid gray
       // under the icons, lighter translucent gray in the gutter beside them
-      // — live-verified. This div now sets NO background of its own at
-      // all: the masking/tinting background lives on the enclosing `<td>`
-      // instead (DataTable's quickActionsColumnClassName), applied to the
-      // WHOLE cell so gutter and icons always match — solid `bg-muted` only
-      // when hover-sticky can actually float this pill over real data
-      // (masking beats color-matching there), otherwise nothing, letting
-      // the row's own `hover:bg-muted/50` show through this div exactly as
-      // it does everywhere else in the row, at rest AND transitioning.
-      className={[
-        // `right-0` (not `right-3`) — flush against the cell's own right
-        // edge, no outer margin: "que se empuje al fondo, tiene como un
-        // espacio" (a `right-3` gap here read as an unexplained sliver of
-        // the reserved column left uncovered at the true edge). `px-3`
-        // keeps the icons themselves off the very edge as inner padding.
-        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100',
-      ].join(' ')}
+      // — live-verified.
+      //
+      // ETP-5600 (QA pass 2) — this div IS the Figma "Sticky Acciones" layer and
+      // carries the masking background again, now as the Figma gradient
+      // (transparent -> `--row-hover-bg` at 10.58%), exactly as wide as its cell, which
+      // DataTable reserves at no less than QUICK_ACTIONS_MIN_BAND_PX (ROW_STICKY_ACTIONS
+      // in rowVisuals.js), so it never reaches past the cell. The `<td>`
+      // paints nothing: its own gradient left a visible seam at the cell's left
+      // edge. Same colour end as before, so the gutter and the icons still match.
+      className={ROW_STICKY_ACTIONS}
       data-testid="row-quick-actions"
       onClick={stop}
     >
@@ -411,7 +407,7 @@ export default function RowQuickActions({
           title={ui('quickAction.edit')}
           data-testid="row-quick-action-edit"
         >
-          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Pencil className="h-5 w-5" data-testid="Pencil__ec6673" />}
+          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicEditIcon className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
       {/* Clone — only when host wires onClone (no generic default exists); never on read-only. */}
@@ -425,7 +421,7 @@ export default function RowQuickActions({
           title={ui('quickAction.clone')}
           data-testid="row-quick-action-clone"
         >
-          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Copy className="h-5 w-5" data-testid="Copy__ec6673" />}
+          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicCopyIcon className="h-5 w-5" data-testid="Copy__ec6673" />}
         </button>
       )}
       {/* Email — gated by sendDocument.enabled (default true for eligible
@@ -441,7 +437,7 @@ export default function RowQuickActions({
           title={ui('quickAction.email')}
           data-testid="row-quick-action-email"
         >
-          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Mail className="h-5 w-5" data-testid="Mail__ec6673" />}
+          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicMailIcon className="h-5 w-5" data-testid="Mail__ec6673" />}
         </button>
       )}
       {/* More — popover with menuActions[] */}
@@ -455,7 +451,7 @@ export default function RowQuickActions({
             title={ui('quickAction.more')}
             data-testid="row-quick-action-more"
           >
-            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ec6673" />
+            <IconicDotsVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ec6673" />
           </button>
           {showMenu && menuPos && createPortal(
             <>

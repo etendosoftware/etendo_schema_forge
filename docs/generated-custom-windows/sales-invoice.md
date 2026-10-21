@@ -2482,6 +2482,23 @@ Discovery and edge cases of the sales invoice import (ETP-5713 review):
 - The remainder of an order import (ordered and not delivered, or already taken by another draft) is created through the native process with a temporary receipt/shipment marker that is removed right after; a skipped removal rolls the import back (`importQuantityNotHonoured`). `ImportOrderLinesIntoInvoiceHandlerIntegrationTest` runs the real process for the covered-by-draft case.
 - A document of another client answers 404 exactly like a missing one. The source lines are locked with `FOR NO KEY UPDATE`.
 
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a sales invoice allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<sales invoice id>)` lists every action and, for that record, says `availableNow`
+  and `unavailableReason`; `documentAction` carries `availableValuesNow` and, for a value ruled out, `unavailableValues`.
+  Unavailable actions stay listed. **Advice only**: it never blocks a call.
+- `documentAction` on the record is the next default action (what the Process button would run); `--` means none.
+- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RC` (void by reversal) or
+  `RE` (reactivate). `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
+  rectified by a completed rectificativa).
+- `post` applies to a completed invoice that is not posted yet, `unpost` to a completed one that is; the import actions (`importOrderLines`, `importShipmentLines` and their `available*` lists) apply to a draft.
+- Posting can answer **409 `costNotCalculated`** (`retryAfterSeconds: 30`) when cost is still being calculated: wait and repeat.
+- Refusals keyed 20501 ("Documento ya procesado") carry a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
+
 ## Unit column in the lines grid (ETP-5696)
 
 The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. facturada**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
@@ -2495,3 +2512,27 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 - **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
 
 **Manual verification:** open a draft sales invoice; confirm `Unidad` sits after Cant. facturada; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## "A favor" topbar chip shows the whole amount — ETP-5729
+
+QA CP-14: the "A favor" chip next to Save truncated a 4-digit balance to "A favor 1.452,0…"
+because the amount sat in a fixed `w-[72px]` box. Both invoice topbars (sales
+`artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`, purchase
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx`) now render the amount
+through the shared `tools/app-shell/src/windows/custom/shared/BadgeAmount.jsx`: content-sized up to
+`max-w-[8.5rem]`, enough for 7 integer digits plus decimals and the symbol ("1.234.567,00 €").
+Longer values still ellipsise with the full amount in a tooltip. The list-column badges in the
+header tables keep their fixed width on purpose (row-to-row alignment) and were not changed.
+
+**Narrow topbars.** At ~1280px wide the chip used to overflow the topbar (the "€" fell off-screen
+and "A favor" wrapped onto two lines) because nothing in the flex chain could shrink: DetailView's
+right-hand action group (`flex items-center gap-2`) → chip → amount were all at their content
+width. Now the action group in `tools/app-shell/src/components/contract-ui/DetailView.jsx` carries
+`min-w-0`, the chip carries `BADGE_CHIP_FIT_CLASS` (`min-w-0 shrink-[999] whitespace-nowrap`,
+exported by `BadgeAmount.jsx`) and the amount is `min-w-0 shrink`. When room runs out the chip
+absorbs the overflow before the fixed-size icon buttons, the label stays on one line and the
+amount ellipsises (full value in the tooltip); with room it still sizes to content. The
+`DetailView` `min-w-0` only changes a toolbar whose actions already overflowed (they were clipped
+by the card's `overflow-hidden`). **Verify:** at 1280x720 open a completed credit with a large
+balance (e.g. "2.420.100,10 €"): the chip ends inside the card, the amount shows "2…" with the
+full value on hover, no horizontal scroll.

@@ -243,11 +243,13 @@
   color: var(--fm-fg-1); vertical-align: middle;
 }
 .fm-table tr:last-child td { border-bottom: 0; }
-/* ETP-5600 — same row hover as the shared DataTable (Figma "Fila"): instant, Shadows/lg.
-   The raised row paints over the table's collapsed border, hiding the line above it (the
-   previous row's border-bottom); each hovered cell redraws it as a 1px inset top shadow. */
+/* ETP-5600 — same row hover as the shared DataTable (Figma "Fila"): instant, Shadows/lg and
+   NO lines (ROW_LIFT_HOVER_NO_BORDERS in rowVisuals.js): the hovered row's own
+   border-bottom and the previous row's border-bottom (its top line in the collapsed grid)
+   turn transparent. Resting rows keep their separators. */
 .fm-table tbody tr:hover { position: relative; z-index: 2; cursor: pointer; box-shadow: 0 4px 6px -2px rgba(18, 18, 23, 0.05), 0 10px 15px -3px rgba(18, 18, 23, 0.08); }
-.fm-table tbody tr:hover td { background: hsl(var(--card)); box-shadow: inset 0 1px 0 var(--fm-border-1); }
+.fm-table tbody tr:hover td { background: hsl(var(--card)); border-bottom-color: transparent; }
+.fm-table tbody tr:has(+ tr:hover) td { border-bottom-color: transparent; }
 .fm-table tr.fm-table__row--current td { background: var(--fm-info-bg); }
 .fm-table tbody tr.fm-table__row--selected td { background: hsl(var(--muted)); box-shadow: inset 0 1px 0 hsl(var(--border-control)), inset 0 -1px 0 hsl(var(--border-control)); }
 /* ETP-5030 — selected-row tint, converged on the app-wide selection colour.

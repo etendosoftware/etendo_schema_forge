@@ -4,6 +4,8 @@ import { computeDocumentTotals } from '@/lib/documentTotals';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
+export const TOTALS_RIGHT_PADDING = 'clamp(0px, calc(100% - 456px), 48px)';
+
 /**
  * DocumentTotalsPanel — generic totals block for document detail views.
  *
@@ -150,7 +152,10 @@ export default function DocumentTotalsPanel({
 
   return (
     <div className="mt-1 flex flex-col items-end" data-inline-add-portal="true">
-      <div className="w-full text-sm pr-12">
+      {/* pr-12 (48px) only while the block is wide (>= 504px); it collapses
+          to 0 as the block narrows toward 456px so a 320px Totals column still
+          reads in full (ETP-5756). Padding % resolves against the block's width. */}
+      <div className="w-full text-sm" style={{ paddingRight: TOTALS_RIGHT_PADDING }}>
 
         <div>
 
