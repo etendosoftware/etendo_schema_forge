@@ -351,9 +351,9 @@ Every failure is an error document, built from Etendo's answer when Etendo refus
 ```
 
 - `status` is the HTTP status as a string; `title` its standard name; `detail` is Etendo's message; `code`, `meta.hint`, `meta.detail` and `meta.field` appear when Etendo provides them. A gateway-originated error (unknown resource, not writable, `401 Missing API key`) has the same shape without `code`.
-- Statuses Etendo answers are passed through: `400`, `401`, `402` (blocked tenant), `403`, `404`, `409`, `412`, `422`, `428`, `429`. Any other upstream status (every `5xx`, an unexpected `4xx`) becomes `502 Bad Gateway` with a generic `detail` and `meta.upstreamStatus`; Etendo's text and stack are logged server side, never returned.
+- Statuses Etendo answers are passed through: `400`, `401`, `402` (blocked tenant), `403`, `404`, `409`, `412`, `422`, `428`, `429`, and `503` (Etendo's transient `service_unavailable`: database timeout or lost connection; retrying is right). Any other upstream status (every other `5xx`, an unexpected `4xx`) becomes `502 Bad Gateway` with a generic `detail` and `meta.upstreamStatus`; Etendo's text and stack are logged server side, never returned. The one exception is Etendo's `hint`: when a failure happens after the main write committed, Etendo's `500` carries a hint ("The record may already be saved. Read it before re-sending the request."); the `502` then returns it in `meta.hint` with the `detail` "Check meta.hint before retrying." instead of "Retry later". Read the record before re-sending, or the write may be duplicated.
 - An unexpected gateway failure is `500` with `detail: "Unexpected error."`.
-- The OpenAPI document lists these responses on every operation (`400`, `401`, `402`, `403`, `404`, `406`, `502`, plus `409`, `415` and `422` on writes; DELETE has no `415`/`422`).
+- The OpenAPI document lists these responses on every operation (`400`, `401`, `402`, `403`, `404`, `406`, `502`, `503`, plus `409`, `415` and `422` on writes; DELETE has no `415`/`422`).
 
 ### 4.9 Automated compliance checks
 
@@ -612,7 +612,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] A relationship sent as an attribute returns `400`; a wrong `type` or a different `id` returns `409` ([4.3](#43-fields-and-fail-closed-filtering), [4.6](#46-relationships))
 - [ ] A single-record `GET`, `POST`, `PUT` and `PATCH` return `data` as one object; a collection returns an array; an empty read is `404`; an empty write answer, or several records, is `502` ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] Responses are `application/vnd.api+json` without parameters; `Accept` that excludes JSON returns `406`; an unsupported body type returns `415` ([4.7](#47-content-negotiation))
-- [ ] Etendo's `400`, `401`, `402`, `403`, `404`, `409`, `422` reach the integrator with Etendo's message; `5xx` returns `502` with no Etendo internals ([4.8](#48-success-and-error-documents-and-statuses))
+- [ ] Etendo's `400`, `401`, `402`, `403`, `404`, `409`, `422` reach the integrator with Etendo's message; `503` passes through; other `5xx` return `502` with no Etendo internals (only `meta.hint`, when Etendo sends one) ([4.8](#48-success-and-error-documents-and-statuses))
 - [ ] `DELETE` answers `204` with no body, as the OpenAPI documents ([4.8](#48-success-and-error-documents-and-statuses))
 - [ ] Every operation of the OpenAPI document lists its error responses ([4.8](#48-success-and-error-documents-and-statuses))
 - [ ] `cd gateway && npm test` passes, including the compliance checks ([4.9](#49-automated-compliance-checks))

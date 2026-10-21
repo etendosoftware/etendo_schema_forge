@@ -82,13 +82,14 @@ const ERROR_DESCRIPTIONS: Record<string, string> = {
   '409': 'Conflict: the resource type or id does not match, or the record changed or is in use.',
   '415': 'The request body is not application/vnd.api+json or application/json.',
   '422': 'Etendo understood the request but refused it (validation).',
-  '502': 'Etendo could not complete the request.',
+  '502': 'Etendo could not complete the request. When meta.hint is present the write may already be saved: read the record before re-sending.',
+  '503': 'Etendo is temporarily unavailable (database timeout or lost connection). Retry later.',
 };
 
 // Statuses each kind of operation can answer, besides its success status.
-const READ_ERRORS = ['400', '401', '402', '403', '404', '406', '502'];
-const WRITE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '415', '422', '502'];
-const DELETE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '502'];
+const READ_ERRORS = ['400', '401', '402', '403', '404', '406', '502', '503'];
+const WRITE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '415', '422', '502', '503'];
+const DELETE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '502', '503'];
 const ERRORS_BY_METHOD: Record<string, string[]> = { get: READ_ERRORS, delete: DELETE_ERRORS };
 
 function errorResponsesFor(method: string): OpenApiOperation['responses'] {

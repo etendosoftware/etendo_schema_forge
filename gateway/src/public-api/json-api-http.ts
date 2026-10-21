@@ -157,9 +157,10 @@ function titleFor(status: number): string {
 }
 
 // Statuses of Etendo that mean something to an integrator and are forwarded as
-// they are. Everything else (5xx, an unexpected 4xx) is the gateway's 502:
-// the integrator can do nothing about it and must not see Etendo's internals.
-const PASS_THROUGH_STATUSES = new Set([400, 401, 402, 403, 404, 409, 412, 422, 428, 429]);
+// they are (503 is Etendo's transient "service_unavailable": retrying is right).
+// Everything else (5xx, an unexpected 4xx) is the gateway's 502: the integrator
+// can do nothing about it and must not see Etendo's internals.
+const PASS_THROUGH_STATUSES = new Set([400, 401, 402, 403, 404, 409, 412, 422, 428, 429, 503]);
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -200,6 +201,11 @@ export function upstreamException(status: number, body: unknown): HttpException 
   if (!PASS_THROUGH_STATUSES.has(status)) {
     // The upstream text stays in the server log; the integrator gets no internals.
     log.warn(`NeoServlet answered ${status}: ${upstream.message ?? upstream.detail ?? 'no message'}`);
+    // A hint means the write may already be committed: it is the only upstream text
+    // forwarded, and the detail must not tell the integrator to blindly retry.
+    if (upstream.hint) {
+      return badGateway('Etendo could not complete the request. Check meta.hint before retrying.', { upstreamStatus: status, hint: upstream.hint });
+    }
     return badGateway('Etendo could not complete the request. Retry later; contact support if it persists.', { upstreamStatus: status });
   }
   const meta: Record<string, unknown> = {};

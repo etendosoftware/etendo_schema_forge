@@ -59,7 +59,7 @@ test('propagates a NeoServlet 401 as a 401 error document, not a raw parse crash
 });
 
 test('propagates a NeoServlet 5xx as a 502, not a raw parse crash', async () => {
-  const fakeFetch = async () => new Response(JSON.stringify({ error: { message: 'boom' } }), { status: 503 });
+  const fakeFetch = async () => new Response(JSON.stringify({ error: { message: 'boom' } }), { status: 500 });
   const controller = new PublicApiController(schema, 'http://neo.local/etendo', fakeFetch as typeof fetch);
   await assert.rejects(
     () => controller.list('businessPartner', { neoJwt: 'jwt-abc' } as any),
@@ -305,7 +305,7 @@ test('passes Etendo statuses 400, 401, 402, 403, 404, 409 and 422 through', asyn
 });
 
 test('answers 502 without Etendo internals for a 5xx or an unexpected status', async () => {
-  for (const status of [500, 503, 405]) {
+  for (const status of [500, 501, 405]) {
     const result = await statusAndErrors(controllerAnswering(status, {
       error: { message: 'java.lang.NullPointerException at org.openbravo.Foo.bar(Foo.java:10)' },
     }).list('product', request));

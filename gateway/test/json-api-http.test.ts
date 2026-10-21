@@ -66,12 +66,37 @@ test('parseUpstreamError reads the nested and the flat Etendo shapes and tolerat
 });
 
 test('upstreamException forwards the meaningful 4xx and turns everything else into a 502', () => {
-  for (const status of [400, 401, 402, 403, 404, 409, 412, 422, 428, 429]) {
+  for (const status of [400, 401, 402, 403, 404, 409, 412, 422, 428, 429, 503]) {
     assert.equal(upstreamException(status, null).getStatus(), status);
   }
-  for (const status of [301, 405, 418, 500, 501, 503]) {
+  for (const status of [301, 405, 418, 500, 501]) {
     assert.equal(upstreamException(status, { error: { message: 'secret internals' } }).getStatus(), 502);
   }
+});
+
+test('upstreamException keeps the code and message of a 503 service_unavailable', () => {
+  const error = upstreamException(503, { error: { status: 503, code: 'service_unavailable', message: 'Service temporarily unavailable' } });
+  assert.equal(error.getStatus(), 503);
+  const { errors } = toErrorDocument(error);
+  assert.equal(errors[0].code, 'service_unavailable');
+  assert.equal(errors[0].detail, 'Service temporarily unavailable');
+});
+
+test('upstreamException turns a 500 with an after-commit hint into a 502 carrying meta.hint, not Retry later', () => {
+  const hint = 'The record may already be saved. Read it before re-sending the request.';
+  const { status, errors } = toErrorDocument(upstreamException(500, { error: { status: 500, message: 'ORA-00001 internal secret', hint } }));
+  assert.equal(status, 502);
+  assert.deepEqual(errors[0].meta, { upstreamStatus: 500, hint });
+  assert.match(errors[0].detail ?? '', /Check meta\.hint/);
+  assert.doesNotMatch(JSON.stringify(errors), /Retry later|ORA-00001|secret/);
+});
+
+test('upstreamException keeps the generic retry 502 for a 500 without a hint', () => {
+  const { status, errors } = toErrorDocument(upstreamException(500, { error: { status: 500, message: 'internal secret' } }));
+  assert.equal(status, 502);
+  assert.deepEqual(errors[0].meta, { upstreamStatus: 500 });
+  assert.match(errors[0].detail ?? '', /Retry later/);
+  assert.doesNotMatch(JSON.stringify(errors), /secret/);
 });
 
 test('toErrorDocument renders gateway and Nest exceptions as error documents without leaking unknown errors', () => {
