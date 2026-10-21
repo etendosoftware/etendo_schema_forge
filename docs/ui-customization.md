@@ -271,6 +271,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
+| `sidebarFormScrollPaddingX` | `sidebarFormScrollPaddingX=""` (DetailView prop, opt-in, hand-built windows only) | Replaces the detail content column's padding when the window HAS a side panel / sidebar (default there: `px-2 pb-2` inline/compact, `pr-2` otherwise). `""` removes it. Ignored without a sidebar; independent of `formScrollPaddingX`. | — (string) |
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
 | `newRecordComponent` | `onNew={() => setShowNewModal(true)}` on `ListView`, plus `{showNewModal && <X … />}` after it | Replaces the list toolbar's New button flow (a modal instead of the generic create form). Needs `hideCreate: false`; ListView still hides New for a read-only window | `token`, `apiBaseUrl`, `windowName`, `onClose` — nothing else, so any page state it needs (a selected row, loaded data) must come from a shared store or the URL |
 
@@ -1459,6 +1460,8 @@ export default function MyBottomPanel(props) {
   );
 }
 ```
+
+**Footer layout (`LinesBottomSection`, ETP-5756).** The Totals column is `min(520px, max(320px, calc(100% - 469px)))` wide: a flat 520 px whenever the footer row leaves the left column at least 469 px (16 p-2 + 1 divider + 24 px-3 + 96 label + 12 gap + 320 content; every window without a side panel), shrinking to a 320 px floor only when the footer area itself is narrow (e.g. purchase-invoice's 320 px OCR sidebar at 1280x720). `%` follows the real container, not the viewport. `DocumentTotalsPanel` collapses its `pr-12` the same way (`clamp(0px, calc(100% - 456px), 48px)`: 48 px at the full width, 0 when narrow). The Docs and Notes rows are `flex-wrap`; their content has a 20rem (320 px) minimum, so when it no longer fits beside the 96 px label it drops under it instead of being squeezed (chips wrap, the Notes placeholder keeps its width). `DocChip` stays a single-line pill (`max-w-full`): the title is `min-w-0 truncate` (full text in its `title` attribute) while icon, amount and status badge are `shrink-0`, so the badge never drops to a second line.
 
 Gate the trigger on `lines.length > 0` (with no lines, the empty state already shows its own import button) plus the trigger's own visibility conditions (draft status + business partner above), so completed documents don't render an empty strip. **Known limitations** of this path: `DetailView`'s `bottomSection` contract passes no refresh callback and no save-header hook (`onSave`), so the trigger cannot save a dirty header before importing and must refresh via `window.location.reload()` after a successful import.
 
