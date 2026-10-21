@@ -161,7 +161,16 @@ PREVIEW_LOG="$REPO_DIR/tmp/e2e-preview.log"
 
 echo "==> Building E2E bundle (no PWA/service worker; log: tmp/e2e-build.log)..."
 BUILD_LOG="$REPO_DIR/tmp/e2e-build.log"
-if ! ( cd "$APP_SHELL_DIR" && npm run build:e2e ) > "$BUILD_LOG" 2>&1; then
+# Vite loads the gitignored tools/app-shell/.env.local, so a developer's real provider config would
+# ship in the "default" bundle and the egress spec would see traffic. Process env beats .env files;
+# configured/killed scenarios export their own fake config and are left alone.
+BUILD_ENV=()
+if [ "${E2E_TELEMETRY:-default}" = "default" ]; then
+  BUILD_ENV=(VITE_MIXPANEL_ENABLED=false VITE_DATADOG_ENABLED=false VITE_RUM_ENABLED=false
+    VITE_MIXPANEL_TOKEN= VITE_DATADOG_CLIENT_TOKEN= VITE_DATADOG_APPLICATION_ID=
+    VITE_RUM_APP_MONITOR_ID= VITE_RUM_IDENTITY_POOL_ID=)  # blank ids too: no real credential in dist
+fi
+if ! ( cd "$APP_SHELL_DIR" && env ${BUILD_ENV[@]+"${BUILD_ENV[@]}"} npm run build:e2e ) > "$BUILD_LOG" 2>&1; then
   echo "❌ Build failed. Last 40 lines of $BUILD_LOG:" >&2
   tail -n 40 "$BUILD_LOG" >&2
   exit 1
