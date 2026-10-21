@@ -39,11 +39,8 @@
           "gridOrder": 1
         },
         "description": {
-          "type": "textarea",
-          "section": "principal",
-          "seq": 3,
-          "span": 2,
-          "rows": 1
+          "form": false,
+          "grid": false
         },
         "default": {
           "section": "principal",

@@ -9,7 +9,7 @@ Business Partner Category lets users maintain the category master record used to
 Users should be able to:
 
 - browse contact categories by Name, Customer, Vendor/Creditor and Default (Yes/No badges)
-- open a category and maintain its header fields: Search Key, Name, Description, Default, and the **contact type** (Customer and/or Vendor/Creditor — at least one is required)
+- open a category and maintain its header fields: Search Key, Name, Default, and the **contact type** (Customer and/or Vendor/Creditor — at least one is required)
 - view and edit the category's accounts from the Accounting tab, grouped by contact type: Customers (receivables, prepayment, write-off) and Vendor/Creditor (liability, prepayment) — see *Contact type — ETP-5791* below
 
 ## Interaction model
@@ -59,7 +59,7 @@ The window uses these layout overrides (all set in `decisions.json → window`, 
 ## Manual verification
 
 1. Open `/business-partner-category` from the Settings menu: the list shows Nombre, Cliente, Proveedor/Acreedor and Valor por defecto (Sí/No badges), no Identificador column, and each column filters and sorts.
-2. Open an existing category: the form shows Search Key, Name, Description, Default and the "Tipo de contacto * (lo heredan solo los contactos nuevos)" group.
+2. Open an existing category: the form shows Search Key, Name, Default and the "Tipo de contacto * (lo heredan solo los contactos nuevos)" group, all visible at once — no "Mostrar más datos" toggle at desktop widths. Description is not in the form.
 3. Create a category: both type checkboxes start unchecked; saving with neither shows "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor".
 4. On the Accounting tab, check/uncheck Cliente and Proveedor/Acreedor (before saving): the matching section appears/disappears; with neither, the "Marca Cliente o Proveedor/Acreedor…" message shows. Re-checking a type shows its previous account values.
 5. Change an account in a visible section: it saves on selection; the hidden section's mandatory accounts do not block it.
@@ -122,6 +122,16 @@ the window's `autoSaveOnBlur`); unchecking the last type is refused by the backe
 toast reads "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor"
 (`lib/backendErrors.js` maps `ETGO_BPGroupContactTypeRequired`, and the contact-side
 `ETGO_BPartnerContactTypeRequired`), and the toggle rolls back.
+
+**Header layout.** The form holds four fields: Search Key, Name and Default on row 1, and the
+full-width (`span: 4`) "Tipo de contacto" group on row 2. The shared header form shows only its
+first 2 rows before the "Mostrar más datos" toggle (`initialRows={2}`, ETP-5513), so this layout
+keeps the mandatory contact-type group always visible and no toggle appears with the 3- or
+4-column grid (container >= 480 px, i.e. every desktop width). **Description** (`Description`)
+was removed from the form (`form: false`, `grid: false` in `decisions.json`) because it is not
+in the design prototype — the PO confirmed the design wins over the ticket. The column and its
+values stay in the DB and in the API; only the UI no longer shows it. Adding another field to the
+header can push the group to row 3 (always on the 3-column grid), behind the toggle.
 
 **Accounting tab — `BpCategoryAccountingPanel`.** Declared as `window.customLinesComponent`
 (label `customLinesLabel: "Accounting"`). It loads the category's single `C_BP_Group_Acct` row
