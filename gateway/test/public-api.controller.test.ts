@@ -229,7 +229,11 @@ test('only a canonical NEO timestamp becomes an ETag', () => {
 
 test('a missing or wildcard If-Match is a 428 and a foreign one a 412', () => {
   for (const value of [undefined, '', '  ', '*']) {
-    assert.throws(() => versionFromIfMatch(value), (error) => statusOf(error) === 428, String(value));
+    assert.throws(
+      () => versionFromIfMatch(value),
+      (error) => statusOf(error) === 428 && ((error as HttpException).getResponse() as { code?: string }).code === 'precondition_required',
+      String(value),
+    );
   }
   assert.throws(() => versionFromIfMatch('*'), /If-Match: \* is not accepted/);
   const weak = `W/${toEtag(VERSION)}`;
@@ -237,7 +241,11 @@ test('a missing or wildcard If-Match is a 428 and a foreign one a 412', () => {
   const notAVersion = `"${Buffer.from('not-a-date', 'utf8').toString('base64url')}"`;
   const list = `${toEtag(VERSION)}, ${toEtag(NEXT_VERSION)}`;
   for (const value of [weak, unquoted, notAVersion, list, '"%%%"']) {
-    assert.throws(() => versionFromIfMatch(value), PreconditionFailedException, String(value));
+    assert.throws(
+      () => versionFromIfMatch(value),
+      (error) => error instanceof PreconditionFailedException && (error.getResponse() as { code?: string }).code === 'precondition_failed',
+      String(value),
+    );
   }
 });
 
@@ -299,7 +307,8 @@ test('a stale If-Match (Etendo stale_record) is a 412, not a 400', async () => {
   const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
   await assert.rejects(
     () => controller.patch('businessPartner', 'bp-1', { name: 'X' }, { neoJwt: 'jwt' } as any, toEtag(VERSION)),
-    (error) => error instanceof PreconditionFailedException && /modified by someone else/.test((error as Error).message),
+    (error) => error instanceof PreconditionFailedException && /modified by someone else/.test((error as Error).message)
+      && (error.getResponse() as { code?: string }).code === 'stale_record',
   );
 });
 

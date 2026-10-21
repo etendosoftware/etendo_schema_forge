@@ -75,8 +75,8 @@ Document lines are addressed through their master resource: \`/api/v1/{master}/{
 - \`401\`: missing, malformed, or invalid credentials.
 - \`403\`: the credential does not have the required scope or organization access.
 - \`404\`: the resource or record does not exist.
-- \`412\`: the record changed since it was read (\`If-Match\` does not match its current version).
-- \`428\`: the update did not send \`If-Match\`.
+- \`412\`: the record changed since it was read (\`If-Match\` does not match its current version). Error codes: \`stale_record\` (the record changed), \`precondition_failed\` (\`If-Match\` is not a valid ETag).
+- \`428\`: the update did not send \`If-Match\`. Error code: \`precondition_required\`.
 - \`502\`: Etendo could not complete the upstream request.
 
 ### Versioning

@@ -57,8 +57,8 @@ const IF_MATCH_PARAMETER = {
   schema: { type: 'string' as const },
 };
 const PRECONDITION_RESPONSES = {
-  '412': { description: 'If-Match does not match the current version: the record changed since it was read, or the value is not a valid ETag.' },
-  '428': { description: 'If-Match is missing, or is `*`, which is not accepted.' },
+  '412': { description: 'If-Match does not match the current version: the record changed since it was read, or the value is not a valid ETag. Error codes: `stale_record`, `precondition_failed`.' },
+  '428': { description: 'If-Match is missing, or is `*`, which is not accepted. Error code: `precondition_required`.' },
 };
 
 function withEtagHeader(responses: OpenApiOperation['responses']) {

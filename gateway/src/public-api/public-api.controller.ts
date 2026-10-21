@@ -7,6 +7,7 @@ import {
   Get,
   Headers,
   HttpException,
+  PreconditionFailedException,
   HttpStatus,
   Inject,
   NotFoundException,
@@ -14,7 +15,6 @@ import {
   Param,
   Patch,
   Post,
-  PreconditionFailedException,
   Put,
   Req,
   Res,
@@ -48,6 +48,13 @@ export function toEtag(version: unknown): string | undefined {
   return `"${Buffer.from(version, 'utf8').toString('base64url')}"`;
 }
 
+// A 412 whose body carries a stable machine-readable `code`.
+function preconditionFailed(message: string, code: 'precondition_failed' | 'stale_record'): PreconditionFailedException {
+  return new PreconditionFailedException({
+    statusCode: HttpStatus.PRECONDITION_FAILED, error: 'Precondition Failed', code, message,
+  });
+}
+
 // Returns the `updated` value an If-Match header stands for. A missing header
 // is a 428; anything that is not one of our strong ETags is a 412, because it
 // cannot match the current version (NeoServlet would answer a malformed value
@@ -59,6 +66,7 @@ export function versionFromIfMatch(ifMatch: string | undefined): string {
       {
         statusCode: HttpStatus.PRECONDITION_REQUIRED,
         error: 'Precondition Required',
+        code: 'precondition_required',
         message: value === '*'
           ? 'If-Match: * is not accepted. Send the ETag returned when the record was read.'
           : 'Updates require an If-Match header carrying the ETag returned when the record was read.',
@@ -69,7 +77,7 @@ export function versionFromIfMatch(ifMatch: string | undefined): string {
   const match = /^"([A-Za-z0-9_-]+)"$/.exec(value);
   const version = match ? Buffer.from(match[1], 'base64url').toString('utf8') : '';
   if (!NEO_TIMESTAMP.test(version)) {
-    throw new PreconditionFailedException('If-Match does not match the current version of the record. Read it again and retry with its ETag.');
+    throw preconditionFailed('If-Match does not match the current version of the record. Read it again and retry with its ETag.', 'precondition_failed');
   }
   return version;
 }
@@ -382,8 +390,9 @@ export class PublicApiController {
       // NeoServlet refuses a write whose `updated` is no longer current with
       // 409 `stale_record`: for the public API that is a failed If-Match.
       if (response.status === 409 && errorBody?.error === 'stale_record') {
-        throw new PreconditionFailedException(
+        throw preconditionFailed(
           errorBody.message ?? 'The record was modified after it was read. Read it again and retry with its ETag.',
+          'stale_record',
         );
       }
       const message = (typeof errorBody?.error === 'object' ? errorBody.error.message : undefined)

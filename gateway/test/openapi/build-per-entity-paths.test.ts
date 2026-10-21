@@ -157,6 +157,8 @@ test('requires If-Match and documents 412/428 on updates of a versioned resource
     assert.deepEqual({ in: ifMatch?.in, required: ifMatch?.required }, { in: 'header', required: true }, method);
     assert.ok(item[method].responses['412'], `${method} documents 412`);
     assert.ok(item[method].responses['428'], `${method} documents 428`);
+    assert.match(item[method].responses['412'].description, /precondition_failed/, `${method} lists 412 codes`);
+    assert.match(item[method].responses['428'].description, /precondition_required/, `${method} lists 428 code`);
     assert.ok(item[method].responses['200'].headers?.ETag, `${method} returns the new ETag`);
   }
 });
