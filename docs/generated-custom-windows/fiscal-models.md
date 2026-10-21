@@ -3771,7 +3771,9 @@ decided entirely by `AEAT3492010ReportDao#getCorrectiveInvoices`, which queries 
 (`ReversedInvoice` entity) for a row with `em_aeat349_iscorrective = 'Y'`. This flag is **not**
 derived from anything structural about the invoice (its DocType, a credit-note flag, etc.) — it is
 set by the user in the invoice's "Facturas revertidas" panel to explicitly flag that invoice as a
-349 correction, and defaults to `'N'` until they do. This is intentional, not a gap: not every
+349 correction, and defaults to `'N'` until they do. Once flagged, its 349 year and period are not
+free: since ETP-5059 they are the original invoice's fiscal year and its month or quarter (see the
+"Correctiva del 349" gate section below). This is intentional, not a gap: not every
 reversed/linked invoice is a 349 correction, so the user's own judgment is the correct source of
 truth here, same as 303's `motivo_rectificacion` is deliberately left manual elsewhere in this doc.
 The practical consequence for this ticket's fix: a 349-corrective invoice only reaches
@@ -4902,6 +4904,16 @@ the interactive checkbox is affected. Full write-up of the invoice-side behavior
 **Known non-blocking follow-up:** toggling 349 off does not clear or warn about an already-`true`
 `aEAT349IsCorrective` value on existing invoice lines — the checkbox simply becomes invisible while
 the underlying data (and the read-only grid badge) stays intact.
+
+**ETP-5059 — year and period forced to the original invoice.** The corrective's 349 year is now
+always the original invoice's fiscal year, and its period the original's month (`MM`, default) or
+quarter (`nT`) — enforced by the classic trigger `AEAT349_CINVREV_TRG0`, which also fills both when
+empty and refuses an unposted original. The panel's **Año** select lists only that year and
+**Periodo** only that month and quarter; `0A` is no longer offered. For this window this means a
+corrective is always declared in the period of the operation it corrects. Accepted limitations:
+one year/period per rectificative row, and month vs quarter correctives consume the declared base
+by exact period text (a month corrective does not see a quarter corrective of the same months, nor
+the other way round). Details: `purchase-invoice.md`, "Factura Rectificativa — ETP-4737".
 
 ## Known gaps and residual findings (ETP-5272 audit)
 
