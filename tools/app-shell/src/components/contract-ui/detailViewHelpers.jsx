@@ -1955,13 +1955,17 @@ export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew, a
   useEffect(() => {
     const arrivedFromAnotherRecord = prevRecordIdRef.current !== recordId;
     prevRecordIdRef.current = recordId;
+    if (accessReadOnly) return; // redirected below, no defaults fetch for a form never shown
     if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
-  }, [isNew, recordId, editing, handleNew]);
+  }, [isNew, recordId, editing, handleNew, accessReadOnly]);
   // ETP-5830 — a read-only role reaching the creation route by URL (the list already hides
   // "Nuevo") is sent back to the list instead of a form whose save the backend rejects.
+  // The callback is read from a ref: callers pass an inline arrow, which must not re-fire it.
+  const onReadOnlyNewRef = useRef(onReadOnlyNew);
+  onReadOnlyNewRef.current = onReadOnlyNew;
   useEffect(() => {
-    if (isNew && accessReadOnly) onReadOnlyNew?.();
-  }, [isNew, accessReadOnly, onReadOnlyNew]);
+    if (isNew && accessReadOnly) onReadOnlyNewRef.current?.();
+  }, [isNew, accessReadOnly]);
 }
 
 /**

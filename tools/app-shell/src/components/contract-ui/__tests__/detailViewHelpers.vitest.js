@@ -1244,6 +1244,19 @@ describe('useNewRouteEditingReset — read-only role on the creation route (ETP-
     expect(onReadOnlyNew).toHaveBeenCalled();
   });
 
+  it('redirects once and skips the defaults fetch, even when re-rendered with a new callback', () => {
+    const handleNew = vi.fn();
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = renderHook(({ cb }) => useNewRouteEditingReset({
+      isNew: true, recordId: 'new', editing: null, handleNew, accessReadOnly: true, onReadOnlyNew: cb,
+    }), { initialProps: { cb: first } });
+    rerender({ cb: second });
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    expect(handleNew).not.toHaveBeenCalled();
+  });
+
   it('leaves a writable role on /new, and a read-only role on an existing record, alone', () => {
     const onReadOnlyNew = vi.fn();
     run({ isNew: true, accessReadOnly: false, onReadOnlyNew });
