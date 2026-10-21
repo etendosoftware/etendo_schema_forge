@@ -15,6 +15,7 @@ import {
   Post,
   PreconditionFailedException,
   Put,
+  Query,
   Req,
   Res,
   UseFilters,
@@ -30,6 +31,7 @@ import {
   type PublicApiSchema,
 } from '@etendosoftware/api-gateway-core';
 
+import { PublicApiThrottlerGuard } from './public-api-throttler.guard.ts';
 import {
   JsonApiExceptionFilter,
   JsonApiNegotiationGuard,
@@ -39,6 +41,7 @@ import {
   upstreamException,
   type JsonApiError,
 } from './json-api-http.ts';
+import { neoListParams, pagination, parseListQuery, type ListQuery } from './json-api-query.ts';
 import { mapAttributes, mapRelationships, resolveResourceObject } from './json-api-request.ts';
 
 /** A public action declared in the manifest's `processes`. */
@@ -88,6 +91,9 @@ export function versionFromIfMatch(ifMatch: string | undefined): string {
   return version;
 }
 
+/** A validated list query plus the root-relative path its pagination links are built on. */
+type ListRequest = { query: ListQuery; basePath: string };
+
 /** NeoServlet answers a record, a list or nothing: always hand back a list of records. */
 function asRecords(data: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(data)) return data as Array<Record<string, unknown>>;
@@ -95,7 +101,8 @@ function asRecords(data: unknown): Array<Record<string, unknown>> {
 }
 
 @Controller()
-@UseGuards(PublicApiKeyGuard, JsonApiNegotiationGuard)
+// Guard order matters: the throttler reads the key id of a request the key guard already validated.
+@UseGuards(PublicApiKeyGuard, PublicApiThrottlerGuard, JsonApiNegotiationGuard)
 @UseFilters(JsonApiExceptionFilter)
 @UseInterceptors(JsonApiResponseInterceptor)
 export class PublicApiController {
@@ -110,10 +117,14 @@ export class PublicApiController {
   ) {}
 
   @Get(':entityName')
-  async list(@Param('entityName') entityName: string, @Req() req: { neoJwt: string }) {
+  async list(
+    @Param('entityName') entityName: string,
+    @Req() req: { neoJwt: string },
+    @Query() query: Record<string, unknown> = {},
+  ) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'GET');
-    return this.forward(entityName, req, 'GET');
+    return this.forward(entityName, req, 'GET', undefined, undefined, undefined, undefined, this.listRequest(entityName, `/api/v1/${entityName}`, query));
   }
 
   @Get(':parentName/:parentId/:childName')
@@ -122,10 +133,12 @@ export class PublicApiController {
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
     @Req() req: { neoJwt: string },
+    @Query() query: Record<string, unknown> = {},
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'GET');
-    return this.forward(child.publicName, req, 'GET', undefined, undefined, parentId);
+    const basePath = `/api/v1/${parentName}/${encodeURIComponent(parentId)}/${childName}`;
+    return this.forward(child.publicName, req, 'GET', undefined, undefined, parentId, undefined, this.listRequest(child.publicName, basePath, query));
   }
 
   @Get(':parentName/:parentId/:childName/:id')
@@ -319,6 +332,11 @@ export class PublicApiController {
     }
   }
 
+  /** Validates a list request's query before anything is sent to Etendo. */
+  private listRequest(entityName: string, basePath: string, query: Record<string, unknown>): ListRequest {
+    return { query: parseListQuery(this.entityOrThrow(entityName), query), basePath };
+  }
+
   private entityOrThrow(entityName: string): PublicApiEntity & { entityName?: string } {
     const entity = this.schema.entities[entityName] as (PublicApiEntity & { entityName?: string }) | undefined;
     if (!entity) throw new NotFoundException(`Unknown public entity: ${entityName}`);
@@ -433,8 +451,31 @@ export class PublicApiController {
     return { data: this.toJsonApiResource(entityName, records[0], id) };
   }
 
+  /**
+   * A page of a collection with `meta.page` and `links`. NEO's `totalRows` comes
+   * from a count query (we never send `_noCount`), so it is exact; it is still
+   * checked for plausibility and left out when it is not. When the page asked
+   * for lies past the end, the datasource rewinds and answers the FIRST page
+   * (its `startRow` is then not the one requested): that is an empty page here.
+   */
+  private toListDocument(entityName: string, data: unknown, envelope: { startRow?: unknown; totalRows?: unknown } | undefined, list: ListRequest) {
+    const { query, basePath } = list;
+    let records = asRecords(data);
+    const answeredStart = typeof envelope?.startRow === 'number' ? envelope.startRow : query.startRow;
+    if (answeredStart !== query.startRow) records = [];
+    records = records.slice(0, query.pageSize);
+    const reported = envelope?.totalRows;
+    const total = typeof reported === 'number' && Number.isSafeInteger(reported) && reported >= (records.length ? query.startRow + records.length : 0)
+      ? reported
+      : undefined;
+    return {
+      data: records.map((record) => this.toJsonApiResource(entityName, record)),
+      ...pagination(basePath, query, records.length, total),
+    };
+  }
+
   /** The document for a successful NeoServlet answer (status already known to be 2xx). */
-  private async toSuccessDocument(response: Response, entityName: string, method: string, id?: string, res?: HeaderSink) {
+  private async toSuccessDocument(response: Response, entityName: string, method: string, id?: string, res?: HeaderSink, list?: ListRequest) {
     // DELETE answers 204 without a body whatever Etendo returned on success.
     if (method === 'DELETE') return undefined;
     if (response.status === 204) {
@@ -442,8 +483,9 @@ export class PublicApiController {
       if (method === 'PUT' || method === 'PATCH') return { meta: { status: 'updated' } };
       throw badGateway('Etendo answered without content.');
     }
-    const json = (await response.json()) as { response?: { data?: unknown } };
+    const json = (await response.json()) as { response?: { data?: unknown; startRow?: unknown; totalRows?: unknown } };
     const data = json.response && 'data' in json.response ? json.response.data : json;
+    if (list && method === 'GET' && id === undefined) return this.toListDocument(entityName, data, json.response, list);
     const document = this.toJsonApi(entityName, data, id, !(method === 'GET' && id === undefined), method);
     // A single-record answer (read, create, update) carries the new version in the ETag header.
     const single = document.data;
@@ -460,11 +502,13 @@ export class PublicApiController {
     id?: string,
     parentId?: string,
     res?: HeaderSink,
+    list?: ListRequest,
   ) {
     this.assertRecordId(id);
     const entity = this.entityOrThrow(entityName);
     const internalEntityName = entity.entityName ?? entityName;
-    const query = parentId ? `?parentId=${encodeURIComponent(parentId)}` : '';
+    const params = [...(parentId ? [`parentId=${encodeURIComponent(parentId)}`] : []), ...(list ? neoListParams(list.query) : [])];
+    const query = params.length ? `?${params.join('&')}` : '';
     const path = `${this.neoBaseUrl}/sws/neo/${entity.specName}/${internalEntityName}${id ? `/${encodeURIComponent(id)}` : ''}${query}`;
     const response = await this.fetchImpl(path, {
       method,
@@ -489,6 +533,6 @@ export class PublicApiController {
       }
       throw upstreamException(response.status, upstream);
     }
-    return this.toSuccessDocument(response, entityName, method, id, res);
+    return this.toSuccessDocument(response, entityName, method, id, res, list);
   }
 }

@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   Catch,
   HttpException,
   Injectable,
@@ -131,6 +132,8 @@ export interface JsonApiError {
   code?: string;
   title: string;
   detail?: string;
+  /** The query parameter (`source.parameter`) or body pointer (`source.pointer`) at fault. */
+  source?: { parameter?: string; pointer?: string };
   meta?: Record<string, unknown>;
 }
 
@@ -193,6 +196,26 @@ export function badGateway(detail: string, meta?: Record<string, unknown>): BadG
   return new BadGatewayException({
     errors: [{ status: '502', title: titleFor(502), detail, ...(meta ? { meta } : {}) } satisfies JsonApiError],
   });
+}
+
+/** A 400 naming the offending query parameter in `source.parameter` (JSON:API 1.1 error object). */
+export function invalidQueryParameter(parameter: string, detail: string): BadRequestException {
+  return new BadRequestException({
+    errors: [{
+      status: '400', code: 'invalid_query_parameter', title: titleFor(400), detail, source: { parameter },
+    } satisfies JsonApiError],
+  });
+}
+
+/** The 429 of the per-key rate limit; `Retry-After` and `X-RateLimit-*` are set on the response by the guard. */
+export function rateLimited(retryAfterSeconds: number): HttpException {
+  return new HttpException({
+    errors: [{
+      status: '429', code: 'rate_limit_exceeded', title: titleFor(429),
+      detail: `Rate limit exceeded for this API key. Retry in ${retryAfterSeconds} seconds.`,
+      meta: { retryAfter: retryAfterSeconds },
+    } satisfies JsonApiError],
+  }, 429);
 }
 
 /** Builds the gateway's exception for an unsuccessful NeoServlet answer. */

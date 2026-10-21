@@ -297,3 +297,61 @@ test('declares one POST path per top-level action and none for children', () => 
   assert.equal(Object.keys(paths).filter((p) => p.includes('/actions/')).length, 1);
   assert.equal(paths['/api/v1/businessPartner/{id}'] && Object.keys(paths).some((p) => p.startsWith('/api/v1/businessPartner/{id}/actions')), false);
 });
+
+test('a list operation documents page, sort and one filter per readable filterable field', () => {
+  const rich = structuredClone(schema) as any;
+  rich.entities.product.fields.active = { publicApi: true, direction: 'inout', internalPath: 'isActive', type: 'passthrough', dataType: { type: 'boolean' } };
+  rich.entities.product.fields.created = { publicApi: true, direction: 'out', internalPath: 'created', type: 'passthrough', dataType: { type: 'string', format: 'date-time' } };
+  rich.entities.product.fields.secret = { publicApi: true, direction: 'in', internalPath: 'secret', type: 'passthrough', dataType: { type: 'string' } };
+  rich.entities.product.fields.rel = { publicApi: true, direction: 'inout', internalPath: 'rel', type: 'passthrough', dataType: { type: 'string' }, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'rel' } };
+  rich.entities.product.fields.blob = { publicApi: true, direction: 'out', internalPath: 'blob', type: 'passthrough', dataType: { type: 'object' } };
+  const parameters = buildPerEntityOpenApiPaths(rich)['/api/v1/product'].get.parameters as any[];
+  const byName = Object.fromEntries(parameters.map((parameter) => [parameter.name, parameter]));
+  assert.deepEqual(Object.keys(byName), ['page[number]', 'page[size]', 'sort', 'filter[searchKey]', 'filter[name]', 'filter[active]', 'filter[created]', 'filter[rel]']);
+  for (const parameter of parameters) assert.deepEqual([parameter.in, parameter.required], ['query', false]);
+  assert.deepEqual(byName['page[size]'].schema, { type: 'integer', minimum: 1, maximum: 100, default: 50 });
+  assert.deepEqual(byName['page[number]'].schema, { type: 'integer', minimum: 1, default: 1 });
+  assert.match(byName.sort.description, /Sortable fields: searchKey, name, active, created\./);
+  assert.doesNotMatch(byName.sort.description, /secret|blob/);
+  assert.doesNotMatch(byName.sort.description, /rel/);
+  assert.match(byName['filter[name]'].description, /eq, ne, contains, in/);
+  assert.match(byName['filter[active]'].description, /true or false/);
+  assert.match(byName['filter[created]'].description, /yyyy-MM-dd/);
+  assert.doesNotMatch(byName['filter[created]'].description, /contains|\bne\b/);
+});
+
+test('a list response documents meta.page and the pagination links; a single read does not', () => {
+  const paths = buildPerEntityOpenApiPaths(schema);
+  const list = paths['/api/v1/product'].get.responses['200'].content!['application/vnd.api+json'].schema.properties as any;
+  assert.deepEqual(Object.keys(list.links.properties), ['self', 'first', 'prev', 'next', 'last']);
+  assert.deepEqual(Object.keys(list.meta.properties.page.properties), ['number', 'size', 'total']);
+  const single = paths['/api/v1/product/{id}'].get.responses['200'].content!['application/vnd.api+json'].schema.properties as any;
+  assert.equal(single.links, undefined);
+  assert.equal(paths['/api/v1/product/{id}'].get.parameters!.some((p) => p.in === 'query'), false);
+});
+
+test('a child list keeps its parentId path parameter ahead of the query parameters', () => {
+  const withChild = structuredClone(schema) as any;
+  withChild.entities.line = {
+    publicApi: true, specName: 'product', operations: ['GET', 'LIST'],
+    parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'p' },
+    fields: { qty: { publicApi: true, direction: 'inout', internalPath: 'qty', type: 'passthrough', dataType: { type: 'integer' } } },
+  };
+  const parameters = buildPerEntityOpenApiPaths(withChild)['/api/v1/product/{parentId}/lines'].get.parameters as any[];
+  assert.deepEqual(parameters.map((p) => `${p.in}:${p.name}`), ['path:parentId', 'query:page[number]', 'query:page[size]', 'query:sort', 'query:filter[qty]']);
+});
+
+test('every operation documents 429 with its rate-limit headers; list operations document 400 as a query error', () => {
+  const crud = structuredClone(schema) as any;
+  crud.entities.product.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  const paths = buildPerEntityOpenApiPaths(crud);
+  for (const path of Object.values(paths)) {
+    for (const operation of Object.values(path)) {
+      const answer = operation.responses['429'];
+      assert.ok(answer, `${operation.operationId} documents 429`);
+      assert.deepEqual(Object.keys(answer.headers!), ['Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset']);
+      assert.ok(answer.content!['application/vnd.api+json']);
+    }
+  }
+  assert.match(paths['/api/v1/product'].get.responses['400'].description, /source\.parameter/);
+});

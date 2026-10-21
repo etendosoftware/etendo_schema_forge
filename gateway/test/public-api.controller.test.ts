@@ -32,7 +32,7 @@ const schema: PublicApiSchema = {
 
 test('list() calls NeoServlet at /sws/neo/{specName}/{entityName} and unwraps the response envelope', async () => {
   const fakeFetch = async (url: string) => {
-    assert.equal(url, 'http://neo.local/etendo/sws/neo/contacts/businessPartner');
+    assert.equal(url, 'http://neo.local/etendo/sws/neo/contacts/businessPartner?_startRow=0&_endRow=49');
     return new Response(
       JSON.stringify({ response: { data: [{ name: 'Widget', internalCostBasis: 99 }] } }),
       { status: 200 }
@@ -40,7 +40,7 @@ test('list() calls NeoServlet at /sws/neo/{specName}/{entityName} and unwraps th
   };
   const controller = new PublicApiController(schema, 'http://neo.local/etendo', fakeFetch as typeof fetch);
   const result = await controller.list('businessPartner', { neoJwt: 'jwt-abc' } as any);
-  assert.deepEqual(result, { data: [{ type: 'businessPartner', attributes: { name: 'Widget' } }] });
+  assert.deepEqual((result as any).data, [{ type: 'businessPartner', attributes: { name: 'Widget' } }]);
 });
 
 test('propagates a NeoServlet 401 as a 401 error document, not a raw parse crash', async () => {
@@ -91,7 +91,7 @@ test('renders a public foreign key as a JSON:API relationship linkage', async ()
   );
   const controller = new PublicApiController(schema, 'http://neo.local/etendo', fakeFetch as typeof fetch);
   const result = await controller.list('businessPartner', { neoJwt: 'jwt-abc' } as any);
-  assert.deepEqual(result, {
+  assert.deepEqual({ data: (result as any).data }, {
     data: [{
       type: 'businessPartner',
       attributes: { name: 'Widget' },
@@ -169,7 +169,7 @@ test('routes every child CRUD verb through the master path and preserves the par
   await controller.removeChild('businessPartner', 'bp-1', 'locations', 'line-1', request);
 
   assert.deepEqual(calls.map(({ url, method }) => ({ url, method })), [
-    { url: 'http://neo.local/etendo/sws/neo/contacts/locationAddress?parentId=bp-1', method: 'GET' },
+    { url: 'http://neo.local/etendo/sws/neo/contacts/locationAddress?parentId=bp-1&_startRow=0&_endRow=49', method: 'GET' },
     { url: 'http://neo.local/etendo/sws/neo/contacts/locationAddress?parentId=bp-1', method: 'POST' },
     { url: 'http://neo.local/etendo/sws/neo/contacts/locationAddress/line-1?parentId=bp-1', method: 'PUT' },
     { url: 'http://neo.local/etendo/sws/neo/contacts/locationAddress/line-1?parentId=bp-1', method: 'PATCH' },
@@ -555,7 +555,7 @@ test('a single-record read returns data as one resource object, a collection ret
   const one = await controllerAnswering(200, { response: { data: [record] } }).list('product', request);
   assert.equal(Array.isArray((one as any).data), true, 'a one-record collection stays an array');
   const none = await controllerAnswering(200, { response: { data: [] } }).list('product', request);
-  assert.deepEqual(none, { data: [] });
+  assert.deepEqual((none as any).data, []);
 });
 
 test('a single-record read of a missing record is 404 and an ambiguous answer is 502', async () => {
@@ -704,4 +704,155 @@ test('refuses the ids "." and ".." with 404 on actions and plain reads, without 
       (e: unknown) => e instanceof HttpException && e.getStatus() === 404);
   }
   assert.equal(calls.length, 0);
+});
+
+// ---- List query: filters, sort, pagination (ETP-5780) -----------------------
+
+const listSchema = {
+  apiVersion: 'v1',
+  entities: {
+    contacts: {
+      publicApi: true,
+      publicName: 'contacts',
+      specName: 'contacts',
+      entityName: 'businessPartner',
+      operations: ['GET', 'LIST'],
+      fields: {
+        id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        tax_id: { publicApi: true, direction: 'inout', internalPath: 'taxID', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        secret: { publicApi: true, direction: 'in', internalPath: 'secretCode', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+      },
+    },
+    'contacts-contact': {
+      publicApi: true,
+      publicName: 'contacts-contact',
+      specName: 'contacts',
+      entityName: 'contact',
+      operations: ['GET', 'LIST'],
+      parent: { resource: 'contacts', entityName: 'businessPartner', pathSegment: 'contacts', foreignKey: 'businessPartner' },
+      fields: {
+        id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        phone: { publicApi: true, direction: 'inout', internalPath: 'phone', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+      },
+    },
+  },
+} as unknown as PublicApiSchema;
+
+function listing(envelope: unknown) {
+  const urls: string[] = [];
+  const fakeFetch = async (url: string) => {
+    urls.push(url);
+    return new Response(JSON.stringify({ response: envelope }), { status: 200 });
+  };
+  return { urls, controller: new PublicApiController(listSchema, 'http://neo.local/etendo', fakeFetch as typeof fetch) };
+}
+
+const rows = (count: number, from = 1) => Array.from({ length: count }, (_, i) => ({ id: `c-${from + i}`, name: `N${from + i}`, taxID: `T${from + i}`, secretCode: 's' }));
+const neoParams = (url: string) => new URL(url).searchParams;
+
+test('list forwards the validated window, sort and one criteria param to NEO', async () => {
+  const { urls, controller } = listing({ status: 0, startRow: 20, endRow: 29, totalRows: 95, data: rows(10, 21) });
+  const result = await controller.list('contacts', request, {
+    page: { number: '3', size: '10' }, sort: '-name', filter: { name: { contains: 'ac' }, tax_id: { in: 'A,B' } },
+  }) as any;
+  const params = neoParams(urls[0]);
+  assert.equal(params.get('_startRow'), '20');
+  assert.equal(params.get('_endRow'), '29');
+  assert.equal(params.get('_sortBy'), '-name,id');
+  assert.equal(params.getAll('criteria').length, 1);
+  assert.deepEqual(JSON.parse(params.get('criteria')!), [
+    { fieldName: 'name', operator: 'iContains', value: 'ac' },
+    { fieldName: 'taxID', operator: 'inSet', value: 'A,B' },
+  ]);
+  assert.equal(result.data.length, 10);
+  assert.deepEqual(result.meta, { page: { number: 3, size: 10, total: 95 } });
+  const keep = 'filter[name][contains]=ac&filter[tax_id][in]=A,B&sort=-name';
+  assert.deepEqual(result.links, {
+    self: `/api/v1/contacts?${keep}&page[number]=3&page[size]=10`,
+    first: `/api/v1/contacts?${keep}&page[number]=1&page[size]=10`,
+    prev: `/api/v1/contacts?${keep}&page[number]=2&page[size]=10`,
+    next: `/api/v1/contacts?${keep}&page[number]=4&page[size]=10`,
+    last: `/api/v1/contacts?${keep}&page[number]=10&page[size]=10`,
+  });
+});
+
+test('list defaults to page 1 of 50 and never sends the client text anywhere but the criteria value', async () => {
+  const { urls, controller } = listing({ startRow: 0, endRow: 1, totalRows: 2, data: rows(2) });
+  const result = await controller.list('contacts', request, {}) as any;
+  assert.equal(urls[0], 'http://neo.local/etendo/sws/neo/contacts/businessPartner?_startRow=0&_endRow=49');
+  assert.deepEqual(result.meta, { page: { number: 1, size: 50, total: 2 } });
+  assert.equal(result.links.next, null);
+  assert.equal(result.links.prev, null);
+  assert.equal(result.links.last, '/api/v1/contacts?page[number]=1&page[size]=50');
+});
+
+test('list: a refused query never reaches NEO, and the write-only field cannot be filtered or sorted', async () => {
+  const { urls, controller } = listing({ data: [] });
+  for (const query of [{ filter: { secret: 'x' } }, { sort: 'secret' }, { foo: 'bar' }, { page: { size: '500' } }, { filter: { taxID: 'x' } }]) {
+    const refused = await statusAndErrors(controller.list('contacts', request, query as any));
+    assert.equal(refused.status, 400);
+    assert.ok(refused.errors?.[0].source.parameter);
+  }
+  assert.deepEqual(urls, []);
+});
+
+test('list: the last page is short, has no next, and a count of 0 is an empty first page', async () => {
+  const last = await listing({ startRow: 20, endRow: 24, totalRows: 25, data: rows(5, 21) }).controller.list('contacts', request, { page: { number: '3', size: '10' } }) as any;
+  assert.equal(last.links.next, null);
+  assert.equal(last.links.last, last.links.self);
+  const empty = await listing({ startRow: 0, endRow: 0, totalRows: 0, data: [] }).controller.list('contacts', request, { filter: { name: 'zzz' } }) as any;
+  assert.deepEqual(empty.data, []);
+  assert.deepEqual(empty.meta.page, { number: 1, size: 50, total: 0 });
+});
+
+test('list: a page past the end is empty, even though NEO rewinds and answers its first page', async () => {
+  // Etendo's datasource answers page 1 (startRow 0) when the requested start is beyond the data.
+  const { controller } = listing({ startRow: 0, endRow: 9, totalRows: 25, data: rows(10) });
+  const result = await controller.list('contacts', request, { page: { number: '9', size: '10' } }) as any;
+  assert.deepEqual(result.data, []);
+  assert.deepEqual(result.meta.page, { number: 9, size: 10, total: 25 });
+  assert.equal(result.links.next, null);
+  assert.equal(result.links.prev, '/api/v1/contacts?page[number]=3&page[size]=10');
+  assert.equal(result.links.last, '/api/v1/contacts?page[number]=3&page[size]=10');
+});
+
+test('list: without a trustworthy totalRows, total and last are omitted and next follows a full page', async () => {
+  for (const totalRows of [undefined, null, 'many', -1, 1.5, 3]) {
+    const full = await listing({ startRow: 0, endRow: 9, ...(totalRows === undefined ? {} : { totalRows }), data: rows(10) }).controller.list('contacts', request, { page: { size: '10' } }) as any;
+    assert.deepEqual(full.meta.page, { number: 1, size: 10 }, `totalRows ${String(totalRows)}`);
+    assert.equal('last' in full.links, false);
+    assert.equal(full.links.next, '/api/v1/contacts?page[number]=2&page[size]=10');
+  }
+  const short = await listing({ startRow: 0, endRow: 3, data: rows(4) }).controller.list('contacts', request, { page: { size: '10' } }) as any;
+  assert.equal(short.links.next, null);
+});
+
+test('list: a NEO answer longer than the page is cut to the page size', async () => {
+  const result = await listing({ startRow: 0, endRow: 14, totalRows: 15, data: rows(15) }).controller.list('contacts', request, { page: { size: '10' } }) as any;
+  assert.equal(result.data.length, 10);
+});
+
+test('child list validates its own query, keeps parentId and builds links on the master path', async () => {
+  const { urls, controller } = listing({ startRow: 0, endRow: 1, totalRows: 2, data: [{ id: 'k-1', phone: '1' }, { id: 'k-2', phone: '2' }] });
+  const result = await controller.listChild('contacts', 'bp 1', 'contacts', request, { filter: { phone: { contains: '5' } }, sort: 'phone', page: { size: '2' } }) as any;
+  const params = neoParams(urls[0]);
+  assert.equal(params.get('parentId'), 'bp 1');
+  assert.equal(params.get('_endRow'), '1');
+  assert.equal(params.get('_sortBy'), 'phone,id');
+  assert.deepEqual(JSON.parse(params.get('criteria')!), [{ fieldName: 'phone', operator: 'iContains', value: '5' }]);
+  assert.equal(result.data.length, 2);
+  assert.equal(result.links.self, '/api/v1/contacts/bp%201/contacts?filter[phone][contains]=5&sort=phone&page[number]=1&page[size]=2');
+
+  // The master's own fields are not the child's, and parentId cannot be overridden from the query.
+  assert.equal((await statusAndErrors(controller.listChild('contacts', 'bp-1', 'contacts', request, { filter: { name: 'x' } }))).errors?.[0].source.parameter, 'filter[name]');
+  assert.equal((await statusAndErrors(controller.listChild('contacts', 'bp-1', 'contacts', request, { parentId: 'other' } as any))).errors?.[0].source.parameter, 'parentId');
+  assert.equal(urls.length, 1);
+});
+
+test('a single-record read is not a list and carries no pagination', async () => {
+  const { controller } = listing({ data: [rows(1)[0]] });
+  const single = await controller.get('contacts', 'c-1', request) as any;
+  assert.equal(single.links, undefined);
+  assert.equal(single.meta, undefined);
 });
