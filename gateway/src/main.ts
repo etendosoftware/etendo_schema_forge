@@ -93,9 +93,9 @@ Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...
 - \`404\`: the resource or record does not exist.
 - \`406\` / \`415\`: the \`Accept\` or \`Content-Type\` header is not JSON:API (or JSON).
 - \`409\`: the \`type\`/\`id\` does not match the URL, or the record is in use.
-- \`412\`: the record changed since it was read (\`If-Match\` does not match its current version).
+- \`412\`: the record changed since it was read (\`If-Match\` does not match its current version). Error codes: \`stale_record\` (the record changed), \`precondition_failed\` (\`If-Match\` is not a valid ETag).
 - \`422\`: Etendo refused the request (validation).
-- \`428\`: the update did not send \`If-Match\`.
+- \`428\`: the update did not send \`If-Match\`. Error code: \`precondition_required\`.
 - \`429\`: the API key exceeded its rate limit; wait \`Retry-After\` seconds.
 - \`502\`: Etendo failed or could not complete the upstream request (any 5xx); no internal details are returned. When \`meta.hint\` is present the write may already be saved: read the record before re-sending.
 - \`503\`: Etendo is temporarily unavailable; retry later.
