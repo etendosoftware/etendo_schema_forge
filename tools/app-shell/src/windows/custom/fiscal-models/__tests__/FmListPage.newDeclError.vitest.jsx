@@ -141,6 +141,21 @@ describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () =
     expect(container.querySelectorAll('tbody tr').length).toBe(0);
   });
 
+  it.each([
+    ['duplicate_key', 'fm.list.new_decl_draft_exists'],
+    ['record_in_use', 'fm.list.new_decl_failed'],
+  ])('maps a 409 with code %s to the %s toast', async (code, expected) => {
+    globalThis.fetch = mockFetch({ postStatus: 409, postBody: { error: { message: 'x', status: 409, code } } });
+    render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    openNewDeclModal();
+    fireEvent.click(screen.getByTestId('new-decl-confirm'));
+
+    const { toast } = await import('sonner');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expected));
+  });
+
   it('shows an error toast for a generic 500 failure too, not just 409', async () => {
     globalThis.fetch = mockFetch({ postStatus: 500 });
     render(<FmListPage declarations={[]} {...withCatalogProps} />);

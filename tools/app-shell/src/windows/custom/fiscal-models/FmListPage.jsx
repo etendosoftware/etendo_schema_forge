@@ -30,6 +30,7 @@ import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch } from '@/auth/api.js';
+import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 // Real-mode only: throws on fetch failure instead of falling back to mock data.
 // Module-level helper (not the component/hook), so it uses the ambient `apiFetch`
 // bound to the session, taking the explicit `token` it already receives as an
@@ -867,9 +868,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         baseUrl: '',
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(r => r.ok ? r.json() : parseBackendError(r).then(e => Promise.reject({ status: r.status, code: e.code })))
         .then(created => setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]))
-        .catch((status) => {
+        // The rejection above is an object `{status, code}`, not a bare status number.
+        .catch(({ status, code } = {}) => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a
           // closed modal with no created row and no explanation. Mirrors the exact toast pattern
@@ -883,7 +885,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           // response body's `error.message`, which is backend English text, not localized)
           // unambiguously identifies "a draft already exists for this period". Every other
           // failure (network error, 500, any other status) keeps the original generic toast.
-          if (status === 409) {
+          // ETP-5782: the hand-written guard answers a code-less 409; a classified 409 (duplicate_key
+          // included) from elsewhere in the chain must not claim "draft exists" unless it is one.
+          if (isDuplicateConflict(status, code)) {
             toast.error(t('fm.list.new_decl_draft_exists')
               ?? 'No se puede crear la declaración. Ya existe una declaración en borrador para el periodo seleccionado.');
             return;

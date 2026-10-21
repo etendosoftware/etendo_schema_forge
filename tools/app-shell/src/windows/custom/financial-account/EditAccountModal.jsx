@@ -26,6 +26,7 @@ import { LastSyncLabel } from '@/components/financial-accounts/LastSyncLabel.jsx
 import { normalizeIban } from '@/lib/validateIban.js';
 import {
   translateBackendError,
+  isDuplicateConflict,
   extractBackendMessageKeys,
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
@@ -1315,7 +1316,9 @@ export function EditAccountModal({
     // discriminator; the status is not.
     if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
       setError(ui('financeAccountsEditStaleRecord'));
-    } else if (err.status === 409) {
+    } else if (isDuplicateConflict(err.status, err.code)) {
+      // ETP-5782: only `duplicate_key` (or a legacy code-less 409) means "name taken"; any other
+      // 409 (record in use, retryable conflict) falls through to the server's own message.
       setError(ui('financeAccountsNewNameExists'));
     } else {
       // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
@@ -1325,6 +1328,7 @@ export function EditAccountModal({
       // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
       // another tab, an API/MCP-shaped body).
       toast.error(translateBackendError(err.message, ui, {
+        code: err.code,
         messageKeys: extractBackendMessageKeys(err.body),
         messageParams: extractBackendMessageParams(err.body),
       }) || ui('financeAccountsEditError'));
