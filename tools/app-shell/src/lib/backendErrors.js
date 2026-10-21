@@ -424,6 +424,11 @@ const BACKEND_ERROR_KEY_MAP = {
   // Consumption pre-check (ETP-5445). Mapped to
   // the same generic retry-later copy as the other two costing messages in BACKEND_ERROR_MAP.
   NotCalculatedCost: 'backendError.costNotCalculated',
+  // ETP-5714 — com.etendoerp DocumentPostingService/CostingStall: a post refused because costing is
+  // stalled (an uncalculated transaction has waited for minutes, so the 30 s retry of
+  // NotCalculatedCost would never succeed). AD_MESSAGE ETGO_CostCalculationStalled, English-only in
+  // the module; the answer is 422 with error "costCalculationStalled" and retryable false.
+  ETGO_CostCalculationStalled: 'backendError.costCalculationStalled',
   // ETP-5529 — core `OtherPostingProcessActive` ("This record is being posted by another
   // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
   // when another posting process holds the record (or AcctServer cannot take its lock).

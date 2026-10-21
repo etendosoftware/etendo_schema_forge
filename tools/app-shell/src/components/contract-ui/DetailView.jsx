@@ -66,7 +66,8 @@ const NO_GATE_EXCLUSIONS = Object.freeze([]);
 
 import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
-import { deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { buildChildRowDeleteFn } from '@/lib/batchDelete.js';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { apiFetch } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
@@ -105,9 +106,9 @@ export {
  * Extracted from inline JSX to avoid the nested-ternary anti-pattern Sonar
  * S3358 was flagging inside the className templates.
  */
-function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
+function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null, sidebarPaddingOverride = null) {
   const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
+  if (hasSidebar) return sidebarPaddingOverride ?? ((isInline || compact) ? 'px-2 pb-2' : 'pr-2');
   if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
   return isInline ? '' : (paddingXOverride ?? 'px-6');
 }
@@ -131,14 +132,14 @@ export function getTabStripBleedClassName({
   sidebarContent,
   sidebarAboveTabsOnly,
   compactSidebarPadding,
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
 } = {}) {
   const padding = detailContentPadding(
     linesLayout,
     !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
     'content',
     compactSidebarPadding,
-    formScrollPaddingX,
+    formScrollPaddingX, sidebarFormScrollPaddingX,
   );
   return padding
       .split(/\s+/)
@@ -260,7 +261,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  * @param {object} deps.secondaryHooks - per-tab child entity hooks
  * @param {Function} deps.ui - i18n label resolver
  * @param {Function} deps.extractErrorMessage - response error extractor
- * @param {Function} deps.confirmDelete - delete confirmation prompt
+ * @param {Function} deps.requestBatchDelete - `useBatchDeleteDialog`'s request fn (bulk delete)
  * @param {object} deps.secondaryInlineLinesRefs - refs to inline line tables
  * @param {object} deps.selectedSecondaryLine - currently open secondary line
  * @param {object} deps.secondaryLineEdits - pending edits for the open line
@@ -270,17 +271,16 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  * @param {Function} deps.setSelectedSecondaryLine
  * @param {Function} deps.setSecondaryLineEdits
  * @param {Function} deps.setSecondaryLineEditColumns
- * @param {Function} deps.setSecondaryDeleting
  * @param {Function} deps.setSecondarySelectedRows
  * @returns {{onAdd: Function, onSaveLine: Function, onDelete: Function}}
  */
 export function buildSecondaryLineHandlers(deps) {
   const {
     st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
-    extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
+    extractErrorMessage, requestBatchDelete, secondaryInlineLinesRefs,
     selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
     setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
-    setSecondaryLineEdits, setSecondaryLineEditColumns, setSecondaryDeleting,
+    setSecondaryLineEdits, setSecondaryLineEditColumns,
     setSecondarySelectedRows,
   } = deps;
 
@@ -330,44 +330,26 @@ export function buildSecondaryLineHandlers(deps) {
     }
   };
 
-  const onDelete = async () => {
-    if (!(await confirmDelete())) return;
-    setSecondaryDeleting(prev => ({...prev, [st.key]: true}));
+  // ETP-5758 — opens the shared bulk-delete dialog instead of awaiting a confirm prompt and
+  // running the batch after it had closed: the dialog now stays open and locked (spinner,
+  // "Eliminando…") until every DELETE settles. Outcome handling is unchanged — succeeded rows
+  // leave the cache, the side panel closes if it showed one of them, the whole selection is
+  // cleared, and the single outcome toast (fired by the hook) names a one-row refusal's reason.
+  const onDelete = () => {
     const rows = secondarySelectedRows[st.key] ?? [];
-    try {
-      // ETP-4656 — shared triage (Promise.allSettled + succeeded/failed partition)
-      // and single-toast-per-outcome selection, same helpers ListView/Financial
-      // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
-      // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
-      // stacked-toast pattern this function predates.
-      const { succeeded, failed, errors } = await runBatchDelete(rows, (row) => {
-        const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
-            || `${apiBaseUrl}/${st.key}/${row.id}`;
-        return apiFetch(childUrl, {
-          method: 'DELETE',
-          token, baseUrl: '',
-        }).then(async res => { // reason + 4xx status travel for the toast (as useBulkRowDelete)
-          if (!res.ok) throw Object.assign(new Error(await extractErrorMessage(res)), { status: res.status });
-          return row;
-        });
-      });
-
-      for (const row of succeeded) {
-        secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
-        if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
-          setSelectedSecondaryLine(null);
+    return requestBatchDelete(rows, {
+      deleteOneFn: buildChildRowDeleteFn({ api, entityKey: st.key, apiBaseUrl, token, extractErrorMessage }),
+      onOutcome: (succeeded) => {
+        for (const row of succeeded) {
+          secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
+          if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
+            setSelectedSecondaryLine(null);
+          }
         }
-      }
-
-      secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
-      setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
-
-      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: rows.length });
-    } catch (err) {
-      toast.error(err.message || ui('networkError'));
-    } finally {
-      setSecondaryDeleting(prev => ({...prev, [st.key]: false}));
-    }
+        secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
+        setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
+      },
+    });
   };
 
   return { onAdd, onSaveLine, onDelete };
@@ -724,12 +706,12 @@ export function getDetailContentContainerClassName({
   compactSidebarPadding,
   primaryTabs,
   activePrimaryTab,
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
   contentOverflow = 'auto',
 } = {}) {
   const defaultOverflowCls = contentOverflow === 'hidden' ? 'overflow-hidden' : 'overflow-auto pb-2';
   const overflowCls = linesLayout === 'inlineEditable' ? 'flex flex-col overflow-y-auto' : defaultOverflowCls;
-  return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
+  return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
 }
 
 export function getLinesTabsSectionClassName(linesLayout) {
@@ -1036,7 +1018,7 @@ export function DetailView({
   linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
   tabsBarPaddingX = 'px-6',
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
   contentOverflow = 'auto',
   formCardPadding = 'p-6',
   primaryTabsVariant = 'default',
@@ -1492,7 +1474,6 @@ export function DetailView({
   const [secondarySelectedRows, setSecondarySelectedRows] = useState({});
   const [secondaryBarVisible, setSecondaryBarVisible] = useState({});
   const [secondaryBarClosing, setSecondaryBarClosing] = useState({});
-  const [secondaryDeleting, setSecondaryDeleting] = useState({});
   // When the bottom section (Docs/Notes/Totals) grows because the user expanded
   // an inner block (e.g., "Añadir descuento total"), the lines area shrinks via
   // flex-1, and rows previously at the bottom of the visible scroll get covered.
@@ -1623,7 +1604,31 @@ export function DetailView({
     setSecondaryBarVisible({});
     setSecondaryBarClosing({});
   }, [activeTab]);
-  const [deletingChildren, setDeletingChildren] = useState(false);
+  // ETP-5758 — ONE bulk-delete dialog for every lines grid of this document (primary lines, in
+  // both layouts, and each secondary tab). Each request carries its own endpoint + outcome
+  // handling (`requestBatchDelete(rows, { deleteOneFn, onOutcome })`), and the dialog stays open
+  // and locked until the batch settles — the former promise-based `confirmDelete` closed BEFORE
+  // the DELETEs ran. `confirmDelete` remains for single-line deletes only.
+  const {
+    requestBatchDelete: requestLineBatchDelete,
+    batchDeleteDialog: lineBatchDeleteDialog,
+    deleting: deletingChildren,
+  } = useBatchDeleteDialog({ testIdScope: 'lines-bulk-delete' });
+  // `clearTableSelection` mirrors what each primary-lines bar did before: the inlineEditable
+  // toolbar also reset the table's own checkboxes through its ref, the classic bar did not.
+  const requestPrimaryLinesBulkDelete = ({ clearTableSelection = false } = {}) => {
+    requestLineBatchDelete(selectedChildRows, {
+      deleteOneFn: buildChildRowDeleteFn({ api, entityKey: detailEntity, apiBaseUrl, token, extractErrorMessage }),
+      onOutcome: (succeeded) => {
+        for (const row of succeeded) {
+          hook.handleDeleteChild(row.id);
+          if (selectedLine?.id === row.id) setSelectedLine(null);
+        }
+        if (clearTableSelection) inlineLinesRef.current?.clearSelection?.();
+        setSelectedChildRows([]);
+      },
+    });
+  };
 
   const [lineEdits, setLineEdits] = useState(null);
   const [lineEditColumns, setLineEditColumns] = useState({});
@@ -3021,12 +3026,12 @@ export function DetailView({
             {isCustomPrimaryTabActive(primaryTabs, activePrimaryTab) ? (() => {
               const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
               return activeTab?.Panel ? (
-                <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX)}`}>
+                <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX)}`}>
                   <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} onPersisted={hook.applyPersistedFields} />
                 </div>
               ) : null;
             })() : null}
-            <div className={getDetailContentContainerClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, primaryTabs, activePrimaryTab, formScrollPaddingX, contentOverflow })}>
+            <div className={getDetailContentContainerClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, primaryTabs, activePrimaryTab, formScrollPaddingX, sidebarFormScrollPaddingX, contentOverflow })}>
               {resolveHeaderContent(headerContent, data, { calloutResult, blockingCondition: hook.blockingCondition, completionSignal: hook.completionSignal, recordId: data?.id || recordId })}
               {(() => {
                 const slotProps = {
@@ -3208,7 +3213,7 @@ export function DetailView({
                       className={getLinesTabsSectionClassName(linesLayout)}
                       onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
                     >
-                      <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
+                      <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
                         <DetailTabStrip
                           tabs={tabs}
                           activeIndex={activeTab}
@@ -3276,8 +3281,7 @@ export function DetailView({
                                   linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
                                   detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess,
                                   executeDetailProcessImpl, detailProcessDeps, tMenu, deletingChildren,
-                                  setDeletingChildren, confirmDelete, apiBaseUrl, token, hook,
-                                  selectedLine, setSelectedLine, setSelectedChildRows,
+                                  onBulkDelete: () => requestPrimaryLinesBulkDelete(), setSelectedChildRows,
                                 })}
                                 <DetailTable
                                   ref={inlineLinesRef}
@@ -3495,30 +3499,7 @@ export function DetailView({
                                           type="button"
                                           disabled={deletingChildren}
                                           title={ui('delete')}
-                                          onClick={async () => {
-                                            if (!(await confirmDelete())) return;
-                                            setDeletingChildren(true);
-                                            try {
-                                              // ETP-4656 — shared triage + single-toast-per-outcome (see
-                                              // batchDelete.js); replaces the old two-independent-if
-                                              // (recordsDeleted + recordsCouldNotBeDeleted) stacked-toast
-                                              // pattern this bar predates.
-                                              const { succeeded, failed } = await deleteSelectedChildRows({
-                                                selectedChildRows, api, detailEntity, apiBaseUrl, token,
-                                              });
-                                              for (const row of succeeded) {
-                                                hook.handleDeleteChild(row.id);
-                                                if (selectedLine?.id === row.id) setSelectedLine(null);
-                                              }
-                                              inlineLinesRef.current?.clearSelection?.();
-                                              setSelectedChildRows([]);
-                                              toastBatchDeleteOutcome(ui, { succeeded, failed, total: selectedChildRows.length });
-                                            } catch (err) {
-                                              toast.error(err.message || ui('networkError'));
-                                            } finally {
-                                              setDeletingChildren(false);
-                                            }
-                                          }}
+                                          onClick={() => requestPrimaryLinesBulkDelete({ clearTableSelection: true })}
                                           aria-label={ui('delete')}
                                           className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                                         >
@@ -3695,10 +3676,10 @@ export function DetailView({
                           if (!isCapabilityVisible(capabilities, st.visibleWhenCapability) || (!isActiveTab && !st.Panel)) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
                             st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
-                            extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
+                            extractErrorMessage, requestBatchDelete: requestLineBatchDelete, secondaryInlineLinesRefs,
                             selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
                             setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
-                            setSecondaryLineEdits, setSecondaryLineEditColumns, setSecondaryDeleting,
+                            setSecondaryLineEdits, setSecondaryLineEditColumns,
                             setSecondarySelectedRows,
                           });
                           return (
@@ -3748,7 +3729,7 @@ export function DetailView({
                                 hideChevron={hideAddLineChevron}
                                 secondaryBarVisible={secondaryBarVisible}
                                 secondaryBarClosing={secondaryBarClosing}
-                                secondaryDeleting={secondaryDeleting}
+                                secondaryDeleting={deletingChildren ? {[st.key]: true} : {}}
                                 secondarySelectedRows={secondarySelectedRows}
                                 setSecondarySelectedRows={setSecondarySelectedRows}
                                 setCustomModalState={setCustomModalState}
@@ -4086,6 +4067,8 @@ export function DetailView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* ETP-5758 — bulk delete of lines (primary + secondary tabs); see requestLineBatchDelete. */}
+      {lineBatchDeleteDialog}
       <Dialog
         open={Boolean(pendingDeleteConfirm)}
         onOpenChange={(open) => {
