@@ -41,3 +41,20 @@ test('publishes fiscal monitors as read-only resources in one OpenAPI group', ()
     assert.deepEqual(manifest.entities[resource].processes, []);
   }
 });
+
+test('derives the complete action from the draft-mode completion flow, never for fiscal monitors', () => {
+  const salesOrder = manifest.entities['sales-order'].processes;
+  assert.deepEqual(salesOrder.find((p: any) => p.action === 'complete'), {
+    action: 'complete',
+    method: 'POST',
+    path: '/header/:id/action/documentAction',
+    body: { docAction: 'CO' },
+  });
+  assert.ok(manifest.entities['sales-invoice'].processes.some((p: any) => p.action === 'complete'));
+  const receipt = manifest.entities['return-material-receipt'].processes.map((p: any) => p.action);
+  assert.deepEqual(receipt, ['complete', 'process-receipt']);
+  for (const [name, entity] of Object.entries(manifest.entities) as Array<[string, any]>) {
+    if (entity.parent || entity.group === 'Fiscal Monitors') assert.deepEqual(entity.processes, [], name);
+    for (const process of entity.processes) assert.ok(process.action, `${name} process without a public action name`);
+  }
+});

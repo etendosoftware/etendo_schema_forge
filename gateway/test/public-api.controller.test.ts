@@ -376,3 +376,83 @@ test('an empty answer to a write is a 502, never a 404 that would deny a possibl
   assert.equal((await statusAndErrors(controllerAnswering(200, empty).patch('product', 'p-1', { name: 'x' }, request))).status, 502);
   assert.equal((await statusAndErrors(controllerAnswering(200, empty).update('product', 'p-1', { name: 'x' }, request))).status, 502);
 });
+
+// ---- business actions (ETP-5783) ----
+
+const actionSchema = (): PublicApiSchema => {
+  const s = structuredClone(schema) as any;
+  s.entities.salesDoc = {
+    publicApi: true, specName: 'sales-doc', entityName: 'header', operations: ['GET', 'LIST'],
+    fields: { id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', handlerId: null },
+      documentStatus: { publicApi: true, direction: 'out', internalPath: 'documentStatus', type: 'passthrough', handlerId: null } },
+    processes: [{ action: 'complete', method: 'POST', path: '/header/:id/action/documentAction', body: { docAction: 'CO' } }],
+  };
+  s.entities.salesDocLine = {
+    publicApi: true, specName: 'sales-doc', entityName: 'line', operations: ['GET', 'LIST'], fields: {},
+    parent: { resource: 'salesDoc', entityName: 'header', foreignKey: 'order', pathSegment: 'lines' },
+    processes: [{ action: 'complete', method: 'POST', path: '/line/:id/action/documentAction', body: { docAction: 'CO' } }],
+  };
+  return s;
+};
+
+function actionFetch(actionAnswer: () => Response, readAnswer: () => Response) {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fn = async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return url.includes('/action/') ? actionAnswer() : readAnswer();
+  };
+  return { calls, fn: fn as typeof fetch };
+}
+
+const okRead = () => new Response(JSON.stringify({ response: { data: [{ id: 'd1', documentStatus: 'CO' }] } }), { status: 200 });
+
+test('runAction forwards the manifest path and body, then re-reads the record with meta.message', async () => {
+  const { calls, fn } = actionFetch(() => new Response(JSON.stringify({ status: 'success', message: 'Done' }), { status: 200 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  const result = await controller.runAction('salesDoc', 'd/1', 'complete', { neoJwt: 'jwt' } as any);
+  assert.equal(calls[0].url, 'http://neo.local/etendo/sws/neo/sales-doc/header/d%2F1/action/documentAction');
+  assert.equal(calls[0].init?.method, 'POST');
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { docAction: 'CO' });
+  assert.equal(calls[1].url, 'http://neo.local/etendo/sws/neo/sales-doc/header/d%2F1');
+  assert.equal(calls[1].init?.method, 'GET');
+  assert.equal((result as any).data.attributes.documentStatus, 'CO');
+  assert.deepEqual((result as any).meta, { message: 'Done' });
+});
+
+test('runAction reports alreadyApplied from Etendo in meta', async () => {
+  const { fn } = actionFetch(() => new Response(JSON.stringify({ status: 'success', message: 'Already', alreadyApplied: true }), { status: 200 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  const result = await controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt' } as any);
+  assert.deepEqual((result as any).meta, { message: 'Already', alreadyApplied: true });
+});
+
+test('runAction answers 200 with a hint when the record cannot be re-read after the action', async () => {
+  const { fn } = actionFetch(() => new Response(JSON.stringify({ status: 'success', message: 'Done' }), { status: 200 }), () => new Response('{}', { status: 500 }));
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  const result = (await controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt' } as any)) as any;
+  assert.equal(result.data, undefined);
+  assert.equal(result.meta.message, 'Done');
+  assert.match(result.meta.hint, /action succeeded/);
+});
+
+test('runAction rejects an unknown action and a child resource with 404', async () => {
+  const { calls, fn } = actionFetch(() => new Response('{}', { status: 200 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  for (const [entity, action] of [['salesDoc', 'void'], ['salesDocLine', 'complete'], ['nope', 'complete']]) {
+    await assert.rejects(
+      () => controller.runAction(entity, 'd1', action, { neoJwt: 'jwt' } as any),
+      (error: unknown) => error instanceof HttpException && error.getStatus() === 404,
+    );
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('runAction passes an Etendo refusal through and does not re-read', async () => {
+  const { calls, fn } = actionFetch(() => new Response(JSON.stringify({ status: 'error', error: 'business_rule', message: 'Cannot complete' }), { status: 422 }), okRead);
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', fn);
+  await assert.rejects(
+    () => controller.runAction('salesDoc', 'd1', 'complete', { neoJwt: 'jwt' } as any),
+    (error: unknown) => error instanceof HttpException && error.getStatus() === 422,
+  );
+  assert.equal(calls.length, 1);
+});

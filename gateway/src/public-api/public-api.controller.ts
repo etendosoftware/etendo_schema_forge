@@ -34,6 +34,9 @@ import {
 } from './json-api-http.ts';
 import { mapAttributes, mapRelationships, resolveResourceObject } from './json-api-request.ts';
 
+/** A public action declared in the manifest's `processes`. */
+type PublicApiProcess = { action?: string; method?: string; path: string; body?: Record<string, unknown> };
+
 /** NeoServlet answers a record, a list or nothing: always hand back a list of records. */
 function asRecords(data: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(data)) return data as Array<Record<string, unknown>>;
@@ -176,6 +179,49 @@ export class PublicApiController {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'DELETE');
     return this.forward(entityName, req, 'DELETE', undefined, id);
+  }
+
+  /**
+   * Runs a declared business action (for example `complete`) on a top-level
+   * record. The action list is the manifest's `processes`; the request body is
+   * ignored in v1. Answers the record re-read after the action plus NEO's message.
+   */
+  @Post(':entityName/:id/actions/:action')
+  @HttpCode(200)
+  async runAction(
+    @Param('entityName') entityName: string,
+    @Param('id') id: string,
+    @Param('action') action: string,
+    @Req() req: { neoJwt: string },
+  ) {
+    this.assertTopLevel(entityName);
+    const entity = this.entityOrThrow(entityName);
+    const declared = (entity as { processes?: PublicApiProcess[] }).processes?.find(
+      (process) => process.action === action && process.method?.toUpperCase() === 'POST',
+    );
+    if (!declared) throw new NotFoundException(`Unknown action ${action} for ${entityName}`);
+    const url = `${this.neoBaseUrl}/sws/neo/${entity.specName}${declared.path.replace(':id', encodeURIComponent(id))}`;
+    const response = await this.fetchImpl(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${req.neoJwt}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(declared.body ?? {}),
+    });
+    if (!response.ok) {
+      throw upstreamException(response.status, await response.json().catch(() => null));
+    }
+    const answer = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    const meta: Record<string, unknown> = {};
+    if (typeof answer?.message === 'string') meta.message = answer.message;
+    if (answer?.alreadyApplied === true) meta.alreadyApplied = true;
+    // The action is already committed: a failed re-read must not turn it into an error.
+    try {
+      const document = (await this.forward(entityName, req, 'GET', undefined, id)) as Record<string, unknown>;
+      return { ...document, meta };
+    } catch {
+      return {
+        meta: { ...meta, hint: 'The action succeeded but the record could not be read back. Read the record to see its current state.' },
+      };
+    }
   }
 
   private entityOrThrow(entityName: string): PublicApiEntity & { entityName?: string } {

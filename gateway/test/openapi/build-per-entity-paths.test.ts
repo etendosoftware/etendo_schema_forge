@@ -196,3 +196,21 @@ test('a single-record response documents data as one object and a collection as 
   assert.equal(single.type, 'object');
   assert.equal(list.type, 'array');
 });
+
+test('declares one POST path per top-level action and none for children', () => {
+  const withActions = structuredClone(schema) as any;
+  withActions.entities.product.processes = [{ action: 'complete', method: 'POST', path: '/header/:id/action/documentAction', body: { docAction: 'CO' } }];
+  withActions.entities.child = {
+    publicApi: true, specName: 'product', operations: ['GET', 'LIST'], fields: {},
+    parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'p' },
+    processes: [{ action: 'complete', method: 'POST', path: '/x/:id/action/documentAction' }],
+  };
+  const paths = buildPerEntityOpenApiPaths(withActions);
+  const action = (paths['/api/v1/product/{id}/actions/complete'] as any).post;
+  assert.equal(action.operationId, 'complete_product');
+  assert.deepEqual(action.security, [{ bearerAuth: [] }]);
+  assert.ok(action.responses['200'] && action.responses['403'] && action.responses['422']);
+  assert.deepEqual(action.parameters.map((p: any) => p.name), ['id']);
+  assert.equal(Object.keys(paths).filter((p) => p.includes('/actions/')).length, 1);
+  assert.equal(paths['/api/v1/businessPartner/{id}'] && Object.keys(paths).some((p) => p.startsWith('/api/v1/businessPartner/{id}/actions')), false);
+});
