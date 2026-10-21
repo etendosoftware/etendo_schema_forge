@@ -817,3 +817,15 @@ describe('wiring guardrails', () => {
     assert.match(workflow, /group: tests-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
   });
 });
+
+describe('run-sonar.sh scanner locale', () => {
+  const runSonar = readFileSync(join(REPO_ROOT, 'run-sonar.sh'), 'utf8');
+
+  it('launches sonar-scanner under a forced UTF-8 locale (LC_ALL=C aborts on non-ASCII paths)', () => {
+    assert.match(runSonar, /LANG="\$SCANNER_LOCALE" LC_ALL="\$SCANNER_LOCALE" sonar-scanner /);
+  });
+
+  it('falls back to en_US.UTF-8, the locale macOS has', () => {
+    assert.match(runSonar, /SCANNER_LOCALE="en_US\.UTF-8"/);
+  });
+});
