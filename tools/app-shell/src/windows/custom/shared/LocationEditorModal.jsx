@@ -34,6 +34,16 @@ const SELECTOR_PAGE_SIZE = 120;
 // ETP-5806 — length of C_Location.Address1/Address2, NOT the 70 of EM_OBSEPA_StrtNm.
 const ADDRESS_LINE_MAX_LENGTH = 60;
 
+// ETP-5806 follow-up — DB column lengths of the 3 structured SEPA fields themselves
+// (org.openbravo.sepa.iso20022's AD_COLUMN.FIELDLENGTH for EM_OBSEPA_StrtNm/BldgNb/BldgNm).
+// Enforced here as `maxLength` so the user can never type past what the backend can store —
+// the backend (StructuredAddressComposer#fieldsExceedingMaxLength) is the real source of truth
+// and rejects an over-length value with a 400; without this client-side cap a value sent through
+// another path (e.g. paste) used to reach OBDal.flush() as a raw data-truncation SQL error (500).
+const STREET_NAME_MAX_LENGTH = 70;
+const BUILDING_NUMBER_MAX_LENGTH = 16;
+const BUILDING_NAME_MAX_LENGTH = 35;
+
 /** Concatenates two parts with `sep` only when BOTH are non-empty — mirrors Java's `append`. */
 function appendPart(base, sep, part) {
     if (!base) return part;
@@ -1242,7 +1252,7 @@ export default function LocationEditorModal({
                             {/* Calle */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('streetNameLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
-                                <input autoFocus type="text" value={form.streetName} onChange={e => setField('streetName', e.target.value)} data-testid="location-field-streetName" style={INPUT} />
+                                <input autoFocus type="text" maxLength={STREET_NAME_MAX_LENGTH} value={form.streetName} onChange={e => setField('streetName', e.target.value)} data-testid="location-field-streetName" style={INPUT} />
                                 {attemptedSave && form.streetName.trim() === '' && (
                                     <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
                                 )}
@@ -1252,14 +1262,14 @@ export default function LocationEditorModal({
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
                                 <div>
                                     <div style={FIELD_LABEL}>{ui('buildingNumberLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
-                                    <input type="text" value={form.buildingNumber} onChange={e => setField('buildingNumber', e.target.value)} data-testid="location-field-buildingNumber" style={INPUT} />
+                                    <input type="text" maxLength={BUILDING_NUMBER_MAX_LENGTH} value={form.buildingNumber} onChange={e => setField('buildingNumber', e.target.value)} data-testid="location-field-buildingNumber" style={INPUT} />
                                     {attemptedSave && form.buildingNumber.trim() === '' && (
                                         <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
                                     )}
                                 </div>
                                 <div>
                                     <div style={FIELD_LABEL}>{ui('buildingNameLabel')}</div>
-                                    <input type="text" value={form.buildingName} onChange={e => setField('buildingName', e.target.value)} data-testid="location-field-buildingName" style={INPUT} />
+                                    <input type="text" maxLength={BUILDING_NAME_MAX_LENGTH} value={form.buildingName} onChange={e => setField('buildingName', e.target.value)} data-testid="location-field-buildingName" style={INPUT} />
                                 </div>
                             </div>
 
