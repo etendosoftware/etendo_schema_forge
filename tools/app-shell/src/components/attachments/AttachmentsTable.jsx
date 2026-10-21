@@ -13,7 +13,9 @@ const UPLOADING_ID_PREFIX = 'uploading:';
 
 // ETP-5833 — explicit width for both date columns: this table lives in a narrow side panel and its
 // labels are short, so it keeps the compact 130px instead of the 176px date tier (which pushed the
-// row's download action out of reach).
+// row's download action out of reach). The headers wrap (`headerWrap`) instead of widening the
+// column: a list header otherwise floors its column at the label width (ETP-5833 QA), and
+// "Última actualización" would push it back past 160px.
 const ATTACHMENT_DATE_WIDTH_PX = 130;
 
 const DATE_PARTS = new Set(['weekday', 'day', 'month']);
@@ -251,6 +253,7 @@ export default function AttachmentsTable({
       label: ui('attachmentsUploadedAt'),
       type: 'date',
       minWidth: ATTACHMENT_DATE_WIDTH_PX,
+      headerWrap: true,
       dot: false,
       render: (row) => (row.uploading ? null : formatAttachmentDate(row.uploadedAt, locale)),
     },
@@ -259,6 +262,7 @@ export default function AttachmentsTable({
       label: ui('attachmentsUpdatedAt'),
       type: 'date',
       minWidth: ATTACHMENT_DATE_WIDTH_PX,
+      headerWrap: true,
       dot: false,
       render: (row) => (row.uploading ? null : formatAttachmentDate(row.updatedAt, locale)),
     },

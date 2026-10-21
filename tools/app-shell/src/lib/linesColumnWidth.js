@@ -17,11 +17,14 @@ import { isPostedStatusColumn } from './postedStatus.js';
 // ETP-5833 — per-type default sizing AND expansion. Only DESCRIPTIVE columns (`string`/`text`,
 // the leading selector) absorb leftover width when the grid has one (else the first unpinned column does, see `absorberIndex`); every other type is fixed (`0 0 <basis>`), so a
 // date, a number or a status never stretches to the width of a description. Bases are constants
-// per type, never measured from content, so sorting or paging cannot move a column.
+// per type, never measured from content, so sorting or paging cannot move a column. In a plain
+// list the rendered header label also floors the column (`listHeaderMinWidthPx`), which depends
+// on label + locale only.
 //  - `date` (176): the value (dd/mm/yyyy ~80px + due-date dot) needs far less, but a LIST header
 //    never wraps (`whitespace-nowrap` + ellipsis), so the basis is sized for the longest
 //    representative translated header ("Fecha de presupuesto", ~129px) + 24px padding + the sort icon.
-//    Measured in the browser at 130px the label was cut at 106px.
+//    Measured in the browser at 130px the label was cut at 106px. A longer label is covered by the
+//    list header floor (`listHeaderMinWidthPx`), not by raising this basis.
 //  - `number` (152): the type the generator emits for every integer/decimal/quantity/price field
 //    (`mapFieldType`); it used to fall to the generic 120px while `quantity` got 152.
 //  - `status` (184): StatusTag pill ("Cobro depositado" is ~153px + padding, ETP-5510). Lines and
@@ -53,6 +56,12 @@ const FIXED_BASIS_PX = {
 // plain-list HTML table (`columnMinWidthPx`, used exclusively by DataTable list
 // mode) narrows to this basis. An explicit `col.minWidth` still wins.
 const PERCENT_LIST_BASIS_PX = 104;
+
+// ETP-5833 (QA) — plain-list-only amount basis, same split as PERCENT_LIST_BASIS_PX. The 172px
+// FIXED_BASIS_PX tier is sized for an editable amount INPUT in a lines grid; a read-only list cell
+// ("1.234.567,89 €", ~95px + 24px padding) needs far less, and the header label is protected by the
+// header floor (`listHeaderMinWidthPx`), not by this basis. Lines (`columnFlex`) keep 172.
+const AMOUNT_LIST_BASIS_PX = 130;
 
 // Descriptive columns: the only types that absorb the leftover width of a lines grid.
 const ELASTIC_BASIS_PX = {
@@ -186,25 +195,125 @@ export function columnFlex(col, idx) {
  * display table — keeping header wrapping consistent across both modes.
  */
 export function columnMinWidthPx(col) {
+  // `headerMinWidthPx` is set by DataTable on plain-list columns only (see listHeaderMinWidthPx);
+  // the lines/add-row renderers never carry it, so their colgroup stays on the type basis.
+  return Math.max(listTypeBasisPx(col), col.headerMinWidthPx ?? 0);
+}
+
+function listTypeBasisPx(col) {
   if (col.display === 'tag') return col.minWidth ?? TAG_BASIS_PX;
   if (col.minWidth) return col.minWidth;
   if (col.type === 'boolean' && col.badge) return booleanBadgeBasisPx(col);
   if (SELECTOR_TYPES.has(col.type)) return 192;
   if (col.type === 'percent') return PERCENT_LIST_BASIS_PX;
+  if (col.type === 'amount') return AMOUNT_LIST_BASIS_PX;
   if (LIST_BASIS_PX[col.type] !== undefined) return LIST_BASIS_PX[col.type];
   return ELASTIC_BASIS_PX[col.type] ?? FIXED_BASIS_PX[col.type] ?? 120;
+}
+
+// ETP-5833 (QA) — a plain-list header never wraps (`whitespace-nowrap` + ellipsis), so a type
+// basis alone truncated long translated labels. The list floor of a column is therefore
+// max(type basis, rendered header width), where the header width is the RESOLVED label (the
+// caller passes what the header actually shows — often only known at render time through
+// useLabel/AD) plus the header chrome below. It depends on label + locale only, never on row
+// data, so sorting or paging cannot move a column.
+//  - 24px: the <th>'s `px-3`;
+//  - 14px: the sort arrow ("▲", 12px at text-xs, plus `pl-0.5`), reserved even when the column
+//    is not sorted, so clicking a header never changes its width;
+//  - 4px: rounding slack between the measured text and the laid-out glyphs.
+export const LIST_HEADER_CHROME_PX = 42;
+// The ComputedFreshnessHint clock (h-3.5 = 14px) plus the label's `gap-1` (4px).
+const COMPUTED_HINT_PX = 18;
+// Deterministic estimate used where no canvas exists (jsdom, node): ~7px per character is the
+// upper end of Inter 600 at 12px ("Fecha de presupuesto" measures 128.6px / 20 chars = 6.4px).
+const FALLBACK_CHAR_PX = 7;
+const HEADER_FONT_WEIGHT_SIZE = '600 12px';
+
+const labelWidthCache = new Map();
+let measureContext;
+
+function canvasContext() {
+  if (measureContext !== undefined) return measureContext;
+  measureContext = null;
+  // jsdom implements <canvas> without a 2D context and logs "Not implemented" when asked for one.
+  const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
+  if (typeof document === 'undefined' || isJsdom) return measureContext;
+  try {
+    measureContext = document.createElement('canvas').getContext('2d') ?? null;
+  } catch {
+    measureContext = null;
+  }
+  return measureContext;
+}
+
+function headerFont() {
+  const family = (typeof document !== 'undefined' && document.body
+    && globalThis.getComputedStyle?.(document.body)?.fontFamily) || 'Inter, sans-serif';
+  return `${HEADER_FONT_WEIGHT_SIZE} ${family}`;
+}
+
+/**
+ * Width in px of a header label rendered with the list header font (`text-xs font-semibold`).
+ * Canvas `measureText` in a browser; a deterministic per-character estimate where no canvas
+ * exists (jsdom tests, node). Results are cached per font + label.
+ */
+export function measureHeaderLabelPx(label) {
+  // A React node (custom header markup) cannot be measured as text: it keeps the type basis.
+  if (typeof label !== 'string' && typeof label !== 'number') return 0;
+  const text = String(label);
+  if (text === '') return 0;
+  const ctx = canvasContext();
+  if (!ctx) return Math.ceil(text.length * FALLBACK_CHAR_PX);
+  const font = headerFont();
+  const cacheKey = `${font}|${text}`;
+  const cached = labelWidthCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  ctx.font = font;
+  const width = Math.ceil(ctx.measureText(text).width);
+  labelWidthCache.set(cacheKey, width);
+  return width;
+}
+
+/**
+ * ETP-5833 (QA) — minimum width (px) a plain-list column needs so its header label is never
+ * truncated: measured label + `LIST_HEADER_CHROME_PX` (+ the computed-freshness clock when it
+ * renders). 0 when the header does not render on one line from a label: `headClass` pins its own
+ * width, and a `headerWrap` header (default for `percent`) wraps onto two lines by design.
+ * `label` is the label the header shows (see `resolveColumnLabel`); for a `multiField` column,
+ * the joined part labels.
+ */
+export function listHeaderMinWidthPx(col, label) {
+  if (col.headClass) return 0;
+  if (col.headerWrap ?? col.type === 'percent') return 0;
+  const textPx = measureHeaderLabelPx(label);
+  if (textPx === 0) return 0;
+  const deferredComputed = col.computed?.mode === 'stored' && col.computed?.refresh !== 'synchronous';
+  return textPx + LIST_HEADER_CHROME_PX + (deferredComputed ? COMPUTED_HINT_PX : 0);
 }
 
 // ETP-5833 — the column that absorbs leftover width must be DESCRIPTIVE (string/text, a
 // selector, a multiField), never a fixed date/number: a leading `date` (Sales Quotation) stretched
 // to the 320px grow floor once dates became fixed. A `display: 'tag'` pill stays fixed. Falls back
 // to the first unpinned column (`headClass`/`cellClass` pin their own width) when none qualifies.
+//
+// ETP-5833 (QA) — a document number or a search key is a short code, not a description: the Sales
+// Invoice list made `DocumentNo` the 320px absorber because it precedes the business partner. Code
+// columns are recognised STRUCTURALLY by their AD column (`col.column`), never by window: they are
+// skipped while a non-code descriptive column exists, and only absorb when nothing else describes.
+const CODE_AD_COLUMNS = new Set(['documentno', 'value']);
+
+function isCodeColumn(col) {
+  return typeof col.column === 'string' && CODE_AD_COLUMNS.has(col.column.toLowerCase());
+}
+
 function absorberIndex(columns) {
   const unpinned = c => !c.headClass && !c.cellClass;
   const descriptive = c => unpinned(c) && c.display !== 'tag'
     && (c.type in ELASTIC_BASIS_PX || SELECTOR_TYPES.has(c.type) || c.type === 'multiField');
-  const idx = columns.findIndex(descriptive);
-  return idx === -1 ? columns.findIndex(unpinned) : idx;
+  const idx = columns.findIndex(c => descriptive(c) && !isCodeColumn(c));
+  if (idx !== -1) return idx;
+  const codeIdx = columns.findIndex(descriptive);
+  return codeIdx === -1 ? columns.findIndex(unpinned) : codeIdx;
 }
 
 /**

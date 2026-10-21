@@ -13,7 +13,7 @@ import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
-import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx } from '@/lib/linesColumnWidth.js';
+import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, listHeaderMinWidthPx } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
@@ -2458,6 +2458,13 @@ function StickyHeaderRow({ elRef, attachSeq, minWidthPx, children }) {
  * cycle as any other column via `onSort(part.key)`. The direction arrow shows
  * only on the currently active part (single active part at a time).
  */
+// The text a plain-list header renders for `col`: its resolved label, or for a `multiField`
+// column the part labels joined by its separator (renderMultiFieldHeaderCell).
+function renderedHeaderLabel(col, locale, t) {
+  if (!Array.isArray(col.parts) || col.parts.length === 0) return resolveColumnLabel(col, locale, t);
+  return col.parts.map(part => resolveColumnLabel(part, locale, t)).join(col.partSeparator ?? ' & ');
+}
+
 function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader }) {
   const separator = col.partSeparator ?? ' & ';
   return (
@@ -3329,8 +3336,16 @@ export function DataTable({
     // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
     // ETP-5833 — the lines/add-row modes get the lines-side absorber, applied to the same
     // `visibleColumns` InlineLinesPanel derives, so header, rows and add-row agree on it.
-    return hideHeader || linesLayout === 'inlineEditable' ? withLinesAbsorberColumn(base) : withImplicitGrowColumn(base);
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout]);
+    if (hideHeader || linesLayout === 'inlineEditable') return withLinesAbsorberColumn(base);
+    // ETP-5833 (QA) — a list header never wraps, so each column's floor also covers its rendered
+    // header: measured from the label the header actually shows (resolved here with the same
+    // `resolveColumnLabel`/`t`/locale as renderColumnHeaderCell), never from row data. Header,
+    // colgroup, body cells and listTableMinWidthPx all read it through columnMinWidthPx.
+    return withImplicitGrowColumn(base.map(col => ({
+      ...col,
+      headerMinWidthPx: listHeaderMinWidthPx(col, renderedHeaderLabel(col, locale, t)),
+    })));
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout, locale, t]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
   // separators, symbol, right alignment, numeric filter) — it does not by itself

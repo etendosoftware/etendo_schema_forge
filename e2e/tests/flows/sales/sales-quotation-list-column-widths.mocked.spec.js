@@ -20,7 +20,8 @@ import { login } from '../../helpers/auth.js';
  *
  * Covered:
  *  - tiers at 1280px: dates ~176 and far narrower than the descriptive columns, status 184,
- *    amount 172;
+ *    amount on the 130 list basis (ETP-5833 QA);
+ *  - the business partner, not the document number, absorbs the leftover width (ETP-5833 QA);
  *  - widths identical after a sort click and after infinite-scroll loads the next page
  *    (ETP-5182 regression: `table-layout: fixed` must hold the bases);
  *  - header label + sort icon stay inside the column box and never run into the next header;
@@ -112,10 +113,21 @@ test.describe('Sales quotation list — per-type default column widths (mocked)'
     expect(Math.abs(date - 176)).toBeLessThanOrEqual(4);
   });
 
-  test('status holds 184px and amount 172px', async ({ page }) => {
+  test('status holds 184px and amount takes the narrower list basis', async ({ page }) => {
     await openList(page);
     expect(Math.abs((await headerWidth(page, 'documentStatus')) - 184)).toBeLessThanOrEqual(4);
-    expect(Math.abs((await headerWidth(page, 'grandTotalAmount')) - 172)).toBeLessThanOrEqual(4);
+    // ETP-5833 QA — list amount basis is 130 (the 172 lines tier is sized for an editable input);
+    // a longer translated header may only widen it through the header floor.
+    const amount = await headerWidth(page, 'grandTotalAmount');
+    expect(amount).toBeGreaterThanOrEqual(126);
+    expect(amount).toBeLessThan(168);
+  });
+
+  test('the document number is not the absorber: the business partner takes the leftover width', async ({ page }) => {
+    await openList(page);
+    // ETP-5833 QA — `DocumentNo` is a code column, skipped by `withImplicitGrowColumn`.
+    expect(Math.abs((await headerWidth(page, 'documentNo')) - 224)).toBeLessThanOrEqual(4);
+    expect(await headerWidth(page, 'businessPartner')).toBeGreaterThanOrEqual(316);
   });
 
   test('column widths do not move after a sort click or after the next page loads (ETP-5182)', async ({ page }) => {

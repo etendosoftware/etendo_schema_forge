@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 // @covers tools/app-shell/src/lib/linesColumnWidth.js
 import {
   columnFlex, columnMinWidthPx, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, GROW_COLUMN_MIN_PX,
+  listHeaderMinWidthPx, measureHeaderLabelPx, LIST_HEADER_CHROME_PX,
 } from '../linesColumnWidth.js';
 
 // Helper — extract the flex-basis px from a CSS flex shorthand like "0 0 172px"
@@ -201,7 +202,6 @@ describe('linesColumnWidth', () => {
 
     it('matches the flex-basis of columnFlex for every type', () => {
       const CASES = [
-        [{ type: 'amount' },      1, 172],
         [{ type: 'price' },       1, 152],
         [{ type: 'quantity' },    1, 152],
         [{ type: 'integer' },     1, 152],
@@ -304,6 +304,66 @@ describe('linesColumnWidth', () => {
     });
   });
 
+  // ETP-5833 (QA) — the lines tier (172) is sized for an editable amount input; a read-only list
+  // cell needs far less, so the list narrows exactly like `percent` does.
+  describe('amount list basis (intentional divergence from columnFlex)', () => {
+    it('columnMinWidthPx returns 130 for amount, columnFlex keeps 172', () => {
+      assert.equal(columnMinWidthPx({ type: 'amount' }), 130);
+      assert.equal(columnFlex({ type: 'amount' }, 1), '0 0 172px');
+    });
+
+    it('an explicit minWidth still wins over the amount list basis', () => {
+      assert.equal(columnMinWidthPx({ type: 'amount', minWidth: 220 }), 220);
+    });
+  });
+
+  // ETP-5833 (QA) — a list header never wraps: the column floor covers the rendered header.
+  describe('list header floor (listHeaderMinWidthPx / headerMinWidthPx)', () => {
+    it('measures with the deterministic 7px-per-character estimate where no canvas exists', () => {
+      assert.equal(measureHeaderLabelPx('Fecha de la factura'), 19 * 7);
+      assert.equal(measureHeaderLabelPx('Fecha de la factura'), measureHeaderLabelPx('Fecha de la factura'));
+      assert.equal(measureHeaderLabelPx(''), 0);
+      assert.equal(measureHeaderLabelPx(null), 0);
+      assert.equal(measureHeaderLabelPx({ type: 'span' }), 0, 'a React node is not measured');
+    });
+
+    it('is label width + chrome (padding, reserved sort arrow, slack)', () => {
+      assert.equal(LIST_HEADER_CHROME_PX, 42);
+      assert.equal(listHeaderMinWidthPx({ type: 'date' }, 'Fecha de la factura'), 133 + 42);
+    });
+
+    it('adds the computed-freshness clock only when it renders (deferred stored column)', () => {
+      const label = 'Estado';
+      const base = listHeaderMinWidthPx({ type: 'string' }, label);
+      assert.equal(listHeaderMinWidthPx({ type: 'string', computed: { mode: 'stored', refresh: 'queued' } }, label), base + 18);
+      assert.equal(listHeaderMinWidthPx({ type: 'string', computed: { mode: 'stored', refresh: 'synchronous' } }, label), base);
+    });
+
+    it('is 0 for headers that do not render on one line from a label', () => {
+      assert.equal(listHeaderMinWidthPx({ type: 'string', headClass: 'w-[80px]' }, 'Long header label'), 0);
+      assert.equal(listHeaderMinWidthPx({ type: 'percent' }, 'Entregado y facturado'), 0, 'percent wraps by default');
+      assert.equal(listHeaderMinWidthPx({ type: 'date', headerWrap: true }, 'Última actualización'), 0);
+      assert.equal(listHeaderMinWidthPx({ type: 'string' }, ''), 0);
+    });
+
+    it('columnMinWidthPx is max(type basis, header floor) — a short label keeps the basis', () => {
+      assert.equal(columnMinWidthPx({ type: 'date', headerMinWidthPx: 90 }), 176);
+      assert.equal(columnMinWidthPx({ type: 'amount', headerMinWidthPx: 150 }), 150);
+      assert.equal(columnMinWidthPx({ type: 'date', minWidth: 130, headerMinWidthPx: 162 }), 162,
+        'the header floor also beats an explicit minWidth: a list header is never truncated');
+      assert.equal(columnMinWidthPx({ type: 'selector', display: 'tag', headerMinWidthPx: 160 }), 160);
+    });
+
+    it('listTableMinWidthPx counts the header floor of fixed and grow columns', () => {
+      const cols = [{ type: 'string', grow: true, headerMinWidthPx: 400 }, { type: 'date', headerMinWidthPx: 200 }];
+      assert.equal(listTableMinWidthPx(cols), 400 + 200);
+    });
+
+    it('never affects the lines layout (columnFlex ignores headerMinWidthPx)', () => {
+      assert.equal(columnFlex({ type: 'date', headerMinWidthPx: 300 }, 1), '0 0 176px');
+    });
+  });
+
   describe('list-only bases (multiField)', () => {
     it('status columns get the same 184px basis in a list and in lines (ETP-5833)', () => {
       assert.equal(columnMinWidthPx({ type: 'status' }), 184);
@@ -355,7 +415,7 @@ describe('linesColumnWidth', () => {
     it('floors the grow column at GROW_COLUMN_MIN_PX (320) and adds the fixed slots', () => {
       assert.equal(GROW_COLUMN_MIN_PX, 320);
       const cols = [{ type: 'string', grow: true }, { type: 'amount' }];
-      assert.equal(listTableMinWidthPx(cols, 40), 320 + 172 + 40);
+      assert.equal(listTableMinWidthPx(cols, 40), 320 + 130 + 40);
     });
 
     it('keeps a grow column that is already wider than the floor at its own basis', () => {
@@ -386,6 +446,34 @@ describe('linesColumnWidth', () => {
   });
 
   describe('absorber rules (ETP-5833)', () => {
+    // QA — Sales Invoice list: DocumentNo precedes the business partner and took the 320px grow.
+    it('skips a document-number / search-key column (by AD column) for a descriptive one', () => {
+      const cols = [
+        { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
+        { key: 'documentNo', column: 'DocumentNo', type: 'string' },
+        { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
+      ];
+      assert.deepEqual(withImplicitGrowColumn(cols).map(c => !!c.grow), [false, false, true]);
+      const byValue = [{ key: 'searchKey', column: 'value', type: 'string' }, { key: 'name', column: 'Name', type: 'string' }];
+      assert.deepEqual(withImplicitGrowColumn(byValue).map(c => !!c.grow), [false, true]);
+    });
+
+    it('a code column still absorbs when it is the only descriptive one (before a date)', () => {
+      const cols = [{ key: 'd', type: 'date' }, { key: 'documentNo', column: 'DocumentNo', type: 'string' }];
+      assert.deepEqual(withImplicitGrowColumn(cols).map(c => !!c.grow), [false, true]);
+    });
+
+    it('the lines absorber skips a code column too', () => {
+      const cols = [
+        { key: 'value', column: 'Value', type: 'string', grow: false },
+        { key: 'name', column: 'Name', type: 'text' },
+      ];
+      // `text` already grows on its own; with fixed types only, the lines absorber must not pick the code.
+      const fixed = [{ key: 'a', type: 'amount' }, { key: 'value', column: 'Value', type: 'selector', grow: false }, { key: 'n', type: 'selector', grow: false }];
+      assert.equal(withLinesAbsorberColumn(cols), cols);
+      assert.deepEqual(withLinesAbsorberColumn(fixed).map(c => !!c.grow), [false, false, true]);
+    });
+
     it('never picks a display:tag pill as the absorber', () => {
       const cols = [{ key: 'u', type: 'selector', display: 'tag' }, { key: 's', type: 'string' }];
       assert.deepEqual(withImplicitGrowColumn(cols).map(c => !!c.grow), [false, true]);

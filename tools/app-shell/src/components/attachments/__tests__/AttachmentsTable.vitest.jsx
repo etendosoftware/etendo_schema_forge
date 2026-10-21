@@ -146,6 +146,13 @@ describe('AttachmentsTable — date columns', () => {
     expect(screen.getByTestId('column-header-updatedAt').style.width).toBe('130px');
   });
 
+  // ETP-5833 (QA) — the list header floor would widen the column to the label; these headers
+  // wrap instead, so the long label ("Última actualización") is shown whole at 130px.
+  it('wraps the date headers instead of widening the column', () => {
+    renderTable({ items: [{ id: 'a', name: 'a.pdf', size: 1, uploadedAt: '2026-01-05T10:00:00Z' }] });
+    expect(screen.getByTestId('column-header-updatedAt').className).toContain('whitespace-normal');
+  });
+
   // The cell shows the formatted label, but the sort must use the raw ISO value:
   // these labels sort alphabetically as Mon < Thu < Tue, chronologically as
   // Jan 5 < Mar 3 < Apr 30.
