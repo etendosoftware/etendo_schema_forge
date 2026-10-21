@@ -49,8 +49,16 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // envelope, so every create may skip decorating the record it would echo back. Its rows are
   // many similar creates that always send the same fields, the case the redundant-callout skip is
   // for; the OCR flow sends neither option.
+  // ETP-5677 — and it runs as an async job: a long chunk can outlive the proxy in front of Tomcat
+  // and lose its answer for rows the server did commit. The job returns at once, commits row by row
+  // and is polled; `onProgress` (passed by the import engine) feeds the dialog's progress bar.
   const postBatch = useCallback(
-    (operations) => runBatch(operations, { onlyReturnIds: true, skipRedundantCallouts: true }),
+    (operations, { onProgress } = {}) => runBatch(operations, {
+      onlyReturnIds: true,
+      skipRedundantCallouts: true,
+      async: true,
+      onProgress,
+    }),
     [runBatch],
   );
   const entity = importConfig?.entity;
