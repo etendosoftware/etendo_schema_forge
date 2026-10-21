@@ -218,12 +218,12 @@ The route table is fixed controller code; resource and child lookup use the mani
 
 | Method | Path | Notes |
 |--------|------|-------|
-| GET | `/api/v1/{resource}` | List. Top-level resources only. |
+| GET | `/api/v1/{resource}` | List. Top-level resources only. Pages, sorts and filters ([4.10](#410-list-queries-pagination-sorting-and-filtering)). |
 | GET | `/api/v1/{resource}/{id}` | Read one. |
 | POST | `/api/v1/{resource}` | Create. |
 | PUT, PATCH | `/api/v1/{resource}/{id}` | Update. Requires `If-Match` on versioned resources ([4.5](#45-optimistic-concurrency-etag-and-if-match)). |
 | DELETE | `/api/v1/{resource}/{id}` | Delete. Answers `204 No Content` with no body ([4.8](#48-success-and-error-documents-and-statuses)). |
-| GET, POST | `/api/v1/{parent}/{parentId}/{child}` | Child collection. `parentId` is sent upstream as the query parameter `parentId`; on POST it is also set in the body as `parentId`. |
+| GET, POST | `/api/v1/{parent}/{parentId}/{child}` | Child collection; the GET takes the same query parameters as a list.  `parentId` is sent upstream as the query parameter `parentId`; on POST it is also set in the body as `parentId`. |
 | GET, PUT, PATCH, DELETE | `/api/v1/{parent}/{parentId}/{child}/{id}` | Child item. PUT and PATCH require `If-Match` on versioned resources. |
 | POST | `/api/v1/{resource}/{id}/actions/{action}` | Run a business action on a record ([4.2.1](#421-business-actions)). Top-level resources only. |
 
@@ -353,7 +353,7 @@ Content-Type: application/vnd.api+json
 
 | Operation | Success |
 |-----------|---------|
-| `GET` collection | `200 { "data": [ ... ] }` |
+| `GET` collection | `200 { "data": [ ... ], "meta": { "page": { ... } }, "links": { ... } }` ([4.10](#410-list-queries-pagination-sorting-and-filtering)) |
 | `GET` one | `200 { "data": { ... } }` |
 | `POST` | `201 { "data": { ... } }` |
 | `PUT`, `PATCH` | `200 { "data": { ... } }`; if Etendo answers `204`, `200 { "meta": { "status": "updated" } }` (JSON:API: only top-level meta, never `null`) |
@@ -369,12 +369,104 @@ Every failure is an error document, built from Etendo's answer when Etendo refus
 
 - `status` is the HTTP status as a string; `title` its standard name; `detail` is Etendo's message; `code`, `meta.hint`, `meta.detail` and `meta.field` appear when Etendo provides them. A gateway-originated error (unknown resource, not writable, `401 Missing API key`) has the same shape without `code`.
 - Statuses Etendo answers are passed through: `400`, `401`, `402` (blocked tenant), `403`, `404`, `409`, `412`, `422`, `428`, `429`, and `503` (Etendo's transient `service_unavailable`: database timeout or lost connection; retrying is right). Any other upstream status (every other `5xx`, an unexpected `4xx`) becomes `502 Bad Gateway` with a generic `detail` and `meta.upstreamStatus`; Etendo's text and stack are logged server side, never returned. The one exception is Etendo's `hint`: when a failure happens after the main write committed, Etendo's `500` carries a hint ("The record may already be saved. Read it before re-sending the request."); the `502` then returns it in `meta.hint` with the `detail` "Check meta.hint before retrying." instead of "Retry later". Read the record before re-sending, or the write may be duplicated.
+- A `400` caused by a query parameter carries `code: "invalid_query_parameter"` and `source.parameter` with the offending parameter ([4.10](#410-list-queries-pagination-sorting-and-filtering)).
+- `429 Too Many Requests` is the per-key rate limit of the gateway itself ([4.11](#411-rate-limiting)): `code: "rate_limit_exceeded"`, `meta.retryAfter` and the `Retry-After` header.
 - An unexpected gateway failure is `500` with `detail: "Unexpected error."`.
-- The OpenAPI document lists these responses on every operation (`400`, `401`, `402`, `403`, `404`, `406`, `502`, `503`, plus `409`, `415` and `422` on writes; DELETE has no `415`/`422`).
+- The OpenAPI document lists these responses on every operation (`400`, `401`, `402`, `403`, `404`, `406`, `429`, `502`, `503`, plus `409`, `415` and `422` on writes; DELETE has no `415`/`422`).
 
 ### 4.9 Automated compliance checks
 
-`gateway/test/json-api-compliance.test.ts` reads the real manifest and the generated OpenAPI and fails when: a relationship is duplicated inside `attributes`; a relationship lacks `type` + `id` linkage or points to an unknown resource; a child's master foreign key is an attribute; `id` is an attribute; a single-record response documents `data` as an array; an operation lacks its error responses; DELETE documents anything but `204`; a runtime document carries a top-level member other than `data`, `errors`, `meta`, `links`, `jsonapi`, `included`; or a relationship is writable as an attribute. `gateway/test/json-api-http.test.ts` exercises media-type negotiation, the error document and the `Content-Type` over real HTTP, and that routes outside the controller keep their own shape. Run with `cd gateway && npm test`.
+`gateway/test/json-api-compliance.test.ts` reads the real manifest and the generated OpenAPI and fails when: a relationship is duplicated inside `attributes`; a relationship lacks `type` + `id` linkage or points to an unknown resource; a child's master foreign key is an attribute; `id` is an attribute; a single-record response documents `data` as an array; an operation lacks its error responses; DELETE documents anything but `204`; a runtime document carries a top-level member other than `data`, `errors`, `meta`, `links`, `jsonapi`, `included`; or a relationship is writable as an attribute. `gateway/test/json-api-http.test.ts` exercises media-type negotiation, the error document, the `Content-Type`, the list query parameters through the real query parser, and the per-key rate limit (headers, 429, isolation between keys) over real HTTP; `gateway/test/json-api-query.test.ts` covers every operator, type validation and pagination links. Run with `cd gateway && npm test`.
+
+### 4.10 List queries: pagination, sorting and filtering
+
+A list (`GET /api/v1/{resource}` and `GET /api/v1/{parent}/{parentId}/{child}`) accepts only the parameters below. The gateway validates them against the manifest, translates them and sends NEO a single window (`_startRow`/`_endRow`), a `_sortBy` and one `criteria` parameter; the client never writes a NEO parameter, operator or property name. **Anything else is refused with `400`** and an error whose `source.parameter` names the parameter, so a typo never silently returns unfiltered data (fail closed). Nothing is sent to Etendo for a refused query. The same rules apply to child lists (`parentId` comes from the path and cannot be given as a query parameter).
+
+| Parameter | Meaning | Limits |
+|-----------|---------|--------|
+| `page[number]` | Page to read, starting at 1 (default 1) | positive integer |
+| `page[size]` | Records per page (default 50) | 1 to 100 |
+| `sort` | Comma-separated public field names; a leading `-` is descending | up to 5 fields, no repeats; only fields the client can read |
+| `filter[<field>]=<value>` | Equals | up to 20 filters in total (each `field`+operator counts one) |
+| `filter[<field>][<operator>]=<value>` | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`, `in` | see the table below |
+
+Field names are the public names of the manifest (not internal paths) and only fields with direction `out` or `inout` can be filtered or sorted. Send each parameter once: a repeated parameter (`filter[name]=a&filter[name]=b`) is a `400`; use `in` for a list of values.
+
+Values are parsed against the field's data type before anything is forwarded:
+
+| Field type | Operators | Value |
+|------------|-----------|-------|
+| string | `eq`, `ne`, `contains` (case-insensitive substring), `in` | text up to 255 characters, not empty |
+| relationship (a foreign key such as `category`) | `eq`, `ne`, `in` | the related record id |
+| integer | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in` | integer (`-12`) |
+| number | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in` | decimal with a point (`-12.5`); no exponent, no `NaN` |
+| boolean | `eq`, `ne` | `true` or `false` |
+| date and date-time | `eq`, `gt`, `gte`, `lt`, `lte` | calendar date `yyyy-MM-dd` that exists (`2026-02-30` is refused) |
+
+`in` takes a comma-separated list (up to 100 values, none empty); a value cannot contain a comma. Dates are whole calendar days with no timezone: `filter[updated][gte]=2026-10-01` means from that day on, and `filter[updated]=2026-10-01` is the whole day, on date and date-time fields alike (the same day-level semantics as the Etendo grids). A timestamp with a time or an offset is refused. Date-time fields are not filterable at second precision in v1.
+
+Examples (brackets are shown unencoded; clients may percent-encode them):
+
+```http
+GET /api/v1/contacts?page[number]=2&page[size]=25
+GET /api/v1/contacts?sort=name,-search_key
+GET /api/v1/contacts?filter[name][contains]=acme&filter[tax_id]=B12345678
+GET /api/v1/contacts?filter[name][in]=Acme,Globex&sort=-name&page[size]=10
+GET /api/v1/{resource}?filter[category]=<related-id>&filter[active]=true
+GET /api/v1/{resource}?filter[updated][gte]=2026-10-01&filter[updated][lt]=2026-11-01
+GET /api/v1/contacts/{id}/contacts?filter[phone][contains]=555
+```
+
+`contacts` is used above because its fields (`name`, `search_key`, `tax_id`) are published today; the OpenAPI document lists the filterable fields of every resource, with the operators each accepts.
+
+**Sort stability.** When `sort` is given the gateway appends `id` as a tie-breaker, so records with equal keys do not move between pages. Without `sort`, the order is NEO's default for the resource.
+
+**Response.**
+
+```json
+{
+  "data": [ { "type": "contacts", "id": "...", "attributes": { ... }, "links": { "self": "/api/v1/contacts/..." } } ],
+  "meta": { "page": { "number": 2, "size": 25, "total": 95 } },
+  "links": {
+    "self":  "/api/v1/contacts?filter[name][contains]=acme&page[number]=2&page[size]=25",
+    "first": "/api/v1/contacts?filter[name][contains]=acme&page[number]=1&page[size]=25",
+    "prev":  "/api/v1/contacts?filter[name][contains]=acme&page[number]=1&page[size]=25",
+    "next":  "/api/v1/contacts?filter[name][contains]=acme&page[number]=3&page[size]=25",
+    "last":  "/api/v1/contacts?filter[name][contains]=acme&page[number]=4&page[size]=25"
+  }
+}
+```
+
+- `links` are root-relative, like the `links.self` of every resource, and keep the client's `filter` and `sort` parameters; `page[size]` is always explicit. `prev` and `next` are `null` when there is no such page.
+- `meta.page.total` is the exact number of records matching the filters. NEO computes it with a count query (the gateway never asks it to skip the count). If NEO ever answers without a usable count, the gateway omits `meta.page.total` and `links.last` and offers `next` only while the page came back full; it never reports an estimate.
+- A page beyond the last one answers `200` with `data: []`, the real `total`, and a `prev` that points at the last page. (NEO's datasource would answer its first page for such a request; the gateway turns that into the empty page.)
+- A single record read has no `meta.page` and no `links` other than the resource's own.
+
+### 4.11 Rate limiting
+
+The gateway limits requests **per API key**: 100 requests per 60 seconds by default. The key is the `clientId` of the `Authorization: Bearer <clientId>:<clientSecret>` header, counted only after `PublicApiKeyGuard` accepted the key, so a client cannot spend another key's quota by sending its id. All routes under `/api/v1` share one quota per key (reads, writes and actions alike); `/api`, `/docs`, `/healthz` and the OpenAPI document are not limited.
+
+| Header | On | Meaning |
+|--------|----|---------|
+| `X-RateLimit-Limit` | every response to an authenticated request, 429 included | requests allowed per window |
+| `X-RateLimit-Remaining` | every such response | requests left in the current window (0 on a 429) |
+| `X-RateLimit-Reset` | every such response | **seconds** until the window resets (not an epoch timestamp) |
+| `Retry-After` | `429` only | seconds to wait before retrying |
+
+A request refused for a missing, malformed or invalid key is `401` without these headers and does not use any key's quota.
+
+```http
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/vnd.api+json
+Retry-After: 23
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 23
+
+{"errors":[{"status":"429","code":"rate_limit_exceeded","title":"Too Many Requests","detail":"Rate limit exceeded for this API key. Retry in 23 seconds.","meta":{"retryAfter":23}}]}
+```
+
+Configuration (environment of the gateway): `PUBLIC_API_RATE_LIMIT` (requests, default 100) and `PUBLIC_API_RATE_WINDOW_SECONDS` (default 60); an invalid value falls back to the default. The counters live in memory of each gateway process: with N gateway tasks the effective limit per key is up to N times the configured one until a shared store is introduced. Requests with invalid keys are not limited by this guard; limiting them (per IP) belongs to the load balancer or WAF.
 
 ---
 
@@ -521,7 +613,7 @@ The gateway document lists, on every operation, the JSON:API error responses of 
 | Built from | Active `ETGO_SF_SPEC` rows (window, process, report), discovery endpoints and the API-key paths | The entities of `public-api/base.v1.json` |
 | Tag filter | `?tag=` accepts `Etendo` and the legacy `EtendoGo` | not applicable |
 | Served at | Not covered by this document | Gateway: `GET /api/openapi.json` and `GET /api/v1/openapi.json` (same document); Scalar documentation page at `/api` and `/docs`; `GET /healthz` |
-| Caching (gateway) | not applicable | `/api/v1/openapi.json` sends `Cache-Control: no-store`; `/api/openapi.json` sends no cache header |
+| Caching (gateway) | not applicable | Both routes send `Cache-Control: no-cache`: a client may keep the document but must revalidate it (with the `ETag` Express sends) before reuse |
 | Authentication to read (gateway) | not applicable | None: these routes are registered on the HTTP adapter outside `PublicApiKeyGuard` |
 
 ### Endpoint matrix
@@ -629,6 +721,8 @@ Testable statements derived from this document, each linked to its section.
 - [ ] A relationship sent as an attribute returns `400`; a wrong `type` or a different `id` returns `409` ([4.3](#43-fields-and-fail-closed-filtering), [4.6](#46-relationships))
 - [ ] A single-record `GET`, `POST`, `PUT` and `PATCH` return `data` as one object; a collection returns an array; an empty read is `404`; an empty write answer, or several records, is `502` ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] Responses are `application/vnd.api+json` without parameters; `Accept` that excludes JSON returns `406`; an unsupported body type returns `415` ([4.7](#47-content-negotiation))
+- [ ] A list query with an unknown parameter, field, operator or invalid value returns `400` with `source.parameter`; `page[size]` above 100 is refused ([4.10](#410-list-queries-pagination-sorting-and-filtering))
+- [ ] Every authenticated response carries `X-RateLimit-Limit/Remaining/Reset`; the 101st request in a window returns `429` with `Retry-After` ([4.11](#411-rate-limiting))
 - [ ] Etendo's `400`, `401`, `402`, `403`, `404`, `409`, `422` reach the integrator with Etendo's message; `503` passes through; other `5xx` return `502` with no Etendo internals (only `meta.hint`, when Etendo sends one) ([4.8](#48-success-and-error-documents-and-statuses))
 - [ ] `DELETE` answers `204` with no body, as the OpenAPI documents ([4.8](#48-success-and-error-documents-and-statuses))
 - [ ] Every operation of the OpenAPI document lists its error responses ([4.8](#48-success-and-error-documents-and-statuses))

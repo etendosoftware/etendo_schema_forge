@@ -1,5 +1,6 @@
 // @covers gateway/src/public-api/json-api-http.ts
 // @covers gateway/src/public-api/public-api.controller.ts
+// @covers gateway/src/public-api/public-api-throttler.guard.ts
 import 'reflect-metadata';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,6 +13,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { CachedTokenExchangeService, PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import { PublicApiController } from '../src/public-api/public-api.controller.ts';
 import {
@@ -125,7 +127,7 @@ const schema: PublicApiSchema = {
       specName: 'product',
       operations: ['GET', 'LIST', 'POST', 'DELETE'],
       fields: {
-        name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', handlerId: null },
+        name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
       },
     },
   },
@@ -138,31 +140,44 @@ const fakeTokenExchange = {
 };
 
 let neoStatus = 200;
+const neoUrls: string[] = [];
 let neoBody: unknown = { response: { data: [{ id: 'p-1', name: 'Widget' }] } };
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
   if (String(url).startsWith('http://neo.local')) {
+    neoUrls.push(String(url));
     return new Response(neoBody === null ? null : JSON.stringify(neoBody), { status: neoStatus });
   }
   return realFetch(url, init);
 }) as typeof fetch;
 process.env.NEO_BASE_URL = 'http://neo.local/etendo';
 
-@Module({
-  controllers: [PublicApiController],
-  providers: [
-    { provide: PUBLIC_API_SCHEMA, useValue: schema },
-    { provide: CachedTokenExchangeService, useValue: fakeTokenExchange },
-  ],
-})
-class TestModule {}
+// A module with its own rate limit: the real throttler guard runs behind the real key guard.
+function testModule(limit: number, ttl = 60_000) {
+  @Module({
+    imports: [ThrottlerModule.forRoot([{ ttl, limit }])],
+    controllers: [PublicApiController],
+    providers: [
+      { provide: PUBLIC_API_SCHEMA, useValue: schema },
+      { provide: CachedTokenExchangeService, useValue: fakeTokenExchange },
+    ],
+  })
+  class TestModule {}
+  return TestModule;
+}
 
-const app = await NestFactory.create(TestModule, { bodyParser: false });
-configureJsonApiBodyParser(app as any);
-app.setGlobalPrefix('api/v1');
-app.getHttpAdapter().get('/healthz', (_req: unknown, res: { json(body: unknown): void }) => res.json({ status: 'ok' }));
-await app.listen(0);
-const base = `http://127.0.0.1:${(app.getHttpServer().address() as AddressInfo).port}`;
+async function startApp(limit: number, ttl?: number) {
+  const instance = await NestFactory.create(testModule(limit, ttl), { bodyParser: false });
+  configureJsonApiBodyParser(instance as any);
+  instance.setGlobalPrefix('api/v1');
+  instance.getHttpAdapter().get('/healthz', (_req: unknown, res: { json(body: unknown): void }) => res.json({ status: 'ok' }));
+  await instance.listen(0);
+  return { instance, url: `http://127.0.0.1:${(instance.getHttpServer().address() as AddressInfo).port}` };
+}
+
+const main = await startApp(100_000);
+const app = main.instance;
+const base = main.url;
 after(async () => {
   globalThis.fetch = realFetch;
   await app.close();
@@ -256,4 +271,129 @@ test('HTTP: routes outside the public controller keep their own shape and conten
   assert.match(unknown.type ?? '', /^application\/json/);
   assert.equal(unknown.json.errors, undefined);
   assert.equal(unknown.json.statusCode, 404);
+});
+
+// ---- Query parameters through the real Express query parser ----------------
+
+const NEO_LIST = { response: { startRow: 10, endRow: 11, totalRows: 12, data: [{ id: 'p-11', name: 'A' }, { id: 'p-12', name: 'B' }] } };
+
+test('HTTP: filter, sort and page parameters are parsed and reach NEO as criteria, _sortBy and rows', async () => {
+  neoStatus = 200;
+  neoBody = NEO_LIST;
+  neoUrls.length = 0;
+  const result = await call('/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&sort=-name&page[number]=2&page[size]=10');
+  assert.equal(result.status, 200);
+  const params = new URL(neoUrls[0]).searchParams;
+  assert.equal(params.get('_startRow'), '10');
+  assert.equal(params.get('_endRow'), '19');
+  assert.equal(params.get('_sortBy'), '-name');
+  assert.deepEqual(JSON.parse(params.get('criteria')!), [
+    { fieldName: 'name', operator: 'iContains', value: 'wid' },
+    { fieldName: 'name', operator: 'notEqual', value: 'x' },
+  ]);
+  assert.deepEqual(result.json.meta, { page: { number: 2, size: 10, total: 12 } });
+  assert.equal(result.json.links.self, '/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&sort=-name&page[number]=2&page[size]=10');
+  assert.equal(result.json.links.next, null);
+  assert.equal(result.json.links.prev, '/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&sort=-name&page[number]=1&page[size]=10');
+});
+
+test('HTTP: a bad query is a 400 JSON:API error with source.parameter and never reaches NEO', async () => {
+  neoUrls.length = 0;
+  const cases: Array<[string, string]> = [
+    ['/api/v1/product?foo=1', 'foo'],
+    ['/api/v1/product?page[size]=101', 'page[size]'],
+    ['/api/v1/product?page[number]=0', 'page[number]'],
+    ['/api/v1/product?sort=nope', 'sort'],
+    ['/api/v1/product?filter[nope]=1', 'filter[nope]'],
+    ['/api/v1/product?filter[name][regex]=1', 'filter[name][regex]'],
+    ['/api/v1/product?filter[name]=a&filter[name]=b', 'filter[name]'],
+    ['/api/v1/product?filter[name][]=a', 'filter[name]'],
+    ['/api/v1/product?filter[name][eq][deep]=a', 'filter[name][eq]'],
+    ['/api/v1/product?criteria=%5B%5D', 'criteria'],
+    ['/api/v1/product?page=2', 'page'],
+  ];
+  for (const [path, parameter] of cases) {
+    const result = await call(path);
+    assert.equal(result.status, 400, path);
+    assert.equal(result.type, 'application/vnd.api+json');
+    assert.equal(result.json.errors[0].source.parameter, parameter, path);
+    assert.equal(result.json.errors[0].status, '400');
+    assert.equal(result.json.errors[0].code, 'invalid_query_parameter');
+  }
+  assert.deepEqual(neoUrls, []);
+});
+
+// ---- Rate limit per API key -------------------------------------------------
+
+test('HTTP: every response carries the rate-limit headers and the 429 is a JSON:API error with Retry-After', async () => {
+  const limited = await startApp(3, 60_000);
+  neoStatus = 200;
+  neoBody = NEO_LIST;
+  try {
+    const as = (key: string, path = '/api/v1/product') =>
+      realFetch(`${limited.url}${path}`, { headers: { Authorization: `Bearer ${key}:secret` } });
+    const first = await as('key-a');
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get('x-ratelimit-limit'), '3');
+    assert.equal(first.headers.get('x-ratelimit-remaining'), '2');
+    assert.ok(Number(first.headers.get('x-ratelimit-reset')) > 0 && Number(first.headers.get('x-ratelimit-reset')) <= 60);
+    // A 400 and a 404 of the controller are counted and carry the headers too.
+    const refused = await as('key-a', '/api/v1/product?foo=1');
+    assert.equal(refused.status, 400);
+    assert.equal(refused.headers.get('x-ratelimit-remaining'), '1');
+    const missing = await as('key-a', '/api/v1/nope');
+    assert.equal(missing.status, 404);
+    assert.equal(missing.headers.get('x-ratelimit-remaining'), '0');
+
+    const blocked = await as('key-a');
+    assert.equal(blocked.status, 429);
+    assert.equal(blocked.headers.get('content-type'), 'application/vnd.api+json');
+    const retryAfter = Number(blocked.headers.get('retry-after'));
+    assert.ok(Number.isInteger(retryAfter) && retryAfter >= 1 && retryAfter <= 60, `Retry-After ${retryAfter}`);
+    assert.equal(blocked.headers.get('x-ratelimit-limit'), '3');
+    assert.equal(blocked.headers.get('x-ratelimit-remaining'), '0');
+    assert.equal(Number(blocked.headers.get('x-ratelimit-reset')), retryAfter);
+    const body = (await blocked.json()) as any;
+    assert.equal(body.errors[0].status, '429');
+    assert.equal(body.errors[0].title, 'Too Many Requests');
+    assert.equal(body.errors[0].code, 'rate_limit_exceeded');
+    assert.equal(body.errors[0].meta.retryAfter, retryAfter);
+
+    // Another key has its own quota; the first one stays blocked.
+    const other = await as('key-b');
+    assert.equal(other.status, 200);
+    assert.equal(other.headers.get('x-ratelimit-remaining'), '2');
+    assert.equal((await as('key-a')).status, 429);
+  } finally {
+    await limited.instance.close();
+  }
+});
+
+test('HTTP: a request with an invalid key is refused by the key guard and spends no key quota', async () => {
+  const limited = await startApp(2, 60_000);
+  try {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await realFetch(`${limited.url}/api/v1/product`, { headers: { Authorization: 'Bearer broken' } });
+      assert.equal(response.status, 401);
+      assert.equal(response.headers.get('x-ratelimit-limit'), null);
+    }
+    const valid = await realFetch(`${limited.url}/api/v1/product`, { headers: { Authorization: 'Bearer broken:secret' } });
+    assert.equal(valid.status, 200);
+    assert.equal(valid.headers.get('x-ratelimit-remaining'), '1');
+  } finally {
+    await limited.instance.close();
+  }
+});
+
+test('HTTP: the quota comes back when the window ends', async () => {
+  const limited = await startApp(1, 1_000);
+  try {
+    const hit = () => realFetch(`${limited.url}/api/v1/product`, { headers: { Authorization: 'Bearer key-w:secret' } });
+    assert.equal((await hit()).status, 200);
+    assert.equal((await hit()).status, 429);
+    await new Promise((resolve) => setTimeout(resolve, 1_150));
+    assert.equal((await hit()).status, 200);
+  } finally {
+    await limited.instance.close();
+  }
 });

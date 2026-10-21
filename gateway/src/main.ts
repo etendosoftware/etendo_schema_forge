@@ -6,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import { AppModule } from './app.module.ts';
 import { buildPerEntityOpenApiPaths } from './openapi/build-per-entity-paths.ts';
+import { registerOpenApiRoutes } from './openapi/register-openapi-routes.ts';
 import { configureJsonApiBodyParser } from './public-api/json-api-http.ts';
 
 const gettingStartedDescription = `
@@ -72,12 +73,20 @@ Updates use optimistic concurrency. Include the \`updated\` value returned by a 
 
 Document lines are addressed through their master resource: \`/api/v1/{master}/{masterId}/{line-resource}\`. For example, create a sales-invoice line with \`POST /api/v1/sales-invoice/{masterId}/lines\`. The gateway derives the master foreign key from the URL and sends it to Etendo as \`parentId\`; clients must not override that relationship in the request body. The same nested path supports \`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, and \`DELETE\` when the document contract exposes those operations.
 
+### 7. Page, sort and filter lists
+
+Collections accept \`page[number]\` (from 1) and \`page[size]\` (default 50, maximum 100), \`sort\` and \`filter[<field>]\`. Use public field names only; any unknown parameter, field or operator, or an invalid value, answers \`400\` with \`source.parameter\` naming the culprit.
+
+- Pagination: \`GET /api/v1/contacts?page[number]=2&page[size]=25\`. The response carries \`meta.page\` (\`number\`, \`size\`, \`total\`) and \`links\` (\`self\`, \`first\`, \`prev\`, \`next\`, \`last\`) that keep your other query parameters.
+- Sorting: \`sort=name,-search_key\` (a leading \`-\` is descending).
+- Filtering: \`filter[name]=Acme\` (equals) or \`filter[<field>][<operator>]=<value>\` with \`eq\`, \`ne\`, \`gt\`, \`gte\`, \`lt\`, \`lte\`, \`contains\` (text only) and \`in\` (comma-separated list). Dates are \`yyyy-MM-dd\`; booleans are \`true\`/\`false\`. Up to 20 filters per request.
+
 ### Responses and errors
 
 Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...", "title": "Not Found", "detail": "<Etendo's message>", "meta": {"hint": "..."}}]}\`. \`detail\` carries Etendo's own message; \`code\` and \`meta.hint\` appear when Etendo provides them.
 
 - \`200\` / \`201\`: the request completed; \`204\`: a record was deleted (no body).
-- \`400\`: invalid input, unsupported field, or invalid operation payload.
+- \`400\`: invalid input, unsupported field, invalid query parameter (see \`source.parameter\`), or invalid operation payload.
 - \`401\`: missing, malformed, or invalid credentials.
 - \`402\`: the tenant is blocked.
 - \`403\`: the credential does not have the required scope or organization access.
@@ -85,6 +94,7 @@ Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...
 - \`406\` / \`415\`: the \`Accept\` or \`Content-Type\` header is not JSON:API (or JSON).
 - \`409\`: the record changed since it was read, or the \`type\`/\`id\` does not match.
 - \`422\`: Etendo refused the request (validation).
+- \`429\`: the API key exceeded its rate limit; wait \`Retry-After\` seconds.
 - \`502\`: Etendo failed (any 5xx); no internal details are returned.
 
 ### Versioning
@@ -93,7 +103,7 @@ The current contract is \`v1\` and is available under \`/api/v1\`. Additive fiel
 
 ### Rate limits
 
-The local gateway currently applies a default limit of 100 requests per 60 seconds per client process. Production limits may be configured independently and are part of the deployment contract.
+The gateway limits each API key to 100 requests per 60 seconds by default (the deployment may configure other values). Every response to an authenticated request carries \`X-RateLimit-Limit\` (requests allowed per window), \`X-RateLimit-Remaining\` (requests left in the current window) and \`X-RateLimit-Reset\` (seconds until the window resets). When the limit is exceeded the API answers \`429 Too Many Requests\` with a JSON:API error and a \`Retry-After\` header (seconds to wait). Requests rejected for a missing or invalid API key are not counted against any key.
 
 This guide is English-only for the first release. The documentation model is prepared for localized versions in the future.
 `;
@@ -142,13 +152,7 @@ async function bootstrap() {
       ].filter(Boolean).join('\n\n'),
     };
   }).filter((tag) => usedTags.has(tag.name));
-  app.getHttpAdapter().get('/api/v1/openapi.json', (_req, res) => {
-    // Scalar must not keep an older generated contract after a local
-    // regeneration; the schema is deployment content, not a cacheable API
-    // response during development.
-    res.setHeader('Cache-Control', 'no-store');
-    return res.json(document);
-  });
+  registerOpenApiRoutes(app.getHttpAdapter(), document);
 
   const docsPage = (_req: unknown, res: { type: (contentType: string) => { send: (body: string) => void } }) => {
     const logoDataUri = `data:image/png;base64,${readFileSync(new URL('../public/logo-etendo.png', import.meta.url)).toString('base64')}`;
@@ -186,7 +190,6 @@ async function bootstrap() {
   // API key through PublicApiKeyGuard.
   app.getHttpAdapter().get('/api', docsPage);
   app.getHttpAdapter().get('/docs', docsPage);
-  app.getHttpAdapter().get('/api/openapi.json', (_req, res) => res.json(document));
   app.getHttpAdapter().get('/healthz', (_req, res) => res.json({ status: 'ok' }));
 
   await app.listen(process.env.GATEWAY_PORT ?? 4300);
