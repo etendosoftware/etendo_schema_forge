@@ -345,6 +345,24 @@ describe('EditAccountModal', () => {
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('boom'));
   });
 
+  it('translates a keyed backend refusal by its messageKey (ETP-5693)', async () => {
+    const user = userEvent.setup();
+    uiMock.mockImplementation((key) => (key === 'backendError.accountIsSummary' ? 'Cuenta de nivel' : key));
+    const err = new Error('depositAccount: the account 1000 - Assets is a summary account.');
+    err.status = 400;
+    err.body = { error: { message: err.message, messageKeys: ['ETGO_AccountIsSummary'] } };
+    updateAccount.mockRejectedValueOnce(err);
+    renderModal();
+
+    const nameInput = screen.getByTestId('edit-account-name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'BBVA Renamed');
+    await user.click(screen.getByTestId('edit-account-save'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Cuenta de nivel'));
+    uiMock.mockImplementation((key) => key);
+  });
+
   it('calls onConnect (after onClose) when the Connect bank button is clicked', async () => {
     const user = userEvent.setup();
     const onConnect = vi.fn();

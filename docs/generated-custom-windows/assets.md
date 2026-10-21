@@ -1094,3 +1094,6 @@ popup is titled with the translated field label, shows each `"<code> - <name>"` 
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
 
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the asset accounting mappings now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via the new `@NeoExtension` `AssetAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
