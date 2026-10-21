@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/support/ValerIATile.jsx
 import { render } from '@testing-library/react';
 import { ValerIATile } from '../ValerIATile.jsx';
 
