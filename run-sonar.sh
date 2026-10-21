@@ -340,7 +340,7 @@ else
 fi
 export SONAR_PR_KEY
 # The scanner's embedded JVM derives sun.jnu.encoding from the locale. Under
-# LC_ALL=C (git push from a JetBrains IDE) it is ANSI_X3.4-1968 and the scan
+# LANG=C or LC_ALL=C (e.g. a shell alias around git) it is ANSI_X3.4-1968 and the scan
 # aborts with InvalidPathException on any non-ASCII file name (e.g. an accented
 # ResultadoValidacionForm.jsx). Force UTF-8 for the scanner only.
 # C.UTF-8 is built into glibc but absent on macOS, where en_US.UTF-8 always exists.
