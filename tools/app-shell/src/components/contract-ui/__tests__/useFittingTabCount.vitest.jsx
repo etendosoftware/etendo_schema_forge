@@ -94,4 +94,18 @@ describe('useFittingTabCount', () => {
     run(refs);
     expect(refs.wrapperRef.current.scrollLeft).toBe(0);
   });
+
+  // CP-10 (ETP-5515 QA): integer offsetWidth rounding must not evict a tab that really fits.
+  it('uses sub-pixel widths so rounding does not evict a tab that fits', () => {
+    installResizeObserver();
+    const refs = makeRefs({ wrapperWidth: 453, childWidths: [101, 101, 101, 101, 101, 101, 51] });
+    const rect = (width) => () => ({ width });
+    refs.wrapperRef.current.getBoundingClientRect = rect(453);
+    refs.measureRef.current.children.forEach((child, i) => {
+      child.getBoundingClientRect = rect(i === 6 ? 50.4 : 100.4);
+    });
+    // 4 visible + More = 452 <= 453 by real widths; the rounded sum (455) would give 3
+    const { result } = run(refs);
+    expect(result.current).toBe(4);
+  });
 });
