@@ -234,7 +234,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
                   title={ui('orgRepIncludedIn390')}
                   aria-label={ui('orgRepIncludedIn390')}
                   data-testid="RepresentantesLegalesSection__included">
-                  390
+                  {ui('orgRepIncludedIn390Badge')}
                 </span>
               )}
             </div>

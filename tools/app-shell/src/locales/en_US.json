@@ -20437,6 +20437,7 @@
     "orgRepNotaryLabel": "Notary",
     "orgRepLimitHint": "Only the first {limit} representatives by line number are included in Modelo 390.",
     "orgRepIncludedIn390": "Included in Modelo 390",
+    "orgRepIncludedIn390Badge": "390",
     "orgRepAddRow": "Add legal representative",
     "orgRepNewTitle": "New legal representative",
     "orgRepEditTitle": "Edit legal representative",
