@@ -438,6 +438,27 @@ describe('renderCustomTabPanels — passes isDocumentReadOnly through (ETP-5205)
   });
 });
 
+// [ETP-5830] — the role tier (the `window` prop) is what locks writes in a custom tab;
+// the static `api.window.readOnly` flag must not, or a completed document's Attachments
+// tab would stop accepting files (ETP-5526).
+describe('renderCustomTabPanels — passes accessReadOnly from the role tier only (ETP-5830)', () => {
+  it('passes accessReadOnly=true when the role tier is read-only', async () => {
+    await act(async () => {
+      renderView({ window: { readOnly: true } });
+    });
+
+    expect(stubProps.accessReadOnly).toBe(true);
+  });
+
+  it('passes accessReadOnly=false for a statically read-only window with a full role tier', async () => {
+    await act(async () => {
+      renderView({ api: { window: { readOnly: true } } });
+    });
+
+    expect(stubProps.accessReadOnly).toBe(false);
+  });
+});
+
 // A custom tab whose Component declares `requiresSavedRecord` (e.g. Attachments
 // without `saveBeforeAttach`) renders its strip button disabled on a new record —
 // in both the main strip and the customTabsAfterBottom strip — and cannot become active.
