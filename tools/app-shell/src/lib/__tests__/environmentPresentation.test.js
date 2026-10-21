@@ -2,10 +2,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  canReactivateSubscription,
   environmentPlanLabelKey,
   environmentCommercialLabel,
   environmentRelationshipLabel,
   environmentTrialLabel,
+  isCanceledSubscription,
   isProductiveEnvironment,
   isPurchaseSourceDemo,
   sortEnvironments,
@@ -105,6 +107,33 @@ test('a canceled productive environment that is also marked as associated stays 
   assert.equal(environmentPlanLabelKey(associated), 'environmentProductive');
   // The plan-based predicate is deliberately unchanged: a canceled productive reads as not paying.
   assert.equal(isProductiveEnvironment(associated), false);
+});
+
+// ETP-5742 — only a CANCELED subscription is re-subscribed; an unpaid one (PAST_DUE) is fixed in
+// the payment portal. The plan is not asked: it reads "free" behind a closed subscription row and
+// "productive" behind the older preference projection.
+test('a canceled productive environment is a canceled subscription whatever its plan reads', () => {
+  assert.equal(isCanceledSubscription(canceledProductive), true);
+  assert.equal(isCanceledSubscription({ ...canceledProductive, plan: 'productive' }), true);
+  assert.equal(isCanceledSubscription({ plan: 'productive', subscriptionStatus: 'EXPIRED' }), true);
+  for (const environment of [
+    { ...canceledProductive, subscriptionStatus: 'PAST_DUE' },
+    { ...canceledProductive, subscriptionStatus: 'CURRENT' },
+    { plan: 'free', environmentType: 'DEMO', subscriptionStatus: 'EXPIRED' },
+    { plan: 'free', subscriptionStatus: 'EXPIRED' },
+    undefined,
+  ]) {
+    assert.equal(isCanceledSubscription(environment), false, JSON.stringify(environment));
+  }
+});
+
+test('only the owner may re-subscribe a canceled environment', () => {
+  assert.equal(canReactivateSubscription({ ...canceledProductive, ownedByAccount: true }), true);
+  assert.equal(canReactivateSubscription({ ...canceledProductive, ownedByAccount: false }), false);
+  // A backend that predates the field omits it; the button is not offered on a guess.
+  assert.equal(canReactivateSubscription(canceledProductive), false);
+  assert.equal(canReactivateSubscription(
+    { ...canceledProductive, subscriptionStatus: 'PAST_DUE', ownedByAccount: true }), false);
 });
 
 test('a demo the account was only invited into is not a purchase source', () => {

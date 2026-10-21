@@ -3408,7 +3408,7 @@ path** — no bespoke bulk-delete code in this window:
 | Row checkboxes | `DataTable`'s own `selectable` column (its default, `true`) |
 | Selection state | `ListView` (`selectedRows`, `clearSelectionCounter`, `deselectTrigger`, `deselectRowIds`) — forwarded read-only to the slot as `selectedRows` |
 | Selection bar (floating `SelectionToolbar`, ETP-4972) + icon-only delete | `ListView`, portaled to `document.body`, viewport-fixed bottom-center — not part of the `AccountsHeaderTable` slot's own DOM |
-| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
+| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` (thin wrapper since ETP-5758) → `hooks/useBatchDeleteDialog.jsx` → `DeleteConfirmDialog` + `lib/batchDelete.js` |
 
 **How the flow behaves.** Tick one or more row checkboxes → `ListView`'s floating
 `SelectionToolbar` pill appears bottom-center of the viewport (ETP-4972 — a true
@@ -3758,3 +3758,9 @@ Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show A
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The new movement, the movement row kebab (Contabilizar, Confirmar, Reactivar — including a reconciled movement, whose core refusal used to arrive as a raw `@ETPR_PeriodClosedForUnRemovePayment@`), the funds transfer modal and the cash close (Conciliación tab) offer **Ir al calendario**. Cash close: a close-date refusal is dated by the close; a marked movement in a closed period keeps its own sentence naming the movement and is dated by that movement (`error.periodDate`). See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `FinancialAccountAccountingHandler` (now rolled back on refusal, including a row it had just created) (`com.etendoerp.go`, see `neo-headless.md`).
+
+Error display: `EditAccountModal` now passes the response's `messageKeys` / `messageParams` to `translateBackendError`, so every keyed backend refusal of this window is shown in the UI locale.

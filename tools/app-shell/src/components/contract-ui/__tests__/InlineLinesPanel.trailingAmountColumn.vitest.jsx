@@ -16,12 +16,16 @@
  *
  * Invariant under test: hovering a row NEVER changes how many cells it renders, nor
  * their order, and the body always renders exactly as many grid cells as the header
- * renders column headers. The deliberate swap (amount genuinely last) is asserted
- * too, so the fix cannot be "just stop suppressing".
+ * renders column headers.
+ *
+ * ETP-5600 (QA pass 2) — the swap itself is gone on editable tables: the strip got
+ * its own reserved slot, sticky to the visible right edge of the scroll box, so no
+ * cell is ever suppressed on hover. A read-only table (no strip at all) keeps the
+ * former slot-free layout when the amount is last; both are asserted below.
  *
  * Same mocks/harness convention as InlineLinesPanel.cellBadges.vitest.jsx.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React from 'react';
@@ -31,6 +35,7 @@ import React from 'react';
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -170,16 +175,35 @@ describe('InlineLinesPanel — hover action strip vs. a non-trailing amount colu
     expect(screen.getAllByTestId('line-actions')).toHaveLength(COSTING_ROWS.length);
   });
 
-  it('still hands its slot to the action strip when the amount column IS last', async () => {
+  // ETP-5600 (QA pass 2) — the trailing amount no longer steps aside for the icons: an
+  // editable table reserves the strip's own slot, which is sticky to the visible right
+  // edge, so scrolled to the end the buttons never cover the last column.
+  it('keeps the trailing amount visible on hover and reserves the strip slot when the amount IS last', async () => {
     const user = userEvent.setup();
     renderPanel(TRAILING_AMOUNT_COLUMNS, TRAILING_AMOUNT_ROWS);
 
     const row = screen.getByTestId('line-row-L1');
     expect(cellKeys(row)).toEqual(['product', 'quantity', 'lineNetAmount']);
+    expect(screen.getAllByTestId('line-actions')).toHaveLength(TRAILING_AMOUNT_ROWS.length);
 
     await user.hover(row);
-    // Deliberate: the trailing amount steps aside so the icons take its space.
-    expect(cellKeys(row)).toEqual(['product', 'quantity']);
+    expect(cellKeys(row)).toEqual(['product', 'quantity', 'lineNetAmount']);
+    const strip = within(row).getByTestId('line-actions');
+    expect(strip.className).toContain('sticky');
+    expect(strip.className).toContain('right-0');
+    expect(strip.getAttribute('style')).toContain('0 0 158px');
+  });
+
+  it('pins the strip only while its actions show', () => {
+    renderPanel(TRAILING_AMOUNT_COLUMNS, TRAILING_AMOUNT_ROWS);
+    const strip = within(screen.getByTestId('line-row-L1')).getByTestId('line-actions');
+    expect(strip.className).not.toContain('sticky');
+  });
+
+  it('keeps the former layout on a read-only table: the trailing amount takes the slot place', () => {
+    renderPanel(TRAILING_AMOUNT_COLUMNS, TRAILING_AMOUNT_ROWS, { isDocumentReadOnly: true });
+    expect(screen.queryAllByTestId('line-actions')).toHaveLength(0);
+    expect(cellKeys(screen.getByTestId('line-row-L1'))).toEqual(['product', 'quantity', 'lineNetAmount']);
   });
 
   // The delete affordance is a red herring: Product > Costo shows pencil AND trash while its

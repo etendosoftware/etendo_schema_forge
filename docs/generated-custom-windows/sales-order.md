@@ -701,6 +701,19 @@ refusal on a stale screen (a shipment created from another tab after the list lo
 used to succeed silently. The `documentAction` agentPrompt's sentence "the process will reject it"
 is now true. Purchase orders are not covered (out of scope).
 
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+- `etendo_schema(spec, entity, view:"actions", id:<sales order id>)` says `availableNow` / `unavailableReason` per action for that
+  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes `CL` or `RE`.
+  `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
+  behind the UI's `hasLinkedDocuments` flag. Advice only: nothing is blocked by it.
+- `createShipment` and `createDraftInvoice` applies to a completed order only.
+- The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
+  they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
+- `hasLinkedDocuments`, `needsPrimaryDoc` and `needsInvoiceDoc` are declared response keys.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
+
 ## Unit column in the lines grid (ETP-5696)
 
 The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. pedido**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).

@@ -40,6 +40,10 @@ describe('specsInvalidatedByWrite', () => {
       ['sales-order', 'sales-invoice']],
     ['goods-receipt process → purchase-invoice (not purchase-order: Purchase cell)',
       '/sws/neo/goods-receipt/goodsReceipt/1/action/complete', ['purchase-invoice']],
+    // ETP-5729: the shipment shows `canCreateReturn` and its `returnReceipts` chips, both derived
+    // from its returns, so deleting / editing / completing a return marks the shipment stale.
+    ['return-material-receipt delete → goods-shipment',
+      '/sws/neo/return-material-receipt/returnMaterialReceipt/1', ['goods-shipment']],
     ['sales-invoice action on an absolute URL → sales-order',
       'https://erp.example/sws/neo/sales-invoice/header/1/action/complete', ['sales-order']],
     ['spec name only in the query string → nothing', '/sws/neo/sales-order/header?criteria=goods-shipment', []],

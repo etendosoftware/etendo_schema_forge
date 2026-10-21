@@ -11,7 +11,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { toast } from 'sonner';
-import { runBatchDelete, toastBatchDeleteOutcome } from '../batchDelete.js';
+import { runBatchDelete, toastBatchDeleteOutcome, buildChildRowDeleteFn } from '../batchDelete.js';
 
 /**
  * Identity-with-params for every UI key, EXCEPT the `backendError.*` namespace: `translateBackendError`
@@ -440,3 +440,174 @@ describe('toastBatchDeleteOutcome — common failure reason', () => {
     expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining(MAPPED_REASON));
   });
 });
+
+// ETP-5758 — useBatchDeleteDialog relies on runBatchDelete never rejecting, so a deleteOneFn that
+// throws synchronously (instead of returning a rejected promise) must still count as that row's
+// failure rather than escaping before Promise.allSettled runs.
+describe('runBatchDelete — synchronous throw (ETP-5758)', () => {
+  it('records a synchronous throw as that item\'s failure and keeps the others', async () => {
+    const boom = new Error('sync boom');
+    const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    const deleteOneFn = vi.fn((item) => {
+      if (item.id === 'b') throw boom;
+      return Promise.resolve(item);
+    });
+
+    const { succeeded, failed, errors } = await runBatchDelete(items, deleteOneFn);
+
+    expect(succeeded).toEqual([{ id: 'a' }, { id: 'c' }]);
+    expect(failed).toEqual([{ id: 'b' }]);
+    expect(errors).toEqual([boom]);
+    // The throw did not short-circuit the rest of the batch.
+    expect(deleteOneFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('resolves (never rejects) when EVERY call throws synchronously', async () => {
+    const deleteOneFn = () => { throw new Error('nope'); };
+
+    await expect(runBatchDelete(['x', 'y'], deleteOneFn)).resolves.toEqual({
+      succeeded: [],
+      failed: ['x', 'y'],
+      errors: [expect.objectContaining({ message: 'nope' }), expect.objectContaining({ message: 'nope' })],
+    });
+  });
+
+  it('a synchronous throw carrying a 4xx status still lets the one-row toast name the reason', async () => {
+    const deleteOneFn = () => { throw rejectionWith(BUSINESS_REASON, 409); };
+
+    const outcome = await runBatchDelete([{ id: 'only' }], deleteOneFn);
+    toastBatchDeleteOutcome(interpolatingUi(), { ...outcome, total: 1 });
+
+    expect(toast.error).toHaveBeenCalledWith(BUSINESS_REASON);
+  });
+
+  it('a plain (non-promise) return value counts as success', async () => {
+    const { succeeded, failed } = await runBatchDelete(['a'], () => 'done');
+
+    expect(succeeded).toEqual(['a']);
+    expect(failed).toEqual([]);
+  });
+});
+
+// ETP-5758 — replaces `deleteSelectedChildRows`: builds the per-row deleteOneFn DetailView hands to
+// `requestBatchDelete(rows, { deleteOneFn })` for primary lines and each secondary tab.
+describe('buildChildRowDeleteFn (ETP-5758)', () => {
+  let fetchMock;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const deleteCall = () => {
+    const [url, init] = fetchMock.mock.calls[0];
+    return { url: String(url), init };
+  };
+
+  it('uses the configured api.crud[entityKey].detailUrl with {id} substituted', async () => {
+    fetchMock.mockResolvedValue({ ok: true });
+    const deleteOne = buildChildRowDeleteFn({
+      api: { crud: { lines: { detailUrl: '/custom/lines-endpoint/{id}' } } },
+      entityKey: 'lines',
+      apiBaseUrl: '/api/sales-order',
+      token: 'tok',
+    });
+
+    const row = { id: 'L1' };
+    await expect(deleteOne(row)).resolves.toBe(row);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const { url, init } = deleteCall();
+    expect(url).toContain('/custom/lines-endpoint/L1');
+    expect(url).not.toContain('/api/sales-order');
+    expect(init).toEqual(expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('falls back to {apiBaseUrl}/{entityKey}/{id} when no detailUrl is configured', async () => {
+    fetchMock.mockResolvedValue({ ok: true });
+    const deleteOne = buildChildRowDeleteFn({ api: {}, entityKey: 'addresses', apiBaseUrl: '/api/contacts' });
+
+    await deleteOne({ id: 'ADDR-9' });
+
+    const { url, init } = deleteCall();
+    expect(url).toContain('/api/contacts/addresses/ADDR-9');
+    expect(init).toEqual(expect.objectContaining({ method: 'DELETE' }));
+  });
+
+  it('falls back to the default path when api is undefined, or detailUrl belongs to another entity', async () => {
+    fetchMock.mockResolvedValue({ ok: true });
+
+    await buildChildRowDeleteFn({ entityKey: 'lines', apiBaseUrl: '/api/x' })({ id: 'A' });
+    await buildChildRowDeleteFn({
+      api: { crud: { other: { detailUrl: '/nope/{id}' } } }, entityKey: 'lines', apiBaseUrl: '/api/x',
+    })({ id: 'B' });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/x/lines/A');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/api/x/lines/B');
+    expect(String(fetchMock.mock.calls[1][0])).not.toContain('/nope/');
+  });
+
+  it('on a non-ok response rejects with the extracted backend message AND the HTTP status', async () => {
+    const res = { ok: false, status: 409 };
+    fetchMock.mockResolvedValue(res);
+    const extractErrorMessage = vi.fn(async () => 'Line belongs to a completed shipment.');
+    const deleteOne = buildChildRowDeleteFn({ entityKey: 'lines', apiBaseUrl: '/api/x', extractErrorMessage });
+
+    const err = await deleteOne({ id: 'L1' }).then(() => null, (e) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe('Line belongs to a completed shipment.');
+    expect(err.status).toBe(409);
+    expect(extractErrorMessage).toHaveBeenCalledWith(res);
+  });
+
+  it('falls back to "HTTP <status>" when no extractor is given, still carrying the status', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500 });
+    const deleteOne = buildChildRowDeleteFn({ entityKey: 'lines', apiBaseUrl: '/api/x' });
+
+    const err = await deleteOne({ id: 'L1' }).then(() => null, (e) => e);
+
+    expect(err.message).toBe('HTTP 500');
+    expect(err.status).toBe(500);
+  });
+
+  it('falls back to "HTTP <status>" when the extractor yields an empty message', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 404 });
+    const deleteOne = buildChildRowDeleteFn({
+      entityKey: 'lines', apiBaseUrl: '/api/x', extractErrorMessage: async () => '',
+    });
+
+    const err = await deleteOne({ id: 'L1' }).then(() => null, (e) => e);
+
+    expect(err.message).toBe('HTTP 404');
+    expect(err.status).toBe(404);
+  });
+
+  it('a network failure propagates as a rejection without a status', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const deleteOne = buildChildRowDeleteFn({ entityKey: 'lines', apiBaseUrl: '/api/x' });
+
+    const err = await deleteOne({ id: 'L1' }).then(() => null, (e) => e);
+
+    expect(err).toBeTruthy();
+    expect(err.status).toBeUndefined();
+  });
+
+  it('end to end with runBatchDelete + toast: a ONE-row 4xx refusal toasts the backend reason', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 409 });
+    const deleteOne = buildChildRowDeleteFn({
+      entityKey: 'lines', apiBaseUrl: '/api/x', extractErrorMessage: async () => BUSINESS_REASON,
+    });
+
+    const outcome = await runBatchDelete([{ id: 'L1' }], deleteOne);
+    toastBatchDeleteOutcome(interpolatingUi(), { ...outcome, total: 1 });
+
+    expect(outcome.failed).toEqual([{ id: 'L1' }]);
+    expect(toast.error).toHaveBeenCalledWith(BUSINESS_REASON);
+  });
+});
+

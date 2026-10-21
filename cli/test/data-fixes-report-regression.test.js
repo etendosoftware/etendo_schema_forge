@@ -183,6 +183,13 @@ const FIXES_WITH_REPORT = new Set([
   // currency. The @report lists a partner the chain could not resolve (a client with no base
   // currency) and is empty on every clean run.
   '20261015T184242Z__R49-bpartner-currency-from-org',
+  // R50 (ETP-5729) removes the duplicated tax line and the order link of rectificative invoices
+  // created from a return. Its @report lists the posted invoices it repaired after deleting their
+  // accounting (RESET, read back from @apply's RETURNING via a temp table — the R32 pattern) and
+  // every document it left alone with the guard that protected it: PERIOD_CLOSED,
+  // CASH_FLOW_STATEMENT, SIF_SENT, TOTALS, PAID, CASH_VAT, TAX_REGISTER, PAYMENT_PLAN,
+  // POSTED_MATCH or ORDER_LINE_OVER_INVOICED — same "flag, don't guess" pattern as R19.
+  '20261016T185257Z__R50-rectificative-dup-tax-and-order-link',
   '20261019T141632Z__R50-gl-journal-foreign-doctype',
 ]);
 
