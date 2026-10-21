@@ -341,6 +341,13 @@ Tables are System-level with rows at client `0`, like `ETGO_ACCOUNT`; window acc
 
 The acceptance bar: **no billing or payment question requires reading a log file or the database to answer.**
 
+*Reconciliation process, as decided on 2026-10-21 (ETP-5048; design of record `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`):*
+
+- **Production schedules it by hand** in the Process Request window (System, timing *Schedule*, hourly), like Demo Trial Notices: production is updated by delta and never restarted, so the startup hook that plants the request only serves environments that restart.
+- **The `billing-reconciliation-schedule` flag gates every scheduled run** — the planted request or one an administrator created. A run from the menu, or a Process Request run immediately or later once, is never gated.
+- **A scheduled run while the flag is off is an ERROR** in Process Monitor (it does no work), plus **one internal alert per UTC day**, so a schedule firing for nothing is seen. Turn the flag on and create the Process Request together at go-live.
+- Toward the acceptance bar above, the run result lists the affected items (request or subscription, company, action, reason), in the popup and in the Process Monitor log, and a dry run says what it *would* do.
+
 ---
 
 ## 11. Data model
