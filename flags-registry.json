@@ -705,10 +705,55 @@
         "e2e": [
           {
             "root": "frontend",
-            "path": "e2e/tests/flows/first-steps-demo-data-transfer.mocked.spec.js",
+            "path": "e2e/tests/flows/platform/first-steps-demo-data-transfer.mocked.spec.js",
             "note": "Covers RUNNING progress, FAILED retry, and row absence with the flag off."
           }
         ]
+      }
+    },
+    {
+      "id": "environment-access-enforcement-kill-switch",
+      "description": "Operational kill switch for commercial environment-access enforcement (ETP-5047): the HTTP 402 that NEO (every credential scheme), the NEO_DATA surfaces (favorites, fiscal test mode, report selectors, OAuth2 API keys), MCP, the /sws/go tenant-session endpoints and the legacy GET /sws/go/login?userId= answer once a demo trial has expired or a subscription's payment grace has elapsed. Enforcement is ON by default and stays on when the flag is unset or the control plane is unreachable; only an explicit true switches the refusal off, and the would-be denial is then logged at INFO. The enforcement itself (EnvironmentAccessGuard, the 402 body, the entry-point checks) is unconditional and is not owned by this entry.",
+      "owner": "mtaal",
+      "jira": "ETP-5047",
+      "created": "2026-09-25",
+      "flag": {
+        "key": "environment-access-enforcement-off",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: an incident switch for a check that went live without one. Revisit once enforcement has run a full billing cycle in production without an incident; at that point decide with the team between retiring it (the guard stays, the switch goes) and keeping it as a standing operational toggle, which would then need its own justification here.",
+        "symbols": [
+          "environment-access-enforcement-off",
+          "FLAG_ENVIRONMENT_ACCESS_ENFORCEMENT_OFF",
+          "ETGO_FLAG_ENVIRONMENT_ACCESS_ENFORCEMENT_OFF",
+          "etendo.go.flags.environment-access-enforcement-off",
+          "EnvironmentAccessEnforcementFlag",
+          "isEnforcementSwitchedOff",
+          "enforcementSwitchedOff"
+        ],
+        "$symbolsComment": "Backend-only flag with an inverted polarity on purpose: GoFeatureFlags resolves every failure to false, and false here means enforcing. No key exists in flag-keys.js and none must be added: the SPA follows the 402. EnvironmentAccessGuard is the only caller of EnvironmentAccessEnforcementFlag; it holds the switch as the Predicate field enforcementSwitchedOff, which is how a test substitutes it. Per-tenant switching is a ConfigCat rule on the clientId attribute and leaves no grep trail here."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": [
+          "src/com/etendoerp/go/payment/EnvironmentAccessEnforcementFlag.java"
+        ]
+      },
+      "$pathsComment": "Owned code only: the flag gate. Shared toggle point, NOT owned: EnvironmentAccessGuard.java (the enforcementSwitchedOff predicate and its kill-switch INFO log line), which stays when the flag retires because it is the enforcement itself. GoFeatureFlags.java carries the constant and is framework code.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/EnvironmentAccessEnforcementFlagTest.java",
+            "note": "Unset flag, a non-boolean value and a provider failure all read as NOT switched off; only a value resolving to true (locally true, Y, yes or 1, case-insensitive) switches off; the clientId attribute reaches the evaluation context (asserted on the FeatureFlagContext and end to end through a per-tenant stub provider)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/EnvironmentAccessGuardTest.java",
+            "note": "Decision x switch matrix: ALLOWED and null never consult the switch; a denial with the switch off is refused, with it on is allowed and logged at INFO; error body shape; checkAsSystem hands the caller its context back."
+          }
+        ],
+        "e2e": []
       }
     },
     {
@@ -841,6 +886,48 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/mcp/McpRequestEraTest.java"
+          }
+        ]
+      }
+    },
+    {
+      "id": "batch-redundant-callout-skip",
+      "description": "Per-batch skip of create-cascade callouts proven redundant (ETP-5676): inside one /sws/neo/batch request sent with _skipRedundantCallouts: true, a callout is skipped once an earlier operation with the same tab, field, trigger value and caller-sent fields showed that every value it writes is discarded. The skip code is PERMANENT; the flag is a backend-only, environment-level kill switch whose true value turns the skip off for every batch, whatever the request asks. Inverted on purpose: false or unset means the opt-in is honoured.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-5676",
+      "created": "2026-10-14",
+      "flag": {
+        "key": "batch-callout-skip-disabled",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "Agreed date, confirmed by the owner (Valentin Vivaldi) on 2026-10-14. Retirement condition: the skip has run on real tenant imports without a wrong default being reported. Retiring it ships the skip: delete the flag check in NeoBatchScope.calloutSkipKillSwitchOn() and the GoFeatureFlags constant, keep NeoCalloutDiscardMemory and the _skipRedundantCallouts option.",
+        "symbols": [
+          "batch-callout-skip-disabled",
+          "FLAG_BATCH_CALLOUT_SKIP_DISABLED",
+          "ETGO_FLAG_BATCH_CALLOUT_SKIP_DISABLED",
+          "etendo.go.flags.batch-callout-skip-disabled",
+          "calloutSkipKillSwitchOn"
+        ],
+        "$symbolsComment": "Backend-only flag: nothing in the browser evaluates it, so it must never be declared in flag-keys.js (same rule as mcp-modern-era-disabled). The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. Evaluated with an empty context, once per batch, when NeoBatchScope opens."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "No owned code: the skip (NeoCalloutDiscardMemory, the _skipRedundantCallouts option in BatchService/McpToolRouter/ToolRegistry, the import's postBatch in useWindowImportDialog.js) is permanent and is NOT deleted when the flag retires. The toggle point is NeoBatchScope.calloutSkipKillSwitchOn(); GoFeatureFlags is shared framework code. Docs: com.etendoerp.go docs/neo-headless.md section 'Bulk writes through /sws/neo/batch - per-row cost options (ETP-5676)'.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoBatchScopeTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BatchServiceTest.java"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ListView.importLabels.vitest.jsx"
           }
         ]
       }

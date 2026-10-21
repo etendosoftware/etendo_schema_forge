@@ -499,9 +499,11 @@ export default function RecordCreateModal({
                 variant, same menu dictionary — so the popup is not a lookalike of the
                 window but literally the same control.
               */}
-              <div className="flex items-center gap-2" data-testid="record-create-tabs">
-                {renderPrimaryTabButtons(target.tabsVariant, tabs, setActiveTab, activeTab, tMenu)}
-              </div>
+              {tabs.length > 1 && (
+                <div className="flex items-center gap-2" data-testid="record-create-tabs">
+                  {renderPrimaryTabButtons(target.tabsVariant, tabs, setActiveTab, activeTab, tMenu)}
+                </div>
+              )}
               {/*
                 Both panels stay MOUNTED — the inactive one is only hidden. Unmounting it
                 would fire EntityForm's registerFields cleanup and silently drop that tab's

@@ -4,6 +4,7 @@ import {
   Pencil,
   Archive,
   RefreshCw,
+  Cable,
   Unlink2,
   Plug,
   ArrowLeftRight,
@@ -21,6 +22,33 @@ import {
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
 import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
+
+/**
+ * "Reconectar" for a connection that is still connected but has stopped refreshing (ETP-5089).
+ * Renders nothing otherwise, so the caller needs no condition of its own.
+ *
+ * Its own flag, `bankConnectionStale`: unlike `bankReconnectable` (deactivated, can be revived) it
+ * keeps every connected action (sync, disconnect). Same reconnect flow as a deactivated account's
+ * item: the popup re-authorizes the existing connection and its callback refreshes the health that
+ * flagged it. Cable, not that item's RefreshCw: it sits right under "Sincronizar ahora", which
+ * already uses RefreshCw, so the two must not look alike.
+ */
+function StaleReconnectMenuItem({ account, ui, onBankConnectionAction }) {
+  if (account.bankConnected !== true || account.bankConnectionStale !== true) {
+    return null;
+  }
+  return (
+    <DropdownMenuItem
+      onClick={() => onBankConnectionAction?.('reconnect', account)}
+      data-testid={`account-row-menu-reconnect-stale-${account.id}`}
+    >
+      <Cable className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CableReconnectStale__ffaf9f" />
+      <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+        {ui('financeAccountsBankConnectionReconnect')}
+      </span>
+    </DropdownMenuItem>
+  );
+}
 
 /**
  * Every item of the kebab except "Abrir cuenta" — all of them write (edit, new movement,
@@ -81,6 +109,11 @@ function AccountRowMenuWriteItems({
                   {ui('financeAccountsMenuSyncNow')}
                 </span>
               </DropdownMenuItem>
+              <StaleReconnectMenuItem
+                account={account}
+                ui={ui}
+                onBankConnectionAction={onBankConnectionAction}
+                data-testid="StaleReconnectMenuItem__ffaf9f" />
               <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
               <DropdownMenuItem
                 onClick={() => onBankConnectionAction?.('disconnect', account)}

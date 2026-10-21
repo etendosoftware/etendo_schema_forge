@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import {
   extractBackendMessageKeys,
   extractBackendMessageParams,
+  stripTrailingPeriods,
   translateBackendError,
   parseBackendErrorMessage,
   parseBackendError,
@@ -1515,6 +1516,13 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
       + ' proveedor. Sólo se sincronizarán los movimientos de ese período.',
     'backendError.psd2NoActiveConnection':
       'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
+    // ETP-5089 — kept byte-identical to the real es_ES entries.
+    'backendError.psd2ConnectionStale':
+      'La sincronización de la cuenta {account} está fallando: {reason}.'
+      + ' Por favor, reconecta la cuenta.',
+    'backendError.psd2ConnectionStaleNoReason':
+      'La sincronización de la cuenta {account} está fallando.'
+      + ' Por favor, reconecta la cuenta.',
   });
 
   // The account name is a free-form financial-account identifier: it contains spaces, a dash and
@@ -1532,6 +1540,18 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
   // parameterized matcher.
   const NO_CONNECTION_RAW = 'No active bank connection found for financial account %s.'
     + ' Connect the account first.';
+  // ETP-5089 — `PSD2_ConnectionStaleReconnect`. The reason is the bank's own free text, so it is
+  // chosen to carry a period and a colon of its own: the matcher must not split on either. It also
+  // ends in its own period, as bank messages usually do, which the `%1.` template doubles into the
+  // `later..` below — exactly what crosses the wire.
+  const STALE_RAW = 'The connection for account Fake Demo Bank - Savings account ETP-5109'
+    + ' has not refreshed successfully since it last failed: Error: token expired. Retry later..'
+    + ' Please reconnect the account.';
+  // What the backend sends when Salt Edge gave no fail_message: StringUtils.defaultString(null)
+  // leaves the slot empty, so the separator runs straight into the suffix.
+  const STALE_NO_REASON_RAW = 'The connection for account Fake Demo Bank - Savings account'
+    + ' ETP-5109 has not refreshed successfully since it last failed: . Please reconnect the'
+    + ' account.';
 
   describe('"The connection for account <name> was found inactive..." parameterized match', () => {
     it('translates to es_ES, interpolating the account name', () => {
@@ -1558,6 +1578,84 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
 
     it('returns the original message unchanged when the translation key is missing (guard)', () => {
       assert.equal(translateBackendError(CONSENT_RAW, (k) => k), CONSENT_RAW);
+    });
+  });
+
+  // ETP-5089 — the bank's failure text is dropped into a sentence that supplies its own period.
+  // Written as a backwards scan, not a `/\.+$/` regex (Sonar S5852: super-linear backtracking on a
+  // long run of periods), so the long-input case below is part of the contract.
+  describe('stripTrailingPeriods', () => {
+    it('drops every trailing period and the whitespace around the text', () => {
+      assert.equal(stripTrailingPeriods('Error interno del banco.'), 'Error interno del banco');
+      assert.equal(stripTrailingPeriods('  token expired...  '), 'token expired');
+    });
+
+    it('keeps periods that are not at the end', () => {
+      assert.equal(stripTrailingPeriods('Error: v1.2 failed. Retry.'), 'Error: v1.2 failed. Retry');
+    });
+
+    it('returns an empty string for null, undefined, blank or only periods', () => {
+      for (const empty of [null, undefined, '', '   ', '.', '...']) {
+        assert.equal(stripTrailingPeriods(empty), '', String(empty));
+      }
+    });
+
+    it('only strips the unbroken run at the end, not periods separated by a space', () => {
+      assert.equal(stripTrailingPeriods('a. .'), 'a.');
+    });
+
+    it('stays linear on a very long run of periods', () => {
+      const start = Date.now();
+      const result = stripTrailingPeriods(`x${'.'.repeat(200000)}`);
+      assert.equal(result, 'x');
+      assert.ok(Date.now() - start < 1000, 'must not backtrack');
+    });
+
+    it('stays linear on a long run of periods followed by text', () => {
+      const text = `${'.'.repeat(200000)}x`;
+      const start = Date.now();
+      assert.equal(stripTrailingPeriods(text), text);
+      assert.ok(Date.now() - start < 1000, 'must not backtrack');
+    });
+  });
+
+  describe('"The connection for account <name> has not refreshed... failed: <reason>." match', () => {
+    it('translates to es_ES, interpolating the account name and the bank reason', () => {
+      assert.equal(
+        translateBackendError(STALE_RAW, es),
+        'La sincronización de la cuenta Fake Demo Bank - Savings account ETP-5109 está fallando:'
+          + ' Error: token expired. Retry later. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('a reason that is only a period counts as no reason', () => {
+      const raw = 'The connection for account Caja has not refreshed successfully since it last'
+        + ' failed: .. Please reconnect the account.';
+      assert.equal(
+        translateBackendError(raw, es),
+        'La sincronización de la cuenta Caja está fallando.'
+          + ' Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('drops the reason clause when the bank gave none, instead of an empty slot', () => {
+      assert.equal(
+        translateBackendError(STALE_NO_REASON_RAW, es),
+        'La sincronización de la cuenta Fake Demo Bank - Savings account ETP-5109 está fallando.'
+          + ' Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('does not swallow the sibling "was found inactive" message sharing its prefix', () => {
+      assert.equal(
+        translateBackendError(INACTIVE_RAW, es),
+        'La conexión de la cuenta Fake Demo Bank - Savings account ETP-5109 se encontró inactiva'
+          + ' durante la sincronización. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(STALE_RAW, (k) => k), STALE_RAW);
     });
   });
 
@@ -2127,6 +2225,144 @@ describe('translateBackendError — invoice lines without amount (ETP-5710)', ()
       assert.ok(flat.includes(`"${KEY}"`), `${loc} is missing ${KEY}`);
       assert.ok(flat.match(new RegExp(`"${KEY}":\\s*"[^"]*\\{products\\}`)), `${loc} lost {products}`);
     }
+  });
+});
+
+// ReturnableQuantity.java / ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711). The
+// over-return refusal names the product and both quantities; the product is free text, so it is
+// located by the fixed delimiters.
+describe('translateBackendError — over-return refusals (ETP-5711)', () => {
+  const es = fakeUiTranslator({
+    'backendError.returnQuantityExceeds': 'No se pueden devolver {requested} de {product}: solo quedan {available} por devolver de esta línea ({total} en el documento de origen).',
+    'backendError.returnNothingLeftOnLine': 'No se pueden devolver {requested} de {product}: no queda nada por devolver de esta línea ({total} en el documento de origen).',
+    'backendError.returnNothingLeft': 'No queda nada por devolver de este documento: todas las líneas ya se han devuelto.',
+    'backendError.returnLineRequiresImport': 'Las líneas de una devolución no se pueden crear directamente.',
+    'backendError.returnLineNotInDocument': 'La línea {lineId} no es una línea de este documento.',
+    'backendError.returnReasonTooLong': 'El motivo es demasiado largo: máximo {max} caracteres (tiene {length}).',
+  });
+
+  it('translates the direct-creation refusal of both directions to the same key', () => {
+    const expected = 'Las líneas de una devolución no se pueden crear directamente.';
+    assert.equal(
+      translateBackendError('Return lines cannot be created directly. Add them to the return with importReceiptLines, or create the whole return from the source document with createPurchaseReturn.', es),
+      expected,
+    );
+    assert.equal(
+      translateBackendError('Return lines cannot be created directly. Add them to the return with importShipmentLines, or create the whole return from the source document with createReturn.', es),
+      expected,
+    );
+  });
+
+  it('translates "line is not a line of this document" keeping the id', () => {
+    assert.equal(
+      translateBackendError('Line 4F2A is not a line of this document.', es),
+      'La línea 4F2A no es una línea de este documento.',
+    );
+    assert.equal(translateBackendError('Line  is not a line of this document.', es), 'Line  is not a line of this document.');
+  });
+
+  it('translates the over-long reason keeping both numbers', () => {
+    assert.equal(
+      translateBackendError('The reason is too long: it can have at most 255 characters (it has 300).', es),
+      'El motivo es demasiado largo: máximo 255 caracteres (tiene 300).',
+    );
+    const odd = 'The reason is too long: it can have at most (it has 3).';
+    assert.equal(translateBackendError(odd, es), odd);
+  });
+
+  it('translates the over-return with product and quantities', () => {
+    assert.equal(
+      translateBackendError('Cannot return 5 of Agua: only 4 can still be returned from this line (10 on the source document).', es),
+      'No se pueden devolver 5 de Agua: solo quedan 4 por devolver de esta línea (10 en el documento de origen).',
+    );
+  });
+
+  it('keeps a product name that itself contains " of " and ": only "', () => {
+    assert.equal(
+      translateBackendError('Cannot return 2 of Box of 6: only 1 can still be returned from this line (3 on the source document).', es),
+      'No se pueden devolver 2 de Box of 6: solo quedan 1 por devolver de esta línea (3 en el documento de origen).',
+    );
+  });
+
+  it('translates the nothing-left variants', () => {
+    assert.equal(
+      translateBackendError('Cannot return 1 of Agua: nothing is left to return from this line (10 on the source document).', es),
+      'No se pueden devolver 1 de Agua: no queda nada por devolver de esta línea (10 en el documento de origen).',
+    );
+    assert.equal(
+      translateBackendError('Nothing is left to return from this document: every line has already been returned.', es),
+      'No queda nada por devolver de este documento: todas las líneas ya se han devuelto.',
+    );
+  });
+
+  it('leaves an unrelated "Cannot return" message untouched', () => {
+    const other = 'Cannot return anything today.';
+    assert.equal(translateBackendError(other, es), other);
+  });
+
+  it('has the keys in en_US, es_ES and es_AR', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      for (const k of ['returnQuantityExceeds', 'returnNothingLeftOnLine', 'returnNothingLeft', 'returnSourceNotCompleted', 'returnLineRequiresImport', 'returnLineNotInDocument', 'returnReasonTooLong']) {
+        assert.ok(flat.includes(`"backendError.${k}"`), `${loc} is missing ${k}`);
+      }
+    }
+  });
+});
+
+// ReturnShipmentUtils.java (com.etendoerp.go — ETP-5712): the factura rectificativa of a return.
+// The zero-amount refusal (`error.code = returnInvoiceWithoutAmount`) names the products by the
+// fixed delimiters of its sentence; the "nothing to rectify" 400 is an exact-match sentence.
+describe('translateBackendError — return factura rectificativa (ETP-5712)', () => {
+  const es = fakeUiTranslator({
+    'backendError.returnInvoiceWithoutAmount': 'No se puede crear la factura rectificativa: no se ha encontrado precio para {products}, y quedaría confirmada con importe cero.',
+    'backendError.rectifiedInvoiceRequired': 'Esta devolución no tiene factura que rectificar.',
+  });
+  const PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
+  const SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+
+  it('translates the zero-amount refusal keeping the product names', () => {
+    assert.equal(
+      translateBackendError(`${PREFIX}Agua, Sal${SUFFIX}`, es),
+      'No se puede crear la factura rectificativa: no se ha encontrado precio para Agua, Sal, y quedaría confirmada con importe cero.',
+    );
+  });
+
+  it('keeps a product name that itself contains a comma', () => {
+    assert.equal(
+      translateBackendError(`${PREFIX}Tornillo 4, 5 mm${SUFFIX}`, es),
+      'No se puede crear la factura rectificativa: no se ha encontrado precio para Tornillo 4, 5 mm, y quedaría confirmada con importe cero.',
+    );
+  });
+
+  it('leaves a message with the prefix but no products untouched', () => {
+    const odd = `${PREFIX.trimEnd()}${SUFFIX}`;
+    assert.equal(translateBackendError(odd, es), odd);
+  });
+
+  it('translates the "no invoice to rectify" sentence the backend sends now', () => {
+    assert.equal(
+      translateBackendError('This return has no invoice to rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. Invoice the original document first, or pass originInvoices with the id of an invoice from rectifiableInvoices.', es),
+      'Esta devolución no tiene factura que rectificar.',
+    );
+  });
+
+  it('has the new key with {products} in en_US, es_ES and es_AR, and the rectified sentence is the new one', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.returnInvoiceWithoutAmount":\s*"[^"]*\{products\}/), `${loc} lost {products}`);
+    }
+    const en = readFileSync(new URL('../../locales/en_US.json', import.meta.url), 'utf8');
+    assert.ok(en.includes('"backendError.rectifiedInvoiceRequired": "This return has no invoice to rectify'), 'en_US still carries the old sentence');
+  });
+
+  it('ships backendError.rectifiedInvoiceRequired in every locale, es_AR in voseo', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.match(flat, /"backendError\.rectifiedInvoiceRequired":\s*"[^"]+"/, `${loc} is missing rectifiedInvoiceRequired`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.match(ar, /"backendError\.rectifiedInvoiceRequired":\s*"[^"]*Facturá primero[^"]*seleccioná/);
   });
 });
 
@@ -3086,6 +3322,11 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
     ['ETGO_InvoiceFieldsLockedSiiSent', 'backendError.invoiceSiiSentReferenceLocked',
       "This purchase invoice has already been sent to the SII, so orderReference (the supplier's invoice number) can no longer be changed."],
     ['PostedDocument', 'backendError.documentAlreadyPosted', 'Document already Posted.'],
+    // ETP-5714: costing is stalled, so retrying will not help (the retryable 409 is NotCalculatedCost).
+    ['ETGO_CostCalculationStalled', 'backendError.costCalculationStalled',
+      'Cost calculation looks stalled: transactions have been waiting for their cost for a long time, so repeating the post will not help. An administrator must check the Costing Background process and the pending transactions.'],
+    ['NotCalculatedCost', 'backendError.costNotCalculated',
+      'Cost has not yet been calculated for all products in the document.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {
@@ -3105,6 +3346,12 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
     assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
     assert.match(es('backendError.invoicePostedExchangeRateLocked'), /contabilizada.*Descontabil/);
     assert.match(es('backendError.invoiceUnpostNotPosted'), /asientos/);
+  });
+
+  it('tells the user a stalled costing is not worth retrying, and who to ask', () => {
+    assert.match(es('backendError.costCalculationStalled'), /administrador/);
+    assert.match(en('backendError.costCalculationStalled'), /administrator/);
+    assert.doesNotMatch(es('backendError.costCalculationStalled'), /unos minutos/);
   });
 
   it('keeps the backend prose when the locale has no entry (never the raw key)', () => {
@@ -3288,4 +3535,52 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
   it('keeps parseBackendErrorMessage returning only the message', async () => {
     assert.equal(await parseBackendErrorMessage(jsonResponse(fenceBody)), fenceBody.error.message);
   });
+});
+
+// ── ETP-5669: G/L journal period mismatch, translated by identity with its params ──
+describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const prose = "Period 'Apr-26' does not contain the accounting date 2026-06-20. Update the period (or the date) and complete again.";
+  const options = {
+    messageKeys: ['ETGO_GLJournalPeriodMismatch'],
+    messageParams: { period: 'Apr-26', accountingDate: '2026-06-20' },
+  };
+
+  it('names the stored period and the date in the UI locale', () => {
+    const esText = translateBackendError(prose, es, options);
+    const enText = translateBackendError(prose, en, options);
+    assert.match(esText, /período del asiento \(Apr-26\).*\(2026-06-20\)/);
+    assert.match(enText, /period \(Apr-26\).*\(2026-06-20\)/);
+    assert.notEqual(esText, enText);
+  });
+
+  it('is not worded as "period not open"', () => {
+    assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
+  });
+});
+
+// ── ETP-5693: posting-account refusals on accounting fields, translated by identity ──
+describe('translateBackendError — posting-account refusals (ETP-5693)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const cases = [
+    ['ETGO_AccountIsSummary', 'backendError.accountIsSummary'],
+    ['ETGO_AccountIsInactive', 'backendError.accountIsInactive'],
+    ['ETGO_AccountWrongLedger', 'backendError.accountWrongLedger'],
+    ['ETGO_LedgerNotUpdatable', 'backendError.ledgerNotUpdatable'],
+  ];
+
+  for (const [key, label] of cases) {
+    it(`${key} becomes the generic sentence of the UI locale`, () => {
+      const prose = 'warehouseDifferences: the account 4300 - Customers is not valid here.';
+      const esText = translateBackendError(prose, es, { messageKeys: [key] });
+      const enText = translateBackendError(prose, en, { messageKeys: [key] });
+      assert.equal(esText, es(label));
+      assert.equal(enText, en(label));
+      assert.notEqual(esText, label, 'the es_ES key must exist');
+      assert.notEqual(enText, label, 'the en_US key must exist');
+      assert.notEqual(esText, enText);
+    });
+  }
 });

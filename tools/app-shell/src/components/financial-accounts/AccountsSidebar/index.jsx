@@ -1,14 +1,7 @@
-import { Info } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { formatCurrency } from '@/lib/formatCurrency.js';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { TruncatedText } from '@/components/ui/truncated-text.jsx';
 import { buildBalanceDisplay } from './balanceDisplay.js';
+import { AmountText, CurrencyBreakdown, InfoTooltipButton } from '@/components/currency-summary';
 
 /**
  * Cuentas sidebar — single column matching Figma frame `3012:25602`.
@@ -21,49 +14,11 @@ import { buildBalanceDisplay } from './balanceDisplay.js';
  *      (`formatCurrency`, no K/M/B); it never shrinks. When it does not fit it
  *      ellipsises and reveals the exact value in a tooltip (TruncatedText, see
  *      `balanceDisplay.js`).
- *   3. Currency breakdown card (gray, rounded). Each row shows the exact
+ *   3. Currency breakdown card (gray, rounded; shared `currency-summary`). Each row shows the exact
  *      balance; when it does not fit next to the ISO label it ellipsises and
  *      reveals the full amount in a tooltip (TruncatedText).
  *   4. Pending reconcile card (bordered, rounded).
  */
-function CurrencyBreakdown({ rows, primaryIso, ui }) {
-  const visibleRows = rows.length > 0
-    ? rows
-    : [{ currencyIso: primaryIso, total: 0 }];
-
-  return (
-    <div className="rounded-lg bg-[hsl(var(--muted))] p-3">
-      <h3 className="text-xs font-semibold leading-4 text-[hsl(var(--muted-foreground))]">
-        {ui('financeAccountsBalanceByCurrency')}
-      </h3>
-      <div className="mt-3 flex flex-col gap-2">
-        {visibleRows.map((row, idx) => (
-          <div key={row.currencyIso}>
-            {idx > 0 ? (
-              <div className="mb-2 h-px w-full bg-[hsl(var(--foreground) / 0.05)]" />
-            ) : null}
-            {/* The ISO label keeps its width (`shrink-0`); the amount takes the rest
-                (`min-w-0 flex-1` bounds it, so TruncatedText can measure the clip) and
-                ellipsises with the exact value in a tooltip when it does not fit. */}
-            <div
-              className="flex items-center justify-between gap-2"
-              data-testid={`balance-by-currency-${row.currencyIso}`}
-            >
-              <span className="shrink-0 text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]">
-                {row.currencyIso}
-              </span>
-              <TruncatedText
-                text={formatCurrency(row.currencyIso, row.total)}
-                className="min-w-0 flex-1 text-right text-sm font-medium leading-5 text-[hsl(var(--foreground))] tabular-nums"
-                data-testid={`balance-by-currency-${row.currencyIso}-amount`} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function PendingIndicator({ dotColor, label, value }) {
   return (
     <div className="flex items-center justify-between px-3">
@@ -101,29 +56,6 @@ function PendingCard({ pending, ui }) {
   );
 }
 
-function BalanceInfoButton({ ui }) {
-  const label = ui('financeAccountsBalanceInfo');
-  return (
-    <TooltipProvider data-testid="TooltipProvider__5d6a4a">
-      <Tooltip delayDuration={150} data-testid="Tooltip__5d6a4a">
-        <TooltipTrigger asChild data-testid="TooltipTrigger__5d6a4a">
-          <button
-            type="button"
-            aria-label={label}
-            data-testid="balance-info-button"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
-          >
-            <Info className="h-4 w-4" data-testid="Info__5d6a4a" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-[260px]" data-testid="balance-info-tooltip">
-          {label}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
 export function AccountsSidebar({ summary, loading }) {
   const ui = useUI();
   // ETP-5580: the total is converted server-side to the organization currency, so its
@@ -153,7 +85,7 @@ export function AccountsSidebar({ summary, loading }) {
           <h2 className="text-xl font-semibold leading-7 text-[hsl(var(--foreground))]">
             {ui('financeAccountsBalanceTitle')}
           </h2>
-          <BalanceInfoButton ui={ui} data-testid="BalanceInfoButton__5d6a4a" />
+          <InfoTooltipButton label={ui('financeAccountsBalanceInfo')} data-testid="BalanceInfoButton__5d6a4a" />
         </div>
       </header>
       <div className="flex flex-col px-3">
@@ -166,7 +98,11 @@ export function AccountsSidebar({ summary, loading }) {
           data-testid="balance-total"
         >
           <TruncatedText
-            text={loading ? '—' : balance.text}
+            text={loading ? '—' : <AmountText
+              iso={primaryIso}
+              amount={totalBalance}
+              approximate={summary?.totalBalanceApproximate === true}
+              data-testid="AmountText__5d6a4a" />}
             className="min-w-0 flex-1 font-medium text-[hsl(var(--foreground))] tabular-nums"
             data-testid="balance-card" />
         </div>
@@ -185,7 +121,7 @@ export function AccountsSidebar({ summary, loading }) {
         <CurrencyBreakdown
           rows={byCurrency}
           primaryIso={primaryIso}
-          ui={ui}
+          title={ui('financeAccountsBalanceByCurrency')}
           data-testid="CurrencyBreakdown__5d6a4a" />
       </div>
       <div className="px-3" data-testid="pending-reconcile-card">

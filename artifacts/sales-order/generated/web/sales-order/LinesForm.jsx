@@ -9,6 +9,7 @@ const fields = [
   { key: 'discount', column: 'Discount', type: 'number', label: 'Discount', section: 'principal', defaultValue: '0', min: 0, readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', required: true, section: 'principal', reference: 'Tax', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'lineGrossAmount', column: 'Line_Gross_Amount', type: 'number', label: 'Line Gross Amount', readOnly: true, section: 'principal', defaultValue: '0' },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true, readOnly: true, section: 'other', reference: 'UOM', inputMode: 'selector', readOnlyLogic: (record) => record['uomManagement'] === 'Y' },
 ];
 // @sf-generated-end fields:lines
 

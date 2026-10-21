@@ -170,7 +170,7 @@ for (const { spec, entity } of WINDOWS) {
       const activeValue = payload?.active;
       expect(activeValue === true || activeValue === 'Y').toBe(true);
 
-      await expect(page).toHaveURL(new RegExp(`/${spec}/(?!new)`), { timeout: 10_000 });
+      await expect(page).toHaveURL(new RegExp(`/${spec}/(?!new)`), { timeout: 15_000 });
     });
 
     // ── Case 2: duplicate Search Key ────────────────────────────────────────

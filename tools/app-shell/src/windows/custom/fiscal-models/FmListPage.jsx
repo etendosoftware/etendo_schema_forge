@@ -538,11 +538,28 @@ function fmListRowClassName({ selected, current }) {
 // and the grid used to always show "Ordinaria" for that window. Once EITHER flag is persisted
 // (even explicitly set to false/'N' by a user override), that persisted value is trusted as
 // before and this fallback no longer applies.
+//
+// ETP-5725 (reopened QA fix, Bug 3) — the fallback above was gated ONLY on the two identification
+// keys being `undefined`, which is NOT the same thing as "this row was never saved": a genuinely
+// persisted ordinaria declaration that was presented without ever touching the rectificativa/
+// sustitutiva checkbox ALSO has both keys `undefined` in its persisted `manualData.identification`
+// (the checkbox simply has nothing to write when left at its default). Repro: present the
+// ordinaria (A), then later present a sibling as Sustitutiva (B) — A's row re-renders with
+// `duplicatePeriodPresented` now true (B is a presented sibling), `neverSaved` true (A never set
+// either key), so the OLD check mislabeled an already-presented, correctly-typed declaration as
+// "Sustitutiva". The backend never serializes "this row was never saved" as a flag — but the
+// frontend already has an equivalent signal: only a `draft` declaration can still be in the
+// "never decided yet" state this fallback exists for. Once a row leaves draft (ready, submitted,
+// submitted_ack, submitted_ext) its identification is authoritative and persisted, so the
+// fallback must not apply, however the identification keys look. Also fixes the companion
+// symptom QA reported ("B's type flips to Ordinaria" when A is reactivated): B is itself
+// non-draft, so with this gate its label never depended on A's status to begin with.
 function resolveDeclTypeLabel(decl, t, duplicatePeriodPresented = false) {
   const ident = decl.manualData?.identification;
   const rectificativaPersisted = ident?.rectificativa;
   const sustitutivaPersisted = ident?.sustitutiva === true || ident?.sustitutiva === 'Y';
-  const neverSaved = rectificativaPersisted === undefined && ident?.sustitutiva === undefined;
+  const neverSaved = decl.status === 'draft'
+    && rectificativaPersisted === undefined && ident?.sustitutiva === undefined;
   if (rectificativaPersisted || (neverSaved && duplicatePeriodPresented && decl.model === '303')) {
     return t('fm.type.rectificative');
   }
@@ -852,11 +869,25 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(created => setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]))
-        .catch(() => {
+        .catch((status) => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a
           // closed modal with no created row and no explanation. Mirrors the exact toast pattern
           // already used for delete failures (handleConfirmDelete above).
+          //
+          // ETP-5725 (reopened QA fix) — the generic fallback below used to fire for EVERY
+          // failure, including the one case that already has a specific, well-known cause: the
+          // pre-existing ETP-5272 one-draft-per-period guard
+          // (`FiscalDeclCrudHandler#hasDraftDeclaration`) rejects with a plain 409 and no other
+          // code path in this POST returns 409 — so the status code alone (no need to parse the
+          // response body's `error.message`, which is backend English text, not localized)
+          // unambiguously identifies "a draft already exists for this period". Every other
+          // failure (network error, 500, any other status) keeps the original generic toast.
+          if (status === 409) {
+            toast.error(t('fm.list.new_decl_draft_exists')
+              ?? 'No se puede crear la declaración. Ya existe una declaración en borrador para el periodo seleccionado.');
+            return;
+          }
           toast.error(t('fm.list.new_decl_failed') ?? 'No se pudo crear la declaración.');
         });
     }
@@ -895,6 +926,19 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           // The backend cleared the submission snapshot (ETP-5438): a draft computes live again.
           setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft', submittedSnapshot: null } : d));
           setReactivateTarget(null);
+        } else if (result.reason === 'corrective_sibling_presented') {
+          // ETP-5725 (reopened QA fix, UX follow-up) — the precise, commonly-hit case: a
+          // rectificativa/sustitutiva sibling is already presented for this period, so
+          // reactivating this one would strand it with nothing left to correct (see
+          // FiscalDeclCrudHandler#findReactivationBlockReason).
+          toast.error(t('fm.list.reactivate_failed_corrective_exists')
+            ?? 'No se puede reactivar: ya existe una declaración rectificativa/sustitutiva presentada para este periodo.');
+        } else if (result.reason === 'sibling_exists') {
+          // Every other blocking-sibling case (a draft sibling, or a presented-but-non-corrective
+          // one) — still more informative than the fully generic fallback below, without a
+          // dedicated sentence for every remaining combination.
+          toast.error(t('fm.list.reactivate_failed_sibling_exists')
+            ?? 'No se puede reactivar: ya existe otra declaración para este periodo.');
         } else {
           toast.error(t('fm.list.reactivate_failed') ?? 'No se pudo reactivar la declaración.');
         }

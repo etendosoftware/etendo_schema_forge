@@ -344,6 +344,15 @@ step's own target**. The latter is how a step can point INSIDE a modal and keep
 its spotlight: sales-order's `confirm-submit` targets `sales-order-confirm-submit`
 in the confirmation modal, and gets a normal highlight over it.
 
+A **tooltip** is not a foreign dialog either: a Radix popper wrapper that holds a
+`role="tooltip"` node is skipped. A tooltip is a passive label, and counting it
+parked the card with no highlight for seconds — closing the Guided Tutorials
+dropdown returns focus to its trigger, the trigger's tooltip opens on that
+focus, and a focus-opened tooltip only closes on blur or pointer movement. Off
+the target screen the navPath clicks moved focus away and hid it; launched from
+the screen the first step already lives on (Contacts → "Create a contact"),
+the card stayed parked until the mouse moved (ETP-5600, CP-20).
+
 A dialog that sets no `role` (sales-order's confirmation modal is a plain
 portalled `div`) is simply not detected — which happens to be right when the
 step targets something inside it, and needs a `role` added when a step must
@@ -698,9 +707,11 @@ Interpolation uses `useUI`'s `{name}` convention — e.g.
 3. **Check *when* each target exists, not only *whether*.** A selector that is
    present on the finished screen can be absent at the point your step reaches
    it. Sales Order's *Add line* is the worked example: `canShowAddLineArea`
-   gates it on `requiredHeaderFields`, which includes the server-computed
-   totals, so the button simply does not render until the header has been
-   saved — hence the explicit `save-header` step before `add-line`. A step
+   gates it on `requiredHeaderFields`, so the button does not render until
+   every required header field the user can fill (business partner, address,
+   price list, …) holds a value — a step targeting `add-line` must come after
+   the steps that fill them. (Server-computed readOnly fields such as the
+   totals are excluded from that list since ETP-5676.) A step
    that waits for a target an earlier step was supposed to create fails as
    "target not found", which reads like a broken selector and is not.
 4. Add the locale keys to `en_US.json`, `es_ES.json` **and** `es_AR.json`.

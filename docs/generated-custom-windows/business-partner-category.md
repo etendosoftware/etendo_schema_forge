@@ -30,6 +30,7 @@ The window uses these layout overrides (all set in `decisions.json → window`, 
 | Key | Value | Effect |
 |-----|-------|--------|
 | `detailEntity` | `"accounting"` | Accounting tab as the primary child entity |
+| `detailVisibleWhenCapability` | `"showAccountingFields"` | **(ETP-5648)** The Accounting tab is this window's detail tab, so it is hidden, and never fetched, for a role without the capability; the header form stays available. The server refuses `<spec>/accounting` with `403` for such a role anyway |
 | `linesLayout` | `"inlineEditable"` | Inline editing on Accounting rows |
 | `noHeaderBorder` | `true` | Removes the border under the header form |
 | `toolbarBorderBottom` | `true` | No effect since ETP-5601 (the record toolbar is standardized) |
@@ -104,3 +105,6 @@ popup is titled with the translated field label, shows each `"<code> - <name>"` 
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
 
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `BusinessPartnerCategoryAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
