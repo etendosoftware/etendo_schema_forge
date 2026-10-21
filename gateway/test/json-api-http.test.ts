@@ -13,9 +13,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerStorageService } from '@nestjs/throttler';
 import { CachedTokenExchangeService, PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import { PublicApiController } from '../src/public-api/public-api.controller.ts';
+import { THROTTLER_NAME } from '../src/public-api/public-api-throttler.guard.ts';
 import {
   acceptsJsonApi,
   configureJsonApiBodyParser,
@@ -445,5 +446,18 @@ test('HTTP: a refused key is accepted again as soon as its oldest request leaves
     assert.equal(again.headers.get('x-ratelimit-remaining'), '0');
   } finally {
     await limited.instance.close();
+  }
+});
+
+test('rate limit: the throttler storage still has the hitExpirations layout the guard reads for X-RateLimit-Reset', async () => {
+  const storage = new ThrottlerStorageService();
+  try {
+    await storage.increment('k', 60_000, 10, 0, THROTTLER_NAME);
+    const hits = (storage as unknown as { hitExpirations?: Map<string, Map<string, number[]>> }).hitExpirations;
+    assert.ok(hits instanceof Map, 'ThrottlerStorageService.hitExpirations changed: update secondsUntilRestored in public-api-throttler.guard.ts');
+    const expirations = hits.get('k')?.get(THROTTLER_NAME);
+    assert.ok(Array.isArray(expirations) && expirations.length === 1 && expirations[0] > Date.now());
+  } finally {
+    storage.onApplicationShutdown();
   }
 });

@@ -2,6 +2,9 @@ import { Injectable, type ExecutionContext } from '@nestjs/common';
 import { ThrottlerGuard, type ThrottlerLimitDetail, type ThrottlerRequest } from '@nestjs/throttler';
 import { rateLimited } from './json-api-http.ts';
 
+/** Name of the single throttler configured in ThrottlerModule.forRoot (the library default). */
+export const THROTTLER_NAME = 'default';
+
 /**
  * Rate limit per API key. It must run AFTER `PublicApiKeyGuard`: the tracker is
  * the key id of an `Authorization: Bearer <apiKeyId>:<secret>` header that guard
@@ -38,8 +41,8 @@ export class PublicApiThrottlerGuard extends ThrottlerGuard {
     const allowed = await super.handleRequest({ ...props, blockDuration: 0 });
     const { req, res } = this.getRequestResponse(props.context);
     const tracker = await props.getTracker(req, props.context);
-    const key = props.generateKey(props.context, tracker, props.throttler.name ?? 'default');
-    const restore = this.secondsUntilRestored(key, props.throttler.name ?? 'default');
+    const key = props.generateKey(props.context, tracker, props.throttler.name ?? THROTTLER_NAME);
+    const restore = this.secondsUntilRestored(key, props.throttler.name ?? THROTTLER_NAME);
     if (restore !== undefined) res.header('X-RateLimit-Reset', String(restore));
     return allowed;
   }
@@ -48,7 +51,7 @@ export class PublicApiThrottlerGuard extends ThrottlerGuard {
     const res = context.switchToHttp().getResponse();
     // Retry-After: until the oldest counted request expires, i.e. the next request is accepted.
     const retryAfter = Math.max(1, detail.timeToBlockExpire || detail.timeToExpire);
-    const restore = this.secondsUntilRestored(detail.key, 'default') ?? retryAfter;
+    const restore = this.secondsUntilRestored(detail.key, THROTTLER_NAME) ?? retryAfter;
     res.header('X-RateLimit-Limit', String(detail.limit));
     res.header('X-RateLimit-Remaining', '0');
     res.header('X-RateLimit-Reset', String(Math.max(restore, retryAfter)));
@@ -56,7 +59,11 @@ export class PublicApiThrottlerGuard extends ThrottlerGuard {
     throw rateLimited(retryAfter);
   }
 
-  /** Seconds until all hits counted for the key have expired (reads the in-memory storage; undefined if unavailable). */
+  /**
+   * Seconds until all hits counted for the key have expired (undefined if unavailable).
+   * Reads ThrottlerStorageService's private `hitExpirations` (layout checked against @nestjs/throttler 6.7.1);
+   * gateway/test/json-api-http.test.ts fails if that layout changes, so an upgrade cannot silently degrade Reset.
+   */
   private secondsUntilRestored(key: string, throttlerName: string): number | undefined {
     const hits = (this.storageService as unknown as { hitExpirations?: Map<string, Map<string, number[]>> }).hitExpirations
       ?.get(key)?.get(throttlerName);
