@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/calendar/YearTableWithCloseStatus.jsx
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
@@ -114,6 +115,40 @@ describe('YearTableWithCloseStatus', () => {
     expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(1);
     expect(screen.getByTestId('col-fiscalYear-y1').querySelector('[data-current-fiscal-year]')).not.toBeNull();
     expect(screen.getByTestId('col-fiscalYear-y2').querySelector('[data-current-fiscal-year]')).toBeNull();
+  });
+
+  it.each([
+    ['string/string', '2026', '2026'],
+    ['number/number', 2026, 2026],
+    ['number year/string context', 2026, '2026'],
+    ['string year/number context', '2026', 2026],
+  ])('marks exactly the middle row of an ascending list (%s)', (_label, rowYear, ctxYear) => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
+    const rows = [
+      { id: 'a', fiscalYear: rowYear - 1 },
+      { id: 'b', fiscalYear: rowYear },
+      { id: 'c', fiscalYear: Number(rowYear) + 1 },
+    ];
+    render(
+      <CurrentFiscalYearContext.Provider value={ctxYear}>
+        <YearTableWithCloseStatus data={rows} apiBaseUrl="https://api.test/fiscal-calendar" />
+      </CurrentFiscalYearContext.Provider>
+    );
+
+    expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(1);
+    expect(screen.getByTestId('col-fiscalYear-b').querySelector('[data-current-fiscal-year]')).not.toBeNull();
+  });
+
+  it.each([[undefined], [[]]])('renders no marker and does not crash when data is %j', (data) => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
+    render(
+      <CurrentFiscalYearContext.Provider value="2026">
+        <YearTableWithCloseStatus data={data} apiBaseUrl="https://api.test/fiscal-calendar" />
+      </CurrentFiscalYearContext.Provider>
+    );
+
+    expect(screen.getByTestId('DataTable__stub')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(0);
   });
 
   it.each([[null], ['1999']])('falls back to the first row when the current year is %s', (year) => {

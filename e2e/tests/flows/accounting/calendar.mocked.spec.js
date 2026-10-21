@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/calendar/YearTableWithCloseStatus.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -303,7 +304,11 @@ test.describe('Calendar — guided tour (ETP-5577)', () => {
     await expect(page.getByTestId('row-year-001').locator('[data-current-fiscal-year]')).toHaveCount(1);
 
     // Ticking the selection checkbox must not advance the step.
-    await page.getByTestId('row-year-001').getByRole('checkbox').click({ force: true });
+    // dispatchEvent fires on the checkbox itself, so it cannot be swallowed by the overlay.
+    const checkbox = page.getByTestId('row-year-001').getByRole('checkbox');
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.dispatchEvent('click');
+    await expect(checkbox).toBeChecked();
     await expect(overlay).toHaveAttribute('data-walkthrough-step', 'open-year');
 
     await page.locator('[data-current-fiscal-year]').click();
