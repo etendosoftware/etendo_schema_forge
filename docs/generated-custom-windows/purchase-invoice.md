@@ -1913,8 +1913,10 @@ Four links, each of which has to carry the data:
 
 `createPrefilledFrom` still lists all eight keys — `name`, `taxID`, `address`, `postalCode`,
 `city`, `country`, `etgoEmail`, `etgoPhone` — matching what the vision model extracts, but
-`buildOcrContactSeed` only forwards `name` (via `buildContactSeed`, which also sets `customer`/
-`vendor` from the invoice's purchase direction), `taxID`, `etgoEmail` and `etgoPhone`. Adding a
+`buildOcrContactSeed` only forwards `name` (via `buildContactSeed`), `taxID`, `etgoEmail` and
+`etgoPhone`. Since ETP-5791 it no longer sets `customer`/`vendor`: the contact's type comes from the
+category seeded from the invoice's direction, and the popup refuses a category that is not a vendor
+category (see `contacts.md` → *ETP-5791*). Adding a
 new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
 `buildOcrContactSeed`; a genuinely new extraction field is one `extraHeaderFields` entry.
 

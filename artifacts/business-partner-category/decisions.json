@@ -18,13 +18,15 @@
     "hideLink": true,
     "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2",
-    "maxDetailLines": 1
+    "maxDetailLines": 1,
+    "customLinesComponent": "BpCategoryAccountingPanel",
+    "customLinesLabel": "Accounting"
   },
   "entities": {
     "businessPartnerCategory": {
       "fields": {
         "searchKey": {
-          "grid": true,
+          "grid": false,
           "searchable": true,
           "section": "principal",
           "seq": 1
@@ -33,7 +35,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 2
+          "seq": 2,
+          "gridOrder": 1
         },
         "description": {
           "type": "textarea",
@@ -44,7 +47,70 @@
         },
         "default": {
           "section": "principal",
-          "seq": 4
+          "seq": 4,
+          "grid": true,
+          "gridOrder": 4,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "es_ES": "Sí",
+              "en_US": "Yes"
+            },
+            "false": {
+              "es_ES": "No",
+              "en_US": "No"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "neutral"
+          }
+        },
+        "etgoIscustomer": {
+          "visibility": "editable",
+          "form": true,
+          "grid": true,
+          "gridOrder": 2,
+          "section": "principal",
+          "seq": 5,
+          "span": 4,
+          "customRenderer": "ContactTypeField",
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "es_ES": "Sí",
+              "en_US": "Yes"
+            },
+            "false": {
+              "es_ES": "No",
+              "en_US": "No"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "neutral"
+          }
+        },
+        "etgoIsvendor": {
+          "visibility": "editable",
+          "form": false,
+          "grid": true,
+          "gridOrder": 3,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "es_ES": "Sí",
+              "en_US": "Yes"
+            },
+            "false": {
+              "es_ES": "No",
+              "en_US": "No"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "neutral"
+          }
         }
       }
     },
@@ -52,7 +118,10 @@
       "javaQualifier": "businessPartnerCategoryAccountingHandler",
       "hideDelete": true,
       "fields": {
-        "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
+        "accountingSchema": {
+          "visibility": "system",
+          "addLineFromSibling": true
+        },
         "customerReceivablesNo": {
           "lookup": true,
           "lookupDrawer": "account",
@@ -199,6 +268,8 @@
     }
   },
   "rules": {},
-  "discardPatterns": ["EM_*"],
+  "discardPatterns": [
+    "EM_*"
+  ],
   "version": 2
 }

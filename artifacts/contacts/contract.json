@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-09T15:04:44.751Z",
-  "checksum": "f8ed5ca0ca57c7f9",
+  "updatedAt": "2026-10-20T12:00:39.163Z",
+  "checksum": "22d4d821175d2a03",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -200,36 +200,6 @@
             "type": "boolean"
           },
           {
-            "target": "customer",
-            "aliases": [
-              "cliente",
-              "es cliente",
-              "customer"
-            ],
-            "label": "Customer",
-            "required": false,
-            "example": "Sí",
-            "exampleKey": "importExampleContactCustomer",
-            "labelKey": "importHeaderCustomer",
-            "column": "IsCustomer",
-            "type": "boolean"
-          },
-          {
-            "target": "vendor",
-            "aliases": [
-              "proveedor",
-              "es proveedor",
-              "vendor",
-              "supplier"
-            ],
-            "label": "Vendor",
-            "required": false,
-            "example": "No",
-            "labelKey": "importHeaderVendor",
-            "column": "IsVendor",
-            "type": "boolean"
-          },
-          {
             "required": false,
             "type": "string",
             "target": "category",
@@ -244,7 +214,7 @@
               "nombre categoría"
             ],
             "label": "Contact Category",
-            "example": "Clientes",
+            "example": "Cliente",
             "exampleKey": "importExampleContactCategory",
             "column": "C_BP_Group_ID"
           },
@@ -5542,36 +5512,6 @@
             "type": "boolean"
           },
           {
-            "target": "customer",
-            "aliases": [
-              "cliente",
-              "es cliente",
-              "customer"
-            ],
-            "label": "Customer",
-            "required": false,
-            "example": "Sí",
-            "exampleKey": "importExampleContactCustomer",
-            "labelKey": "importHeaderCustomer",
-            "column": "IsCustomer",
-            "type": "boolean"
-          },
-          {
-            "target": "vendor",
-            "aliases": [
-              "proveedor",
-              "es proveedor",
-              "vendor",
-              "supplier"
-            ],
-            "label": "Vendor",
-            "required": false,
-            "example": "No",
-            "labelKey": "importHeaderVendor",
-            "column": "IsVendor",
-            "type": "boolean"
-          },
-          {
             "required": false,
             "type": "string",
             "target": "category",
@@ -5586,7 +5526,7 @@
               "nombre categoría"
             ],
             "label": "Contact Category",
-            "example": "Clientes",
+            "example": "Cliente",
             "exampleKey": "importExampleContactCategory",
             "column": "C_BP_Group_ID"
           },

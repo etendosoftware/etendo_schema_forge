@@ -8,19 +8,19 @@ Business Partner Category lets users maintain the category master record used to
 
 Users should be able to:
 
-- browse business partner categories by Search Key and Name
-- open a category and maintain its header fields: Search Key, Name, Description, and Default
-- view and edit the accounting accounts (Customer Receivables, Customer Prepayment, Vendor Liability, Vendor Prepayment, Write-off, and a set of secondary GL accounts) for the category directly from the Accounting grid, using inline editing
+- browse contact categories by Name, Customer, Vendor/Creditor and Default (Yes/No badges)
+- open a category and maintain its header fields: Search Key, Name, Description, Default, and the **contact type** (Customer and/or Vendor/Creditor — at least one is required)
+- view and edit the category's accounts from the Accounting tab, grouped by contact type: Customers (receivables, prepayment, write-off) and Vendor/Creditor (liability, prepayment) — see *Contact type — ETP-5791* below
 
 ## Interaction model
 
 - **Route:** `/business-partner-category`, `/business-partner-category/:recordId`
 - **Visibility:** visible in the **Settings** menu as **Business Partner Category** (EN) / **Categoría de Contacto** (ES) (AD window ID `192`)
-- **Implementation type:** generated window — `registry.js` points directly to the generated entry point (`@generated/business-partner-category/generated/web/business-partner-category/index.jsx`); no custom wrapper exists for this window
-- **Window shape:** master + inline-editable detail; `businessPartnerCategory` is the header entity (table `C_BP_Group`) and `accounting` is the detail entity (table `C_BP_Group_Acct`) rendered as an inline-editable grid
-- **List behavior:** the category list shows Search Key and Name and supports filtering by those same fields
-- **Record behavior:** opening a category record renders a detail view with the category header form plus the **Accounting** tab with `linesLayout="inlineEditable"`
-- **Accounting tab behavior:** shows one row per accounting schema. Each row exposes 20 ValidCombination FK selectors (`Customer Receivables No.`, `Customer Prepayment`, `Vendor Liability`, `Vendor Prepayment`, `Write-off`, `Write-off Revenue`, plus 15 secondary GL accounts covering non-invoiced receipts/receivables/revenue, payment discount expense/revenue, realized/unrealized gain/loss, unearned revenue, vendor service liability, and doubtful/bad-debt accounts). `Customer Receivables No.`, `Write-off`, and `Vendor Liability` are mandatory (`ismandatory=Y` in the AD). The five primary columns (`customerReceivablesNo`, `customerPrepayment`, `vendorLiability`, `vendorPrepayment`, `writeoff`) share the available width via `grow: true`; the remaining GL accounts are added as ordinary editable columns without `grow`.
+- **Implementation type:** generated window — `registry.js` points directly to the generated entry point (`@generated/business-partner-category/generated/web/business-partner-category/index.jsx`); no custom wrapper. Since ETP-5791 the header type group and the Accounting tab are custom components in `artifacts/business-partner-category/custom/`, declared in `decisions.json`
+- **Window shape:** master + detail; `businessPartnerCategory` is the header entity (table `C_BP_Group`) and `accounting` is the detail entity (table `C_BP_Group_Acct`), rendered since ETP-5791 by the custom `BpCategoryAccountingPanel` (`window.customLinesComponent`) instead of the inline grid
+- **List behavior:** the category list shows Name, Customer, Vendor/Creditor and Default (Yes/No badges, real AD columns, so all four filter and sort). Search Key is no longer a list column (ETP-5791) but stays in the form
+- **Record behavior:** opening a category record renders a detail view with the category header form plus the **Accounting** tab (the custom panel)
+- **Accounting tab behavior (before ETP-5791 — superseded, see below):** shows one row per accounting schema. Each row exposes 20 ValidCombination FK selectors (`Customer Receivables No.`, `Customer Prepayment`, `Vendor Liability`, `Vendor Prepayment`, `Write-off`, `Write-off Revenue`, plus 15 secondary GL accounts covering non-invoiced receipts/receivables/revenue, payment discount expense/revenue, realized/unrealized gain/loss, unearned revenue, vendor service liability, and doubtful/bad-debt accounts). `Customer Receivables No.`, `Write-off`, and `Vendor Liability` are mandatory (`ismandatory=Y` in the AD). The five primary columns (`customerReceivablesNo`, `customerPrepayment`, `vendorLiability`, `vendorPrepayment`, `writeoff`) share the available width via `grow: true`; the remaining GL accounts are added as ordinary editable columns without `grow`.
 - An **Attachments** tab is available in the detail tab strip (standard `AttachmentsTab` wiring, same as other generated master/detail windows).
 
 ## Layout configuration
@@ -58,13 +58,13 @@ The window uses these layout overrides (all set in `decisions.json → window`, 
 
 ## Manual verification
 
-1. Open `/business-partner-category` from the Settings menu and confirm the list filters by Search Key and Name.
-2. Open an existing category and confirm the header form shows Search Key, Name, Description, and Default.
-3. Confirm the **Accounting** tab is the active detail tab and shows one row per accounting schema.
-4. Confirm the `Customer Receivables No.`, `Customer Prepayment`, `Vendor Liability`, `Vendor Prepayment`, and `Write-off` columns render as ValidCombination selectors and share the row width.
-5. Confirm the secondary GL account columns (non-invoiced receipts, payment discount, realized/unrealized gain/loss, etc.) are present and editable.
-6. Confirm `Processing` ("Copy Accounts") and `Status` do **not** appear anywhere in the UI.
-7. Attempt to create a new Accounting row and confirm `accountingSchema` populates automatically from the client's default active `AcctSchema` — expected to succeed now that `businessPartnerCategoryAccountingHandler` is implemented (see Gap assessment).
+1. Open `/business-partner-category` from the Settings menu: the list shows Nombre, Cliente, Proveedor/Acreedor and Valor por defecto (Sí/No badges), no Identificador column, and each column filters and sorts.
+2. Open an existing category: the form shows Search Key, Name, Description, Default and the "Tipo de contacto * (lo heredan solo los contactos nuevos)" group.
+3. Create a category: both type checkboxes start unchecked; saving with neither shows "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor".
+4. On the Accounting tab, check/uncheck Cliente and Proveedor/Acreedor (before saving): the matching section appears/disappears; with neither, the "Marca Cliente o Proveedor/Acreedor…" message shows. Re-checking a type shows its previous account values.
+5. Change an account in a visible section: it saves on selection; the hidden section's mandatory accounts do not block it.
+6. Save a category that has contacts: the info toast "Categoría guardada. Tiene contactos asociados…" appears; a category without contacts shows no such toast.
+7. With a role without "Show Accounting Fields", the Accounting tab is absent.
 8. Open the **Attachments** tab and confirm file upload, download, and delete work as expected.
 
 ## Automated evidence
@@ -105,3 +105,60 @@ popup is titled with the translated field label, shows each `"<code> - <name>"` 
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
 
+
+## Contact type — ETP-5791
+
+A category now defines whether its contacts are **Customer**, **Vendor/Creditor** or both. Backend
+(`com.etendoerp.go`): columns `EM_Etgo_Iscustomer` / `EM_Etgo_Isvendor` on `C_BP_Group` (API
+`etgoIscustomer` / `etgoIsvendor`, YesNo, default `N`) and `BusinessPartnerCategoryHandler`, which
+refuses a category saved with neither (`messageKeys: ["ETGO_BPGroupContactTypeRequired"]`). The
+flags are copied into a contact when the contact is created; they never change existing contacts.
+
+**Header — "Tipo de contacto".** `etgoIscustomer` declares `customRenderer: "ContactTypeField"`
+(`span: 4`). The component has `ownsLabel = true`, so it draws the legend "Tipo de contacto *
+(lo heredan solo los contactos nuevos)" and the two checkboxes "Cliente" / "Proveedor/Acreedor";
+it writes `etgoIsvendor` (declared `form: false`) through EntityForm's `onFieldChange`. A new
+category starts with both unchecked. On an existing record each toggle autosaves (`onCommit`,
+the window's `autoSaveOnBlur`); unchecking the last type is refused by the backend and the error
+toast reads "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor"
+(`lib/backendErrors.js` maps `ETGO_BPGroupContactTypeRequired`, and the contact-side
+`ETGO_BPartnerContactTypeRequired`), and the toggle rolls back.
+
+**Accounting tab — `BpCategoryAccountingPanel`.** Declared as `window.customLinesComponent`
+(label `customLinesLabel: "Accounting"`). It loads the category's single `C_BP_Group_Acct` row
+(`accounting?parentId=<id>`) and shows two sections:
+
+| Section | Accounts |
+|---|---|
+| Clientes | Recibos de clientes (`customerReceivablesNo`), Prepago del cliente (`customerPrepayment`), Cancelaciones (`writeoff`) |
+| Proveedor/Acreedor | Pasivo del proveedor/acreedor (`vendorLiability`), Pagos por adelantado del proveedor/acreedor (`vendorPrepayment`) |
+
+- Each section follows its header checkbox **live**, before saving: the panel reads DetailView's
+  editing record (`data`).
+- The section of an unchecked type is **hidden**; with no type checked the tab shows "Marca
+  Cliente o Proveedor/Acreedor para configurar sus cuentas contables.". Values are never cleared.
+- Hiding the unchecked section is the confirmed behaviour (PO decision): the ticket's read-only /
+  padlock wording was superseded by the design, so there is no read-only variant
+  (`resolveAccountSections` in `custom/bpCategoryContactTypes.js` returns only the checked
+  sections).
+- Every account uses the shared account search popup (`lookupDrawer: 'account'`) and is PATCHed
+  on its own. The mandatory accounts of a hidden section never take part in a save: the row is
+  created by `c_bp_group_trg` with the accounting schema defaults (verified on the shared DB: all
+  739 `C_BP_Group_Acct` rows have receivables, write-off and vendor liability filled).
+- A new (unsaved) category shows "Guarda la categoría para configurar sus cuentas contables.".
+- The tab stays gated by `detailVisibleWhenCapability: "showAccountingFields"` — the gate now
+  also covers a `CustomLines` tab (`gateDetailTab`).
+- The 16 secondary GL accounts of `C_BP_Group_Acct` are no longer shown in the UI; their values
+  are untouched.
+
+**"Saved with associated contacts" notice.** After a category is saved — toolbar Save or
+autosave, detected as a change of the record's `updated` token — or after an account is changed
+in the panel, the window reads one row of `contacts/businessPartner` filtered by
+`businessPartnerCategory`. If there is one, an info toast says "Categoría guardada. Tiene
+contactos asociados: los cambios no los modifican y solo se aplicarán a los contactos nuevos."
+(`custom/useAssociatedContactsNotice.js`). A role that cannot read Contacts gets no notice.
+
+**Labels.** `fields.EM_Etgo_Iscustomer` / `fields.EM_Etgo_Isvendor` are in the locales (the module
+has no es_ES translation pack). The vendor account labels were renamed in Spanish everywhere they
+come from the AD label (this window and Contacts' vendor accounting): "Pasivo del
+proveedor/acreedor" and "Pagos por adelantado del proveedor/acreedor".

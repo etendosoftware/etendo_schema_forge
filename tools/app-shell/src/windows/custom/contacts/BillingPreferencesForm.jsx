@@ -372,8 +372,10 @@ export default function BillingPreferencesForm(props) {
 
           {/* ── Proveedor ─────────────────────────────────────────────────── */}
           <div className="bg-[hsl(var(--muted))] rounded-lg p-3 flex flex-col gap-3">
+            {/* ETP-5791: "Proveedor/Acreedor" — a creditor is a vendor-type contact too. Own key:
+                the generic `vendor` label is used elsewhere and must stay "Proveedor". */}
             <SquareCheckbox
-              label={ui('vendor')}
+              label={ui('contactVendorCreditor')}
               checked={!!data?.vendor}
               onChange={(val) => onChange?.('vendor', val)}
               data-testid="SquareCheckbox__7f0756-vendor" />

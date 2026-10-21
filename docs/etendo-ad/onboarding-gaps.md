@@ -3044,6 +3044,69 @@ Not yet run against the full dev tenant universe.
 
 ---
 
+## U — Contact Categories
+
+### U1 — Contact categories without customer/vendor type; no "Cliente/Proveedor" category (ETP-5791)
+
+**Change:** `C_BP_Group` gets two type flags, `EM_ETGO_ISCUSTOMER` and `EM_ETGO_ISVENDOR` (YesNo,
+NOT NULL, default `'N'`, created in `com.etendoerp.go`). The column default leaves every existing
+category N/N, and a category flagged N/N cannot be saved afterwards. The story also adds a fourth
+standard category, "Cliente/Proveedor", for contacts that are both customer and vendor.
+
+**Target state** (by name; onboarding ships Name == Value):
+
+| Category | Customer | Vendor | Default (new tenants) | Default (existing tenants) |
+|---|---|---|---|---|
+| Cliente | Y | N | N | **Y** (unchanged) |
+| Proveedor | N | Y | N | N |
+| Acreedor | N | Y | N | N |
+| Cliente/Proveedor | Y | Y | **Y** | N |
+
+**Preventive front:** dataset-only. `referencedata/sampledata/GOClient/C_BP_GROUP.xml` ships the
+flags on all four rows and the new `Cliente/Proveedor` row (Value = Name = `Cliente/Proveedor`) as
+the default. Its posting rows need no new code: `C_BP_GROUP_ACCT` is not imported, and
+`OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` (+ `patchBpGroupAcctMissingColumns`) creates
+a `C_BP_Group_Acct` row from `C_AcctSchema_Default` for every imported group. `Value` is given
+explicitly, so the `DocumentNo_C_BP_Group` sequence is not involved.
+`ONBOARDING_PROVISIONED_THROUGH` is not bumped: a newborn tenant already matches the target state,
+so the corrective `@check` returns 0 rows for it.
+
+**Corrective fix:** `20261019T120000Z__R50-bp-category-customer-vendor-flags.sql` — per client:
+creates `Cliente/Proveedor` (Y/Y, `ISDEFAULT='N'`) when missing; mirrors its `C_BP_Group_Acct`
+from the tenant's `Cliente` row (customer side and shared columns) and `Proveedor` row (vendor side:
+`V_Liability`, `V_Liability_Services`, `V_Prepayment`, `NotInvoicedReceipts`, `PayDiscount_Rev`),
+falling back to `C_AcctSchema_Default` only when the tenant has neither; sets the flags on the four
+standard categories. `Acreedor` is never a mirror source (its vendor accounts are creditor-specific,
+R9/R35). Contacts (`C_BPartner`) are not touched. The core `c_bp_group_trg()` is disabled around
+the group INSERT so the mirrored INSERT is the only writer of the posting rows.
+
+**DB state (2026-10-19, local dev DB, read-only):** 213 tenants, none has `Cliente/Proveedor`; 211
+have the three standard categories (with identical `Cliente`/`Proveedor` posting rows on every
+schema); 2 legacy Classic demo tenants (`QA Testing`, `F&B International Group`) have none of them.
+96 categories with other names across 86 tenants: 85 `E2E Contact Category <n>` (84 E2E tenants,
+2 contacts each, 1 tenant with 2 empty ones) and 11 in the two demo tenants.
+
+**Custom categories (decided 2026-10-20, option (a)):** R50 leaves every non-standard category
+N/N; a second fix, `20261020T120000Z__R51-bp-category-custom-flags-from-contacts.sql`, dated after
+R50 so the fail-fast chain runs it only once R50 is processed, flags each non-standard category
+still N/N from its contacts: customer = Y if any contact is a customer, vendor = Y if any is a
+vendor, Y/Y when it has no contacts or none of them is either (e.g. employees only). Inactive
+contacts count. Contacts are not touched; a category with any flag already `Y` is never touched.
+This also covers a standard category a tenant renamed (its name no longer matches R50's four).
+No preventive twin: a new tenant has only the four standard, already-flagged categories, and the
+UI requires a flag on any category created later. `@report` lists what each category received.
+Read-only preview on the local DB: 96 categories in 86 tenants — 85 E2E (83 → Y/N, 2 empty → Y/Y)
+and 11 in the two demo tenants (4 → Y/N, 3 → N/Y, 4 → Y/Y).
+
+**Tenant pool (decided 2026-10-20):** pooled tenants built before this deploy get R50 and keep
+`Cliente` as their default — accepted.
+
+**Status:** both fronts written (R50 2026-10-19, R51 2026-10-20). Not run: the flag columns do not
+exist yet in the local DB; the statements were plan-checked (`EXPLAIN`, no execution) with the
+flags shadowed.
+
+---
+
 ## Recommended Order of Operations
 
 Consolidated from the field checklist; covers A1–C2. D1 and E1 are addressed inside the Initial Client Setup process itself.

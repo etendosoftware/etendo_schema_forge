@@ -287,6 +287,20 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 **Every `InfoBanner` is dismissible by default (ETP-5245).** The X is rendered unless the caller passes `dismissible={false}`, and with no `onDismiss` the banner hides itself — supplying `onDismiss` switches it to controlled mode, where the caller owns visibility (that is what `ListModalWindow` does). A banner that explains a **block** must not stay closed while the user keeps hitting that block: pass `reopenSignal={useSaveBlockSignal('<stable-toast-id>')}` (`@/hooks/useSaveBlockSignal.js`) and it re-opens itself every time `useEntity`'s save gate actually refuses a save for that reason. The id is the same stable toast id the gate already passes to `reportInvalidFormatField`, so the banner and the toast can never describe different refusals; a new blocking rule gets the behaviour just by passing a `toastId`. See `ProductCostBanner.jsx` for the reference wiring.
 
+**Replacing the detail tab — `window.customLinesComponent` (ETP-5791 documents it).** When the
+detail tab's content cannot be a grid (a one-row child laid out as a form, sections that follow a
+header checkbox), declare `"customLinesComponent": "<Name>"` + `"customLinesLabel"`: the generator
+passes `CustomLines={<Name>}` to `DetailView` instead of the generated table. The component gets
+the header's LIVE editing record as `data`, so it can react to unsaved header edits, and it loads
+and writes its own rows. It is gated by `window.detailVisibleWhenCapability` like the tab it
+replaces. Full prop list: `docs/decisions-reference.md` → `customLinesComponent`. Reference:
+`business-partner-category`'s `BpCategoryAccountingPanel` (sections shown per contact type).
+
+**A field renderer that edits several columns — `customRenderer` + `ownsLabel` (ETP-5791).** A
+`customRenderer` component also receives `onFieldChange(key, value)` (write a sibling column),
+`onCommit()` (the checkbox autosave hook), `label` and `required`; with the static
+`ownsLabel = true` it draws its own legend. See `docs/decisions-reference.md` → Custom Renderer.
+
 **Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. A `topbarRight` component that only reacts to the generic Confirm's `draftMode.onConfirm` event (the return windows' `ConfirmWithCreditButtonBase` since ETP-5408, like `GoodsReceiptActions`) must NOT save again: `runDraftModeConfirm` in `saveActions.jsx` has already saved before calling `onConfirm`, and the listener's `isDirty` may still hold the pre-save value. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
 ---
@@ -2570,8 +2584,23 @@ stops `shouldSkipPayloadField` from dropping a seeded legacy-looking numeric FK 
   dependency array: a fresh object per render reloads the window module and refetches `/defaults` on
   every keystroke in the document behind the dialog.
 
-Seed keys are verified `businessPartner` field names — `name`, `customer`, `vendor` — built by the
-exported `buildContactSeed(query, { documentType })`.
+The seed key is the verified `businessPartner` field `name`, built by the exported
+`buildContactSeed(query)`. It used to seed `customer` / `vendor` from the document's nature too;
+ETP-5791 removed them, because a seeded key is user-changed and therefore always posted, and the
+backend now inherits the contact type from the category only when the create body omits both keys.
+The type now follows the seeded category, and the flow wraps `RecordCreateModal` in
+`ContactTypeRequirementContext` (`contactTypeRequirement.js`) so the Contacts header form refuses a
+category that does not grant the document's type (purchase → vendor, sale → customer). The context
+crosses the dialog portal and the embedded router; `RecordCreateModal` itself knows nothing about it.
+
+A create target may also declare `createOmitUntouched` (array of keys): the fallback form's POST then
+omits those keys unless the user set them, for fields whose mere presence the backend reads as a
+decision. Contacts declares `['customer', 'vendor']` (ETP-5791).
+
+A create target may also carry `validateBeforeCreate(data) => Promise<string|null>`: the fallback
+form awaits it before the POST, and a returned message is shown as the error and the create is not
+sent. The create-contact flow sets it to the contact-type check (`buildContactTypeCreateCheck`), since
+the fallback form does not mount the Contacts window that runs that check otherwise (ETP-5791).
 
 The contact **category** (`businessPartnerCategory`) is seeded separately because its id is per client
 and needs an async lookup: `useContactCategorySeed` (backed by `resolveContactCategorySeed`) maps

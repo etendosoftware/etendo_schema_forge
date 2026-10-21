@@ -11,12 +11,15 @@ import { captureScreenshot } from '../../helpers/captureScreenshot.js';
  *
  * The page, import dialog, descriptor, and resolver are real. Only the NEO
  * catalog, category CRUD, and batch endpoints are mocked at the network edge.
+ *
+ * ETP-5791: a category the file names but the catalogue does not have is never created
+ * (it would carry no contact type): the row fails with "create it first".
  */
 
-test('keeps valid contact rows and surfaces ambiguous or failed category rows', async ({ page }) => {
+test('keeps valid contact rows and surfaces ambiguous or unknown category rows', async ({ page }) => {
   const evidenceDir = resolve(import.meta.dirname, '../../../../artifacts/delivery-evidence/ETP-4905');
   mkdirSync(evidenceDir, { recursive: true });
-  const state = { batchBodies: [] };
+  const state = { batchBodies: [], categoryPosts: 0 };
 
   await login(page);
   await page.route('**/sws/neo/business-partner-category/businessPartnerCategory{/**,}**', async (route) => {
@@ -32,11 +35,9 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
       });
     }
     if (route.request().method() === 'POST') {
-      return route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Contact category creation failed' }),
-      });
+      // Must never happen: counted so the spec fails if the import tries to create it.
+      state.categoryPosts += 1;
+      return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'unexpected create' }) });
     }
     return route.fallback();
   });
@@ -64,7 +65,7 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
       'nombre comercial,nombre de pila,apellido,categoria,cif/nif,email de contacto',
       'Contacto válido,Val,Id,VALID,B20000006,valid@example.com',
       'Categoría ambigua,Ana,Lopez,Servicios,B20000014,ambiguous@example.com',
-      'Error creando categoría,Leo,Diaz,Nueva Categoría,B20000022,error@example.com',
+      'Categoría inexistente,Leo,Diaz,Nueva Categoría,B20000022,error@example.com',
     ].join('\n')),
   });
   await page.getByTestId('ImportDialog__importButton').click();
@@ -75,11 +76,12 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
   await expect(errorFilter).toContainText('2');
   await errorFilter.click();
   await expect(page.getByTestId('ImportReviewQueue__rowError-0')).toContainText(/múltiple|multiple|match|coincid/i);
-  await expect(page.getByTestId('ImportReviewQueue__rowError-1')).toContainText(/category|categoría|creation|creación/i);
+  await expect(page.getByTestId('ImportReviewQueue__rowError-1')).toContainText(/"Nueva Categoría".*(no existe|does not exist)/i);
   await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-errors.png'), fullPage: true });
 
   expect(state.batchBodies).toHaveLength(1);
   expect(state.batchBodies[0].operations[0].body.businessPartnerCategory).toBe('bpg-valid');
+  expect(state.categoryPosts).toBe(0);
 });
 
 test('skips an in-file duplicate tax id before sending the batch', async ({ page }) => {

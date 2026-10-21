@@ -1384,6 +1384,14 @@
       "label": "Warehouse Differences",
       "description": "Warehouse Differences Account"
     },
+    "EM_Etgo_Iscustomer": {
+      "label": "Customer",
+      "description": "New contacts of this category are customers."
+    },
+    "EM_Etgo_Isvendor": {
+      "label": "Vendor/Creditor",
+      "description": "New contacts of this category are vendors or creditors."
+    },
     "V_Liability_Acct": {
       "label": "Vendor Liability",
       "description": "An account number in the general ledger used to mark transactions with this business partner."
@@ -16620,7 +16628,6 @@
     "importExampleContactPosition": "Purchasing Manager",
     "importExampleContactAddress": "12 Main Street",
     "importExampleContactCountry": "Spain",
-    "importExampleContactCustomer": "Yes",
     "importUnskip": "Edit again",
     "importDownloadErrors": "Download errors",
     "importStatus": "Status",
@@ -16682,8 +16689,6 @@
     "importHeaderScopeContact": "Contact",
     "importHeaderScopeAddress": "Address",
     "importHeaderType": "Type",
-    "importHeaderCustomer": "Customer",
-    "importHeaderVendor": "Vendor",
     "importErrorInvalidEmail": "Not a valid email address.",
     "importErrorNotANumber": "The value \"{value}\" is not a valid number. Use 1234.56 or 1,234.56.",
     "importErrorFkUnmatched": "The value \"{value}\" could not be matched to an existing record.",
@@ -20708,6 +20713,17 @@
     "backendError.invoiceSiiSentReferenceLocked": "This purchase invoice has already been sent to the SII, so the supplier's invoice number can no longer be changed.",
     "backendError.invoiceReactivateFiscalRectified": "This invoice cannot be reactivated: it has already been accepted by {fiscalSystem} and is rectified by: {rectificativas}.",
     "backendError.documentAlreadyPosted": "This document is already posted. Refresh it to see its current status.",
+    "backendError.bpGroupContactTypeRequired": "At least one contact type must be checked: Customer or Vendor/Creditor",
+    "backendError.bpartnerContactTypeRequired": "The contact must have at least one type: Customer or Vendor/Creditor",
+    "bpCategoryContactType": "Contact type",
+    "bpCategoryContactTypeHint": "(inherited by new contacts only)",
+    "bpCategoryCustomersSection": "Customers",
+    "bpCategoryVendorsSection": "Vendor/Creditor",
+    "bpCategoryNoTypeAccounts": "Check Customer or Vendor/Creditor to set up its accounts.",
+    "bpCategoryAccountsSaveFirst": "Save the category to set up its accounts.",
+    "bpCategoryNoAccountingRow": "This category has no accounting configuration.",
+    "bpCategoryAccountsLoadError": "The category accounts could not be loaded. Try again.",
+    "bpCategorySavedWithContacts": "Category saved. It has associated contacts: the changes do not modify them and only apply to new contacts.",
     "backendError.cashCloseNoConcept": "This account has no accounting account configured for differences. Set one under Edit account before confirming a close that does not balance.",
     "backendError.cashCloseDateInFuture": "The close date cannot be in the future.",
     "backendError.cashCloseDateBeforeLastClose": "The close date cannot be earlier than the last confirmed close ({date}).",
@@ -20771,6 +20787,10 @@
     "taxIDField": "Tax ID",
     "bpGroupField": "Business partner group",
     "contactCategoryField": "Contact Category",
+    "contactVendorCreditor": "Vendor/Creditor",
+    "contactCategoryNotVendor": "The category \"{category}\" is not a vendor or creditor category. Choose one that is to create a contact from a purchase.",
+    "contactCategoryNotCustomer": "The category \"{category}\" is not a customer category. Choose one that is to create a contact from a sale.",
+    "importErrorContactCategoryNotFound": "The contact category \"{category}\" does not exist. Create it first in Contact Category or use an existing one.",
     "taxIdTypeField": "Tax ID country type",
     "contactPersonSubtable": "Contact person",
     "bankAccountSubtable": "Contact bank account",

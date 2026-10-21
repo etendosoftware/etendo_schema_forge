@@ -1417,6 +1417,49 @@ describe('EntityForm — extended render coverage', () => {
     });
   });
 
+  // --- customRenderer that owns its label (groups several fields, commits like a checkbox) ---
+
+  describe('customRenderer with ownsLabel', () => {
+    function GroupRenderer({ label, required, onFieldChange, onCommit, record }) {
+      return (
+        <fieldset data-testid="group-renderer">
+          <legend>{label}{required ? ' *' : ''}</legend>
+          <span data-testid="group-record">{String(record?.typeB)}</span>
+          <button type="button" data-testid="group-toggle-b" onClick={() => { onFieldChange('typeB', true); onCommit(); }}>b</button>
+        </fieldset>
+      );
+    }
+    GroupRenderer.ownsLabel = true;
+    const fields = [
+      { key: 'typeA', label: 'Contact type', column: 'EM_Type_A', required: true, customRenderer: GroupRenderer },
+      { key: 'typeB', label: 'Type B', column: 'EM_Type_B', form: false },
+    ];
+
+    it('leaves the label to the renderer, handing it the label, required flag and record', () => {
+      const { container } = render(<EntityForm fields={fields.slice(0, 1)} data={{ typeB: false }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('group-renderer')).toHaveTextContent('EM_Type_A *');
+      expect(screen.getByTestId('group-record')).toHaveTextContent('false');
+      expect(container.querySelector('label')).toBeNull();
+    });
+
+    it('writes a sibling field with its own column, then commits that change asynchronously', async () => {
+      vi.useFakeTimers();
+      try {
+        const onChange = vi.fn();
+        const onFieldBlur = vi.fn();
+        render(<EntityForm fields={fields} data={{}} onChange={onChange} onFieldBlur={onFieldBlur} />);
+        screen.getByTestId('group-toggle-b').click();
+        expect(onChange).toHaveBeenCalledWith('typeB', true, 'EM_Type_B');
+        // Deferred so the parent applies the write before the immediate save reads the record.
+        expect(onFieldBlur).not.toHaveBeenCalled();
+        vi.runAllTimers();
+        expect(onFieldBlur).toHaveBeenCalledWith('typeA');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   // --- Boolean select with valueType handling ---
 
   describe('boolean select value resolution', () => {

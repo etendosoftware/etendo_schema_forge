@@ -611,16 +611,16 @@ describe('gateDetailTab (ETP-5648)', () => {
   const Table = () => null;
 
   it('keeps the detail entity and table when no capability is declared', () => {
-    expect(gateDetailTab('lines', Table, null, {})).toEqual(['lines', Table]);
+    expect(gateDetailTab('lines', Table, null, {})).toEqual(['lines', Table, null]);
   });
 
   it('keeps them when the declared capability is granted', () => {
     expect(gateDetailTab('accounting', Table, 'showAccountingFields', { showAccountingFields: true }))
-      .toEqual(['accounting', Table]);
+      .toEqual(['accounting', Table, null]);
   });
 
   it('drops both (no tab, no fetch) when the capability is missing', () => {
-    expect(gateDetailTab('accounting', Table, 'showAccountingFields', {})).toEqual([null, null]);
+    expect(gateDetailTab('accounting', Table, 'showAccountingFields', {})).toEqual([null, null, null]);
   });
 });
 

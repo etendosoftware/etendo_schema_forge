@@ -13,6 +13,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const apiFetchMock = vi.fn();
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
 vi.mock('@/auth/api.js', () => ({ buildHeaders: () => ({}) }));
+// Stable identity: the hooks memoise their create check on `ui`.
+const ui = (key, params) => `${key}|${params?.category ?? ''}`;
+vi.mock('@/i18n', () => ({ useUI: () => ui }));
 
 const modalProps = vi.fn();
 vi.mock('../RecordCreateModal.jsx', () => ({
@@ -31,6 +34,11 @@ const GROUPS = [
   { id: 'G-PRO', label: 'Proveedor' },
 ];
 const answer = items => apiFetchMock.mockResolvedValue({ ok: true, json: async () => ({ items }) });
+/** After the popup opened: the category read of the create check answers these flags. */
+const categoryFlags = (row) => apiFetchMock.mockImplementation(async (url) => (
+  String(url).startsWith('/businessPartnerCategory/')
+    ? { ok: true, json: async () => ({ response: { data: [row] } }) }
+    : { ok: true, json: async () => ({ items: GROUPS }) }));
 
 beforeEach(() => {
   apiFetchMock.mockReset();
@@ -88,7 +96,7 @@ describe('useCreateContactModal (manual document flow)', () => {
     );
   }
 
-  it('mounts the popup only after the lookup, seeding Proveedor alongside vendor and name', async () => {
+  it('mounts the popup only after the lookup, seeding Proveedor and the name but no customer/vendor', async () => {
     answer(GROUPS);
     render(<Host documentType="purchase" />);
     await act(async () => { screen.getByText('open').click(); });
@@ -96,10 +104,13 @@ describe('useCreateContactModal (manual document flow)', () => {
     const { initialData } = modalProps.mock.calls.at(-1)[0];
     expect(initialData).toMatchObject({
       name: 'ACME',
-      vendor: true,
       businessPartnerCategory: 'G-PRO',
       'businessPartnerCategory$_identifier': 'Proveedor',
     });
+    // The type comes from the category: a seeded key would reach the POST and disable the
+    // backend's inheritance of customer/vendor from it.
+    expect(initialData).not.toHaveProperty('vendor');
+    expect(initialData).not.toHaveProperty('customer');
     // Never mounted with a half-resolved seed: the window would read it once and lose it.
     expect(modalProps.mock.calls.every(([p]) => p.initialData.businessPartnerCategory === 'G-PRO')).toBe(true);
   });
@@ -119,7 +130,22 @@ describe('useCreateContactModal (manual document flow)', () => {
     await waitFor(() => expect(screen.getByTestId('modal-open')).toBeTruthy());
     const { initialData } = modalProps.mock.calls.at(-1)[0];
     expect(initialData).not.toHaveProperty('businessPartnerCategory');
-    expect(initialData.vendor).toBe(true);
+    expect(initialData).not.toHaveProperty('vendor');
+  });
+
+  // The fallback form of RecordCreateModal never runs the Contacts window's own check, so the
+  // target carries it: from a purchase, a customer-only category is refused before the POST.
+  it('hands the popup a create check that refuses a category not granting the document type', async () => {
+    answer(GROUPS);
+    render(<Host documentType="purchase" />);
+    await act(async () => { screen.getByText('open').click(); });
+    await waitFor(() => expect(screen.getByTestId('modal-open')).toBeTruthy());
+    const { target } = modalProps.mock.calls.at(-1)[0];
+    expect(target.createOmitUntouched).toEqual(['customer', 'vendor']);
+    categoryFlags({ etgoIscustomer: 'Y', etgoIsvendor: 'N' });
+    await expect(target.validateBeforeCreate({
+      businessPartnerCategory: 'G-CLI', 'businessPartnerCategory$_identifier': 'Cliente',
+    })).resolves.toBe('contactCategoryNotVendor|Cliente');
   });
 
   it('still opens the popup when the lookup throws', async () => {
@@ -139,9 +165,34 @@ describe('CreateContactModalAdapter (OCR flow)', () => {
     render(<CreateContactModalAdapter
       item={item} apiBaseUrl="/sws/neo/purchase-invoice" token="t" onCancel={vi.fn()} onSubmit={vi.fn()} />);
     await waitFor(() => expect(screen.getByTestId('modal-open')).toBeTruthy());
-    expect(modalProps.mock.calls.at(-1)[0].initialData).toMatchObject({
-      name: 'ACME', taxID: 'B123', vendor: true, businessPartnerCategory: 'G-PRO',
-    });
+    const { initialData } = modalProps.mock.calls.at(-1)[0];
+    expect(initialData).toMatchObject({ name: 'ACME', taxID: 'B123', businessPartnerCategory: 'G-PRO' });
+    expect(initialData).not.toHaveProperty('vendor');
+    expect(initialData).not.toHaveProperty('customer');
+  });
+
+  it.each([
+    ['a purchase extraction refuses a customer-only category', 'purchase', 'contactCategoryNotVendor|Cliente'],
+    ['a sale extraction accepts it', 'sale', null],
+  ])('create check: %s', async (_label, documentType, expected) => {
+    answer(GROUPS);
+    render(<CreateContactModalAdapter
+      item={{ payload: { ...item.payload, documentType } }}
+      apiBaseUrl="/sws/neo/purchase-invoice" token="t" onCancel={vi.fn()} onSubmit={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId('modal-open')).toBeTruthy());
+    categoryFlags({ etgoIscustomer: 'Y', etgoIsvendor: 'N' });
+    const { target } = modalProps.mock.calls.at(-1)[0];
+    await expect(target.validateBeforeCreate({
+      businessPartnerCategory: 'G-CLI', 'businessPartnerCategory$_identifier': 'Cliente',
+    })).resolves.toBe(expected);
+  });
+
+  it('carries no create check when the extraction has no document nature', async () => {
+    render(<CreateContactModalAdapter
+      item={{ payload: { prefilled: { name: 'ACME' } } }}
+      apiBaseUrl="/sws/neo/purchase-invoice" token="t" onCancel={vi.fn()} onSubmit={vi.fn()} />);
+    await waitFor(() => expect(screen.getByTestId('modal-open')).toBeTruthy());
+    expect(modalProps.mock.calls.at(-1)[0].target.validateBeforeCreate).toBeUndefined();
   });
 
   it('opens with the OCR prefill and no category when the lookup fails', async () => {
@@ -150,7 +201,8 @@ describe('CreateContactModalAdapter (OCR flow)', () => {
       item={item} apiBaseUrl="/sws/neo/purchase-invoice" token="t" onCancel={vi.fn()} onSubmit={vi.fn()} />);
     await waitFor(() => expect(screen.getByTestId('modal-open')).toBeTruthy());
     const { initialData } = modalProps.mock.calls.at(-1)[0];
-    expect(initialData).toMatchObject({ name: 'ACME', vendor: true });
+    expect(initialData).toMatchObject({ name: 'ACME' });
+    expect(initialData).not.toHaveProperty('vendor');
     expect(initialData).not.toHaveProperty('businessPartnerCategory');
   });
 });

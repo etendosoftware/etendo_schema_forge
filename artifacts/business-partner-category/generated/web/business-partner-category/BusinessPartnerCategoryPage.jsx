@@ -4,8 +4,7 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import BusinessPartnerCategoryTable from './BusinessPartnerCategoryTable';
 import BusinessPartnerCategoryForm from './BusinessPartnerCategoryForm';
-import AccountingTable from './AccountingTable';
-import AccountingForm from './AccountingForm';
+import BpCategoryAccountingPanel from '../../../custom/BpCategoryAccountingPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -38,7 +37,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:businessPartnerCategory
 
 // @sf-generated-start requiredHeaderFields:businessPartnerCategory
-const requiredHeaderFields = ['searchKey', 'name', 'default'];
+const requiredHeaderFields = ['searchKey', 'name', 'default', 'etgoIscustomer'];
 // @sf-generated-end requiredHeaderFields:businessPartnerCategory
 
 // @sf-generated-start addLineFields:accounting
@@ -319,13 +318,10 @@ export default function BusinessPartnerCategoryPage({ windowName, recordId, ...p
         entity="businessPartnerCategory"
         detailEntity="accounting"
         Form={BusinessPartnerCategoryForm}
-        DetailTable={AccountingTable}
-        DetailForm={AccountingForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Business Partner Category"
         detailLabel="Accounting"
@@ -333,6 +329,8 @@ export default function BusinessPartnerCategoryPage({ windowName, recordId, ...p
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        CustomLines={BpCategoryAccountingPanel}
+        customLinesLabel="Accounting"
         hidePrint
         noHeaderBorder
         toolbarBorderBottom

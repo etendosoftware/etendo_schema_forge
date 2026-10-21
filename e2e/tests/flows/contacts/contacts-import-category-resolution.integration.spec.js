@@ -32,7 +32,10 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
   test.skip(!RUN_INTEGRATION, 'Requires E2E_USE_MOCK=0 and E2E_PASSWORD for a real Etendo backend');
   test.setTimeout(120_000);
 
-  test('persists contacts with an existing category, a normalized name, and one new shared category', async ({ page }) => {
+  // ETP-5791: the category decides the contact type, so an unknown category is no longer
+  // auto-created (it would carry neither type and every contact on it would be refused). Rows
+  // naming one fail on their own row with the not-found message; the rest still import.
+  test('persists contacts with an existing category by code or name, and fails rows naming an unknown category', async ({ page }) => {
     const evidenceDir = resolve(import.meta.dirname, '../../../../artifacts/delivery-evidence/ETP-4905');
     mkdirSync(evidenceDir, { recursive: true });
     const unique = Date.now();
@@ -53,6 +56,8 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       { name: `E2E Contact New Two ${unique}`, first: `Martin${unique}`, last: 'Shared', categoryMode: 'new' },
       { name: `E2E Contact Legacy ${unique}`, first: `Julia${unique}`, last: 'Legacy', categoryMode: 'fallback' },
     ];
+    const importedRows = rows.filter((row) => row.categoryMode !== 'new');
+    const rejectedRows = rows.filter((row) => row.categoryMode === 'new');
 
     await login(page, onboardingCredentials ? {
       user: onboardingCredentials.email,
@@ -68,10 +73,14 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     const categoriesPayload = { status: categoriesResponse.status(), body: await categoriesResponse.json() };
     expect(categoriesPayload.status).toBe(200);
     const categories = categoriesPayload.body?.response?.data ?? categoriesPayload.body?.data ?? [];
-    const existingCategory = categories.find((category) => {
+    // A category that grants at least one contact type: one with neither (legacy, not yet
+    // migrated) gives its contacts no type, which the backend refuses since ETP-5791.
+    const isYes = (value) => value === true || value === 'Y' || value === 'true';
+    const typed = categories.filter((category) => isYes(category.etgoIscustomer) || isYes(category.etgoIsvendor));
+    const existingCategory = typed.find((category) => {
       const label = String(category.name ?? category._identifier ?? '').trim().toLowerCase();
-      return label === 'clientes' || label === 'otros';
-    }) ?? categories.find((category) => category.searchKey ?? category.value ?? category._value);
+      return label === 'clientes' || label === 'cliente' || label === 'otros';
+    }) ?? typed.find((category) => category.searchKey ?? category.value ?? category._value);
     expect(existingCategory, 'expected at least one existing business partner category').toBeTruthy();
     const existingCategoryName = existingCategory.name ?? existingCategory._identifier;
     const existingCategoryCode = existingCategory.searchKey ?? existingCategory.value ?? existingCategory._value;
@@ -108,9 +117,10 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     });
 
     // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
-    // of all importable fields (22 for Contacts since ETP-5544 added Customer/Vendor), not
-    // columns mapped out of columns present.
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/22');
+    // of all importable fields (20 for Contacts: ETP-5791 dropped the Customer/Vendor columns
+    // ETP-5544 had added, the type now comes from the category), not columns mapped out of
+    // columns present.
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/20');
     // ETP-5223: the chip reads `<source column>→<target caption>`, and the target caption
     // is now resolved through `fieldLabelFn` (the AD label dictionary for the SESSION locale)
     // instead of the English `field.label` declared in decisions.json. The locale here is
@@ -129,14 +139,18 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
     await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('5');
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-confirm.png'), fullPage: true });
-    const categoryResponsePromise = page.waitForResponse(
-      (response) => response.request().method() === 'POST'
-        && response.url().includes('/sws/neo/business-partner-category/businessPartnerCategory'),
-      { timeout: 30_000 },
-    );
     await page.getByTestId('ImportConfirmStep__confirm').click();
-    const categoryResponse = await categoryResponsePromise;
-    expect(categoryResponse.status()).toBeLessThan(300);
+
+    // The two rows naming the unknown category fail on their own row, telling the user to
+    // create it first — and nothing tries to create it.
+    const errorFilter = page.getByTestId('ImportReviewQueue__statusFilter-error');
+    await expect(errorFilter).toContainText(String(rejectedRows.length), { timeout: 30_000 });
+    await errorFilter.click();
+    for (let i = 0; i < rejectedRows.length; i += 1) {
+      await expect(page.getByTestId(`ImportReviewQueue__rowError-${i}`))
+        .toContainText(/no existe|does not exist/i);
+    }
+    await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-5791-contacts-import-unknown-category.png'), fullPage: true });
 
     // ETP-5676: rows travel in chunks of up to `batchSize` (10 for Contacts), so the five rows
     // are normally ONE /batch request. Assert on the rows, not on the request count: every row
@@ -144,13 +158,16 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     // one by one, so the request count is bounded by 1 + rows (one batch, then one per row).
     const allBatchOperations = () => batchBodies.flatMap((body) => body.operations ?? []);
     await expect.poll(
-      () => rows.every((row) => allBatchOperations().some((operation) => operation.body?.name === row.name)),
+      () => importedRows.every((row) => allBatchOperations().some((operation) => operation.body?.name === row.name)),
       { timeout: 30_000 },
     ).toBe(true);
     expect(batchBodies.length).toBeGreaterThanOrEqual(1);
-    expect(batchBodies.length).toBeLessThanOrEqual(rows.length + 1);
-    expect(categoryCreateBodies.filter((body) => body.name === newCategoryName)).toHaveLength(1);
-    for (const row of rows) {
+    expect(batchBodies.length).toBeLessThanOrEqual(importedRows.length + 1);
+    expect(categoryCreateBodies).toHaveLength(0);
+    for (const row of rejectedRows) {
+      expect(allBatchOperations().some((operation) => operation.body?.name === row.name), `${row.name} must not be sent`).toBe(false);
+    }
+    for (const row of importedRows) {
       const batch = batchBodies.find((body) => body.operations?.some((operation) => operation.body?.name === row.name));
       expect(batch, `expected a batch for ${row.name}`).toBeTruthy();
       const bpOperation = batch.operations.find((operation) => operation.body?.name === row.name);
@@ -169,8 +186,10 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     expect(firstLocation.body.cityName).toBe('Madrid');
     expect(firstLocation.body.postalCode).toBe('28013');
 
+    // The dialog stays on the review queue because of the failed rows: reload the list.
+    await navigateTo(page, 'contacts');
     await expect(page.getByTestId('action-new-more')).toBeVisible({ timeout: 30_000 });
-    for (const row of rows) await expect(page.getByText(row.name, { exact: true })).toBeVisible({ timeout: 30_000 });
+    for (const row of importedRows) await expect(page.getByText(row.name, { exact: true })).toBeVisible({ timeout: 30_000 });
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-created.png'), fullPage: true });
 
     await page.getByText(rows[0].name, { exact: true }).click();
