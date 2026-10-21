@@ -15,7 +15,7 @@ import {
 import { NestFactory } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerStorageService } from '@nestjs/throttler';
 import { CachedTokenExchangeService, PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
-import { PublicApiController } from '../src/public-api/public-api.controller.ts';
+import { PublicApiController, versionFromIfMatch } from '../src/public-api/public-api.controller.ts';
 import { THROTTLER_NAME } from '../src/public-api/public-api-throttler.guard.ts';
 import {
   acceptsJsonApi,
@@ -113,6 +113,15 @@ test('toErrorDocument renders gateway and Nest exceptions as error documents wit
   });
   const many = toErrorDocument(new BadRequestException({ message: ['a is required', 'b is invalid'] }));
   assert.deepEqual(many.errors.map((error) => error.detail), ['a is required', 'b is invalid']);
+  // The stable code of a coded HttpException (If-Match 428 and 412) is carried into the document.
+  for (const [ifMatch, status, code] of [[undefined, 428, 'precondition_required'], ['"not-an-etag"', 412, 'precondition_failed']] as const) {
+    let thrown: unknown;
+    try { versionFromIfMatch(ifMatch); } catch (error) { thrown = error; }
+    const coded = toErrorDocument(thrown);
+    assert.equal(coded.status, status);
+    assert.equal(coded.errors[0].code, code);
+    assert.equal(coded.errors[0].status, String(status));
+  }
   const unexpected = toErrorDocument(new Error('connect ECONNREFUSED 10.0.0.5:5432 password=hunter2'));
   assert.equal(unexpected.status, 500);
   assert.doesNotMatch(JSON.stringify(unexpected), /ECONNREFUSED|hunter2/);

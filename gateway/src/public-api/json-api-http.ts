@@ -260,11 +260,14 @@ export function toErrorDocument(exception: unknown): { status: number; errors: J
     return { status, errors: response.errors as JsonApiError[] };
   }
   const message = isRecord(response) ? response.message : response;
+  // A coded HttpException (`{ code: 'precondition_required', ... }`) keeps its code.
+  const code = isRecord(response) ? text(response.code) : undefined;
   const details = (Array.isArray(message) ? message : [message]).filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
   return {
     status,
     errors: (details.length ? details : [undefined]).map((detail) => ({
       status: String(status),
+      ...(code ? { code } : {}),
       title: titleFor(status),
       ...(detail ? { detail } : {}),
     })),
