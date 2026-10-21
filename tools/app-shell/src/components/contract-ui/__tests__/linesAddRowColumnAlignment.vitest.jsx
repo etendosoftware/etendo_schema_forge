@@ -72,9 +72,9 @@ const COSTING_COLUMNS = [
   { key: 'endingDate', column: 'DateTo', type: 'date', label: 'Ending Date' },
 ];
 
-// Document lines: the amount IS last, so it doubles as the action strip and NO extra
-// slot is reserved. This is the shape that already rendered correctly — it pins that
-// the fix did not just "always reserve 160px".
+// Document lines: the amount IS last. Until ETP-5600 it doubled as the action strip and
+// NO extra slot was reserved; an editable table now always reserves the slot (the strip
+// is sticky and needs room of its own past the last column), on both renderers.
 const TRAILING_AMOUNT_COLUMNS = [
   { key: 'product', column: 'M_Product_ID', type: 'string', label: 'Product' },
   { key: 'quantity', column: 'QtyOrdered', type: 'quantity', label: 'Quantity' },
@@ -291,23 +291,23 @@ describe.each([
 });
 
 describe('the reserved action slot itself (ETP-5245)', () => {
-  it('reserves 160px in the add-row whenever the header does — Producto > Costo', () => {
+  it('reserves the 158px action slot in the add-row whenever the header does — Producto > Costo', () => {
     const { headerLayout, addRowLayout } = layoutsFor(COSTING_COLUMNS);
-    // checkbox 40 + two fixed dates 176 each (ETP-5833: dates no longer grow) + action slot 160
-    // + right spacer 48 = 600; the lines absorber (`withLinesAbsorberColumn`) makes the leading
+    // checkbox 40 + two fixed dates 176 each (ETP-5833: dates no longer grow) + action slot 158
+    // + right spacer 48 = 598; the lines absorber (`withLinesAbsorberColumn`) makes the leading
     // amount the one growing column, so the add-row keeps a calc() and cannot drift (ETP-5245).
-    expect(headerLayout.fixedPx).toBe(600);
-    expect(addRowLayout.fixedPx).toBe(600);
-    expect(addRowLayout.calcFixedPx).toBe(600);
+    expect(headerLayout.fixedPx).toBe(598);
+    expect(addRowLayout.fixedPx).toBe(598);
+    expect(addRowLayout.calcFixedPx).toBe(598);
     expect(headerLayout.growBases).toEqual([172]);
     expect(addRowLayout.growBases).toEqual([172]);
   });
 
-  it('reserves NO extra slot when the trailing amount column doubles as the strip', () => {
+  it('reserves the slot too when the amount column is last, on an editable table (ETP-5600)', () => {
     const { headerLayout, addRowLayout } = layoutsFor(TRAILING_AMOUNT_COLUMNS);
-    // checkbox 40 + quantity 152 + amount 172 + right spacer 48 — no 160px slot.
-    expect(headerLayout.fixedPx).toBe(412);
-    expect(addRowLayout.calcFixedPx).toBe(412);
+    // checkbox 40 + quantity 152 + amount 172 + action slot 158 + right spacer 48.
+    expect(headerLayout.fixedPx).toBe(570);
+    expect(addRowLayout.calcFixedPx).toBe(570);
   });
 });
 
@@ -428,7 +428,7 @@ describe('date vs string column basis — saved rows, header and add-row agree',
   it('the add-row colgroup keeps the date fixed (176px) and grows only the string column from 224', () => {
     const { headerLayout, addRowLayout } = layoutsFor(DATE_STRING_COLUMNS);
     // The date is a literal-px fixed column, so it is part of the locked budget...
-    expect(headerLayout.fixedPx).toBe(40 + 176 + 48 + 160);
+    expect(headerLayout.fixedPx).toBe(40 + 176 + 48 + 158);
     expect(addRowLayout.calcFixedPx).toBe(headerLayout.fixedPx);
     // ...and the only grow column is the string, from its own 224px basis.
     expect(headerLayout.growBases).toEqual([224]);

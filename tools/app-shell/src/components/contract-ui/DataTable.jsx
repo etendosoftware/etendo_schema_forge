@@ -32,9 +32,12 @@ import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericField
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 
 // ETP-5268 — pixel geometry of one canonical RowQuickActions button, mirrored
-// from its own className (`h-10 px-3` container, `gap-0.5` between `h-8 w-8`
-// buttons) — used below to size the reserved column to the buttons THIS
-// window's `rowQuickActions` will actually render, not a fixed worst-case.
+// from its own className (`px-3` container, `h-8 w-8` buttons) — used below to
+// size the reserved column to the buttons THIS window's `rowQuickActions` will
+// actually render, not a fixed worst-case. ETP-5600 (Figma "Sticky Acciones"):
+// 2px between buttons (`gap-0.5`, ROW_STICKY_ACTIONS), so four buttons make the
+// Figma 158px band (4 x 32 + 3 x 2 + 24). A custom `render` (e.g.
+// AccountRowActions) spaces its own buttons by the same 2px.
 const QUICK_ACTIONS_BUTTON_PX = 32;
 const QUICK_ACTIONS_GAP_PX = 2;
 const QUICK_ACTIONS_CONTAINER_PADDING_PX = 24; // px-3 on both sides
@@ -90,9 +93,16 @@ function quickActionsReservedWidthPx(rowQuickActions) {
   if (Number.isFinite(explicitWidth) && explicitWidth > 0) return explicitWidth;
   const count = estimateQuickActionsButtonCount(rowQuickActions);
   if (count <= 0) return 0;
-  return count * QUICK_ACTIONS_BUTTON_PX
+  const buttonsPx = count * QUICK_ACTIONS_BUTTON_PX
     + Math.max(count - 1, 0) * QUICK_ACTIONS_GAP_PX
     + QUICK_ACTIONS_CONTAINER_PADDING_PX;
+  // ETP-5600 (review W1) — the canonical band (ROW_STICKY_ACTIONS) is at least
+  // QUICK_ACTIONS_MIN_BAND_PX wide and exactly its cell, so the cell reserves that floor:
+  // with 1–2 buttons (56px / 90px) the band used to overflow the cell and cover the last
+  // data column on hover. A custom `render` brings no band, so it keeps its own width.
+  return typeof rowQuickActions?.render === 'function'
+    ? buttonsPx
+    : Math.max(buttonsPx, QUICK_ACTIONS_MIN_BAND_PX);
 }
 
 // ETP-5268 — the quick-actions column is ALWAYS rendered at its own full
@@ -152,7 +162,7 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // the exact math) while staying solid enough to mask real data underneath
 // while floating. (ETP-5600: solid under the buttons in the row hover colour,
 // with a fade across the cell's left padding — see the class list below.)
-function quickActionsColumnClassName(extraClassName) {
+function quickActionsColumnClassName(extraClassName, { paintsOwnBand = false } = {}) {
   // `relative` (not `sticky`) is the resting state — gives RowQuickActions'
   // `position: absolute` pill a containing block scoped to this cell either
   // way. `right-0`/`z-10` are harmless no-ops while merely `relative` (no
@@ -172,11 +182,17 @@ function quickActionsColumnClassName(extraClassName) {
     // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
     // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
     // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
-    // ETP-5510 — a subtle left edge on the floating zone (inset shadow, so it adds no width to
-    // the fixed-layout cell) so the hand-off from scrolled content to the actions is not an
-    // abrupt cut; it only exists while the cell is sticky, i.e. while it floats over content.
-    'group-hover/row:shadow-[inset_1px_0_0_hsl(var(--border-control)/0.35)] has-[[data-state=open]]:shadow-[inset_1px_0_0_hsl(var(--border-control)/0.35)]',
+    'relative right-0 z-10 group-hover/row:sticky has-[[data-state=open]]:sticky',
+    // ETP-5600 (QA pass 2) — with the canonical RowQuickActions the CELL paints nothing:
+    // the band inside it (ROW_STICKY_ACTIONS, the Figma "Sticky Acciones" layer) carries
+    // the gradient. A cell gradient left a visible vertical seam at the cell's left edge.
+    // Review W1: the band is exactly the cell (`min-w-full`) and the cell reserves at least
+    // QUICK_ACTIONS_MIN_BAND_PX, so nothing reaches past the cell and the TableCell base
+    // `overflow-hidden` stays. A custom `rowQuickActions.render` brings no such band, so its
+    // cell keeps painting the fade itself (below).
+    paintsOwnBand
+      ? ''
+      : 'group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
     // ETP-5600 — Figma "Fila Contactos / State=Hover", layer "Sticky Acciones": a white
     // linear gradient (0% -> 100% opacity) whose fade lives in the cell's 12px left padding
     // (RowQuickActions' `px-3`, QUICK_ACTIONS_CONTAINER_PADDING_PX) and is OPAQUE from there
@@ -574,7 +590,7 @@ import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
-import { ROW_LIFT_SHADOW, ROW_LIFT_TOP_SEPARATOR, ROW_CHECKED_BG } from './rowVisuals.js';
+import { ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS, ROW_CHECKED_BG, QUICK_ACTIONS_MIN_BAND_PX } from './rowVisuals.js';
 
 import { apiFetch } from '@/auth/api.js';
 /**
@@ -1755,7 +1771,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         touchedFieldsRef, invalidFields, specName,
       }))}
       {/* Skip action cells in inlineEditable add-row mode — actions belong to
-          InlineLinesPanel's 160px slot, not to separate columns here. */}
+          InlineLinesPanel's 158px slot, not to separate columns here. */}
       {!ilpTrailing && (hoverRowActions ? (
         <>
           <TableCell className="w-10" data-testid="TableCell__eb5261" />
@@ -2077,7 +2093,7 @@ function isQuickActionsEnabled(rowQuickActions) {
 }
 
 // ETP-5600 — the shared row visuals (Shadows/lg, the checked colour, the lifted row's
-// top separator) live in rowVisuals.js, shared with InlineLinesPanel's line rows.
+// hover border reset) live in rowVisuals.js, shared with InlineLinesPanel's line rows.
 // The two below are DataTable-only.
 const ROW_ACTIVE_BG = 'bg-primary/10 hover:bg-primary/10 [--row-hover-bg:color-mix(in_srgb,hsl(var(--primary))_10%,hsl(var(--card)))]';
 // The composited `bg-muted/50` tint, for a row that tints on hover: a clickable row under
@@ -2112,10 +2128,9 @@ function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelect
  *   - `lift` (default, ETP-5600 — Figma "Fila"): transparent at rest; on hover an
  *     opaque white background plus Shadows/lg, raised with `z-10` so the shadow falls
  *     over the row below. Instant — no colour transition (a fading background made the
- *     chips inside the row flash). The lifted row paints above the table's collapsed
- *     border, which hid the line ABOVE it (the previous row's `border-b`); each of its
- *     cells redraws that line as a 1px inset top shadow, which sits above every cell
- *     background (the checkbox cell and the sticky quick-actions gradient included).
+ *     chips inside the row flash). Figma's hover row has NO borders: the hovered row's
+ *     own `border-b` and the previous row's `border-b` (its top line) turn transparent
+ *     while hovered (ROW_LIFT_HOVER_NO_BORDERS); resting rows keep their separators.
  *     `elevated` is the former name of this style and stays an alias.
  *   - `tint`: the pre-ETP-5600 translucent `bg-muted/50` wash, kept as an explicit
  *     opt-out for a grid where a raised white row would read wrong.
@@ -2138,7 +2153,7 @@ function getRowClassName({
   let hoverClass = '';
   if (liftRow && !isSelectedLine) {
     hoverClass = [
-      'hover:z-10', ROW_LIFT_SHADOW, ROW_LIFT_TOP_SEPARATOR,
+      'hover:z-10', ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS,
       selectionClass ? '' : 'hover:bg-card [--row-hover-bg:hsl(var(--card))]',
     ].filter(Boolean).join(' ');
   } else if (!isSelectedLine && !selectionClass) {
@@ -2157,7 +2172,7 @@ function getRowClassName({
 
 // Sums the pixel widths reserved in the fixed-layout <colgroup> for the
 // selection checkbox column and every row-action slot (hover actions, legacy
-// delete/clone, quick actions), mirroring the 40px/48px/160px slots rendered
+// delete/clone, quick actions), mirroring the 40px/48px/158px slots rendered
 // by InlineLinesPanel and the row-action cells in the table body. Extracted
 // from a single chained sum of ternaries so each conditional slot keeps its
 // own branch instead of adding flat complexity to the caller.
@@ -2263,7 +2278,7 @@ export function renderLinesColgroup({
           : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount, measured) }} />;
       })}
       {/* In inlineEditable add-row mode (ilpTrailing), all row actions live
-          inside InlineLinesPanel's 160px action slot — never add separate
+          inside InlineLinesPanel's 158px action slot — never add separate
           action cols here or the flex columns shrink by 40px. */}
       {!ilpTrailing && hoverRowActions && <col style={{ width: 40 }} />}
       {!ilpTrailing && hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}
@@ -2940,7 +2955,9 @@ function TableDataRow({
         // that read the same window-level `rowQuickActions` config on
         // every row, on every render, for an identical result each time.
         (<TableCell
-          className={quickActionsColumnClassName('px-2')}
+          className={quickActionsColumnClassName('px-2', {
+            paintsOwnBand: typeof rowQuickActions.render !== 'function',
+          })}
           style={quickActionsColumnStyle(quickActionsColWidthPx)}
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
@@ -3426,13 +3443,16 @@ export function DataTable({
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
   // always appends a 48px right spacer, plus an ACTION_SLOT_WIDTH_PX action slot when
   // no column can be swapped for the hover action strip. Mirror those here so flexible
-  // columns grow to the same width in both.
+  // columns grow to the same width in both. ETP-5600 — an editable lines table always
+  // reserves that slot (the strip is sticky and needs room past the last column), and
+  // this add-row only mounts on an editable table, hence `reservesActionSlot`'s
+  // default `editable: true`.
   //
   // ETP-5245 — this MUST be `reservesActionSlot()`, the same predicate
   // InlineLinesPanel uses, not a local "is there any amount column?" guess: the panel
   // only ever swaps the LAST column, so a tab whose amount sits earlier (Producto >
   // Costo: `cost`, `startingDate`, `endingDate`) reserves the slot there while this
-  // table did not — handing those 160px to `growColumnWidth()`'s grow columns and
+  // table did not — handing those 158px to `growColumnWidth()`'s grow columns and
   // pushing every add-row input right of its header.
   const ilpReservesActionSlot = hideHeader && linesLayout === 'inlineEditable'
     && reservesActionSlot(visibleColumns);

@@ -827,6 +827,10 @@ merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + cop
 	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
 	@./scripts/merge-block-check.sh $(TASK)
 
+.PHONY: check-modules
+check-modules: ## Check every Etendo repo/module is on its expected branch (FETCH=0, ONLY=a,b, ROOT=<env path>[,<path>], ALL_ENVS=1)
+	@node scripts/check-modules.js $(if $(filter 0,$(FETCH)),--no-fetch,) $(if $(ONLY),--only=$(ONLY),) $(if $(ROOT),--root=$(ROOT),) $(if $(ALL_ENVS),--all-envs,)
+
 # --- CI parity -------------------------------------------------------------
 # These variable names are shared with unrelated targets earlier in this file
 # (DRY_RUN ?= 0 for data-fixes, PROFILE ?= for regen-check). A plain `?=` here

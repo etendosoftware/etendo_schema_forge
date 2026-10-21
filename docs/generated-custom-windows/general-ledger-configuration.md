@@ -210,3 +210,9 @@ Before, a valid `general.name` plus a bad account answered 400 and still renamed
 
 Backend detail: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` (example "tenant-scoped
 ids (ETP-5722)").
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Defaults and General Accounts tabs now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `GeneralLedgerConfigurationHandler` (aggregate save, rolled back on refusal) and the `@NeoExtension` handlers of the generic `Valores por defecto` / `Cuentas generales` entities (`com.etendoerp.go`, see `neo-headless.md`).
+
+Error display: a failed save used to show nothing (the page had no `catch`). `useGeneralLedgerConfig.save` now throws with the backend message and body (`throwHttpError`), and `GeneralLedgerConfigPage` shows it as a toast translated by `messageKeys` (any backend error, not only these).

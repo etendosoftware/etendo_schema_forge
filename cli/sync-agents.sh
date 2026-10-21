@@ -7,6 +7,7 @@
 #   .claude/skills/  ->  .agents/skills/        (Codex; OpenCode reads .claude/ too)
 #   .claude/agents/  ->  .codex/agents/*.toml   (Codex subagents)
 #                    ->  .opencode/agents/*.md  (OpenCode subagents)
+#                    ->  .omp/agents/*.md       (oh-my-pi subagents; omp skips the other agent dirs)
 #
 # Claude Code >= 2.1.277 falls back to AGENTS.md only when CLAUDE.md is absent,
 # so while both exist CLAUDE.md is the file Claude actually reads and the
@@ -87,15 +88,15 @@ dst.write_text("".join(lines))
 PY
 done
 
-# --- subagents: .codex/agents/*.toml + .opencode/agents/*.md -----------------
+# --- subagents: .codex/agents/*.toml + .opencode/agents/*.md + .omp/agents/*.md
 N_AGENTS="$("$SCRIPT_DIR/lib-gen-agents.py" \
-  "$REPO_DIR/.claude/agents" "$STAGE/codex-agents" "$STAGE/opencode-agents")"
+  "$REPO_DIR/.claude/agents" "$STAGE/codex-agents" "$STAGE/opencode-agents" "$STAGE/omp-agents")"
 
 # --- apply or verify ---------------------------------------------------------
 if [ "$CHECK_ONLY" -eq 1 ]; then
   STALE=0
   cmp -s "$STAGE/AGENTS.md" "$REPO_DIR/AGENTS.md" || { echo "stale: AGENTS.md"; STALE=1; }
-  for pair in "skills:.agents/skills" "codex-agents:.codex/agents" "opencode-agents:.opencode/agents"; do
+  for pair in "skills:.agents/skills" "codex-agents:.codex/agents" "opencode-agents:.opencode/agents" "omp-agents:.omp/agents"; do
     from="$STAGE/${pair%%:*}"; to="$REPO_DIR/${pair#*:}"
     if ! diff -rq "$from" "$to" >/dev/null 2>&1; then
       diff -rq "$from" "$to" 2>&1 | sed 's/^/stale: /'
@@ -112,10 +113,11 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
 fi
 
 cp "$STAGE/AGENTS.md" "$REPO_DIR/AGENTS.md"
-mkdir -p "$REPO_DIR/.agents" "$REPO_DIR/.codex" "$REPO_DIR/.opencode"
+mkdir -p "$REPO_DIR/.agents" "$REPO_DIR/.codex" "$REPO_DIR/.opencode" "$REPO_DIR/.omp"
 rsync -a --delete "$STAGE/skills/"           "$REPO_DIR/.agents/skills/"
 rsync -a --delete "$STAGE/codex-agents/"     "$REPO_DIR/.codex/agents/"
 rsync -a --delete "$STAGE/opencode-agents/"  "$REPO_DIR/.opencode/agents/"
+rsync -a --delete "$STAGE/omp-agents/"       "$REPO_DIR/.omp/agents/"
 
 N_SKILLS="$(find "$REPO_DIR/.agents/skills" -name SKILL.md | wc -l | tr -d ' ')"
 echo "Synced:"
@@ -123,6 +125,8 @@ echo "  AGENTS.md           <- CLAUDE.md"
 echo "  .agents/skills/     <- .claude/skills/   ($N_SKILLS skills, for Codex)"
 echo "  .codex/agents/      <- .claude/agents/   ($N_AGENTS subagents, TOML)"
 echo "  .opencode/agents/   <- .claude/agents/   ($N_AGENTS subagents, Markdown)"
+echo "  .omp/agents/        <- .claude/agents/   ($N_AGENTS subagents, Markdown, oh-my-pi)"
 echo ""
 echo "OpenCode needs no mirror for instructions or skills - it reads CLAUDE.md"
-echo "and .claude/skills/ natively."
+echo "and .claude/skills/ natively. omp reads AGENTS.md/CLAUDE.md and .agents/skills/"
+echo "natively but only discovers subagents in .omp/agents/."
