@@ -469,6 +469,14 @@ const BACKEND_ERROR_KEY_MAP = {
   // same case maps to "period not open", which sends the user to open a period they do not need.
   // `messageParams` { period, accountingDate }.
   ETGO_GLJournalPeriodMismatch: 'backendError.glJournalPeriodMismatch',
+  // ETP-5693 — com.etendoerp.go PostingAccountGuard: a write to an accounting field with a summary
+  // or inactive account, an account of another ledger, or a changed ledger on an existing row.
+  // The selectors already hide those accounts, so the SPA only meets these in a race: a generic
+  // sentence per key, no messageParams (the backend text carries field + account for REST/MCP).
+  ETGO_AccountIsSummary: 'backendError.accountIsSummary',
+  ETGO_AccountIsInactive: 'backendError.accountIsInactive',
+  ETGO_AccountWrongLedger: 'backendError.accountWrongLedger',
+  ETGO_LedgerNotUpdatable: 'backendError.ledgerNotUpdatable',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own

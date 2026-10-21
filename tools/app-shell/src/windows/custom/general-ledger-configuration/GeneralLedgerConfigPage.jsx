@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -10,6 +11,11 @@ import DefaultsTab from './DefaultsTab.jsx';
 import DimensionsTab from './DimensionsTab.jsx';
 import GeneralAccountsTab from './GeneralAccountsTab.jsx';
 import { useGeneralLedgerConfig } from './useGeneralLedgerConfig.js';
+import {
+  translateBackendError,
+  extractBackendMessageKeys,
+  extractBackendMessageParams,
+} from '@/lib/backendErrors.js';
 import { DEFAULTS_GROUPS } from './mockCatalogs.js';
 
 const REQUIRED_GENERAL = ['name', 'currency'];
@@ -71,6 +77,11 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
       await save();
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
+    } catch (err) {
+      toast.error(translateBackendError(err.message, ui, {
+        messageKeys: extractBackendMessageKeys(err.body),
+        messageParams: extractBackendMessageParams(err.body),
+      }) || err.message);
     } finally {
       setSaving(false);
     }
