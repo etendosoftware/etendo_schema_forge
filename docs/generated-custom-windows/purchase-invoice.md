@@ -2828,6 +2828,23 @@ Discovery and edge cases of the purchase invoice import (ETP-5713 review):
 - The remainder of an order import (ordered and not delivered, or already taken by another draft) is created through the native process with a temporary receipt/shipment marker that is removed right after; a skipped removal rolls the import back (`importQuantityNotHonoured`). `ImportOrderLinesIntoInvoiceHandlerIntegrationTest` runs the real process for the covered-by-draft case.
 - A document of another client answers 404 exactly like a missing one. The source lines are locked with `FOR NO KEY UPDATE`.
 
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a purchase invoice allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<purchase invoice id>)` lists every action and, for that record, says `availableNow`
+  and `unavailableReason`; `documentAction` carries `availableValuesNow` and, for a value ruled out, `unavailableValues`.
+  Unavailable actions stay listed. **Advice only**: it never blocks a call.
+- `documentAction` on the record is the next default action (what the Process button would run); `--` means none.
+- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RC` (void by reversal) or
+  `RE` (reactivate). `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
+  rectified by a completed rectificativa).
+- `post` applies to a completed invoice that is not posted yet, `unpost` to a completed one that is; the import actions (`importOrderLines`, `importReceiptLines` and their `available*` lists) apply to a draft.
+- Posting can answer **409 `costNotCalculated`** (`retryAfterSeconds: 30`) when cost is still being calculated: wait and repeat.
+- Refusals keyed 20501 ("Documento ya procesado") carry a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
+
 ## Unit column in the lines grid (ETP-5696)
 
 The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. facturada**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
