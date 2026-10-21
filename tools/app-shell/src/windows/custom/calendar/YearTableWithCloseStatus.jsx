@@ -1,8 +1,9 @@
-import { forwardRef } from 'react';
+import { forwardRef, useMemo } from 'react';
 import { DataTable } from '@/components/contract-ui';
 import { Tag } from '@/components/ui/tag';
 import { useUI } from '@/i18n';
 import { useYearCloseStatus } from './useYearCloseStatus.js';
+import { useCalendarReview } from '@/pages/first-steps/useCalendarReview.js';
 
 // `col.render` (checked first, before any type-based cell renderer — see
 // DataTable.jsx's renderCellValue) receives `(row, { entity, token, apiBaseUrl })`, where
@@ -73,11 +74,29 @@ const columns = [
 
 const filters = [];
 
+// ETP-5577: marks the year the First Steps card calls current (`useCalendarReview().year`, the
+// fiscal year containing today) so the "Ver guía" tour targets it instead of the first row, which
+// is the newest year and may have no periods. A span, not a row attribute: the tour listens for
+// clicks on it, so the row's selection checkbox cannot advance the step.
+function withCurrentYearMarker(currentYear) {
+  return columns.map((col) => (col.key !== 'fiscalYear' ? col : {
+    ...col,
+    render: (row) => (
+      <span {...(currentYear != null && String(row.fiscalYear) === String(currentYear)
+        ? { 'data-current-fiscal-year': '' } : {})}>
+        {row.fiscalYear}
+      </span>
+    ),
+  }));
+}
+
 const YearTableWithCloseStatus = forwardRef(function YearTableWithCloseStatus(props, ref) {
+  const { year: currentYear } = useCalendarReview();
+  const tableColumns = useMemo(() => withCurrentYearMarker(currentYear), [currentYear]);
   return (
     <DataTable
       ref={ref}
-      columns={columns}
+      columns={tableColumns}
       filters={filters}
       {...props}
       data-testid="DataTable__413aee" />

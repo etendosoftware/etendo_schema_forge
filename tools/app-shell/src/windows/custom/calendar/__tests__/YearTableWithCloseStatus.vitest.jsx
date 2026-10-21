@@ -85,7 +85,7 @@ describe('YearTableWithCloseStatus', () => {
 
     // Both requests are fired before either resolves — captured synchronously, not awaited
     // in sequence — proving the per-row fetches run in parallel.
-    await waitFor(() => expect(calls.length).toBe(2));
+    await waitFor(() => expect(calls.filter((u) => u.includes('end-year-close')).length).toBe(2));
     await waitFor(() => {
       const badgeY1 = screen.getByTestId('col-yearCloseStatus-y1').querySelector('[data-testid="tag"]');
       const badgeY2 = screen.getByTestId('col-yearCloseStatus-y2').querySelector('[data-testid="tag"]');
@@ -99,6 +99,27 @@ describe('YearTableWithCloseStatus', () => {
     render(<YearTableWithCloseStatus data={[YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />);
 
     expect(screen.getByTestId('col-yearCloseStatus-y1')).toBeEmptyDOMElement();
+  });
+
+  // ETP-5577 tour: step "open the year" must target the current year, not the first row.
+  it('marks only the current fiscal year (the one the review card shows) for the guided tour', async () => {
+    global.fetch = vi.fn((url) => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(url.includes('calendar-review')
+        ? { required: true, reviewed: false, year: '2026' } : { data: [] }),
+    }));
+    // Newest first, like the grid: 2027 has no periods, 2026 is the current year.
+    render(<YearTableWithCloseStatus data={[YEARS[1], YEARS[0]]} apiBaseUrl="https://api.test/fiscal-calendar" />);
+
+    await waitFor(() => expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(1));
+    expect(screen.getByTestId('col-fiscalYear-y1').querySelector('[data-current-fiscal-year]')).not.toBeNull();
+    expect(screen.getByTestId('col-fiscalYear-y2').querySelector('[data-current-fiscal-year]')).toBeNull();
+  });
+
+  it('marks no year when the current year is unknown', () => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
+    render(<YearTableWithCloseStatus data={YEARS} apiBaseUrl="https://api.test/fiscal-calendar" />);
+    expect(document.querySelectorAll('[data-current-fiscal-year]')).toHaveLength(0);
   });
 
   it('still renders the standard fiscalYear/description columns', () => {
