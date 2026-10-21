@@ -1,4 +1,5 @@
 import { buildHeaders } from '@/auth/api.js';
+import { extractBackendErrorCode } from '@/lib/backendErrors.js';
 /**
  * Shared fetch helpers for the `financial-account` NEO spec's write hooks
  * (`useAccountMutations.js`, `useFinancialAccountAccounting.js`) — both call
@@ -25,7 +26,7 @@ async function readError(res) {
   try {
     const json = await res.json();
     const nested = json?.error && typeof json.error === 'object' ? json.error : null;
-    const code = typeof json?.error === 'string' ? json.error : null;
+    const code = extractBackendErrorCode(json) ?? null;
     return {
       message: nested?.message || json?.message || `HTTP ${res.status}`,
       code,
