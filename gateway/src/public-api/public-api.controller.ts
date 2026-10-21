@@ -41,6 +41,9 @@ import {
 } from './json-api-http.ts';
 import { mapAttributes, mapRelationships, resolveResourceObject } from './json-api-request.ts';
 
+/** A public action declared in the manifest's `processes`. */
+type PublicApiProcess = { action?: string; method?: string; path: string; body?: Record<string, unknown> };
+
 // Optimistic concurrency. NeoServlet refuses an update unless it carries the
 // record's `updated` value as it was read, and refuses a stale one. The public
 // contract expresses that with standard HTTP preconditions: reads return an
@@ -263,6 +266,58 @@ export class PublicApiController {
     return this.forward(entityName, req, 'DELETE', undefined, id);
   }
 
+  /**
+   * Runs a declared business action (for example `complete`) on a top-level
+   * record. The action list is the manifest's `processes`; the request body is
+   * ignored in v1. Answers the record re-read after the action plus NEO's message.
+   */
+  @Post(':entityName/:id/actions/:action')
+  @HttpCode(200)
+  async runAction(
+    @Param('entityName') entityName: string,
+    @Param('id') id: string,
+    @Param('action') action: string,
+    @Req() req: { neoJwt: string },
+  ) {
+    this.assertTopLevel(entityName);
+    const entity = this.entityOrThrow(entityName);
+    const declared = (entity as { processes?: PublicApiProcess[] }).processes?.find(
+      (process) => process.action === action && process.method?.toUpperCase() === 'POST',
+    );
+    if (!declared) throw new NotFoundException(`Unknown action ${action} for ${entityName}`);
+    this.assertRecordId(id);
+    const url = `${this.neoBaseUrl}/sws/neo/${entity.specName}${declared.path.replace(':id', encodeURIComponent(id))}`;
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${req.neoJwt}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(declared.body ?? {}),
+      });
+    } catch {
+      // No answer at all: the action may or may not have been applied.
+      throw badGateway('Etendo did not answer the action request. Check meta.hint before retrying.', {
+        hint: 'The action may have been applied. Read the record before retrying.',
+      });
+    }
+    if (!response.ok) {
+      throw upstreamException(response.status, await response.json().catch(() => null));
+    }
+    const answer = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    const meta: Record<string, unknown> = {};
+    if (typeof answer?.message === 'string') meta.message = answer.message;
+    if (answer?.alreadyApplied === true) meta.alreadyApplied = true;
+    // The action is already committed: a failed re-read must not turn it into an error.
+    try {
+      const document = (await this.forward(entityName, req, 'GET', undefined, id)) as Record<string, unknown>;
+      return { ...document, meta: { ...(document.meta as Record<string, unknown> | undefined), ...meta } };
+    } catch {
+      return {
+        meta: { ...meta, hint: 'The action succeeded but the record could not be read back. Read the record to see its current state.' },
+      };
+    }
+  }
+
   private entityOrThrow(entityName: string): PublicApiEntity & { entityName?: string } {
     const entity = this.schema.entities[entityName] as (PublicApiEntity & { entityName?: string }) | undefined;
     if (!entity) throw new NotFoundException(`Unknown public entity: ${entityName}`);
@@ -277,6 +332,13 @@ export class PublicApiController {
     }) as (PublicApiEntity & { publicName: string; parent: { resource: string; pathSegment: string } }) | undefined;
     if (!child) throw new NotFoundException(`Unknown child resource: ${parentName}/${childPath}`);
     return child;
+  }
+
+  /** A path-segment id (`.`/`..` would be normalised by URL resolution into another NEO route) must be a real id. */
+  private assertRecordId(id: string | undefined) {
+    if (id !== undefined && (id.trim() === '' || id === '.' || id === '..')) {
+      throw new NotFoundException('The record does not exist');
+    }
   }
 
   private assertTopLevel(entityName: string) {
@@ -398,6 +460,7 @@ export class PublicApiController {
     parentId?: string,
     res?: HeaderSink,
   ) {
+    this.assertRecordId(id);
     const entity = this.entityOrThrow(entityName);
     const internalEntityName = entity.entityName ?? entityName;
     const query = parentId ? `?parentId=${encodeURIComponent(parentId)}` : '';

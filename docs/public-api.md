@@ -225,10 +225,27 @@ The route table is fixed controller code; resource and child lookup use the mani
 | DELETE | `/api/v1/{resource}/{id}` | Delete. Answers `204 No Content` with no body ([4.8](#48-success-and-error-documents-and-statuses)). |
 | GET, POST | `/api/v1/{parent}/{parentId}/{child}` | Child collection. `parentId` is sent upstream as the query parameter `parentId`; on POST it is also set in the body as `parentId`. |
 | GET, PUT, PATCH, DELETE | `/api/v1/{parent}/{parentId}/{child}/{id}` | Child item. PUT and PATCH require `If-Match` on versioned resources. |
+| POST | `/api/v1/{resource}/{id}/actions/{action}` | Run a business action on a record ([4.2.1](#421-business-actions)). Top-level resources only. |
 
 - A resource that has a `parent` in the manifest is not reachable at top level: `404 Child resource must be addressed through its master: <name>`.
 - An unknown resource returns `404 Unknown public entity: <name>`; an unknown child path returns `404 Unknown child resource: <parent>/<child>`.
 - An operation absent from the resource's `operations` returns `404 Operation <METHOD> is not exposed for <name>`. `LIST` in `operations` also allows `GET`.
+
+#### 4.2.1 Business actions
+
+`POST /api/v1/{resource}/{id}/actions/{action}` runs a named action declared in the manifest's
+`processes` (each entry has a public `action` name, `method`, `path` and optional `body`).
+
+- **Declared actions.** `complete` exists on every resource whose window has a completion flow
+  (`draftMode` with `processField: documentAction`); the generator derives it structurally and sends
+  `{"docAction": "<processValue>"}` to `POST /sws/neo/{specName}{path}`. In v1 `complete` is the only
+  public action: declared `processEndpoints` are not exposed. Fiscal monitors and child resources
+  declare none.
+- **Request.** No body is needed; a body is accepted and ignored in v1. An action the resource does not declare, or a child resource, answers `404`.
+- **Permission.** The key needs `public-api:process`. A key with only `public-api:write` is refused by Etendo with `403`.
+- **Response.** `200` with the record re-read after the action (the normal single-record document, so `documentStatus` shows the new state) plus `meta.message` with Etendo's message. If the record was already in the target status, `meta.alreadyApplied` is `true` and nothing was run again, so retrying is safe. If the action succeeded but the re-read failed, the answer is still `200` with only `meta` and `meta.hint` ("read the record to see its current state"); a committed action is never reported as an error. The re-read is a plain `GET` of the same record, so it needs `public-api:read`: a process-only key always gets the hint.
+- **Refusals.** A document rule that refuses the action (for example completing an empty order) passes through with Etendo's status and message (`422`, `403`, ...).
+- **Synchronous.** The action completes within the request; there is no status endpoint in v1. If the connection fails or times out the answer is `502` with `meta.hint` ("The action may have been applied. Read the record before retrying."); read the record before retrying. The ids `.` and `..` are refused with `404`.
 
 Upstream mapping: the gateway calls
 `{NEO_BASE_URL}/sws/neo/{specName}/{entityName}[/{id}][?parentId=...]` with the token from the
