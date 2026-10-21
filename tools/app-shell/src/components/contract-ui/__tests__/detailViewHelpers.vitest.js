@@ -9,12 +9,14 @@
 // which is exactly the coupling ETP-4730 set out to remove.
 
 import { describe, it, expect, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
 
 vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (data, field) => (field ? data?.[field] : undefined),
 }));
 
 import {
+  useNewRouteEditingReset,
   evalDisplayLogicRaw,
   deriveTaxRateFromGross,
   normalizePatchFieldValues,
@@ -1228,5 +1230,24 @@ describe('buildCustomAddModalSeed / buildCustomAddModalOnParentRefresh (ETP-5654
     buildCustomAddModalOnParentRefresh({ hook, parentRecordId: 'p1' })();
     expect(hook.invalidateEntityCache).toHaveBeenCalled();
     expect(hook.fetchById).toHaveBeenCalledWith('p1', { force: true });
+  });
+});
+
+describe('useNewRouteEditingReset — read-only role on the creation route (ETP-5830)', () => {
+  const run = (props) => renderHook(() => useNewRouteEditingReset({
+    recordId: 'new', editing: null, handleNew: vi.fn(), ...props,
+  }));
+
+  it('sends a read-only role on /new back via onReadOnlyNew', () => {
+    const onReadOnlyNew = vi.fn();
+    run({ isNew: true, accessReadOnly: true, onReadOnlyNew });
+    expect(onReadOnlyNew).toHaveBeenCalled();
+  });
+
+  it('leaves a writable role on /new, and a read-only role on an existing record, alone', () => {
+    const onReadOnlyNew = vi.fn();
+    run({ isNew: true, accessReadOnly: false, onReadOnlyNew });
+    run({ isNew: false, recordId: 'R1', accessReadOnly: true, onReadOnlyNew });
+    expect(onReadOnlyNew).not.toHaveBeenCalled();
   });
 });
