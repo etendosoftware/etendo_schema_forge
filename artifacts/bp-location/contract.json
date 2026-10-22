@@ -1,13 +1,13 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-03-06T17:20:29.904Z",
-  "updatedAt": "2026-10-22T13:47:37.888Z",
-  "checksum": "33802e52c5761352",
+  "updatedAt": "2026-10-22T14:08:39.383Z",
+  "checksum": "038b57c0cee82ea7",
   "frontendContract": {
     "window": {
       "id": "121",
       "name": "Location",
-      "primaryEntity": "location",
+      "primaryEntity": "bpLocation",
       "category": "general",
       "hidePrint": true,
       "hideMoreMenu": true,
@@ -16,7 +16,7 @@
       "layoutType": "default"
     },
     "entities": {
-      "location": {
+      "bpLocation": {
         "tableName": "C_Location",
         "tabId": "154",
         "tabName": "Location",
@@ -192,7 +192,7 @@
     "window": {
       "id": "121",
       "name": "Location",
-      "primaryEntity": "location",
+      "primaryEntity": "bpLocation",
       "category": "general",
       "hidePrint": true,
       "hideMoreMenu": true,
@@ -200,7 +200,7 @@
       "detailEntity": null
     },
     "entities": {
-      "location": {
+      "bpLocation": {
         "tableName": "C_Location",
         "tabId": "154",
         "tabName": "Location",
@@ -371,32 +371,32 @@
     "endpoints": [
       {
         "method": "GET",
-        "path": "/location",
-        "entity": "location",
+        "path": "/bpLocation",
+        "entity": "bpLocation",
         "supportedFilters": []
       },
       {
         "method": "GET",
-        "path": "/location/:id",
-        "entity": "location",
+        "path": "/bpLocation/:id",
+        "entity": "bpLocation",
         "supportedFilters": []
       },
       {
         "method": "POST",
-        "path": "/location",
-        "entity": "location",
+        "path": "/bpLocation",
+        "entity": "bpLocation",
         "supportedFilters": []
       },
       {
         "method": "PUT",
-        "path": "/location/:id",
-        "entity": "location",
+        "path": "/bpLocation/:id",
+        "entity": "bpLocation",
         "supportedFilters": []
       },
       {
         "method": "DELETE",
-        "path": "/location/:id",
-        "entity": "location",
+        "path": "/bpLocation/:id",
+        "entity": "bpLocation",
         "supportedFilters": []
       }
     ],
@@ -406,34 +406,34 @@
     "specName": "bp-location",
     "baseUrl": "/sws/neo/bp-location",
     "crud": {
-      "location": {
+      "bpLocation": {
         "get": true,
         "getById": true,
         "post": true,
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/bp-location/location",
-        "detailUrl": "/sws/neo/bp-location/location/{id}",
+        "listUrl": "/sws/neo/bp-location/bpLocation",
+        "detailUrl": "/sws/neo/bp-location/bpLocation/{id}",
         "supportedFilters": []
       }
     },
     "selectors": [
       {
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "country",
         "column": "C_Country_ID",
         "reference": "Country",
         "inputMode": "selector",
-        "url": "/sws/neo/bp-location/location/selectors/country"
+        "url": "/sws/neo/bp-location/bpLocation/selectors/country"
       },
       {
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "region",
         "column": "C_Region_ID",
         "reference": "Region",
         "inputMode": "selector",
-        "url": "/sws/neo/bp-location/location/selectors/region",
+        "url": "/sws/neo/bp-location/bpLocation/selectors/region",
         "context": {
           "required": [
             {
@@ -465,7 +465,7 @@
   },
   "formState": {
     "entities": {
-      "location": {
+      "bpLocation": {
         "fields": {
           "country": {
             "required": true
@@ -509,7 +509,7 @@
     },
     "selectorContexts": [
       {
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "region",
         "context": {
           "required": [
@@ -543,155 +543,155 @@
   "testManifest": {
     "tests": [
       {
-        "id": "t-crud-flags-location",
+        "id": "t-crud-flags-bpLocation",
         "category": "crud-flags",
-        "entity": "location",
+        "entity": "bpLocation",
         "runner": "node",
-        "description": "CRUD flags for 'location' should all be booleans"
+        "description": "CRUD flags for 'bpLocation' should all be booleans"
       },
       {
-        "id": "t-field-presence-location-addressLine1",
+        "id": "t-field-presence-bpLocation-addressLine1",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "addressLine1",
         "runner": "node",
-        "description": "Field 'addressLine1' should be present in location"
+        "description": "Field 'addressLine1' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-addressLine2",
+        "id": "t-field-presence-bpLocation-addressLine2",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "addressLine2",
         "runner": "node",
-        "description": "Field 'addressLine2' should be present in location"
+        "description": "Field 'addressLine2' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-cityName",
+        "id": "t-field-presence-bpLocation-cityName",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "cityName",
         "runner": "node",
-        "description": "Field 'cityName' should be present in location"
+        "description": "Field 'cityName' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-country",
+        "id": "t-field-presence-bpLocation-country",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "country",
         "runner": "node",
-        "description": "Field 'country' should be present in location"
+        "description": "Field 'country' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-oBSEPABuildingName",
+        "id": "t-field-presence-bpLocation-oBSEPABuildingName",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "oBSEPABuildingName",
         "runner": "node",
-        "description": "Field 'oBSEPABuildingName' should be present in location"
+        "description": "Field 'oBSEPABuildingName' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-oBSEPABuildingNumber",
+        "id": "t-field-presence-bpLocation-oBSEPABuildingNumber",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "oBSEPABuildingNumber",
         "runner": "node",
-        "description": "Field 'oBSEPABuildingNumber' should be present in location"
+        "description": "Field 'oBSEPABuildingNumber' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-oBSEPAStreetName",
+        "id": "t-field-presence-bpLocation-oBSEPAStreetName",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "oBSEPAStreetName",
         "runner": "node",
-        "description": "Field 'oBSEPAStreetName' should be present in location"
+        "description": "Field 'oBSEPAStreetName' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-postalCode",
+        "id": "t-field-presence-bpLocation-postalCode",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "postalCode",
         "runner": "node",
-        "description": "Field 'postalCode' should be present in location"
+        "description": "Field 'postalCode' should be present in bpLocation"
       },
       {
-        "id": "t-field-presence-location-region",
+        "id": "t-field-presence-bpLocation-region",
         "category": "field-presence",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "region",
         "runner": "node",
-        "description": "Field 'region' should be present in location"
+        "description": "Field 'region' should be present in bpLocation"
       },
       {
-        "id": "t-field-type-location-addressLine1",
+        "id": "t-field-type-bpLocation-addressLine1",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "addressLine1",
         "runner": "node",
-        "description": "Field 'addressLine1' should have type 'string' in location"
+        "description": "Field 'addressLine1' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-addressLine2",
+        "id": "t-field-type-bpLocation-addressLine2",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "addressLine2",
         "runner": "node",
-        "description": "Field 'addressLine2' should have type 'string' in location"
+        "description": "Field 'addressLine2' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-cityName",
+        "id": "t-field-type-bpLocation-cityName",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "cityName",
         "runner": "node",
-        "description": "Field 'cityName' should have type 'string' in location"
+        "description": "Field 'cityName' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-country",
+        "id": "t-field-type-bpLocation-country",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "country",
         "runner": "node",
-        "description": "Field 'country' should have type 'string' in location"
+        "description": "Field 'country' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-oBSEPABuildingName",
+        "id": "t-field-type-bpLocation-oBSEPABuildingName",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "oBSEPABuildingName",
         "runner": "node",
-        "description": "Field 'oBSEPABuildingName' should have type 'string' in location"
+        "description": "Field 'oBSEPABuildingName' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-oBSEPABuildingNumber",
+        "id": "t-field-type-bpLocation-oBSEPABuildingNumber",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "oBSEPABuildingNumber",
         "runner": "node",
-        "description": "Field 'oBSEPABuildingNumber' should have type 'string' in location"
+        "description": "Field 'oBSEPABuildingNumber' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-oBSEPAStreetName",
+        "id": "t-field-type-bpLocation-oBSEPAStreetName",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "oBSEPAStreetName",
         "runner": "node",
-        "description": "Field 'oBSEPAStreetName' should have type 'string' in location"
+        "description": "Field 'oBSEPAStreetName' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-postalCode",
+        "id": "t-field-type-bpLocation-postalCode",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "postalCode",
         "runner": "node",
-        "description": "Field 'postalCode' should have type 'string' in location"
+        "description": "Field 'postalCode' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-location-region",
+        "id": "t-field-type-bpLocation-region",
         "category": "field-type",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "region",
         "runner": "node",
-        "description": "Field 'region' should have type 'string' in location"
+        "description": "Field 'region' should have type 'string' in bpLocation"
       },
       {
         "id": "t-rule-declared-AD-Client-Security-validation",
@@ -708,115 +708,115 @@
         "description": "Rule 'C_Region of Country' (validation) should be declared"
       },
       {
-        "id": "t-selector-endpoint-location-country",
+        "id": "t-selector-endpoint-bpLocation-country",
         "category": "selector-endpoint",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "country",
         "runner": "node",
-        "description": "Selector endpoint for 'country' in location should exist"
+        "description": "Selector endpoint for 'country' in bpLocation should exist"
       },
       {
-        "id": "t-selector-endpoint-location-region",
+        "id": "t-selector-endpoint-bpLocation-region",
         "category": "selector-endpoint",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "region",
         "runner": "node",
-        "description": "Selector endpoint for 'region' in location should exist"
+        "description": "Selector endpoint for 'region' in bpLocation should exist"
       },
       {
-        "id": "t-system-field-location-active",
+        "id": "t-system-field-bpLocation-active",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "active",
         "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for location"
+        "description": "System field 'active' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-city",
+        "id": "t-system-field-bpLocation-city",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "city",
         "runner": "node",
-        "description": "System field 'city' should exist in backend but not frontend for location"
+        "description": "System field 'city' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-client",
+        "id": "t-system-field-bpLocation-client",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "client",
         "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for location"
+        "description": "System field 'client' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-createdBy",
+        "id": "t-system-field-bpLocation-createdBy",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "createdBy",
         "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for location"
+        "description": "System field 'createdBy' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-creationDate",
+        "id": "t-system-field-bpLocation-creationDate",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "creationDate",
         "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for location"
+        "description": "System field 'creationDate' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-id",
+        "id": "t-system-field-bpLocation-id",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "id",
         "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for location"
+        "description": "System field 'id' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-organization",
+        "id": "t-system-field-bpLocation-organization",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "organization",
         "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for location"
+        "description": "System field 'organization' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-postalAdd",
+        "id": "t-system-field-bpLocation-postalAdd",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "postalAdd",
         "runner": "node",
-        "description": "System field 'postalAdd' should exist in backend but not frontend for location"
+        "description": "System field 'postalAdd' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-regionName",
+        "id": "t-system-field-bpLocation-regionName",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "regionName",
         "runner": "node",
-        "description": "System field 'regionName' should exist in backend but not frontend for location"
+        "description": "System field 'regionName' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-updated",
+        "id": "t-system-field-bpLocation-updated",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "updated",
         "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for location"
+        "description": "System field 'updated' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-system-field-location-updatedBy",
+        "id": "t-system-field-bpLocation-updatedBy",
         "category": "system-field",
-        "entity": "location",
+        "entity": "bpLocation",
         "field": "updatedBy",
         "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for location"
+        "description": "System field 'updatedBy' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-visibility-location",
+        "id": "t-visibility-bpLocation",
         "category": "visibility",
-        "entity": "location",
+        "entity": "bpLocation",
         "runner": "node",
-        "description": "Entity 'location' should only expose visible fields in frontend"
+        "description": "Entity 'bpLocation' should only expose visible fields in frontend"
       }
     ],
     "summary": {
