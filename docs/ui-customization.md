@@ -56,6 +56,38 @@ auto-synced when a generated prop's shape changes.
 
 ---
 
+## Default column widths by field type (ETP-5833)
+
+One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit. The only measured input is the plain-list **header label** (below), which depends on label + locale, never on row data.
+
+| Type | Width (px) | Expands? | Why |
+|---|---|---|---|
+| `string`, `text` | 224 | **yes** (`1 0`) | descriptive: absorb the leftover width |
+| leading `selector`/`search`/`foreignKey` (idx 0) | 192 | yes | the product/identity column; selectors at idx > 0 are fixed |
+| `date` | 176 | no (`0 0`) | sized for the longest representative translated header ("Fecha de presupuesto", ~129px) + 24 padding + sort icon; the value itself needs ~120. Longer labels are covered by the header floor below |
+| `amount` / `price` / `quantity` / `integer` / `decimal` / `number` / `signedDelta` | `amount`: 172 lines / 130 list; 152 (rest) | no | `number` is the type the generator emits for every numeric field; it used to fall to the 120 default. The lines `amount` tier is sized for an editable input; a read-only list cell needs ~120 |
+| `percent` | 152 lines / 104 list | no | compact progress circle |
+| `status` | 184 | no | the pill ("Cobro depositado") clips below it; same in lines and list |
+| `enum`, `select` | 224 | no | value + chevron ("Use Generic Account No."); codes/states do not stretch |
+| `boolean` + `badge` | 152 (240 for the Posted status) | no | the pill |
+| `display: 'tag'` | 144 | no | UoM-style grey pill |
+| `multiField` | 240 (list only) | no | media + title + chip |
+| anything else | 120 | no | safe fallback |
+
+**List header floor (ETP-5833 QA) — no list header is ever truncated.** A plain-list header never wraps (`whitespace-nowrap` + ellipsis), so in list mode a column's width is `max(type basis or col.minWidth, rendered header)`. The rendered header is the label the header actually shows — resolved in `DataTable` with the same `resolveColumnLabel(col, locale, t)` as the header cell (often an AD label from `useLabel`, not `col.label`; for a `multiField`, the joined part labels) — measured by `measureHeaderLabelPx` (`OffscreenCanvas` `measureText` with the header font, `600 12px` + the body font family, resolved once per render pass; a deterministic 7px/char estimate where there is no `OffscreenCanvas` — jsdom, node — or the canvas measures 0. A width is cached only once `document.fonts.check(font)` passes: while Inter is still swapping in, the fallback face is measured but not cached, and `DataTable` re-measures exactly once when `document.fonts.ready` resolves) plus `LIST_HEADER_CHROME_PX` = 42 (cell padding 24 + the sort arrow 14, reserved even when unsorted so a click never resizes, + 4 slack), plus 18 when the computed-freshness clock renders. `DataTable` stores it as `col.headerMinWidthPx` on its list columns only, and `columnMinWidthPx` folds it in, so the header `<th>`, the body `<col>`/cells and `listTableMinWidthPx` agree. Opt-outs: `headClass` (pinned width) and `headerWrap` (the header wraps onto two lines — the default for `percent`; `AttachmentsTable` uses it to keep its 130px dates). The lines grid is not affected: its headers are flex cells that wrap, and its widths come from `columnFlex`, which ignores the floor.
+
+**The absorber is descriptive, not a code.** `withImplicitGrowColumn` / `withLinesAbsorberColumn` skip columns whose AD column (`col.column`) is `DocumentNo` or `Value` (a document number or a search key is a short code) while another descriptive column exists — so on Sales Invoice the business partner, not "Nº documento", takes the leftover width. A code column only absorbs when it is the only descriptive column. The test is structural (the AD column name), never a window or spec name.
+
+Overrides win over the type: `col.minWidth` (decisions `columnWidth`; elastic by the ETP-5332 contract) and `col.grow: true` (decisions `grow`). A plain list always keeps exactly one width-less column to absorb the leftover (`withImplicitGrowColumn`, ETP-5510). On a narrow viewport every column keeps its basis and the scroll container scrolls (`overflow-x: auto`, ETP-5133), so nothing overlaps or becomes unreachable.
+
+**Date with time — documented exception.** There is no `datetime` tier: no list or lines column carries one today (the only `datetime` fields in the contracts are the hidden `created`/`updated` audit columns; the generator maps a visible datetime to `string`, and a `date` column renders date-only). When a datetime column is ever exposed, add its tier together with its renderer (and the generator mapping in `schema_forge_core`).
+
+**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `simple-g-l-journal`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
+
+Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the geometry specs `e2e/tests/flows/sales/sales-quotation-list-column-widths.mocked.spec.js` (list) and `e2e/tests/flows/platform/lines-grid-narrow-viewport.mocked.spec.js` (lines), and the `linesAddRowColumnAlignment.vitest.jsx` cases. The implicit absorber is `withImplicitGrowColumn` (list) / `withLinesAbsorberColumn` (lines + add-row): a descriptive non-code column when one exists (never a `tag` pill, never `DocumentNo`/`Value` while something else describes), otherwise the first unpinned column (e.g. the leading amount on Product > Costo). Header floor: `linesColumnWidth.test.js` (*list header floor*) and `DataTable.percentHeader.vitest.jsx` (*plain list header floor*: AD-resolved label drives `<th>`, cells and table min-width; sorting does not move a column).
+
+---
+
 ## Customization options reference
 
 ### 1. `window.statusBar` — declarative summary bar
@@ -2874,7 +2906,7 @@ no amount, and its title, banner and buttons are computed:
 | `facturaVenta` | Factura de venta | Factura creada | `soViewInvoice` | feminine | sales-order confirm, goods-shipment invoicing (single / bulk / row Confirmar), sales-quotation «Facturar directamente» |
 | `facturaCompra` | Factura de compra | Factura creada | `poViewInvoice` | feminine | purchase-order confirm, goods-receipt invoicing (single / bulk / row Confirmar) |
 | `facturaRectificativa` | Factura rectificativa | Factura rectificativa creada | `soViewInvoice` | feminine | return-material-receipt |
-| `facturaRectificativaCompra` | Factura rectificativa de compra | Factura rectificativa de compra creada | `poViewInvoice` | feminine | return-to-vendor-shipment |
+| `facturaRectificativaCompra` | Factura rectificativa | Factura rectificativa creada | `poViewInvoice` | feminine | return-to-vendor-shipment (same wording as `facturaRectificativa`; the type only differs in purchases routing / `data-doc-type`) |
 | `devolucionCompra` | Devolución de compra | Devolución de compra creada | `confirmResultModal.view.devolucion` | feminine | goods-receipt «Crear devolución» (opens `/return-to-vendor-shipment/{id}`) |
 | `pedidoVenta` | Pedido de venta | Pedido creado | `sqViewOrder` | masculine | sales-quotation «Crear pedido» |
 

@@ -16,6 +16,9 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfirmResultModal } from '../ConfirmResultModal.jsx';
 import { inlineFontFamiliesUpToBody } from './fontInheritance.js';
+import enUS from '../../../locales/en_US.json';
+import esES from '../../../locales/es_ES.json';
+import esAR from '../../../locales/es_AR.json';
 
 const RECEIPT = { type: 'entrada', num: 'GR-001', documentStatus: 'DR', route: '/goods-receipt/1' };
 const INVOICE = { type: 'facturaCompra', num: 'PI-002', documentStatus: 'CO', route: '/purchase-invoice/2' };
@@ -55,6 +58,19 @@ describe('ConfirmResultModal', () => {
       expect(card(0)).toHaveTextContent(`confirmResultModal.status.${statusKey}`);
       expect(screen.getByTestId('action-confirm-result-view')).toHaveTextContent(viewKey);
     });
+
+    // Product decision: the purchase rectifying invoice reads exactly like the sales one
+    // ("Factura rectificativa"); only the type (routing, view button) stays purchase-specific.
+    it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])(
+      '%s: the purchase rectifying invoice uses the same wording as the sales one',
+      (_locale, dict) => {
+        for (const part of ['title', 'docType']) {
+          const sales = dict.genericLabels[`confirmResultModal.${part}.facturaRectificativa`];
+          expect(sales).toBeTruthy();
+          expect(dict.genericLabels[`confirmResultModal.${part}.facturaRectificativaCompra`]).toBe(sales);
+        }
+      },
+    );
 
     it('one document: singular banner and hint, the number, Cerrar plus a primary Ver button', () => {
       renderModal({ docs: [RECEIPT] });

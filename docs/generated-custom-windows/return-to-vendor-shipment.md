@@ -255,7 +255,7 @@ covers the precedence fix.
 On a **completed** shipment with no return invoice yet, the "Crear Factura Rectificativa"
 button opens `CreateInvoiceConfirmModal.jsx` ("Gestionar documentos"). Before this fix, clicking
 its primary "Crear →" button closed the modal **synchronously**, then the invoice-creation
-request ran with no visible UI, and `ConfirmResultModal` ("Factura rectificativa de compra
+request ran with no visible UI, and `ConfirmResultModal` ("Factura rectificativa
 creada") only appeared once the request resolved — on a slow connection this looked like the
 click did nothing. The sibling **draft**-status flow (`ConfirmInOutModal.jsx`, opened from the
 same shared `ConfirmWithCreditButtonBase.jsx` for `status === 'DR'`) never had this problem: it
@@ -482,7 +482,7 @@ shipment, post-completion «Crear Factura Rectificativa» (`ConfirmWithCreditBut
 (`ReturnWindowShell` → `useRowConfirmAction`, `invoiceDocType: 'facturaRectificativaCompra'`) — is
 announced by the shared `ConfirmResultModal` as a `facturaRectificativaCompra` doc (it used to be
 typed `facturaCompra`, titled by `returnToVendor.invoiceCreatedTitle`, now removed). The popup reads
-«Factura rectificativa de compra creada», one card «Factura rectificativa de compra · Completada ·
+«Factura rectificativa creada», one card «Factura rectificativa · Completada ·
 Nº …» (no amount), «Cerrar» + «Ver factura» → `/purchase-invoice/{id}`. Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
 
 **Manual verification.** On a completed shipment with no invoice, run «Crear Factura Rectificativa»

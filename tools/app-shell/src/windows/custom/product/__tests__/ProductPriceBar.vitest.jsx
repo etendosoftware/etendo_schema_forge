@@ -272,6 +272,19 @@ describe('ProductPriceBar', () => {
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 
+  it('shows prices but no add, edit or delete for a read-only role (ETP-5830)', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow()] } },
+    });
+
+    renderBar({ accessReadOnly: true });
+
+    await screen.findByDisplayValue('Sales List v1');
+    expect(screen.queryByTestId('price-add-tariff')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(/^price-delete-/)).not.toBeInTheDocument();
+    for (const input of screen.getAllByTestId('PriceStepperInput__d76b90')) expect(input).toBeDisabled();
+  });
+
   it('renders price stepper inputs for a sales row', async () => {
     global.fetch = buildFetch({
       'GET /price?parentId=': { response: { data: [salesRow()] } },
