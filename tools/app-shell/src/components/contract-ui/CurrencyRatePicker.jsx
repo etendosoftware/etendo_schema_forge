@@ -9,6 +9,7 @@ import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
+import { parseCalendarDate, formatCalendarDate } from '@/lib/dateOnly.js';
 
 // ETP-5479: the Moneda field must look and behave exactly like the field it replaces.
 // In every window NOT matched by EntityForm's isCurrencyRateSelectorField (e.g. Albaranes)
@@ -20,20 +21,56 @@ const FIELD_SHELL = `${FIELD_HEIGHT} rounded-lg border px-2 text-sm`;
 const ENABLED_SHELL = `${FIELD_SHELL} border-[hsl(var(--border-control))] bg-card text-text-primary shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)]`;
 const DISABLED_SHELL = `${FIELD_SHELL} border-[hsl(var(--field-disabled-border))] bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed`;
 
+// AD column of the accounting date. A document that carries one (invoices) takes its
+// exchange rate from the conversion ranges valid on that date; one that does not
+// (quotations, orders) takes it from its declared document date.
+const ACCOUNTING_DATE_COLUMN = 'DateAcct';
+
 /**
- * CurrencyRatePicker — searchable currency selector for order header fields.
+ * ETP-5840 — the header field whose (unsaved) form value is the exchange-rate reference date.
  *
- * Replaces the standard SelectorInput for the C_Currency_ID field on sales-order
- * and purchase-order header entities. Shows each currency option as "{isoCode} — {rate}"
- * where the rate is the conversion from org currency to that currency for the order's date.
+ * Structural, not per-window: the header field bound to the `DateAcct` AD column when the form
+ * declares one, otherwise the window's `documentDateField`. `documentDateField` is NOT used
+ * directly for invoices because it also drives the invoiceDate → accountingDate cascade and
+ * must stay `invoiceDate` there, while the rate follows the accounting date.
  *
- * An inline pencil icon allows the user to override the displayed rate. The override is
- * staged via `onChange('eTGOCurrencyRate', rate)` and saved with the normal form save.
- * The pencil is hidden when the selected currency IS the org's own currency (rate 1.0,
- * always returned that way by the currencyOptions action) — there is no conversion to
- * override in that case.
+ * @param {Array<{key: string, column?: string}>} fields  the header form's field definitions
+ * @param {string|null|undefined} documentDateField       the window's declared document date
+ * @returns {string|null} the field key, or null when neither is known
+ */
+export function resolveRateDateField(fields, documentDateField) {
+  const accountingDate = Array.isArray(fields)
+    ? fields.find(f => f?.column === ACCOUNTING_DATE_COLUMN)
+    : null;
+  return accountingDate?.key ?? documentDateField ?? null;
+}
+
+// `yyyy-MM-dd` for the currencyOptions `date` query param, read in local-calendar space so a
+// date-only value is never shifted a day by the host's timezone.
+function toCalendarISO(raw) {
+  const d = parseCalendarDate(raw);
+  if (!d) return null;
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/**
+ * CurrencyRatePicker — searchable currency selector for document header fields.
  *
- * Falls back to the recordId-less state (no rate fetching) for new records.
+ * Replaces the standard SelectorInput for the C_Currency_ID field on the header of the
+ * quotation, order and invoice windows. Shows each currency option as "{isoCode} — {rate}"
+ * where the rate is the conversion from org currency to that currency on the rate reference
+ * date CURRENTLY in the form (`rateDateField`, unsaved value included — ETP-5840). A
+ * currency with no conversion range on that date shows «—» instead of a rate; selecting it
+ * stages an empty rate the user can type.
+ *
+ * An inline pencil icon allows the user to override the rate, on new and saved documents.
+ * The override is staged via `onChange('eTGOCurrencyRate', rate)` and saved with the normal
+ * form save; it is kept until the reference date or the currency changes, when the header
+ * callout recalculates it (see isCurrencyRateRecalcTarget in detailViewHelpers.jsx). The
+ * pencil is hidden when the selected option is the org's own currency (`isOrgCurrency`) —
+ * there is no conversion to override in that case.
  *
  * Props (same shape as SelectorInput / EntityForm selector slots):
  * @param {object}   field         - Contract field definition (key, column, required, …)
@@ -47,6 +84,9 @@ const DISABLED_SHELL = `${FIELD_SHELL} border-[hsl(var(--field-disabled-border))
  * @param {string}   [entityPath]  - Entity path segment for action URLs (default: 'header').
  *                                   Pass the actual entity name when the header entity is not
  *                                   called 'header' (e.g. 'quotation' for sales-quotation).
+ * @param {string}   [rateDateField] - Header field holding the rate reference date (see
+ *                                   resolveRateDateField). Absent ⇒ no `date` param is sent
+ *                                   and the backend falls back to the saved document.
  * @param {boolean}  isReadOnly    - When true renders a plain read-only display
  * @param {number}   [precision=4] - Decimal places for rate display. Pass org currency's
  *                                   Standard Precision when available; defaults to 4.
@@ -61,6 +101,7 @@ export function CurrencyRatePicker({
   token,
   apiBaseUrl,
   entityPath = 'header',
+  rateDateField = null,
   isReadOnly,
   precision = 4,
 }) {
@@ -78,30 +119,39 @@ export function CurrencyRatePicker({
 
   const recordId = formData?.id;
   const hasRecord = recordId && recordId !== 'new';
-
-  // Use the user-overridden rate if staged, otherwise fall back to system rate from options
-  const stagedRate = formData?.eTGOCurrencyRate != null ? parseFloat(formData.eTGOCurrencyRate) : null;
+  const fetchId = hasRecord ? recordId : 'new';
+  const rateDate = rateDateField ? toCalendarISO(formData?.[rateDateField]) : null;
 
   const selectedOption = options.find(o => o.id === value);
-  const displayRate = stagedRate ?? selectedOption?.rate ?? null;
+  const isOrgCurrency = selectedOption?.isOrgCurrency === true;
+  // The form's own rate is what will be saved, so it wins. The option's rate is only a
+  // fallback when the form has never carried the field (key absent) or for the org currency
+  // (whose rate is not a conversion). An explicit null on a foreign currency means "no range
+  // on this date" and must render as «—», not as some other date's rate.
+  const formRate = formData?.eTGOCurrencyRate;
+  const stagedRate = formRate != null && formRate !== '' ? parseFloat(formRate) : null;
+  const useOptionRate = formRate === undefined || isOrgCurrency;
+  const displayRate = stagedRate ?? (useOptionRate ? selectedOption?.rate ?? null : null);
   const displayIso = selectedOption?.isoCode ?? displayValue ?? value ?? '';
+  const showMissingRate = !!value && displayRate == null && !!selectedOption && !isOrgCurrency;
 
-  // Fetch options when the dropdown opens (lazy load)
-  // For new records (no ID yet) we pass 'new' — the backend falls back to session context.
+  // Options depend on the record and on the rate reference date in the form, so they are
+  // refetched whenever either changes — eagerly, so the trigger shows the rate and the pencil
+  // knows whether the selected currency is the org's one without opening the dropdown.
+  // `reloadKey` forces a refresh when the dropdown is opened.
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
-    if (!open || !apiBaseUrl) return;
+    if (!apiBaseUrl) return undefined;
     let cancelled = false;
     setLoading(true);
-    const fetchId = hasRecord ? recordId : 'new';
+    const query = rateDate ? `?date=${encodeURIComponent(rateDate)}` : '';
     (async () => {
       try {
-        const res = await apiFetch(`/${entityPath}/${fetchId}/action/currencyOptions`, { token });
-        if (cancelled) return;
-        if (res.ok) {
-          const json = await res.json();
-          const list = json?.response?.data ?? json ?? [];
-          setOptions(Array.isArray(list) ? list : []);
-        }
+        const res = await apiFetch(`/${entityPath}/${fetchId}/action/currencyOptions${query}`, { token });
+        if (cancelled || !res.ok) return;
+        const json = await res.json();
+        const list = json?.response?.data ?? json ?? [];
+        setOptions(Array.isArray(list) ? list : []);
       } catch {
         // silently fall back — network error or endpoint unavailable
       } finally {
@@ -109,25 +159,7 @@ export function CurrencyRatePicker({
       }
     })();
     return () => { cancelled = true; };
-  }, [open, hasRecord, recordId, apiBaseUrl, token, apiFetch]); // hasRecord kept so re-fetch fires when record gets saved
-
-  // Eagerly fetch options when the record is first saved so the rate is visible in the
-  // trigger and the pencil icon appears without requiring the user to open the dropdown.
-  useEffect(() => {
-    if (!hasRecord || !apiBaseUrl) return;
-    let cancelled = false;
-    const fetchId = recordId;
-    (async () => {
-      try {
-        const res = await apiFetch(`/${entityPath}/${fetchId}/action/currencyOptions`, { token });
-        if (cancelled || !res.ok) return;
-        const json = await res.json();
-        const list = json?.response?.data ?? json ?? [];
-        setOptions(Array.isArray(list) ? list : []);
-      } catch { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, [hasRecord, recordId, apiBaseUrl, token, apiFetch]);
+  }, [fetchId, rateDate, reloadKey, entityPath, apiBaseUrl, token, apiFetch]);
 
   // Auto-focus the search input when dropdown opens
   useEffect(() => {
@@ -157,10 +189,10 @@ export function CurrencyRatePicker({
     // Stage currency change
     onChange(field.key, opt.id, field.column);
     onChange(field.key + '$_identifier', opt.isoCode);
-    // Stage the system rate for this currency (user can override with pencil)
-    if (opt.rate != null) {
-      onChange('eTGOCurrencyRate', opt.rate, 'EM_ETGO_Currency_Rate');
-    }
+    // Stage the rate valid on the reference date — ALWAYS, so a previous currency's (or a
+    // manual) rate never survives a currency change. `null` when no range covers the date:
+    // the rate stays empty for the user to type, and saving it empty is refused by the backend.
+    onChange('eTGOCurrencyRate', opt.rate ?? null, 'EM_ETGO_Currency_Rate');
     setOpen(false);
     setSearch('');
   }, [field, onChange]);
@@ -189,6 +221,11 @@ export function CurrencyRatePicker({
     setEditingRate(false);
     setRateInput('');
   }, []);
+
+  const toggleOpen = useCallback(() => {
+    if (!open) setReloadKey(k => k + 1);
+    setOpen(!open);
+  }, [open]);
 
   const formatRate = (rate) => {
     if (rate == null) return '';
@@ -219,6 +256,9 @@ export function CurrencyRatePicker({
           {displayIso}
           {displayRate != null && (
             <span className="text-muted-foreground ml-1">— {formatRate(displayRate)}</span>
+          )}
+          {showMissingRate && (
+            <span className="text-muted-foreground ml-1" title={ui('currencyRateNotAvailable')}>—</span>
           )}
         </div>
       </div>
@@ -263,7 +303,7 @@ export function CurrencyRatePicker({
             type="button"
             onClick={handleRateConfirm}
             className="text-status-success-foreground hover:text-status-success-foreground p-0.5 rounded"
-            title="Confirmar"
+            title={ui('confirm')}
           >
             <Check className="h-3.5 w-3.5" data-testid={"Check__" + field.id} />
           </button>
@@ -272,7 +312,7 @@ export function CurrencyRatePicker({
             type="button"
             onClick={handleRateCancel}
             className="text-muted-foreground hover:text-foreground p-0.5 rounded"
-            title="Cancelar"
+            title={ui('cancel')}
           >
             <X className="h-3.5 w-3.5" data-testid={"X__" + field.id} />
           </button>
@@ -287,7 +327,7 @@ export function CurrencyRatePicker({
             // The ring stays on while the list is open: the search box takes focus then,
             // but CreatableSearchSelect keeps its ring for as long as its list is open too.
             className={`flex-1 min-w-0 flex items-center justify-between ${ENABLED_SHELL} hover:bg-[hsl(var(--field-hover))] focus:outline-none ring-2 focus:ring-primary${open ? ' ring-primary' : ' ring-transparent'}`}
-            onClick={() => setOpen((v) => !v)}
+            onClick={toggleOpen}
           >
             {value ? (
               <span>
@@ -297,10 +337,18 @@ export function CurrencyRatePicker({
                     — {formatRate(displayRate)}
                   </span>
                 )}
+                {showMissingRate && (
+                  <span
+                    className="text-muted-foreground ml-1.5"
+                    title={ui('currencyRateNotAvailable')}
+                    data-testid="currency-rate-missing">
+                    —
+                  </span>
+                )}
               </span>
             ) : (
               <span className="text-muted-foreground">
-                Seleccionar {resolvedLabel}...
+                {ui('currencyRateSelectPlaceholder', { label: resolvedLabel })}
               </span>
             )}
             {loading ? (
@@ -320,11 +368,12 @@ export function CurrencyRatePicker({
               header currency IS the org currency, so the pencil has no effect there —
               hide it rather than let the user "edit" a rate that never applies to
               anything (ETP-4029). */}
-          {value && hasRecord && selectedOption?.rate !== 1 && (
+          {value && !isOrgCurrency && (
             <button
               data-testid="currency-rate-pencil"
               type="button"
-              title="Editar tipo de cambio"
+              title={ui('currencyRateEdit')}
+              aria-label={ui('currencyRateEdit')}
               onClick={handleRateEdit}
               className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             >
@@ -340,13 +389,20 @@ export function CurrencyRatePicker({
             <input
               ref={searchRef}
               type="text"
-              placeholder="Buscar moneda..."
+              placeholder={ui('currencyRateSearchPlaceholder')}
               className="w-full text-sm bg-transparent outline-none placeholder:text-muted-foreground"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
             />
           </div>
+          {rateDate && (
+            <div
+              className="px-3 pt-2 pb-1 text-xs text-muted-foreground"
+              data-testid="currency-rate-date">
+              {ui('currencyRatesAtDate', { date: formatCalendarDate(rateDate) })}
+            </div>
+          )}
           <div className="max-h-56 overflow-y-auto py-1">
             {loading && (
               <div className="px-3 py-2 text-xs text-muted-foreground" data-testid={"Loading__" + field.id}>
@@ -355,7 +411,7 @@ export function CurrencyRatePicker({
             )}
             {!loading && filtered.length === 0 && (
               <div className="px-3 py-2 text-sm text-muted-foreground text-center">
-                Sin resultados
+                {ui('noResults')}
               </div>
             )}
             {!loading &&
@@ -370,9 +426,18 @@ export function CurrencyRatePicker({
                   onClick={() => handleSelect(opt)}
                 >
                   <span>{opt.isoCode}</span>
-                  <span className="text-muted-foreground tabular-nums ml-3">
-                    {formatRate(opt.rate)}
-                  </span>
+                  {opt.rate == null && !opt.isOrgCurrency ? (
+                    <span
+                      className="text-muted-foreground ml-3"
+                      title={ui('currencyRateNotAvailable')}
+                      data-testid="currency-rate-option-missing">
+                      —
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground tabular-nums ml-3">
+                      {formatRate(opt.rate)}
+                    </span>
+                  )}
                 </button>
               ))}
           </div>

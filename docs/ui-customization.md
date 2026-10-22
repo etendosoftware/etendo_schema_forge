@@ -2942,6 +2942,65 @@ Overlay `zIndex: 50` (the app's modal tier — see `docs/walkthrough-flows.md`).
 Pure helpers `getConfirmResultTypeConfig(type)` and `getConfirmResultCopy(docs, ui)` are exported for
 reuse and tests. Unit coverage: `tools/app-shell/src/components/contract-ui/__tests__/ConfirmResultModal.vitest.jsx`.
 
+### 22. Header currency and exchange rate — `CurrencyRatePicker` (ETP-5840)
+
+Not a `decisions.json` option: `EntityForm` swaps the header `C_Currency_ID` selector for
+`components/contract-ui/CurrencyRatePicker.jsx` on the quotation, order and invoice windows
+(`isCurrencyRateSelectorField`). The rate it edits is the header's hidden
+`eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`, `form: false`), which is the document's only
+exchange rate: totals, previews, the Confirm/Complete check and the invoice «Tipos de cambio»
+tab all read it.
+
+**Rate reference date.** The rate comes from the conversion ranges valid on the reference date
+currently in the FORM (unsaved edits included), resolved structurally by
+`resolveRateDateField(fields, documentDateField)` — exported from `CurrencyRatePicker.jsx`:
+
+| Header form declares | Reference date | Windows today |
+|---|---|---|
+| a field bound to AD column `DateAcct` | that field (`accountingDate`, «Fecha contable») | sales-invoice, purchase-invoice |
+| no `DateAcct` field | `window.documentDateField` | sales-quotation, sales-order, purchase-order (`orderDate`) |
+
+`documentDateField` is deliberately NOT repointed to `accountingDate` on invoices: it also
+drives the `invoiceDate → accountingDate` cascade (`isDocumentDateCascadeTarget`). `DetailView`
+threads `documentDateField` into the header `<Form>` calls; no generator change is involved.
+
+**Behavior**
+
+- Options come from `GET {entity}/{id|new}/action/currencyOptions?date=yyyy-MM-dd`, fetched
+  eagerly on load and again whenever the record or the reference date changes, plus on every
+  open. ALL selectable currencies are listed; one with no range on the date has `rate: null`
+  and shows «—» (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
+  dd/mm/yyyy (`currencyRatesAtDate`, `formatCalendarDate`).
+- Selecting a currency ALWAYS stages its rate — `null` when there is no range — so neither the
+  previous currency's rate nor a manual rate survives a currency change. There is no
+  client-side blocking anymore: the old «Cambio de moneda cancelado» revert
+  (`validate-exchange-rate` + `noConversionRateError`) was removed from `DetailView.fireCallout`.
+- The pencil (`currency-rate-pencil`) is offered on new and saved documents whenever the
+  selected option is not the org currency (`isOrgCurrency` from `currencyOptions`; the former
+  `rate === 1` sentinel is gone). A manual rate is kept until the reference date or the
+  currency changes.
+- **Recalculation.** The header callout on `currency`, the declared `documentDateField` and
+  `accountingDate` returns the recalculated `eTGOCurrencyRate` (or `null`).
+  `applyCalloutFieldUpdates` applies it through `isCurrencyRateRecalcTarget`
+  (`detailViewHelpers.jsx`), which exempts exactly that key from the two guards that would
+  otherwise drop it: the user-touched guard (so recalculation overrides a manual rate) and the
+  empty-value guard (so «no range» clears a stale rate). On invoices an `invoiceDate` change
+  recalculates too, because its callout also cascades `accountingDate`.
+- Saving a foreign currency with an empty rate is refused by the backend with an
+  already-translated message, shown verbatim by the save toast (`translateBackendError` passes
+  unmatched text through); the form stays in edit. The org currency needs no rate.
+- The list-row Confirm of orders (`useOrderWindow.jsx`) no longer pre-checks
+  `validate-exchange-rate`; the backend completion check is the authority. The quotation
+  confirm modal only blocks when the document itself has no rate on a foreign currency.
+
+**i18n keys:** `currencyRateSearchPlaceholder`, `currencyRateSelectPlaceholder`,
+`currencyRateEdit`, `currencyRateNotAvailable`, `currencyRatesAtDate` (plus the existing
+`noResults`, `confirm`, `cancel`, `loading`).
+
+**Known gap:** on a NEW document a rate applied by a callout (not typed or picked) is
+excluded from the create POST by the ETP-5537 rule 1 (`eTGOCurrencyRate` is not a mounted
+form field and a callout value is not user-authored), so the backend recomputes it on create.
+
 ## Decision tree: which option to use?
 
 ```

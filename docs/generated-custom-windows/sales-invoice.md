@@ -765,6 +765,24 @@ Sales invoices carry the same currency/exchange-rate editing model already shipp
 - `tools/app-shell/src/components/contract-ui/EntityForm.jsx` renders the `CurrencyRatePicker` component (searchable currency selector with an inline rate editor, shared with sales-order/purchase-order/sales-quotation) instead of the plain `SelectorInput` whenever the field's column is `C_Currency_ID`, the entity is `header`, and the current URL matches `/(sales-order|purchase-order|sales-quotation|sales-invoice|purchase-invoice)(\/|$)/`. Selecting a currency calls the `currencyOptions` header action to list currencies reachable from the org currency (with their rates) and PATCHes `currency`, `currency$_identifier`, and `eTGOCurrencyRate` together.
 - `lines.cCurrencyId` remains `visibility: "system"` on sales-invoice — unlike orders, invoice lines (`C_InvoiceLine`) have no `C_Currency_ID` column at all, so there is no line-level currency to sync; the field in the contract is a derived/context value, not a real column.
 
+### Exchange rate on the accounting date (ETP-5840)
+
+- The rate reference date of an invoice is **`accountingDate` («Fecha contable», `DateAcct`)**,
+  not `invoiceDate`. `CurrencyRatePicker` resolves it structurally (`resolveRateDateField`: the
+  header field bound to `DateAcct`), so `window.documentDateField` stays `invoiceDate` and keeps
+  driving the `invoiceDate → accountingDate` cascade.
+- The dropdown lists every selectable currency with its rate on the `accountingDate` currently in
+  the form (`currencyOptions?date=`); a currency with no range shows «—» and selecting it leaves
+  the rate empty for the user to type with the pencil (available on new and saved invoices unless
+  the currency is the org's own, `isOrgCurrency`).
+- Changing `currency`, `accountingDate` or `invoiceDate` (which cascades `accountingDate`)
+  recalculates `eTGOCurrencyRate` through the header callout, overriding a manual rate; empty
+  when there is no range. No change is reverted anymore («Cambio de moneda cancelado» is gone).
+- Saving a foreign-currency invoice with an empty rate is refused by the backend with a
+  translated message; the form stays in edit. The «Tipos de cambio» tab refetches when the saved
+  rate changes (`EXCHANGE_RATES_TAB_KEY` effect in `DetailView`).
+- Full reference: `docs/ui-customization.md` §22.
+
 ### Backend wiring
 
 - `CurrencyOptionsHandler` (`@Named("currencyOptionsHandler")`) resolves the org/client/date context needed to list currency options. For invoice specs (`context.getSpecName()` containing `"invoice"`) it loads via `Invoice.class` and uses `getInvoiceDate()`; for order specs it uses `Order.class` and `getOrderDate()` as before. `SalesInvoiceHeaderHandler` `@Inject`s `CurrencyOptionsHandler` and passes it into `NeoHeaderActionRouter.dispatch(...)`, exposing `GET /sws/neo/sales-invoice/header/{id}/action/currencyOptions`.
@@ -790,9 +808,9 @@ Live-verified (see `docs/plans/ETP-4029-currency-invoice.md` §7.4): creating a 
 
 ### Manual verification
 
-1. Open a new sales invoice and confirm the currency field renders as the searchable `CurrencyRatePicker` (not a plain dropdown), listing currencies reachable from the org currency with their rates.
+1. Open a new sales invoice and confirm the currency field renders as the searchable `CurrencyRatePicker` (not a plain dropdown), listing every selectable currency with its rate on the accounting date in the form («—» when there is no range).
 2. Select a non-org currency with a defined `C_Conversion_Rate`: confirm no warning appears and the field commits normally.
-3. Select a non-org currency with no defined rate: confirm a warning message appears (the field is not reverted here — compare with the stricter order-side behavior in ETP-4027 if validating both windows in the same session).
+3. Select a non-org currency with no conversion range on the accounting date: confirm it shows «—», stays selected with an empty rate, and that saving without typing a rate is refused with a translated message (ETP-5840).
 4. Save the invoice, add a line, and confirm the invoice's Exchange Rates tab (ETP-4030 section below) reflects an updated `foreignAmount` as the grand total changes — without needing to touch the exchange-rate row directly.
 5. Create a draft invoice from a completed sales order or quotation that has a non-org currency and a set exchange rate; confirm the new invoice inherits currency, price list, and the same rate, and that a `C_Conversion_Rate_Document` row exists for it.
 6. Open the list/preview of a non-org-currency invoice and confirm the preview modal shows both the document-currency total and the organization-currency equivalent with the rate in parentheses.

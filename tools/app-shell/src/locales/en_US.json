@@ -25758,7 +25758,12 @@
     "rectifyChangeSelection": "Change selection",
     "couldNotLoadInvoicesToRectify": "The invoices to rectify could not be loaded.",
     "rectifyLinkedBadge": "Related",
-    "soGenerateDocsImplied": "Document to create"
+    "soGenerateDocsImplied": "Document to create",
+    "currencyRateSearchPlaceholder": "Search currency...",
+    "currencyRateSelectPlaceholder": "Select {label}...",
+    "currencyRateEdit": "Edit exchange rate",
+    "currencyRateNotAvailable": "No exchange rate for this date. You can type one.",
+    "currencyRatesAtDate": "Rates as of {date}"
   },
   "menus": {
     "Currency": {

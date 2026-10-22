@@ -15,6 +15,16 @@ vi.mock('@/components/ui/label', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
 
+// ETP-5840 — the picker's strings now go through useUI(); resolve them against the Spanish
+// catalog so the assertions below keep reading the text a user actually sees.
+vi.mock('@/i18n', async (importOriginal) => {
+  const actual = await importOriginal();
+  const es = (await import('../../../locales/es_ES.json')).default.genericLabels;
+  const ui = (key, params) => String(es[key] ?? key)
+    .replace(/\{(\w+)\}/g, (m, name) => (params?.[name] ?? m));
+  return { ...actual, useUI: () => ui };
+});
+
 vi.mock('lucide-react', () => ({
   ChevronDown: (props) => <span data-testid={props['data-testid'] || 'icon-chevron'} />,
   Loader2: (props) => <span data-testid={props['data-testid'] || 'icon-loader'} />,
@@ -31,7 +41,7 @@ const TOKEN = 'test-token';
 
 const CURRENCIES = [
   { id: 'usd-id', isoCode: 'USD', rate: 1.2345 },
-  { id: 'eur-id', isoCode: 'EUR', rate: 1 },
+  { id: 'eur-id', isoCode: 'EUR', rate: 1, isOrgCurrency: true },
 ];
 
 function mkFetch(currencies = CURRENCIES, sessionPrecision) {
@@ -270,16 +280,15 @@ describe('CurrencyRatePicker', () => {
     expect(screen.getByTestId('currency-rate-pencil')).toBeInTheDocument();
   });
 
-  it('hides the pencil when the selected currency is the org currency (rate 1)', async () => {
-    // ETP-4029: CURRENCIES fixture's EUR entry has rate: 1, mirroring how
-    // CurrencyOptionsHandler always returns the org's own currency with a
-    // hardcoded rate of 1.0 — there is nothing to override in that case.
+  it('hides the pencil when the selected currency is the org currency (isOrgCurrency)', async () => {
+    // ETP-5840: the org currency is identified by the option's `isOrgCurrency` flag returned by
+    // CurrencyOptionsHandler, not by the old rate === 1 sentinel — there is nothing to override.
     renderPicker({ value: 'eur-id', displayValue: 'EUR', formData: { id: 'rec-1', eTGOCurrencyRate: '1' } });
 
     await waitFor(() => {
-      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
+      expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
     });
-    expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
+    expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
   });
 
   it('shows the pencil again after switching from the org currency to a foreign one', async () => {
@@ -296,9 +305,8 @@ describe('CurrencyRatePicker', () => {
       />,
     );
     await waitFor(() => {
-      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
+      expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
     });
-    expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
 
     rerender(
       <CurrencyRatePicker
