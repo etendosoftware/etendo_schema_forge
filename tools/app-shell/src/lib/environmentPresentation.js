@@ -108,14 +108,44 @@ export function environmentPlanLabelKey(environment) {
     : 'environmentDemo';
 }
 
-/** Returns the trial status label only when the backend supplied lifecycle metadata. */
-export function environmentTrialLabel(environment, ui) {
-  if (isProductiveEnvironment(environment) || !Number.isInteger(environment?.trialDaysRemaining)) {
+/**
+ * The "N days left" key for a trial: singular for one day, so it never reads "1 days left". Only
+ * English and Spanish are shipped and neither inflects further, the same `…One` convention as
+ * `subscriptionGraceRemainingOne`.
+ */
+export function environmentTrialDaysKey(days) {
+  return days === 1 ? 'environmentTrialDaysRemainingOne' : 'environmentTrialDaysRemaining';
+}
+
+/**
+ * ETP-5049 — the trial state of a demo, or `null` when it has no trial to show: a productive
+ * environment, or one the backend sent no `trialDaysRemaining` for.
+ *
+ * @returns {null | { daysRemaining: number, expired: boolean, escalated: boolean }}
+ *   `escalated` — an active trial in its last {@link BILLING_WARNING_ESCALATION_DAYS} days, drawn
+ *   as prominently as an expired one.
+ */
+export function demoTrialStatus(environment) {
+  if (!environment || isProductiveEnvironment(environment)
+    || !Number.isInteger(environment.trialDaysRemaining)) {
     return null;
   }
-  return environment.trialDaysRemaining > 0
-    ? ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining })
-    : ui('environmentDemoExpired');
+  const daysRemaining = environment.trialDaysRemaining;
+  const expired = daysRemaining <= 0;
+  return {
+    daysRemaining,
+    expired,
+    escalated: !expired && daysRemaining <= BILLING_WARNING_ESCALATION_DAYS,
+  };
+}
+
+/** Returns the trial status label only when the backend supplied lifecycle metadata. */
+export function environmentTrialLabel(environment, ui) {
+  const trial = demoTrialStatus(environment);
+  if (!trial) return null;
+  return trial.expired
+    ? ui('environmentDemoExpired')
+    : ui(environmentTrialDaysKey(trial.daysRemaining), { days: trial.daysRemaining });
 }
 
 /** Returns a commercial state label when the backend has evaluated access. */

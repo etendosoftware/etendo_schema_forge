@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMenuLabel, useUI } from '@/i18n';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { useGuardedNavigate } from '@/hooks/useGuardedNavigate.js';
-import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
+import { demoTrialStatus, environmentTrialDaysKey } from '@/lib/environmentPresentation.js';
 import { useCopilot } from '@/components/CopilotContext';
 import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
 import { cn } from '@/lib/utils.js';
@@ -335,43 +335,55 @@ function resolveScopeLabel(scope, tMenu) {
   return tMenu(scope.label) || scope.label;
 }
 
+// ETP-5049 — an expired trial, or one in its last days, is drawn red. The red family of the core
+// preset is `destructive`; `status-danger` is not a token there and generated no CSS at all.
+const DEMO_TRIAL_TONES = {
+  warning: {
+    bar: 'border-status-warning-border bg-status-warning text-status-warning-foreground',
+    pill: 'border-status-warning-border bg-status-warning text-status-warning-foreground',
+    track: 'bg-status-warning-border',
+    fill: 'bg-status-warning-foreground',
+  },
+  destructive: {
+    bar: 'border-destructive bg-destructive/10 text-destructive',
+    pill: 'border-destructive bg-destructive text-destructive-foreground',
+    track: 'bg-destructive/20',
+    fill: 'bg-destructive',
+  },
+};
+
 function DemoTrialIndicator({ ui }) {
   const navigate = useNavigate();
   const { environments, currentClientId } = useEnvironmentSwitch();
   const environment = environments.find(item => item.clientId === currentClientId);
-  if (!environment) return null;
-  const productive = isProductiveEnvironment(environment);
-  if (productive) return null;
-  const hasTrial = Number.isInteger(environment.trialDaysRemaining);
-  if (!hasTrial) return null;
-  const expired = environment.trialDaysRemaining <= 0;
+  const trial = demoTrialStatus(environment);
+  if (!trial) return null;
+  const variant = trial.expired || trial.escalated ? 'destructive' : 'warning';
+  const tone = DEMO_TRIAL_TONES[variant];
   const start = Date.parse(environment.trialStartedAt);
   const end = Date.parse(environment.trialExpiresAt);
   const total = end - start;
   const remaining = Math.max(0, end - Date.now());
   const progress = total > 0
     ? Math.min(100, Math.max(0, (remaining / total) * 100)) : 0;
-  const label = expired
+  const label = trial.expired
     ? ui('environmentDemoExpired')
-    : ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining });
+    : ui(environmentTrialDaysKey(trial.daysRemaining), { days: trial.daysRemaining });
   return (
     <div
       className={cn(
         'flex min-h-[46px] w-full flex-wrap items-center justify-start gap-x-4 gap-y-2 border-b px-6 py-2 text-sm',
-        expired
-          ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
-          : 'border-status-warning-border bg-status-warning text-status-warning-foreground'
+        tone.bar
       )}
       aria-label={label}
       title={environment.trialExpiresAt || undefined}
       data-testid="topbar-demo-trial-indicator"
+      data-variant={variant}
     >
       <div className="flex min-w-0 items-center gap-3">
         <span className={cn(
           'rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide',
-          expired
-            ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
-            : 'border-status-warning-border bg-status-warning text-status-warning-foreground'
+          tone.pill
         )}>
           {ui('environmentDemo')}
         </span>
@@ -379,17 +391,11 @@ function DemoTrialIndicator({ ui }) {
       </div>
       <div className="flex w-full max-w-[360px] items-center gap-3">
         <div
-          className={cn(
-            'h-2 min-w-20 flex-1 overflow-hidden rounded-full',
-            expired ? 'bg-status-danger-border' : 'bg-status-warning-border'
-          )}
+          className={cn('h-2 min-w-20 flex-1 overflow-hidden rounded-full', tone.track)}
           aria-hidden="true"
         >
           <div
-            className={cn(
-              'h-full rounded-full',
-              expired ? 'bg-status-danger-foreground' : 'bg-status-warning-foreground'
-            )}
+            className={cn('h-full rounded-full', tone.fill)}
             style={{ width: `${progress}%` }}
           />
         </div>

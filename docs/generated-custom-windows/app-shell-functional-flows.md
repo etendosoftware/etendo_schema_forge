@@ -191,26 +191,34 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Layout: the pair lives in one `flex-1 min-w-[16rem]` block inside the already-`flex-wrap`
     bar, so it takes the leftover width when there is room and drops to a second line of the same
     bar when there is not — it never squeezes the days label or the button.
-- **Colour.** The non-expired state is amber: `status-warning` (`bg`/`foreground`/`border`), the
-  only orange trio the core Tailwind preset defines, which brings its dark-mode values with it.
-  Changing it was a token swap, not new CSS.
-  - ⚠️ **The expired state's classes do not exist.** `status-danger` is defined **nowhere** — not
-    in `@etendosoftware/app-shell-core`'s Tailwind preset (which has `success`, `warning`, `info`
-    and `neutral`) and not in any stylesheet; the red family is called `destructive`. So
-    `bg-status-danger`, `text-status-danger-foreground`, `border-status-danger-border`,
-    `bg-status-danger-border` and `bg-status-danger-foreground` all generate no CSS and the
-    expired banner renders with no background, border or text colour of its own. This is
-    pre-existing and `TopBar.jsx` is the only file in the repo that uses those class names. Left
-    as found: red-vs-amber is a design decision, not a rename.
+- **Colour.** An active trial with more than 3 days left is amber: `status-warning`
+  (`bg`/`foreground`/`border`), the only orange trio the core Tailwind preset defines, which brings
+  its dark-mode values with it.
+- **Escalation (ETP-5049).** With 3 days or fewer left (`BILLING_WARNING_ESCALATION_DAYS`), and
+  once expired, the bar is red: the core preset's `destructive` family (`bg-destructive/10`,
+  `border-destructive`, a solid `bg-destructive` pill and progress fill). `data-variant` on
+  `topbar-demo-trial-indicator` reads `warning` or `destructive`. The state is the pure
+  `demoTrialStatus(environment)` in `lib/environmentPresentation.js`; the CTA (**Ir al pago**,
+  `/upgrade`) stays visible to everyone, as before — upgrading is not owner-gated (an invited
+  member buys a clean productive environment). This bar is the in-environment trial warning:
+  ETP-5049 deliberately did not add a second banner for an ending trial.
+  - Before ETP-5049 the expired state used `status-danger-*` classes, which are not a token of the
+    core preset, so it rendered with no colour of its own. They are gone.
+- **One day left** reads "1 day left" / "Queda 1 día" (`environmentTrialDaysRemainingOne`, picked
+  by `environmentTrialDaysKey`), also in the company list's trial label.
 - **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
   — both caveats' presence and their position after the button, that they are two sibling `<p>`
   neither of which carries the other's text, that no second link is drawn, the wrap classes, the
-  amber token, and the three states that render nothing or keep the caveats.
+  amber token, the destructive variant at 3 and 1 days left and once expired (and no
+  `status-danger` class), the singular day label, and the three states that render nothing or
+  keep the caveats.
 - **Manual verification path:**
   1. On a trial tenant, confirm the bar is amber and the two caveats read to the right of Ir al
      pago, on two separate lines.
   2. Narrow the window and confirm the block wraps onto its own row instead of crushing the bar.
   3. On a productive tenant, confirm the whole bar is gone.
+  4. Set the trial so 3 days or fewer remain (`docs/etp-5396-local-lifecycle-tool.md`) and confirm
+     the bar turns red while still counting down; with 1 day left it reads "Queda 1 día".
 
 #### 3.2a The failed-payment banner (`BillingStatusBanner`, ETP-5049)
 

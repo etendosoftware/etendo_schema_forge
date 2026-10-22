@@ -18104,6 +18104,7 @@
     "environmentDemo": "Demo",
     "environmentProductive": "Productivo",
     "environmentTrialDaysRemaining": "Quedan {days} días",
+    "environmentTrialDaysRemainingOne": "Queda 1 día",
     "environmentDemoExpired": "Demo expirado",
     "environmentDemoFiscalNotice": "En este entorno de pruebas no se harán conexiones con Hacienda, para ello deberá crear un entorno productivo.",
     "environmentDemoMigrationNotice": "Los datos distintos a contactos y productos, no se migrarán al entorno productivo.",

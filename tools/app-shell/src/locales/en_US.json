@@ -17872,6 +17872,7 @@
     "environmentDemo": "Demo",
     "environmentProductive": "Productive",
     "environmentTrialDaysRemaining": "{days} days left",
+    "environmentTrialDaysRemainingOne": "1 day left",
     "environmentDemoExpired": "Demo expired",
     "environmentDemoFiscalNotice": "This test environment makes no connections to the tax authority; to do that you need to create a productive environment.",
     "environmentDemoMigrationNotice": "Data other than contacts and products will not be migrated to the productive environment.",
