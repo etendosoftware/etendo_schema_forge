@@ -756,6 +756,7 @@ export function SecondaryPanelTab(props) {
         token={props.token}
         apiBaseUrl={props.apiBaseUrl}
         onCount={props.onCount}
+        readOnly={props.readOnly === true}
     />
   </div>;
 }
@@ -1954,13 +1955,32 @@ export function shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnoth
 }
 
 /** Reactive wrapper: calls `handleNew()` exactly when {@link shouldResetEditingForNewRoute} says to. */
-export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew }) {
+export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew, accessReadOnly: roleReadOnly = false, embedded = false, onReadOnlyNew }) {
+  const accessReadOnly = roleReadOnly && !embedded; // an embedded form is never redirected
   const prevRecordIdRef = useRef(recordId);
   useEffect(() => {
     const arrivedFromAnotherRecord = prevRecordIdRef.current !== recordId;
     prevRecordIdRef.current = recordId;
+    if (accessReadOnly) return; // redirected below, no defaults fetch for a form never shown
     if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
-  }, [isNew, recordId, editing, handleNew]);
+  }, [isNew, recordId, editing, handleNew, accessReadOnly]);
+  // ETP-5830 — a read-only role reaching the creation route by URL (the list already hides
+  // "Nuevo") is sent back to the list instead of a form whose save the backend rejects.
+  // The callback is read from a ref: callers pass an inline arrow, which must not re-fire it.
+  const onReadOnlyNewRef = useRef(onReadOnlyNew);
+  onReadOnlyNewRef.current = onReadOnlyNew;
+  useEffect(() => {
+    if (isNew && accessReadOnly) onReadOnlyNewRef.current?.();
+  }, [isNew, accessReadOnly]);
+}
+
+/**
+ * ETP-5830 — the `editing` record a custom Panel / CustomLines receives: `false` when the role
+ * only reads the window, so the panel locks its writes; the record itself otherwise. Lives here
+ * to keep DetailView's own cognitive complexity flat.
+ */
+export function panelEditing(windowReadOnly, editing) {
+  return windowReadOnly ? false : editing;
 }
 
 /**
@@ -2089,8 +2109,8 @@ export function getTabStripBleedClassName({
  *  3. Inline-editable tabs → no row click handler. Editing happens in place via
  *     the pencil action; opening a side panel would defeat that UX.
  */
-function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout }) {
-  if (st.customAddModal) return openCustomModal;
+function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout, readOnly }) {
+  if (st.customAddModal) return readOnly ? undefined : openCustomModal; // ETP-5830: the popup has no read-only mode
   if (st.Form && linesLayout !== 'inlineEditable') return openSecondaryLine;
   return undefined;
 }
@@ -2274,7 +2294,7 @@ export function SecondaryFormTab(props) {
   return <div className="flex-1 min-w-0">
     <props.st.Form
         data={props.data ?? {}}
-        readOnly={!props.hook.editing}
+        readOnly={!props.hook.editing || props.windowReadOnly === true}
         onChange={props.onChange}
         entity={props.st.key}
         catalogs={props.catalogs}
@@ -2305,7 +2325,7 @@ function secondaryDetailSidebar(props) {
       </div>
       <props.st.Form
           data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
-          readOnly={!props.hook.editing}
+          readOnly={!props.hook.editing || props.windowReadOnly === true}
           onChange={props.onChange}
           entity={props.st.key}
           catalogs={props.catalogs}
@@ -2315,7 +2335,7 @@ function secondaryDetailSidebar(props) {
           excludeFields={props.st.key === "contact" ? ["active"] : []}
           labelOverrides={props.labelOverrides}
       />
-      {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
+      {props.hook.editing && props.windowReadOnly !== true && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
           <div className="flex gap-2 mt-4">
             {props.secondaryLineEdits && (
                 <>
@@ -2420,11 +2440,10 @@ function secondaryAddLineBar(props) {
 }
 
 export function SecondaryTableTab(props) {
-  // Evaluates the tab's own readOnlyLogic (if declared) against the current
-  // header record — independent of the document-wide isDocumentReadOnly, which
-  // only governs the primary lines table. Most tabs declare no readOnlyLogic
-  // and this stays false, preserving today's behavior everywhere else.
-  const tabReadOnly = evalTabReadOnly(props.st, props.hook.selected);
+  // Read-only when the role only has read access to the window (ETP-5830) or the tab's own
+  // readOnlyLogic matches the header record. Deliberately NOT the document-wide
+  // isDocumentReadOnly, which only governs the primary lines table.
+  const tabReadOnly = props.windowReadOnly === true || evalTabReadOnly(props.st, props.hook.selected);
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
   const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
@@ -2471,11 +2490,11 @@ export function SecondaryTableTab(props) {
               onRowClick={resolveSecondaryRowClickHandler(props.st, {
                 openCustomModal: props.openCustomModal,
                 openSecondaryLine: props.openSecondaryLine,
-                linesLayout: props.linesLayout,
+                linesLayout: props.linesLayout, readOnly: tabReadOnly,
               })}
               // Pencil action for customAddModal tabs (Dirección) opens
               // the popup editor — rows are not editable in place.
-              onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
+              onEditRow={tabReadOnly ? undefined : getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
               onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st, props.enableSecondaryRowDelete)}
               onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}

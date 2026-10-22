@@ -670,3 +670,7 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   button in every window without its own override key — filed as a separate follow-up ticket.
   ETP-5407 added the `April - March`/`October - September` entries to the same block in both
   files.
+
+## Read-only role tier: Períodos tab — ETP-5830
+
+With a `read-only` tier, `PeriodsExpandablePanel` (reached through `SecondaryPanelTab`, which now forwards `readOnly`) disables the row and select-all checkboxes and hides *Abrir/Cerrar Periodo*. The Accounting tab has no writes. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

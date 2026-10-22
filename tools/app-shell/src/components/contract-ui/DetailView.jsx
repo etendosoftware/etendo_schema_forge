@@ -69,7 +69,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import { buildLineRowUpdateHandler, resolveCompletedLineFieldGate } from './inlineLineUpdateHandlers.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, gateDetailTab, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, gateDetailTab, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset, panelEditing, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
   // ETP-4731 (slice 2 of 3): the secondary-tab helpers and the remaining free module scope moved
   // to detailViewHelpers.jsx; imported here only for the symbols this component body still uses.
   formatAmount, NO_GATE_EXCLUSIONS, detailContentPadding, getTabStripBleedClassName,
@@ -1139,7 +1139,7 @@ export function DetailView({
 
   // ETP-4830 clears a stale OTHER record's `editing`; ETP-5002 keeps it from firing
   // mid-save and duplicating the record. Full reasoning in the helper.
-  useNewRouteEditingReset({ isNew, recordId, editing: hook.editing, handleNew: hook.handleNew });
+  useNewRouteEditingReset({ isNew, recordId, editing: hook.editing, handleNew: hook.handleNew, accessReadOnly: menuActionsReadOnly, embedded, onReadOnlyNew: () => navigate(`/${windowName}`, { replace: true }) });
 
   // Auto-open add-line form after header auto-save navigation (openAddLine flag in route state).
   useEffect(() => {
@@ -1936,7 +1936,7 @@ export function DetailView({
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          api={api} isDocumentReadOnly={isDocumentReadOnly}
+          api={api} isDocumentReadOnly={isDocumentReadOnly} accessReadOnly={menuActionsReadOnly}
           isActive={isActive}
           isNew={isNew}
           onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
@@ -2312,7 +2312,7 @@ export function DetailView({
               const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
               return activeTab?.Panel ? (
                 <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX)}`}>
-                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} onPersisted={hook.applyPersistedFields} />
+                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={panelEditing(windowReadOnly, hook.editing)} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} onPersisted={hook.applyPersistedFields} />
                 </div>
               ) : null;
             })() : null}
@@ -2933,7 +2933,7 @@ export function DetailView({
                               token={token}
                               apiBaseUrl={apiBaseUrl}
                               api={api}
-                              editing={hook.editing}
+                              editing={panelEditing(windowReadOnly, hook.editing)}
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
@@ -2974,13 +2974,13 @@ export function DetailView({
                               <SecondaryFormTab data={data} hook={hook} onChange={(key, val, column) => {
                                 setSecondaryLineEdits(prev => ({...(prev ?? {}), [key]: val}));
                                 if (column) setSecondaryLineEditColumns(prev => ({...prev, [key]: column}));
-                              }} st={st} catalogs={catalogs} token={token} apiBaseUrl={apiBaseUrl}
+                              }} st={st} catalogs={catalogs} token={token} apiBaseUrl={apiBaseUrl} windowReadOnly={windowReadOnly}
                                                 selectorContextByEntity={selectorContextByEntity}
                                                 labelOverrides={labelOverrides}
                                                 data-testid="SecondaryFormTab__fa3275" />
                             );
                               if (st.Panel) return (
-                              <SecondaryPanelTab st={st} data={data} token={token} apiBaseUrl={apiBaseUrl}
+                              <SecondaryPanelTab st={st} data={data} token={token} apiBaseUrl={apiBaseUrl} readOnly={windowReadOnly}
                                                  onCount={(n) => setPanelCounts(prev => ({...prev, [st.key]: n}))}
                                                  data-testid="SecondaryPanelTab__fa3275" />
                             );
@@ -2999,7 +2999,7 @@ export function DetailView({
                                 api={api}
                                 crud={api?.crud}
                                 ui={ui}
-                                hook={hook}
+                                hook={hook} windowReadOnly={windowReadOnly}
                                 labelOverrides={labelOverrides}
                                 extractErrorMessage={extractErrorMessage}
                                 enableSecondaryRowDelete={enableSecondaryRowDelete}

@@ -191,6 +191,15 @@ describe('PeriodsExpandablePanel', () => {
     expect(createAdjustment.key).toBe('CREATEADJUSTMENT');
   });
 
+  it('hides Abrir/Cerrar Periodo and disables selection for a read-only role (ETP-5830)', async () => {
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" readOnly data-testid="p2" />);
+    await waitFor(() => screen.getByText('January 27'));
+
+    expect(screen.queryByTestId('period-openclose-p1')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select January 27' })).toBeDisabled();
+    expect(screen.getByTestId('period-select-all').querySelector('input')).toBeDisabled();
+  });
+
   it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Periodo is clicked', async () => {
     const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p2" />);

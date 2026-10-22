@@ -71,7 +71,7 @@ export const TBAI_REVERSEINVOICECODE_OPTIONS = [
 //     error path the header form already uses.
 // This also makes DateField's onBlur-timing bugs (fixed separately in
 // schema_forge_core) irrelevant here — SIF fields only ever need `onChange`.
-export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
+export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locked = false }) {
   const ui = useUI();
   // ETP-5087: keyed by the INVOICE's own org (data.adOrgId), not the top-nav org
   // selector — see resolveInvoiceOrgId.js.
@@ -112,7 +112,8 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
   // `record['processed'] === true`. `isProcessed` mirrors that flag so every SII
   // field locks once the document is completed, matching the pattern already
   // used for `tbaiReverseinvoicecode` (`disabled={data?.processed === true}`).
-  const isProcessed = data?.processed === true;
+  // ETP-5830: `locked` (a read-only role) locks every SII field exactly like a completed document.
+  const isProcessed = data?.processed === true || locked;
   const dateReadOnly = !isDraft || isProcessed;
   const siiFieldReadOnly = isSentToSii || isProcessed;
 
