@@ -16,7 +16,6 @@ import {
   fetchPlans,
   createBillingPurchase,
   getBillingOverview,
-  getBillingOffer,
   getBillingPurchase,
   getCheckoutStatus,
   runPaidOnboarding,
@@ -25,7 +24,6 @@ import {
 import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { isProductiveEnvironment, isPurchaseSourceDemo } from '@/lib/environmentPresentation.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 
 /** Billing interval as the catalog spells it, mapped to the i18n key that phrases the price. */
 const PRICE_LABEL_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
@@ -292,41 +290,61 @@ async function resumeCheckoutProvisioning({
   storage.removeItem(PENDING_CHECKOUT_DATA_TRANSFER);
 }
 
-function PlanCard({ testId, name, tagline, price, features, current, highlighted, ui, className = '', onSelect }) {
+/**
+ * One purchasable plan on the Plan step (ETP-5049).
+ *
+ * Everything this card says about the plan — name, description, price — is the catalog entry
+ * (`GET /sws/go/plans`), so a plan added to ETGO_PLAN appears here with no frontend change and a
+ * renamed or repriced one is never contradicted by a static translation. The feature list is not
+ * per plan: it describes what every purchase creates (a separate productive environment), whichever
+ * plan pays for it, so it is the same on every card.
+ *
+ * The card holds a plan KEY only. The provider price behind it never reaches the browser; the
+ * checkout resolves it server-side from the key.
+ */
+function PlanCard({ plan, selected, onSelect, ui }) {
   return (
     <Card
-      className={`${highlighted
-        ? 'flex flex-col border-2 border-primary bg-card shadow-lg'
-        : 'flex flex-col border-border bg-card'} ${className}`}
-      data-testid={testId}
+      className={selected
+        ? 'flex w-full flex-col border-2 border-primary bg-card shadow-lg'
+        : 'flex w-full flex-col border-border bg-card'}
+      data-selected={selected ? 'true' : 'false'}
+      data-testid={`upgrade-plan-card-${plan.planKey}`}
     >
       <CardHeader className="space-y-4 p-6" data-testid="CardHeader__58bad7">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-xl" data-testid="CardTitle__58bad7">{name}</CardTitle>
-            <p className="mt-2 text-sm text-muted-foreground">{tagline}</p>
+          <div className="min-w-0">
+            <CardTitle className="text-xl" data-testid="upgrade-plan-name">{plan.name}</CardTitle>
+            {plan.description && (
+              <p className="mt-2 text-sm text-muted-foreground" data-testid="upgrade-plan-description">
+                {plan.description}
+              </p>
+            )}
           </div>
-          {current && <Badge variant="secondary" data-testid="Badge__58bad7">{ui('upgradePlanCurrentBadge')}</Badge>}
+          {selected && (
+            <Badge variant="secondary" data-testid="upgrade-plan-selected-badge">
+              {ui('upgradePlanSelectedBadge')}
+            </Badge>
+          )}
         </div>
-        <div className="flex items-baseline gap-2">
-          <p className="text-3xl font-bold tracking-tight">{price}</p>
-        </div>
-        {onSelect && (
-          <Button
-            type="button"
-            variant={highlighted ? 'default' : 'outline'}
-            className="w-full"
-            onClick={onSelect}
-            data-testid="upgrade-plan-select"
-          >
-            {ui('upgradeCheckoutSelectPlan')}
-            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
-          </Button>
-        )}
+        <p className="text-3xl font-bold tracking-tight" data-testid="upgrade-plan-price">
+          {formatPlanPrice(ui, plan)}
+        </p>
+        <Button
+          type="button"
+          variant={selected ? 'default' : 'outline'}
+          className="w-full"
+          aria-pressed={selected}
+          onClick={onSelect}
+          data-testid="upgrade-plan-select"
+        >
+          {ui('upgradeCheckoutSelectPlan')}
+          <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+        </Button>
       </CardHeader>
       <CardContent className="border-t p-6" data-testid="CardContent__58bad7">
         <ul className="space-y-3 text-sm">
-          {features.map(key => (
+          {PRODUCTIVE_FEATURES.map(key => (
             <li key={key} className="flex items-start gap-2">
               <Check
                 className="mt-0.5 h-4 w-4 shrink-0 text-primary"
@@ -335,23 +353,6 @@ function PlanCard({ testId, name, tagline, price, features, current, highlighted
             </li>
           ))}
         </ul>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SkeletonPlanCard({ testId, className = '' }) {
-  return (
-    <Card className={`flex min-h-[280px] flex-col border-border bg-muted/20 ${className}`} data-testid={testId}>
-      <CardContent className="flex flex-1 flex-col gap-5 p-6" data-testid="CardContent__58bad7">
-        <div className="h-6 w-28 animate-pulse rounded bg-muted" />
-        <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-        <div className="h-10 w-32 animate-pulse rounded bg-muted" />
-        <div className="mt-auto space-y-3">
-          {[1, 2, 3, 4].map(item => (
-            <div key={item} className="h-4 w-full animate-pulse rounded bg-muted" />
-          ))}
-        </div>
       </CardContent>
     </Card>
   );
@@ -391,7 +392,7 @@ function CheckoutSteps({ ui, checkoutStep, highestReachedStep, enabled, onStepCh
   );
 }
 
-function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue, includeDataTransfer }) {
+function AddonsStep({ ui, selectedPlan, dataTransfer, onDataTransferChange, onContinue, includeDataTransfer }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" data-testid="upgrade-addons-step">
       <section className="space-y-5">
@@ -449,10 +450,14 @@ function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue, includ
           <CardTitle data-testid="CardTitle__58bad7">{ui('upgradeCheckoutSummary')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5" data-testid="CardContent__58bad7">
-          <div className="flex items-center justify-between text-sm">
-            <span>{ui('upgradePlanProductiveName')}</span>
-            <span className="font-semibold">{ui('upgradeCheckoutIncluded')}</span>
-          </div>
+          {selectedPlan && (
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span data-testid="upgrade-checkout-summary-plan">{selectedPlan.name}</span>
+              <span className="font-semibold" data-testid="upgrade-checkout-summary-price">
+                {formatPlanPrice(ui, selectedPlan)}
+              </span>
+            </div>
+          )}
           <div className="border-t pt-4 text-sm text-muted-foreground">{ui('upgradeCheckoutNoAddons')}</div>
           <div className="grid gap-2">
             <Button type="button" onClick={onContinue} data-testid="upgrade-addons-continue">
@@ -499,22 +504,16 @@ function ProgressPanel({ steps, ui }) {
 }
 
 /**
- * What the user is about to buy, and — only when the catalog offers a choice — which one.
+ * The plan catalog's non-ready states, shared by the Plan step and the Payment summary so both
+ * read the one state machine: 'loading' | 'ready' | 'unavailable' | 'no-session'. Renders nothing
+ * once the catalog is ready with at least one plan — the caller shows the plans then.
  *
- * Deliberately plain: a single flat monthly subscription is the v1 catalog, so the one-plan case
- * is a statement, not a picker. THIS COMPONENT IS THE SEAM ETP-5049 REPLACES — the real
- * plan-selection UI (comparison, feature matrix, annual/monthly toggle) belongs there. Do not
- * grow a pricing table here.
- *
- * The catalog is the ONLY source of a plan key. There is no hardcoded fallback key: a guess here
- * would be a purchase nobody reviewed. (The server does sell without a key while its legacy price
- * fallback is active — ETP-5046 — but then the catalog lists exactly that plan, so the page still
- * sends the key it showed rather than relying on the server's default.)
+ * The catalog is the ONLY source of a plan key and of a price. There is no hardcoded fallback key
+ * and no second quote source (the legacy `GET /sws/go/billing/offers` preview is gone, ETP-5049): a
+ * guess here would be a purchase nobody reviewed, or a price the checkout does not charge.
  */
-function PlanSelector({ state, plans, selectedPlanKey, onSelect, onRetry, ui }) {
-  // Nothing to say about plans when there is no session to read them with: the submit reports
-  // the expired session, which is the accurate answer.
-  if (state === 'no-session') return null;
+function PlanCatalogStatus({ state, plans, onRetry, ui }) {
+  if (state === 'ready' && plans.length > 0) return null;
 
   if (state === 'loading') {
     return (
@@ -528,71 +527,104 @@ function PlanSelector({ state, plans, selectedPlanKey, onSelect, onRetry, ui }) 
     );
   }
 
-  if (state === 'unavailable' || plans.length === 0) {
-    return (
-      <div
-        role="status"
-        className="flex items-start gap-2 rounded-md border p-3 text-sm"
-        // Semantic status tokens, not palette literals — see
-        // src/lib/__tests__/semanticThemeUsage.test.js.
-        style={{
-          background: 'var(--status-warning-bg)',
-          color: 'var(--status-warning-fg)',
-          borderColor: 'var(--status-warning-border)',
-        }}
-        data-testid="upgrade-plans-unavailable"
-      >
-        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
-        <div className="space-y-2">
-          <p>{ui(state === 'unavailable' ? 'upgradePlansUnavailable' : 'upgradePlansEmpty')}</p>
-          {state === 'unavailable' && (
-            <Button type="button" variant="outline" size="sm" onClick={onRetry} data-testid="upgrade-plans-retry">
-              {ui('upgradePlansRetry')}
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (plans.length === 1) {
-    const [plan] = plans;
-    return (
-      <div className="rounded-md border p-3 text-sm" data-testid="upgrade-plan-single">
-        <span className="block font-medium">{plan.name}</span>
-        {plan.description && (
-          <span className="block text-xs text-muted-foreground">{plan.description}</span>
-        )}
-        <span className="mt-1 block font-semibold" data-testid="upgrade-plan-single-price">
-          {formatPlanPrice(ui, plan)}
-        </span>
-      </div>
-    );
-  }
+  // A missing session is not an empty or unreadable catalog, and saying so would be misleading:
+  // the accurate answer is that the session expired, and retrying the same request cannot help.
+  let messageKey = 'upgradePlansEmpty';
+  if (state === 'no-session') messageKey = 'upgradeSessionExpired';
+  else if (state === 'unavailable') messageKey = 'upgradePlansUnavailable';
 
   return (
-    <fieldset className="space-y-3" data-testid="upgrade-plan-choice">
-      <legend className="text-sm font-medium">{ui('upgradePlanChoiceLabel')}</legend>
+    <div
+      role="status"
+      className="flex items-start gap-2 rounded-md border p-3 text-sm"
+      // Semantic status tokens, not palette literals — see
+      // src/lib/__tests__/semanticThemeUsage.test.js.
+      style={{
+        background: 'var(--status-warning-bg)',
+        color: 'var(--status-warning-fg)',
+        borderColor: 'var(--status-warning-border)',
+      }}
+      data-testid={state === 'no-session' ? 'upgrade-plans-session-expired' : 'upgrade-plans-unavailable'}
+    >
+      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
+      <div className="space-y-2">
+        <p>{ui(messageKey)}</p>
+        {state === 'unavailable' && (
+          <Button type="button" variant="outline" size="sm" onClick={onRetry} data-testid="upgrade-plans-retry">
+            {ui('upgradePlansRetry')}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Step 1 — the plan chooser (ETP-5049): one card per catalog plan, selectable. Choosing a card
+ * selects its key and moves on to the add-ons; a single plan is preselected by the catalog lookup
+ * (the v1 catalog is one flat monthly subscription), so its card is already highlighted.
+ */
+function PlanCatalog({ state, plans, selectedPlanKey, onSelect, onRetry, ui }) {
+  if (state !== 'ready' || plans.length === 0) {
+    return (
+      <PlanCatalogStatus
+        state={state}
+        plans={plans}
+        onRetry={onRetry}
+        ui={ui}
+        data-testid="PlanCatalogStatus__58bad7" />
+    );
+  }
+  // One card does not stretch across a three-column grid: it keeps a card's width.
+  const columns = { 1: 'max-w-md', 2: 'md:grid-cols-2' }[plans.length] || 'md:grid-cols-3';
+  return (
+    <div
+      role="group"
+      aria-label={ui('upgradePlanChoiceLabel')}
+      className={`grid gap-5 ${columns}`}
+      data-testid="upgrade-plan-catalog"
+    >
       {plans.map(plan => (
-        <label key={plan.planKey} className="flex items-start gap-2 rounded-md border p-3">
-          <input
-            type="radio"
-            name="planKey"
-            value={plan.planKey}
-            checked={selectedPlanKey === plan.planKey}
-            onChange={() => onSelect(plan.planKey)}
-            data-testid={`upgrade-plan-option-${plan.planKey}`}
-          />
-          <span>
-            <span className="block text-sm font-medium">{plan.name}</span>
-            {plan.description && (
-              <span className="block text-xs text-muted-foreground">{plan.description}</span>
-            )}
-            <span className="mt-1 block text-sm font-semibold">{formatPlanPrice(ui, plan)}</span>
-          </span>
-        </label>
+        <PlanCard
+          key={plan.planKey}
+          plan={plan}
+          selected={plan.planKey === selectedPlanKey}
+          onSelect={() => onSelect(plan.planKey)}
+          ui={ui}
+          data-testid="PlanCard__58bad7" />
       ))}
-    </fieldset>
+    </div>
+  );
+}
+
+/**
+ * Step 3 — what is being bought, read-only. The choice is made on the Plan step; offering a second
+ * chooser here would let the two disagree. The submit sends this plan's KEY, never a price.
+ * Renders nothing when no plan is selected: the submit answers `upgradePlanRequired`.
+ */
+function PlanSummary({ state, plans, plan, onRetry, ui }) {
+  if (state !== 'ready' || plans.length === 0) {
+    return (
+      <PlanCatalogStatus
+        state={state}
+        plans={plans}
+        onRetry={onRetry}
+        ui={ui}
+        data-testid="PlanCatalogStatus__58bad7" />
+    );
+  }
+  if (!plan) return null;
+  return (
+    <div className="rounded-md border p-3 text-sm" data-testid="upgrade-plan-summary">
+      <span className="block text-xs font-medium text-muted-foreground">{ui('upgradeCheckoutStepPlan')}</span>
+      <span className="block font-medium" data-testid="upgrade-plan-summary-name">{plan.name}</span>
+      {plan.description && (
+        <span className="block text-xs text-muted-foreground">{plan.description}</span>
+      )}
+      <span className="mt-1 block font-semibold" data-testid="upgrade-plan-summary-price">
+        {formatPlanPrice(ui, plan)}
+      </span>
+    </div>
   );
 }
 
@@ -698,16 +730,6 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
   );
 }
 
-function formatOfferAmount(offer) {
-  if (!offer || !Number.isFinite(Number(offer.amountMinor)) || !offer.currency) return null;
-  const normalized = minorUnitsToAmount(offer.currency, Number(offer.amountMinor));
-  if (!normalized) return null;
-  return formatCurrency(offer.currency, normalized.amount, {
-    minimumFractionDigits: normalized.fractionDigits,
-    maximumFractionDigits: normalized.fractionDigits,
-  });
-}
-
 export default function UpgradePage() {
   const ui = useUI();
   const navigate = useNavigate();
@@ -731,16 +753,16 @@ export default function UpgradePage() {
   const [provisioningPurchaseId, setProvisioningPurchaseId] = useState('');
   const [environmentSyncPending, setEnvironmentSyncPending] = useState(false);
   const [billingPurchases, setBillingPurchases] = useState([]);
-  const [billingOffer, setBillingOffer] = useState(null);
   const [resumingPurchaseId, setResumingPurchaseId] = useState(null);
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
-  // 'loading' | 'ready' | 'unavailable' | 'no-session' — the plan catalog. Unlike the
-  // environments lookup, a failure here BLOCKS checkout: without the catalog the buyer has not
-  // been shown a price, so there is nothing legitimate to send. The server would accept a missing
-  // key only while its legacy price fallback is active (and refuses it PLAN_NOT_AVAILABLE once a
-  // priced plan exists); sending none, or guessing one, is never this page's choice to make.
+  // 'loading' | 'ready' | 'unavailable' | 'no-session' — the plan catalog, shown on the Plan step
+  // (ETP-5049). Unlike the environments lookup, a failure here BLOCKS checkout: without the
+  // catalog the buyer has not been shown a plan or a price, so there is nothing legitimate to send.
+  // The server would accept a missing key only while its legacy price fallback is active (and
+  // refuses it PLAN_NOT_AVAILABLE once a priced plan exists); sending none, or guessing one, is
+  // never this page's choice to make.
   const [plansState, setPlansState] = useState('loading');
   const [plans, setPlans] = useState([]);
   const [selectedPlanKey, setSelectedPlanKey] = useState('');
@@ -992,14 +1014,6 @@ export default function UpgradePage() {
         // Environment lookup remains the primary page state; billing is a recoverable projection.
       });
 
-    getBillingOffer(getUpgradeBaseUrl())
-      .then(offer => {
-        if (!cancelled) setBillingOffer(offer);
-      })
-      .catch(() => {
-        // The backend still validates the offer; the page only loses the price preview.
-      });
-
     return () => {
       cancelled = true;
     };
@@ -1017,18 +1031,22 @@ export default function UpgradePage() {
         const available = Array.isArray(catalog) ? catalog.filter(plan => plan?.planKey) : [];
         setPlans(available);
         // Exactly one purchasable plan is the v1 case (a single flat monthly subscription), so
-        // there is nothing to choose: select it. With several, the user must pick — see
-        // PlanSelector, the seam ETP-5049 replaces.
-        setSelectedPlanKey(available.length === 1 ? available[0].planKey : '');
+        // there is nothing to choose: select it. With several, the user picks a card on the Plan
+        // step. A re-read (the retry buttons share `lookupAttempt`) keeps a choice the catalog
+        // still offers: by then the user may be on the Payment step, which has no chooser.
+        setSelectedPlanKey(previous => {
+          if (available.length === 1) return available[0].planKey;
+          return available.some(plan => plan.planKey === previous) ? previous : '';
+        });
         setPlansState('ready');
       })
       .catch(error => {
         if (cancelled) return;
+        // The selected KEY is kept: with no plans listed nothing resolves from it (`selectedPlan`
+        // below is null and the checkout is blocked), and a successful retry restores the choice.
         setPlans([]);
-        setSelectedPlanKey('');
         // A missing session is not an empty or unreadable catalog, and saying so would be
-        // misleading. Kept distinct so the submit stays reachable and runUpgrade answers with the
-        // accurate "your session expired", exactly as it did before the catalog existed.
+        // misleading: PlanCatalogStatus answers with the accurate "your session expired".
         setPlansState(error?.code === UPGRADE_ERROR_CODES.sessionExpired ? 'no-session' : 'unavailable');
       });
 
@@ -1144,10 +1162,11 @@ export default function UpgradePage() {
           ...(isDemoOrigin && selectedDemoClientId ? { demoClientId: selectedDemoClientId } : {}),
           ...(includeDataTransfer ? { dataTransfer } : {}),
           upgradeAction: form.upgradeAction,
-          // Always a KEY from the catalog, never a price and never a literal written here. The
-          // server only sells without one under its legacy price fallback; the page never relies
-          // on that and sends the plan it showed.
-          planKey: selectedPlanKey,
+          // Always a KEY from the catalog — the plan chosen on the Plan step and summarized on the
+          // Payment step — never a price and never a literal written here. The server only sells
+          // without one under its legacy price fallback; the page never relies on that and sends
+          // the plan it showed.
+          planKey: selectedPlan.planKey,
           language: getStoredLocale(),
         }
       );
@@ -1198,10 +1217,11 @@ export default function UpgradePage() {
   const showAccountLoading = phase === 'form' && accountState === 'loading';
   const showFirstTenantFree = phase === 'form' && hasNoTenants;
   const showCheckout = phase === 'form' && accountState !== 'loading' && !hasNoTenants;
-  // Nothing purchasable, or the catalog could not be read: there is no plan key to send, so the
-  // submit is blocked rather than allowed to produce a guaranteed 400. A missing session is the
-  // exception — see the lookup above.
-  const canCheckout = plansState === 'no-session' || (plansState === 'ready' && plans.length > 0);
+  // Nothing purchasable, the catalog could not be read, or the session expired: there is no plan
+  // key to send, so the submit is blocked rather than allowed to produce a guaranteed 400/401.
+  const canCheckout = plansState === 'ready' && plans.length > 0;
+  // Resolved against the CURRENT catalog, so a key the catalog no longer lists selects nothing.
+  const selectedPlan = plans.find(plan => plan.planKey === selectedPlanKey) || null;
   const goToCheckoutStep = step => {
     const stepIndex = { plan: 0, addons: 1, payment: 2 }[step];
     if (phase !== 'form' || stepIndex === undefined || stepIndex > highestReachedCheckoutStep) return;
@@ -1225,11 +1245,6 @@ export default function UpgradePage() {
   // so do purchases from a demo that already originated one (ETP-5548).
   const isDemoOrigin = isPurchaseSourceDemo(currentEnvironment);
   const includeDataTransfer = isDemoOrigin;
-  const offerIntervalLabel = ({ day: 'upgradeBillingIntervalDay', week: 'upgradeBillingIntervalWeek', month: 'upgradeBillingIntervalMonth', year: 'upgradeBillingIntervalYear' })[billingOffer?.interval];
-  const offerPrice = formatOfferAmount(billingOffer);
-  const offerPriceLabel = offerPrice && offerIntervalLabel
-    ? ui('upgradePlanProductivePrice', { amount: offerPrice, interval: ui(offerIntervalLabel) })
-    : ui('upgradePlanProductivePriceUnavailable');
   const demoEnvironment = demoEnvironments.find(environment => environment.clientId === selectedDemoClientId);
   const demoDays = demoEnvironment?.trialDaysRemaining;
   const handleSubmit = event => {
@@ -1280,9 +1295,8 @@ export default function UpgradePage() {
     setErrors({});
 
     // The catalog is the only source of a plan key, so an unmade choice stops here rather than
-    // being papered over with a default. With no session there is no catalog to choose from and
-    // runUpgrade reports the expired session instead — the accurate answer.
-    if (plansState !== 'no-session' && !selectedPlanKey) {
+    // being papered over with a default.
+    if (!selectedPlan) {
       setFormError('upgradePlanRequired');
       return;
     }
@@ -1340,46 +1354,34 @@ export default function UpgradePage() {
           </div>
         )}
       {showCheckout && checkoutStep === 'plan' && <>
-      <div className="grid gap-5 md:grid-cols-3">
-        <PlanCard
-          testId="upgrade-plan-productive"
-          name={ui('upgradePlanProductiveName')}
-          tagline={ui('upgradePlanProductiveTagline')}
-          // Quotes the real catalog price once it is known, so this card can never advertise a
-          // different amount from the one the checkout charges. The catalog is the truth: it
-          // carries the amount derived from the provider price the checkout will actually charge.
-          // The server-owned billing offer is the fallback while the catalog lookup is in flight
-          // or has failed, and when neither can answer the card says so rather than quoting a
-          // number nobody verified — advertising one price and charging another is the worst
-          // outcome this page can produce.
-          price={plans.length > 0
-            ? formatPlanPrice(ui, plans.find(plan => plan.planKey === selectedPlanKey) || plans[0])
-            : offerPriceLabel}
-          features={PRODUCTIVE_FEATURES}
-          highlighted
-          ui={ui}
-          className="w-full"
-          onSelect={() => advanceCheckoutStep('addons')}
-          data-testid="PlanCard__58bad7" />
-        <SkeletonPlanCard
-          testId="upgrade-plan-coming-soon-1"
-          className="w-full"
-          data-testid="SkeletonPlanCard__58bad7" />
-        <SkeletonPlanCard
-          testId="upgrade-plan-coming-soon-2"
-          className="w-full"
-          data-testid="SkeletonPlanCard__58bad7" />
-      </div>
-      <div className="flex justify-end md:hidden">
-        <Button onClick={() => advanceCheckoutStep('addons')} data-testid="upgrade-plan-continue">
-          {ui('upgradeCheckoutContinue')}
-          <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
-        </Button>
-      </div>
+      <PlanCatalog
+        state={plansState}
+        plans={plans}
+        selectedPlanKey={selectedPlanKey}
+        onSelect={planKey => {
+          setSelectedPlanKey(planKey);
+          setFormError(previous => (previous === 'upgradePlanRequired' ? null : previous));
+          advanceCheckoutStep('addons');
+        }}
+        onRetry={() => setLookupAttempt(attempt => attempt + 1)}
+        ui={ui}
+        data-testid="PlanCatalog__58bad7" />
+      {canCheckout && (
+        <div className="flex justify-end md:hidden">
+          <Button
+            onClick={() => advanceCheckoutStep('addons')}
+            disabled={!selectedPlan}
+            data-testid="upgrade-plan-continue">
+            {ui('upgradeCheckoutContinue')}
+            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+          </Button>
+        </div>
+      )}
       </>}
       {showCheckout && checkoutStep === 'addons' && (
         <AddonsStep
           ui={ui}
+          selectedPlan={selectedPlan}
           dataTransfer={dataTransfer}
           onDataTransferChange={(key, checked) => {
             setDataTransferChosen(true);
@@ -1627,14 +1629,13 @@ export default function UpgradePage() {
               )}
 
 
-              <PlanSelector
+              <PlanSummary
                 state={plansState}
                 plans={plans}
-                selectedPlanKey={selectedPlanKey}
-                onSelect={setSelectedPlanKey}
+                plan={selectedPlan}
                 onRetry={() => setLookupAttempt(attempt => attempt + 1)}
                 ui={ui}
-                data-testid="PlanSelector__58bad7" />
+                data-testid="PlanSummary__58bad7" />
 
               {formError && (
                 <div

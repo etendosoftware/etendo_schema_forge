@@ -62,14 +62,6 @@ async function installFailureBoundary(page, failure = RETRYABLE_FAILURE) {
     json(route, { environments: EXISTING_ENVIRONMENTS })
   ));
 
-  await page.route('**/sws/go/billing/offers{/**,}**', route => (
-    json(route, {
-      amountMinor: 1000,
-      currency: 'EUR',
-      interval: 'month',
-    })
-  ));
-
   // The purchase is durable and account-scoped. The browser must use this same
   // requestId after returning from hosted checkout; it must not invent another one.
   await page.route(`**/sws/go/billing/purchases/${REQUEST_ID}{/**,}**`, route => (

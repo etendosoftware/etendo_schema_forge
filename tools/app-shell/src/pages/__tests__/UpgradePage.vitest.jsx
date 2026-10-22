@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/pages/UpgradePage.jsx
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const navigateMock = vi.fn();
@@ -9,9 +9,8 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/i18n', () => ({
   // Keys pass through untranslated. The two catalog price keys append their interpolated values,
   // so a test can still assert on a formatted amount (`formatCurrency`'s output) without depending
-  // on the English copy around it; the billing-offer price renders as "amount / interval".
+  // on the English copy around it.
   useUI: () => (key, options) => {
-    if (key === 'upgradePlanProductivePrice' && options) return `${options.amount} / ${options.interval}`;
     if (options && (key === 'upgradePlanPriceMonthly' || key === 'upgradePlanPriceYearly')) {
       return `${key} ${Object.values(options).join(' ')}`;
     }
@@ -160,7 +159,6 @@ function successStream({ success = true, clientName = 'Acme Productive', clientI
  */
 function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
   purchaseDataTransferEnabled, purchaseProjection, checkoutError, checkout = {}, statuses = ['paid'], onboarding,
-  offer = { code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' },
   sessionEnvironment, plans = [PRODUCTIVE_PLAN] } = {}) {
   const requests = [];
   let statusCallIndex = 0;
@@ -189,9 +187,6 @@ function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
     }
     if (target.includes('/sws/go/billing/overview')) {
       return jsonResponse({ canManageBilling: true, purchases });
-    }
-    if (target.includes('/sws/go/billing/offers')) {
-      return jsonResponse(offer);
     }
     if (target.includes('/sws/go/billing/purchases')) {
       if (!init.method) {
@@ -376,101 +371,6 @@ afterEach(() => {
 });
 
 describe('UpgradePage — hosted checkout', () => {
-  it('displays the amount, currency, and interval returned by the billing offer', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1000, currency: 'USD', interval: 'year' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    const expectedAmount = formatCurrency('USD', 10);
-    const planCard = screen.getByTestId('upgrade-plan-productive');
-    expect(planCard).toHaveTextContent(displayed(`${expectedAmount} / upgradeBillingIntervalYear`));
-    expect(planCard).not.toHaveTextContent('upgradeCheckoutMonth');
-    expect(planCard).not.toHaveTextContent('49');
-  });
-
-  it('uses Stripe whole-unit amounts for zero-decimal currencies and ISK compatibility amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'JPY', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('JPY', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-  });
-
-  it('displays Stripe ISK compatibility amounts in whole units', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'ISK', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('ISK', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-    expect(screen.getByTestId('upgrade-plan-productive')).not.toHaveTextContent('12,34');
-  });
-
-  it('displays Stripe UGX compatibility amounts in whole units', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'UGX', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('UGX', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-  });
-
-  it('preserves two-decimal HUF charge amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'HUF', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('HUF', 12.34)} / upgradeBillingIntervalMonth`));
-  });
-
-  it('preserves two-decimal TWD charge amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'TWD', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('TWD', 12.34)} / upgradeBillingIntervalMonth`));
-  });
-
-  it('does not show a numeric fallback when the billing offer is unavailable', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: null,
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    const planCard = screen.getByTestId('upgrade-plan-productive');
-    expect(planCard).toHaveTextContent('upgradePlanProductivePriceUnavailable');
-    expect(planCard).not.toHaveTextContent('49');
-  });
-
   it('uses customer-facing retry and payment copy in every supported locale', () => {
     const locales = [enUs, esEs, esAr];
     for (const locale of locales) {
@@ -584,9 +484,10 @@ describe('UpgradePage — hosted checkout', () => {
 });
 
 /**
- * The plan catalog (ETP-5046). The checkout endpoint REQUIRES a plan key and has no default, so
- * the page cannot complete a purchase without asking the server what is for sale. These specs pin
- * the three catalog shapes and, above all, that the page never invents a key.
+ * The plan catalog (ETP-5046), chosen on the Plan step since ETP-5049. The checkout endpoint
+ * REQUIRES a plan key and has no default, so the page cannot complete a purchase without asking
+ * the server what is for sale. These specs pin the three catalog shapes and, above all, that the
+ * page never invents a key.
  */
 describe('UpgradePage — plan catalog', () => {
   const SECOND_PLAN = {
@@ -599,13 +500,26 @@ describe('UpgradePage — plan catalog', () => {
   };
 
   it('selects the only purchasable plan and shows what is being bought', async () => {
+    const user = userEvent.setup();
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
-    await renderUpgradePage();
+    await renderUpgradePage({ advanceCheckout: false });
 
-    expect(screen.getByTestId('upgrade-plan-single')).toHaveTextContent('Productive');
-    // Formatted through the canonical formatCurrency (es-ES separators, EUR symbol on the
-    // right), never a hand-rolled toFixed/Intl call.
-    expect(screen.getByTestId('upgrade-plan-single-price')).toHaveTextContent('49,00');
+    // Step 1 shows the catalog plan itself — its name and its price, never a static card.
+    const card = screen.getByTestId('upgrade-plan-card-productive-monthly');
+    expect(card).toHaveAttribute('data-selected', 'true');
+    expect(within(card).getByTestId('upgrade-plan-name')).toHaveTextContent('Productive');
+    // Formatted through the canonical formatCurrency, never a hand-rolled toFixed/Intl call.
+    expect(within(card).getByTestId('upgrade-plan-price'))
+      .toHaveTextContent(displayed(formatCurrency('EUR', '49.00')));
+    expect(screen.queryByTestId('upgrade-plan-productive')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-coming-soon-1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-plan-continue'));
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+
+    // Step 3 summarizes the choice read-only: no second chooser.
+    expect(screen.getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive');
+    expect(screen.getByTestId('upgrade-plan-summary-price')).toHaveTextContent('49,00');
     expect(screen.queryByTestId('upgrade-plan-choice')).not.toBeInTheDocument();
   });
 
@@ -629,19 +543,20 @@ describe('UpgradePage — plan catalog', () => {
       environments: [{ clientName: EXISTING_TENANT }],
       plans: [PRODUCTIVE_PLAN, SECOND_PLAN],
     });
-    await renderUpgradePage();
-
-    expect(screen.getByTestId('upgrade-plan-choice')).toBeInTheDocument();
-    // ETP-5396 made the tenant name read-only on this step: it is taken from the demo
-    // environment rather than typed, so the fixture above supplies it.
-    await user.click(screen.getByTestId('upgrade-submit'));
+    await renderUpgradePage({ advanceCheckout: false });
 
     // No default is picked for the user: the server has none either, and choosing on their
     // behalf would charge them for something they did not select.
-    expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradePlanRequired');
-    expect(requests).toHaveLength(0);
+    expect(screen.getByTestId('upgrade-plan-card-productive-monthly')).toHaveAttribute('data-selected', 'false');
+    expect(screen.getByTestId('upgrade-plan-card-productive-yearly')).toHaveAttribute('data-selected', 'false');
+    expect(screen.getByTestId('upgrade-plan-continue')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
 
-    await user.click(screen.getByTestId('upgrade-plan-option-productive-yearly'));
+    await user.click(within(screen.getByTestId('upgrade-plan-card-productive-yearly'))
+      .getByTestId('upgrade-plan-select'));
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+
+    expect(screen.getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     await waitFor(() => expect(requests).toHaveLength(1));
@@ -652,8 +567,10 @@ describe('UpgradePage — plan catalog', () => {
     installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [] });
     await renderUpgradePage();
 
+    // The Plan step says so and offers no way forward: there is no plan key to send.
     expect(screen.getByTestId('upgrade-plans-unavailable')).toHaveTextContent('upgradePlansEmpty');
-    expect(screen.getByTestId('upgrade-submit')).toBeDisabled();
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
   });
 
   it('blocks checkout and offers a retry when the catalog cannot be read', async () => {
@@ -667,7 +584,7 @@ describe('UpgradePage — plan catalog', () => {
     // is exactly what a guess here would reintroduce.
     expect(screen.getByTestId('upgrade-plans-unavailable'))
       .toHaveTextContent('upgradePlansUnavailable');
-    expect(screen.getByTestId('upgrade-submit')).toBeDisabled();
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
     expect(screen.getByTestId('upgrade-plans-retry')).toBeInTheDocument();
   });
 
@@ -687,8 +604,8 @@ describe('UpgradePage — plan catalog', () => {
 
     await user.click(screen.getByTestId('upgrade-plans-retry'));
 
-    expect(await screen.findByTestId('upgrade-plan-single')).toBeInTheDocument();
-    expect(screen.getByTestId('upgrade-submit')).toBeEnabled();
+    expect(await screen.findByTestId('upgrade-plan-card-productive-monthly')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-plan-continue')).toBeEnabled();
   });
 });
 
