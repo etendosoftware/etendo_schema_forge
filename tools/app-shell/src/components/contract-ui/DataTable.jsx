@@ -16,6 +16,7 @@ import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, listHeaderMinWidthPx, listHeaderFont } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
+import { withContentWidths } from '@/lib/linesContentWidth.js';
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
@@ -3356,7 +3357,9 @@ export function DataTable({
     // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
     // ETP-5833 — the lines/add-row modes get the lines-side absorber, applied to the same
     // `visibleColumns` InlineLinesPanel derives, so header, rows and add-row agree on it.
-    if (hideHeader || linesLayout === 'inlineEditable') return withLinesAbsorberColumn(base);
+    // ETP-5133 (QA pass 3, F-2) — same for the width of a no-truncate column (e.g. product),
+    // sized for its widest value in `data` exactly as InlineLinesPanel sizes it.
+    if (hideHeader || linesLayout === 'inlineEditable') return withContentWidths(withLinesAbsorberColumn(base), data);
     // ETP-5833 (QA) — a list header never wraps, so each column's floor also covers its rendered
     // header: measured from the label the header actually shows (resolved here with the same
     // `resolveColumnLabel`/`t`/locale as renderColumnHeaderCell), never from row data. Header,

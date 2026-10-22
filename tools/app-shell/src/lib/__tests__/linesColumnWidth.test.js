@@ -178,6 +178,26 @@ describe('linesColumnWidth', () => {
       });
     });
 
+    // ETP-5133 (QA pass 3, F-2) — a no-truncate column carries the width its widest value
+    // needs (`contentWidthPx`, set by linesContentWidth.js). It may only RAISE the basis, and
+    // must keep the grow/shrink terms so the absorber choice is unchanged.
+    describe('contentWidthPx (ETP-5133)', () => {
+      it('raises the basis above the type default, keeping the grow term', () => {
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 412.4 }, 0), '1 0 413px');
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 412 }, 1), '0 0 412px');
+      });
+
+      it('never shrinks the basis below the type default or an explicit minWidth', () => {
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 100 }, 1), '0 0 192px');
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280, contentWidthPx: 200 }, 1), '1 0 280px');
+      });
+
+      it('is ignored when absent or not positive', () => {
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 0 }, 1), '0 0 192px');
+        assert.equal(columnFlex({ type: 'selector' }, 1), '0 0 192px');
+      });
+    });
+
     // A `boolean`+`badge` column normally gets the generic 152px basis, but the
     // Posted-status column (`postedStatus.js`) needs a wider 240px basis — its
     // pill can also show one of 15 long reason codes, not just true/false.

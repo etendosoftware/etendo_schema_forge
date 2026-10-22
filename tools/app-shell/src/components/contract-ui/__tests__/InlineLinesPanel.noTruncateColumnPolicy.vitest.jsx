@@ -45,7 +45,10 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
   resolveColumnLabel: (col) => col.label || col.key,
 }));
 
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  // Real `measureTextPx` (linesContentWidth.js measures the no-truncate column with it); the
+  // width helpers below stay pinned so cell markup is the only thing under test here.
+  ...(await importOriginal()),
   withLinesAbsorberColumn: (cols) => cols,
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
@@ -107,12 +110,14 @@ async function enterEditMode(row) {
 }
 
 describe('InlineLinesPanel — noTruncate column policy, view mode / ReadCell (ETP-5133)', () => {
-  it('does NOT truncate the product cell (noTruncate: true) and gives it horizontal scroll instead', () => {
+  it('does NOT truncate the product cell (noTruncate: true) and has no scrollbar of its own', () => {
     renderPanel();
     const row = screen.getByTestId('line-row-L1');
     const cell = row.querySelector('[data-cell-key="product"]');
     expect(cell).not.toBeNull();
-    expect(cell.style.overflowX).toBe('auto');
+    // QA pass 3 (F-2) — an in-cell `overflow-x: auto` drew a mini scrollbar per cell and cut
+    // the name; the column widens instead and the grid's own scroll absorbs the overflow.
+    expect(cell.style.overflowX).toBe('');
     const span = cell.querySelector('span');
     expect(span.className).not.toContain('truncate');
     expect(span.className).toContain('whitespace-nowrap');
@@ -135,13 +140,13 @@ describe('InlineLinesPanel — noTruncate column policy, view mode / ReadCell (E
 });
 
 describe('InlineLinesPanel — noTruncate column policy, edit mode / LookupTrigger (ETP-5133)', () => {
-  it('renders the product LookupTrigger without a truncate class and with horizontal-scroll capability', async () => {
+  it('renders the product LookupTrigger without a truncate class and without an in-cell scrollbar', async () => {
     renderPanel();
     const row = screen.getByTestId('line-row-L1');
     await enterEditMode(row);
     const lookupBtn = within(row).getByTestId('field-product');
     expect(lookupBtn.className).not.toContain('truncate');
-    expect(lookupBtn.className).toContain('overflow-x-auto');
+    expect(lookupBtn.className).not.toContain('overflow-x-auto');
     const label = within(lookupBtn).getByText(LONG_PRODUCT);
     expect(label.className).not.toContain('truncate');
     expect(label.className).toContain('whitespace-nowrap');
@@ -160,5 +165,51 @@ describe('InlineLinesPanel — noTruncate column policy, edit mode / LookupTrigg
     const label = within(lookupBtn).getByText('A Fairly Long Warehouse Name');
     expect(label.className).toContain('truncate');
     expect(label.className).not.toContain('whitespace-nowrap');
+  });
+});
+
+// QA pass 3 (F-2) — the no-truncate default is structural: every lookup selector
+// (`type: 'selector', lookup: true`, how every generated lines product column is emitted)
+// shows its full value even when the generated column carries no `noTruncate` flag
+// (sales-quotation, purchase/sales order, goods receipt). An explicit flag still wins.
+describe('InlineLinesPanel — no-truncate default for lookup selectors (ETP-5133 QA pass 3)', () => {
+  const LOOKUP_SELECTOR = { key: 'product', label: 'Product', type: 'selector', column: 'M_Product_ID', lookup: true };
+
+  function productCell(columns) {
+    renderPanel({ columns });
+    return screen.getByTestId('line-row-L1').querySelector('[data-cell-key="product"]');
+  }
+
+  it('shows a lookup selector without an explicit flag in full: no truncate, no in-cell scroll', () => {
+    const cell = productCell([LOOKUP_SELECTOR, COLUMNS[1]]);
+    expect(cell.style.overflowX).toBe('');
+    const span = cell.querySelector('span');
+    expect(span.className).not.toContain('truncate');
+    expect(span.className).toContain('whitespace-nowrap');
+    expect(span.textContent).toBe(LONG_PRODUCT);
+  });
+
+  it('keeps the lookup selector LookupTrigger untruncated in edit mode', async () => {
+    renderPanel({ columns: [LOOKUP_SELECTOR, COLUMNS[1]] });
+    const row = screen.getByTestId('line-row-L1');
+    await enterEditMode(row);
+    const label = within(within(row).getByTestId('field-product')).getByText(LONG_PRODUCT);
+    expect(label.className).not.toContain('truncate');
+    expect(label.className).toContain('whitespace-nowrap');
+  });
+
+  it('still truncates a lookup selector that opts out explicitly (noTruncate: false)', () => {
+    const cell = productCell([{ ...LOOKUP_SELECTOR, noTruncate: false }, COLUMNS[1]]);
+    expect(cell.style.overflowX).toBe('');
+    const span = cell.querySelector('span');
+    expect(span.className).toContain('truncate');
+    expect(span).toHaveAttribute('title', LONG_PRODUCT);
+  });
+
+  it('still truncates a plain (non-lookup) selector column', () => {
+    const cell = productCell([{ ...LOOKUP_SELECTOR, lookup: false }, COLUMNS[1]]);
+    const span = cell.querySelector('span');
+    expect(span.className).toContain('truncate');
+    expect(span).toHaveAttribute('title', LONG_PRODUCT);
   });
 });
