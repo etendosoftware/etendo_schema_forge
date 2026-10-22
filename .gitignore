@@ -114,3 +114,4 @@ docs/plans/drafts/
 # own paths; only the .example is versioned.
 schema_forge.properties
 mcp-usage/
+.omp/extensions/*

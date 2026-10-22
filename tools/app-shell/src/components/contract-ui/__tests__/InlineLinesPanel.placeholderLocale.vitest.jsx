@@ -68,6 +68,7 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 // verifies both the header and the placeholder now go through identically.
 
 vi.mock('@/lib/linesColumnWidth.js', () => ({
+  withLinesAbsorberColumn: (cols) => cols,
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',

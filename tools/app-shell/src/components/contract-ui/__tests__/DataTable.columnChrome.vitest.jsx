@@ -197,11 +197,12 @@ describe('DataTable — per-column isolation', () => {
 describe('DataTable — generic minWidth floor', () => {
   it('applies the width floor to the header cell and the minWidth floor to the body cell when no headClass/cellClass is set', () => {
     // ETP-5510 — a lone column would become the implicit width-less `grow` column, so the
-    // floor is asserted on the second one (the first absorbs the leftover space).
+    // floor is asserted on the other one. ETP-5833: the absorber is the first DESCRIPTIVE
+    // column (the string), so the floor is asserted on the leading amount.
     render(<DataTable columns={[AMOUNT_COL, STRING_COL]} data={DATA} />);
 
-    const th = screen.getByTestId('column-header-name');
-    const td = screen.getByTestId('row-r1').querySelectorAll('td')[2];
+    const th = screen.getByTestId('column-header-total');
+    const td = screen.getByTestId('row-r1').querySelectorAll('td')[1];
 
     expect(th.style.width).toBe('100px');
     expect(td.style.minWidth).toBe('100px');

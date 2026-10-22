@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/shared/SifTab.jsx
+// @covers tools/app-shell/src/windows/custom/shared/useSifFieldPatcher.js
 // Mocks must be declared before any imports that pull in the mocked modules.
 
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
@@ -415,6 +417,15 @@ describe('SifTab', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: false } })} />);
       const wrapper = document.querySelector('#sif-siiType').closest('[data-testid="select-wrapper"]');
       expect(wrapper).toHaveAttribute('data-disabled', 'false');
+    });
+
+    it('locks Tipo factura and Descripción SII on a draft for a read-only role (ETP-5830)', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', processed: false, aeatsiiDescripcionSii: 'Draft desc' },
+      })} accessReadOnly />);
+      const wrapper = document.querySelector('#sif-siiType').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'true');
+      expect(screen.getByTestId('input-sif-siiDesc')).toBeDisabled();
     });
 
     it('Tipo factura select stays enabled when documentStatus looks completed but processed is still false', () => {

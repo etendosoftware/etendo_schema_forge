@@ -18,6 +18,20 @@ import yaml
 
 REGEN = "Regenerate: make sync-agents"
 
+# OpenCode rejects the whole config unless `color` is #RRGGBB or a theme token,
+# so Claude's named colors are translated; anything unknown is dropped.
+OPENCODE_COLORS = {
+    "red": "error",
+    "green": "success",
+    "yellow": "warning",
+    "blue": "info",
+    "purple": "#a855f7",
+    "pink": "#ec4899",
+    "cyan": "#06b6d4",
+    "orange": "#f97316",
+    "gray": "#6b7280",
+}
+
 
 def split_frontmatter(text):
     if not text.startswith("---\n"):
@@ -91,6 +105,9 @@ def main(src_dir, codex_dir, opencode_dir, omp_dir):
             dropped_opencode.append(note)
         if meta.get("color"):
             dropped_codex.append("color (no Codex equivalent)")
+        opencode_color = OPENCODE_COLORS.get(str(meta.get("color", "")).lower())
+        if meta.get("color") and not opencode_color:
+            dropped_opencode.append(f"color: {meta['color']} (not an OpenCode color)")
 
         # --- Codex: .codex/agents/<name>.toml --------------------------------
         lines = [
@@ -116,8 +133,8 @@ def main(src_dir, codex_dir, opencode_dir, omp_dir):
             f"description: {json.dumps(description, ensure_ascii=False)}",
             "mode: subagent",
         ]
-        if meta.get("color"):
-            fm.append(f"color: {json.dumps(str(meta['color']), ensure_ascii=False)}")
+        if opencode_color:
+            fm.append(f"color: {json.dumps(opencode_color)}")
         fm.append("---")
 
         note = [f"<!-- GENERATED MIRROR - DO NOT EDIT. Source: {rel} - {REGEN}"]
