@@ -22,7 +22,9 @@ The current frontend is production-shaped but still backed by local mock data be
 - Slug: `general-ledger-configuration`
 - Window type: `layoutType: custom`
 - Top metadata: breadcrumb `Finanzas / Esquema contable` (built from the shared `ui('finance')` key + `ui('glc.title')`, ETP-4945)
-- Right side of the tab row: dirty-state `Guardar cambios` button
+- Top bar (`glc-toolbar`): follows the record (form view) toolbar standard (ETP-5736) — 56px, 8px padding, inset bottom rule, via the shared `getLinesToolbarClassName()` (`components/contract-ui/toolbarClasses.js`)
+- Left side of the top bar: the 4 tabs, rendered by the shared segmented control `SegmentedTabs` (40px group, 32px tabs, same as the list subset tabs; group label = translated window title)
+- Right side of the top bar: dirty-state `Guardar cambios` button, 40px via the shared `getSaveBtnCls()`; primary colour from the semantic tokens (ETP-5752 brand blue), not hardcoded
 
 ## Tab Behavior
 

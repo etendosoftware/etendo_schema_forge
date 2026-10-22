@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+// @covers tools/app-shell/src/components/contract-ui/toolbarClasses.js
 //
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //

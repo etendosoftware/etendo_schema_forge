@@ -211,4 +211,11 @@ describe('GeneralLedgerConfigPage — tab label resolution (ETP-4452 follow-up)'
     expect(screen.queryByText('glc.tab.generalAccounts')).toBeNull();
     expect(screen.getByText(esES.genericLabels['glc.tab.generalAccounts'])).toBeInTheDocument();
   });
+
+  // ETP-5736 — the shared segmented control takes a translated group label (the window title).
+  it('names the tab group with the translated window title', () => {
+    renderWithLocale('es_ES', <GeneralLedgerConfigPage apiBaseUrl="/mock" />);
+
+    expect(screen.getByRole('group', { name: esES.genericLabels['glc.title'] })).toBeInTheDocument();
+  });
 });
