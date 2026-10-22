@@ -1116,11 +1116,24 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 1 (documentAction/confirm)', () => {
       // ETP-5840: Step 1 goes through translateBackendErrorBody (message + identity). The real
       // helper runs here with an identity `ui`, so an unkeyed body still yields its raw message.
-      function resolveMessage(e, processRes) {
+      function resolveMessage(e, processRes, ui = (k) => k) {
         const expr = extractCallExprAfter(src, 'action/documentAction', 'throw new Error(');
         return new Function('e', 'processRes', 'ui', 'translateBackendErrorBody', `return ${expr};`)(
-          e, processRes, (k) => k, translateBackendErrorBody);
+          e, processRes, ui, translateBackendErrorBody);
       }
+
+      it('translates the missing-exchange-rate completion refusal from its identity', () => {
+        const es = JSON.parse(readFileSync(join(__dirname, '../../../../tools/app-shell/src/locales/es_ES.json'), 'utf8')).genericLabels;
+        const ui = (key, params = {}) => Object.entries(params)
+          .reduce((text, [p, v]) => text.replace(`{${p}}`, v), es[key] ?? key);
+        const body = { error: {
+          message: 'prose in the AD language',
+          messageKeys: ['ETGO_ExchangeRateMissingOnComplete'],
+          messageParams: { orgCurrency: 'EUR', documentCurrency: 'USD' },
+        } };
+        assert.equal(resolveMessage(body, { status: 422 }, ui),
+          'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.');
+      });
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {
         assert.equal(resolveMessage(flatErrBody(), { status: 400 }), REAL_MESSAGE);
