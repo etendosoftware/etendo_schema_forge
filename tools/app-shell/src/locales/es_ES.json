@@ -20468,6 +20468,7 @@
     "countrySearchPlaceholder": "Buscar país...",
     "countryLoadError": "No se pudieron cargar los países",
     "locationCountryRequired": "Debes seleccionar un país antes de guardar la ubicación",
+    "locationSaveError": "No se pudo guardar la dirección. Inténtalo de nuevo.",
     "regionLabel": "Región",
     "regionSearchPlaceholder": "Buscar región...",
     "regionLoadError": "No se pudieron cargar las regiones",

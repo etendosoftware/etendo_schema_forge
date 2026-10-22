@@ -20232,6 +20232,7 @@
     "countrySearchPlaceholder": "Search country...",
     "countryLoadError": "Could not load countries",
     "locationCountryRequired": "Country is required before saving the location",
+    "locationSaveError": "Could not save the address. Please try again.",
     "regionLabel": "Region",
     "regionSearchPlaceholder": "Search region...",
     "regionLoadError": "Could not load regions",

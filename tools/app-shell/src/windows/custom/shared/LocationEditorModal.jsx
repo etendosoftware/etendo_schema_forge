@@ -1104,6 +1104,14 @@ export default function LocationEditorModal({
                     showBackendMessages(rec?.messages);
                     // Return id/name so a single-FK field (Warehouse) can refresh its display.
                     onSaved?.(rec?.id ?? bplLinkId, rec?.name ?? name);
+                } else {
+                    // ETP-5806 — a non-ok response used to be completely silent: no toast, no
+                    // console output, modal just sat there with nothing visibly wrong. The user
+                    // had no way to tell a failed save from a successful one that was merely slow,
+                    // and (worse) nothing here ever re-synced the form with what the backend
+                    // actually has, so a retry could look like a no-op too. Surface it loudly.
+                    console.error('[LocationEditorModal] locationAddress PUT failed with status', res.status);
+                    toast.error(ui('locationSaveError'));
                 }
                 return;
             }
@@ -1124,12 +1132,14 @@ export default function LocationEditorModal({
 
             if (!res.ok) {
                 console.error('[LocationEditorModal] locationAddress POST failed with status', res.status);
+                toast.error(ui('locationSaveError'));
                 return;
             }
 
             const data = await res.json();
             if ((data?.response?.status ?? 0) !== 0) {
                 console.error('[LocationEditorModal] locationAddress POST returned NEO error:', data?.response);
+                toast.error(ui('locationSaveError'));
                 return;
             }
 
