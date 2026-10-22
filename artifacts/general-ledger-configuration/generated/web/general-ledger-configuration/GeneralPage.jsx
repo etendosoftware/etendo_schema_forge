@@ -95,13 +95,19 @@ export const api = {
     "Cuentas generales": {
       "get": true,
       "getById": true,
-      "post": true,
+      "post": false,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
       "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID",
+        "PUT",
+        "PATCH"
+      ]
     },
     "Valores por defecto": {
       "get": true,
