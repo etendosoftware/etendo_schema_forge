@@ -1,8 +1,8 @@
 {
   "version": "0.92.0",
   "generatedAt": "2026-10-19T17:29:21.531Z",
-  "updatedAt": "2026-10-20T12:10:52.257Z",
-  "checksum": "733df94b67254a4e",
+  "updatedAt": "2026-10-22T17:16:48.232Z",
+  "checksum": "bd239a71d3069fe8",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -1837,7 +1837,6 @@
             }
           }
         ],
-        "javaQualifier": "salesInvoiceHeaderHandler",
         "draftMode": {
           "enabled": true,
           "processField": "documentAction",
@@ -4341,7 +4340,6 @@
             "required": false
           }
         ],
-        "javaQualifier": "salesInvoiceHeaderHandler",
         "namedFilters": [
           {
             "name": "completed",

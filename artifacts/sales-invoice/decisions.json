@@ -155,7 +155,6 @@
   },
   "entities": {
     "header": {
-      "javaQualifier": "salesInvoiceHeaderHandler",
       "namedFilters": [
         {
           "name": "completed",
