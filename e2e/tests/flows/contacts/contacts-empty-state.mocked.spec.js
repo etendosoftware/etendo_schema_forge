@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/windows/custom/contacts/ContactsTable.jsx
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 // @covers tools/app-shell/src/lib/walkthrough/useLaunchWalkthrough.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

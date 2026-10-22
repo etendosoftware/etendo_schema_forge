@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/pages/UpgradePage.jsx
 // @covers tools/app-shell/src/lib/upgrade/api.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, MOCK_ORG_ID } from '../../helpers/auth.js';
 import { installPlansMock, PRODUCTIVE_PLAN } from '../../helpers/plan-catalog-mock.js';
 

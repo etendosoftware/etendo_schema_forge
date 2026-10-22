@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/general-ledger-configuration/GeneralLedgerConfigPage.jsx
 // @covers tools/app-shell/src/windows/custom/general-ledger-configuration/DefaultsTab.jsx
 // @covers tools/app-shell/src/components/contract-ui/AccountSelect.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';

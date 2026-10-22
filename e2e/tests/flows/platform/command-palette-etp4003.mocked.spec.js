@@ -15,7 +15,7 @@
  * Requires dev server: make dev (http://localhost:3100)
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 // ─── Group 1: CommandPalette i18n ─────────────────────────────────────────────
