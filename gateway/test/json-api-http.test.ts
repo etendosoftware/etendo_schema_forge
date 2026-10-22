@@ -105,7 +105,7 @@ test('upstreamException keeps the generic retry 502 for a 500 without a hint', (
 test('toErrorDocument renders gateway and Nest exceptions as error documents without leaking unknown errors', () => {
   assert.deepEqual(toErrorDocument(new UnauthorizedException('Missing API key')), {
     status: 401,
-    errors: [{ status: '401', title: 'Unauthorized', detail: 'Missing API key' }],
+    errors: [{ status: '401', code: 'unauthorized', title: 'Unauthorized', detail: 'Missing API key' }],
   });
   assert.deepEqual(toErrorDocument(new ServiceUnavailableException('Authentication service unavailable')), {
     status: 503,

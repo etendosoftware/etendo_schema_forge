@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { UnauthorizedException, BadGatewayException, BadRequestException, HttpException, PreconditionFailedException } from '@nestjs/common';
 import { PublicApiController, toEtag, versionFromIfMatch } from '../src/public-api/public-api.controller.ts';
+import { toErrorDocument } from '../src/public-api/json-api-http.ts';
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 
 const schema: PublicApiSchema = {
@@ -311,6 +312,42 @@ test('a stale If-Match (Etendo stale_record) is a 412, not a 400', async () => {
     (error) => error instanceof HttpException && error.getStatus() === 412 && /modified by someone else/.test(JSON.stringify(error.getResponse()))
       && JSON.stringify(error.getResponse()).includes('stale_record'),
   );
+});
+
+test('a stale If-Match 412 tells the client to re-read and retry with the new ETag', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({
+    status: 409, error: 'stale_record', message: 'Changed', hint: "Re-read the record and retry with the fresh 'updated'.",
+  }), { status: 409 });
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const { status, errors } = await statusAndErrors(controller.patch('businessPartner', 'bp-1', { name: 'X' }, { neoJwt: 'jwt' } as any, toEtag(VERSION)));
+  assert.equal(status, 412);
+  assert.match(errors?.[0].meta.hint, /ETag in If-Match/);
+  assert.doesNotMatch(errors?.[0].meta.hint, /updated/);
+});
+
+test('MISSING_REQUIRED_FIELDS becomes one missing_required_field error per public field', async () => {
+  const body = { error: { code: 'MISSING_REQUIRED_FIELDS', status: 400, message: 'Missing required fields', fields: ['name', 'productCategory', 'c_internal_col'] } };
+  const { status, errors } = await statusAndErrors(controllerAnswering(400, body).create('product', { name: 'x' }, request));
+  assert.equal(status, 400);
+  assert.deepEqual(errors?.map((e) => e.source?.pointer), ['/data/attributes/name', '/data/relationships/category', undefined]);
+  assert.ok(errors?.every((e) => e.code === 'missing_required_field' && e.status === '400'));
+  assert.doesNotMatch(JSON.stringify(errors), /productCategory|c_internal_col/);
+});
+
+test('MISSING_REQUIRED_FIELDS with no field list is a single pointer-less error', async () => {
+  const body = { error: { code: 'MISSING_REQUIRED_FIELDS', message: 'Missing required fields', fields: [] } };
+  const { errors } = await statusAndErrors(controllerAnswering(400, body).create('product', { name: 'x' }, request));
+  assert.equal(errors?.length, 1);
+  assert.equal(errors?.[0].code, 'missing_required_field');
+  assert.equal(errors?.[0].source, undefined);
+});
+
+test('an unknown action is a 404 coded unknown_action', async () => {
+  const controller = new PublicApiController(actionSchema(), 'http://neo.local/etendo', (async () => { throw new Error('no'); }) as any);
+  const refusal = await controller.runAction('salesDoc', 'd1', 'nope', { neoJwt: 'jwt' } as any).catch((error) => error);
+  const { status, errors } = toErrorDocument(refusal);
+  assert.equal(status, 404);
+  assert.equal(errors[0].code, 'unknown_action');
 });
 
 test('updated stays read-only in the body; the version travels in If-Match', async () => {

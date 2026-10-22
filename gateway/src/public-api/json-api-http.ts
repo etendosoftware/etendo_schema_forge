@@ -165,6 +165,9 @@ function titleFor(status: number): string {
 // can do nothing about it and must not see Etendo's internals.
 const PASS_THROUGH_STATUSES = new Set([400, 401, 402, 403, 404, 409, 412, 422, 428, 429, 503]);
 
+// Stable codes for the refusals raised without one (API-key guard, record lookups).
+const DEFAULT_CODES: Record<number, string> = { 401: 'unauthorized', 404: 'not_found' };
+
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown): string | undefined =>
@@ -218,6 +221,42 @@ export function rateLimited(retryAfterSeconds: number): HttpException {
   }, 429);
 }
 
+type MissingFieldEntity = { fields: Record<string, { internalPath: string; relationship?: unknown } | undefined> };
+
+/**
+ * NeoServlet's 400 `MISSING_REQUIRED_FIELDS` names the internal properties left
+ * empty. Answers one JSON:API error per field, pointing at its public name; a
+ * name the manifest does not know yields an error with no pointer (internals never leak).
+ * Returns undefined when the body is not that refusal.
+ */
+export function missingFieldsException(entity: MissingFieldEntity, body: unknown): HttpException | undefined {
+  const nested = isRecord(body) && isRecord(body.error) ? body.error : undefined;
+  if (!nested || nested.code !== 'MISSING_REQUIRED_FIELDS') return undefined;
+  const internal = Array.isArray(nested.fields) ? nested.fields.filter((f): f is string => typeof f === 'string') : [];
+  const byPath = new Map<string, { name: string; relationship: boolean }>();
+  for (const [name, field] of Object.entries(entity.fields)) {
+    if (field && !byPath.has(field.internalPath)) byPath.set(field.internalPath, { name, relationship: !!field.relationship });
+  }
+  const errors: JsonApiError[] = [];
+  const seen = new Set<string>();
+  let unnamed = false;
+  for (const path of internal) {
+    const hit = byPath.get(path);
+    if (!hit) { unnamed = true; continue; }
+    if (seen.has(hit.name)) continue;
+    seen.add(hit.name);
+    errors.push({
+      status: '400', code: 'missing_required_field', title: titleFor(400),
+      detail: `The field "${hit.name}" is required.`,
+      source: { pointer: `/data/${hit.relationship ? 'relationships' : 'attributes'}/${hit.name}` },
+    });
+  }
+  if (unnamed || errors.length === 0) {
+    errors.push({ status: '400', code: 'missing_required_field', title: titleFor(400), detail: 'A required field is missing.' });
+  }
+  return new HttpException({ errors }, 400);
+}
+
 /** Builds the gateway's exception for an unsuccessful NeoServlet answer. */
 export function upstreamException(status: number, body: unknown): HttpException {
   const upstream = parseUpstreamError(body);
@@ -261,7 +300,7 @@ export function toErrorDocument(exception: unknown): { status: number; errors: J
   }
   const message = isRecord(response) ? response.message : response;
   // A coded HttpException (`{ code: 'precondition_required', ... }`) keeps its code.
-  const code = isRecord(response) ? text(response.code) : undefined;
+  const code = (isRecord(response) ? text(response.code) : undefined) ?? DEFAULT_CODES[status];
   const details = (Array.isArray(message) ? message : [message]).filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
   return {
     status,
