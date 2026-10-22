@@ -159,9 +159,32 @@ existing_pid="$(lsof -tiTCP:"$E2E_PORT" -sTCP:LISTEN 2>/dev/null || true)"
 mkdir -p "$REPO_DIR/tmp"
 PREVIEW_LOG="$REPO_DIR/tmp/e2e-preview.log"
 
+# The mocked suite drives the real shared `LoginStep`, whose Google button only
+# renders when `getConfiguredSsoProviders()` finds a non-empty
+# `VITE_GOOGLE_CLIENT_ID` (etendo-go-core `src/onboarding/sso.js`), and a Vite
+# production build bakes that value at build time. Without it the SSO surface is
+# unreachable in every mocked run and no mocked spec can exercise it
+# (`user-invitation.mocked.spec.js`). A Google Web client id is a PUBLIC
+# identifier, not a secret (docs/architecture/07-auth-and-security.md), and the
+# specs stub the provider SDK themselves, so a placeholder is enough here. A
+# caller that has a real id (e.g. staging) still wins via the default expansion.
+# Only the mocked run needs it; the integration specs never press the button.
+if [ "$SUITE" != "integration" ]; then
+  export VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-e2e-mocked.apps.googleusercontent.com}"
+fi
+
 echo "==> Building E2E bundle (no PWA/service worker; log: tmp/e2e-build.log)..."
 BUILD_LOG="$REPO_DIR/tmp/e2e-build.log"
-if ! ( cd "$APP_SHELL_DIR" && npm run build:e2e ) > "$BUILD_LOG" 2>&1; then
+# Vite loads the gitignored tools/app-shell/.env.local, so a developer's real provider config would
+# ship in the "default" bundle and the egress spec would see traffic. Process env beats .env files;
+# configured/killed scenarios export their own fake config and are left alone.
+BUILD_ENV=()
+if [ "${E2E_TELEMETRY:-default}" = "default" ]; then
+  BUILD_ENV=(VITE_MIXPANEL_ENABLED=false VITE_DATADOG_ENABLED=false VITE_RUM_ENABLED=false
+    VITE_MIXPANEL_TOKEN= VITE_DATADOG_CLIENT_TOKEN= VITE_DATADOG_APPLICATION_ID=
+    VITE_RUM_APP_MONITOR_ID= VITE_RUM_IDENTITY_POOL_ID=)  # blank ids too: no real credential in dist
+fi
+if ! ( cd "$APP_SHELL_DIR" && env ${BUILD_ENV[@]+"${BUILD_ENV[@]}"} npm run build:e2e ) > "$BUILD_LOG" 2>&1; then
   echo "❌ Build failed. Last 40 lines of $BUILD_LOG:" >&2
   tail -n 40 "$BUILD_LOG" >&2
   exit 1

@@ -2536,3 +2536,7 @@ amount ellipsises (full value in the tooltip); with room it still sizes to conte
 by the card's `overflow-hidden`). **Verify:** at 1280x720 open a completed credit with a large
 balance (e.g. "2.420.100,10 €"): the chip ends inside the card, the amount shows "2…" with the
 full value on hover, no horizontal scroll.
+
+## Read-only role tier: SIF tab and rectified invoices — ETP-5830
+
+With a `read-only` tier the SIF tab locks its fields (`useSifFieldPatcher` `locked`, same path as a processed invoice) and `ReversedInvoicesPanel` is read-only. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

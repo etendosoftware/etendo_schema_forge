@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/lib/linesColumnWidth.js
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * ETP-5245 — the add-row must reserve the SAME column widths as the header above it.
  *
@@ -19,7 +22,7 @@
  * in `@/lib/linesActionSlot.js`.
  *
  * These tests deliberately do NOT mock `@/lib/linesColumnWidth.js` (unlike the sibling
- * suites): the real per-type bases — amount 172px, date 130px, string 224px — are what
+ * suites): the real per-type bases — amount 172px, date 176px, string 224px — are what
  * make the two layouts comparable at all. Under the usual uniform `'1 0 100px'` stub
  * every column looks alike and the misalignment is invisible.
  *
@@ -261,6 +264,8 @@ describe.each([
     // What the grow columns are told is already spoken for MUST equal what the header
     // actually reserves — this single number is the misalignment: every px missing here
     // is silently split among the grow columns, pushing later columns to the right.
+    // ETP-5833: the lines absorber guarantees a growing column, so a calc() is always emitted;
+    // dropping the absorber would make this null and fail loudly.
     expect(addRowLayout.calcFixedPx).toBe(headerLayout.fixedPx);
   });
 
@@ -288,11 +293,14 @@ describe.each([
 describe('the reserved action slot itself (ETP-5245)', () => {
   it('reserves the 158px action slot in the add-row whenever the header does — Producto > Costo', () => {
     const { headerLayout, addRowLayout } = layoutsFor(COSTING_COLUMNS);
-    // checkbox 40 + amount basis 172 + action slot 158 + right spacer 48.
-    expect(headerLayout.fixedPx).toBe(418);
-    expect(addRowLayout.calcFixedPx).toBe(418);
-    // The two date columns keep their own 130px basis and split what is left.
-    expect(addRowLayout.growBases).toEqual([130, 130]);
+    // checkbox 40 + two fixed dates 176 each (ETP-5833: dates no longer grow) + action slot 158
+    // + right spacer 48 = 598; the lines absorber (`withLinesAbsorberColumn`) makes the leading
+    // amount the one growing column, so the add-row keeps a calc() and cannot drift (ETP-5245).
+    expect(headerLayout.fixedPx).toBe(598);
+    expect(addRowLayout.fixedPx).toBe(598);
+    expect(addRowLayout.calcFixedPx).toBe(598);
+    expect(headerLayout.growBases).toEqual([172]);
+    expect(addRowLayout.growBases).toEqual([172]);
   });
 
   it('reserves the slot too when the amount column is last, on an editable table (ETP-5600)', () => {
@@ -385,5 +393,46 @@ describe('growColumnWidth()', () => {
 describe('getTableContainerStyle()', () => {
   it('always returns the fixed table-layout, 100%-width style object', () => {
     expect(getTableContainerStyle()).toEqual({ tableLayout: 'fixed', width: '100%' });
+  });
+});
+
+// ── Per-type default sizing and expansion (date fixed 176, string elastic 224) ─────────────
+describe('date vs string column basis — saved rows, header and add-row agree', () => {
+  const DATE_STRING_COLUMNS = [
+    { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date' },
+    { key: 'note', column: 'Description', type: 'string', label: 'Note' },
+  ];
+
+  it('renders the date cell fixed at 0 0 176px and the string cell elastic at 1 0 224px', () => {
+    render(
+      <InlineLinesPanel
+        columns={DATE_STRING_COLUMNS}
+        data={[{ id: 'r1', orderDate: '2026-10-20', note: 'Some note' }]}
+        entity="costing"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    // children[0] is the selection checkbox cell; the column cells follow in order.
+    const [, dateCell, stringCell] = screen.getByTestId('line-row-r1').children;
+    expect(styleProp(dateCell, 'flex')).toBe('0 0 176px');
+    expect(styleProp(stringCell, 'flex')).toBe('1 0 224px');
+    expect(styleProp(screen.getByTestId('column-header-orderDate'), 'flex')).toBe('0 0 176px');
+    expect(styleProp(screen.getByTestId('column-header-note'), 'flex')).toBe('1 0 224px');
+  });
+
+  it('the add-row colgroup keeps the date fixed (176px) and grows only the string column from 224', () => {
+    const { headerLayout, addRowLayout } = layoutsFor(DATE_STRING_COLUMNS);
+    // The date is a literal-px fixed column, so it is part of the locked budget...
+    expect(headerLayout.fixedPx).toBe(40 + 176 + 48 + 158);
+    expect(addRowLayout.calcFixedPx).toBe(headerLayout.fixedPx);
+    // ...and the only grow column is the string, from its own 224px basis.
+    expect(headerLayout.growBases).toEqual([224]);
+    expect(addRowLayout.growBases).toEqual([224]);
+    expect(addRowLayout.calcGrowCount).toBe(1);
   });
 });

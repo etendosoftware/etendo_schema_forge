@@ -306,7 +306,7 @@ function applyCalloutMessages(messages) {
 }
 
 
-export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange }) {
+export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange, accessReadOnly = false }) {
   const {
     ui,
     specName,
@@ -322,7 +322,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     isProcessed,
     getVal,
     getDateVal,
-  } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange });
+  } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange, locked: accessReadOnly });
   const apiFetch = useApiFetch(apiBaseUrl);
 
   // ETP-4751 (Block B): exempt-tax signal served by the invoice-header NeoHandler
@@ -378,7 +378,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   const siiCompletionLockedReadOnly = siiSentReadOnly || isProcessed;
   // Modificada-error-registral follows AD readOnly logic: editable only when SII estado
   // is CO (Correcto) or AE (Aceptado con errores) and the invoice is not voided.
-  const errorRegistralReadOnly =
+  const errorRegistralReadOnly = accessReadOnly ||
     !['CO', 'AE'].includes(data?.aeatsiiEstado ?? '') || data?.documentStatus === 'VO';
 
   // ETP-4751 (Block B/F): Classic parity for the SII module's ExemptTaxes line-save behaviour.
@@ -752,7 +752,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 <Select
                   value={getVal('tbaiReverseinvoicecode') || undefined}
                   onValueChange={val => onChange?.('tbaiReverseinvoicecode', val)}
-                  disabled={data?.processed === true}
+                  disabled={isProcessed}
                   data-testid="Select__tbai_reversecode">
                   <SelectTrigger id="tbai-reverseinvoicecode" data-testid="SelectTrigger__tbai_reversecode">
                     <SelectValue placeholder="—" data-testid="SelectValue__tbai_reversecode" />

@@ -119,7 +119,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
   7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
   8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
-  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully.
+  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it; only Admin/client-admin (sidebar exemption above) or a role with a hand-made grant does.
   10. As GOAdmin or GOClient Admin, confirm all three anchor entries are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
 
 ### 3. Generated/custom window loading
@@ -517,6 +517,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   5. Confirm "Match Rule"/"Reglas de matcheo" and "Periods"/"Períodos" do NOT appear anywhere in the matrix (hidden-only in `menu.json`), even for a role known to hold real `AD_Window_Access` on them.
   6. Confirm "Fiscal Monitor", "Fiscal Models", and "Not Posted Documents" appear in the matrix with cells that track their proxy's access (SII Monitor / Tax Report / the proxy process, respectively) rather than always showing full access.
   7. Pick a role with no access to the SII Monitor window and confirm "Fiscal Monitor" is also absent from that role's real sidebar (not just shown as "none" in the matrix) — this is the sidebar-visibility side effect, not only an admin-matrix display change.
+- **Admin-only and capability-only rows (ETP-5830):** five matrix rows are deliberate and stay: *Relación albarán-factura* (window `107`, granted by the ETP-5075 template lines), and four Admin-only configuration windows with no template grant — *Centro de costos*, *Proyecto*, *Organización* (`110`) and *Secuencias de documentos* (`112`). They show a check for Admin and a dash for the four template roles. Hiding one would mean adding it to `UI_EXCLUDED_WINDOW_IDS`, which also hides it from the NEO/MCP UI view, so they are not hidden. *Proceso Contable* (`acct-process-monitor`) never appears: it is a capability page gated by `isAdminOrClientAdmin` with no `AD_Window_ID`, so the window-access matrix has nothing to show. Making it appear would need a permission-anchor pseudo-window like Smart Scan's.
 
 ### 6d. Informes subsection (ETP-5402, same `/roles` page)
 
@@ -882,3 +883,57 @@ because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an 
 a gratuitous accounting reversal. Full reference, including the `isPosted` /
 `runPreUnpost` contracts and why the helper is a plain module rather than a hook:
 [`../ui-customization.md`](../ui-customization.md) §9e.
+
+## Read-only role access — every write path is gated — ETP-5830
+
+A window whose role tier is `read-only` (`useWindowAccess(windowId)`, from `SFWindowAccessMap`)
+renders with `window.readOnly = true`. `DetailView` turns that into two signals:
+
+- `windowReadOnly` — the static window flag **or** the role tier. Drives header, lines and sub-tabs.
+- `menuActionsReadOnly` — the role tier only. Drives the kebab menu, the `/new` route and attachments.
+
+What a read-only role gets, surface by surface:
+
+| Surface | Read-only behaviour | Where |
+|---|---|---|
+| Header form, "Nuevo", processes, kebab | not editable / hidden | `DetailView.jsx`, `DetailMoreActionsMenu.jsx` (ETP-5116) |
+| `/new` reached by URL | redirected to the list, with no defaults fetch (skipped for `?embedded=1`) | `useNewRouteEditingReset` in `detailViewHelpers.jsx` |
+| "Open the add row" hand-offs (`openAddSecondaryLine`, `openCustomTabAdd` router state on `/{id}`) | not gated: they are router state, not URL, and only an in-app save sets them, which a read-only role cannot do | `DetailView.jsx` deep-link effect |
+| Sub-tab tables (inline and non-inline) | no "+ Añadir", no inline edit, no delete, no hover pencil; an empty tab shows an empty table, not the add illustration (same as `readOnlyLogic` tabs) | `SecondaryTableTab` — `tabReadOnly = windowReadOnly \|\| readOnlyLogic` |
+| Sub-tab sidebar detail / form sub-tabs | read-only form, no Save/Delete | sidebar + `SecondaryFormTab` |
+| Sub-tabs with a `customAddModal` (Contactos → Dirección) | row click opens nothing — the address modal has no read-only mode | `resolveSecondaryRowClickHandler` |
+| Custom `Panel` sub-tabs and `CustomLines` | receive `editing=false` / `readOnly` | `SecondaryPanelTab`, primary Panel |
+| Attachments tab | no upload dropzone, no delete, no description edit; download and preview kept | `AttachmentsTab` `accessReadOnly` |
+
+`AttachmentsTab` has three independent signals; only `accessReadOnly` (the role tier) hides the
+dropzone. A completed document keeps accepting attachments (`isDocumentReadOnly` is ignored,
+ETP-5526), and `readOnly` alone removes deletion only (ETP-5432). Attachment errors now go through
+`translateBackendError`, so the backend's `accessDeniedToSpec` 403 shows as a translated toast,
+not the raw English message.
+
+Custom panels that write on their own each take the signal explicitly: Contactos → Financiero
+(`BillingPreferencesForm`, `FiscalDefaultsSection`), Calendario → Períodos
+(`PeriodsExpandablePanel`), Producto → precios (`ProductPriceBar`), Activos → amortización
+(`AssetsAmortizationPanel`), the SIF tab (`SifTab` / `useSifFieldPatcher` `locked`), facturas
+rectificadas (`ReversedInvoicesPanel`), and the purchase-invoice OCR uploader (`OcrSidePanel`,
+never mounted on `/new` for a read-only role). A new custom panel that writes must read
+`editing` / `readOnly` / `accessReadOnly` the same way — the role tier does not reach it by itself.
+
+**Why the PO/SO "Confirmar" asymmetry happened (ETP-5116), and why it matters for new code.** A
+read-only role could reactivate a Sales Order but not a Purchase Order. The cause was not grants
+or `processes`: `DetailMoreActionsMenu` never checked `windowReadOnly`. Sales Order declares a
+`menuActions` reactivate entry, Purchase Order declares none, so PO only *looked* gated because
+it had nothing to show. The same exposure existed in every window with `menuActions`. Lesson: a
+surface that renders actions must check the read-only signal itself; "it works on window X" proves
+nothing if X has nothing to render there.
+
+- **Automated evidence:** `DetailView.secondaryTabs.vitest.js` (sub-tab table, sidebar, form tab,
+  `customAddModal`, Panel forwarding), `detailViewHelpers.vitest.js` (`/new` redirect),
+  `AttachmentsTab.vitest.jsx` / `useAttachments.vitest.jsx` (dropzone, delete, translated 403),
+  and the panel suites `PeriodsExpandablePanel`, `FiscalDefaultsSection`, `ProductPriceBar`,
+  `OcrSidePanel`.
+- **Manual verification path:** with a role whose tier for Contactos is `read-only`, open a
+  contact: no "+ Añadir" in Persona / Cuenta bancaria / Dirección, a Dirección row opens nothing,
+  the Financiero panel is all disabled, the attachments tab shows files but no dropzone. Open
+  `/contacts/new` directly and confirm it lands on the list. Repeat the attachments check on
+  Payment terms, Product category and Business partner category.

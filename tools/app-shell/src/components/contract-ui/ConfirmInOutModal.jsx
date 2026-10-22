@@ -99,6 +99,13 @@ function buildBackendError(body, status) {
   return err;
 }
 
+// Footer button colours. The footer is gray (--muted), so Cancel rests on the card (white) and
+// its hover is a translucent muted-foreground wash (visibly darker than both). Confirm hovers
+// to the same --primary-hover the primary toolbar buttons use.
+const CANCEL_REST_BG = 'hsl(var(--card))';
+const CANCEL_HOVER_BG = 'hsl(var(--muted-foreground) / 0.12)';
+const CONFIRM_HOVER_BG = 'var(--primary-hover)';
+
 /**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
  * Matches the ConfirmGoodsReceiptModal design: toggle switch + green info row + dynamic button.
@@ -206,6 +213,9 @@ export default function ConfirmInOutModal({
   const primaryLabel = invoiceRequested && confirmWithInvoiceLabel
     ? confirmWithInvoiceLabel
     : confirmLabel;
+
+  const confirmDisabled = loading || !canConfirm;
+  const confirmRestBg = confirmDisabled ? 'var(--status-info-border)' : 'var(--status-info-fg)';
 
   return createPortal(
     <div
@@ -362,9 +372,9 @@ export default function ConfirmInOutModal({
             data-testid="confirm-modal-cancel-btn"
             onClick={onClose}
             disabled={loading}
-            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'hsl(var(--muted))'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = CANCEL_HOVER_BG; }}
+            onMouseLeave={e => { e.currentTarget.style.background = CANCEL_REST_BG; }}
           >
             {cancelLabel}
           </button>
@@ -372,10 +382,10 @@ export default function ConfirmInOutModal({
             type="button"
             data-testid="confirm-modal-confirm-btn"
             onClick={handleConfirm}
-            disabled={loading || !canConfirm}
-            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: (loading || !canConfirm) ? 'var(--status-info-border)' : 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: (loading || !canConfirm) ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+            disabled={confirmDisabled}
+            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: confirmRestBg, color: 'hsl(var(--card))', cursor: confirmDisabled ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
+            onMouseEnter={e => { if (!confirmDisabled) e.currentTarget.style.background = CONFIRM_HOVER_BG; }}
+            onMouseLeave={e => { e.currentTarget.style.background = confirmRestBg; }}
           >
             {loading ? (
               <>

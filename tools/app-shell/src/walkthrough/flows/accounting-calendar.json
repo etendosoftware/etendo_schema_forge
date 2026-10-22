@@ -48,7 +48,8 @@
     {
       "id": "open-year",
       "route": "/calendar",
-      "target": "tr[data-testid^=\"row-\"]",
+      "target": "tr[data-testid^=\"row-\"] [data-current-fiscal-year]",
+      "highlightTarget": "tr[data-testid^=\"row-\"]:has([data-current-fiscal-year])",
       "titleKey": "walkthroughCalendarStepYearTitle",
       "bodyKey": "walkthroughCalendarStepYearBody",
       "placement": "bottom",
