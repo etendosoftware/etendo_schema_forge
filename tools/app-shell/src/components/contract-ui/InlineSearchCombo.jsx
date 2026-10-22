@@ -744,6 +744,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               // A row can be both (the user arrowed onto their own value), which is correct.
               const isSelected = index === selectedIndex;
               const isHighlighted = index === activeIndex;
+              // The label span carries `whitespace-nowrap`, NOT `truncate`: the panel sizes itself to
+              // `width: max-content` so it grows to fit its longest option instead of truncating it
+              // (ETP-4600 Gap C), and `truncate`'s `overflow: hidden` would let the row's intrinsic
+              // width collapse instead of growing with the content.
               return (
                 <button
                   key={opt.id}
@@ -764,9 +768,6 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                       className="h-4 w-4 shrink-0 text-primary"
                       data-testid={`inline-add-option-${field.key}-${opt.id}-selected-indicator`} />
                   )}
-                  // `whitespace-nowrap` (not `truncate`): the panel sizes itself to `width: max-content` so it grows
-                  // to fit its longest option instead of truncating it (ETP-4600 Gap C), and
-                  // `truncate`'s `overflow: hidden` would let the intrinsic width collapse instead.
                   <span className="whitespace-nowrap">{opt.name || opt.label || opt._identifier || opt.id}</span>
                 </button>
               );
