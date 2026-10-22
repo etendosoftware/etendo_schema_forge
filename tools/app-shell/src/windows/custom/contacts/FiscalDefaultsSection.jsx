@@ -45,13 +45,14 @@ const aeatsiiKeyListField = [
 // per the UX ask (ETP-4784); label moved beside the switch in ETP-5519.
 // `caption` is the muted secondary line under the label (label + caption, as in
 // the shared ToggleRow) — here the fiscal system name, "SII" / "TicketBAI".
-function FiscalToggle({ id, label, caption, value, onCheckedChange, 'data-testid': testId }) {
+function FiscalToggle({ id, label, caption, value, onCheckedChange, disabled = false, 'data-testid': testId }) {
   return (
     <div className="flex items-center gap-2 min-h-10">
       <PillToggle
         id={id}
         checked={value}
         onCheckedChange={onCheckedChange}
+        disabled={disabled}
         aria-label={label}
         data-testid={testId} />
       <div className="min-w-0">
@@ -85,7 +86,7 @@ function FiscalToggle({ id, label, caption, value, onCheckedChange, 'data-testid
 export default function FiscalDefaultsSection(props) {
   const ui = useUI();
   const t = useLabel();
-  const { data, onChange } = props;
+  const { data, onChange, readOnly = false } = props;
 
   return (
     <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">
@@ -102,6 +103,7 @@ export default function FiscalDefaultsSection(props) {
               caption={ui('fiscalDefaultsSiiBlock')}
               value={data?.aeatsiiDefaultsiikey}
               onCheckedChange={(next) => onChange?.('aeatsiiDefaultsiikey', next, 'EM_Aeatsii_Defaultsiikey')}
+              disabled={readOnly}
               data-testid="FiscalToggle__aeatsii-default" />
             <EntityForm
               {...props}
@@ -117,6 +119,7 @@ export default function FiscalDefaultsSection(props) {
             caption={ui('fiscalDefaultsTbaiBlock')}
             value={data?.tbaiIssimplifiedinv}
             onCheckedChange={(next) => onChange?.('tbaiIssimplifiedinv', next, 'EM_Tbai_Issimplifiedinv')}
+            disabled={readOnly}
             data-testid="FiscalToggle__tbai-simplified" />
         </div>
       </div>

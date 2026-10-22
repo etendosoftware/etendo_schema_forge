@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { createElement as h } from 'react';
@@ -264,6 +266,14 @@ describe('SecondaryFormTab', () => {
     expect(received.readOnly).toBe(true);
     expect(received.selectorContext).toBeUndefined();
   });
+  it('ETP-5830: is readOnly while editing when the role only has read access to the window', () => {
+    const Form = makeForm();
+    render(SecondaryFormTab({
+      st: { key: 'line', Form }, data: {}, hook: { editing: true }, onChange: vi.fn(), catalogs: {},
+      token: 't', apiBaseUrl: '/api', selectorContextByEntity: {}, labelOverrides: {}, windowReadOnly: true,
+    }));
+    expect(Form.mock.calls[0][0].readOnly).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -295,6 +305,13 @@ describe('SecondaryPanelTab', () => {
     const props = { st: { key: 'p', Panel }, data: null, token: 't', apiBaseUrl: '/api', onCount: vi.fn() };
     render(SecondaryPanelTab(props));
     expect(Panel.mock.calls[0][0].parentId).toBeUndefined();
+  });
+  it('ETP-5830: forwards readOnly to the Panel (false unless the window is read-only)', () => {
+    const Panel = vi.fn(() => h('div', { 'data-testid': 'panel' }));
+    const base = { st: { key: 'p', Panel }, data: { id: 'x' }, token: 't', apiBaseUrl: '/api', onCount: vi.fn() };
+    render(SecondaryPanelTab(base));
+    render(SecondaryPanelTab({ ...base, readOnly: true }));
+    expect(Panel.mock.calls.map((c) => c[0].readOnly)).toEqual([false, true]);
   });
 });
 
@@ -489,5 +506,79 @@ describe('SecondaryTableTab', () => {
     });
     render(SecondaryTableTab(props));
     expect(screen.queryByText('Add a line')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. SecondaryTableTab — role read-only access (ETP-5830)
+// ---------------------------------------------------------------------------
+describe('SecondaryTableTab — window read-only (ETP-5830)', () => {
+  const makeTable = () => vi.fn(() => h('div', { 'data-testid': 'table' }));
+  const addLineFields = { entry: [{ name: 'firstName' }] };
+  const props = (overrides = {}) => ({
+    st: { key: 'contact', Table: makeTable(), addLineFields },
+    linesLayout: 'inlineEditable',
+    secondaryInlineLinesRef: vi.fn(() => ({ current: null })),
+    secondaryHooks: [{ children: [{ id: 'c1' }] }],
+    stIdx: 0, token: 'tok', apiBaseUrl: '/api', selectorContextByEntity: {},
+    openCustomModal: vi.fn(), openSecondaryLine: vi.fn(), setCustomModalState: vi.fn(),
+    selectedSecondaryLine: null, setSecondarySelectedRows: vi.fn(), enableSecondaryRowDelete: false,
+    crud: {}, onDeleteRow: vi.fn(), api: { crud: {} }, ui: (k) => k, extractErrorMessage: vi.fn(),
+    secondaryAddRowRef: { current: null }, addingSecondaryLine: {}, onAdd: vi.fn(), onCancel: vi.fn(),
+    catalogs: {}, hook: { editing: true, selected: {} }, onChange: vi.fn(), labelOverrides: {},
+    onSaveLine: vi.fn(), onDiscardLine: vi.fn(), onDeleteLine: vi.fn(),
+    saveLabel: 'Save', discardLabel: 'Discard', deleteLabel: 'Delete', loadingLabel: 'Loading',
+    onAddLineClick: vi.fn(), addLineLabel: 'Add line', secondaryBarVisible: {}, secondaryBarClosing: {},
+    secondarySelectedRows: {}, selectedLabel: 'selected', secondaryDeleting: {}, closeTitle: 'close',
+    onDelete: vi.fn(), onClose: vi.fn(),
+    ...overrides,
+  });
+
+  it('offers add, inline edit and row delete when the window is writable (control)', () => {
+    const p = props();
+    render(SecondaryTableTab(p));
+    const received = p.st.Table.mock.calls[0][0];
+    expect(screen.getByTestId('secondary-add-line-contact')).toBeTruthy();
+    expect(received.isDocumentReadOnly).toBe(false);
+    expect(received.addRow).toBeDefined();
+    expect(received.onDeleteRow).toBe(p.onDeleteRow);
+  });
+
+  it('offers no add, no inline edit and no row delete when the window is read-only', () => {
+    const p = props({ windowReadOnly: true });
+    render(SecondaryTableTab(p));
+    const received = p.st.Table.mock.calls[0][0];
+    expect(screen.queryByTestId('secondary-add-line-contact')).toBeNull();
+    expect(received.isDocumentReadOnly).toBe(true);
+    expect(received.addRow).toBeUndefined();
+    expect(received.onDeleteRow).toBeUndefined();
+  });
+
+  it('does not open the customAddModal editor (Dirección) by row click or pencil when read-only', () => {
+    const st = { key: 'locationAddress', Table: makeTable(), customAddModal: 'LocationEditorModal' };
+    const writable = props({ st, linesLayout: 'table' });
+    render(SecondaryTableTab(writable));
+    expect(st.Table.mock.calls[0][0].onRowClick).toBe(writable.openCustomModal);
+    expect(st.Table.mock.calls[0][0].onEditRow).toBeTypeOf('function');
+
+    render(SecondaryTableTab(props({ st, linesLayout: 'table', windowReadOnly: true })));
+    expect(st.Table.mock.calls[1][0].onRowClick).toBeUndefined();
+    expect(st.Table.mock.calls[1][0].onEditRow).toBeUndefined();
+  });
+
+  it('shows the side detail form read-only and without Save/Delete when read-only', () => {
+    const Form = vi.fn(() => h('div', { 'data-testid': 'detail-form' }));
+    const p = props({
+      st: { key: 'line', Table: makeTable(), Form },
+      linesLayout: 'table',
+      selectedSecondaryLine: { id: 'sel-1', _tabKey: 'line' },
+      secondaryLineEdits: { id: 'sel-1', qty: 2 },
+      crud: { line: { delete: true } },
+      windowReadOnly: true,
+    });
+    render(SecondaryTableTab(p));
+    expect(Form.mock.calls[0][0].readOnly).toBe(true);
+    expect(screen.queryByText('Save')).toBeNull();
+    expect(screen.queryByText('Delete')).toBeNull();
   });
 });

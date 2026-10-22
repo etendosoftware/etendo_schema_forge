@@ -42,6 +42,20 @@ import { login } from '../../helpers/auth.js';
  *   4. The grid never starts to the left of the sidebar's right edge (no
  *      overlap with the left nav).
  *
+ * ETP-5833 — per-type default sizing (see the basis table below). The extra tests at the end
+ * of the file cover the `number` tier on purchase-invoice and sales-invoice (`invoicedQuantity`,
+ * `etgoDiscount`): fixed at 152px (never grows, even on a 3000px viewport where the elastic
+ * columns do), header / saved-row / add-row column boxes aligned per key, and the horizontal
+ * scroll still reaching the trailing column. The footer is checked on simple-g-l-journal, the
+ * only window with a real totals row (`balance-footer-row`, decisions `balanceFooter`): its
+ * debit/credit cells align with their header columns. The invoice/quotation grids have NO
+ * footer row (their totals live in the header), so there the trailing `grossAmount` /
+ * `lineGrossAmount` amount column is the checked edge. No standard inline lines grid renders a
+ * `date` column (dates only appear in forms and in the product costing sub-tabs), so the `date`
+ * 0 0 176 tier has no lines-grid E2E here; it is covered at unit level in
+ * `linesAddRowColumnAlignment.vitest.jsx` and on the list in
+ * `sales-quotation-list-column-widths.mocked.spec.js`.
+ *
  * A dedicated extra test for purchase-invoice (the worst-case window, with
  * its right-side attachments panel) scrolls the body wrapper all the way to
  * its trailing fixed column (`grossAmount`) and confirms it becomes visible,
@@ -63,7 +77,7 @@ const VIEWPORT = { width: 1280, height: 800 };
 // `linesColumnWidth.js`'s ELASTIC_BASIS_PX / selector-at-idx0 rules:
 //   - selector/search/foreignKey at idx 0            -> basis 192
 //   - string/text/enum/select (any idx)               -> basis 224
-//   - date (any idx)                                   -> basis 130
+//   - date (any idx)                                   -> basis 176
 //   - any column with an explicit `minWidth`           -> basis = minWidth
 // A selector/search column at idx > 0 (e.g. `tax`) is FIXED (`0 0 192px`),
 // not elastic, so it is deliberately excluded here — it was never shrinkable
@@ -85,6 +99,7 @@ const WINDOWS = [
       { key: 'description', minBasis: 224 },
     ],
     trailingColumnKey: 'grossAmount',
+    numberColumns: ['invoicedQuantity', 'etgoDiscount'],
     header: {
       id: 'mock-narrow-pinv-001',
       documentNo: 'PINV-NARROW-001',
@@ -99,6 +114,7 @@ const WINDOWS = [
       paymentTerms: 'pt-1',
       paymentMethod: 'pm-1',
       invoiceDate: '2026-08-01',
+      accountingDate: '2026-08-01', // requiredHeaderFields gate "Añadir línea" (add-row alignment test)
       grandTotalAmount: 382.9,
       currency: 'eur-1',
       'currency$_identifier': 'EUR',
@@ -132,6 +148,7 @@ const WINDOWS = [
       { key: 'product', minBasis: 192 },
       { key: 'description', minBasis: 224 },
     ],
+    numberColumns: ['invoicedQuantity', 'etgoDiscount'],
     header: {
       id: 'mock-narrow-sinv-001',
       documentNo: 'SINV-NARROW-001',
@@ -139,7 +156,14 @@ const WINDOWS = [
       'documentStatus$_identifier': 'Borrador',
       businessPartner: 'bp-2',
       'businessPartner$_identifier': 'Cliente Ejemplo S.A.',
+      transactionDocument: 'doc-type-ar-invoice',
+      'transactionDocument$_identifier': 'AR Invoice',
+      partnerAddress: 'addr-2',
+      priceList: 'pl-2',
+      paymentTerms: 'pt-1',
+      paymentMethod: 'pm-1',
       invoiceDate: '2026-08-01',
+      accountingDate: '2026-08-01', // requiredHeaderFields gate "Añadir línea" (add-row alignment test)
       grandTotalAmount: 250.4,
       currency: 'eur-1',
       'currency$_identifier': 'EUR',
@@ -350,6 +374,19 @@ async function installMocks(page, win) {
       });
     }
   );
+
+  // Registered LAST (highest LIFO priority): the selector URL also matches the header route above.
+  // partnerAddress is a dependent selector that self-heals to the first returned option; answer
+  // with the header's own value so "Añadir línea" (gated on a complete header) keeps rendering.
+  if (header.partnerAddress) {
+    await page.route('**/selectors/C_BPartner_Location_ID{/**,}**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [{ id: header.partnerAddress, label: 'Proveedor Test S.L. — Sede Central', name: 'Proveedor Test S.L. — Sede Central' }] }),
+      });
+    });
+  }
 }
 
 /** Navigates to the window's Lines tab and returns the `inline-lines-panel` locator. */
@@ -481,5 +518,103 @@ test.describe('Lines grid — purchase-invoice horizontal scroll reaches trailin
     expect(boxAfter.x + boxAfter.width).toBeLessThanOrEqual(wrapperBox.x + clientWidth + 1);
 
     await expect(trailingCell).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5833 — `number` columns are fixed at 152px and the layouts agree per key.
+// ---------------------------------------------------------------------------
+
+const NUMBER_BASIS = 152;
+const NUMBER_WINDOWS = WINDOWS.filter((w) => w.numberColumns);
+
+/** Left/width of every column header, in DOM order, keyed by column key. */
+async function headerBoxes(page) {
+  return page.locator('[data-testid^="column-header-"]').evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { key: el.getAttribute('data-testid').replace('column-header-', ''), x: r.x, width: r.width };
+    }));
+}
+
+test.describe('Lines grid — number columns hold 152px (ETP-5833)', () => {
+  for (const win of NUMBER_WINDOWS) {
+    test(`number columns do not grow and stay aligned across header, rows and add-row — ${win.slug}`, async ({ page }) => {
+      await openLinesTab(page, win);
+
+      // 1. Basis: 152 at the laptop width.
+      for (const key of win.numberColumns) {
+        const box = await page.getByTestId(`column-header-${key}`).boundingBox();
+        expect(box, key).not.toBeNull();
+        expect(Math.abs(box.width - NUMBER_BASIS), `${key} at 1280`).toBeLessThanOrEqual(2);
+      }
+
+      // 2. Header, saved row and add-row column boxes line up per key.
+      const headers = await headerBoxes(page);
+      const rowId = win.lines[0].id;
+      const rowCells = await page.getByTestId(`line-row-${rowId}`).evaluate((row) =>
+        [...row.children].map((c) => { const r = c.getBoundingClientRect(); return { x: r.x, width: r.width }; }));
+      await page.getByTestId('action-add-line').click();
+      const addCells = await page.getByTestId('inline-add-row').evaluate((row) =>
+        [...row.querySelectorAll(':scope > td')].map((c) => { const r = c.getBoundingClientRect(); return { x: r.x, width: r.width }; }));
+
+      // Saved rows and the add-row both lead with the dimensions expand-chevron cell (when the
+      // grid has a `dimensionsPanel`) followed by the selection checkbox.
+      const rowLead = (await page.getByTestId(`line-row-${rowId}`).getByTestId('dimensions-panel-toggle').count()) > 0 ? 2 : 1;
+      for (const key of win.numberColumns) {
+        const i = headers.findIndex((h) => h.key === key);
+        expect(i, `${key} header present`).toBeGreaterThanOrEqual(0);
+        const h = headers[i];
+        const rowCell = rowCells[i + rowLead];
+        const addCell = addCells[i + rowLead];
+        expect(Math.abs(rowCell.x - h.x), `${key} row x`).toBeLessThanOrEqual(2);
+        expect(Math.abs(rowCell.width - h.width), `${key} row width`).toBeLessThanOrEqual(2);
+        expect(Math.abs(addCell.x - h.x), `${key} add-row x`).toBeLessThanOrEqual(2);
+        expect(Math.abs(addCell.width - h.width), `${key} add-row width`).toBeLessThanOrEqual(2);
+      }
+
+      // 3. No growth: on a 3000px viewport the elastic description widens, the numbers do not.
+      const descBefore = (await page.getByTestId('column-header-description').boundingBox()).width;
+      await page.setViewportSize({ width: 3000, height: 900 });
+      await page.waitForTimeout(300);
+      const descAfter = (await page.getByTestId('column-header-description').boundingBox()).width;
+      expect(descAfter).toBeGreaterThan(descBefore + 20);
+      for (const key of win.numberColumns) {
+        const box = await page.getByTestId(`column-header-${key}`).boundingBox();
+        expect(Math.abs(box.width - NUMBER_BASIS), `${key} at 3000`).toBeLessThanOrEqual(2);
+      }
+    });
+  }
+
+  test('purchase-invoice: scrolling at 1280px still reaches the trailing amount column past the fixed number columns', async ({ page }) => {
+    const win = WINDOWS.find((w) => w.slug === 'purchase-invoice');
+    const panel = await openLinesTab(page, win);
+    const bodyWrapper = panel.locator(':scope > div').nth(1);
+    await bodyWrapper.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+    await page.waitForTimeout(150);
+    const wrapper = await bodyWrapper.boundingBox();
+    const trailing = await page.getByTestId(`column-header-${win.trailingColumnKey}`).boundingBox();
+    expect(trailing.x).toBeGreaterThanOrEqual(wrapper.x - 1);
+    expect(trailing.x + trailing.width).toBeLessThanOrEqual(wrapper.x + wrapper.width + 1);
+  });
+});
+
+test.describe('Lines grid — totals footer aligns with its header columns (ETP-5833)', () => {
+  const win = WINDOWS.find((w) => w.slug === 'simple-g-l-journal');
+
+  test('balance footer debit/credit cells share the x/width of their header columns', async ({ page }) => {
+    await openLinesTab(page, win);
+    await expect(page.getByTestId('balance-footer-row')).toBeVisible({ timeout: 10_000 });
+    for (const [footerId, key] of [
+      ['balance-footer-debit', 'foreignCurrencyDebit'],
+      ['balance-footer-credit', 'foreignCurrencyCredit'],
+    ]) {
+      const f = await page.getByTestId(footerId).boundingBox();
+      const h = await page.getByTestId(`column-header-${key}`).boundingBox();
+      expect(f, footerId).not.toBeNull();
+      expect(h, key).not.toBeNull();
+      expect(Math.abs(f.x - h.x), `${key} x`).toBeLessThanOrEqual(2);
+      expect(Math.abs(f.width - h.width), `${key} width`).toBeLessThanOrEqual(2);
+    }
   });
 });

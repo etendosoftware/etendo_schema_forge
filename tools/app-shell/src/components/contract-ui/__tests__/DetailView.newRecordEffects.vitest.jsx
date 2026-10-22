@@ -69,8 +69,12 @@ vi.mock('@/hooks/useDisplayLogic', () => ({
   useDisplayLogic: () => ({ visibleFields: [], hiddenFields: new Set() }),
 }));
 
+// Shared spy so the ETP-4744 suite can observe the initial-callout chain from the
+// outside (`vi.hoisted` because `vi.mock` factories run before module-level consts).
+const { executeCalloutMock } = vi.hoisted(() => ({ executeCalloutMock: vi.fn() }));
+
 vi.mock('@/hooks/useCallout', () => ({
-  useCallout: () => ({ calloutResult: null, calloutLoading: false, executeCallout: vi.fn() }),
+  useCallout: () => ({ calloutResult: null, calloutLoading: false, executeCallout: executeCalloutMock }),
 }));
 
 vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'USD' }));
@@ -156,8 +160,8 @@ const ENTRY_FIELDS = [
   { key: 'product', label: 'Product', type: 'selector', column: 'M_Product_ID' },
 ];
 
-function renderNew(props = {}) {
-  return render(
+function detailElement(props = {}) {
+  return (
     <MemoryRouter>
       <DetailView
         entity="header"
@@ -181,8 +185,12 @@ function renderNew(props = {}) {
         linesLayout="inlineEditable"
         {...props}
       />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderNew(props = {}) {
+  return render(detailElement(props));
 }
 
 describe('DetailView isNew-gated effects', () => {
@@ -416,5 +424,101 @@ describe('handleImportClick — isNew branch (DetailExtraActions.onSave)', () =>
     await act(async () => { outcome = await importCaptured.onSave(); });
     expect(outcome).toBe(false);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ETP-4744 — the initial-callout chain must be armed by the arrival of the defaults
+ * SESSION, not by `editing` becoming non-empty for any reason.
+ *
+ * `useEntity` opens a new record's form empty and fetches `GET /{entity}/defaults`
+ * asynchronously, exposing `defaultsPending: true` while the request is in flight
+ * (ETP-5002's request window). `DetailView`'s effect used to arm its one-shot latch
+ * (`defaultCalloutsTriggeredRef`) as soon as `editing` held ANY value; a user typing
+ * into a plain, non-selector field during that window consumed the latch with an empty
+ * trigger list, so the chain never ran once the defaults merged (docs/feedback.md,
+ * [2026-07-31] ETP-4741). The latch reset only on `!isNew`, so it stayed broken for the
+ * whole creation session.
+ *
+ * These tests mount the real DetailView and drive a mutable fake hook through the exact
+ * sequence. `executeCallout` fires after a 400 ms stagger, hence the bounded `waitFor`.
+ */
+describe('initial callout chain is armed by the defaults session (ETP-4744)', () => {
+  const HEADER_SELECTORS = [
+    { field: 'businessPartner', entity: 'header', inputMode: 'search' },
+    { field: 'partnerAddress', entity: 'header', inputMode: 'dependent' },
+    { field: 'priceList', entity: 'header', inputMode: 'selector' },
+  ];
+  const api = { selectors: HEADER_SELECTORS };
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockHook.editing = { documentNo: '', documentStatus: 'DR', uOM: 'U1' };
+    mockHook.defaultsPending = false;
+  });
+
+  it('still fires for a default selector when the user typed first while defaults were in flight', async () => {
+    mockHook.editing = {};
+    mockHook.defaultsPending = true;
+    const { rerender } = renderNew({ api });
+    await act(async () => { await Promise.resolve(); });
+    expect(executeCalloutMock).not.toHaveBeenCalled();
+
+    // The user types into a plain, non-selector field before the defaults land.
+    mockHook.editing = { documentNo: 'PO-TYPED' };
+    rerender(detailElement({ api }));
+    await act(async () => { await Promise.resolve(); });
+    expect(
+      executeCalloutMock,
+      'a keystroke before the defaults land must not consume the one-shot chain',
+    ).not.toHaveBeenCalled();
+
+    // The defaults merge (the keystroke survives) and the session settles.
+    mockHook.editing = { documentNo: 'PO-TYPED', businessPartner: 'BP1' };
+    mockHook.defaultsPending = false;
+    rerender(detailElement({ api }));
+    await waitFor(
+      () => expect(executeCalloutMock).toHaveBeenCalledWith(
+        'businessPartner', 'BP1', expect.any(Object), expect.any(Object),
+      ),
+      { timeout: 3000 },
+    );
+  });
+
+  it('fires for a default selector when the defaults settle with no user typing', async () => {
+    mockHook.editing = {};
+    mockHook.defaultsPending = true;
+    const { rerender } = renderNew({ api });
+
+    mockHook.editing = { businessPartner: 'BP1' };
+    mockHook.defaultsPending = false;
+    rerender(detailElement({ api }));
+    await waitFor(
+      () => expect(executeCalloutMock).toHaveBeenCalledWith(
+        'businessPartner', 'BP1', expect.any(Object), expect.any(Object),
+      ),
+      { timeout: 3000 },
+    );
+    // The `dependent` selector (partnerAddress) must never be part of the chain.
+    expect(executeCalloutMock.mock.calls.map(([field]) => field)).not.toContain('partnerAddress');
+  });
+
+  it('does not fire while the defaults request is still pending, even with a selector value', async () => {
+    mockHook.editing = { businessPartner: 'BP1' };
+    mockHook.defaultsPending = true;
+    renderNew({ api });
+    await act(async () => { await new Promise((r) => setTimeout(r, 700)); });
+    expect(
+      executeCalloutMock,
+      'the chain is armed by the defaults session settling, not by a selector already holding a value',
+    ).not.toHaveBeenCalled();
+  });
+
+  it('does not fire the chain for a non-new record', async () => {
+    mockHook.editing = { id: 'SO-1', businessPartner: 'BP1' };
+    mockHook.defaultsPending = false;
+    renderNew({ api, recordId: 'SO-1' });
+    await act(async () => { await new Promise((r) => setTimeout(r, 700)); });
+    expect(executeCalloutMock).not.toHaveBeenCalled();
   });
 });
