@@ -1,0 +1,58 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "specName": "bp-location",
+  "window": {
+    "category": "general",
+    "name": "Location",
+    "breadcrumb": "Location",
+    "detailEntity": null,
+    "hidePrint": true,
+    "hideMoreMenu": true,
+    "_note": "ETP-5806 housekeeping: this artifact was a pipeline orphan (AD Window 121 'Location', ISACTIVE='N', no menu entry, never processed through decisions.json/push-to-neo — only a stale March-2026 contract.json + generated/ from an early test run). Migrated into the pipeline now because its NEO Headless API stays live and writable (create/update/delete enabled) regardless of menu visibility, and a live MCP probe found it accepted plain-text addressLine1/addressLine2 writes with none of ETP-5806's structured-address rules applied — the one address-writing surface the rest of the ticket missed. PUSH_TO_NEO was deliberately NOT run for this change: the live ETGO_SF_ENTITY row (Name='bpLocation') predates today's naming convention and was populated by hand outside this pipeline; re-running push-to-neo risks creating a duplicate/divergent entity rather than updating it in place. This decisions.json documents the intended curated shape (and is the source of truth for a future, carefully-verified push-to-neo migration) but the actual ETP-5806 behavior (mandatory Street/Number/City/Country, Address1/Address2 computed, streetName/buildingNumber/buildingName naming) is enforced by BpLocationHandler (com.etendoerp.go), independent of ETGO_SF_FIELD state."
+  },
+  "entities": {
+    "location": {
+      "fields": {
+        "addressLine1": {
+          "visibility": "readOnly",
+          "section": "principal",
+          "seq": 30,
+          "_note": "ETP-5806: computed from streetName/buildingNumber/buildingName by BpLocationHandler, same algorithm (and same product decision: stricter than Classic) as ContactsLocationAddressHandler/WarehouseLocationHandler. Not yet pushed to NEO (ETGO_SF_FIELD.isreadonly stays 'N' live) — the handler enforces this by always overwriting the value server-side regardless of what a caller sends."
+        },
+        "addressLine2": {
+          "visibility": "readOnly",
+          "section": "principal",
+          "seq": 40,
+          "_note": "See addressLine1 — same computed/overwritten field."
+        },
+        "oBSEPAStreetName": {
+          "visibility": "editable",
+          "required": true,
+          "section": "principal",
+          "seq": 10,
+          "_note": "ETP-5806 structured SEPA field, published as 'streetName' (see AddressVirtualSelectorPolicy#PUBLISHED_NAME_OVERRIDES and BpLocationHandler). Mandatory together with buildingNumber/cityName/country — enforced by BpLocationHandler, not by AD_Column.IsMandatory (still 'N' on EM_OBSEPA_StrtNm, so this 'required' flag is documentation only until a push-to-neo migration curates the live ETGO_SF_FIELD row)."
+        },
+        "oBSEPABuildingNumber": {
+          "visibility": "editable",
+          "required": true,
+          "section": "principal",
+          "seq": 20,
+          "_note": "Published as 'buildingNumber'. See oBSEPAStreetName note."
+        },
+        "oBSEPABuildingName": {
+          "visibility": "editable",
+          "required": false,
+          "section": "principal",
+          "seq": 25,
+          "_note": "Published as 'buildingName'. Optional, matching every other ETP-5806 address surface."
+        },
+        "city": {
+          "visibility": "discarded"
+        }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": []
+}

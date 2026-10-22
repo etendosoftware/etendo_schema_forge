@@ -1,115 +1,189 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-03-06T17:20:29.904Z",
-  "checksum": "b21119370bf96214",
+  "updatedAt": "2026-10-22T13:47:37.888Z",
+  "checksum": "33802e52c5761352",
   "frontendContract": {
     "window": {
       "id": "121",
-      "name": "BP Location",
-      "primaryEntity": "bpLocation",
-      "category": "reference"
+      "name": "Location",
+      "primaryEntity": "location",
+      "category": "general",
+      "hidePrint": true,
+      "hideMoreMenu": true,
+      "breadcrumb": "Location",
+      "detailEntity": null,
+      "layoutType": "default"
     },
     "entities": {
-      "bpLocation": {
+      "location": {
+        "tableName": "C_Location",
+        "tabId": "154",
+        "tabName": "Location",
+        "uiPattern": "STD",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "address",
-            "column": "Address1",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "city",
-            "column": "City",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "postalCode",
-            "column": "Postal",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
             "name": "country",
+            "apiKey": "country",
             "column": "C_Country_ID",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "phone",
-            "column": "Phone",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "businessPartner",
-            "column": "C_BPartner_ID",
+            "label": "Country",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
-            "reference": "BusinessPartner",
-            "inputMode": "search"
+            "sourceRequired": true,
+            "reference": "Country",
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "addressLine1",
+            "apiKey": "addressLine1",
+            "column": "Address1",
+            "label": "Address Line 1",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 30,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "addressLine2",
+            "apiKey": "addressLine2",
+            "column": "Address2",
+            "label": "Address Line 2",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 40,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "cityName",
+            "apiKey": "cityName",
+            "column": "City",
+            "label": "City Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "postalCode",
+            "apiKey": "postalCode",
+            "column": "Postal",
+            "label": "Postal Code",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 10
+            }
           },
           {
             "name": "region",
+            "apiKey": "region",
             "column": "C_Region_ID",
-            "type": "string",
+            "label": "Region",
+            "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "reference": "Region",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            },
+            "validationRule": {
+              "code": "C_Region.C_Country_ID=@C_Country_ID@",
+              "contextParams": [],
+              "cascadeParams": [
+                "C_Country_ID"
+              ]
+            }
           },
           {
-            "name": "address2",
-            "column": "Address2",
+            "name": "oBSEPABuildingNumber",
+            "apiKey": "oBSEPABuildingNumber",
+            "column": "EM_OBSEPA_BldgNb",
+            "label": "EM_OBSEPA_BldgNb",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 20,
+            "validation": {
+              "required": true,
+              "maxLength": 16
+            }
+          },
+          {
+            "name": "oBSEPABuildingName",
+            "apiKey": "oBSEPABuildingName",
+            "column": "EM_OBSEPA_BldgNm",
+            "label": "EM_OBSEPA_BldgNm",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 25,
+            "validation": {
+              "maxLength": 35
+            }
+          },
+          {
+            "name": "oBSEPAStreetName",
+            "apiKey": "oBSEPAStreetName",
+            "column": "EM_OBSEPA_StrtNm",
+            "label": "EM_OBSEPA_StrtNm",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 10,
+            "validation": {
+              "required": true,
+              "maxLength": 70
+            }
           }
         ],
-        "searchableFields": [
-          "name",
-          "city",
-          "businessPartner"
-        ],
+        "searchableFields": [],
         "computedFields": []
       }
     }
@@ -117,29 +191,55 @@
   "backendContract": {
     "window": {
       "id": "121",
-      "name": "BP Location",
-      "primaryEntity": "bpLocation",
-      "category": "reference"
+      "name": "Location",
+      "primaryEntity": "location",
+      "category": "general",
+      "hidePrint": true,
+      "hideMoreMenu": true,
+      "breadcrumb": "Location",
+      "detailEntity": null
     },
     "entities": {
-      "bpLocation": {
+      "location": {
+        "tableName": "C_Location",
+        "tabId": "154",
+        "tabName": "Location",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
-            "type": "string",
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "country",
+            "apiKey": "country",
+            "column": "C_Country_ID",
+            "type": "foreignKey",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "address",
+            "name": "addressLine1",
+            "apiKey": "addressLine1",
             "column": "Address1",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": false
           },
           {
-            "name": "city",
+            "name": "addressLine2",
+            "apiKey": "addressLine2",
+            "column": "Address2",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "cityName",
+            "apiKey": "cityName",
             "column": "City",
             "type": "string",
             "visibility": "editable",
@@ -147,307 +247,591 @@
           },
           {
             "name": "postalCode",
+            "apiKey": "postalCode",
             "column": "Postal",
             "type": "string",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "country",
-            "column": "C_Country_ID",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "phone",
-            "column": "Phone",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "businessPartner",
-            "column": "C_BPartner_ID",
+            "name": "region",
+            "apiKey": "region",
+            "column": "C_Region_ID",
             "type": "foreignKey",
             "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
             "required": true
           },
           {
-            "name": "adClientId",
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Location_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
             "column": "AD_Client_ID",
-            "type": "id",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
+            "name": "postalAdd",
+            "apiKey": "postalAdd",
+            "column": "Postal_Add",
+            "type": "string",
             "visibility": "system",
-            "required": true
+            "required": false
           },
           {
-            "name": "created",
+            "name": "city",
+            "apiKey": "city",
+            "column": "C_City_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "regionName",
+            "apiKey": "regionName",
+            "column": "RegionName",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
             "column": "Created",
-            "type": "datetime",
+            "type": "dateTime",
             "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "oBSEPABuildingNumber",
+            "apiKey": "oBSEPABuildingNumber",
+            "column": "EM_OBSEPA_BldgNb",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "oBSEPABuildingName",
+            "apiKey": "oBSEPABuildingName",
+            "column": "EM_OBSEPA_BldgNm",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "oBSEPAStreetName",
+            "apiKey": "oBSEPAStreetName",
+            "column": "EM_OBSEPA_StrtNm",
+            "type": "string",
+            "visibility": "editable",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "region",
-            "column": "C_Region_ID",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "address2",
-            "column": "Address2",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           }
-        ],
-        "tabName": "Location",
-        "tabId": "154",
-        "tableName": "C_Location"
+        ]
       }
     },
     "endpoints": [
       {
         "method": "GET",
-        "path": "/bpLocation",
-        "entity": "bpLocation",
-        "supportedFilters": [
-          "name",
-          "city",
-          "businessPartner"
-        ]
+        "path": "/location",
+        "entity": "location",
+        "supportedFilters": []
       },
       {
         "method": "GET",
-        "path": "/bpLocation/:id",
-        "entity": "bpLocation",
+        "path": "/location/:id",
+        "entity": "location",
         "supportedFilters": []
       },
       {
         "method": "POST",
-        "path": "/bpLocation",
-        "entity": "bpLocation",
+        "path": "/location",
+        "entity": "location",
         "supportedFilters": []
       },
       {
         "method": "PUT",
-        "path": "/bpLocation/:id",
-        "entity": "bpLocation",
+        "path": "/location/:id",
+        "entity": "location",
         "supportedFilters": []
       },
       {
         "method": "DELETE",
-        "path": "/bpLocation/:id",
-        "entity": "bpLocation",
+        "path": "/location/:id",
+        "entity": "location",
         "supportedFilters": []
       }
     ],
     "processEndpoints": []
   },
+  "apiPrediction": {
+    "specName": "bp-location",
+    "baseUrl": "/sws/neo/bp-location",
+    "crud": {
+      "location": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/bp-location/location",
+        "detailUrl": "/sws/neo/bp-location/location/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "location",
+        "field": "country",
+        "column": "C_Country_ID",
+        "reference": "Country",
+        "inputMode": "selector",
+        "url": "/sws/neo/bp-location/location/selectors/country"
+      },
+      {
+        "entity": "location",
+        "field": "region",
+        "column": "C_Region_ID",
+        "reference": "Region",
+        "inputMode": "selector",
+        "url": "/sws/neo/bp-location/location/selectors/region",
+        "context": {
+          "required": [
+            {
+              "param": "C_Country_ID",
+              "source": "field",
+              "field": "country"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "general"
+    }
+  },
+  "formState": {
+    "entities": {
+      "location": {
+        "fields": {
+          "country": {
+            "required": true
+          },
+          "addressLine1": {
+            "readOnly": true
+          },
+          "addressLine2": {
+            "readOnly": true
+          },
+          "cityName": {},
+          "postalCode": {},
+          "region": {},
+          "oBSEPABuildingNumber": {
+            "required": true
+          },
+          "oBSEPABuildingName": {},
+          "oBSEPAStreetName": {
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage location records.",
+    "whenToUse": [
+      "Use for location management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "country",
+        "oBSEPABuildingNumber",
+        "oBSEPAStreetName"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [
+      {
+        "entity": "location",
+        "field": "region",
+        "context": {
+          "required": [
+            {
+              "param": "C_Country_ID",
+              "source": "field",
+              "field": "country"
+            }
+          ]
+        }
+      }
+    ],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "country",
+          "oBSEPABuildingNumber",
+          "oBSEPAStreetName"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
   "testManifest": {
     "tests": [
       {
-        "id": "t-1",
-        "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "name",
+        "id": "t-crud-flags-location",
+        "category": "crud-flags",
+        "entity": "location",
         "runner": "node",
-        "description": "Field 'name' should be present in bpLocation"
+        "description": "CRUD flags for 'location' should all be booleans"
       },
       {
-        "id": "t-2",
+        "id": "t-field-presence-location-addressLine1",
         "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "address",
+        "entity": "location",
+        "field": "addressLine1",
         "runner": "node",
-        "description": "Field 'address' should be present in bpLocation"
+        "description": "Field 'addressLine1' should be present in location"
       },
       {
-        "id": "t-3",
+        "id": "t-field-presence-location-addressLine2",
         "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "city",
+        "entity": "location",
+        "field": "addressLine2",
         "runner": "node",
-        "description": "Field 'city' should be present in bpLocation"
+        "description": "Field 'addressLine2' should be present in location"
       },
       {
-        "id": "t-4",
+        "id": "t-field-presence-location-cityName",
         "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "postalCode",
+        "entity": "location",
+        "field": "cityName",
         "runner": "node",
-        "description": "Field 'postalCode' should be present in bpLocation"
+        "description": "Field 'cityName' should be present in location"
       },
       {
-        "id": "t-5",
+        "id": "t-field-presence-location-country",
         "category": "field-presence",
-        "entity": "bpLocation",
+        "entity": "location",
         "field": "country",
         "runner": "node",
-        "description": "Field 'country' should be present in bpLocation"
+        "description": "Field 'country' should be present in location"
       },
       {
-        "id": "t-6",
+        "id": "t-field-presence-location-oBSEPABuildingName",
         "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "phone",
+        "entity": "location",
+        "field": "oBSEPABuildingName",
         "runner": "node",
-        "description": "Field 'phone' should be present in bpLocation"
+        "description": "Field 'oBSEPABuildingName' should be present in location"
       },
       {
-        "id": "t-7",
+        "id": "t-field-presence-location-oBSEPABuildingNumber",
         "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "businessPartner",
+        "entity": "location",
+        "field": "oBSEPABuildingNumber",
         "runner": "node",
-        "description": "Field 'businessPartner' should be present in bpLocation"
+        "description": "Field 'oBSEPABuildingNumber' should be present in location"
       },
       {
-        "id": "t-8",
-        "category": "field-type",
-        "entity": "bpLocation",
-        "field": "name",
+        "id": "t-field-presence-location-oBSEPAStreetName",
+        "category": "field-presence",
+        "entity": "location",
+        "field": "oBSEPAStreetName",
         "runner": "node",
-        "description": "Field 'name' should have type 'string' in bpLocation"
+        "description": "Field 'oBSEPAStreetName' should be present in location"
       },
       {
-        "id": "t-9",
-        "category": "field-type",
-        "entity": "bpLocation",
-        "field": "address",
-        "runner": "node",
-        "description": "Field 'address' should have type 'string' in bpLocation"
-      },
-      {
-        "id": "t-10",
-        "category": "field-type",
-        "entity": "bpLocation",
-        "field": "city",
-        "runner": "node",
-        "description": "Field 'city' should have type 'string' in bpLocation"
-      },
-      {
-        "id": "t-11",
-        "category": "field-type",
-        "entity": "bpLocation",
+        "id": "t-field-presence-location-postalCode",
+        "category": "field-presence",
+        "entity": "location",
         "field": "postalCode",
         "runner": "node",
-        "description": "Field 'postalCode' should have type 'string' in bpLocation"
+        "description": "Field 'postalCode' should be present in location"
       },
       {
-        "id": "t-12",
+        "id": "t-field-presence-location-region",
+        "category": "field-presence",
+        "entity": "location",
+        "field": "region",
+        "runner": "node",
+        "description": "Field 'region' should be present in location"
+      },
+      {
+        "id": "t-field-type-location-addressLine1",
         "category": "field-type",
-        "entity": "bpLocation",
+        "entity": "location",
+        "field": "addressLine1",
+        "runner": "node",
+        "description": "Field 'addressLine1' should have type 'string' in location"
+      },
+      {
+        "id": "t-field-type-location-addressLine2",
+        "category": "field-type",
+        "entity": "location",
+        "field": "addressLine2",
+        "runner": "node",
+        "description": "Field 'addressLine2' should have type 'string' in location"
+      },
+      {
+        "id": "t-field-type-location-cityName",
+        "category": "field-type",
+        "entity": "location",
+        "field": "cityName",
+        "runner": "node",
+        "description": "Field 'cityName' should have type 'string' in location"
+      },
+      {
+        "id": "t-field-type-location-country",
+        "category": "field-type",
+        "entity": "location",
         "field": "country",
         "runner": "node",
-        "description": "Field 'country' should have type 'string' in bpLocation"
+        "description": "Field 'country' should have type 'string' in location"
       },
       {
-        "id": "t-13",
+        "id": "t-field-type-location-oBSEPABuildingName",
         "category": "field-type",
-        "entity": "bpLocation",
-        "field": "phone",
+        "entity": "location",
+        "field": "oBSEPABuildingName",
         "runner": "node",
-        "description": "Field 'phone' should have type 'string' in bpLocation"
+        "description": "Field 'oBSEPABuildingName' should have type 'string' in location"
       },
       {
-        "id": "t-14",
+        "id": "t-field-type-location-oBSEPABuildingNumber",
         "category": "field-type",
-        "entity": "bpLocation",
-        "field": "businessPartner",
+        "entity": "location",
+        "field": "oBSEPABuildingNumber",
         "runner": "node",
-        "description": "Field 'businessPartner' should have type 'string' in bpLocation"
+        "description": "Field 'oBSEPABuildingNumber' should have type 'string' in location"
       },
       {
-        "id": "t-15",
-        "category": "searchable-filters",
-        "entity": "bpLocation",
-        "field": "name",
+        "id": "t-field-type-location-oBSEPAStreetName",
+        "category": "field-type",
+        "entity": "location",
+        "field": "oBSEPAStreetName",
         "runner": "node",
-        "description": "Field 'name' should be a supported filter for bpLocation"
+        "description": "Field 'oBSEPAStreetName' should have type 'string' in location"
       },
       {
-        "id": "t-16",
-        "category": "searchable-filters",
-        "entity": "bpLocation",
+        "id": "t-field-type-location-postalCode",
+        "category": "field-type",
+        "entity": "location",
+        "field": "postalCode",
+        "runner": "node",
+        "description": "Field 'postalCode' should have type 'string' in location"
+      },
+      {
+        "id": "t-field-type-location-region",
+        "category": "field-type",
+        "entity": "location",
+        "field": "region",
+        "runner": "node",
+        "description": "Field 'region' should have type 'string' in location"
+      },
+      {
+        "id": "t-rule-declared-AD-Client-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Client Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Region-of-Country",
+        "category": "rule-declared",
+        "rule": "C_Region of Country",
+        "runner": "node",
+        "description": "Rule 'C_Region of Country' (validation) should be declared"
+      },
+      {
+        "id": "t-selector-endpoint-location-country",
+        "category": "selector-endpoint",
+        "entity": "location",
+        "field": "country",
+        "runner": "node",
+        "description": "Selector endpoint for 'country' in location should exist"
+      },
+      {
+        "id": "t-selector-endpoint-location-region",
+        "category": "selector-endpoint",
+        "entity": "location",
+        "field": "region",
+        "runner": "node",
+        "description": "Selector endpoint for 'region' in location should exist"
+      },
+      {
+        "id": "t-system-field-location-active",
+        "category": "system-field",
+        "entity": "location",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for location"
+      },
+      {
+        "id": "t-system-field-location-city",
+        "category": "system-field",
+        "entity": "location",
         "field": "city",
         "runner": "node",
-        "description": "Field 'city' should be a supported filter for bpLocation"
+        "description": "System field 'city' should exist in backend but not frontend for location"
       },
       {
-        "id": "t-17",
-        "category": "searchable-filters",
-        "entity": "bpLocation",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should be a supported filter for bpLocation"
-      },
-      {
-        "id": "t-18",
-        "category": "visibility",
-        "entity": "bpLocation",
-        "runner": "node",
-        "description": "Entity 'bpLocation' should only expose visible fields in frontend"
-      },
-      {
-        "id": "t-19",
+        "id": "t-system-field-location-client",
         "category": "system-field",
-        "entity": "bpLocation",
-        "field": "adClientId",
+        "entity": "location",
+        "field": "client",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for bpLocation"
+        "description": "System field 'client' should exist in backend but not frontend for location"
       },
       {
-        "id": "t-20",
+        "id": "t-system-field-location-createdBy",
         "category": "system-field",
-        "entity": "bpLocation",
-        "field": "adOrgId",
+        "entity": "location",
+        "field": "createdBy",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for bpLocation"
+        "description": "System field 'createdBy' should exist in backend but not frontend for location"
       },
       {
-        "id": "t-21",
+        "id": "t-system-field-location-creationDate",
         "category": "system-field",
-        "entity": "bpLocation",
-        "field": "created",
+        "entity": "location",
+        "field": "creationDate",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for bpLocation"
+        "description": "System field 'creationDate' should exist in backend but not frontend for location"
       },
       {
-        "id": "t-22",
+        "id": "t-system-field-location-id",
         "category": "system-field",
-        "entity": "bpLocation",
+        "entity": "location",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for location"
+      },
+      {
+        "id": "t-system-field-location-organization",
+        "category": "system-field",
+        "entity": "location",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for location"
+      },
+      {
+        "id": "t-system-field-location-postalAdd",
+        "category": "system-field",
+        "entity": "location",
+        "field": "postalAdd",
+        "runner": "node",
+        "description": "System field 'postalAdd' should exist in backend but not frontend for location"
+      },
+      {
+        "id": "t-system-field-location-regionName",
+        "category": "system-field",
+        "entity": "location",
+        "field": "regionName",
+        "runner": "node",
+        "description": "System field 'regionName' should exist in backend but not frontend for location"
+      },
+      {
+        "id": "t-system-field-location-updated",
+        "category": "system-field",
+        "entity": "location",
         "field": "updated",
         "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for bpLocation"
+        "description": "System field 'updated' should exist in backend but not frontend for location"
+      },
+      {
+        "id": "t-system-field-location-updatedBy",
+        "category": "system-field",
+        "entity": "location",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for location"
+      },
+      {
+        "id": "t-visibility-location",
+        "category": "visibility",
+        "entity": "location",
+        "runner": "node",
+        "description": "Entity 'location' should only expose visible fields in frontend"
       }
     ],
     "summary": {
-      "total": 22,
+      "total": 35,
       "byCategory": {
-        "field-presence": 7,
-        "field-type": 7,
-        "searchable-filters": 3,
-        "visibility": 1,
-        "system-field": 4
+        "crud-flags": 1,
+        "field-presence": 9,
+        "field-type": 9,
+        "rule-declared": 2,
+        "selector-endpoint": 2,
+        "system-field": 11,
+        "visibility": 1
       },
       "byRunner": {
-        "node": 22,
+        "node": 35,
         "junit": 0
       }
     }
