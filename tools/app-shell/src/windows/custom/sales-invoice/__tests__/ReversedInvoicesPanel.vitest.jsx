@@ -478,8 +478,8 @@ describe('TC-05/TC-06 — 349 fields only visible when "Correctiva del 349" is c
     await expandFirstRow();
     fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
 
-    // ETP-5059: checking saves straight away — the trigger fills year and period — and the
-    // re-read that follows briefly swaps the rows for the loading line, so wait for it to settle.
+    // ETP-5059: checking saves straight away — the trigger fills year and period — and the row
+    // only changes once the server answered, so wait for the PATCH and its silent re-read to land.
     await waitFor(() => expect(patchCalls()).toHaveLength(1));
     await waitFor(() => expect(screen.getByText('rectBaseProducts')).toBeInTheDocument());
     expect(screen.getByTestId('checkbox__isCorrective')).toHaveAttribute('aria-checked', 'true');
@@ -751,7 +751,8 @@ describe('TC-08 — ticking saves at once; year and period are bound to the orig
 
     fireEvent.change(findPeriodSelect(), { target: { value: '2T' } });
     await waitFor(() => expect(patchCalls()).toHaveLength(1));
-    expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2026', aEAT349Period: '2T' });
+    // The year goes as null so the trigger fills the original's year (a legacy wrong one cannot block).
+    expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: '2T' });
   });
 
   it('TC-08: unchecking corrective PATCHes {aEAT349IsCorrective: N} immediately', async () => {

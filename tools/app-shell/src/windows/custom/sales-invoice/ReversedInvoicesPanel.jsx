@@ -35,9 +35,11 @@ function originalPeriods(invoiceDate) {
 }
 
 // Localized label of one AEAT-349 period code: quarters via i18n keys, months via Intl for the
-// active locale. Any other code (a legacy row saved before ETP-5059, e.g. `0A`) shows as-is.
+// active locale. `0A` (annual) is never offered since ETP-5059, but a legacy row may still store
+// it, so it keeps its label. Any other unknown code shows as-is.
 function periodLabel(code, ui, locale) {
   if (QUARTER_LABEL_KEYS[code]) return `${code} - ${ui(QUARTER_LABEL_KEYS[code])}`;
+  if (code === '0A') return `${code} - ${ui('rectPeriodAnnual')}`;
   if (MONTH_CODE_RE.test(code)) {
     const tag = (locale || 'es_ES').replace('_', '-');
     const name = new Intl.DateTimeFormat(tag, { month: 'long' }).format(new Date(2000, Number(code) - 1, 1));
@@ -374,7 +376,7 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, readOnly, sa
   // ETP-5059 — year and period are bound to the original invoice, so both pickers are built from
   // its invoice date. On a multi-selection draft that is the FIRST selected invoice; the trigger
   // still checks every row against its own original.
-  const { date: originalDate } = useOriginalInvoiceDate(apiBaseUrl, data?.reversedInvoice);
+  const { date: originalDate } = useOriginalInvoiceDate(apiBaseUrl, readOnly ? null : data?.reversedInvoice);
   const orig = useMemo(() => originalPeriods(originalDate), [originalDate]);
   const storedPeriod = data?.aEAT349Period || '';
   const periodOptions = useMemo(
@@ -896,7 +898,10 @@ export default function ReversedInvoicesPanel({
       }
       patchAeatGroup(lineId, {
         aEAT349IsCorrective: 'Y',
-        aEAT349CYear: val('aEAT349CYear') || null,
+        // A period change re-sends NO year: the stored one may be a legacy wrong year, which the
+        // trigger would refuse together with the new period. Null lets it fill the original's
+        // year — the only value it accepts anyway.
+        aEAT349CYear: key === 'aEAT349CYear' ? (value || null) : null,
         aEAT349Period: val('aEAT349Period') || null,
       });
       return;

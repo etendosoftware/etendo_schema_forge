@@ -1390,12 +1390,15 @@ rectificative type and the legacy `APC` credit memo.
       **Periodo** select offers exactly two options — the month (default) and the quarter —
       and the **Año** select offers only the original's year from `/fiscal-calendar/year`.
       When that year is missing from the calendar the select offers nothing and the save
-      returns the backend's own refusal. A row stored before the rule (e.g. `0A`) keeps its
-      value visible as an extra option instead of being masked.
+      returns the backend's own refusal. A row stored before the rule (e.g. `0A`, labelled
+      "Anual") keeps its value visible as an extra option instead of being masked; it is never
+      offered for a new choice.
     - **Defaults.** On an existing row, ticking the box saves at once with
       `{aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null}`; the trigger fills
       the original's year and month and the panel re-reads the row. Switching between month
-      and quarter saves the whole group (`corrective + year + period`). On a saved row none of
+      and quarter saves the whole group with the year as `null`, so the trigger re-fills the
+      original's year and a legacy row with a wrong year or a `0A` period can still be
+      corrected. On a saved row none of
       these changes is applied optimistically: while the PATCH is in flight the checkbox shows a
       spinner and it and both pickers are disabled, and the row only changes after the silent
       re-read (no loading line), so a refusal never flashes the fields open and shut. Draft rows
