@@ -16,6 +16,7 @@ import userEvent from '@testing-library/user-event';
 vi.mock('lucide-react', () => ({
   ChevronDown: () => <span data-testid="chevron" />,
   X: () => <span data-testid="x-icon" />,
+  Check: () => <span data-testid="check-icon" />,
 }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url, params) => {
@@ -230,5 +231,49 @@ describe('InlineSearchCombo — immediate open vs debounced typing (ETP-5005 fol
     // A short timeout is the point: if "load more" were debounced like typing now is, this
     // would still be pending well short of 1000ms.
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2), { timeout: 300, interval: 20 });
+  });
+
+  // ETP-5846 — the extra request that resolves the CURRENT selection when it is not on
+  // the loaded page is a LOOKUP, not a page of the list. It must not touch the first-page
+  // loading flag in either direction, or the skeleton would flash back over options the
+  // user can already act on.
+  it('the current-selection resolution never raises or lowers the first-page loading flag', async () => {
+    let resolveCurrent;
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(jsonOk(makePage(0, 3)))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveCurrent = resolve; }));
+
+    renderCombo({ value: 'tax-77', displayLabel: 'IVA 4%', clearOnType: false });
+    fireEvent.click(screen.getByTestId('inline-add-field-tax-chip'));
+    await screen.findByTestId('inline-add-field-tax');
+
+    // Page 0 landed, so the skeleton is gone and page 0's rows are on offer...
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(3));
+    expect(screen.queryByTestId('inline-add-options-tax-loading')).not.toBeInTheDocument();
+
+    // ...and while the resolution is in flight the panel must NOT fall back to a skeleton.
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId('inline-add-options-tax-loading')).not.toBeInTheDocument();
+
+    resolveCurrent(await jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]));
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
+    expect(screen.queryByTestId('inline-add-options-tax-loading')).not.toBeInTheDocument();
+  });
+
+  it('still shows the skeleton while the first page is in flight even when a value is committed', async () => {
+    let resolveFetch;
+    global.fetch = vi.fn()
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }))
+      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]));
+
+    renderCombo({ value: 'tax-77', displayLabel: 'IVA 4%', clearOnType: false });
+    fireEvent.click(screen.getByTestId('inline-add-field-tax-chip'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-add-options-tax-loading')).toBeInTheDocument();
+    }, { timeout: 500, interval: 20 });
+
+    resolveFetch(await jsonOk(makePage(0, 2)));
+    await waitFor(() => expect(screen.queryByTestId('inline-add-options-tax-loading')).not.toBeInTheDocument());
   });
 });
