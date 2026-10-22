@@ -13,13 +13,15 @@ Use this runbook to build the gateway image from pinned sources, push it to ECR,
 Tools (local machine or a build host):
 
 - `git`, `docker` (BuildKit), `aws` CLI v2.
-- The image is built for the platform the ECS task runs on. Set `<platform>` (for example `linux/amd64`) to match the task definition; this is not stated in the repo.
+- The image must be `linux/amd64`: the service runs on Fargate and its task definition declares no `runtimePlatform`, so Fargate uses X86_64. Always pass `--platform linux/amd64`, especially when building on an Apple Silicon (arm64) machine.
 
 Access (describe by role, never share credentials in this repo or in the record):
 
 - Read access to the `etendosoftware/etendo_schema_forge` and `etendosoftware/schema_forge_core` repositories.
 - An AWS profile `<aws-profile>` in account `<aws-account-id>`, region `<aws-region>`, allowed to: authenticate to and push to the ECR repository `etendo/public-api-gateway`; describe and register ECS task definitions; update the service `etendo-public-api-service` in cluster `etendo-production`; read the service's CloudWatch logs.
-- Permission to pass the existing task and execution roles when registering a new task definition revision.
+- Permission to pass the existing execution role when registering a new task definition revision (the task has no task role).
+
+Today the deploy runs from a developer machine with that person's own IAM credentials (no shared deploy role or profile). Who holds ECR push and ECS update rights is tracked by DevOps, not in this repo.
 
 ## 3. Prepare sources at pinned SHAs
 
@@ -64,10 +66,10 @@ Example: `sf-a1b2c3d-core-e4f5a6b`. Never use `latest` for a deploy: it cannot b
 TAG="sf-$(git rev-parse --short=7 HEAD)-core-$(git -C .schema_forge_core rev-parse --short=7 HEAD)"
 ECR="<aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/etendo/public-api-gateway"
 
-docker build --platform <platform> -f gateway/Dockerfile -t "$ECR:$TAG" .
+docker build --platform linux/amd64 -f gateway/Dockerfile -t "$ECR:$TAG" .
 ```
 
-The final image runs `node dist/main.js` as user `node`, listens on port `4300` (`GATEWAY_PORT`) and serves `/app/public-api/base.v1.json` (`PUBLIC_API_SCHEMA_PATH`). The gateway reads `NEO_BASE_URL` at runtime to reach NEO; it is not baked into the image, so it must come from the ECS task definition.
+The final image runs `node dist/main.js` as user `node`, listens on port `4300` (`GATEWAY_PORT`) and serves `/app/public-api/base.v1.json` (`PUBLIC_API_SCHEMA_PATH`); `GATEWAY_PORT`, `PUBLIC_API_SCHEMA_PATH` and `NODE_ENV=production` are set in the image. The gateway reads `NEO_BASE_URL` at runtime to reach NEO through the internal ALB; it is not baked into the image and comes from the task definition environment. There are no secrets in the task definition today.
 
 ## 5. Push to ECR and update ECS
 
@@ -78,15 +80,17 @@ aws ecr get-login-password | docker login --username AWS --password-stdin "<aws-
 docker push "$ECR:$TAG"
 ```
 
+The task definition family is `etendo-public-api-production`. Its only container is `public-api-gateway` (port 4300, no sidecars), on Fargate with 0.5 vCPU / 1 GB, logging to the CloudWatch group `/ecs/etendo-public-api-production` (stream prefix `gateway`). The service runs one task (`desiredCount` 1).
+
 Register a new task definition revision that points the gateway container at the new tag, keeping everything else from the current revision:
 
 ```bash
 aws ecs describe-services --cluster etendo-production --services etendo-public-api-service \
   --query 'services[0].taskDefinition' --output text          # note this as the PREVIOUS revision
 
-aws ecs describe-task-definition --task-definition <current-task-definition-family-or-arn> \
+aws ecs describe-task-definition --task-definition etendo-public-api-production \
   --query taskDefinition > td.json
-# Edit td.json: set containerDefinitions[<gateway>].image to "$ECR:$TAG", and delete the
+# Edit td.json: set the image of container "public-api-gateway" to "$ECR:$TAG", and delete the
 # read-only fields (taskDefinitionArn, revision, status, requiresAttributes, compatibilities,
 # registeredAt, registeredBy) before registering.
 aws ecs register-task-definition --cli-input-json file://td.json   # note the new revision number
@@ -110,13 +114,13 @@ curl -fsS "$HOST/api/openapi.json" | head -c 200                      # expect O
 curl -sS -o /dev/null -w '%{http_code}\n' "$HOST/api/v1/openapi.json" # expect 200
 ```
 
-To prove `/api/v1/*` reaches the gateway without a key, request any data path without credentials and expect an authentication error from the gateway (401 or 403), not a CloudFront/ALB 404/502/503:
+To prove `/api/v1/*` reaches the gateway without a key, request any data path without credentials and expect `401` with a JSON body from the gateway, not a CloudFront/ALB 404/502/503:
 
 ```bash
-curl -sS -o /dev/null -w '%{http_code}\n' "$HOST/api/v1/<entity-name>"
+curl -sS -w '\n%{http_code}\n' "$HOST/api/v1/products"   # expect a JSON error body and 401
 ```
 
-`/healthz` (returns `{"status":"ok"}`) exists in the app, but the ALB rules list only `/api`, `/api/openapi.json` and `/api/v1/*`, so it is probably not reachable through the public host; use it only from inside the VPC or from the task logs. Also check the new task's CloudWatch log stream for startup errors.
+`/healthz` (returns `{"status":"ok"}`) is not routed to the gateway through the public host: there it returns `200` with the SPA's HTML, which proves nothing. It is checked internally instead, by the target group `etendo-public-api-production-tg` (HTTP on the traffic port, expects 200) and by the container's own ECS health check against `localhost:4300/healthz`; the new task reporting healthy in the target group covers it. Also check the new task's CloudWatch log stream for startup errors.
 
 ## 7. Rollback
 
@@ -136,21 +140,13 @@ Repeat the [smoke check](#6-smoke-check). The previous image tag must still exis
 
 | Date (UTC) | etendo_schema_forge SHA | schema_forge_core SHA | Image tag | ECS task definition revision | Deployed by | Notes |
 |---|---|---|---|---|---|---|
-| | | | | | | |
+| 2026-09-16 | `cfb35e0e0bd58f2b1581f355fbc9f219c3650e8a` | `45a16a8ba6a8e998008f8ff8afff7966bce505cb` (not verified) | `etp-5345-cfb35e0e0` | `etendo-public-api-production:3` | gateway author | Built before this record existed, on a developer machine. The core SHA is inferred: it is the last change to `packages/api-gateway-core` before the build (the next one is from 2026-10-05), assuming the local `.schema_forge_core` was up to date. |
 
-The image that is running today was built before this record existed, and nobody has verified which core SHA it contains. Treat it as unknown until the first row is added.
+## Open points
 
-## To confirm with the gateway authors
-
-These could not be confirmed from the repository and must not be guessed:
-
-1. Which ECS container name and task definition family belong to the gateway, and whether the task definition has other containers.
-2. Where `NEO_BASE_URL` and any other runtime configuration come from (task definition environment, secrets), and whether any variable besides `NEO_BASE_URL`, `GATEWAY_PORT` and `PUBLIC_API_SCHEMA_PATH` is required.
-3. The target platform (`linux/amd64` or `linux/arm64`) of the ECS tasks.
-4. The AWS account, region and the profile or role name people use to deploy, and who is authorized to run it.
-5. Whether the ALB target group health check path is `/healthz` (which the public routes do not expose) and whether `/api/v1/*` without credentials returns 401 or 403.
-6. Which `schema_forge_core` ref was the source of the currently deployed image (the authors say it was never recorded).
-7. Whether the build is expected to happen on a developer machine or on a dedicated build host.
+- **Pin the core by version, not by a local checkout.** `api-gateway-core` is not published with the other `schema_forge_core` packages, so the image depends on whatever `.schema_forge_core` holds at build time. Publishing it in the core release would make the core version traceable from `gateway/package.json`. Infra sees no objection; the decision belongs to the core owners.
+- **Shared deploy identity.** Deploys use personal IAM credentials from a developer machine; a dedicated deploy role (or a pipeline) would make them reproducible and auditable.
+- **Rate limiting is per task.** The gateway's rate limit is kept in memory. With one task it is exact; scaling the service out multiplies the effective limit by the task count, so revisit it before raising `desiredCount`.
 
 ## Dockerfile notes
 
