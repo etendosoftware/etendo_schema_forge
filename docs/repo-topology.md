@@ -153,3 +153,52 @@ Neither of these is needed once the package is genuinely published: a normal
 A tooling change is only visible to the functional repo after it is published and the
 version bumped in `package.json` — **or** consumed live via `LOCAL_CORE` during
 development.
+
+## The one tree that is NOT published: `templates/reports/` (duplicated, guarded)
+
+`templates/` belongs to no npm package, so it is the one part of the split that
+exists as **one physical copy per repo** — and the only one that can drift silently.
+It already did: ETP-4908 synced the two `templates/reports/helpers/` copies, then
+ETP-5107 added the HALF_UP rounding to the functional copy only, so the core copy
+rendered half-cent amounts one cent lower for ~2.5 months (ETP-4910).
+
+| File | Which copy wins | Guarded by |
+|---|---|---|
+| `templates/reports/helpers/*.js` | Functional — `scripts/assemble-report-server-context.sh` copies its `templates/` **last** (see its TEMPLATE PRECEDENCE note), so the deployed report-server image runs it | `parity.json` + tests in both repos (below) |
+| `templates/reports/base.css`, `document-branding.hbs` | Functional (same precedence, known to differ) | the semantic tests `report-no-mono-font.test.js`, `report-print-footer-note.test.js` assert both copies' rules |
+
+`templates/reports/helpers/parity.json` is the contract: **identical bytes in both
+repos**, holding one canonical sha256 per module plus the single import line the two
+copies are allowed to differ in (`report-i18n` is imported from the published CLI
+package here, and reached relatively inside `schema_forge_core`). Two checks enforce
+it:
+
+- a test in **each** repo hashes its own copy against the manifest — this repo's is
+  in `tools/app-shell/test/report-template-helpers-contract.test.js`, the mirror's in
+  `schema_forge_core/cli/test/report-jsreport-helpers-builder.test.js` (self-contained:
+  it never reads a sibling checkout, so it passes in core's own CI);
+- this repo's test additionally compares the sibling `schema_forge_core` checkout
+  (`$SF_CORE_DIR` / `$CORE_DIR`, else `../schema_forge_core`) against the same digest
+  whenever it exists — the layer that catches a sync committed in only one repo.
+
+Fix a parity failure with one command, run **in this repo**:
+
+```bash
+make sync-report-helpers          # rewrites schema_forge_core/templates/... and both parity.json
+make sync-report-helpers-check    # report only, exit 1 when out of parity
+```
+
+It rewrites files in **both** checkouts, so commit the result in both repos (core
+first, so a developer who has pulled one repo before the other does not hit the
+parity failure). Adding a module to the mirror is a one-line change in
+`HELPER_MODULES` in `scripts/sync-report-helpers.mjs`.
+
+The same module drives the deploy: `scripts/assemble-report-server-context.sh`
+copies this repo's `templates/` into a context that carries core's `cli/src`, then
+calls `node scripts/sync-report-helpers.mjs --relativize-import <context>` so the
+assembled helper imports the one form that resolves there. Skip that step and the
+container dies on startup with `ERR_MODULE_NOT_FOUND: Cannot find package
+'@etendosoftware/schema-forge-cli'` — it did, undetected, for weeks (ETP-4910). The
+assembly fails closed on it now, and
+`tools/app-shell/test/report-template-helpers-contract.test.js` runs the real
+assembly and pins the resolved form.

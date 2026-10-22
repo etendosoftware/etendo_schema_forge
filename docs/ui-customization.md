@@ -58,7 +58,7 @@ auto-synced when a generated prop's shape changes.
 
 ## Default column widths by field type (ETP-5833)
 
-One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit. The only measured input is the plain-list **header label** (below), which depends on label + locale, never on row data.
+One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit. The only measured input is the plain-list **header label** (below), which depends on label + locale, never on row data. **One exception, lines grid only (ETP-5133):** a no-truncate column (any lookup selector, or `noTruncate: true` — see `docs/decisions-reference.md`) gets `contentWidthPx` from `withContentWidths()` (`lib/linesContentWidth.js`): the widest identifier among the loaded lines plus the add-row draft (published by `DataTable` through `lib/linesScrollHost.js`), measured with `measureTextPx` in the cell font. `columnFlex()` only ever raises the type basis to it (no maximum), so header, lines, totals and the add-row colgroup stay aligned and the grid's horizontal scroll absorbs the overflow.
 
 | Type | Width (px) | Expands? | Why |
 |---|---|---|---|
@@ -2070,28 +2070,35 @@ own child count reaches the declared `maxDetailLines`.
 
 #### The "More" overflow menu of the Form View tab strip (ETP-5515)
 
-The Form View's bottom tab strip (`DetailTabStrip.jsx`, rendered by `DetailView`) shows at most
-**4 tabs plus a "Más" / "More" menu** in every window, with or without a sidebar; labels never
-wrap (`whitespace-nowrap`). With 4 tabs or fewer there is no menu. No `decisions.json` option:
-the rule is generic, so it applies to every window, declarative or custom.
+The Form View's bottom tab strip (`DetailTabStrip.jsx`, rendered by `DetailView`) shows **every tab
+when they all fit** in the strip's width and puts only the ones that do not fit behind a
+"Más" / "More" menu (showing the hidden count); there is no fixed cap, so a wide screen shows all
+of them and a narrow one groups the rest. Labels never wrap (`whitespace-nowrap`). When everything
+fits there is no menu. No `decisions.json` option: the rule is generic, so it applies to every
+window, declarative or custom.
 
-- **Dynamic slot.** The last visible tab (4th) is a slot. Picking a hidden tab from the menu puts
-  it in the slot and the tab that was there drops into the menu; selecting any fixed tab (the
-  first three) restores the original arrangement. The arrangement is derived purely from the
+- **Dynamic slot.** The last visible tab (before "Más") is a slot. Picking a hidden tab from the menu puts
+  it in the slot and the tab that was there drops into the menu; selecting any fixed tab (any
+  tab before the slot) restores the original arrangement. The arrangement is derived purely from the
   active tab key (`resolveTabStripLayout` in `detailTabStripLayout.js`), so it also follows
   deep links (`location.state.openSecondaryTab`).
-- **Width-aware.** The limit of 4 is a ceiling: the visible count is `min(4, tabs that fit)` in the
-  strip's own width (`useFittingTabCount.js` + `computeFittingTabCount`), so a 4-tab window gets a
-  "Más" at narrow widths or high zoom and tabs never overlap the side panel. The rest of the rules
-  (slot, reset, active tab always visible) hold for any count. Floor: 1 fixed tab + the slot; if
-  even that does not fit, the strip clips (`min-w-0 overflow-hidden`) instead of overlapping.
+- **Width-aware.** The visible count is the largest number of tabs (up to all of them) that fit in the
+  strip's own width, "Más" included whenever something is hidden (`useFittingTabCount.js` +
+  `computeFittingTabCount`). The rules (slot, reset, active tab always visible) hold for any count.
+  Floor: 1 fixed tab + the slot; if even that does not fit, the strip clips
+  (`min-w-0 overflow-hidden`) instead of overlapping the side panel. While geometry is unknown
+  (jsdom, no `ResizeObserver`, zero width) it falls back to 4 visible tabs.
   Natural widths come from an invisible probe row rendered inside the strip (same box classes as `TabStripButton`, shared via `tabStripButtonBaseCls`; labels and counters are drawn with CSS `::after{content:attr(data-text)}`, so the probe adds no text nodes, test ids or focusable elements to the DOM); a `ResizeObserver`
   on the strip and the probe re-measures on resize, sidebar open/close, zoom and font changes.
-  Without layout (jsdom, no `ResizeObserver`, zero width) it falls back to the count-only rule.
+- **Never left scrolled (CP-3).** The strip is clipped, not scrollable. The probe row lives in its
+  own `overflow-hidden` clip box so it never counts as scrollable overflow of the strip (a wider
+  absolutely positioned row used to inflate `scrollWidth`, so a focus/`scrollIntoView` on the More
+  trigger scrolled the strip and it never scrolled back, cutting off the first tab). On top of that
+  the strip resets `scrollLeft` to 0 on any scroll event and on every re-measure.
 - **Counters** (e.g. "Dirección 1") and the save-first disabled hint travel with the tab into and
   out of the menu.
 - **Test ids.** Visible tabs keep `tab-<key>`; the trigger is `detail-tab-more` and menu entries
-  are `detail-tab-more-item-<key>`. A test that clicks `tab-<key>` for a tab beyond the 4th must
+  are `detail-tab-more-item-<key>`. A test that clicks `tab-<key>` for a tab that may be hidden must
   open `detail-tab-more` first.
 - Hand-built windows that render their own tab strip (e.g. financial-account `DetailTabs`) are not
   affected.
