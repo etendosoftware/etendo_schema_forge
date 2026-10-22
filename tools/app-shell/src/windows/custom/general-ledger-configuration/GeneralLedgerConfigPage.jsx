@@ -21,14 +21,17 @@ import { DEFAULTS_GROUPS } from './mockCatalogs.js';
 
 const REQUIRED_GENERAL = ['name', 'currency'];
 const REQUIRED_DEFAULTS = DEFAULTS_GROUPS.flatMap((g) => g.fields.filter((f) => f.required).map((f) => f.key));
+// [switch, account]: the account is required while its switch is on (ETP-5724, enforced by the backend too).
+const BALANCING_PAIRS = [['suspenseBalancingUse', 'suspenseBalancing'], ['currencyBalancingUse', 'currencyBalancingAcct']];
+const GENERAL_ACCOUNTS_TAB = 3;
 
 /**
  * General Ledger Configuration (AD window 125, "Esquema contable").
  * layoutType: custom — fiscal-config pattern. 4 tabs: General · Valores por
  * defecto · Dimensiones · Cuentas generales.
  *
- * Backend is greenfield (no NEO spec yet); data comes from mockCatalogs and the
- * save handler is a Phase 3 stub (see useGeneralLedgerConfig.save()).
+ * Loads and saves one org-scoped aggregate through the `General` entity
+ * (GeneralLedgerConfigurationHandler in com.etendoerp.go, see useGeneralLedgerConfig).
  */
 export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
   const ui = useUI();
@@ -45,6 +48,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
   const [savedOk, setSavedOk] = useState(false);
   const [generalErrors, setGeneralErrors] = useState({});
   const [defaultsErrors, setDefaultsErrors] = useState({});
+  const [generalAccountsErrors, setGeneralAccountsErrors] = useState({});
 
   useSetPageMeta({
     title: ui('glc.title'),
@@ -60,9 +64,15 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
     for (const k of REQUIRED_DEFAULTS) {
       if (!defaults[k]) dErr[k] = ui('glc.validation.required');
     }
+    const gaErr = {};
+    for (const [use, acct] of BALANCING_PAIRS) {
+      if (generalAccounts[use] && !generalAccounts[acct]) gaErr[acct] = ui('glc.validation.required');
+    }
     setGeneralErrors(gErr);
     setDefaultsErrors(dErr);
-    return { ok: Object.keys(gErr).length === 0 && Object.keys(dErr).length === 0, gErr, dErr };
+    setGeneralAccountsErrors(gaErr);
+    const ok = [gErr, dErr, gaErr].every((e) => Object.keys(e).length === 0);
+    return { ok, gErr, dErr };
   }
 
   async function handleSave() {
@@ -71,6 +81,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
       // Jump to the first tab that has an error so the user sees it.
       if (Object.keys(gErr).length > 0) setActiveTab(0);
       else if (Object.keys(dErr).length > 0) setActiveTab(1);
+      else setActiveTab(GENERAL_ACCOUNTS_TAB);
       return;
     }
     setSaving(true);
@@ -79,6 +90,18 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
     } catch (err) {
+      // The backend refused a balancing account the page could not see missing (e.g. cleared over
+      // the API meanwhile): mark it like the local check does; its English message is for API callers.
+      const error = err.body?.error;
+      const missing = error?.code === 'MISSING_REQUIRED_FIELDS'
+        ? BALANCING_PAIRS.map(([, acct]) => acct).filter((acct) => error.fields?.includes(acct))
+        : [];
+      if (missing.length > 0) {
+        setGeneralAccountsErrors(Object.fromEntries(missing.map((acct) => [acct, ui('glc.validation.required')])));
+        setActiveTab(GENERAL_ACCOUNTS_TAB);
+        toast.error(ui('requiredFieldsMissing'));
+        return;
+      }
       toast.error(translateBackendError(err.message, ui, {
         messageKeys: extractBackendMessageKeys(err.body),
         messageParams: extractBackendMessageParams(err.body),
@@ -152,6 +175,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
               generalAccounts={generalAccounts}
               accountOptions={catalogs.accounts}
               setGeneralAccountsField={setGeneralAccountsField}
+              errors={generalAccountsErrors}
               data-testid="GeneralAccountsTab__79cd86" />
           )}
         </div>

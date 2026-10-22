@@ -39,7 +39,7 @@ vi.mock('../DimensionsTab.jsx', () => ({
   default: () => <div data-testid="dimensions-tab" />,
 }));
 vi.mock('../GeneralAccountsTab.jsx', () => ({
-  default: () => <div data-testid="general-accounts-tab" />,
+  default: (props) => <div data-testid="general-accounts-tab" data-errors={JSON.stringify(props.errors)} />,
 }));
 
 vi.mock('@/components/ui/button', () => ({
@@ -260,5 +260,75 @@ describe('GeneralLedgerConfigPage — save failure (ETP-5693)', () => {
     renderPage();
     fireEvent.click(screen.getByTestId('glc-save'));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Accounting combination not found: abc'));
+  });
+});
+
+describe('GeneralLedgerConfigPage — balancing account required while its switch is on (ETP-5724)', () => {
+  async function clickSave() {
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('glc-save'));
+    });
+  }
+
+  async function generalAccountsErrors() {
+    const tab = await screen.findByTestId('general-accounts-tab');
+    return JSON.parse(tab.getAttribute('data-errors'));
+  }
+
+  it.each([
+    ['suspenseBalancingUse', 'suspenseBalancing'],
+    ['currencyBalancingUse', 'currencyBalancingAcct'],
+  ])('switch %s on without %s blocks the save and lands on the General Accounts tab', async (use, acct) => {
+    const save = vi.fn();
+    vi.mocked(useGeneralLedgerConfig).mockReturnValue(
+      makeHook({ save, generalAccounts: { [use]: true, [acct]: null } }),
+    );
+    renderPage();
+    await clickSave();
+    expect(save).not.toHaveBeenCalled();
+    expect(await generalAccountsErrors()).toEqual({ [acct]: 'glc.validation.required' });
+  });
+
+  it('saves when the switch is on with its account, or off without one', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useGeneralLedgerConfig).mockReturnValue(makeHook({
+      save,
+      generalAccounts: { suspenseBalancingUse: true, suspenseBalancing: 'acct-1', currencyBalancingUse: false },
+    }));
+    renderPage();
+    await clickSave();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('an error on the General tab wins over one on General Accounts', async () => {
+    vi.mocked(useGeneralLedgerConfig).mockReturnValue(makeHook({
+      general: { name: '', currency: 'EUR' },
+      generalAccounts: { suspenseBalancingUse: true },
+    }));
+    renderPage();
+    fireEvent.click(screen.getByText('glc.tab.dimensions'));
+    await clickSave();
+    expect(await screen.findByTestId('general-tab')).toBeInTheDocument();
+  });
+
+  it('a backend MISSING_REQUIRED_FIELDS on a balancing account marks it, jumps there and toasts a translated text', async () => {
+    const err = new Error('suspenseBalancing is required while suspenseBalancingUse is true');
+    err.status = 400;
+    err.body = { error: { code: 'MISSING_REQUIRED_FIELDS', fields: ['suspenseBalancing'] } };
+    vi.mocked(useGeneralLedgerConfig).mockReturnValue(makeHook({ save: vi.fn().mockRejectedValue(err) }));
+    renderPage();
+    await clickSave();
+    expect(await generalAccountsErrors()).toEqual({ suspenseBalancing: 'glc.validation.required' });
+    expect(toast.error).toHaveBeenCalledWith('requiredFieldsMissing');
+  });
+
+  it('a rejection without a body only toasts', async () => {
+    vi.mocked(useGeneralLedgerConfig).mockReturnValue(
+      makeHook({ save: vi.fn().mockRejectedValue(new Error('boom')) }),
+    );
+    renderPage();
+    await clickSave();
+    expect(toast.error).toHaveBeenCalledWith('boom');
+    expect(screen.getByTestId('general-tab')).toBeInTheDocument();
   });
 });
