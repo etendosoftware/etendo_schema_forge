@@ -50,6 +50,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | O1 | SII / Fiscal Master Data | The "Causa de exencion" (exemption cause) selector on the invoice SIF/SII tab was empty for every tenant except GOClient and one other tenant that had already received a private copy via `R17-sii-cause-exemption` (ETP-4751) — `AEATSII_CAUSE_EXEMPTION` had no `ad_client_id='0'` rows at all | **Redesigned mid-flight** (2026-09-25) from a per-tenant onboarding-dataset addition to SIX SHARED SYSTEM ROWS: preventive is `modules/com.etendoerp.go/src-db/database/sourcedata/AEATSII_CAUSE_EXEMPTION.xml` (module system data, `ad_client_id='0'`, loaded independently of any tenant's onboarding run — no `OnboardingDatasetDefinition.INCLUDED_TABLES` entry); corrective is `R40-aeatsii-cause-exemption-catalog`, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover | ETP-5481 |
 | T1 | Demo data transfer | Contacts copied by the demo-to-production transfer land with `BP_Currency_ID` NULL, so Core refuses to complete any invoice, order, shipment or payment for them (`InitBPCurrencyLnk`). The copy runs through DAL as System and bypasses the NEO hook that defaults a new contact's currency | Both fronts closed: preventive `DemoDataTransferEntityCopier#targetContactCurrency` (source currency, else the target organization's); corrective data-fix (`R49-bpartner-currency-from-org`) for **every** partner without currency, migrated or not. CUT NOT bumped — not an onboarding gap: the transfer runs after provisioning, so the watermark says nothing about it | ETP-5768 |
 | U1 | SII / Fiscal Master Data | Module `com.etendoerp.go.localization.es.data` ships two `FinancialMgmtTaxCategory` ("Standard") rows that both read "IVA Normal" in Spanish — the obsolete one (`c_taxcategory_id` `828E8E40DD3C4FA6A4F531569D26A6AF`) was renamed "OLD IVA Normal" in English but its `es_ES` translation (`FinancialMgmtTaxCategoryTrl` id `FE6B21A01CB141818AD4F1A12E60F594`) was never updated and the row was left `isactive='Y'` — so the Tax Category selector (OCR "Nuevo producto" popup, Product window) shows "IVA Normal" twice for es_ES tenants. The row is SYSTEM-owned (`ad_client_id='0'`); `C_TaxCategory` (AD_Table 252) is AccessLevel 7, so it is visible to every client. No active tax rate hangs off it — the only `FinancialMgmtTaxRate` under it (`867FFFAC82CC44069FE6497E4C5C6348`, "IVA Normal") was already deactivated by ETP-4944 ("Keep IVA Normal, live invoice reference found"), which cleaned up the tax-rate catalog but never touched the category itself | Both fronts closed, shaped like O1 (single shared System row, not per-tenant): preventive is reference-data-only — `referencedata/standard/Spanish_Fiscal_Taxes_Go.xml` (module `com.etendoerp.go.localization.es.data`) flips `<active>` to `false` on the id-828E8E… `FinancialMgmtTaxCategory` element; corrective data-fix (`R50-tax-category-old-iva-normal-deactivate`) deactivates the already-provisioned System row, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. Deactivating (not deleting) means any product that already references this category keeps a valid FK and still opens. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover | ETP-5802 |
+| Q1 | Surveys | The "Survey Configuration" window (`ETGO_Survey_Config` / `ETGO_Survey_Type` / `ETGO_Survey_Canned_Resp`) starts completely empty for every install — all NPS/CSAT tuning (cooldowns, min documents, canned response chips) is governed by hardcoded defaults in schema_forge's `survey-config.js`/`surveys.js`, invisible to the admin unless they read source. `csat_onboarding` is the worst case: it has no row at all, not even a stub to edit | Both fronts closed, shaped like O1/U1 (System pseudo-tenant singleton, not per-tenant — confirmed by reading `SurveyConfigServlet`'s three read queries, which carry no `ad_client_id` filter at all): preventive is `OnboardingSurveyConfigService#seedSurveyConfig`, wired as the last business step in `OnboardingProvisioningChain#ensureOnboardingDataset`; corrective data-fix (`R51-etgo-survey-config-seed`) seeds the config singleton, the 4 survey type rows and their 38 canned response rows, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover, and bumping it would risk silently skipping other per-tenant fixes (R41..R50) not yet closed on their own preventive front | ETP-5870 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -3092,6 +3093,127 @@ create (ETP-3660). The paths that require them (`CreateDraftInvoiceHandler`,
 rolled-back transaction: `keepDataProd2` (a transfer of `keepDataDemo`) 3 rows, `QA Testing` 6
 rows (3 of them in organization `0`, resolved from the client base currency), re-check 0 rows.
 Not yet run against the full dev tenant universe.
+
+---
+
+## Q — Survey Configuration
+
+### Q1 — "Survey Configuration" window born empty, `csat_onboarding` has no row at all (ETP-5870)
+
+**Symptom:** the backoffice "Survey Configuration" window (`ETGO_Survey_Config` /
+`ETGO_Survey_Type` / `ETGO_Survey_Canned_Resp`) is completely empty for every install. All
+NPS/CSAT survey behavior — global cooldowns, per-survey eligibility thresholds (min account age,
+inactivity guard, min documents, document gap, response cooldown), canned CSAT/NPS response chips
+— is governed entirely by hardcoded fallback defaults in schema_forge's `survey-config.js` /
+`surveys.js`. An admin cannot discover that a knob exists, let alone tune it, without reading
+frontend source. `csat_onboarding` is the worst case: its `ETGO Survey Key` reference value was
+added in ETP-4353 Phase 2, but no row was ever seeded for it — there was not even a stub to edit.
+
+**Root cause:** the window's three backing tables were always designed to be populated by hand by
+an Etendo GO team member (see `docs/surveys.md` → Configuration), but nothing — neither onboarding
+nor a corrective pass — ever actually populated them. `SurveyConfigServlet`'s three read queries
+(`GLOBAL_QUERY`, `SURVEY_TYPES_QUERY`, `CANNED_QUERY`) return whatever rows exist, with no
+`ad_client_id` filter at all, confirming (independently of `docs/surveys.md`'s own "single row,
+`AD_Client_ID='0'`" note) that this is a System pseudo-tenant singleton per physical install — one
+SaaS tenant has one install, so this is effectively per-tenant in practice, just not expressed as
+per-`AD_Client` rows the way chart-of-accounts/org-tree gaps are.
+
+**Preventive fix:** `OnboardingSurveyConfigService#seedSurveyConfig`
+(`modules/com.etendoerp.go/src/com/etendoerp/go/onboarding/OnboardingSurveyConfigService.java`),
+wired as the last business step in `OnboardingProvisioningChain#ensureOnboardingDataset`, right
+before the baseline stamp. Inserts, if not already present anywhere in the install:
+- 1 `ETGO_Survey_Config` row (`GLOBAL_COOLDOWN_DAYS=30`, `DISMISSED_COOLDOWN_DAYS=21`,
+  `MAX_PER_MONTH=2`).
+- 4 `ETGO_Survey_Type` rows (`nps`, `csat_onboarding`, `csat_invoicing`, `csat_order`), each with
+  the exact field pattern `survey-config.js` already treats as the default — notably
+  `csat_onboarding.MIN_ACCOUNT_AGE_DAYS=1`, **not** 60 (that column is reused with a different
+  meaning per survey — "days since onboarding completed" vs. "days since account creation").
+- 38 `ETGO_Survey_Canned_Resp` rows (`nps`: 7 chips, `csat_invoicing`/`csat_order`: 6 chips each,
+  × `en_US`/`es_ES`) — only for the 3 survey keys that have a hardcoded fallback list today;
+  `csat_onboarding` gets none. Text is the exact current locale strings from
+  `tools/app-shell/src/locales/en_US.json`/`es_ES.json`, not the locale keys. CSAT rows are forced
+  to `MIN_SCORE=1, MAX_SCORE=5` (the full range) rather than the column default of `1-3`, which
+  would silently restrict those chips to 1-3 star responses — the hardcoded fallback list has no
+  score band at all (always shown).
+
+Every insert is independently `NOT EXISTS`-guarded (config: any row at all; survey type: by
+`survey_key`; canned response: by `(etgo_survey_type_id, language, line_no)`), and the survey
+type's real id is always re-read after its guarded insert so canned responses never reference a
+stale id.
+
+**Corrective fix:** `20261021T120000Z__R51-etgo-survey-config-seed.sql` — the identical seed,
+shaped exactly like O1/U1 (every statement scoped to `:client_id` to satisfy the framework's
+literal tenant-scope rule, the anchor rows genuinely owned by the System client), run once per
+install:
+
+```bash
+node cli/src/data-fixes/run.js --fix R51-etgo-survey-config-seed --client 0
+```
+
+Never picked up by the default per-tenant sweep (the runner's tenant-universe query excludes
+`ad_client_id='0'`).
+
+**CUT not bumped — and deliberately so.** `ONBOARDING_PROVISIONED_THROUGH` stays at
+`2026-09-02T12:00:00Z`. Same reasoning as O1/U1: the watermark is keyed per real tenant
+(`remediated_client_id`) and only gates the per-tenant corrective sweep, which this System
+pseudo-tenant data never enters either way. Bumping it would have done nothing for this gap while
+risking silently skipping every other per-tenant corrective fix dated between the current cutoff
+and this one for brand-new tenants — several of R41..R50 are themselves deliberately not yet
+closed on their own preventive front, and the watermark skip happens *before* `@check` even runs.
+
+**Idempotency verification:** validated via the existing data-fixes test harness
+(`data-fixes-catalog-ordering.test.js` — no timestamp collision; `data-fixes-run.test.js` /
+`data-fixes-parse-fix.test.js` — catalog loads and parses cleanly) plus the dedicated regression
+suite `cli/test/data-fixes-r51-etgo-survey-config-seed.test.js` (tester-functional). Not yet run
+against a live Postgres instance in this session (no local DB reachable at the time); Sentinel
+did reproduce bug 3 below against the dev DB inside a rolled-back transaction.
+
+**Three bugs found during QA before this shipped, all fixed in the same revision:**
+1. (tester-functional) Every `@uuid_<KEY>@` placeholder originally used an underscore inside KEY
+   (e.g. `@uuid_NPS_SPEED_EN@`). `parse-fix.js`'s `UUID_TOKEN` regex is alnum-only
+   (`/@uuid_([0-9A-Za-z]+)@/g`, no underscore), so all 38 canned-response placeholders would have
+   inserted the literal placeholder string as a primary key. Fixed by renaming every placeholder
+   to an alnum-only key (`NPSSPEEDEN`, `INV1EN`, ...) rather than widening the shared regex (a
+   framework-wide change out of scope here).
+2. (tester-functional) Neither `@check` nor any `@apply` statement filtered
+   `ad_client_id = :client_id` anywhere — unlike R40/R50, which filter every statement by it (the
+   framework's own non-negotiable rule, `sql/README.md` rule 1). Fixed by scoping every statement
+   to `ad_client_id = :client_id`, mirroring R40/R50.
+3. (Sentinel, live-reproduced with a rolled-back transaction) Bug 2's fix alone was **not**
+   sufficient: once `@check`/`@apply` are scoped to the caller's `:client_id`, a normal full sweep
+   (`make data-fixes`, no `--fix`) still evaluates R51 once per REAL tenant, and the existence
+   logic still legitimately reports "needed" for each one — so `@apply` would have reseeded all 43
+   rows under every real tenant's own `ad_client_id` on the very first sweep after merge. O1/R40
+   and U1/R50 share this exact shape but are lower-risk because their target tables ARE read
+   through Etendo's standard DAL/selector client-visibility filter (a stray row under a real
+   tenant is at most an extra option visible only to that tenant); R51 is categorically worse
+   because `SurveyConfigServlet` has **no** `ad_client_id` filter at all on any of its 3 read
+   queries, so a stray duplicate is served **globally** to every tenant sharing the install
+   (confirmed live: NPS chips 7→14 per language, CSAT chips 6→12, 2 config rows, 2 survey-type
+   rows per key). `@optIn: true` was considered and rejected — `optInChainGate` requires every
+   earlier chain fix to already be `PROCESSED` in the ledger for the *target* client, but client
+   `'0'` structurally never accumulates ledger rows (excluded from
+   `resolveTenants`/`tenantsWithoutLedger`), so marking R51 opt-in would make its one sanctioned
+   invocation (`--fix R51-etgo-survey-config-seed --client 0`) itself fail as
+   `BLOCKED_CHAIN_BEHIND`. Fixed with a **literal client guard** at the top of `@check` —
+   `WHERE :client_id = '0' AND (...)` wraps the entire existence logic — making the fix
+   structurally a no-op (0 rows, `SKIPPED_NOT_NEEDED`) for any client other than the System
+   pseudo-tenant, regardless of what the existence checks would otherwise report. The preventive
+   Java twin does **not** share this risk: every column value `OnboardingSurveyConfigService`
+   writes (including `ad_client_id`/`ad_org_id`) is a hardcoded Java string literal `'0'`, never
+   parameterized by whichever real `clientId` triggered that onboarding call — confirmed by
+   re-reading its SQL constants.
+
+**Follow-up flagged, not blocking this ticket:** O1 (`R40`) and U1 (`R50`) share the same
+"no literal client guard in `@check`" shape as R51's bug 3 and would benefit from the same
+hardening if their target tables (`AEATSII_CAUSE_EXEMPTION`, the tax-category row) ever stop being
+read exclusively through the standard DAL/selector client-visibility filter. Today they are
+lower-risk because that filter already contains the blast radius to "an extra option visible to
+one tenant." Tracked here as a candidate follow-up, not required for this ticket.
+
+**Docs:** `docs/surveys.md` → Configuration section updated to drop the "starts empty, admin must
+create a row" framing and the `csat_onboarding` "needs a new row to become configurable" caveat —
+both are no longer true.
 
 ---
 
