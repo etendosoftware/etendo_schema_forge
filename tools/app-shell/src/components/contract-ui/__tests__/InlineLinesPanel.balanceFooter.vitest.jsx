@@ -124,8 +124,9 @@ describe('InlineLinesPanel — balanceFooter totals row', () => {
 
     const row = screen.getByTestId('balance-footer-row');
     // Structure mirrors the header row: [checkbox placeholder] [account] [debit] [credit] [right spacer].
-    // No dimensionsPanel column and no reserved action slot in this fixture (the
-    // trailing amount column — credit — always supplies the hover-action slot).
+    // No dimensionsPanel column in this fixture; the reserved action slot (an editable
+    // table always has one since ETP-5600) sits after the last column, so index 1 is
+    // still the account cell.
     const accountCell = row.children[1];
     expect(accountCell).not.toBe(within(row).getByTestId('balance-footer-debit'));
     expect(accountCell).not.toBe(within(row).getByTestId('balance-footer-credit'));

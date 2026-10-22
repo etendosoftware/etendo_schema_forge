@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -22,7 +23,7 @@ vi.mock('@/components/ui/checkbox', () => ({
   ),
 }));
 
-import DocumentTotalsPanel from '../DocumentTotalsPanel.jsx';
+import DocumentTotalsPanel, { TOTALS_RIGHT_PADDING } from '../DocumentTotalsPanel.jsx';
 
 const LINE_CONFIG = { qtyField: 'qty', priceField: 'unitPrice', discountField: 'discount', grossField: 'lineGrossAmount' };
 const LINES = [
@@ -386,6 +387,27 @@ describe('DocumentTotalsPanel', () => {
       // so label.nextElementSibling does not reach it directly).
       const valueSpan = container.querySelector('span.ml-auto');
       expect(valueSpan.textContent).toBe('0.45');
+    });
+  });
+
+  describe('right padding (footer no-overlap rule)', () => {
+    it('collapses from 48px at >= 504px wide to 0 at <= 456px', () => {
+      expect(TOTALS_RIGHT_PADDING).toBe('clamp(0px, calc(100% - 456px), 48px)');
+      // jsdom has no layout and drops clamp(), so the formula is evaluated numerically.
+      const pr = (block) => Math.min(48, Math.max(0, block - 456));
+      expect(pr(504)).toBe(48);
+      expect(pr(456)).toBe(0);
+      expect(pr(304)).toBe(0);
+    });
+
+    it('applies the padding to the totals block that holds the rows', () => {
+      render(<DocumentTotalsPanel lines={LINES} lineConfig={LINE_CONFIG} formatAmount={(v) => `${v}`} currency="EUR" />);
+      const block = screen.getByTestId('totals-row-total').closest('div.w-full.text-sm');
+      expect(block).not.toBeNull();
+      // jsdom drops the clamp() declaration from element.style, so read the style prop
+      // React actually passed to the DOM node instead.
+      const propsKey = Object.keys(block).find((k) => k.startsWith('__reactProps$'));
+      expect(block[propsKey].style.paddingRight).toBe(TOTALS_RIGHT_PADDING);
     });
   });
 });

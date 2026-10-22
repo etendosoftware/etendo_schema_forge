@@ -69,9 +69,9 @@ const COSTING_COLUMNS = [
   { key: 'endingDate', column: 'DateTo', type: 'date', label: 'Ending Date' },
 ];
 
-// Document lines: the amount IS last, so it doubles as the action strip and NO extra
-// slot is reserved. This is the shape that already rendered correctly — it pins that
-// the fix did not just "always reserve 160px".
+// Document lines: the amount IS last. Until ETP-5600 it doubled as the action strip and
+// NO extra slot was reserved; an editable table now always reserves the slot (the strip
+// is sticky and needs room of its own past the last column), on both renderers.
 const TRAILING_AMOUNT_COLUMNS = [
   { key: 'product', column: 'M_Product_ID', type: 'string', label: 'Product' },
   { key: 'quantity', column: 'QtyOrdered', type: 'quantity', label: 'Quantity' },
@@ -286,20 +286,20 @@ describe.each([
 });
 
 describe('the reserved action slot itself (ETP-5245)', () => {
-  it('reserves 160px in the add-row whenever the header does — Producto > Costo', () => {
+  it('reserves the 158px action slot in the add-row whenever the header does — Producto > Costo', () => {
     const { headerLayout, addRowLayout } = layoutsFor(COSTING_COLUMNS);
-    // checkbox 40 + amount basis 172 + action slot 160 + right spacer 48.
-    expect(headerLayout.fixedPx).toBe(420);
-    expect(addRowLayout.calcFixedPx).toBe(420);
+    // checkbox 40 + amount basis 172 + action slot 158 + right spacer 48.
+    expect(headerLayout.fixedPx).toBe(418);
+    expect(addRowLayout.calcFixedPx).toBe(418);
     // The two date columns keep their own 130px basis and split what is left.
     expect(addRowLayout.growBases).toEqual([130, 130]);
   });
 
-  it('reserves NO extra slot when the trailing amount column doubles as the strip', () => {
+  it('reserves the slot too when the amount column is last, on an editable table (ETP-5600)', () => {
     const { headerLayout, addRowLayout } = layoutsFor(TRAILING_AMOUNT_COLUMNS);
-    // checkbox 40 + quantity 152 + amount 172 + right spacer 48 — no 160px slot.
-    expect(headerLayout.fixedPx).toBe(412);
-    expect(addRowLayout.calcFixedPx).toBe(412);
+    // checkbox 40 + quantity 152 + amount 172 + action slot 158 + right spacer 48.
+    expect(headerLayout.fixedPx).toBe(570);
+    expect(addRowLayout.calcFixedPx).toBe(570);
   });
 });
 

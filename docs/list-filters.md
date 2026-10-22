@@ -23,6 +23,8 @@ line 2  [ Subset | Subset | Subset ]
 
 All four combine with AND at query time. Empty / default selections contribute nothing — a totally unfiltered list shows when every surface is at its default state.
 
+> Saved named filter presets (`useWindowFilterPresets`) store filters only. They are not column layouts; column width/order/visibility views are evaluated in [plans/grid-customization-evaluation.md](plans/grid-customization-evaluation.md) (ETP-5834, decision pending).
+
 ## Toolbar layout (ETP-5509)
 
 The idle list bar is a single flex-wrap row (`list-toolbar-main-row`), with no bottom border (ETP-5601).

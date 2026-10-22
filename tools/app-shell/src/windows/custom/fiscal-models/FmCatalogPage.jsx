@@ -1,20 +1,46 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUI } from '@/i18n';
-import { X } from 'lucide-react';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
+import { TriangleAlert, X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
+import { listModels, getModel } from './modelRegistry.js';
+import useOrgSiiStatus, { isSiiJoinedDuringYear } from './useOrgSiiStatus.js';
 
-const CATALOG = [
-  { id: '303', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
-  { id: '349', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
-];
+// The catalog lists every registered model (id, periodicities, default state, lock, badge
+// variant) — see modelRegistry.js.
+const CATALOG = listModels();
+const ANY_SII_WARNING = CATALOG.some(m => m.siiWarningOnActivate);
 
-// Only 303 and 349 support per-model configuration
-const CONFIGURABLE = new Set(['303', '349']);
-
-// Badge variant per model id
-const BADGE_VARIANT = { '303': '303', '349': '349' };
+// ETP-5716 — inline, non-blocking confirmation under a card whose model asks for it
+// (`siiWarningOnActivate`) when the organization is in the SII: "Cancelar" leaves it off,
+// "Activar" activates it. Amber (warning role), inside the card list so it needs no extra layer.
+// When the organization joined the SII after 1 January of the current year (`sinceLabel`), it was
+// not in the SII for the whole year: the text says "en el SII desde <fecha>" instead of implying
+// an exemption for the year.
+function SiiActivationWarning({ sinceLabel, onCancel, onConfirm, t }) {
+  return (
+    <div className="fm-banner fm-banner--warning fm-catalog-sii-warning" role="alertdialog" aria-live="polite" data-testid="FmCatalogPage__siiWarning">
+      <div className="fm-catalog-sii-warning__msg">
+        <TriangleAlert size={16} strokeWidth={1.75} className="fm-catalog-sii-warning__icon" data-testid="TriangleAlert__fmCatalogSii" />
+        <span>
+          <strong>{sinceLabel ? t('fm.catalog.sii_warning_since_title', { date: sinceLabel }) : t('fm.catalog.sii_warning_title')}</strong>
+          {' '}
+          {sinceLabel ? t('fm.catalog.sii_warning_since_body', { date: sinceLabel }) : t('fm.catalog.sii_warning_body')}
+        </span>
+      </div>
+      <div className="fm-catalog-sii-warning__actions">
+        <button type="button" className="fm-btn fm-btn--cancel-pill" onClick={onCancel} data-testid="FmCatalogPage__siiCancel">
+          {t('fm.action.cancel')}
+        </button>
+        <button type="button" className="fm-btn fm-btn--save-pill fm-btn--save-pill--active" onClick={onConfirm} data-testid="FmCatalogPage__siiConfirm">
+          {t('fm.catalog.activate')}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // Toggle switch component
 function ToggleSwitch({ checked, onChange, disabled }) {
@@ -45,23 +71,46 @@ function ToggleSwitch({ checked, onChange, disabled }) {
 
 export default function FmCatalogPage({ onBack, onSave, activeModels, token, apiBaseUrl }) {
   const t = useUI();
+  const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
   const [active, setActive] = useState(
     () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
   );
   const [configModel, setConfigModel] = useState(null);
+  // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null, and
+  // the formatted SII date when the organization joined during the current year.
+  const [siiPendingId, setSiiPendingId] = useState(null);
+  const [siiSinceLabel, setSiiSinceLabel] = useState(null);
+  const getSiiStatus = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
 
   const handleClose = () => { onSave?.(active); onBack?.(); };
 
   // ETP-5187 (adjacent scope) — Modelo 303 needs a default IAE activity configured for its
   // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
-  // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of 303 itself —
-  // never on deactivation, never for any other model.
-  const toggleModel = (id) => setActive(prev => {
+  // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of a model whose
+  // registry entry asks for it (`iaeReminderOnActivate`: 303 only) — never on deactivation.
+  const applyToggle = (id) => setActive(prev => {
     const next = { ...prev, [id]: !prev[id] };
-    if (id === '303' && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
+    if (getModel(id)?.iaeReminderOnActivate && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
     return next;
   });
+  // ETP-5716 — activating a `siiWarningOnActivate` model for an organization in the SII asks
+  // first (SiiActivationWarning). Deactivating, or an organization outside the SII (or an SII
+  // status that cannot be read), toggles right away.
+  const toggleModel = async (id) => {
+    if (!getModel(id)?.siiWarningOnActivate || active[id]) {
+      applyToggle(id);
+      return;
+    }
+    const status = await getSiiStatus();
+    if (!status?.active) {
+      applyToggle(id);
+      return;
+    }
+    const joinedThisYear = isSiiJoinedDuringYear(status.since, new Date().getFullYear());
+    setSiiSinceLabel(joinedThisYear ? formatCalendarDate(status.since, locale || 'es-ES') : null);
+    setSiiPendingId(id);
+  };
   const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
 
@@ -110,11 +159,11 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
             {sortedCatalog.map(model => {
               const isActive = active[model.id];
               const isLocked = model.locked;
-              const badgeVariant = BADGE_VARIANT[model.id] ?? 'muted';
+              const badgeVariant = model.badgeVariant ?? 'muted';
               return (
                 <div
                   key={model.id}
-                  className={`fm-catalog-card${isActive && !isLocked ? ' fm-catalog-card--active' : ''}${isLocked ? ' fm-catalog-card--locked' : ''}`}
+                  className={`fm-catalog-card${isActive && !isLocked ? ' fm-catalog-card--active' : ''}${isLocked ? ' fm-catalog-card--locked' : ''}${siiPendingId === model.id ? ' fm-catalog-card--attention' : ''}`}
                 >
                   <span className={`fm-catalog-card__badge fm-catalog-card__badge--${badgeVariant}`}>
                     {model.id}
@@ -130,6 +179,14 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
                       ))}
                     </div>
                   </div>
+                  {siiPendingId === model.id && (
+                    <SiiActivationWarning
+                      t={t}
+                      sinceLabel={siiSinceLabel}
+                      onCancel={() => setSiiPendingId(null)}
+                      onConfirm={() => { setSiiPendingId(null); applyToggle(model.id); }}
+                      data-testid="SiiActivationWarning__4ee693" />
+                  )}
                   <div className="fm-catalog-card__actions" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {isLocked ? (
                       <span style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', fontWeight: 400, whiteSpace: 'nowrap' }}>

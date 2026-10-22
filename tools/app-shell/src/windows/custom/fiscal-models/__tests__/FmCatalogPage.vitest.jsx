@@ -1,14 +1,17 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
 // Vitest component tests for FmCatalogPage.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
   X: () => null,
+  TriangleAlert: () => null,
   Check: () => null,
   Star: () => null,
 }));
@@ -21,6 +24,17 @@ vi.mock('../FmOverlays.jsx', () => ({
 // navigation itself, so a plain stub is enough — mirrors FmModel303Page.vitest.jsx's own mock.
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
+// ETP-5716 — the organization's SII status (controls the 390 activation warning). Not in the SII
+// by default, so every pre-existing test toggles straight away.
+const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0 }));
+vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    default: () => () => { sii.calls += 1; return Promise.resolve({ active: sii.active, since: sii.since }); },
+  };
+});
+
 import FmCatalogPage from '../FmCatalogPage.jsx';
 
 const defaultProps = {
@@ -31,6 +45,9 @@ const defaultProps = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sii.active = false;
+  sii.since = null;
+  sii.calls = 0;
 });
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -41,10 +58,11 @@ describe('FmCatalogPage — rendering', () => {
     expect(document.body.textContent).toContain('fm.catalog.title');
   });
 
-  it('renders a card for each catalog model (2 total)', () => {
+  // ETP-5716 — the registry has 3 models (303, 349 and the annual 390).
+  it('renders a card for each catalog model (3 total)', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const cards = container.querySelectorAll('.fm-catalog-card');
-    expect(cards.length).toBe(2);
+    expect(cards.length).toBe(3);
   });
 
   it('shows total catalog count badge (2)', () => {
@@ -119,8 +137,8 @@ describe('FmCatalogPage — rendering', () => {
   it('303 and 349 pills render simultaneously without cross-contamination', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const allPills = container.querySelectorAll('.fm-catalog-card__pill');
-    // 2 pills per model x 2 models = 4 pills total, rendered together.
-    expect(allPills.length).toBe(4);
+    // 2 pills each for 303 and 349 + 1 ("Anual") for 390 (ETP-5716), rendered together.
+    expect(allPills.length).toBe(5);
   });
 });
 
@@ -147,10 +165,10 @@ describe('FmCatalogPage — toggle', () => {
     expect(document.body.textContent).toContain('1');
   });
 
-  it('both 303 and 349 have a toggle switch (no locked models in the catalog)', () => {
+  it('every model (303, 349, 390) has a toggle switch (no locked models in the catalog)', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     const switches = container.querySelectorAll('[role="switch"]');
-    expect(switches.length).toBe(2);
+    expect(switches.length).toBe(3);
   });
 
   it('no cards have the --locked CSS class', () => {
@@ -161,10 +179,11 @@ describe('FmCatalogPage — toggle', () => {
 
   it('re-sorts cards so the still-active model renders first after a toggle', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
-    // Initially both active — id order wins the tie-break (303 before 349).
+    // Initially 303 and 349 active — id order wins the tie-break (303 before 349); the inactive
+    // 390 (ETP-5716, not in activeModels) sorts after them.
     let order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
       .map(b => b.textContent);
-    expect(order).toEqual(['303', '349']);
+    expect(order).toEqual(['303', '349', '390']);
 
     // Deactivate 303 (first switch) — 349 (still active) should now sort first.
     const switches = container.querySelectorAll('[role="switch"]');
@@ -172,7 +191,7 @@ describe('FmCatalogPage — toggle', () => {
 
     order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
       .map(b => b.textContent);
-    expect(order).toEqual(['349', '303']);
+    expect(order).toEqual(['349', '303', '390']);
   });
 });
 
@@ -319,5 +338,95 @@ describe('FmCatalogPage — active count', () => {
       />
     );
     expect(document.body.textContent).toContain('0');
+  });
+});
+
+// ── SII warning on activating 390 (ETP-5716) ─────────────────────────────────
+
+describe('FmCatalogPage — SII warning when activating the 390', () => {
+  const switchOf = (container, id) => {
+    const card = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === id);
+    return card.querySelector('[role="switch"]');
+  };
+
+  it('shows the 390 card with the single "Anual" chip', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    const card = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '390');
+    const pills = Array.from(card.querySelectorAll('.fm-catalog-card__pill')).map(p => p.textContent);
+    expect(pills).toEqual(['fm.catalog.periodicity.annual']);
+    expect(card.textContent).toContain('fm.catalog.390.name');
+  });
+
+  it('organization in the SII: asks first, "Activar" activates it', async () => {
+    sii.active = true;
+    const onSave = vi.fn();
+    const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
+    fireEvent.click(switchOf(container, '390'));
+    await screen.findByTestId('FmCatalogPage__siiWarning');
+    const warning = screen.getByTestId('FmCatalogPage__siiWarning');
+    // Bold first sentence, then the rest; the 390 card is highlighted while it is open.
+    expect(warning.querySelector('strong').textContent).toBe('fm.catalog.sii_warning_title');
+    expect(warning.textContent).toContain('fm.catalog.sii_warning_body');
+    const card390 = () => Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '390');
+    expect(card390().className).toContain('fm-catalog-card--attention');
+    expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(screen.getByTestId('FmCatalogPage__siiConfirm'));
+    expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+    expect(card390().className).not.toContain('fm-catalog-card--attention');
+    expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '390': true }));
+  });
+
+  it('organization that joined the SII this year: the warning says "since <date>", not exempt', async () => {
+    sii.active = true;
+    const year = new Date().getFullYear();
+    sii.since = `${year}-09-15`;
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    fireEvent.click(switchOf(container, '390'));
+    const warning = await screen.findByTestId('FmCatalogPage__siiWarning');
+    expect(warning.querySelector('strong').textContent).toContain('fm.catalog.sii_warning_since_title');
+    expect(warning.querySelector('strong').textContent).toContain(`15/09/${year}`);
+    expect(warning.textContent).toContain('fm.catalog.sii_warning_since_body');
+  });
+
+  it('organization in the SII since a previous year (or since 1 January): the plain warning', async () => {
+    sii.active = true;
+    sii.since = `${new Date().getFullYear()}-01-01`;
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    fireEvent.click(switchOf(container, '390'));
+    const warning = await screen.findByTestId('FmCatalogPage__siiWarning');
+    expect(warning.textContent).toBe('fm.catalog.sii_warning_title fm.catalog.sii_warning_bodyfm.action.cancelfm.catalog.activate');
+  });
+
+  it('organization in the SII: "Cancelar" leaves it inactive', async () => {
+    sii.active = true;
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    fireEvent.click(switchOf(container, '390'));
+    fireEvent.click(await screen.findByTestId('FmCatalogPage__siiCancel'));
+    expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+    expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('organization outside the SII: activates without asking', async () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    fireEvent.click(switchOf(container, '390'));
+    await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true'));
+    expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+  });
+
+  it('never asks for 303/349, nor when deactivating the 390', async () => {
+    sii.active = true;
+    const { container } = render(<FmCatalogPage {...defaultProps} activeModels={{ '303': true, '349': false, '390': true }} />);
+    fireEvent.click(switchOf(container, '349'));
+    fireEvent.click(switchOf(container, '390'));
+    await waitFor(() => expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false'));
+    expect(switchOf(container, '349').getAttribute('aria-checked')).toBe('true');
+    expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+    expect(sii.calls).toBe(0);
   });
 });

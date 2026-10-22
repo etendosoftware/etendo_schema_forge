@@ -1,7 +1,7 @@
 ---
 description: "reviewer -- Crisol UI. You are Crisol, the code reviewer of the etendo-ui-dev team."
 mode: subagent
-color: "#A855F7"
+color: "purple"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/crisol-ui.md - Regenerate: make sync-agents

@@ -2748,6 +2748,10 @@ The `purchase-invoice:document-created` event is the `refreshEvent`. See `docs/u
 
 ## Header layout at 1280x720 — ETP-5513
 
+- The form's scroll container has no extra padding next to the OCR side panel (`sidebarFormScrollPaddingX=""` in `windows/custom/purchase-invoice/index.jsx`, ETP-5756), so its margins match `/sales-invoice`. `formScrollPaddingX` alone does not apply when a sidebar is present.
+
+- Footer (Docs / Notes / Totals) does not overlap at 1280x720 (ETP-5756). The 320 px sidebar leaves the main area ~690 px; the shared `LinesBottomSection` Totals column now shrinks from 520 px to a 320 px floor only when the footer row leaves the left column under 469 px (`min(520px, max(320px, calc(100% - 469px)))`), and `DocumentTotalsPanel`'s `pr-12` collapses to 0 as the block narrows. The Docs/Notes rows wrap their content under the DOCUMENTOS/NOTAS label when it would get under 20rem, so the chips get the full row and the Notes placeholder stays on one line. Each chip is a single-line pill: only its title truncates (with a `title` tooltip); the status badge always stays beside it. Windows without a side panel keep 520 px / 48 px unchanged. Covered by `components/contract-ui/__tests__/LinesBottomSection.vitest.jsx` (CSS contract; jsdom has no layout, so no pixel check).
+
 - The OCR side panel is a fixed 320 px (`sidePanelStyle={{ width: 320 }}` in
   `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`; it was 360 px).
 - The header form follows the shared responsive rules of `EntityForm` (see
@@ -2823,6 +2827,23 @@ Discovery and edge cases of the purchase invoice import (ETP-5713 review):
 - The gross repair touches only the lines this import added: a deliberate zero line or a negative line already in the draft keeps its gross.
 - The remainder of an order import (ordered and not delivered, or already taken by another draft) is created through the native process with a temporary receipt/shipment marker that is removed right after; a skipped removal rolls the import back (`importQuantityNotHonoured`). `ImportOrderLinesIntoInvoiceHandlerIntegrationTest` runs the real process for the covered-by-draft case.
 - A document of another client answers 404 exactly like a missing one. The source lines are locked with `FOR NO KEY UPDATE`.
+
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a purchase invoice allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<purchase invoice id>)` lists every action and, for that record, says `availableNow`
+  and `unavailableReason`; `documentAction` carries `availableValuesNow` and, for a value ruled out, `unavailableValues`.
+  Unavailable actions stay listed. **Advice only**: it never blocks a call.
+- `documentAction` on the record is the next default action (what the Process button would run); `--` means none.
+- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RC` (void by reversal) or
+  `RE` (reactivate). `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
+  rectified by a completed rectificativa).
+- `post` applies to a completed invoice that is not posted yet, `unpost` to a completed one that is; the import actions (`importOrderLines`, `importReceiptLines` and their `available*` lists) apply to a draft.
+- Posting can answer **409 `costNotCalculated`** (`retryAfterSeconds: 30`) when cost is still being calculated: wait and repeat.
+- Refusals keyed 20501 ("Documento ya procesado") carry a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
 
 ## Unit column in the lines grid (ETP-5696)
 
