@@ -105,6 +105,15 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 
 **Each account selector follows its own toggle (ETP-5682)**, matching the AD display logic (`@UseSuspenseBalancing@='Y'`, `@UseCurrencyBalancing@='Y'`): the selector is shown only while its toggle is on, immediately, without saving. Turning a toggle off only **hides** the selector — the stored account is kept (Classic behavior) and posting reads it only while the flag is on.
 
+**While a toggle is on, its account is required (ETP-5724).** Core posting (`AcctSchema.java`) silently treats "switch on, no account" as off, so the row is refused instead: the selector shows the required marker and cannot be cleared, and `Guardar cambios` with the account empty is blocked on this tab with a required error under the selector. The backend enforces the same rule on every NEO channel that can write the row (REST single and MCP; batch only creates, and creating is closed) for both write paths — the aggregate save (`GeneralLedgerConfigurationHandler`) and a generic PUT/PATCH on `Cuentas generales` (`GeneralLedgerAccountsHandler` → `GeneralLedgerBalancingRule`) — answering `400 MISSING_REQUIRED_FIELDS` with `fields: ["suspenseBalancing"]` / `["currencyBalancingAcct"]`. If the backend refuses a save the page could not foresee (e.g. the account was cleared over the API meanwhile), the page marks the account, jumps to this tab and shows a translated "complete all required fields" toast. `Cuentas generales` cannot be created or deleted through the API (`methods: GET, GETBYID, PUT, PATCH` in `decisions.json` → native `405`, and MCP does not offer create/delete for it): its single row comes from the ledger setup and the window cannot load without it.
+
+Asymmetries that are intended (do not log them as bugs):
+
+- **Classic still accepts** a switch on without its account (unchanged on purpose).
+- A row that is **already broken** blocks every aggregate save, even one that only edits `General`; a generic CRUD write to `Valores por defecto` / `Dimensiones` is not blocked.
+- A **stale** PUT/PATCH on a broken row answers the 400 before the 409 (the pre-hook runs before the stale-record check).
+- A stored account missing from the account list shows empty, required and not clearable (pre-existing).
+
 `Active` (`IsActive` on `C_AcctSchema_GL`) is not surfaced in this tab — it mirrors the window-level `Active` flag and is marked `system` in `decisions.json`.
 
 ## Current Technical State
@@ -118,13 +127,9 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 
 ## Known Gaps
 
-- No NEO spec or `ETGO_SF_*` config for window `125` yet
-- No multi-entity save handler yet
-- No real selector/catalog reads yet
-- `Guardar cambios` is still a frontend stub over mock state
-- **Cuentas generales — a balancing switch can be saved on with no account (ETP-5682 QA, tracked in ETP-5724).** Classic parity: nothing requires `suspenseBalancing` / `currencyBalancingAcct` while its switch is on. Proposed: make the account required while its switch is on.
+- **Generic CRUD on `Valores por defecto` / `Dimensiones` bypasses the aggregate's rules** (required defaults, mandatory and locked dimensions), and POST/DELETE on `Valores por defecto` can leave the window unable to load. Follow-up of ETP-5724, not fixed there.
 
-After the backend wiring lands, remember the Etendo step:
+Any change to `ETGO_SF_*` for this window needs `make regen ONLY=general-ledger-configuration PUSH_TO_NEO=1` and then, in the Etendo root:
 
 ```bash
 ./gradlew export.database
@@ -140,7 +145,7 @@ After the backend wiring lands, remember the Etendo step:
 6. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
 7. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
 8. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear. Confirm the list never shows a row for Organización (`OO`), Cuenta (`AC`), Contacto (`BP`) or Producto (`PR`) — the first two are Etendo's built-in mandatory dimensions, and Contacto/Producto are locked always-on per ETP-4879 (same as `U1`/`U2`) — while Proyecto (`PJ`) and Centro de coste (`CC`) remain visible and toggleable.
-9. On **Cuentas generales**, confirm the three sections render and the two toggle+account pairs (suspense balancing, currency balancing) behave independently, and that no suspense error switch or account is shown: with a toggle off its account selector is hidden; turning it on shows it at once; turning it off again hides it, and turning it back on shows the same account (ETP-5682).
+9. On **Cuentas generales**, confirm the three sections render and the two toggle+account pairs (suspense balancing, currency balancing) behave independently, and that no suspense error switch or account is shown: with a toggle off its account selector is hidden; turning it on shows it at once; turning it off again hides it, and turning it back on shows the same account (ETP-5682). Then turn a toggle on, leave its account empty and save: the save is blocked and the account shows the required marker and a required error (ETP-5724); pick an account and the save goes through.
 
 ## Test Design
 

@@ -62,3 +62,7 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
 
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
+
+## Read-only role tier: no attachment uploads — ETP-5830
+
+With a `read-only` tier on this window the Attachments tab lists, previews and downloads files but shows no upload dropzone and no delete or description edit (`AttachmentsTab` `accessReadOnly`). Before ETP-5830 the dropzone stayed enabled and the upload failed with the raw backend 403; that error is now translated too. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

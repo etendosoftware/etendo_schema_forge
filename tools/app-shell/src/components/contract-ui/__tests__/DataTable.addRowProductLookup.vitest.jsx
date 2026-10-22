@@ -18,7 +18,7 @@
  * Unlike its sibling DataTable suites, this spec deliberately does NOT stub
  * ProductSearchDrawer — the assertion is precisely that the real drawer opens.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -162,6 +162,9 @@ describe('DataTable add-row — the product control comes from addRow.fields, no
       expect(screen.getByTestId('inline-add-field-product')).toHaveTextContent('Agua mineral');
     });
     expect(screen.getByTestId('inline-add-field-product')).not.toHaveAttribute('data-placeholder');
+    // ETP-5133 — the add-row cell truncates until the line is saved, so the full name is on hover.
+    expect(within(screen.getByTestId('inline-add-field-product')).getByText('Agua mineral'))
+      .toHaveAttribute('title', 'Agua mineral');
   });
 
   it('falls back to the selector combo when the add-row entry itself is not a lookup', async () => {

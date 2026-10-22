@@ -953,7 +953,7 @@ That mock now reads `BusinessPartnerHandler.LOCATION_COLUMNS` / `CONTACT_COLUMNS
 arrays `queryChildData()` walks — so it can no longer disagree with the code it exercises, but a
 mock still cannot say whether those names exist in the database.
 
-`BusinessPartnerHandlerDbTest` (OBBaseTest) answers that half: it executes both statements against
+`BusinessPartnerHandlerChildDataSqlIntegrationTest` (OBBaseTest) answers that half: it executes both statements against
 the live schema with the same `= ANY(?)` varchar-array binding the handler uses, and asserts each
 result set exposes `c_bpartner_id` plus every column name read by name, and that each returned row
 is readable through them. A wrong column name now fails a test instead of silently emptying a
@@ -1033,7 +1033,7 @@ parity and a full re-import round trip asserted against `buildTemplateCsv`/`mapC
 a Spanish and an English session), `ListViewExport.vitest.js`, the `baseUrl` and
 non-CSV-response cases in `useCsvExport.vitest.jsx`, the `codeLabels` block in `codedValue.vitest.js`, the child-data block
 in com.etendoerp.go `BusinessPartnerHandlerTest` (attachment, a partner with no children, the
-flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerDbTest` (both child
+flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerChildDataSqlIntegrationTest` (both child
 statements executed against the live schema), and `NeoCsvExportServiceTest` — which now covers the flat list envelope, an absent
 column key, a `$_identifier` companion, a non-list GET that must still decline, value
 translation, and an unmapped/blank/malformed `valueMaps`.
@@ -1542,3 +1542,15 @@ on the Contacts window (`/contacts`), not on a Business Partner page or a redire
 Saving an account field of the Customer Accounting and Vendor Accounting areas now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `CustomerAccountingHandler` / `VendorAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
 
 `employeeAccounting` (`C_BP_Employee_Acct`) is not guarded: both its account fields are `discarded`, so it accepts no write. Exposing them requires wiring the guard for `contacts/employeeAccounting` first.
+
+## Read-only role tier: sub-tabs, Financiero and attachments — ETP-5830
+
+With a `read-only` tier on Contactos:
+
+- **Persona / Cuenta bancaria / Dirección:** no "+ Añadir", no inline edit, no delete, no hover pencil.
+- **Dirección:** clicking a row opens nothing. `LocationEditorModal` has no read-only mode, so a read-only role cannot open the address popup at all; the row in the table is what it sees. Accepted trade-off.
+- **Financiero:** credit limit, Cliente/Proveedor, discount, payment selects, *Bloquear* and the SII/TicketBAI defaults are all disabled (`BillingPreferencesForm` and `FiscalDefaultsSection` read `editing === false`).
+- **Attachments:** files are listed and downloadable; no upload, no delete.
+- **`/contacts/new` by URL** redirects to the list.
+
+Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

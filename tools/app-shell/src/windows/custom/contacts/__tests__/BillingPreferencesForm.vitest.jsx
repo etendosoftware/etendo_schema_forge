@@ -133,6 +133,28 @@ describe('BillingPreferencesForm', () => {
       expect(screen.getAllByTestId('entity-form')).toHaveLength(2);
     });
 
+    it('locks every control when the window is not editing (read-only role, ETP-5830)', () => {
+      render(
+        <BillingPreferencesForm
+          data={{ id: 'BP1', customer: true, vendor: true }}
+          token="t"
+          apiBaseUrl="/api"
+          onChange={vi.fn()}
+          editing={false}
+        />,
+      );
+      const forms = EntityForm.mock.calls.map(([p]) => p);
+      expect(forms.length).toBeGreaterThan(0);
+      forms.forEach((p) => expect(p.readOnly).toBe(true));
+      const controls = [
+        ...screen.queryAllByRole('combobox'),
+        ...screen.queryAllByRole('switch'),
+        ...screen.queryAllByRole('checkbox'),
+      ];
+      expect(controls.length).toBeGreaterThan(0);
+      controls.forEach((c) => expect(c).toBeDisabled());
+    });
+
     it.each(SIDES)('$side: the payment-terms field and the Bloquear switch share one EntityForm', ({ side, terms }) => {
       renderBoth();
       const forms = screen.getAllByTestId('entity-form');
