@@ -502,6 +502,16 @@ calendario contable" (`periodNotAvailableReviewCalendar`) for an owner whose rev
 Non-owners always get "Ir al calendario". The 4xx-only keying rule (5xx, 401,
 403 and 404 are never keyed) lives in the backend; see `docs/generated-custom-windows/calendar.md`.
 
+**Payment-term refusals (ETP-5826).** `PaymentTermHandler` (`com.etendoerp.go`) answers with
+key-only `ETGO_*` identities, no AD_MESSAGE behind them (the ETP-5692 pattern). The range refusals
+`ETGO_PaymentTermDaysInvalid` / `ETGO_PaymentTermDaysOutOfRange` are plain `BACKEND_ERROR_KEY_MAP`
+entries interpolating `{min}` / `{max}` / `{value}`. The duplicate refusals
+`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate` are a params composer
+(`translatePaymentTermConflict`, so they are not in the map): it needs `messageParams.paymentTermName`
+and picks the `…Inactive` sentence (with the "Reactívala en Condiciones de pago" hint) when
+`paymentTermActive` is false. Both the Payment Term window's save and the "+ Crear condición de
+pago" inline-create modal go through this one translator — see `docs/ui-customization.md` §19c.
+
 `translateBackendError` tries the message keys first (they are a stable identity; the text is not),
 then the exact-match map, then the parameterized matchers, and returns the original (untranslated)
 message if none matches — never throws and never silently swallows an unrecognized backend error.

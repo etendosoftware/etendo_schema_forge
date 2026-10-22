@@ -158,7 +158,13 @@
           "section": "principal"
         },
         "paymentTerms": {
-          "section": "principal"
+          "section": "principal",
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "warehouse": {
           "inputMode": "search"
