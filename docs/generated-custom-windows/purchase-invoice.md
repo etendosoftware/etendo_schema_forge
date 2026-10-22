@@ -393,7 +393,7 @@ invoice completed with a total of 0, no payment plan and `paymentComplete = Y`.
 16. Open "Nuevo pago" for an invoice whose business partner has a preferred `pOFinancialAccount` supporting the invoice's method and confirm both **Método de pago** and **Cuenta** preselect to those values; change **Método de pago** to one the preferred account does not support and confirm **Cuenta** re-filters to only the accounts supporting the new method, reselecting per the BP-preferred → `default`-flagged → first-supporting priority. Select a saldo a favor/crédito line that covers 100% of the outstanding amount (leaving Importe at 0,00 €) and confirm **Confirmar** is enabled, not disabled. From the invoice list, click the payment cell in the **Saldo pendiente** column to open the history popup, register a payment, and confirm both the popup's own **Saldo pendiente** stat and the list's **Saldo pendiente** column update immediately without a page reload.
 17. In the list, select 0, then 1, then 2+ invoices and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/purchase-invoice/<id>`. Open a saved invoice and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
 18. (ETP-5087, needs the companion `com.etendoerp.go` change deployed) With a Bizkaia TBAI org selected in the top nav, open the purchase-invoice list and confirm the **Estado Batuz** column appears next to **Estado SII**. Confirm an invoice already accepted by the Diputación reads **Recibido** (not "Enviada") and a rejected one reads **Rechazado** — a rejection must never render as "Enviada" or "Pendiente". Then confirm an invoice submitted but with no row yet in `tbai_syncinvoice` falls back to **Enviada**, and a never-submitted one to **Pendiente**. Switch the top-nav org to a Gipuzkoa/Álava TBAI org and confirm the column disappears while **Estado SII** stays.
-19. **ETP-5059 — 349 corrective bound to the original.** With Modelo 349 active, open a draft purchase rectificative, add a row for a posted original and tick **Correctiva del 349**: the row saves at once and shows the original's year and its month. Open **Periodo** and confirm it offers only that month and its quarter (no `0A`), and **Año** only the original's year. Switch to the quarter and back; each change saves. Repeat with an unposted original and confirm the Spanish toast "La factura original no está contabilizada…", never a raw `@EM_AEAT349_…@` key. While each save is in flight the checkbox shows a spinner and nothing else moves; on a refusal the box stays unticked and the fields never open.
+19. **ETP-5059 — 349 corrective bound to the original.** With Modelo 349 active, open a draft purchase rectificative, add a row for a posted original and tick **Correctiva del 349**: the row saves at once and shows the original's year and its month. Open **Periodo** and confirm it offers only that month and its quarter (no `0A`, which GO never offers although the module accepts it), and **Año** only the original's year. Switch to the quarter and back; each change saves. Repeat with an unposted original and confirm the Spanish toast "La factura original no está contabilizada…", never a raw `@EM_AEAT349_…@` key. While each save is in flight the checkbox shows a spinner and nothing else moves; on a refusal the box stays unticked and the fields never open.
 
 ## Automated evidence
 
@@ -1381,24 +1381,25 @@ rectificative type and the legacy `APC` credit memo.
     classic module `org.openbravo.module.aeat349.es` (trigger `AEAT349_CINVREV_TRG0` on
     `C_Invoice_Reverse`) now accepts, for a "Correctiva del 349", only the original invoice's
     fiscal year (the `C_Year` of the org's inherited calendar named after the `YYYY` of its
-    `DateInvoiced`) and only its month (`MM`) or its quarter (`1T`..`4T`); `0A` and every other
-    code are refused. Classic enforces the same through two `AD_Val_Rule`s and a callout, which
-    this custom panel bypasses, so `ReversedInvoicesPanel.jsx` (shared by both windows) mirrors
-    the rule:
+    `DateInvoiced`) and only its month (`MM`), its quarter (`1T`..`4T`) or the annual `0A` of
+    that year; every other code is refused. Classic files the 349 annually too, so it offers
+    `0A`; Etendo GO only files it monthly or quarterly, so GO never offers `0A`. Classic enforces
+    the rule through two `AD_Val_Rule`s and a callout, which this custom panel bypasses, so
+    `ReversedInvoicesPanel.jsx` (shared by both windows) mirrors it:
     - **Pickers.** The panel reads the original invoice by id (`GET {spec}/header/{id}`) and
       derives its year/month/quarter from `invoiceDate` with `parseCalendarDate`. The
       **Periodo** select offers exactly two options — the month (default) and the quarter —
       and the **Año** select offers only the original's year from `/fiscal-calendar/year`.
       When that year is missing from the calendar the select offers nothing and the save
-      returns the backend's own refusal. A row stored before the rule (e.g. `0A`, labelled
-      "Anual") keeps its value visible as an extra option instead of being masked; it is never
-      offered for a new choice.
+      returns the backend's own refusal. A row that stores a period outside the pair — a `0A`
+      set in Classic (labelled "0A - Anual"), or a value saved before the rule — keeps it visible
+      as an extra option instead of being masked, and stays saveable: a year-only change re-sends
+      the stored `0A`, which the module accepts. `0A` is never offered for a new choice.
     - **Defaults.** On an existing row, ticking the box saves at once with
       `{aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null}`; the trigger fills
       the original's year and month and the panel re-reads the row. Switching between month
       and quarter saves the whole group with the year as `null`, so the trigger re-fills the
-      original's year and a legacy row with a wrong year or a `0A` period can still be
-      corrected. On a saved row none of
+      original's year and a legacy row with a wrong year can still be corrected. On a saved row none of
       these changes is applied optimistically: while the PATCH is in flight the checkbox shows a
       spinner and it and both pickers are disabled, and the row only changes after the silent
       re-read (no loading line), so a refusal never flashes the fields open and shut. Draft rows
@@ -1409,10 +1410,16 @@ rectificative type and the legacy `APC` credit memo.
       new original's year on the backend, and its month unless the stored period already fits.
     - **Errors.** The trigger raises `@EM_AEAT349_CINVREV_YEAR@`, `@EM_AEAT349_CINVREV_PERIOD@`,
       `@EM_AEAT349_CINVREV_NO_YEAR@` (year missing from the calendar),
-      `@EM_AEAT349_ORIG_NOT_POSTED@` (original not posted) and `@EM_AEAT349_ZERO_BASE_RECT@`.
+      `@EM_AEAT349_ORIG_NOT_POSTED@` (original not posted) and `@EM_AEAT349_ZERO_BASE_RECT@`
+      (the PERIOD text reads "…debe ser el mes, el trimestre o el año (0A) de la factura
+      original.").
       NEO translates them before answering (`{"error":{"message":"<AD_Message text>"}}`,
       verified against the live backend), and the panel shows that text as the toast; the row
-      stays as the database left it (box unticked, fields closed).
+      stays as the database left it (box unticked, fields closed). A request with no HTTP answer
+      shows the already-translated network message (`isNetworkError(err)` → `err.message`, see
+      `docs/request-policy.md`); any other unexpected failure keeps `rectSaveError`. The 349
+      base amounts and the original invoice amount are formatted with the canonical
+      `formatCurrency('EUR', …)`.
     - **Accepted limitations.** One year/period per rectificative row; a multi-selection draft
       that picks the quarter sends it to every created row, so originals from different
       quarters need separate saves. Month and quarter correctives consume the declared base by

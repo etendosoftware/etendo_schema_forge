@@ -6,14 +6,16 @@ import { parseCalendarDate } from '@/lib/dateOnly.js';
 import { toast } from 'sonner';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import SharedInvoicePickerModal from '@/components/contract-ui/InvoicePickerModal.jsx';
 /* eslint-disable react/prop-types */
 
 // ETP-5059 — the 349 period of a corrective is NOT free: AEAT349_CINVREV_TRG0 (module
-// org.openbravo.module.aeat349.es) accepts only the ORIGINAL invoice's month (`MM`) or its quarter
-// (`nT`), and the year only as the original's fiscal year. Offering the other fifteen codes (the
-// annual `0A` among them) only produced a refusal on save, so the picker now lists exactly the two
-// accepted values, derived from the original's invoice date.
+// org.openbravo.module.aeat349.es) accepts only the ORIGINAL invoice's month (`MM`), its quarter
+// (`nT`) or the annual `0A`, and the year only as the original's fiscal year. Classic files the 349
+// annually too; Etendo GO only files it monthly or quarterly, so the picker lists exactly the month
+// and the quarter, derived from the original's invoice date. A stored `0A` is shown and stays
+// saveable, but it is never offered as a new choice.
 const QUARTER_LABEL_KEYS = { '1T': 'rectPeriodQ1', '2T': 'rectPeriodQ2', '3T': 'rectPeriodQ3', '4T': 'rectPeriodQ4' };
 const MONTH_CODE_RE = /^(0[1-9]|1[0-2])$/;
 
@@ -35,8 +37,8 @@ function originalPeriods(invoiceDate) {
 }
 
 // Localized label of one AEAT-349 period code: quarters via i18n keys, months via Intl for the
-// active locale. `0A` (annual) is never offered since ETP-5059, but a legacy row may still store
-// it, so it keeps its label. Any other unknown code shows as-is.
+// active locale. `0A` (annual) is valid for the module but never offered by GO; a row that stores
+// it (set in Classic, or saved before ETP-5059) keeps its label. Any other code shows as-is.
 function periodLabel(code, ui, locale) {
   if (QUARTER_LABEL_KEYS[code]) return `${code} - ${ui(QUARTER_LABEL_KEYS[code])}`;
   if (code === '0A') return `${code} - ${ui('rectPeriodAnnual')}`;
@@ -49,8 +51,9 @@ function periodLabel(code, ui, locale) {
 }
 
 // The original's month and quarter, in that order (the month is the default). A stored value
-// outside that pair — a row saved before the rule existed — is kept as an extra option so the
-// select shows what is really stored instead of silently pretending it is the month.
+// outside that pair — a `0A` set in Classic, or a row saved before the rule existed — is kept as an
+// extra option so the select shows what is really stored instead of silently pretending it is the
+// month; a year-only change then re-sends it untouched.
 function buildPeriodOptions(ui, locale, orig, current) {
   const codes = orig ? [orig.month, orig.quarter] : [];
   if (current && !codes.includes(current)) codes.push(current);
@@ -348,13 +351,13 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, originalYear
 }
 
 // ── AmountInput ──────────────────────────────────────────────────────────────
-// Read-only EUR amount display (349 base amounts are DB-trigger computed).
+// Read-only amount display (349 base amounts are DB-trigger computed); the value carries its
+// currency symbol from formatCurrency, so there is no separate currency prefix.
 function AmountInput({ label, value }) {
   return (
     <div className="space-y-1.5">
       <label className="text-sm font-medium text-foreground block">{label}</label>
       <div className="flex items-center h-10 rounded-lg border border-border-control bg-muted overflow-hidden">
-        <span className="px-3 text-sm text-muted-foreground border-r border-border-control flex items-center h-full">EUR</span>
         <input
           type="text"
           value={value}
@@ -385,7 +388,8 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, readOnly, sa
   );
   // Empty period = the trigger will store the month, so the month is what is shown by default.
   const shownPeriod = storedPeriod || orig?.month || '';
-  const fmtEur = v => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+  // 349 bases are always EUR; canonical formatter (CLAUDE.md, Currency & Amount Formatting).
+  const fmtEur = v => (v != null ? formatCurrency('EUR', v) : '');
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
@@ -471,7 +475,7 @@ function ExpandedForm({
   const invoiceDisplayParts = [
     ref.docNo,
     ref.date,
-    ref.amount != null ? ref.amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    ref.amount != null ? formatCurrency('EUR', ref.amount) : null,
   ].filter(Boolean);
   const invoiceDisplay = invoiceDisplayParts.join(' · ');
 
@@ -693,6 +697,9 @@ export default function ReversedInvoicesPanel({
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
+  // A request with no HTTP answer rejects with a NetworkError whose message is already translated
+  // (docs/request-policy.md); anything else keeps the generic save error.
+  const saveErrorMessage = err => (isNetworkError(err) ? err.message : ui('rectSaveError'));
 
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -853,8 +860,8 @@ export default function ReversedInvoicesPanel({
       }
       dropPendingKeys(lineId, payload);
       await fetchLines({ silent: true });
-    } catch {
-      toast.error(ui('rectSaveError'));
+    } catch (err) {
+      toast.error(saveErrorMessage(err));
     }
   }
 
@@ -931,8 +938,8 @@ export default function ReversedInvoicesPanel({
         toast.error(msg);
       }
       fetchLines();
-    } catch {
-      toast.error(ui('rectSaveError'));
+    } catch (err) {
+      toast.error(saveErrorMessage(err));
     } finally { setDeleting(null); }
   }
 
@@ -1017,8 +1024,8 @@ export default function ReversedInvoicesPanel({
       } else {
         await reportSaveFailure(res, savedHeader);
       }
-    } catch {
-      toast.error(ui('rectSaveError'));
+    } catch (err) {
+      toast.error(saveErrorMessage(err));
       failedDraftRef.current = draftSignature(newLine);
     } finally { setSaving(false); }
   }

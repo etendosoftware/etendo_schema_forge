@@ -952,7 +952,7 @@ describe('TC-10 — Periodo offers only the original invoice\'s month and quarte
     expect(optionValues(findPeriodSelect())).not.toContain('0A');
   });
 
-  it('TC-10: a legacy stored code outside the pair stays visible instead of being masked', async () => {
+  it('TC-10: a stored 0A (valid in Classic, not offered by GO) stays visible instead of being masked', async () => {
     renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349Period: '0A' })], years: [] });
     await expandFirstRow();
 
