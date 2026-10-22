@@ -506,7 +506,7 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
 
     // ETP-5674: a return-to-vendor invoice is announced as a purchase factura
     // rectificativa, and the result popup shows no amount (it used to render the total).
-    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa de compra creada|Purchase rectificative invoice created/);
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
     await expect(resultModal).not.toContainText('250,00');
 
     // ETP-5381: the preselected suggestion must travel on the createReturnInvoice POST —
@@ -661,7 +661,7 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
 
     // ETP-5674: same contract from the CO (already confirmed) detail flow —
     // useConfirmWithCredit.handleCreateReturnInvoice types it as a purchase rectificativa.
-    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa de compra creada|Purchase rectificative invoice created/);
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
     await expect(resultModal).not.toContainText('250,00');
 
     // ETP-5381: the user's choice must reach the backend —

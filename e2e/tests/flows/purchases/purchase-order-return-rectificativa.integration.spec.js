@@ -310,7 +310,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
     });
 
     await test.step('Navigate to the rectificative invoice and verify', async () => {
-      const rectificativeCreatedMsg = page.getByText('Factura rectificativa de compra creada', { exact: true });
+      const rectificativeCreatedMsg = page.getByText('Factura rectificativa creada', { exact: true });
       await expect(rectificativeCreatedMsg).toBeVisible({ timeout: 30_000 });
       await slow(page);
 
