@@ -52,7 +52,8 @@ const formFields = [
   { name: 'documentNo', visibility: 'readOnly', form: true, type: 'string' },
   { name: 'orderDate', visibility: 'editable', form: true, type: 'date' },
   { name: 'businessPartner', visibility: 'editable', type: 'foreignKey', reference: 'BusinessPartner' },
-  { name: 'gridOnlyTotal', visibility: 'readOnly', form: false, type: 'amount' },
+  { name: 'listOnlyTotal', visibility: 'readOnly', form: false, type: 'amount' },
+  { name: 'hiddenEverywhere', visibility: 'readOnly', form: false, grid: false, type: 'string' },
   { name: 'gridOnlyEditable', visibility: 'editable', form: false, type: 'string' },
   { name: 'processed', visibility: 'system', form: true, type: 'boolean' },
   { name: 'legacyField', visibility: 'discarded', form: true, type: 'string' },
@@ -97,10 +98,24 @@ describe('isPublicField', () => {
   });
 });
 
-describe('buildEntity — non-curated entity derives its window form', () => {
-  it('publishes the form fields and skips grid-only, system and discarded fields', () => {
+describe('buildEntity — non-curated entity derives its form and read-only list fields', () => {
+  it('publishes form fields and read-only list fields, skipping editable grid-only, hidden, system and discarded', () => {
     const entity = build('sales-order', formFields);
-    assert.deepEqual(Object.keys(entity.fields).sort(), ['business_partner', 'document_no', 'id', 'order_date']);
+    assert.deepEqual(Object.keys(entity.fields).sort(), [
+      'business_partner',
+      'document_no',
+      'id',
+      'list_only_total',
+      'order_date',
+    ]);
+  });
+
+  it('publishes a read-only list-only field as out, and never an editable form:false one', () => {
+    const { fields } = build('sales-order', formFields);
+    assert.equal(fields.list_only_total.direction, 'out');
+    assert.equal(fields.list_only_total.sourceVisibility, 'readOnly');
+    assert.equal(fields.grid_only_editable, undefined);
+    assert.equal(fields.hidden_everywhere, undefined);
   });
 
   it('marks editable fields inout and readOnly fields out when the entity accepts writes', () => {
@@ -131,6 +146,7 @@ describe('buildEntity — non-curated entity derives its window form', () => {
 
 describe('buildEntity — curated entity keeps its curation', () => {
   it('publishes only curated fields, ignoring the rest of its form', () => {
+    // listOnlyTotal is read-only and shown in the list, but curation wins.
     const curatedFields = formFields.map((field) =>
       field.name === 'orderDate' ? { ...field, publicApi: { exposed: true, name: 'date' } } : field
     );
@@ -242,7 +258,7 @@ describe('generateManifest', () => {
 
   it('records the field-selection policy and the excluded fields', async () => {
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
-    assert.equal(manifest.policy.fieldSelection, 'curated-publicApi-else-window-form');
+    assert.equal(manifest.policy.fieldSelection, 'curated-publicApi-else-form-plus-readonly-list');
     assert.deepEqual(manifest.policy.excludedFields, [...neverExposedFields]);
     assert.equal(manifest.policy.failClosed, true);
   });
