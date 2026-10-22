@@ -174,7 +174,7 @@ export function columnFlex(col, idx) {
   // Header, body rows, new/edit row, totals row and the add-row colgroup all read their widths
   // from here, so they keep agreeing with each other.
   const contentPx = col.contentWidthPx;
-  if (!(contentPx > 0)) return flex;
+  if (typeof contentPx !== 'number' || contentPx <= 0) return flex;
   const [grow, shrink, basis] = flex.split(' ');
   return contentPx > Number.parseFloat(basis) ? `${grow} ${shrink} ${Math.ceil(contentPx)}px` : flex;
 }
@@ -244,6 +244,7 @@ const FALLBACK_CHAR_PX = 7;
 const HEADER_FONT_WEIGHT_SIZE = '600 12px';
 
 const labelWidthCache = new Map();
+const MEASURE_CACHE_MAX = 500;
 let measureContext;
 
 // `OffscreenCanvas` is feature-detected rather than a DOM <canvas>: jsdom implements <canvas>
@@ -315,7 +316,12 @@ export function measureTextPx(value, font, fallbackCharPx = FALLBACK_CHAR_PX) {
   ctx.font = font;
   const measured = Math.ceil(ctx.measureText(text)?.width ?? 0);
   const width = measured > 0 ? measured : estimate;
-  if (measured > 0 && fontReady(font)) labelWidthCache.set(cacheKey, width);
+  if (measured > 0 && fontReady(font)) {
+    // ponytail: bounded cache — cell values (ETP-5133) are unbounded, unlike header labels; a
+    // full reset is enough at this size (no LRU needed).
+    if (labelWidthCache.size >= MEASURE_CACHE_MAX) labelWidthCache.clear();
+    labelWidthCache.set(cacheKey, width);
+  }
   return width;
 }
 

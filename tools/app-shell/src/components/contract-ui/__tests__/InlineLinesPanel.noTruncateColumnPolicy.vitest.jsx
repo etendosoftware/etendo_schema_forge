@@ -17,6 +17,7 @@
 import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
+import { measureTextPx } from '@/lib/linesColumnWidth.js';
 import React from 'react';
 
 // The line delete button renders the Iconic trash from the core custom-icons barrel;
@@ -49,6 +50,7 @@ vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
   // Real `measureTextPx` (linesContentWidth.js measures the no-truncate column with it); the
   // width helpers below stay pinned so cell markup is the only thing under test here.
   ...(await importOriginal()),
+  measureTextPx: vi.fn((await importOriginal()).measureTextPx),
   withLinesAbsorberColumn: (cols) => cols,
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
@@ -211,5 +213,30 @@ describe('InlineLinesPanel — no-truncate default for lookup selectors (ETP-513
     const span = cell.querySelector('span');
     expect(span.className).toContain('truncate');
     expect(span).toHaveAttribute('title', LONG_PRODUCT);
+  });
+});
+
+// Review W2 — the no-truncate width is measured with canvas; while the web font is still
+// swapping in that measures the fallback face, so the panel re-measures once
+// `document.fonts.ready` resolves (the same signal DataTable's add-row uses).
+describe('InlineLinesPanel — no-truncate width re-measures when the web font loads (ETP-5133)', () => {
+  const STABLE_HIDDEN = [];
+
+  it('measures the product column again after document.fonts.ready resolves', async () => {
+    let resolveFonts;
+    const ready = new Promise((resolve) => { resolveFonts = resolve; });
+    const original = Object.getOwnPropertyDescriptor(document, 'fonts');
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { status: 'loading', ready } });
+    try {
+      // A stable `hiddenColumns` so only `fontsReady` can invalidate the column memo.
+      renderPanel({ hiddenColumns: STABLE_HIDDEN });
+      const callsBefore = measureTextPx.mock.calls.length;
+      expect(callsBefore).toBeGreaterThan(0);
+      await act(async () => { resolveFonts(); await ready; });
+      expect(measureTextPx.mock.calls.length).toBeGreaterThan(callsBefore);
+    } finally {
+      if (original) Object.defineProperty(document, 'fonts', original);
+      else delete document.fonts;
+    }
   });
 });

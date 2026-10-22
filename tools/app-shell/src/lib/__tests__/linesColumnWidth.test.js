@@ -386,6 +386,17 @@ describe('linesColumnWidth', () => {
         } finally { uninstall(); }
       });
 
+      it('bounds the width cache (cell values are unbounded, ETP-5133)', () => {
+        install();
+        try {
+          fontLoaded = true;
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 40);
+          for (let i = 0; i < 500; i += 1) measureHeaderLabelPx(`label ${i}`, FONT);
+          pxPerChar = 6;
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 48, 'the cache was reset once full');
+        } finally { uninstall(); }
+      });
+
       it('falls back to the estimate when the canvas measures 0', () => {
         install();
         try {

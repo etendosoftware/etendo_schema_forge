@@ -17,6 +17,7 @@ import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn,
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { withContentWidths } from '@/lib/linesContentWidth.js';
+import { useFontsReady } from '@/hooks/useFontsReady.js';
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
@@ -1934,7 +1935,9 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
           data-testid="Search__eb5261" />
         {value ? (
-          <span className="truncate text-foreground">{value}</span>
+          // ETP-5133 — the add-row cell still truncates until the line is saved (the column only
+          // widens to the saved lines' widest value), so the full name stays reachable on hover.
+          <span className="truncate text-foreground" title={typeof value === 'string' ? value : undefined}>{value}</span>
         ) : (
           <span className="truncate text-muted-foreground">{placeholder}</span>
         )}
@@ -2459,25 +2462,6 @@ function StickyHeaderRow({ elRef, attachSeq, minWidthPx, children }) {
  * cycle as any other column via `onSort(part.key)`. The direction arrow shows
  * only on the currently active part (single active part at a time).
  */
-// ETP-5833 (QA) — one-shot flag that flips to true when `document.fonts.ready` resolves. The list
-// header floor measures labels with canvas; while Inter is still swapping in (`display=swap`) that
-// measures the fallback face, so `visibleColumns` depends on this flag to re-measure exactly once
-// when the real font is in. True from the start when the fonts are already loaded or the
-// FontFaceSet API is missing (jsdom, old browsers).
-function useHeaderFontsReady() {
-  const [ready, setReady] = useState(() => {
-    const fonts = typeof document === 'undefined' ? undefined : document.fonts;
-    return !fonts?.ready || fonts.status === 'loaded';
-  });
-  useEffect(() => {
-    if (ready) return undefined;
-    let alive = true;
-    document.fonts.ready.then(() => { if (alive) setReady(true); }, () => {});
-    return () => { alive = false; };
-  }, [ready]);
-  return ready;
-}
-
 // The text a plain-list header renders for `col`: its resolved label, or for a `multiField`
 // column the part labels joined by its separator (renderMultiFieldHeaderCell).
 function renderedHeaderLabel(col, locale, t) {
@@ -3226,7 +3210,7 @@ export function DataTable({
   const ui = useUI();
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
-  const headerFontsReady = useHeaderFontsReady();
+  const headerFontsReady = useFontsReady();
   // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
   const capabilities = useCapabilitiesSafe();
   // ETP-5245 — last-resort currency for `amount` cells whose row carries none of
@@ -3364,7 +3348,7 @@ export function DataTable({
     // header: measured from the label the header actually shows (resolved here with the same
     // `resolveColumnLabel`/`t`/locale as renderColumnHeaderCell), never from row data. Header,
     // colgroup, body cells and listTableMinWidthPx all read it through columnMinWidthPx.
-    // `headerFontsReady` re-runs this once the web font has loaded (see useHeaderFontsReady); the
+    // `headerFontsReady` re-runs this once the web font has loaded (see useFontsReady); the
     // font is resolved once per pass, not per column.
     const headerFont = listHeaderFont();
     return withImplicitGrowColumn(base.map(col => ({

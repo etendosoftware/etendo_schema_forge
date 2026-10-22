@@ -28,6 +28,7 @@ import { resolveLookupDrawer } from './lookupDrawers.js';
 import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { columnFlex, isLineGridColumn, withLinesAbsorberColumn } from '@/lib/linesColumnWidth.js';
 import { isNoTruncateColumn, withContentWidths } from '@/lib/linesContentWidth.js';
+import { useFontsReady } from '@/hooks/useFontsReady.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
 import { registerLinesScrollHost, unregisterLinesScrollHost } from '@/lib/linesScrollHost.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
@@ -1354,12 +1355,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   //
   // ETP-5133 (QA pass 3, F-2) — `withContentWidths` sizes every no-truncate
   // column (e.g. product) for its widest value in `data`; DataTable's add-row
-  // derives the same width from the same `columns` + `data` props.
+  // derives the same width from the same `columns` + `data` props. `fontsReady`
+  // re-measures once the web font has loaded — the same signal DataTable uses,
+  // so the rows and the add-row never measure with different faces.
+  const fontsReady = useFontsReady();
   const visibleColumns = useMemo(
     () => withContentWidths(withLinesAbsorberColumn((columns || []).filter(c => (
       isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
     ))), data),
-    [columns, hiddenColumns, data]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fontsReady only triggers the re-measure
+    [columns, hiddenColumns, data, fontsReady]
   );
   // Whether the row reserves the 158px action slot after its last column. Until
   // ETP-5600 the LAST column, when an `amount`, disappeared on hover to make room
