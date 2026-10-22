@@ -963,7 +963,7 @@ describe('TC-10 — Periodo offers only the original invoice\'s month and quarte
     expect(optionValues(findPeriodSelect())).not.toContain('0A');
   });
 
-  it('TC-10: a stored 0A (valid in Classic, not offered by GO) stays visible instead of being masked', async () => {
+  it('TC-10: a legacy stored 0A (refused by the module, never offered) stays visible instead of being masked', async () => {
     renderPanel({ lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349Period: '0A' })], years: [] });
     await expandFirstRow();
 
@@ -1101,7 +1101,7 @@ describe('ETP-5059 — the AEAT-349 group on a saved row, edge cases', () => {
     expect(fetchCalls.some(c => /\/header\//.test(c.url))).toBe(false);
     expect(fetchCalls.some(c => c.url.includes('/fiscal-calendar'))).toBe(false);
 
-    // Stored period, labelled as the annual one, disabled.
+    // Legacy stored period, labelled as the annual one, disabled.
     expect(findPeriodSelect()).toBeDisabled();
     expect(findPeriodSelect()).toHaveValue('0A');
     expect(optionValues(findPeriodSelect())).toEqual(['0A']);

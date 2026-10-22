@@ -11,11 +11,10 @@ import SharedInvoicePickerModal from '@/components/contract-ui/InvoicePickerModa
 /* eslint-disable react/prop-types */
 
 // ETP-5059 — the 349 period of a corrective is NOT free: AEAT349_CINVREV_TRG0 (module
-// org.openbravo.module.aeat349.es) accepts only the ORIGINAL invoice's month (`MM`), its quarter
-// (`nT`) or the annual `0A`, and the year only as the original's fiscal year. Classic files the 349
-// annually too; Etendo GO only files it monthly or quarterly, so the picker lists exactly the month
-// and the quarter, derived from the original's invoice date. A stored `0A` is shown and stays
-// saveable, but it is never offered as a new choice.
+// org.openbravo.module.aeat349.es) accepts only the ORIGINAL invoice's month (`MM`) or its quarter
+// (`nT`), and the year only as the original's fiscal year; the annual `0A` is refused (annual 349
+// filing is no longer used). The picker lists exactly the month and the quarter, derived from the
+// original's invoice date. A legacy stored `0A` is still shown, never offered as a new choice.
 const QUARTER_LABEL_KEYS = { '1T': 'rectPeriodQ1', '2T': 'rectPeriodQ2', '3T': 'rectPeriodQ3', '4T': 'rectPeriodQ4' };
 const MONTH_CODE_RE = /^(0[1-9]|1[0-2])$/;
 
@@ -37,8 +36,8 @@ function originalPeriods(invoiceDate) {
 }
 
 // Localized label of one AEAT-349 period code: quarters via i18n keys, months via Intl for the
-// active locale. `0A` (annual) is valid for the module but never offered by GO; a row that stores
-// it (set in Classic, or saved before ETP-5059) keeps its label. Any other code shows as-is.
+// active locale. `0A` (annual) is refused by the module and never offered; a legacy row that still
+// stores it keeps its "0A - Anual" label. Any other code shows as-is.
 function periodLabel(code, ui, locale) {
   if (QUARTER_LABEL_KEYS[code]) return `${code} - ${ui(QUARTER_LABEL_KEYS[code])}`;
   if (code === '0A') return `${code} - ${ui('rectPeriodAnnual')}`;
@@ -51,9 +50,10 @@ function periodLabel(code, ui, locale) {
 }
 
 // The original's month and quarter, in that order (the month is the default). A stored value
-// outside that pair — a `0A` set in Classic, or a row saved before the rule existed — is kept as an
+// outside that pair — a legacy `0A`, or any value saved before the rule existed — is kept as an
 // extra option so the select shows what is really stored instead of silently pretending it is the
-// month; a year-only change then re-sends it untouched.
+// month. Such a row is fixed by choosing the month or the quarter (the year goes as null and the
+// trigger fills it); a year-only change re-sends the stored value and the trigger refuses it.
 function buildPeriodOptions(ui, locale, orig, current) {
   const codes = orig ? [orig.month, orig.quarter] : [];
   if (current && !codes.includes(current)) codes.push(current);
