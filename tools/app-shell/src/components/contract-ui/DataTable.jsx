@@ -3070,7 +3070,8 @@ function renderFooterCell({ col, totals, serverTotals, filteredData, sessionCurr
           iso={server.iso}
           amount={server.amount}
           approximate={server.approximate === true}
-          testId={`footer-total-${col.key}`} />
+          testId={`footer-total-${col.key}`}
+          data-testid="AmountText__eb5261" />
         {missing?.length ? (
           <p className="text-xs text-[var(--status-warning-fg)]" data-testid={`footer-total-missing-rate-${col.key}`}>
             {ui('financeAccountsBalanceMissingRate', { currencies: missing.join(', ') })}
