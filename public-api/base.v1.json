@@ -622,7 +622,7 @@
       },
       "source": {
         "artifact": "goods-movements",
-        "contractVersion": "0.23.0",
+        "contractVersion": "0.24.0",
         "backendEntity": true
       }
     },
@@ -771,7 +771,7 @@
       },
       "source": {
         "artifact": "goods-movements",
-        "contractVersion": "0.23.0",
+        "contractVersion": "0.24.0",
         "backendEntity": true
       }
     },
@@ -984,7 +984,7 @@
       },
       "source": {
         "artifact": "goods-receipt",
-        "contractVersion": "0.38.0",
+        "contractVersion": "0.39.0",
         "backendEntity": true
       }
     },
@@ -1027,6 +1027,17 @@
             "type": "string"
           },
           "reference": null,
+          "handlerId": null
+        },
+        "uom": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "uOM",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "UOM",
           "handlerId": null
         },
         "order_quantity": {
@@ -1110,7 +1121,7 @@
       },
       "source": {
         "artifact": "goods-receipt",
-        "contractVersion": "0.38.0",
+        "contractVersion": "0.39.0",
         "backendEntity": true
       }
     },
@@ -1302,7 +1313,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.4.0",
+        "contractVersion": "0.5.0",
         "backendEntity": true
       }
     },
@@ -1345,6 +1356,17 @@
             "type": "string"
           },
           "reference": null,
+          "handlerId": null
+        },
+        "uom": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "uOM",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "UOM",
           "handlerId": null
         },
         "description": {
@@ -1439,7 +1461,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.4.0",
+        "contractVersion": "0.5.0",
         "backendEntity": true
       }
     },
@@ -1532,7 +1554,7 @@
       },
       "source": {
         "artifact": "internal-consumption",
-        "contractVersion": "0.21.0",
+        "contractVersion": "0.22.0",
         "backendEntity": true
       }
     },
@@ -1658,7 +1680,7 @@
       },
       "source": {
         "artifact": "internal-consumption",
-        "contractVersion": "0.21.0",
+        "contractVersion": "0.22.0",
         "backendEntity": true
       }
     },
@@ -1979,7 +2001,7 @@
       },
       "source": {
         "artifact": "physical-inventory",
-        "contractVersion": "0.39.0",
+        "contractVersion": "0.40.0",
         "backendEntity": true
       }
     },
@@ -2151,7 +2173,7 @@
       },
       "source": {
         "artifact": "physical-inventory",
-        "contractVersion": "0.39.0",
+        "contractVersion": "0.40.0",
         "backendEntity": true
       }
     },
@@ -2274,17 +2296,17 @@
           "Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.",
           "Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.",
           "Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.",
-          "Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.",
           "Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.",
           "Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.",
           "Inspect stock availability and stock movement context from the custom sidebar.",
-          "Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments)."
+          "Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).",
+          "Use the contract-backed product children and actions when the generated page exposes them, while treating the exact visible tab set beyond the custom surfaces as partially evidenced."
         ],
         "functionalDoc": "docs/generated-custom-windows/product.md"
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.14.0",
+        "contractVersion": "0.15.0",
         "backendEntity": true
       }
     },
@@ -2376,17 +2398,17 @@
           "Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.",
           "Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.",
           "Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.",
-          "Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.",
           "Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.",
           "Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.",
           "Inspect stock availability and stock movement context from the custom sidebar.",
-          "Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments)."
+          "Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).",
+          "Use the contract-backed product children and actions when the generated page exposes them, while treating the exact visible tab set beyond the custom surfaces as partially evidenced."
         ],
         "functionalDoc": "docs/generated-custom-windows/product.md"
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.14.0",
+        "contractVersion": "0.15.0",
         "backendEntity": true
       }
     },
@@ -2806,7 +2828,7 @@
       },
       "source": {
         "artifact": "purchase-invoice",
-        "contractVersion": "0.4.0",
+        "contractVersion": "0.5.0",
         "backendEntity": true
       }
     },
@@ -2916,7 +2938,7 @@
       },
       "source": {
         "artifact": "purchase-invoice",
-        "contractVersion": "0.4.0",
+        "contractVersion": "0.5.0",
         "backendEntity": true
       }
     },
@@ -3068,18 +3090,6 @@
           "reference": null,
           "handlerId": null
         },
-        "summed_line_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "summedLineAmount",
-          "type": "passthrough",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null,
-          "handlerId": null
-        },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -3165,7 +3175,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.53.0",
+        "contractVersion": "0.55.0",
         "backendEntity": true
       }
     },
@@ -3267,6 +3277,17 @@
           "reference": null,
           "handlerId": null
         },
+        "uom": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "uOM",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "UOM",
+          "handlerId": null
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -3314,7 +3335,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.53.0",
+        "contractVersion": "0.55.0",
         "backendEntity": true
       }
     },
@@ -3422,7 +3443,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.53.0",
+        "contractVersion": "0.55.0",
         "backendEntity": true
       }
     },
@@ -3599,7 +3620,7 @@
       },
       "source": {
         "artifact": "return-material-receipt",
-        "contractVersion": "0.7.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -3745,7 +3766,7 @@
       },
       "source": {
         "artifact": "return-material-receipt",
-        "contractVersion": "0.7.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
@@ -3920,7 +3941,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -4053,7 +4074,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -4169,18 +4190,6 @@
           "sourceVisibility": "readOnly",
           "direction": "out",
           "internalPath": "grandTotalAmount",
-          "type": "passthrough",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null,
-          "handlerId": null
-        },
-        "summed_line_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "summedLineAmount",
           "type": "passthrough",
           "dataType": {
             "type": "number",
@@ -4376,7 +4385,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.91.0",
+        "contractVersion": "0.92.0",
         "backendEntity": true
       }
     },
@@ -4487,7 +4496,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.91.0",
+        "contractVersion": "0.92.0",
         "backendEntity": true
       }
     },
@@ -4627,18 +4636,6 @@
           "reference": null,
           "handlerId": null
         },
-        "summed_line_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "summedLineAmount",
-          "type": "passthrough",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null,
-          "handlerId": null
-        },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -4724,7 +4721,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.36.0",
+        "contractVersion": "0.38.0",
         "backendEntity": true
       }
     },
@@ -4826,6 +4823,17 @@
           "reference": null,
           "handlerId": null
         },
+        "uom": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "uOM",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "UOM",
+          "handlerId": null
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -4873,7 +4881,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.36.0",
+        "contractVersion": "0.38.0",
         "backendEntity": true
       }
     },
@@ -5031,18 +5039,6 @@
           "reference": null,
           "handlerId": null
         },
-        "summed_line_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "summedLineAmount",
-          "type": "passthrough",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null,
-          "handlerId": null
-        },
         "description": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -5104,7 +5100,7 @@
       },
       "source": {
         "artifact": "sales-quotation",
-        "contractVersion": "0.28.0",
+        "contractVersion": "0.30.0",
         "backendEntity": true
       }
     },
@@ -5206,6 +5202,17 @@
           "reference": null,
           "handlerId": null
         },
+        "uom": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "uOM",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "UOM",
+          "handlerId": null
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -5253,7 +5260,7 @@
       },
       "source": {
         "artifact": "sales-quotation",
-        "contractVersion": "0.28.0",
+        "contractVersion": "0.30.0",
         "backendEntity": true
       }
     },
