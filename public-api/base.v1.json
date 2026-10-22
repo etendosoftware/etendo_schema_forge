@@ -51,6 +51,12 @@
       "etblkpAccountingstatus",
       "etblkpBulkposting"
     ],
+    "exposeProcesses": false,
+    "readOnlyResources": [
+      "product-costing",
+      "sales-invoice-exchangeRates",
+      "purchase-invoice-exchangeRates"
+    ],
     "failClosed": true
   },
   "entities": {
@@ -2286,16 +2292,12 @@
       "publicApi": true,
       "operations": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "LIST",
-        "PATCH"
+        "LIST"
       ],
       "fields": {
         "cost": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "cost",
           "type": "passthrough",
           "dataType": {
@@ -2307,7 +2309,7 @@
         },
         "starting_date": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "startingDate",
           "type": "passthrough",
           "dataType": {
@@ -2319,7 +2321,7 @@
         },
         "ending_date": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "endingDate",
           "type": "passthrough",
           "dataType": {
@@ -2792,10 +2794,10 @@
         "backendEntity": true
       }
     },
-    "purchase-invoice-exchangeRates": {
-      "publicName": "purchase-invoice-exchangeRates",
+    "purchase-invoice-lines": {
+      "publicName": "purchase-invoice-lines",
       "specName": "purchase-invoice",
-      "entityName": "exchangeRates",
+      "entityName": "lines",
       "publicApi": true,
       "operations": [
         "GET",
@@ -2804,6 +2806,173 @@
         "DELETE",
         "LIST",
         "PATCH"
+      ],
+      "fields": {
+        "product": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "product",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Product",
+          "handlerId": null,
+          "relationship": {
+            "resource": "product",
+            "cardinality": "one",
+            "foreignKey": "product"
+          }
+        },
+        "description": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "description",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoiced_quantity": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "invoicedQuantity",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "list_price": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "listPrice",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "discount": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoDiscount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "tax": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "tax",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Tax",
+          "handlerId": null
+        },
+        "gross_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "grossAmount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "project": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "project",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Project",
+          "handlerId": null
+        },
+        "costcenter": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "costcenter",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "CostCenter",
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "purchase-invoice",
+        "entityName": "header",
+        "foreignKey": "invoice",
+        "pathSegment": "lines"
+      },
+      "functional": {
+        "functionalName": "Purchase Invoice — Lines",
+        "functionalSummary": "Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.",
+        "functionalCapabilities": [
+          "Create and edit a purchase invoice header with the supplier, invoice dates, payment terms, payment method, and the supplier invoice reference (`POReference`, displayed as \"Document No.\" / \"Nº documento\") alongside the other payable-identifying fields used by this workflow.",
+          "Add and review invoice lines so the document reflects what the supplier billed, including product, description, quantity, unit price, discount, tax, and line gross amount.",
+          "Review invoice totals at document level, including net amount, gross amount, paid amount, and outstanding amount when those values are available from the header or payment schedule data.",
+          "Inspect the invoice from the list without immediately leaving the list route, then move into full edit mode when needed.",
+          "Understand the payable relationship to the originating purchase order, related goods receipts, and downstream payment-out records.",
+          "Open payment detail flows when the invoice is completed and still has an amount pending.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/purchase-invoice.md"
+      },
+      "source": {
+        "artifact": "purchase-invoice",
+        "contractVersion": "0.4.0",
+        "backendEntity": true
+      }
+    },
+    "purchase-invoice-exchangeRates": {
+      "publicName": "purchase-invoice-exchangeRates",
+      "specName": "purchase-invoice",
+      "entityName": "exchangeRates",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "LIST"
       ],
       "fields": {
         "currency": {
@@ -2830,7 +2999,7 @@
         },
         "rate": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "rate",
           "type": "passthrough",
           "dataType": {
@@ -2841,7 +3010,7 @@
         },
         "foreign_amount": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "foreignAmount",
           "type": "passthrough",
           "dataType": {
@@ -3548,18 +3717,7 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "name": "Process Receipt",
-          "method": "POST",
-          "path": "/returnMaterialReceipt/:id/action/documentAction",
-          "entity": "returnMaterialReceipt",
-          "columnName": "documentAction",
-          "params": [],
-          "preconditions": [],
-          "steps": 0
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Return Material Receipt",
         "functionalSummary": "Receive material back into stock after a sales-side return flow. The window is oriented around a receipt header that captures who is returning goods, where the material is received, and which sales order provides the source context, then child lines that record the returned products and quantities against that source document.",
@@ -4337,10 +4495,10 @@
         "backendEntity": true
       }
     },
-    "sales-invoice-exchangeRates": {
-      "publicName": "sales-invoice-exchangeRates",
+    "sales-invoice-lines": {
+      "publicName": "sales-invoice-lines",
       "specName": "sales-invoice",
-      "entityName": "exchangeRates",
+      "entityName": "lines",
       "publicApi": true,
       "operations": [
         "GET",
@@ -4349,6 +4507,174 @@
         "DELETE",
         "LIST",
         "PATCH"
+      ],
+      "fields": {
+        "product": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "product",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Product",
+          "handlerId": null,
+          "relationship": {
+            "resource": "product",
+            "cardinality": "one",
+            "foreignKey": "product"
+          }
+        },
+        "description": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "description",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoiced_quantity": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "invoicedQuantity",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "list_price": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "listPrice",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "discount": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoDiscount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "tax": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "tax",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Tax",
+          "handlerId": null
+        },
+        "gross_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "grossAmount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "project": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "project",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Project",
+          "handlerId": null
+        },
+        "costcenter": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "costcenter",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Costcenter",
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "sales-invoice",
+        "entityName": "header",
+        "foreignKey": "invoice",
+        "pathSegment": "lines"
+      },
+      "functional": {
+        "functionalName": "Sales Invoice — Lines",
+        "functionalSummary": "This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.",
+        "functionalCapabilities": [
+          "browse sales invoices by document number, invoice date, business partner, status, and gross total;",
+          "open an invoice from the list into a lateral preview, then move into full record editing when needed;",
+          "create or update a draft invoice header with at least business partner, partner address, invoice date, payment method, and payment terms;",
+          "add invoice lines with product, invoiced quantity, net unit price, discount, tax, and resulting amounts, or import eligible lines from completed shipments or completed (not fully invoiced) sales orders for the same customer;",
+          "review subtotal, derived tax, and total amounts from the invoice itself;",
+          "inspect installment-level payment-plan data and open payment details from the payment-status badge or preview;",
+          "register or review downstream customer payment activity from the invoice payment modal when payment actions are available;",
+          "clone an invoice and navigate to the new invoice record;"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-invoice.md"
+      },
+      "source": {
+        "artifact": "sales-invoice",
+        "contractVersion": "0.91.0",
+        "backendEntity": true
+      }
+    },
+    "sales-invoice-exchangeRates": {
+      "publicName": "sales-invoice-exchangeRates",
+      "specName": "sales-invoice",
+      "entityName": "exchangeRates",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "LIST"
       ],
       "fields": {
         "currency": {
@@ -4375,7 +4701,7 @@
         },
         "rate": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "rate",
           "type": "passthrough",
           "dataType": {
@@ -4386,7 +4712,7 @@
         },
         "foreign_amount": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "foreignAmount",
           "type": "passthrough",
           "dataType": {

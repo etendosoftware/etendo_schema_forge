@@ -85,6 +85,25 @@ export const neverExposedFields = new Set([
   'etblkpBulkposting',
 ]);
 
+// The base exposes no document completion or any other process: the code that
+// derives `complete` from the document workflow stays, behind this flag.
+export const exposeProcesses = false;
+
+// Public resources published read-only (GET/LIST, every field `out`).
+// TEMPORARY: until the functional team curates these resources field by field,
+// the base does not let an integration write them.
+export const readOnlyResources = new Set([
+  'product-costing',
+  'sales-invoice-exchangeRates',
+  'purchase-invoice-exchangeRates',
+]);
+
+// Structural marker of a window's lines entity: the entity keyed `lines` in a
+// window that declares `linesLayout` renders it as its inline lines grid.
+export function isLinesEntity(entityName, windowContract) {
+  return entityName === 'lines' && Boolean(windowContract?.linesLayout);
+}
+
 // Internal references must not reach the public OpenAPI document: the
 // functional texts are written for the team and may cite tickets or people.
 const internalReference = /\bETP-\d+\b|\bjira\b/i;
@@ -224,7 +243,10 @@ export function buildEntity({ specName, entityName, contract, functional, parent
   }
   const readOnlyFiscalMonitor = fiscalMonitorWindows.has(specName);
   if (readOnlyFiscalMonitor) operations = ['GET', 'LIST'];
-  const writable = endpoints.some((endpoint) => writeMethods.has(endpoint.method));
+  const pubName = publicName(specName, entityName, contract.frontendContract.window.primaryEntity);
+  const readOnlyResource = readOnlyResources.has(pubName);
+  if (readOnlyResource) operations = ['GET', 'LIST'];
+  const writable = !readOnlyResource && endpoints.some((endpoint) => writeMethods.has(endpoint.method));
 
   const fields = {};
   const curated = isCurated(source);
@@ -300,14 +322,14 @@ export function buildEntity({ specName, entityName, contract, functional, parent
   if (!hasWritableField) operations = operations.filter((operation) => operation === 'GET' || operation === 'LIST');
 
   return {
-    publicName: publicName(specName, entityName, contract.frontendContract.window.primaryEntity),
+    publicName: pubName,
     specName,
     entityName,
     publicApi: true,
     ...(readOnlyFiscalMonitor ? { group: 'Fiscal Monitors' } : {}),
     operations,
     fields,
-    processes: (readOnlyFiscalMonitor ? [] : backend.processEndpoints ?? []).filter(
+    processes: (readOnlyFiscalMonitor || !exposeProcesses ? [] : backend.processEndpoints ?? []).filter(
       (process) => process.entity === entityName
     ),
     ...(parent ? {
@@ -395,7 +417,8 @@ export async function generateManifest({
       // actually visible in that window. Do not publish every schema-linked tab
       // when the UI intentionally exposes only a curated subset. Standard
       // windows without an explicit child-tab map retain their linked children.
-      if (!isPrimary && hasExplicitChildVisibility && !configuredVisibleChildren.has(entityName)) continue;
+      if (!isPrimary && hasExplicitChildVisibility && !configuredVisibleChildren.has(entityName)
+        && !isLinesEntity(entityName, contract.frontendContract.window)) continue;
       // Only expose children whose parent link is explicitly present in the
       // extracted schema. This prevents unrelated tabs and orphan technical
       // datasets from becoming public resources by accident.
@@ -466,6 +489,8 @@ export async function generateManifest({
       excludedWindows: [...excludedWindows],
       excludedChildTabs: excludedChildTabs.map((pattern) => pattern.source),
       excludedFields: [...neverExposedFields],
+      exposeProcesses,
+      readOnlyResources: [...readOnlyResources],
       failClosed: true,
     },
     entities,
