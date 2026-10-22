@@ -166,7 +166,11 @@ function titleFor(status: number): string {
 const PASS_THROUGH_STATUSES = new Set([400, 401, 402, 403, 404, 409, 412, 422, 428, 429, 503]);
 
 // Stable codes for the refusals raised without one (API-key guard, record lookups).
-const DEFAULT_CODES: Record<number, string> = { 401: 'unauthorized', 404: 'not_found' };
+const DEFAULT_CODES: Record<number, string> = {
+  400: 'bad_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found', 406: 'not_acceptable',
+  409: 'conflict', 412: 'precondition_failed', 415: 'unsupported_media_type', 422: 'unprocessable_entity',
+  428: 'precondition_required', 429: 'rate_limit_exceeded',
+};
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -227,12 +231,22 @@ type MissingFieldEntity = { fields: Record<string, { internalPath: string; relat
  * NeoServlet's 400 `MISSING_REQUIRED_FIELDS` names the internal properties left
  * empty. Answers one JSON:API error per field, pointing at its public name; a
  * name the manifest does not know yields an error with no pointer (internals never leak).
- * Returns undefined when the body is not that refusal.
+ * Also maps the code-less single-field `Missing required field: <name>` message.
+ * Returns undefined when the body is neither refusal.
  */
 export function missingFieldsException(entity: MissingFieldEntity, body: unknown): HttpException | undefined {
   const nested = isRecord(body) && isRecord(body.error) ? body.error : undefined;
-  if (!nested || nested.code !== 'MISSING_REQUIRED_FIELDS') return undefined;
-  const internal = Array.isArray(nested.fields) ? nested.fields.filter((f): f is string => typeof f === 'string') : [];
+  if (!nested) return undefined;
+  let internal: string[];
+  if (nested.code === 'MISSING_REQUIRED_FIELDS') {
+    internal = Array.isArray(nested.fields) ? nested.fields.filter((f): f is string => typeof f === 'string') : [];
+  } else {
+    // Handlers refuse a single missing field with a bare `Missing required field: <name> (<COLUMN>)`
+    // message and no code (e.g. country on the contact location address).
+    const single = typeof nested.message === 'string' ? /^Missing required field: ([A-Za-z0-9_]+)/.exec(nested.message) : null;
+    if (!single) return undefined;
+    internal = [single[1]];
+  }
   const byPath = new Map<string, { name: string; relationship: boolean }>();
   for (const [name, field] of Object.entries(entity.fields)) {
     if (field && !byPath.has(field.internalPath)) byPath.set(field.internalPath, { name, relationship: !!field.relationship });

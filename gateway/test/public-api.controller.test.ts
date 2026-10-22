@@ -2,7 +2,7 @@
 // @covers gateway/src/public-api/json-api-request.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UnauthorizedException, BadGatewayException, BadRequestException, HttpException, PreconditionFailedException } from '@nestjs/common';
+import { UnauthorizedException, BadGatewayException, BadRequestException, ConflictException, NotAcceptableException, UnsupportedMediaTypeException, HttpException, PreconditionFailedException } from '@nestjs/common';
 import { PublicApiController, toEtag, versionFromIfMatch } from '../src/public-api/public-api.controller.ts';
 import { toErrorDocument } from '../src/public-api/json-api-http.ts';
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
@@ -340,6 +340,32 @@ test('MISSING_REQUIRED_FIELDS with no field list is a single pointer-less error'
   assert.equal(errors?.length, 1);
   assert.equal(errors?.[0].code, 'missing_required_field');
   assert.equal(errors?.[0].source, undefined);
+});
+
+test('a code-less single "Missing required field" message is coded missing_required_field without leaking the column', async () => {
+  const body = { error: { status: 400, message: 'Missing required field: country (C_Country_ID)' } };
+  const { status, errors } = await statusAndErrors(controllerAnswering(400, body).create('product', { name: 'x' }, request));
+  assert.equal(status, 400);
+  assert.equal(errors?.length, 1);
+  assert.equal(errors?.[0].code, 'missing_required_field');
+  assert.equal(errors?.[0].source, undefined);
+  assert.doesNotMatch(JSON.stringify(errors), /country|C_Country_ID/);
+  const mapped = await statusAndErrors(controllerAnswering(400, { error: { message: 'Missing required field: name' } }).create('product', { name: 'x' }, request));
+  assert.equal(mapped.errors?.[0].source?.pointer, '/data/attributes/name');
+  const other = await statusAndErrors(controllerAnswering(400, { error: { message: 'Something else' } }).create('product', { name: 'x' }, request));
+  assert.equal(other.errors?.[0].code, undefined);
+});
+
+test('every plain 4xx exception carries a code', () => {
+  const cases: Array<[unknown, number, string]> = [
+    [new BadRequestException('x'), 400, 'bad_request'], [new ConflictException('x'), 409, 'conflict'],
+    [new NotAcceptableException('x'), 406, 'not_acceptable'], [new UnsupportedMediaTypeException('x'), 415, 'unsupported_media_type'],
+  ];
+  for (const [error, status, code] of cases) {
+    const doc = toErrorDocument(error);
+    assert.equal(doc.status, status);
+    assert.ok(doc.errors.every((e) => e.code === code));
+  }
 });
 
 test('an unknown action is a 404 coded unknown_action', async () => {
