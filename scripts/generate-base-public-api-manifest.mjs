@@ -248,7 +248,17 @@ function buildProcesses({ source, entityName }) {
   return [];
 }
 
-export function buildEntity({ specName, entityName, contract, functional, parent, rawEntity }) {
+// API-only input fields: values the resource accepts (and may echo) that are not
+// contract fields, declared per entity in decisions.json as
+// `entities.<entity>.publicApi.inputFields: [{ name, internalPath, dataType, required?, readable? }]`.
+// `readable: true` means a GET returns the value, so the field is `inout`; otherwise `in`.
+// A resource with no write endpoint publishes nothing from this list.
+export function inputFieldsOf(decisions, entityName) {
+  const list = decisions?.entities?.[entityName]?.publicApi?.inputFields;
+  return Array.isArray(list) ? list : [];
+}
+
+export function buildEntity({ specName, entityName, contract, functional, parent, rawEntity, inputFields = [] }) {
   const source = contract.frontendContract.entities[entityName];
   const backend = contract.backendContract ?? {};
   const backendEntity = backend.entities?.[entityName] ?? {};
@@ -289,6 +299,23 @@ export function buildEntity({ specName, entityName, contract, functional, parent
       dataType: openApiType(field.type),
       reference: field.reference ?? null,
       handlerId: null,
+    };
+  }
+
+  for (const input of writable ? inputFields : []) {
+    const apiName = publicFieldName(input.name);
+    if (fields[apiName]) {
+      throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
+    }
+    fields[apiName] = {
+      sourceVisibility: 'editable',
+      direction: input.readable === true ? 'inout' : 'in',
+      internalPath: input.internalPath,
+      type: 'passthrough',
+      dataType: { type: input.dataType ?? 'string' },
+      reference: null,
+      handlerId: null,
+      ...(input.required === true ? { required: true } : {}),
     };
   }
 
@@ -473,7 +500,7 @@ export async function generateManifest({
         // Keep the generated resource available, but make the missing guide
         // explicit so documentation work can fill the gap without guessing.
       }
-      const entity = buildEntity({ specName: entry.name, entityName, contract, functional, parent, rawEntity });
+      const entity = buildEntity({ specName: entry.name, entityName, contract, functional, parent, rawEntity, inputFields: inputFieldsOf(decisions, entityName) });
       entities[entity.publicName] = entity;
     }
   }

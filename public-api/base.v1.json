@@ -187,7 +187,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.2.0",
+        "contractVersion": "0.4.0",
         "backendEntity": true
       }
     },
@@ -304,6 +304,72 @@
           "reference": null,
           "handlerId": null
         },
+        "address_line1": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "addressLine1",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "address_line2": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "addressLine2",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "city_name": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "cityName",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "postal_code": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "postalCode",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "country": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "country",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "region_name": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "regionName",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -352,7 +418,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.2.0",
+        "contractVersion": "0.4.0",
         "backendEntity": true
       }
     },
@@ -495,7 +561,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.2.0",
+        "contractVersion": "0.4.0",
         "backendEntity": true
       }
     },

@@ -8,6 +8,7 @@ import {
   buildEntity,
   fiscalMonitorWindows,
   generateManifest,
+  inputFieldsOf,
   isCurated,
   exposeProcesses,
   isLinesEntity,
@@ -157,6 +158,47 @@ describe('buildEntity — curated entity keeps its curation', () => {
     const entity = build('contacts', curatedFields);
     assert.deepEqual(Object.keys(entity.fields).sort(), ['date', 'id']);
     assert.equal(entity.fields.date.internalPath, 'orderDate');
+  });
+});
+
+describe('buildEntity — API-only input fields declared in decisions.json', () => {
+  const decisions = { entities: { header: { publicApi: { inputFields: [
+    { name: 'city_name', internalPath: 'cityName', dataType: 'string', readable: true },
+    { name: 'secret_note', internalPath: 'secretNote', dataType: 'string', required: true },
+  ] } } } };
+  const curatedFields = [{ name: 'orderDate', visibility: 'editable', type: 'date', publicApi: { exposed: true, name: 'date' } }];
+
+  it('reads the list from the entity decisions and ignores a missing one', () => {
+    assert.equal(inputFieldsOf(decisions, 'header').length, 2);
+    assert.deepEqual(inputFieldsOf(decisions, 'lines'), []);
+    assert.deepEqual(inputFieldsOf(null, 'header'), []);
+  });
+
+  it('publishes them writable: inout when GET returns the value, in otherwise', () => {
+    const entity = buildEntity({
+      specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curatedFields),
+      functional, parent: null, rawEntity: null, inputFields: inputFieldsOf(decisions, 'header'),
+    });
+    assert.equal(entity.fields.city_name.direction, 'inout');
+    assert.equal(entity.fields.city_name.internalPath, 'cityName');
+    assert.equal(entity.fields.secret_note.direction, 'in');
+    assert.equal(entity.fields.secret_note.required, true);
+    assert.equal(entity.fields.date.internalPath, 'orderDate');
+  });
+
+  it('publishes none on a resource without write endpoints', () => {
+    const entity = buildEntity({
+      specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curatedFields, { methods: ['GET'] }),
+      functional, parent: null, rawEntity: null, inputFields: inputFieldsOf(decisions, 'header'),
+    });
+    assert.equal(entity.fields.city_name, undefined);
+  });
+
+  it('rejects a name that collides with a published field', () => {
+    assert.throws(() => buildEntity({
+      specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curatedFields),
+      functional, parent: null, rawEntity: null, inputFields: [{ name: 'date', internalPath: 'x' }],
+    }), /collision/);
   });
 });
 
