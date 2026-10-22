@@ -143,6 +143,7 @@ After the backend wiring lands, remember the Etendo step:
 7. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
 8. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear. Confirm the list never shows a row for Organización (`OO`), Cuenta (`AC`), Contacto (`BP`) or Producto (`PR`) — the first two are Etendo's built-in mandatory dimensions, and Contacto/Producto are locked always-on per ETP-4879 (same as `U1`/`U2`) — while Proyecto (`PJ`) and Centro de coste (`CC`) remain visible and toggleable.
 9. On **Cuentas generales**, confirm the three sections render and the two toggle+account pairs (suspense balancing, currency balancing) behave independently, and that no suspense error switch or account is shown: with a toggle off its account selector is hidden; turning it on shows it at once; turning it off again hides it, and turning it back on shows the same account (ETP-5682).
+10. Top bar (ETP-5736): in DevTools the bar (`glc-toolbar`) is 56px with 8px padding and its bottom rule is an inset `box-shadow` (no border); the tab group is 40px with 32px tabs (14px/24px, medium); `Guardar cambios` is 40px. Editing a field does not change the bar height. Compare with the Factura de venta form toolbar (`/sales-invoice/new`): same bar height, padding and rule.
 
 ## Test Design
 
@@ -165,8 +166,10 @@ Core acceptance coverage should include at least these scenarios:
 
 Current automated coverage:
 
-- `e2e/tests/flows/general-ledger-configuration.mocked.spec.js`
-  captures the tabs and provides a visual-review seed in mock mode.
+- `e2e/tests/flows/accounting/general-ledger-configuration.mocked.spec.js`
+  captures the tabs as a visual-review seed in mock mode, drives the dirty-state save, the
+  account selectors and the dimension toggles, and asserts the top bar's sizes (ETP-5736: bar
+  56px with an inset rule, tab group 40px, tabs 32px, Save 40px).
 
 Recommended next automated additions once backend/save work starts:
 
