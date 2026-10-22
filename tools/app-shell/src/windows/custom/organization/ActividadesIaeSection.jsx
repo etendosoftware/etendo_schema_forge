@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
-import { useActividadesIae } from './useActividadesIae.js';
+import { useActividadesIae, iaeCapState, IAE_MAX_SECONDARY_ACTIVITIES } from './useActividadesIae.js';
 
 // Field descriptors mirror `artifacts/organization/contract.json`'s
 // `actividadesDelIae` entity (ETP-4975) — same shape SelectorInput/DataTable
@@ -65,6 +65,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
   const [addingRow, setAddingRow] = useState(false);
   const [newRow, setNewRow] = useState({});
   const [savingNew, setSavingNew] = useState(false);
+
+  const { atCap, overCap } = iaeCapState(rows);
 
   function selectorUrlFor(field) {
     return `${apiBaseUrl}/actividadesDelIae/selectors/${field.column}`;
@@ -356,12 +358,29 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
           </tbody>
         </table>
       </div>
+      {/* Modelo 390 cap (1 main + 5 others, see IAE_MAX_SECONDARY_ACTIVITIES): existing rows are
+          never hidden — over the cap a warning asks to remove some; at the cap "Añadir" is off. */}
+      {!loading && overCap && (
+        <p
+          role="alert"
+          className="flex items-start gap-1.5 text-xs leading-[18px] text-[var(--status-warning-fg)]"
+          data-testid="ActividadesIaeSection__overCapWarning">
+          <TriangleAlert size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__iaeOverCap" />
+          <span>{ui('orgIaeOverCapWarning', { max: IAE_MAX_SECONDARY_ACTIVITIES })}</span>
+        </p>
+      )}
       {!addingRow && (
-        <div>
+        <div className="flex items-center gap-2">
           <AddLineButton
             onClick={() => setAddingRow(true)}
             label={ui('orgIaeAddRow')}
+            disabled={atCap}
             data-testid="ActividadesIaeSection__addButton" />
+          {atCap && !overCap && (
+            <span className="text-xs text-muted-foreground" data-testid="ActividadesIaeSection__capHint">
+              {ui('orgIaeCapHint', { max: IAE_MAX_SECONDARY_ACTIVITIES })}
+            </span>
+          )}
         </div>
       )}
     </div>

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/App.jsx
+// @covers tools/app-shell/src/lib/environmentAccessGate.js
 /**
  * ETP-5443 follow-up — `fetchWindowAccess`'s environment-access-gate side effect: a NEO
  * `/sws/neo/windowaccessmap` 402 records the demo/subscription block via
@@ -7,7 +9,8 @@
  * message parsing, the blocking-decision allowlist, notify semantics) and
  * `layout/__tests__/AppLayout.vitest.jsx` (which mocks the React binding and tests the RENDER
  * side). This file tests the DETECTION side, at the source, through the real
- * `fetchWindowAccess` + `readNeoErrorMessage` + `parseEnvironmentAccessDecision` pipeline.
+ * `fetchWindowAccess` + `readNeoAccessDecision` (App.jsx) + `readEnvironmentAccessDecision`
+ * (lib/environmentAccessGate.js) pipeline.
  *
  * A NEW file rather than an addition to `__tests__/App.vitest.jsx`'s own
  * `describe('fetchWindowAccess', ...)` block: that file's heavy mock set (below) exists only to
@@ -184,7 +187,11 @@ vi.mock('../lib/observability/RouteTracker.jsx', () => ({
   ObservabilityRouteTracker: () => null,
 }));
 
-import { fetchWindowAccess, __resetMenuAccessCacheForTest } from '../App.jsx';
+import {
+  fetchWindowAccess,
+  __resetMenuAccessCacheForTest,
+  __resetEnvironmentBlockClientForTest,
+} from '../App.jsx';
 import {
   getEnvironmentAccessDecision,
   resetEnvironmentAccessGateForTest,
@@ -210,13 +217,26 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     )));
   }
 
-  /** `NeoResponse.error()`'s real shape: `{ error: { message: "..." } }` — see readNeoErrorMessage. */
+  /** The pre-ETP-5047 NEO shape: `{ error: { message: "..." } }`, parsed by message prefix. */
   function neoError(message) {
     return { error: { message } };
   }
 
+  /** ETP-5047 — `EnvironmentAccessGuard.Denial.errorBody(402)`, the shared structured shape. */
+  function guardDenial(decision) {
+    return {
+      error: {
+        message: `Environment access is not available: ${decision}`,
+        status: 402,
+        code: 'ENVIRONMENT_ACCESS_DENIED',
+        decision,
+      },
+    };
+  }
+
   beforeEach(() => {
     __resetMenuAccessCacheForTest();
+    __resetEnvironmentBlockClientForTest();
     resetEnvironmentAccessGateForTest();
   });
 
@@ -240,6 +260,25 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
 
     expect(result).toBeNull();
     expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+  });
+
+  it('records the decision from the structured ETP-5047 402 body', async () => {
+    stubFetch(jsonResponse(guardDenial('SUBSCRIPTION_REQUIRED'), false, 402));
+
+    const result = await fetchWindowAccess({ token: 'tok' });
+
+    expect(result).toBeNull();
+    expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+  });
+
+  it('trusts the structured decision over a message that disagrees with it', async () => {
+    const body = guardDenial('DEMO_TRIAL_EXPIRED');
+    body.error.message = 'Environment access is not available: SUBSCRIPTION_REQUIRED';
+    stubFetch(jsonResponse(body, false, 402));
+
+    await fetchWindowAccess({ token: 'tok' });
+
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
   });
 
   // MEMBERSHIP_REQUIRED is a real EnvironmentAccessPolicy.Decision, but a DIFFERENT kind of "no
@@ -293,7 +332,11 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     expect(getEnvironmentAccessDecision()).toBeNull();
   });
 
-  it('clears a previously-recorded decision on a 401', async () => {
+  // ETP-5047 — only a granted access map (2xx) proves the environment is usable again. Any other
+  // answer says nothing about the commercial block, so clearing on it made the blocked screen
+  // flicker away on a blocked tenant until the next 402 (docs/request-policy.md, "402 and the
+  // blocked-access screen").
+  it('leaves a previously-recorded decision UNCHANGED on a 401', async () => {
     stubFetch(jsonResponse(neoError('Environment access is not available: SUBSCRIPTION_REQUIRED'), false, 402));
     await fetchWindowAccess({ token: 'tok' });
     expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
@@ -301,10 +344,10 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
     await fetchWindowAccess({ token: 'tok' });
 
-    expect(getEnvironmentAccessDecision()).toBeNull();
+    expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
   });
 
-  it('clears a previously-recorded decision on an unrelated 500', async () => {
+  it('leaves a previously-recorded decision UNCHANGED on an unrelated 500', async () => {
     stubFetch(jsonResponse(neoError('Environment access is not available: DEMO_TRIAL_EXPIRED'), false, 402));
     await fetchWindowAccess({ token: 'tok' });
     expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
@@ -312,7 +355,18 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     stubFetch(jsonResponse({ message: 'internal error' }, false, 500));
     await fetchWindowAccess({ token: 'tok' });
 
-    expect(getEnvironmentAccessDecision()).toBeNull();
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
+  });
+
+  it('leaves a previously-recorded decision UNCHANGED on a 402 that carries no blocking decision', async () => {
+    stubFetch(jsonResponse(guardDenial('DEMO_TRIAL_EXPIRED'), false, 402));
+    await fetchWindowAccess({ token: 'tok' });
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
+
+    stubFetch(jsonResponse(neoError('Rate limit exceeded'), false, 402));
+    await fetchWindowAccess({ token: 'tok' });
+
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
   });
 
   // Intentional behavior: a thrown/rejected `apiFetch()` call (DNS failure, connection
@@ -330,6 +384,77 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     await fetchWindowAccess({ token: 'tok' });
 
     expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+  });
+
+  // ETP-5047 — a block belongs to the client (environment) it was recorded for. Three automatic
+  // logouts inside the core (an ambient 401, a failed session restore, a logout broadcast from
+  // another tab) end the session without going through `useLogout`, so the next login in the same
+  // tab can reach `fetchWindowAccess` with the previous client's block still recorded. Since only a
+  // granted access map clears a block, a 401/500 for the NEW client would otherwise keep showing
+  // the previous company's blocked screen.
+  describe('a block recorded for another client', () => {
+    const CLIENT_A = { token: 'tok-a', clientId: 'CLIENT_A' };
+    const CLIENT_B = { token: 'tok-b', clientId: 'CLIENT_B' };
+
+    async function recordBlockFor(session, decision = 'SUBSCRIPTION_REQUIRED') {
+      stubFetch(jsonResponse(guardDenial(decision), false, 402));
+      await fetchWindowAccess(session);
+      expect(getEnvironmentAccessDecision()).toBe(decision);
+    }
+
+    it('is forgotten when the access map of a different client answers 401', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
+
+    it('is forgotten when the access map of a different client answers 500', async () => {
+      await recordBlockFor(CLIENT_A, 'DEMO_TRIAL_EXPIRED');
+
+      stubFetch(jsonResponse({ message: 'internal error' }, false, 500));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
+
+    it('is forgotten when the access map of a different client cannot be reached at all', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
+
+    it('is kept when the SAME client answers 401', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
+      await fetchWindowAccess({ ...CLIENT_A, token: 'tok-a-renewed' });
+
+      expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+    });
+
+    it('is replaced by the new client own block when that client is blocked too', async () => {
+      await recordBlockFor(CLIENT_A, 'SUBSCRIPTION_REQUIRED');
+
+      stubFetch(jsonResponse(guardDenial('DEMO_TRIAL_EXPIRED'), false, 402));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
+    });
+
+    it('is forgotten when the session no longer names a client', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
+      await fetchWindowAccess({ token: 'tok' });
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
   });
 });
 

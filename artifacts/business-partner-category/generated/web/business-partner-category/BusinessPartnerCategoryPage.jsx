@@ -342,6 +342,7 @@ export default function BusinessPartnerCategoryPage({ windowName, recordId, ...p
         toolbarPaddingX="px-2"
         formCardPadding="p-2"
         formScrollPaddingX="px-2"
+        detailVisibleWhenCapability="showAccountingFields"
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_BP_Group", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}

@@ -1866,25 +1866,24 @@ Tests: `ocr/__tests__/hasExtractedData.test.js`, `useOcrExtraction.vitest.jsx`,
 
 ## OCR reader — product matching never assigns a partial match silently
 
-Line products are looked up with `simSearch` (Product, `minSimPercent: 30`, `qtyResults: 3`).
+Line products are looked up with `simSearch` (Product, `minSimPercent: 50`, `qtyResults: 3`; raised from 30 in ETP-5654 to cut low-similarity noise from the suggestions).
 `classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line:
 
 - **Exactly one candidate whose name equals the line description** (trim, case-insensitive) →
   assigned automatically.
 - **Any other candidate** (partial similarity, or two products with the same exact name) → the
-  line goes to the "Asociar productos" popup with the best candidate **preselected** in the
-  product selector. The user can change it, search, create a product, or skip the line with the
-  small "Skip line" button below the selector (`ocr-product-skip-{idx}`, shown only while a product
-  is selected);
-  Continue returns the preselected id unless changed. A **non-dismissible warning banner**
-  (`ocrProductAutoMatchedWarning`) is shown at the top of the popup whenever any row was
-  preselected, and the generic "couldn't auto-match" hint is shown only when at least one row has
-  no suggestion.
+  line goes to the "Asociar productos" popup, where the best candidate is only **suggested**
+  (ETP-5654): the row starts undecided and the suggestion shows as a one-click chip below the
+  selector (`ocr-product-suggestion-{idx}`, "Suggested: <name>"). Nothing is selected until the user
+  accepts the chip, picks another product, creates one, or skips the line. A **non-dismissible
+  warning banner** (`ocrProductAutoMatchedWarning`) is shown at the top of the popup whenever any
+  row carries a suggestion, and the generic "couldn't auto-match" hint is shown only when at least
+  one row has no suggestion.
 - **No candidates** → popup without a suggestion, as before.
 
 Example: product "Mantenimiento Web" exists, the invoice line reads "Servicio de desarrollo y
-mantenimiento web" → the popup preselects it under the warning banner; nothing reaches the
-invoice without passing through that review step.
+mantenimiento web" → the popup offers it as a chip under the warning banner and keeps Continue
+disabled; nothing reaches the invoice without an explicit decision on that line.
 
 Tests: `ocr/ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx`,
 `ocr/__tests__/ProductResolverPopup.vitest.jsx`.
@@ -2015,15 +2014,16 @@ Each unmatched line is in one of three states, kept per row in `ProductResolverP
 
 | State | How a row gets there | Submitted as |
 |-------|----------------------|--------------|
-| Undecided | Default for a line **without** a suggestion | (blocks Continue) |
-| Product | Created through the "New product" modal, picked from the dropdown, or arrived with a suggestion | the product id |
+| Undecided | Default for every line, **including** one with a suggestion (the suggestion is only a chip) | (blocks Continue) |
+| Product | Created through the "New product" modal, picked from the dropdown, or the suggestion chip was accepted | the product id |
 | Skipped | The user explicitly chose "Skip line" | `null` |
 
 - An undecided row shows "+ Create product" instead of "Skip line". Clicking that label opens the
   "New product" modal; nothing opens or is created automatically. The chevron next to it opens the
   dropdown (search an existing product, "+ Create product", "Skip line").
 - **Continue is disabled while any row is undecided**, and a short helper
-  (`ocrProductResolverIncomplete`) explains why. Rows that arrive with a suggestion count as decided.
+  (`ocrProductResolverIncomplete`) explains why. A row with a suggestion is still undecided until
+  the chip is accepted.
 - Skipping is always explicit (dropdown entry, or the ghost skip button on a row that has a
   product). A skipped row can still go back to creating or picking a product.
 - The `onSubmit` contract is unchanged: `{ [idx]: productId | null }`, where `null` means skipped.
@@ -2058,7 +2058,7 @@ zeros are kept.
 | Status | Condition | Result |
 |---|---|---|
 | `match` | ids equal after normalization | continue |
-| `mismatch` | receiver id present and different | **blocked**: error toast with both ids, flow stops |
+| `mismatch` | receiver id present and different | **blocked**: inline error in the upload panel (no toast), flow stops |
 | `absent` | no receiver id (null, blank or the "?" placeholder) | continue, no session call, no toast; the "Datos detectados" modal shows a non-blocking amber notice (`ocrReceiverTaxIdAbsent`, prop `receiverTaxIdAbsent`) that never affects "Continuar" |
 | `same-as-issuer` | receiver id equals the issuer id (`issuer.tax_id_raw` or `tax_id`) | continue (OCR confusion) |
 | `no-org-tax-id` | organization has no tax id | continue + warning toast |
@@ -2067,15 +2067,18 @@ zeros are kept.
 Out of scope: a legal-entity child organization without its own `AD_OrgInfo.TaxID` is treated as
 `no-org-tax-id` (no inheritance from the parent).
 
-Messages use `toast` from sonner directly (`ocrReceiverTaxIdMismatch`, `ocrOrgTaxIdMissing`,
+The warnings use `toast` from sonner directly (`ocrOrgTaxIdMissing`,
 `ocrReceiverTaxIdUnverified`), not `useBulkActionToast().showResult`, which reads `failed[0].message`
 while this flow passes `{ reason }` (pre-existing, not changed here).
 
-The mismatch error (`ocrReceiverTaxIdMismatch`) is a **persistent** toast: `duration: Infinity`,
-`closeButton: true` and the stable id `ocr-receiver-tax-id-mismatch`, so it stays until the user
-closes it and a second wrong invoice replaces it instead of stacking. Each validation run dismisses
-that id before comparing, so a correct invoice never leaves a stale error on screen. The two
-warnings (`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient with default options.
+The mismatch error (`ocrReceiverTaxIdMismatch`) is **not** a toast: it blocks the flow and is shown
+**inline** in the "Subir Factura" panel, below the "Extraer y completar" button, with the same red
+text and alert icon as the extraction errors and no retry button. `useOcrFlow` stores it in
+`result.blocked` (a field distinct from `result.error`, which carries failures that already toast
+via `showResult`) and `OcrInlineUploader` renders only that field. The message goes away when it
+stops being true: a new extraction starts, the file is removed, or another file is picked
+(`useOcrFlow` returns `clearResult` and the uploader calls it in those places). The two warnings
+(`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient toasts with default options.
 
 Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
 `useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
@@ -2687,6 +2690,47 @@ warning. The review modal ("Datos detectados en la factura") now looks for it.
 - **Warn only.** Continue stays enabled. A failed lookup (network, non-OK, unreadable answer)
   shows nothing and does not block.
 
+## OCR reader — step flow and Back button — ETP-5654
+
+The OCR upload runs as up to three review steps. `useOcrFlow` drives them as a small state machine
+(`header` -> `lines` -> `build`) instead of a straight-line script:
+
+1. **Datos detectados en la factura** (`OcrReviewModal`). First step: no Back button.
+2. **Líneas detectadas en la factura** (`OcrLinesReviewModal`). Only when the invoice has lines.
+   Back returns to step 1.
+3. **Asociar productos** (`ProductResolverPopup`). Only when some line has no automatic product
+   match; it is opened from inside `buildPurchaseInvoiceBatch` through `askUserForProducts`.
+   Back returns to step 2 (or to step 1 when no lines step was shown).
+
+Back always goes to the previous step that was actually shown. The label is the generic `back`
+i18n key (Back / Atrás); test ids: `ocr-lines-back`, `Button__b3ae11_back`.
+
+**Back signal.** `ocrFlowSignals.js` exports the symbol `BACK`. Each step resolves with its value
+(continue), `null` (cancel) or `BACK`. Cancel is unchanged: it marks the run cancelled, with no
+toast. Back never marks anything. When the popup is backed out of, `askUserForProducts` resolves
+`BACK` and `buildPurchaseInvoiceBatch` returns `{ back: true }` (distinct from `{ cancelled: true }`),
+before any op is built or sent; the flow then re-enters the previous step.
+
+**State is preserved.** Each modal reports its current state through an optional `onStateChange`
+callback right before `onSubmit`/`onBack`; the flow keeps it for the run and passes it back as
+`initialState` (header toggles/values), `initialRows` (line edits, tax included) or
+`initialSelections` (product picks) when the step is shown again. Returning to the header does not
+re-run the vendor pre-resolvers: the restored state already holds the resolved vendor.
+
+**Recompute rule.** The lines depend on the reviewed header: the vendor's location and the invoice
+date feed the default-tax lookup. Moving forward from the header again compares
+`headerDependencyKey(reviewed)` (vendor id + ISO invoice date) with the one the lines were built
+for. Same key: the user's edited rows are reused as they are. Different key: lines are rebuilt from
+the OCR payload and the stale line edits are dropped (their taxes may no longer apply). Product
+picks are keyed by line index and survive either way; a pick whose line is no longer unmatched is
+ignored.
+
+**Irreversible side effects.** Going back never undoes anything. A product created from the
+popup is already saved, and a contact created from the header modal is already saved; both come
+back as ordinary selected values (the product as a selected pick, the contact as the vendor in the
+restored header state), so they are never created a second time. Nothing else is written before
+the final batch, so a Back before "Create" leaves no other trace.
+
 ## Related documents — form and list preview share one definition — ETP-5539
 
 The form's Related Documents tab (`tools/app-shell/src/windows/custom/purchase-invoice/RelatedDocuments.jsx`,
@@ -2703,6 +2747,10 @@ render the same definition. The preview no longer links to sales documents (`/sa
 The `purchase-invoice:document-created` event is the `refreshEvent`. See `docs/ui-customization.md` §7.a.
 
 ## Header layout at 1280x720 — ETP-5513
+
+- The form's scroll container has no extra padding next to the OCR side panel (`sidebarFormScrollPaddingX=""` in `windows/custom/purchase-invoice/index.jsx`, ETP-5756), so its margins match `/sales-invoice`. `formScrollPaddingX` alone does not apply when a sidebar is present.
+
+- Footer (Docs / Notes / Totals) does not overlap at 1280x720 (ETP-5756). The 320 px sidebar leaves the main area ~690 px; the shared `LinesBottomSection` Totals column now shrinks from 520 px to a 320 px floor only when the footer row leaves the left column under 469 px (`min(520px, max(320px, calc(100% - 469px)))`), and `DocumentTotalsPanel`'s `pr-12` collapses to 0 as the block narrows. The Docs/Notes rows wrap their content under the DOCUMENTOS/NOTAS label when it would get under 20rem, so the chips get the full row and the Notes placeholder stays on one line. Each chip is a single-line pill: only its title truncates (with a `title` tooltip); the status badge always stays beside it. Windows without a side panel keep 520 px / 48 px unchanged. Covered by `components/contract-ui/__tests__/LinesBottomSection.vitest.jsx` (CSS contract; jsdom has no layout, so no pixel check).
 
 - The OCR side panel is a fixed 320 px (`sidePanelStyle={{ width: 320 }}` in
   `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`; it was 360 px).
@@ -2732,3 +2780,93 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - The `posted` field was already gated (ETP-4520), but the list is rendered by `windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`, which re-declared `posted` without the gate. Its column now carries `visibleWhenCapability: ACCOUNTING_CAPABILITY`; `ListView` also drops it from the filter, sort and export.
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Import lines into a draft purchase invoice over MCP — ETP-5713
+
+An agent fills a DRAFT purchase invoice from purchase orders and from goods receipts, the way the window's "Create from ..." modals do, with
+six declared actions on `header` (`PurchaseInvoiceHeaderHandler`): `availableOrders` / `availableOrderLines` / `importOrderLines`
+(`{orderId, lines?:[{sourceLineId, quantity}]}`) and `availableReceipts` / `availableReceiptLines` / `importReceiptLines` (`{receiptId, lines?}`).
+The `id` of every call is the draft purchase invoice. `lines` omitted imports everything still pending; given, exactly those lines.
+
+- **Cap = pending including drafts, applied server-side.** From an order: ordered - invoiced - the lines of every
+  DRAFT purchase invoice (this one included); the one-step `createPurchaseInvoice` ignores drafts because it completes the invoice
+  in the same call, an import into a draft cannot. From a receipt: the movement quantity minus completed invoices, match
+  rows and draft invoices (this one included), not the full movement quantity the modal offered. More than pending on any
+  line is a 422 `importQuantityExceedsPending` naming the product, the requested and the pending quantity, and nothing is
+  created. The source lines are locked (`FOR UPDATE`, sorted) before the total is read. The order's invoiced quantity
+  only moves when the purchase invoice is completed.
+- **Price, tax and discount** come from the order line through the native `CreateInvoiceLinesFromProcess` (the process
+  of the one-step actions): unit and list price exactly as in the order (no second discount: the lines CRUD, which
+  re-derives amounts, is not used), `EM_Etgo_Discount` carried to the NEW lines only, the gross amount filled when
+  missing. The invoice is never completed by an import.
+- **Order lines with receipts not yet invoiced:** the requested quantity goes first to those completed receipts, oldest first,
+  each up to its own pending (as `importReceiptLines` would offer, drafts included), as lines bound to the receipt so it shows as
+  invoiced; the rest (ordered and not delivered, or already taken by another draft) is invoiced against the order line
+  alone: order 10, receipt 6 already in a draft invoice, import of the order gives one line of 4. The same invoice can be
+  filled from the order or from the receipt and each path counts what the other created; a second import of the same
+  remainder answers `importNothingPending`. Nothing is refused for having deliveries.
+- **Preconditions (422):** draft target (`importTargetNotDraft`) with a price list (`importPriceListRequired`),
+  completed source (`importSourceNotCompleted`) that is not a return, same business partner, currency and direction.
+- **Header.** The invoice's order reference is left by the native process: the order when every line comes from one
+  order, empty when several are mixed. From an order, `etgoTotalDiscount` takes the order's when positive and the
+  invoice has none yet (or the same), as the modal's `afterImport` does; the discount line is materialised when the
+  invoice is completed.
+- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
+- The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
+  through `MCP_CONFIG`. `createPurchaseInvoice` on the purchase order or the goods receipt (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/purchase-invoice/spec.md`)
+  describes the flow.
+
+The window itself is unchanged: its modals still post one line at a time through the lines CRUD (uncapped by the server).
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34.
+
+Discovery and edge cases of the purchase invoice import (ETP-5713 review):
+- A return order and a return document are never importable (422 `importDirectionMismatch`) and never listed.
+- `available*` answers are bounded scans (200 most recent candidates, 50 documents) and carry `hasMore`, `limit` and `scanLimit`; `hasMore:true` means the list may be incomplete.
+- `headerLinked` / `salesOrder` report the truth: the order the header points at now, `headerLinked:true` only when an imported line belongs to it.
+- A receipt imported into the invoice does NOT carry the order's `etgoTotalDiscount`; only the order import does.
+- The gross repair touches only the lines this import added: a deliberate zero line or a negative line already in the draft keeps its gross.
+- The remainder of an order import (ordered and not delivered, or already taken by another draft) is created through the native process with a temporary receipt/shipment marker that is removed right after; a skipped removal rolls the import back (`importQuantityNotHonoured`). `ImportOrderLinesIntoInvoiceHandlerIntegrationTest` runs the real process for the covered-by-draft case.
+- A document of another client answers 404 exactly like a missing one. The source lines are locked with `FOR NO KEY UPDATE`.
+
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a purchase invoice allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<purchase invoice id>)` lists every action and, for that record, says `availableNow`
+  and `unavailableReason`; `documentAction` carries `availableValuesNow` and, for a value ruled out, `unavailableValues`.
+  Unavailable actions stay listed. **Advice only**: it never blocks a call.
+- `documentAction` on the record is the next default action (what the Process button would run); `--` means none.
+- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RC` (void by reversal) or
+  `RE` (reactivate). `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
+  rectified by a completed rectificativa).
+- `post` applies to a completed invoice that is not posted yet, `unpost` to a completed one that is; the import actions (`importOrderLines`, `importReceiptLines` and their `available*` lists) apply to a draft.
+- Posting can answer **409 `costNotCalculated`** (`retryAfterSeconds: 30`) when cost is still being calculated: wait and repeat.
+- Refusals keyed 20501 ("Documento ya procesado") carry a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. facturada**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 4 (price, discount, tax and gross amount moved to 5–8)`, `gridReadOnly: true`, `display: "tag"` — it was `system` (hidden). With the document-attachments side panel open the last column (gross amount) sits at the edge and the grid scrolls horizontally. The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES, es_AR) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as the product is chosen: this window's line callout answers `uOM` with an empty object, so the unit is taken from the selected item's `_aux` (`_UOM`, serialised as `UOM(<id>) (name: <name>)`) by `lib/auxReference.js`; the backend then stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft purchase invoice; confirm `Unidad` sits after Cant. facturada; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## "A favor" topbar chip shows the whole amount — ETP-5729
+
+QA CP-14 applied here too: `PurchaseInvoiceTopbar.jsx` now renders the "A favor" balance through the
+shared `BadgeAmount` (with the chip class `BADGE_CHIP_FIT_CLASS`), so a large credit balance is no longer
+cut at "1.452,0…" and, on a narrow ~1280px topbar, the chip shrinks inside the card instead of pushing
+the "€" off-screen. The component, the flex-chain fix in `DetailView.jsx` and the manual check are
+described once in [`sales-invoice.md` — A favor topbar chip, ETP-5729](sales-invoice.md#a-favor-topbar-chip-shows-the-whole-amount--etp-5729).
+
+## Read-only role tier: no OCR uploader on /new — ETP-5830
+
+`OcrSidePanel` mounts the OCR uploader only when `isNew && !readOnly`. A read-only role reaching `/purchase-invoice/new` by URL is redirected to the list anyway; this guard keeps the uploader out of the embedded `?embedded=1` path too. On a saved invoice the side panel already used `ReadOnlyOcrSidePanel` (ETP-5205). The SIF tab and `ReversedInvoicesPanel` are locked for a read-only role exactly as in sales-invoice. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

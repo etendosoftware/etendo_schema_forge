@@ -16,9 +16,13 @@ function normaliseRow(line, columns) {
   return base;
 }
 
-export default function OcrLinesReviewModal({ columns = [], lines = [], token, apiBaseUrl, onSubmit, onCancel }) {
+// `initialRows` (ETP-5654) are the rows of an earlier visit, edits included; they replace the
+// freshly built `lines` when the user comes back to this step from a later one. `onStateChange`
+// receives the current rows right before `onSubmit`/`onBack` fire, so the flow can hand them
+// back as `initialRows`.
+export default function OcrLinesReviewModal({ columns = [], lines = [], initialRows = null, token, apiBaseUrl, onSubmit, onBack, onStateChange, onCancel }) {
   const ui = useUI();
-  const [rows, setRows] = useState(() => lines.map((line) => ({
+  const [rows, setRows] = useState(() => initialRows ?? lines.map((line) => ({
     ...normaliseRow(line, columns),
     _rowId: crypto.randomUUID(),
   })));
@@ -28,7 +32,9 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
   };
 
   const handleSubmit = () => {
-    onSubmit(rows.map((row) => ({ ...row })));
+    const snapshot = rows.map((row) => ({ ...row }));
+    onStateChange?.(snapshot);
+    onSubmit(snapshot);
   };
 
   return (
@@ -98,6 +104,19 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-5 py-3">
+          {onBack && (
+            <button
+              type="button"
+              onClick={() => {
+                onStateChange?.(rows.map((row) => ({ ...row })));
+                onBack();
+              }}
+              className="mr-auto rounded-full border border-border-control bg-card px-5 py-2 text-sm font-medium text-foreground hover:bg-muted"
+              data-testid="ocr-lines-back"
+            >
+              {ui('back')}
+            </button>
+          )}
           <button
             type="button"
             onClick={onCancel}

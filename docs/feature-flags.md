@@ -200,3 +200,19 @@ and debt at the start of a flag's life, following [flag debt](flag-debt.md) and
 
 The former `tenant-upgrade` flag is retired; permanent payment/entitlement rules
 are documented in [paid tenant infrastructure](paid-tenant-infrastructure.md).
+
+## Backend-only flags
+
+A flag evaluated only in `com.etendoerp.go` (backend framework `featureflags/`, see
+*Architecture: flag code layout* above) has **no key in `flag-keys.js`, and none must be added**:
+the SPA reacts to what the backend answers, never to the flag itself — a browser key would be a
+second evaluator on a different control plane. Its owned paths, symbols and TTL are registered in
+[`flags-registry.json`](../flags-registry.json) under root `backend`, like every other flag, and
+its behaviour is documented in its topic doc and in `com.etendoerp.go`
+`docs/feature-flags-and-tenant-upgrade.md`. This page keeps only the list:
+
+| Key | Registry entry | Topic doc |
+|---|---|---|
+| `bp-portal-link` | `bp-self-service-portal` | [BP self-service portal](plans/2026-09-10-bp-self-service-portal.md); backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
+| `demo-data-transfer` | `demo-data-transfer` | Retired in `com.etendoerp.go` by ETP-5480 (`docs/feature-flags-and-tenant-upgrade.md`, "`demo-data-transfer` — retired"); the registry entry still awaits its retirement |
+| `environment-access-enforcement-off` | `environment-access-enforcement-kill-switch` | [Paid tenant infrastructure](paid-tenant-infrastructure.md) §3.7; local testing: [`stripe-local-testing.md`](stripe-local-testing.md) "The 402 body and the kill switch"; operating it: "Operating environment-access enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |

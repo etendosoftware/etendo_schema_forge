@@ -22,7 +22,7 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), dismiss: vi.fn() },
 }));
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('../useFiscalAutoCompute.js', () => ({
@@ -122,7 +122,12 @@ afterEach(() => {
 });
 
 describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () => {
-  it('shows an error toast and does not add a row when the backend rejects with 409 (duplicate draft)', async () => {
+  // ETP-5725 (reopened QA fix) — the generic fallback below used to fire for EVERY failure,
+  // including this one well-known cause. `handler.get(status)` from the POST's rejected promise
+  // is the ONLY source of a 409 on this endpoint (FiscalDeclCrudHandler#hasDraftDeclaration), so
+  // this assertion was updated from `fm.list.new_decl_failed` to the new, specific
+  // `fm.list.new_decl_draft_exists` toast — see FmListPage.jsx's `handleNewDecl` `.catch`.
+  it('shows the specific "draft already exists" toast and does not add a row on a 409', async () => {
     globalThis.fetch = mockFetch({ postStatus: 409 });
     const { container } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
@@ -131,7 +136,8 @@ describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () =
     fireEvent.click(screen.getByTestId('new-decl-confirm'));
 
     const { toast } = await import('sonner');
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.new_decl_failed'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.new_decl_draft_exists'));
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.new_decl_failed');
     expect(container.querySelectorAll('tbody tr').length).toBe(0);
   });
 
@@ -145,6 +151,9 @@ describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () =
 
     const { toast } = await import('sonner');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.new_decl_failed'));
+    // ETP-5725 (reopened QA fix) — the specific 409 toast must stay specific to 409: a 500
+    // keeps the generic fallback.
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.new_decl_draft_exists');
   });
 
   it('does not toast and adds the created row when the backend succeeds', async () => {
@@ -158,5 +167,48 @@ describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () =
     await waitFor(() => expect(container.querySelectorAll('tbody tr').length).toBe(1));
     const { toast } = await import('sonner');
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5716 — a single-ordinary model (Modelo 390) answers a 2nd ordinary of the exercise with
+// 409 DUPLICATE_ORDINARY + `existingId`: the toast says so and opens the existing declaration.
+describe('FmListPage — handleNewDecl, 409 DUPLICATE_ORDINARY (ETP-5716)', () => {
+  const existing = { id: 'd-390', model: '390', year: 2026, period: '0A', status: 'draft' };
+  const duplicateBody = {
+    error: { status: 409, code: 'DUPLICATE_ORDINARY', message: 'exists', existingId: 'd-390' },
+  };
+  // Same as mockFetch, with the 390 active in the catalog (its rows are listed).
+  function mockFetch390(opts) {
+    const base = mockFetch(opts);
+    return vi.fn((url, init = {}) => (String(url).includes('fiscal-models-catalog')
+      ? Promise.resolve({ ok: true, json: async () => ({ '303': true, '349': true, '390': true }) })
+      : base(url, init)));
+  }
+
+  it('toasts the duplicate (not the generic failure) and opens the existing declaration', async () => {
+    globalThis.fetch = mockFetch390({ postStatus: 409, postBody: duplicateBody });
+    const onSelect = vi.fn();
+    const { container } = render(<FmListPage declarations={[existing]} {...withCatalogProps} onSelect={onSelect} />);
+    await waitForCatalogLoad();
+
+    openNewDeclModal();
+    fireEvent.click(screen.getByTestId('new-decl-confirm'));
+
+    const { toast } = await import('sonner');
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.new_decl_failed');
+    const message = toast.error.mock.calls[0][0];
+    const { getByTestId } = render(message);
+    expect(document.body.textContent).toContain('fm.new_decl.duplicate_ordinary');
+    fireEvent.click(getByTestId('FmListPage__openExistingDecl'));
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'd-390' })));
+    expect(container.querySelectorAll('tbody tr').length).toBe(1);
+  });
+
+  it('shows the annual period as "Anual" in the Periodo column', async () => {
+    globalThis.fetch = mockFetch390();
+    const { container } = render(<FmListPage declarations={[existing]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    expect(container.querySelector('tbody .fm-period').textContent).toBe('fm.period.annual');
   });
 });

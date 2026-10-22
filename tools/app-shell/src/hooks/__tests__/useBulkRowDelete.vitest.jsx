@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useBulkRowDelete } from '../useBulkRowDelete';
 
@@ -32,6 +32,8 @@ vi.mock('@/i18n', () => ({
       bulkDeleteAllSucceeded: '{count} record(s) deleted successfully.',
       bulkDeletePartialFailure: '{succeeded} of {total} record(s) deleted. {failed} could not be deleted.',
       bulkDeleteAllFailed: 'None of the {count} selected record(s) could be deleted.',
+      bulkDeleteInProgress: 'Deleting…',
+      bulkDeleteInProgressMessage: 'Deleting {count} record(s). This may take a few seconds.',
       // ETP-5111 — the two account-delete blocker sentences the tests below exercise. Present so
       // the reason assertion goes through the REAL translation path (`translateAccountDeleteBlocked`
       // recognises the "Cannot delete this account. " prefix and answers with ONE generic
@@ -662,3 +664,98 @@ describe('useBulkRowDelete', () => {
     await act(async () => { resolveFetch({ ok: true }); });
   });
 });
+
+// ETP-5758 — useBulkRowDelete is now a thin wrapper over useBatchDeleteDialog: the dialog, its
+// in-progress lock and the outcome toast come from the generic hook, under the `bulk-delete` scope
+// ListView / ListModalWindow (and their e2e specs) have always published.
+describe('useBulkRowDelete — generic dialog wrapper (ETP-5758)', () => {
+  const opts = {
+    apiBaseUrl: 'http://localhost/api',
+    entity: 'header',
+    token: 'test-token',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function Host({ hookOpts }) {
+    const { requestBulkDelete, bulkDeleteDialog, deleting } = useBulkRowDelete(hookOpts);
+    return (
+      <>
+        <span data-testid="deleting-flag">{String(deleting)}</span>
+        <button onClick={() => requestBulkDelete([{ id: 'a' }, { id: 'b' }])}>Bulk</button>
+        {bulkDeleteDialog}
+      </>
+    );
+  }
+
+  it('publishes the bulk-delete testid family (not batch-delete) on the shared dialog', async () => {
+    const user = userEvent.setup();
+    render(<Host hookOpts={{ ...opts, onSuccess: vi.fn() }} />);
+
+    await user.click(screen.getByText('Bulk'));
+
+    for (const id of [
+      'DialogContent__bulk-delete', 'DialogHeader__bulk-delete', 'DialogTitle__bulk-delete',
+      'DialogDescription__bulk-delete', 'DialogFooter__bulk-delete',
+      'Button__bulk-delete-cancel', 'bulk-delete-confirm',
+    ]) {
+      expect(screen.getByTestId(id)).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('Button__batch-delete-cancel')).not.toBeInTheDocument();
+  });
+
+  it('shows the generic in-progress state under the bulk-delete scope while the DELETEs run, then closes', async () => {
+    const resolvers = [];
+    globalThis.fetch.mockImplementation(() => new Promise((resolve) => { resolvers.push(resolve); }));
+    const onSuccess = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<Host hookOpts={{ ...opts, onSuccess }} />);
+
+    await user.click(screen.getByText('Bulk'));
+    await user.click(screen.getByTestId('bulk-delete-confirm'));
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('bulk-delete-spinner')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-delete-confirm')).toHaveTextContent('Deleting…');
+    expect(screen.getByTestId('DialogDescription__bulk-delete'))
+      .toHaveTextContent('Deleting 2 record(s). This may take a few seconds.');
+    expect(screen.getByTestId('DialogContent__bulk-delete')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByTestId('deleting-flag')).toHaveTextContent('true');
+
+    // Not dismissible mid-batch.
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByTestId('DialogOverlay__6a5928'));
+    expect(screen.getByTestId('DialogContent__bulk-delete')).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
+
+    await act(async () => { resolvers.forEach((r) => r({ ok: true })); });
+
+    await waitFor(() => expect(screen.queryByTestId('DialogContent__bulk-delete')).not.toBeInTheDocument());
+    expect(onSuccess).toHaveBeenCalledWith([{ id: 'a' }, { id: 'b' }], []);
+    expect(screen.getByTestId('deleting-flag')).toHaveTextContent('false');
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['empty string', ''],
+    ['null', null],
+  ])('does not open the dialog at all when apiBaseUrl is %s', async (_label, apiBaseUrl) => {
+    const user = userEvent.setup();
+    render(<Host hookOpts={{ ...opts, apiBaseUrl, onSuccess: vi.fn() }} />);
+
+    await user.click(screen.getByText('Bulk'));
+
+    expect(screen.queryByText('Delete records')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bulk-delete-confirm')).not.toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+

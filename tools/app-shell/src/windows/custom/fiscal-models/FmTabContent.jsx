@@ -162,7 +162,32 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
   );
 }
 
-export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
+const CASILLA_ORIGIN_RE = /Casilla\s+\d+/i;
+
+// The 303 action: an incident whose origin names a casilla opens the Facturas tab.
+function defaultIncidentAction(inc, onGoToSources, t) {
+  if (!inc.origin?.match(CASILLA_ORIGIN_RE) || !onGoToSources) return null;
+  return (
+    <button
+      onClick={() => onGoToSources()}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'hsl(var(--foreground))', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
+    >
+      {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} data-testid="ChevronRight__931756" />
+    </button>
+  );
+}
+
+/**
+ * The Incidencias tab of every model: severity banner + table (Severidad · Origen · Mensaje ·
+ * [Sugerencia] · [Acción]), blocking first.
+ *
+ * A model with its own incident texts and actions (390) passes the optional resolvers; without
+ * them the tab shows `inc.message` / `inc.origin` and the 303 casilla action, as it always did.
+ * @param {Function} [getMessage]   (inc) => text of the Mensaje column
+ * @param {Function} [getOrigin]    (inc) => text of the Origen column (`null` → "—")
+ * @param {Function} [renderAction] (inc) => node of the Acción column, or `null`
+ */
+export function IncidentsTab({ decl, blocking, warning, t, onGoToSources, getMessage, getOrigin, renderAction }) {
   const incidents = decl.incidents?.items ?? [];
   // Per-session dismissal of the warning banner (no localStorage precedent found for
   // this pattern — see CertExpiryBanner.jsx, which also uses a plain local useState).
@@ -193,7 +218,12 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   // validation flow — AEAT submission incidents never populate them. Hide both columns
   // when no row has anything to show, instead of rendering permanently-empty '—' cells.
   const hasSuggestion = sorted.some((inc) => inc.suggestion);
-  const hasAction = sorted.some((inc) => inc.origin?.match(/Casilla\s+\d+/i));
+  const messageOf = (inc) => (getMessage ? getMessage(inc) : inc.message);
+  const originOf = (inc) => (getOrigin ? getOrigin(inc) : inc.origin);
+  const actionOf = (inc) => (renderAction ? renderAction(inc) : null);
+  const hasAction = renderAction
+    ? sorted.some((inc) => actionOf(inc) != null)
+    : sorted.some((inc) => inc.origin?.match(CASILLA_ORIGIN_RE));
   // ETP-5597 — the banner follows the real severity: any blocking incident keeps the "resolve
   // before generating the file" text in the destructive role; warnings only get an amber,
   // non-blocking message (warnings never prevent file generation).
@@ -237,27 +267,20 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((inc) => (
-                <tr key={`${inc.origin ?? ''}-${inc.message}`}>
+              {sorted.map((inc, i) => (
+                <tr key={`${inc.origin ?? ''}-${inc.message}-${i}`} data-testid={`IncidentsTab__row_${inc.origin ?? i}`}>
                   <td>
                     {inc.severity === 'block'
                       ? <span style={{ fontSize: 12, fontWeight: 400, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', borderRadius: 4, padding: '2px 6px' }}>{t('fm.incidents.severity.block')}</span>
                       : <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--status-warning-fg)', background: 'var(--status-warning-bg)', borderRadius: 4, padding: '2px 6px' }}>{t('fm.incidents.severity.warn')}</span>
                     }
                   </td>
-                  <td>{inc.origin ?? '—'}</td>
-                  <td>{inc.message}</td>
+                  <td>{originOf(inc) ?? '—'}</td>
+                  <td>{messageOf(inc)}</td>
                   {hasSuggestion && <td>{inc.suggestion ?? '—'}</td>}
                   {hasAction && (
                     <td>
-                      {inc.origin?.match(/Casilla\s+\d+/i) && onGoToSources && (
-                        <button
-                          onClick={() => onGoToSources()}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'hsl(var(--foreground))', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
-                        >
-                          {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} data-testid="ChevronRight__931756" />
-                        </button>
-                      )}
+                      {renderAction ? actionOf(inc) : defaultIncidentAction(inc, onGoToSources, t)}
                     </td>
                   )}
                 </tr>

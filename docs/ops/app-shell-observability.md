@@ -83,13 +83,15 @@ The provider names are the gateway's adapter names: `datadog`, `aws-rum`, `mixpa
 
 ### Verifying egress in a browser
 
-`e2e/tests/flows/telemetry-egress.mocked.spec.js` aborts and records every request to the
+`e2e/tests/flows/platform/telemetry-egress.mocked.spec.js` aborts and records every request to the
 providers' hosts (Datadog intake, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
 are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
 one and passes `VITE_*` through to it. The fake values below never reach a real account.
 
 Scenario 1 is the default bundle, so the regular mocked suite (and the pre-push) already runs
-it. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
+it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_ENABLED`,
+`VITE_DATADOG_ENABLED` and `VITE_RUM_ENABLED` forced to `false`, so a developer's gitignored
+`tools/app-shell/.env.local` no longer leaks real providers into the default bundle. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
 
 ```bash
 # 2. Positive control, providers configured and NOT killed: requests are attempted.

@@ -1,11 +1,15 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers artifacts/sales-quotation/custom/QuotationConfirmModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
+import { createDraftWithFirstLine } from '../../helpers/purchase-helpers.js';
 
 /**
  * Sales Quotation — Full happy-path integration E2E against a real backend.
@@ -14,12 +18,12 @@ import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
  *   1. Login with onboarding credentials
  *   2. Navigate to /sales-quotation, verify list view loads
  *   3. Create a new quotation — fill BP, verify autocomplete
- *   4. Save as draft
- *   5. Add a line — select product, verify price/tax autocomplete
- *   6. Confirm (DR → UE) via SendToEvaluationModal
- *   7. Confirm (UE → "Crear Pedido") via QuotationConfirmModal
- *   8. Verify status "Cerrado - Pedido creado" (CA)
- *   9. Return to list — verify the quotation appears
+ *   4. Add a line straight from the empty state, which saves the header
+ *      (no manual "Guardar")
+ *   5. Confirm (DR → UE) via SendToEvaluationModal
+ *   6. Confirm (UE → "Crear Pedido") via QuotationConfirmModal
+ *   7. Verify status "Cerrado - Pedido creado" (CA)
+ *   8. Return to list — verify the quotation appears
  *
  * Requires:
  *   - Etendo backend running
@@ -48,19 +52,10 @@ async function slow(page) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
-  // Wait for any loading indicator to disappear (covers late-appearing spinners)
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
-}
-
-function expectSaveResponse(page) {
-  return page.waitForResponse(
-    (resp) =>
-      resp.url().includes('/sws/neo/') &&
-      ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) &&
-      resp.status() < 400,
-    { timeout: 30_000 },
-  );
+  // Wait for EVERY loading indicator to disappear (covers late-appearing spinners
+  // and panels that load concurrently). Passes at once when none is shown; a
+  // still-visible indicator after the budget is tolerated, as before.
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 // ── Test suite ───────────────────────────────────────────────────────────────
@@ -134,93 +129,13 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
       await slow(page);
     });
 
-    await test.step('Save as draft', async () => {
-      const saveBtn = page.getByTestId('action-save-draft')
-        .or(page.getByRole('button', { name: /guardar|save/i }));
-      const savePromise = expectSaveResponse(page);
-      await saveBtn.click();
-      await savePromise;
-      await slow(page);
-
-      // URL should include record ID
-      await expect(page).toHaveURL(/\/sales-quotation\/[a-zA-Z0-9]+/, { timeout: 20_000 });
-
-      // Wait for the detail to fully load after save redirect
-      await waitForDetailReady(page);
-
-      // Verify draft status badge
-      const statusPill = page.getByTestId('document-status-pill');
-      await expect(statusPill).toBeVisible({ timeout: 15_000 });
-      await slow(page);
-    });
-
-    await test.step('Add a line — select a product', async () => {
-      await waitForDetailReady(page);
-
-      // Click "+ Añadir líneas" — wait for the button to appear first (the lines
-      // panel may still be loading after the draft save), then retry until the
-      // inline-add-row appears.
-      const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
-        .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
-      await expect(emptyStateBtn).toBeVisible({ timeout: 15_000 });
-
-      await expect(async () => {
-        await emptyStateBtn.click({ timeout: 5_000 });
-        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
-      }).toPass({ timeout: 30_000 });
-      await slow(page);
-
-      // Click product field — opens ProductSearchDrawer (retry if click doesn't register)
-      const productField = page.getByTestId('inline-add-field-product');
-      const searchDrawer = page.getByTestId('product-search-drawer');
-
-      await expect(async () => {
-        await productField.click({ timeout: 3_000 });
-        await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
-      }).toPass({ timeout: 15_000 });
-      await slow(page);
-
-      // Narrow to the fixture by name instead of taking whatever sits first:
-      // drawer position depends on what else the tenant accumulated.
-      await page.getByTestId('product-search-input').fill(PRODUCT_FIXTURE_ALPHA.name);
-      const productOption = page.locator('[data-testid^="product-search-option-"]')
-        .filter({ hasText: PRODUCT_FIXTURE_ALPHA.name }).first();
-      await expect(productOption,
-        `Product "${PRODUCT_FIXTURE_ALPHA.name}" should appear in the search drawer`,
-      ).toBeVisible({ timeout: 15_000 });
-
-      // Retry click if the product element detaches mid-click (the drawer
-      // re-renders its list when waterfall fetches complete — see purchase-helpers.js).
-      let productCalloutResponse;
-      await expect(async () => {
-        productCalloutResponse = page.waitForResponse(
-          (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
-          { timeout: 30_000 },
-        );
-        await productOption.click({ timeout: 3_000 });
-      }).toPass({ timeout: 15_000 });
-      await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
-      await productCalloutResponse;
-      await slow(page);
-
-      // Submit the line (qty=1 default) — click quantity field first to ensure
-      // focus is on a numeric input (Enter on the product field opens the drawer
-      // instead of submitting). Then press Enter to save.
-      const qtyField = page.getByTestId('inline-add-field-orderedQuantity')
-        .or(page.getByTestId('inline-add-field-quantity'))
-        .or(page.locator('[data-testid^="inline-add-field-"] input[type="number"]').first());
-      if (await qtyField.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        await qtyField.click({ timeout: 2_000 }).catch(() => {});
-      }
-
-      const lineAddPromise = expectSaveResponse(page);
-      await page.keyboard.press('Enter');
-      await lineAddPromise;
-      await slow(page);
-
-      // Verify the inline-add-row closed
-      await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 10_000 })
-        .catch(() => {});
+    // No Guardar first: "+ Añadir líneas" saves the header itself, the path a user
+    // takes. The manual-save path is kept by the ALL-negative case of
+    // sales-quotation-full-flow.integration.spec.js.
+    await test.step('Add a line from the empty state (no manual save)', async () => {
+      await createDraftWithFirstLine(page, {
+        spec: 'sales-quotation', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
     });
 
     await test.step('Confirm DR → UE (SendToEvaluationModal)', async () => {

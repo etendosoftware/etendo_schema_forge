@@ -4,6 +4,7 @@
     "category": "contact",
     "name": "Business Partner Category",
     "detailEntity": "accounting",
+    "detailVisibleWhenCapability": "showAccountingFields",
     "linesLayout": "inlineEditable",
     "formCardPadding": "p-2",
     "toolbarPaddingX": "px-2",

@@ -24,6 +24,7 @@ import React from 'react';
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -45,6 +46,7 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
 }));
 
 vi.mock('@/lib/linesColumnWidth.js', () => ({
+  withLinesAbsorberColumn: (cols) => cols,
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 // @covers tools/app-shell/src/windows/custom/contacts/index.jsx
 // @covers tools/app-shell/src/hooks/useBulkRowDelete.jsx
@@ -6,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { uniqueValidCif } from '../../helpers/tax-id.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 
 /**
  * Contacts — Full integration E2E journey against a real Etendo backend.
@@ -79,11 +81,7 @@ function digitsOf(amount) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
-  // Only wait for spinner to disappear if it's actually visible
-  const spinner = page.getByText(/cargando|loading/i);
-  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
-    await expect(spinner).toBeHidden({ timeout: 10_000 });
-  }
+  await waitForLoadingIndicatorsGone(page, { timeout: 10_000 });
 }
 
 /**

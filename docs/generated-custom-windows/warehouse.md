@@ -296,6 +296,8 @@ panel reads the stored columns like any other field and `binContents` no longer 
 
 Added by ETP-4565 (scope-expanded follow-up to ETP-4402 — "Contabilidad tab: single record + non-deletable" across 8 master-data windows). The native AD `Warehouse and Storage Bins` window (`AD_Window_ID = 139`) has an "Accounting" tab (`ad_tab_id = 209`, table `M_Warehouse_Acct`); it is now wired into the custom warehouse window as a `secondaryTabs` entry, the same pattern used by `product`/`asset-group`.
 
+**Role gate (ETP-5648).** The custom `index.jsx` builds its own `secondaryTabs` list, so it declares `visibleWhenCapability: ACCOUNTING_CAPABILITY` on the `accounting` entry itself (the generated page's flag never reaches it). Without the `showAccountingFields` capability (e.g. the Inventory template role) the tab is hidden and its rows are never fetched; the server refuses `warehouse/accounting` with `403` anyway.
+
 The Accounting tab maps to `M_Warehouse_Acct` and exposes exactly one visible field:
 
 | Field | Notes |
@@ -393,3 +395,6 @@ popup is titled with the translated field label, shows each `"<code> - <name>"` 
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
 
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the warehouse accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via the new `@NeoExtension` `WarehouseAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).

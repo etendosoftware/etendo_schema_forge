@@ -243,16 +243,34 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
-  // ETP-5381: the only remaining server-side duplicate guard. The order, shipment, receipt and
-  // quotation paths need none — now that the invoice is confirmed on creation, the core's own
-  // pending-quantity logic sees the invoiced amounts and rejects the second attempt by itself.
-  // A return document has no such native cap: its rectificative takes the lines whole.
+  // ETP-5381: this duplicate guard was REMOVED on purpose (a return can legitimately have more
+  // than one rectificative invoice) and the backend no longer sends this sentence; ETP-5712 reports
+  // the existing ones in `previousReturnInvoices` instead. The entry stays only so a response from
+  // an older backend still reads in the user's language.
   'A rectificative invoice already exists for this return document.':
     'backendError.returnInvoiceAlreadyExists',
   // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
   // rectifies (ETSG_CHECK_RECTIF_INV_DOC), so the request is rejected before anything is written.
+  // ETP-5712 reworded the sentence so an agent reads why (the returned document was never invoiced)
+  // and what to do; ReturnShipmentUtils.ERR_RECTIFIED_INVOICE_REQUIRED is the source, keep both in step.
+  'This return has no invoice to rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. Invoice the original document first, or pass originInvoices with the id of an invoice from rectifiableInvoices.':
+    'backendError.rectifiedInvoiceRequired',
+  // Before ETP-5712 the same refusal read as a UI hint; an older backend may still send it.
   'Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.':
     'backendError.rectifiedInvoiceRequired',
+  // ReturnFromDocumentSupport (com.etendoerp.go — ETP-5711): the create-from-document return
+  // actions refuse a document with nothing left to return, and one that is not completed.
+  'Nothing is left to return from this document: every line has already been returned.':
+    'backendError.returnNothingLeft',
+  'The document must be completed before goods can be returned from it.':
+    'backendError.returnSourceNotCompleted',
+  // ReturnableQuantity.refuseDirectCreate (com.etendoerp.go — ETP-5711): a return line is never
+  // created by a plain POST of the line, only by the import / create-from-document actions. Two
+  // exact strings (one per direction, they differ only in the action names), one translation.
+  'Return lines cannot be created directly. Add them to the return with importReceiptLines, or create the whole return from the source document with createPurchaseReturn.':
+    'backendError.returnLineRequiresImport',
+  'Return lines cannot be created directly. Add them to the return with importShipmentLines, or create the whole return from the source document with createReturn.':
+    'backendError.returnLineRequiresImport',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — same hardcoded-Spanish-literal bug
   // as above, but from the shipment-invoicing flow. Two throw sites emit this exact
   // string: capShipmentLineOverrides (~L952) and the line-selection loop inside
@@ -406,6 +424,11 @@ const BACKEND_ERROR_KEY_MAP = {
   // Consumption pre-check (ETP-5445). Mapped to
   // the same generic retry-later copy as the other two costing messages in BACKEND_ERROR_MAP.
   NotCalculatedCost: 'backendError.costNotCalculated',
+  // ETP-5714 — com.etendoerp DocumentPostingService/CostingStall: a post refused because costing is
+  // stalled (an uncalculated transaction has waited for minutes, so the 30 s retry of
+  // NotCalculatedCost would never succeed). AD_MESSAGE ETGO_CostCalculationStalled, English-only in
+  // the module; the answer is 422 with error "costCalculationStalled" and retryable false.
+  ETGO_CostCalculationStalled: 'backendError.costCalculationStalled',
   // ETP-5529 — core `OtherPostingProcessActive` ("This record is being posted by another
   // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
   // when another posting process holds the record (or AcctServer cannot take its lock).
@@ -441,6 +464,19 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
+  // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
+  // same case maps to "period not open", which sends the user to open a period they do not need.
+  // `messageParams` { period, accountingDate }.
+  ETGO_GLJournalPeriodMismatch: 'backendError.glJournalPeriodMismatch',
+  // ETP-5693 — com.etendoerp.go PostingAccountGuard: a write to an accounting field with a summary
+  // or inactive account, an account of another ledger, or a changed ledger on an existing row.
+  // The selectors already hide those accounts, so the SPA only meets these in a race: a generic
+  // sentence per key, no messageParams (the backend text carries field + account for REST/MCP).
+  ETGO_AccountIsSummary: 'backendError.accountIsSummary',
+  ETGO_AccountIsInactive: 'backendError.accountIsInactive',
+  ETGO_AccountWrongLedger: 'backendError.accountWrongLedger',
+  ETGO_LedgerNotUpdatable: 'backendError.ledgerNotUpdatable',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -735,6 +771,107 @@ function matchInvoiceLinesWithoutAmount(msg) {
   return { products };
 }
 
+// ReturnableQuantity.java (com.etendoerp.go — ETP-5711), `error.code = returnQuantityExceedsAvailable`:
+// "Cannot return {requested} of {product}: only {available} can still be returned from this line
+// ({total} on the source document)." or, with nothing left, "...: nothing is left to return from
+// this line ({total} on the source document)." The numbers are plain, locale-neutral digits and
+// the product name is free text, so it is located by the fixed delimiters, never by a regex.
+const RETURN_EXCEEDS_PREFIX = 'Cannot return ';
+const RETURN_EXCEEDS_OF = ' of ';
+const RETURN_EXCEEDS_ONLY = ': only ';
+const RETURN_EXCEEDS_ONLY_TAIL = ' can still be returned from this line (';
+const RETURN_EXCEEDS_NONE = ': nothing is left to return from this line (';
+const RETURN_EXCEEDS_SUFFIX = ' on the source document).';
+
+function splitReturnExceeds(msg) {
+  if (!msg.startsWith(RETURN_EXCEEDS_PREFIX) || !msg.endsWith(RETURN_EXCEEDS_SUFFIX)) return null;
+  const rest = msg.slice(RETURN_EXCEEDS_PREFIX.length, -RETURN_EXCEEDS_SUFFIX.length);
+  const ofAt = rest.indexOf(RETURN_EXCEEDS_OF);
+  if (ofAt <= 0) return null;
+  return { requested: rest.slice(0, ofAt), afterOf: rest.slice(ofAt + RETURN_EXCEEDS_OF.length) };
+}
+
+function matchReturnQuantityExceeds(msg) {
+  const parts = splitReturnExceeds(msg);
+  if (!parts) return null;
+  const { requested, afterOf } = parts;
+  const onlyAt = afterOf.lastIndexOf(RETURN_EXCEEDS_ONLY);
+  const tailAt = afterOf.lastIndexOf(RETURN_EXCEEDS_ONLY_TAIL);
+  if (onlyAt <= 0 || tailAt < onlyAt) return null;
+  return {
+    requested,
+    product: afterOf.slice(0, onlyAt),
+    available: afterOf.slice(onlyAt + RETURN_EXCEEDS_ONLY.length, tailAt),
+    total: afterOf.slice(tailAt + RETURN_EXCEEDS_ONLY_TAIL.length),
+  };
+}
+
+function matchReturnNothingLeftOnLine(msg) {
+  const parts = splitReturnExceeds(msg);
+  if (!parts) return null;
+  const noneAt = parts.afterOf.lastIndexOf(RETURN_EXCEEDS_NONE);
+  if (noneAt <= 0) return null;
+  return {
+    requested: parts.requested,
+    product: parts.afterOf.slice(0, noneAt),
+    total: parts.afterOf.slice(noneAt + RETURN_EXCEEDS_NONE.length),
+  };
+}
+
+// ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711), `error.code = returnLineNotInDocument`:
+// "Line {lineId} is not a line of this document." The id is an opaque token, located by the fixed
+// prefix and suffix, no regex.
+const RETURN_LINE_NOT_IN_DOCUMENT_PREFIX = 'Line ';
+const RETURN_LINE_NOT_IN_DOCUMENT_SUFFIX = ' is not a line of this document.';
+
+function matchReturnLineNotInDocument(msg) {
+  if (!msg.startsWith(RETURN_LINE_NOT_IN_DOCUMENT_PREFIX)
+    || !msg.endsWith(RETURN_LINE_NOT_IN_DOCUMENT_SUFFIX)) {
+    return null;
+  }
+  const lineId = msg.slice(
+    RETURN_LINE_NOT_IN_DOCUMENT_PREFIX.length,
+    -RETURN_LINE_NOT_IN_DOCUMENT_SUFFIX.length,
+  );
+  if (!lineId) return null;
+  return { lineId };
+}
+
+// ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711), `error.code = returnReasonTooLong`:
+// "The reason is too long: it can have at most {max} characters (it has {length})."
+const RETURN_REASON_TOO_LONG_PREFIX = 'The reason is too long: it can have at most ';
+const RETURN_REASON_TOO_LONG_MID = ' characters (it has ';
+const RETURN_REASON_TOO_LONG_SUFFIX = ').';
+
+function matchReturnReasonTooLong(msg) {
+  if (!msg.startsWith(RETURN_REASON_TOO_LONG_PREFIX) || !msg.endsWith(RETURN_REASON_TOO_LONG_SUFFIX)) {
+    return null;
+  }
+  const rest = msg.slice(RETURN_REASON_TOO_LONG_PREFIX.length, -RETURN_REASON_TOO_LONG_SUFFIX.length);
+  const midAt = rest.indexOf(RETURN_REASON_TOO_LONG_MID);
+  if (midAt <= 0) return null;
+  const max = rest.slice(0, midAt);
+  const length = rest.slice(midAt + RETURN_REASON_TOO_LONG_MID.length);
+  return max && length ? { max, length } : null;
+}
+
+// ReturnShipmentUtils.refuseIfUnpriced (com.etendoerp.go — ETP-5712), `error.code = returnInvoiceWithoutAmount`:
+// "The corrective invoice (factura rectificativa) cannot be created: no price could be found for
+// {products}, so it would be confirmed with a zero amount. Set a price for ... and try again."
+// The products are free text joined with ", " — one opaque {products} param (same shape as
+// matchInvoiceLinesWithoutAmount), located by the fixed prefix and suffix, never by a regex.
+const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
+const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+
+function matchReturnInvoiceWithoutAmount(msg) {
+  if (!msg.startsWith(RETURN_INVOICE_NO_AMOUNT_PREFIX) || !msg.endsWith(RETURN_INVOICE_NO_AMOUNT_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(RETURN_INVOICE_NO_AMOUNT_PREFIX.length, -RETURN_INVOICE_NO_AMOUNT_SUFFIX.length);
+  if (!products) return null;
+  return { products };
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -1017,6 +1154,53 @@ function matchConsentExpired(msg) {
   return account ? { account } : null;
 }
 
+// ETP-5089: `PSD2_ConnectionStaleReconnect`, raised on the same fetchAccountTransactions path when
+// Salt Edge still reports the connection active but its last failed fetch is newer than its last
+// success. Two slots: the account name (%0) and the bank's own failure text (%1). The reason is
+// free text written by the bank — it may carry periods, colons or nothing at all (the backend
+// sends "" when Salt Edge gave no message) — so it is captured as whatever sits between the fixed
+// mid and suffix, and an empty reason still counts as a match. It shares its prefix with
+// CONNECTION_WENT_INACTIVE_PREFIX, which is safe: the two differ in the text right after the name.
+const CONNECTION_STALE_PREFIX = 'The connection for account ';
+const CONNECTION_STALE_MID = ' has not refreshed successfully since it last failed: ';
+const CONNECTION_STALE_SUFFIX = '. Please reconnect the account.';
+
+/**
+ * Trims a free-text reason and drops the periods it ends with.
+ *
+ * The bank's failure text usually ends in its own period, and the sentence it is dropped into
+ * supplies the closing one, so without this the result reads "…del banco.. Por favor". A plain
+ * backwards scan rather than a `/\.+$/` regex: the text is written by the bank, and that pattern
+ * backtracks super-linearly on a long run of periods (Sonar S5852), while this is linear whatever
+ * it is given.
+ *
+ * @param {unknown} value the reason text; null and undefined count as empty
+ * @returns {string} the trimmed text without trailing periods, or '' when nothing is left
+ */
+export function stripTrailingPeriods(value) {
+  const text = String(value ?? '').trim();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '.') {
+    end -= 1;
+  }
+  return text.slice(0, end).trim();
+}
+
+function matchConnectionStale(msg) {
+  if (!msg.startsWith(CONNECTION_STALE_PREFIX) || !msg.endsWith(CONNECTION_STALE_SUFFIX)) {
+    return null;
+  }
+  const body = msg.slice(CONNECTION_STALE_PREFIX.length, -CONNECTION_STALE_SUFFIX.length);
+  const mid = body.indexOf(CONNECTION_STALE_MID);
+  if (mid <= 0) {
+    return null;
+  }
+  return {
+    account: body.slice(0, mid),
+    reason: stripTrailingPeriods(body.slice(mid + CONNECTION_STALE_MID.length)),
+  };
+}
+
 // The AD_MESSAGE template repeats `%0`, so the same day count appears twice in the rendered string.
 // Both occurrences are captured and required to agree — a message whose two numbers differ is not
 // this message and must not be translated as if it were.
@@ -1126,6 +1310,11 @@ const PARAMETERIZED_MATCHERS = [
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
   [matchInvoiceLinesWithoutAmount, 'backendError.invoiceLinesWithoutAmount'],
+  [matchReturnQuantityExceeds, 'backendError.returnQuantityExceeds'],
+  [matchReturnNothingLeftOnLine, 'backendError.returnNothingLeftOnLine'],
+  [matchReturnLineNotInDocument, 'backendError.returnLineNotInDocument'],
+  [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
+  [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -1161,6 +1350,15 @@ function resolveParameterizedMatch(msg) {
       };
     }
     return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
+  }
+
+  // Hand-written for the same reason (ETP-5089): when the bank gave no failure text the sentence
+  // must drop the "último fallo: <reason>" clause, not render it with an empty slot.
+  const staleMatch = matchConnectionStale(msg);
+  if (staleMatch) {
+    return staleMatch.reason
+      ? { key: 'backendError.psd2ConnectionStale', params: { ...staleMatch } }
+      : { key: 'backendError.psd2ConnectionStaleNoReason', params: { account: staleMatch.account } };
   }
 
   for (const [matcher, key] of PARAMETERIZED_MATCHERS) {
