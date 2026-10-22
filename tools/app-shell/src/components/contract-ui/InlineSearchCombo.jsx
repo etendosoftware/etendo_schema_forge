@@ -456,18 +456,19 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     [options, serverResults, value]
   );
   useEffect(() => {
+    // The lookup exists to make the OPENED dropdown identify what the cell holds. Every other
+    // situation is deliberately out of its scope:
+    //  - closed, or the value is already in the local catalog or a loaded page -> nothing to do;
+    //  - no selector -> there is nothing to ask (the local catalog is the only catalog);
+    //  - the opening page has not landed -> resolving against an empty list would fire on every
+    //    open of a cell whose value is perfectly visible on page 0. `serverResults` stays null
+    //    until that page resolves;
+    //  - the user has typed -> a query is its own explicit search, its results are what the list
+    //    shows, and the pin is cleared anyway (see the reset effect above).
     if (!open || currentValueIsShown) return;
-    // Wait for the OPENING page before asking: with a selector configured the first page is
-    // fetched the moment the combo opens, and it is the page the user is actually looking at —
-    // resolving against a list that is still empty would fire a lookup on every open of a cell
-    // whose value is perfectly visible on page 0. `serverResults` stays null until that page
-    // lands (and stays null forever when there is no selector, which is the local-catalog case:
-    // there the opening fetch never runs, so the label check below is what releases the effect).
-    if (selectorUrl && serverResults == null) return;
-    // No selector and no local catalog entry to search by: nothing to resolve from.
-    if (!selectorUrl && !resolvedLabel) return;
+    if (!selectorUrl || serverResults == null || query.trim() !== '') return;
     fetchCurrentSelection();
-  }, [open, currentValueIsShown, serverResults, selectorUrl, resolvedLabel, fetchCurrentSelection]);
+  }, [open, currentValueIsShown, serverResults, selectorUrl, query, fetchCurrentSelection]);
 
   // Keep the highlighted option scrolled into view (mirrors CreatableSearchSelect).
   useEffect(() => {
@@ -753,7 +754,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                   {...(isHighlighted ? { 'data-highlighted': 'true' } : {})}
                   data-option-index={index}
                   data-testid={`inline-add-option-${field.key}-${opt.id}`}
-                  className={`w-full block text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap flex items-center gap-2${isHighlighted ? ' bg-status-info' : ''}${isSelected ? ' font-medium text-foreground' : ''}`}
+                  className={`w-full flex text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap items-center gap-2${isHighlighted ? ' bg-status-info' : ''}${isSelected ? ' font-medium text-foreground' : ''}`}
                   onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
                   onMouseEnter={() => setActiveIndex(index)}
                 >
@@ -763,7 +764,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                       className="h-4 w-4 shrink-0 text-primary"
                       data-testid={`inline-add-option-${field.key}-${opt.id}-selected-indicator`} />
                   )}
-                  <span className="truncate">{opt.name || opt.label || opt._identifier || opt.id}</span>
+                  // `whitespace-nowrap` (not `truncate`): the panel sizes itself to `width: max-content` so it grows
+                  // to fit its longest option instead of truncating it (ETP-4600 Gap C), and
+                  // `truncate`'s `overflow: hidden` would let the intrinsic width collapse instead.
+                  <span className="whitespace-nowrap">{opt.name || opt.label || opt._identifier || opt.id}</span>
                 </button>
               );
             })}
