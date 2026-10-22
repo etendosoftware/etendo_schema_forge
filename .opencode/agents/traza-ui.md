@@ -1,7 +1,7 @@
 ---
 description: "analyst -- Traza UI. You are Traza, the technical planner of the etendo-ui-dev team."
 mode: subagent
-color: "#808080"
+color: "gray"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/traza-ui.md - Regenerate: make sync-agents

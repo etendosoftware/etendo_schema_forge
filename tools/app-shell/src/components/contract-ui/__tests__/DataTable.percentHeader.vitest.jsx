@@ -1,15 +1,21 @@
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
- * DataTable — percent column header wrapping + list width (ETP-5545 follow-up).
+ * DataTable — percent column header wrapping + plain-list widths (ETP-5545 follow-up, ETP-5833).
  *
  * `percent` columns wrap their header label (`wrapHeader = col.headerWrap ?? type === 'percent'`)
  * and use the real `columnMinWidthPx` (104px list basis). `@/lib/linesColumnWidth.js` is NOT
- * mocked here on purpose, so the 104px width is verified end to end.
+ * mocked here on purpose, so the widths are verified end to end: the percent basis, the implicit
+ * grow column + table min-width, and the list header floor (a column is never narrower than its
+ * rendered header — measured from the label the header resolves, re-measured once the web font
+ * has loaded, unaffected by sorting).
  */
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
+import { resetHeaderMeasureCache } from '@/lib/linesColumnWidth.js';
 
 vi.mock('@/i18n', () => ({
-  useLabel: () => (key) => key,
+  // AD label lookup (`t(col.column)`): one long Spanish AD label, to prove the list header floor
+  // is measured from the label the header RESOLVES at render time, not from `col.label`.
+  useLabel: () => (key) => (key === 'DateInvoiced' ? 'Fecha de la factura rectificativa' : key),
   useMenuLabel: () => (key) => key,
   useUI: () => (key) => key,
   useLocale: () => ({ genericLabels: {}, statuses: {} }),
@@ -26,7 +32,7 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (row, key) => row?.[key] ?? '',
 }));
 vi.mock('@/lib/resolveColumnLabel.js', () => ({
-  resolveColumnLabel: (col) => col.label ?? col.key,
+  resolveColumnLabel: (col, _locale, t) => col.label ?? (col.column ? t(col.column) : undefined) ?? col.key,
 }));
 vi.mock('@/lib/formatAmount.js', () => ({
   formatAmount: (val) => (val != null ? String(val) : ''),
@@ -183,12 +189,88 @@ describe('DataTable — plain list implicit grow column and min-width', () => {
     render(<DataTable columns={[STR, AMOUNT]} data={[{ id: 'r1', name: 'BBVA', total: 5 }]} selectable />);
 
     const widths = [...document.querySelectorAll('colgroup col')].slice(0, 3).map((c) => c.style.width);
-    // checkbox | grow (no width) | amount (172px basis)
-    expect(widths).toEqual(['40px', '', '172px']);
+    // checkbox | grow (no width) | amount (130px list basis, ETP-5833 QA; lines keep 172)
+    expect(widths).toEqual(['40px', '', '130px']);
 
-    // grow floor 320 + amount 172 + 40px selection slot
+    // grow floor 320 + amount 130 + 40px selection slot
     const tables = [...document.querySelectorAll('table')];
     expect(tables.length).toBeGreaterThan(0);
-    for (const t of tables) expect(t.style.minWidth).toBe('532px');
+    for (const t of tables) expect(t.style.minWidth).toBe('490px');
+  });
+});
+
+// ETP-5833 (QA) — a list header never wraps, so no header may be truncated: each column's floor is
+// max(type basis, rendered header). jsdom has no canvas, so the deterministic 7px/char estimate
+// applies; chrome = 42px (padding 24 + reserved sort arrow 14 + slack 4).
+describe('DataTable — plain list header floor', () => {
+  const DATE = { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' }; // label from AD: 33 chars
+  const TOTAL = { key: 'total', label: 'Importe total pendiente', type: 'amount' }; // 23 chars
+  const ROWS = [{ id: 'r1', name: 'BBVA', invoiceDate: '2026-10-20', total: 5 }];
+  const DATE_PX = 33 * 7 + 42; // 273 > 176 date basis
+  const TOTAL_PX = 23 * 7 + 42; // 203 > 130 amount list basis
+
+  function widthsOf() {
+    return {
+      th: [DATE, TOTAL].map(c => screen.getByTestId(`column-header-${c.key}`).style.width),
+      td: [DATE, TOTAL].map(c => screen.getByTestId(`cell-r1-${c.key}`).style.minWidth),
+      tables: [...document.querySelectorAll('table')].map(t => t.style.minWidth),
+    };
+  }
+
+  it('header, body cells and table min-width all use the resolved (AD) label width', () => {
+    render(<DataTable columns={[STR, DATE, TOTAL]} data={ROWS} onSort={vi.fn()} />);
+    expect(screen.getByTestId('column-header-invoiceDate')).toHaveTextContent('Fecha de la factura rectificativa');
+    const w = widthsOf();
+    expect(w.th).toEqual([`${DATE_PX}px`, `${TOTAL_PX}px`]);
+    expect(w.td).toEqual([`${DATE_PX}px`, `${TOTAL_PX}px`]);
+    // grow floor 320 + both header floors + the 40px row quick-actions slot
+    expect(new Set(w.tables)).toEqual(new Set([`${320 + DATE_PX + TOTAL_PX + 40}px`]));
+  });
+
+  it('a short label keeps the type basis', () => {
+    render(<DataTable columns={[STR, { key: 'd', label: 'Fecha', type: 'date' }]} data={ROWS} />);
+    expect(screen.getByTestId('column-header-d').style.width).toBe('176px');
+  });
+
+  it('sorting does not move a column (the floor depends on the label, not on the sort state)', () => {
+    const { rerender } = render(<DataTable columns={[STR, DATE, TOTAL]} data={ROWS} onSort={vi.fn()} />);
+    const before = widthsOf();
+    rerender(<DataTable columns={[STR, DATE, TOTAL]} data={[...ROWS].reverse()} onSort={vi.fn()} sortColumn="invoiceDate" sortDirection="desc" />);
+    expect(widthsOf()).toEqual(before);
+  });
+
+  // W1 — while Inter is still swapping in, canvas measures the fallback face; the floor must be
+  // re-measured once `document.fonts.ready` resolves instead of keeping that width.
+  it('re-measures the header floor once the web font has loaded', async () => {
+    let pxPerChar = 5; // fallback face
+    let loaded = false;
+    let resolveReady;
+    const ready = new Promise((r) => { resolveReady = r; });
+    globalThis.OffscreenCanvas = class {
+      getContext() { return { font: '', measureText: (txt) => ({ width: txt.length * pxPerChar }) }; }
+    };
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: { get status() { return loaded ? 'loaded' : 'loading'; }, ready, check: () => loaded },
+    });
+    resetHeaderMeasureCache();
+    try {
+      render(<DataTable columns={[STR, DATE]} data={ROWS} />);
+      const th = () => screen.getByTestId('column-header-invoiceDate').style.width;
+      expect(th()).toBe(`${33 * 5 + 42}px`); // 207 > 176 basis
+      pxPerChar = 7; // Inter is in
+      loaded = true;
+      await act(async () => { resolveReady(); await ready; });
+      expect(th()).toBe(`${33 * 7 + 42}px`);
+    } finally {
+      delete globalThis.OffscreenCanvas;
+      delete document.fonts;
+      resetHeaderMeasureCache();
+    }
+  });
+
+  it('a headerWrap column opts out of the floor (its header wraps instead)', () => {
+    render(<DataTable columns={[STR, { ...DATE, minWidth: 130, headerWrap: true }]} data={ROWS} />);
+    expect(screen.getByTestId('column-header-invoiceDate').style.width).toBe('130px');
   });
 });

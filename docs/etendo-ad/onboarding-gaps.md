@@ -1219,8 +1219,9 @@ without an own GLJ doctype (untouched, listed by `@report`, one row per journal 
 fact rows); non-numeric `documentno` ignored by the advance; forward-only guard; other tenants
 unchanged; multi-line posted facts repointed with amounts unchanged.
 
-**Not in scope:** RTV shipments (`M_InOut`) with another tenant's `MMR` doctype — a separate live
-leak in `CreatePurchaseReturnHandler`, ETP-5801.
+**Not in scope here:** RTV shipments (`M_InOut`) with another tenant's `MMR` doctype — a separate
+leak in `CreatePurchaseReturnHandler` (code fix ETP-5711), repaired by
+`R50-inout-foreign-return-doctype` (ETP-5801).
 
 ---
 

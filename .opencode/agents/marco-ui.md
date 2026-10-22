@@ -1,7 +1,7 @@
 ---
 description: "developer -- Marco UI. You are Marco, the frontend developer of the etendo-ui-dev team."
 mode: subagent
-color: "#22C55E"
+color: "green"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/marco-ui.md - Regenerate: make sync-agents

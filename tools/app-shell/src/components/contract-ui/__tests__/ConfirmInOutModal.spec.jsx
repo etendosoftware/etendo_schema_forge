@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @covers tools/app-shell/src/components/contract-ui/ConfirmInOutModal.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ETP-5316 — the modal's only use of `useUI()` is `translateBackendError(err.message, ui, …)`,
@@ -788,6 +789,66 @@ describe('ConfirmInOutModal', () => {
       render(<ConfirmInOutModal {...BASE_PROPS} />);
       expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.title))).toEqual([]);
       expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.cardTitle))).toEqual([]);
+    });
+  });
+
+  describe('footer button hover', () => {
+    const CANCEL_REST = 'hsl(var(--card))';
+    const CONFIRM_REST = 'var(--status-info-fg)';
+    const CONFIRM_DISABLED = 'var(--status-info-border)';
+
+    it('Cancel rests on the white card token, not transparent', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      expect(screen.getByTestId('confirm-modal-cancel-btn').style.background).toBe(CANCEL_REST);
+    });
+
+    it('Cancel hover changes the background (not the footer gray) and mouseLeave restores white', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      const btn = screen.getByTestId('confirm-modal-cancel-btn');
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).not.toBe(CANCEL_REST);
+      expect(btn.style.background).not.toBe('hsl(var(--muted))');
+      expect(btn.style.background).not.toBe('transparent');
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CANCEL_REST);
+    });
+
+    it('Confirm hover switches to --primary-hover and mouseLeave restores the rest colour', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      const btn = screen.getByTestId('confirm-modal-confirm-btn');
+      expect(btn.style.background).toBe(CONFIRM_REST);
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).toBe('var(--primary-hover)');
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CONFIRM_REST);
+    });
+
+    it('Confirm has no hover effect while disabled (price list required but not chosen)', async () => {
+      mockFetchRouter({ priceLists: [] });
+      render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+      await waitFor(() => expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument());
+      const btn = screen.getByTestId('confirm-modal-confirm-btn');
+      expect(btn).toBeDisabled();
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+    });
+
+    it('neither button reacts to hover while loading', async () => {
+      let resolveFetch;
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(r => { resolveFetch = r; })));
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      const cancel = screen.getByTestId('confirm-modal-cancel-btn');
+      const confirm = screen.getByTestId('confirm-modal-confirm-btn');
+      await waitFor(() => expect(cancel).toBeDisabled());
+      fireEvent.mouseEnter(cancel);
+      expect(cancel.style.background).toBe(CANCEL_REST);
+      fireEvent.mouseEnter(confirm);
+      expect(confirm.style.background).toBe(CONFIRM_DISABLED);
+      resolveFetch?.({ ok: true, json: async () => ({ response: { data: {} } }) });
     });
   });
 });

@@ -3202,3 +3202,24 @@ can also produce.
 **Reference:** `docs/generated-custom-windows/app-shell-functional-flows.md` §4; tests
 `DetailView.newRecordEffects.vitest.jsx` ("initial callout chain is armed by the defaults session") and
 `DetailView.extractedHelpers.vitest.js` (`resolveInitialCalloutTriggers`).
+
+---
+
+## [2026-10-21] ETP-5830 — es_AR is missing most `backendError.*` translations (known gap, one key ported)
+
+**Component:** `tools/app-shell/src/locales/es_AR.json` → `genericLabels`, read by `translateBackendError()`
+(`tools/app-shell/src/lib/backendErrors.js`).
+
+**Symptom:** an es_AR user sees the raw English backend message, or the generic fallback, where an
+es_ES user sees a translated error. Seen first on attachments: a read-only role uploading a file got
+the raw `accessDeniedToSpec` 403 text.
+
+**Root cause:** es_AR does not fall back to es_ES key by key, and 86 `backendError.*` keys present in
+es_ES are absent from es_AR (count measured 2026-10-21, after this ticket ported one).
+
+**Fix in ETP-5830:** only `backendError.accessDeniedToSpec` was ported (voseo: "No tenés acceso para
+realizar esta acción."), because that is the one the new read-only gating surfaces. The other 86 are
+**not fixed**. They need a translation pass, not a copy, because es_AR uses voseo.
+
+**Lesson:** when adding a `backendError.*` key, add it to es_AR too. A guardrail test comparing the
+`backendError.*` sets of es_ES and es_AR would stop the gap from growing.

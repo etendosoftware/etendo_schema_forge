@@ -10,6 +10,11 @@
         "tabOrder": 10,
         "label": "Actividades del IAE",
         "addLineFields": ["epgrafeIAE", "epiaeType", "epiaeCode", "default"]
+      },
+      "representanteLegal": {
+        "tabOrder": 20,
+        "label": "Representante Legal",
+        "addLineFields": ["taxID", "firstName", "lastname1", "lastname2", "powerDate", "notaryName"]
       }
     }
   },
@@ -177,7 +182,55 @@
       "exclude": true
     },
     "representanteLegal": {
-      "exclude": true
+      "fields": {
+        "organization": {
+          "visibility": "system"
+        },
+        "active": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "defaultValue": "Y"
+        },
+        "lineNo": {
+          "visibility": "system"
+        },
+        "taxID": {
+          "visibility": "editable"
+        },
+        "firstName": {
+          "visibility": "editable"
+        },
+        "lastname1": {
+          "visibility": "editable"
+        },
+        "lastname2": {
+          "visibility": "editable"
+        },
+        "powerDate": {
+          "visibility": "editable"
+        },
+        "notaryName": {
+          "visibility": "editable"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "id": {
+          "visibility": "system"
+        },
+        "creationDate": {
+          "visibility": "system"
+        },
+        "createdBy": {
+          "visibility": "system"
+        },
+        "updated": {
+          "visibility": "system"
+        },
+        "updatedBy": {
+          "visibility": "system"
+        }
+      }
     },
     "information": {
       "javaQualifier": "organization-information",
@@ -241,25 +294,25 @@
           "visibility": "discarded"
         },
         "aeat390Isperson": {
-          "visibility": "discarded"
+          "visibility": "editable"
         },
         "aeat390Firstname": {
-          "visibility": "discarded"
+          "visibility": "editable"
         },
         "etvfacInstallationNumber": {
           "visibility": "discarded"
         },
         "aeat390Surname1": {
-          "visibility": "discarded"
+          "visibility": "editable"
         },
         "aeat390Surname2": {
-          "visibility": "discarded"
+          "visibility": "editable"
         },
         "aeat390RepNif": {
-          "visibility": "discarded"
+          "visibility": "editable"
         },
         "aeat390RepName": {
-          "visibility": "discarded"
+          "visibility": "editable"
         },
         "aeat303IsNatPer": {
           "visibility": "discarded"
