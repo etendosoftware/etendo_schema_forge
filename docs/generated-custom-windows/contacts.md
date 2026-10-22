@@ -1585,10 +1585,13 @@ defines nothing and is not inherited from.
   wraps `RecordCreateModal` in `ContactTypeRequirementContext` (`contactTypeRequirement.js`) —
   purchase → `vendor`, sale → `customer`. Inside it, the Contacts header form **holds** a category
   selection until its flags are known and applies it only when it grants the type; otherwise it
-  shows `contactCategoryNotVendor` / `contactCategoryNotCustomer` (toast + under the field) and the
-  field keeps its previous value. A category that arrived another way (the `/defaults` default when
+  shows `contactCategoryNotVendor` / `contactCategoryNotCustomer` as a **toast only** and the field
+  keeps its previous value. No error is put under the field in that case: the value on screen is
+  still valid, and an inline error there outlived the successful save that followed, so the user
+  read it as a failed create. A category that arrived another way (the `/defaults` default when
   the seed could not be resolved) is checked too and, if it does not grant the type, cleared with
-  the error under the field, so the required-field gate keeps Save disabled. Unknown flags (the
+  the error under the field, so the required-field gate keeps Save disabled; that inline error is
+  cleared as soon as a granting category is accepted. Unknown flags (the
   category read was refused) and a category with neither flag (legacy, before R50 — it defines
   nothing, as on the backend) are let through; the backend still refuses a contact with no type.
   `RecordCreateModal` and `EmbeddedWindowRoute` are unaware of any of this: the context crosses the

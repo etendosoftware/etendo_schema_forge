@@ -147,15 +147,16 @@ describe('useContactCategoryTypeSync — create popup from a purchase (vendor re
       expect(result.current.categoryError).toBeNull();
       expect(mocks.toastError).not.toHaveBeenCalled();
     } else {
-      await waitFor(() => expect(result.current.categoryError).toBe('contactCategoryNotVendor|Elegida'));
-      expect(mocks.toastError).toHaveBeenCalledWith('contactCategoryNotVendor|Elegida');
+      await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('contactCategoryNotVendor|Elegida'));
+      // The field still holds a valid value: toast only, no inline error left under it.
+      expect(result.current.categoryError).toBeNull();
       expect(result.current.data).toMatchObject({ [CAT]: 'G-BOTH', [CAT_LABEL]: 'Ambos' });
       expect(writes.mock.calls.some(([k]) => k === CAT)).toBe(false);
     }
   });
 
   it.each([
-    ['an incompatible /defaults category is cleared with the error under the field', 'G-CLI', true],
+    ['an incompatible /defaults category is cleared with the error under the field until a valid one is picked', 'G-CLI', true],
     ['a compatible one is kept', 'G-PRO', false],
   ])('%s', async (_label, categoryId, cleared) => {
     const { result } = renderSync({ name: 'Nuevo', [CAT]: categoryId, [CAT_LABEL]: 'Por defecto' }, VENDOR);
@@ -164,6 +165,9 @@ describe('useContactCategoryTypeSync — create popup from a purchase (vendor re
       await waitFor(() => expect(result.current.data[CAT]).toBeNull());
       expect(result.current.data[CAT_LABEL]).toBe('');
       expect(result.current.categoryError).toBe('contactCategoryNotVendor|Por defecto');
+      pick(result, 'G-PRO', 'Proveedor');
+      await waitFor(() => expect(result.current.data[CAT]).toBe('G-PRO'));
+      expect(result.current.categoryError).toBeNull();
     } else {
       // Give the read a chance to settle, then nothing must have changed.
       await act(async () => {});

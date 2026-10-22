@@ -63,7 +63,7 @@ The window uses these layout overrides (all set in `decisions.json → window`, 
 3. Create a category: both type checkboxes start unchecked; saving with neither shows "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor".
 4. On the Accounting tab, check/uncheck Cliente and Proveedor/Acreedor (before saving): the matching section appears/disappears; with neither, the "Marca Cliente o Proveedor/Acreedor…" message shows. Re-checking a type shows its previous account values.
 5. Change an account in a visible section: it saves on selection; the hidden section's mandatory accounts do not block it.
-6. Save a category that has contacts: the info toast "Categoría guardada. Tiene contactos asociados…" appears; a category without contacts shows no such toast.
+6. Save a category that has contacts (toolbar Save, or ticking a type checkbox on an existing category): only the info toast "Categoría guardada. Tiene contactos asociados…" remains — no green "Registro guardado" stacked behind it. A category without contacts shows only "Registro guardado".
 7. With a role without "Show Accounting Fields", the Accounting tab is absent.
 8. Open the **Attachments** tab and confirm file upload, download, and delete work as expected.
 
@@ -165,7 +165,11 @@ autosave, detected as a change of the record's `updated` token — or after an a
 in the panel, the window reads one row of `contacts/businessPartner` filtered by
 `businessPartnerCategory`. If there is one, an info toast says "Categoría guardada. Tiene
 contactos asociados: los cambios no los modifican y solo se aplicarán a los contactos nuevos."
-(`custom/useAssociatedContactsNotice.js`). A role that cannot read Contacts gets no notice.
+(`custom/useAssociatedContactsNotice.js`). The notice **replaces** the generic "Registro guardado"
+toast instead of stacking on it: it is raised with the generic save toast's own id
+(`RECORD_SAVE_TOAST_ID`, `hooks/useEntity.js`), which sonner turns into an in-place update — the
+same mechanism the User window uses for its create toast. A category without contacts keeps the
+plain "Registro guardado". A role that cannot read Contacts gets no notice.
 
 **Labels.** `fields.EM_Etgo_Iscustomer` / `fields.EM_Etgo_Isvendor` are in the locales (the module
 has no es_ES translation pack). The vendor account labels were renamed in Spanish everywhere they

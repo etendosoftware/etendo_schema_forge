@@ -3,7 +3,8 @@
  * After a contact category is SAVED, and only when it already has contacts, the user is told
  * that the change does not reach them (a category's type and accounts are copied into a contact
  * when it is created). A save is a change of the record's `updated` token for the same id; the
- * first value seen for an id is a load. The lookup is advisory: a failure stays silent.
+ * first value seen for an id is a load. The lookup is advisory: a failure stays silent. The
+ * notice replaces the generic "record saved" toast (same toast id) instead of stacking on it.
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,7 @@ vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mocks.apiFetch }));
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo } }));
 
 import { useNotifyOnHeaderSave } from '@generated/business-partner-category/custom/useAssociatedContactsNotice.js';
+import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 
 const contacts = (rows) => ({ ok: true, json: async () => ({ response: { data: rows } }) });
 
@@ -57,6 +59,13 @@ describe('useNotifyOnHeaderSave', () => {
     expect(url).toMatch(/^\/businessPartner\?criteria=/);
     expect(url).toContain('"fieldName":"businessPartnerCategory","operator":"equals","value":"G-1"');
     expect(url).toContain('_endRow=1');
+  });
+
+  it('replaces the generic save toast instead of stacking a second one', async () => {
+    mocks.apiFetch.mockResolvedValue(contacts([{ id: 'BP-1' }]));
+    await runSequence([A1, A2]);
+    await waitFor(() => expect(mocks.toastInfo).toHaveBeenCalledWith(
+      'bpCategorySavedWithContacts', expect.objectContaining({ id: RECORD_SAVE_TOAST_ID })));
   });
 
   it.each([

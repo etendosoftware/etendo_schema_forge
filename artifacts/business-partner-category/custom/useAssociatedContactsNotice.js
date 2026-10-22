@@ -3,10 +3,17 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getSpecBaseUrl } from '@/lib/neoBaseUrl.js';
+import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 
 /**
  * Contact category (ETP-5791): after a category is saved, tell the user — only when the category
  * already has contacts — that the change does not reach them and applies to new contacts only.
+ *
+ * The notice REPLACES the generic "Registro guardado" toast rather than stacking on it: it is
+ * shown with the generic save toast's own id (`RECORD_SAVE_TOAST_ID`), which sonner treats as an
+ * in-place update (see the comment on that constant in useEntity.js). The lookup is awaited after
+ * the save already showed its toast, so the update always lands on it; a category without
+ * contacts keeps the plain success toast.
  *
  * A category's type flags and accounts are COPIED into a contact when the contact is created, so
  * editing the category never modifies existing contacts; the notice makes that explicit.
@@ -15,8 +22,6 @@ import { getSpecBaseUrl } from '@/lib/neoBaseUrl.js';
  * (`criteria` businessPartnerCategory = id, `_endRow=1`) — the generic NEO list, no dedicated
  * endpoint. A role that cannot read Contacts gets a refusal and simply no notice.
  */
-const NOTICE_TOAST_ID = 'bp-category-saved-with-contacts';
-
 function contactsByCategoryQuery(categoryId) {
   const criteria = JSON.stringify([{ fieldName: 'businessPartnerCategory', operator: 'equals', value: categoryId }]);
   return `/businessPartner?criteria=${encodeURIComponent(criteria)}&_startRow=0&_endRow=1`;
@@ -33,7 +38,7 @@ export function useAssociatedContactsNotice() {
       if (!res.ok) return;
       const body = await res.json();
       const rows = body?.response?.data ?? body?.data ?? [];
-      if (rows.length > 0) toast.info(ui('bpCategorySavedWithContacts'), { id: NOTICE_TOAST_ID });
+      if (rows.length > 0) toast.info(ui('bpCategorySavedWithContacts'), { id: RECORD_SAVE_TOAST_ID, action: undefined });
     } catch {
       // The notice is advisory: a failed lookup must never look like a failed save.
     }

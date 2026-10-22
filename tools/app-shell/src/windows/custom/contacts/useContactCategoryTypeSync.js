@@ -34,11 +34,13 @@ const CATEGORY_LABEL_FIELD = `${CATEGORY_FIELD}$_identifier`;
  * 2. **Create popup opened from a document — the category must grant the document's type.**
  *    Inside `ContactTypeRequirementContext` (a purchase needs a vendor, a sale a customer) a
  *    category that does not grant it is REFUSED: the selection is held until its flags are known
- *    and is only applied when they grant the type, otherwise a translated error is shown and the
- *    field keeps its previous value. A category that reached the form some other way — the
- *    `/defaults` category when the seed could not be resolved — is checked the same way and,
- *    when it does not grant the type, cleared with the error under the field, so the required
- *    field gate keeps Save disabled until a valid one is chosen. Holding (rather than applying
+ *    and is only applied when they grant the type, otherwise a translated error TOAST is shown
+ *    and the field keeps its previous value — no inline error, since the value on screen is
+ *    still valid and an error under it would outlive a successful save. A category that reached
+ *    the form some other way — the `/defaults` category when the seed could not be resolved —
+ *    is checked the same way and, when it does not grant the type, cleared with the error under
+ *    the field (the only inline error), so the required field gate keeps Save disabled until a
+ *    valid one is chosen; accepting a valid category clears it. Holding (rather than applying
  *    and undoing) is what keeps an incompatible category from ever being saved, however fast the
  *    user clicks Save. Unknown flags (the category spec refused the read) and a category with
  *    neither flag (legacy, defines nothing — same as the backend) are let through.
@@ -108,9 +110,9 @@ export function useContactCategoryTypeSync({ data, onChange, apiBaseUrl, enabled
     if (!held || held.seq !== seq) return;
     heldRef.current = null;
     if (!categoryGrantsContactType(flags, requiredType)) {
-      const message = notGrantedMessage(held.label);
-      setCategoryError(message);
-      toast.error(message);
+      // Toast only: the field keeps its previous value, so an inline error under it would read
+      // as if the record were invalid and outlive a successful save.
+      toast.error(notGrantedMessage(held.label));
       return;
     }
     acceptedRef.current.add(held.id);
@@ -166,6 +168,7 @@ export function useContactCategoryTypeSync({ data, onChange, apiBaseUrl, enabled
       if (cancelled || seqRef.current !== seq || dataRef.current?.[CATEGORY_FIELD] !== currentCategory) return;
       if (categoryGrantsContactType(flags, requiredType)) {
         acceptedRef.current.add(currentCategory);
+        setCategoryError(null);
         return;
       }
       setCategoryError(notGrantedMessage(currentLabel));
