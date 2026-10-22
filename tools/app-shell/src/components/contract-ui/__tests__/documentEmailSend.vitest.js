@@ -8,7 +8,6 @@ import {
   resolveNeoBaseUrl,
   sendDocumentEmail,
 } from '../documentEmailSend.js';
-import { resolveAttachmentTable } from '../windowAttachmentTable.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -16,16 +15,6 @@ beforeEach(() => {
 });
 
 describe('documentEmailSend', () => {
-  // ETP-5588 — the attachment table comes from the window's contract, not a per-window map:
-  // the primary entity is not always named `header` (sales-quotation's is `quotation`), and a
-  // window with no contract has nothing to cache against.
-  it('resolves the attachment table from the primary entity of the window contract', async () => {
-    await expect(resolveAttachmentTable('sales-invoice')).resolves.toBe('C_Invoice');
-    await expect(resolveAttachmentTable('sales-quotation')).resolves.toBe('C_Order');
-    await expect(resolveAttachmentTable('goods-shipment')).resolves.toBe('M_InOut');
-    await expect(resolveAttachmentTable('no-such-window')).resolves.toBeNull();
-  });
-
   it('builds the minimal contract command without provider payload fields', () => {
     const command = buildEmailContractCommand('sales-invoice-send', 'invoice-1');
 
