@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback, forwardRef, u
 import { createPortal } from 'react-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { AmountText } from '@/components/currency-summary';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Inbox, X, Trash2, Copy, Loader2, Pencil, Check, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -3054,6 +3055,36 @@ function renderTableRows({
 }
 
 /**
+ * ETP-5757 — one footer cell. A column with a server-side total (`meta.listTotals`, the whole
+ * filtered set converted to the org currency) shows that, with the "≈" prefix when approximate and
+ * a warning for currencies that had no rate; otherwise the client-side sum of the loaded rows.
+ */
+function renderFooterCell({ col, totals, serverTotals, filteredData, sessionCurrency, ui }) {
+  if (col.type !== 'amount') return '';
+  const server = serverTotals?.[col.key];
+  if (server) {
+    const missing = server.missingRateCurrencies;
+    return (
+      <>
+        <AmountText
+          iso={server.iso}
+          amount={server.amount}
+          approximate={server.approximate === true}
+          testId={`footer-total-${col.key}`} />
+        {missing?.length ? (
+          <p className="text-xs text-[var(--status-warning-fg)]" data-testid={`footer-total-missing-rate-${col.key}`}>
+            {ui('financeAccountsBalanceMissingRate', { currencies: missing.join(', ') })}
+          </p>
+        ) : null}
+      </>
+    );
+  }
+  return totals?.[col.key] !== undefined
+    ? formatCurrency(resolveRowCurrency(filteredData[0], col, sessionCurrency), totals[col.key])
+    : '';
+}
+
+/**
  * Renders the footer row showing per-column totals (currently only `amount`
  * columns) plus the matching row-action spacer cells. Returns null when
  * there is nothing to total or the caller opted out via `showFooterTotals`.
@@ -3062,9 +3093,9 @@ function renderTableRows({
 function renderFooterRow({
   totals, showFooterTotals, selectable, visibleColumns, filteredData,
   hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
-  hasDimensionsPanel = false, sessionCurrency,
+  hasDimensionsPanel = false, sessionCurrency, serverTotals = null, ui,
 }) {
-  if (!totals || !showFooterTotals) return null;
+  if ((!totals && !serverTotals) || !showFooterTotals) return null;
   return (
     <TableFooter data-testid="TableFooter__eb5261">
       <TableRow className="font-medium" data-testid="TableRow__eb5261">
@@ -3081,9 +3112,7 @@ function renderFooterRow({
                 printing a formatted `undefined`. The currency comes from the same
                 resolver the cells use, so the total is labelled with the code the
                 rows actually carry. */}
-            {col.type === 'amount' && totals[col.key] !== undefined
-              ? formatCurrency(resolveRowCurrency(filteredData[0], col, sessionCurrency), totals[col.key])
-              : ''}
+            {renderFooterCell({ col, totals, serverTotals, filteredData, sessionCurrency, ui })}
           </TableCell>
         ))}
         {renderRowActionFooterCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
@@ -3121,6 +3150,9 @@ function renderFooterRow({
  *      the companion of InlineLinesPanel in inlineEditable LinesTable), so there are no visible
  *      rows to total; without this it summed every amount column of the spread lines under the
  *      add-row (ETP-5771).
+ *  - meta: object — list envelope metadata. `meta.listTotals.columns[key]` carries the server-side
+ *      total of an amount column over the WHOLE filtered set, in the org currency (ETP-5757); the
+ *      footer prefers it over the client-side sum of the loaded rows.
  */
 export function DataTable({
   entity,
@@ -3219,6 +3251,8 @@ export function DataTable({
   hideHeader = false,
   hideDataRows = false,
   emptyState,
+  // ETP-5757 — list GET envelope siblings (`meta.listTotals`); see serverTotals below.
+  meta,
 }) {
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
@@ -3405,6 +3439,20 @@ export function DataTable({
     }
     return sums;
   }, [filteredData, amountColumns]);
+
+  // ETP-5757 — server totals describe the whole backend-filtered set, so they only match what the
+  // table shows when nothing narrows the rows client-side (rowFilter, or local search when the
+  // backend is not handling filters). Otherwise fall back to the client-side sum.
+  const serverTotals = useMemo(() => {
+    const columnsTotals = meta?.listTotals?.columns;
+    if (!columnsTotals) return null;
+    if (rowFilter || (!onFilterChange && searchQuery.length > 0)) return null;
+    const summable = {};
+    for (const col of amountColumns) {
+      if (columnsTotals[col.key]) summable[col.key] = columnsTotals[col.key];
+    }
+    return Object.keys(summable).length > 0 ? summable : null;
+  }, [meta, rowFilter, onFilterChange, searchQuery, amountColumns]);
 
   const handleInlineToggle = useCallback(async (row, col, checked) => {
     if (!apiBaseUrl || !entity || !row?.id) {
@@ -3770,7 +3818,7 @@ export function DataTable({
           {renderFooterRow({
             totals, showFooterTotals: showFooterTotals && !balanceFooter && !hideDataRows, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
-            hasDimensionsPanel, sessionCurrency,
+            hasDimensionsPanel, sessionCurrency, serverTotals, ui,
           })}
         </Table>
       </div>
