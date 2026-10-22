@@ -113,6 +113,9 @@ Delegate all branch operations to Clerk. See `docs/branch-workflow.md` for full 
 Code change + doc update = one atomic unit. REVIEW must reject PRs that change behavior without updating docs. Full checklist and trigger list: `docs/self-documentation-policy.md`.
 Window-specific changes MUST update the matching `docs/generated-custom-windows/<window>.md` guide in the same change.
 
+## Module Repos and Branch Policy
+The README tables "Base repos" and "Module repos" are the team's record of which repos are base (`main`/`develop`) and which are **fixed on epic**. When you add a module, or a module stops being fixed on epic (its epic work merged to `develop`/`main`), or becomes fixed on epic, update in the same change: the README tables, `scripts/modules-policy.json` (used by `make check-modules`) and the clone commands in the README. Feature/hotfix branches must be cut from the base of their group (fixed on epic: the epic; others: features from `develop`, hotfixes from `main`). Run `make check-modules` to verify.
+
 ## Commit Conventions
 All commits MUST follow Etendo Git Police conventions as defined by the `/etendo-workflow-manager` skill.
 **This skill MUST be installed.** If it is not available, ask the user to install it before proceeding with any commits.

@@ -351,6 +351,12 @@ marked the sales order stale.
 | `goods-shipment`, `sales-invoice` | `sales-order` |
 | `goods-shipment` | `sales-invoice` (ETP-5576) |
 | `goods-receipt` | `purchase-invoice` (ETP-5576) |
+| `return-material-receipt` | `goods-shipment` (ETP-5729) |
+
+The return row (ETP-5729) exists because a shipment shows values derived from its customer
+returns — `canCreateReturn` (the «Crear devolución» button) and the `returnReceipts` Related
+Documents chips. Without it, deleting a draft return and going back to the shipment still listed
+the deleted return and kept the button hidden until a manual reload.
 
 The invoice rows (ETP-5576) exist because an invoice shows values derived from its shipments /
 receipts — the `followUp` annotation behind «Gestionar envío / recepción», the delivery status and

@@ -469,6 +469,14 @@ const BACKEND_ERROR_KEY_MAP = {
   // same case maps to "period not open", which sends the user to open a period they do not need.
   // `messageParams` { period, accountingDate }.
   ETGO_GLJournalPeriodMismatch: 'backendError.glJournalPeriodMismatch',
+  // ETP-5693 — com.etendoerp.go PostingAccountGuard: a write to an accounting field with a summary
+  // or inactive account, an account of another ledger, or a changed ledger on an existing row.
+  // The selectors already hide those accounts, so the SPA only meets these in a race: a generic
+  // sentence per key, no messageParams (the backend text carries field + account for REST/MCP).
+  ETGO_AccountIsSummary: 'backendError.accountIsSummary',
+  ETGO_AccountIsInactive: 'backendError.accountIsInactive',
+  ETGO_AccountWrongLedger: 'backendError.accountWrongLedger',
+  ETGO_LedgerNotUpdatable: 'backendError.ledgerNotUpdatable',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -1146,6 +1154,53 @@ function matchConsentExpired(msg) {
   return account ? { account } : null;
 }
 
+// ETP-5089: `PSD2_ConnectionStaleReconnect`, raised on the same fetchAccountTransactions path when
+// Salt Edge still reports the connection active but its last failed fetch is newer than its last
+// success. Two slots: the account name (%0) and the bank's own failure text (%1). The reason is
+// free text written by the bank — it may carry periods, colons or nothing at all (the backend
+// sends "" when Salt Edge gave no message) — so it is captured as whatever sits between the fixed
+// mid and suffix, and an empty reason still counts as a match. It shares its prefix with
+// CONNECTION_WENT_INACTIVE_PREFIX, which is safe: the two differ in the text right after the name.
+const CONNECTION_STALE_PREFIX = 'The connection for account ';
+const CONNECTION_STALE_MID = ' has not refreshed successfully since it last failed: ';
+const CONNECTION_STALE_SUFFIX = '. Please reconnect the account.';
+
+/**
+ * Trims a free-text reason and drops the periods it ends with.
+ *
+ * The bank's failure text usually ends in its own period, and the sentence it is dropped into
+ * supplies the closing one, so without this the result reads "…del banco.. Por favor". A plain
+ * backwards scan rather than a `/\.+$/` regex: the text is written by the bank, and that pattern
+ * backtracks super-linearly on a long run of periods (Sonar S5852), while this is linear whatever
+ * it is given.
+ *
+ * @param {unknown} value the reason text; null and undefined count as empty
+ * @returns {string} the trimmed text without trailing periods, or '' when nothing is left
+ */
+export function stripTrailingPeriods(value) {
+  const text = String(value ?? '').trim();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '.') {
+    end -= 1;
+  }
+  return text.slice(0, end).trim();
+}
+
+function matchConnectionStale(msg) {
+  if (!msg.startsWith(CONNECTION_STALE_PREFIX) || !msg.endsWith(CONNECTION_STALE_SUFFIX)) {
+    return null;
+  }
+  const body = msg.slice(CONNECTION_STALE_PREFIX.length, -CONNECTION_STALE_SUFFIX.length);
+  const mid = body.indexOf(CONNECTION_STALE_MID);
+  if (mid <= 0) {
+    return null;
+  }
+  return {
+    account: body.slice(0, mid),
+    reason: stripTrailingPeriods(body.slice(mid + CONNECTION_STALE_MID.length)),
+  };
+}
+
 // The AD_MESSAGE template repeats `%0`, so the same day count appears twice in the rendered string.
 // Both occurrences are captured and required to agree — a message whose two numbers differ is not
 // this message and must not be translated as if it were.
@@ -1295,6 +1350,15 @@ function resolveParameterizedMatch(msg) {
       };
     }
     return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
+  }
+
+  // Hand-written for the same reason (ETP-5089): when the bank gave no failure text the sentence
+  // must drop the "último fallo: <reason>" clause, not render it with an empty slot.
+  const staleMatch = matchConnectionStale(msg);
+  if (staleMatch) {
+    return staleMatch.reason
+      ? { key: 'backendError.psd2ConnectionStale', params: { ...staleMatch } }
+      : { key: 'backendError.psd2ConnectionStaleNoReason', params: { account: staleMatch.account } };
   }
 
   for (const [matcher, key] of PARAMETERIZED_MATCHERS) {

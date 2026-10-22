@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import {
   extractBackendMessageKeys,
   extractBackendMessageParams,
+  stripTrailingPeriods,
   translateBackendError,
   parseBackendErrorMessage,
   parseBackendError,
@@ -1515,6 +1516,13 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
       + ' proveedor. Sólo se sincronizarán los movimientos de ese período.',
     'backendError.psd2NoActiveConnection':
       'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
+    // ETP-5089 — kept byte-identical to the real es_ES entries.
+    'backendError.psd2ConnectionStale':
+      'La sincronización de la cuenta {account} está fallando: {reason}.'
+      + ' Por favor, reconecta la cuenta.',
+    'backendError.psd2ConnectionStaleNoReason':
+      'La sincronización de la cuenta {account} está fallando.'
+      + ' Por favor, reconecta la cuenta.',
   });
 
   // The account name is a free-form financial-account identifier: it contains spaces, a dash and
@@ -1532,6 +1540,18 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
   // parameterized matcher.
   const NO_CONNECTION_RAW = 'No active bank connection found for financial account %s.'
     + ' Connect the account first.';
+  // ETP-5089 — `PSD2_ConnectionStaleReconnect`. The reason is the bank's own free text, so it is
+  // chosen to carry a period and a colon of its own: the matcher must not split on either. It also
+  // ends in its own period, as bank messages usually do, which the `%1.` template doubles into the
+  // `later..` below — exactly what crosses the wire.
+  const STALE_RAW = 'The connection for account Fake Demo Bank - Savings account ETP-5109'
+    + ' has not refreshed successfully since it last failed: Error: token expired. Retry later..'
+    + ' Please reconnect the account.';
+  // What the backend sends when Salt Edge gave no fail_message: StringUtils.defaultString(null)
+  // leaves the slot empty, so the separator runs straight into the suffix.
+  const STALE_NO_REASON_RAW = 'The connection for account Fake Demo Bank - Savings account'
+    + ' ETP-5109 has not refreshed successfully since it last failed: . Please reconnect the'
+    + ' account.';
 
   describe('"The connection for account <name> was found inactive..." parameterized match', () => {
     it('translates to es_ES, interpolating the account name', () => {
@@ -1558,6 +1578,84 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
 
     it('returns the original message unchanged when the translation key is missing (guard)', () => {
       assert.equal(translateBackendError(CONSENT_RAW, (k) => k), CONSENT_RAW);
+    });
+  });
+
+  // ETP-5089 — the bank's failure text is dropped into a sentence that supplies its own period.
+  // Written as a backwards scan, not a `/\.+$/` regex (Sonar S5852: super-linear backtracking on a
+  // long run of periods), so the long-input case below is part of the contract.
+  describe('stripTrailingPeriods', () => {
+    it('drops every trailing period and the whitespace around the text', () => {
+      assert.equal(stripTrailingPeriods('Error interno del banco.'), 'Error interno del banco');
+      assert.equal(stripTrailingPeriods('  token expired...  '), 'token expired');
+    });
+
+    it('keeps periods that are not at the end', () => {
+      assert.equal(stripTrailingPeriods('Error: v1.2 failed. Retry.'), 'Error: v1.2 failed. Retry');
+    });
+
+    it('returns an empty string for null, undefined, blank or only periods', () => {
+      for (const empty of [null, undefined, '', '   ', '.', '...']) {
+        assert.equal(stripTrailingPeriods(empty), '', String(empty));
+      }
+    });
+
+    it('only strips the unbroken run at the end, not periods separated by a space', () => {
+      assert.equal(stripTrailingPeriods('a. .'), 'a.');
+    });
+
+    it('stays linear on a very long run of periods', () => {
+      const start = Date.now();
+      const result = stripTrailingPeriods(`x${'.'.repeat(200000)}`);
+      assert.equal(result, 'x');
+      assert.ok(Date.now() - start < 1000, 'must not backtrack');
+    });
+
+    it('stays linear on a long run of periods followed by text', () => {
+      const text = `${'.'.repeat(200000)}x`;
+      const start = Date.now();
+      assert.equal(stripTrailingPeriods(text), text);
+      assert.ok(Date.now() - start < 1000, 'must not backtrack');
+    });
+  });
+
+  describe('"The connection for account <name> has not refreshed... failed: <reason>." match', () => {
+    it('translates to es_ES, interpolating the account name and the bank reason', () => {
+      assert.equal(
+        translateBackendError(STALE_RAW, es),
+        'La sincronización de la cuenta Fake Demo Bank - Savings account ETP-5109 está fallando:'
+          + ' Error: token expired. Retry later. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('a reason that is only a period counts as no reason', () => {
+      const raw = 'The connection for account Caja has not refreshed successfully since it last'
+        + ' failed: .. Please reconnect the account.';
+      assert.equal(
+        translateBackendError(raw, es),
+        'La sincronización de la cuenta Caja está fallando.'
+          + ' Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('drops the reason clause when the bank gave none, instead of an empty slot', () => {
+      assert.equal(
+        translateBackendError(STALE_NO_REASON_RAW, es),
+        'La sincronización de la cuenta Fake Demo Bank - Savings account ETP-5109 está fallando.'
+          + ' Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('does not swallow the sibling "was found inactive" message sharing its prefix', () => {
+      assert.equal(
+        translateBackendError(INACTIVE_RAW, es),
+        'La conexión de la cuenta Fake Demo Bank - Savings account ETP-5109 se encontró inactiva'
+          + ' durante la sincronización. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(STALE_RAW, (k) => k), STALE_RAW);
     });
   });
 
@@ -3460,4 +3558,29 @@ describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () 
   it('is not worded as "period not open"', () => {
     assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
   });
+});
+
+// ── ETP-5693: posting-account refusals on accounting fields, translated by identity ──
+describe('translateBackendError — posting-account refusals (ETP-5693)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const cases = [
+    ['ETGO_AccountIsSummary', 'backendError.accountIsSummary'],
+    ['ETGO_AccountIsInactive', 'backendError.accountIsInactive'],
+    ['ETGO_AccountWrongLedger', 'backendError.accountWrongLedger'],
+    ['ETGO_LedgerNotUpdatable', 'backendError.ledgerNotUpdatable'],
+  ];
+
+  for (const [key, label] of cases) {
+    it(`${key} becomes the generic sentence of the UI locale`, () => {
+      const prose = 'warehouseDifferences: the account 4300 - Customers is not valid here.';
+      const esText = translateBackendError(prose, es, { messageKeys: [key] });
+      const enText = translateBackendError(prose, en, { messageKeys: [key] });
+      assert.equal(esText, es(label));
+      assert.equal(enText, en(label));
+      assert.notEqual(esText, label, 'the es_ES key must exist');
+      assert.notEqual(enText, label, 'the en_US key must exist');
+      assert.notEqual(esText, enText);
+    });
+  }
 });

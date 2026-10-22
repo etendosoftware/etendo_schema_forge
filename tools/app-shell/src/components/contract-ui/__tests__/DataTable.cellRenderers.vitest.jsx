@@ -387,6 +387,18 @@ describe('renderDateCell', () => {
 
     expect(screen.getByText('—')).toBeInTheDocument();
   });
+
+  it('renders an ISO datetime value as a date only: a date column has no time tier', () => {
+    renderCell(renderDateCell({
+      ...baseContext,
+      row: { id: '1', date: '2026-10-20T14:30:00' },
+      col: { key: 'date', type: 'date', dot: false },
+    }));
+
+    const text = screen.getByTestId('cell').textContent;
+    expect(text).toBe('10/20/2026');
+    expect(text).not.toMatch(/14|30|:|AM|PM/);
+  });
 });
 
 describe('renderAmountCell', () => {

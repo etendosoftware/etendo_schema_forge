@@ -197,6 +197,30 @@ describe('buildJsreportHelpersString', () => {
     assert.equal(formatCurrency(1000), '1.000,00');
   });
 
+  // ETP-4910: the emitted string round-trips the browser formatter's HALF_UP rule
+  // (`tools/app-shell/src/lib/formatCurrency.js`'s `toFixedHalfUp`, ETP-5107) instead of
+  // going through the binary `abs.toFixed(maxFrac)`. `(2.675).toFixed(2)` is "2.67"
+  // because 2.675 is stored as 2.67499999…, one cent below what the backend's
+  // BigDecimal HALF_UP arithmetic computes and what the screen shows. The rule was
+  // unpinned on BOTH sides of the repo split — which is exactly how the mirrored
+  // schema_forge_core copy lost it silently — so it is asserted here on the emitted
+  // jsreport/PDF payload, next to the browser-side case in
+  // src/lib/__tests__/formatCurrency.test.js.
+  it('rounds HALF-UP on the decimal value, never through the binary toFixed approximation (ETP-5107)', () => {
+    const built = buildJsreportHelpersString(DOCUMENT_HELPERS_SRC);
+    const groupSrc = extractFunctionSource(built, '__groupEsEs');
+    const fnSource = extractFunctionSource(built, 'formatCurrency');
+    const formatCurrency = new Function(`${groupSrc}\n${fnSource}; return formatCurrency;`)();
+
+    // Native toFixed(2) answers "2.67"/"8.57" for the first two.
+    assert.equal(formatCurrency(2.675), '2,68');
+    assert.equal(formatCurrency(8.575), '8,58');
+    // Rounding and grouping together, on a monetary amount.
+    assert.equal(formatCurrency(1234.565), '1.234,57');
+    // The ordinary path is untouched: 2.674 is already below the half cent.
+    assert.equal(formatCurrency(2.674), '2,67');
+  });
+
   it('accepts an explicit numberFormat override as a 2nd param — for callers with a known JS value (not a helpers.js string to regex-extract from)', () => {
     const built = buildJsreportHelpersString('', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
     const groupSrc = extractFunctionSource(built, '__groupEsEs');

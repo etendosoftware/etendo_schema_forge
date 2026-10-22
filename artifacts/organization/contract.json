@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-08-01T00:36:50.964Z",
-  "updatedAt": "2026-10-16T16:21:16.325Z",
-  "checksum": "b4012f1fb3c1a8d3",
+  "updatedAt": "2026-10-20T16:34:58.494Z",
+  "checksum": "9525840b8d6dae55",
   "frontendContract": {
     "window": {
       "id": "110",
@@ -18,6 +18,18 @@
             "epiaeType",
             "epiaeCode",
             "default"
+          ]
+        },
+        "representanteLegal": {
+          "tabOrder": 20,
+          "label": "Representante Legal",
+          "addLineFields": [
+            "taxID",
+            "firstName",
+            "lastname1",
+            "lastname2",
+            "powerDate",
+            "notaryName"
           ]
         }
       },
@@ -187,6 +199,123 @@
             }
           },
           {
+            "name": "aeat390Isperson",
+            "apiKey": "aeat390Isperson",
+            "column": "EM_Aeat390_Isperson",
+            "label": "Persona Física 390",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "aeat390Firstname",
+            "apiKey": "aeat390Firstname",
+            "column": "EM_Aeat390_Firstname",
+            "label": "Nombre",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@EM_Aeat390_Isperson@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeat390Surname1",
+            "apiKey": "aeat390Surname1",
+            "column": "EM_Aeat390_Surname1",
+            "label": "Primer Apellido",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@EM_Aeat390_Isperson@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeat390Surname2",
+            "apiKey": "aeat390Surname2",
+            "column": "EM_Aeat390_Surname2",
+            "label": "Segundo Apellido",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@EM_Aeat390_Isperson@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeat390RepNif",
+            "apiKey": "aeat390RepNif",
+            "column": "EM_Aeat390_Rep_Nif",
+            "label": "NIF del Representante Legal",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 20
+            },
+            "displayLogic": {
+              "raw": "@EM_Aeat390_Isperson@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeat390RepName",
+            "apiKey": "aeat390RepName",
+            "column": "EM_Aeat390_Rep_Name",
+            "label": "Nombre del Representante Legal",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@EM_Aeat390_Isperson@='Y'",
+              "evaluable": true
+            }
+          },
+          {
             "name": "etgoEmail",
             "apiKey": "etgoEmail",
             "column": "EM_Etgo_Email",
@@ -233,7 +362,15 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": [],
+        "computedFields": [
+          {
+            "name": "aeat390Isperson",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ],
         "javaQualifier": "organization-information"
       },
       "actividadesDelIae": {
@@ -316,6 +453,116 @@
         ],
         "searchableFields": [],
         "computedFields": []
+      },
+      "representanteLegal": {
+        "tableName": "OREP_Representative_Info",
+        "tabId": "53EEA7ADEBA24190A340084CC9A4119C",
+        "tabName": "Representante Legal",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "taxID",
+            "apiKey": "taxID",
+            "column": "Taxid",
+            "label": "CIF/NIF",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "firstName",
+            "apiKey": "firstName",
+            "column": "Firstname",
+            "label": "Nombre",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "lastname1",
+            "apiKey": "lastname1",
+            "column": "Lastname1",
+            "label": "Primer Apellido",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "lastname2",
+            "apiKey": "lastname2",
+            "column": "Lastname2",
+            "label": "Segundo Apellido",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "powerDate",
+            "apiKey": "powerDate",
+            "column": "Power_Date",
+            "label": "Fecha Poder",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 19
+            }
+          },
+          {
+            "name": "notaryName",
+            "apiKey": "notaryName",
+            "column": "Notary_Name",
+            "label": "Notaría",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": []
       }
     }
   },
@@ -334,6 +581,18 @@
             "epiaeType",
             "epiaeCode",
             "default"
+          ]
+        },
+        "representanteLegal": {
+          "tabOrder": 20,
+          "label": "Representante Legal",
+          "addLineFields": [
+            "taxID",
+            "firstName",
+            "lastname1",
+            "lastname2",
+            "powerDate",
+            "notaryName"
           ]
         }
       },
@@ -694,7 +953,7 @@
             "apiKey": "aeat390Isperson",
             "column": "EM_Aeat390_Isperson",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -702,7 +961,7 @@
             "apiKey": "aeat390Firstname",
             "column": "EM_Aeat390_Firstname",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -718,7 +977,7 @@
             "apiKey": "aeat390Surname1",
             "column": "EM_Aeat390_Surname1",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -726,7 +985,7 @@
             "apiKey": "aeat390Surname2",
             "column": "EM_Aeat390_Surname2",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -734,7 +993,7 @@
             "apiKey": "aeat390RepNif",
             "column": "EM_Aeat390_Rep_Nif",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -742,7 +1001,7 @@
             "apiKey": "aeat390RepName",
             "column": "EM_Aeat390_Rep_Name",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -978,6 +1237,133 @@
             "required": true
           }
         ]
+      },
+      "representanteLegal": {
+        "tableName": "OREP_Representative_Info",
+        "tabId": "53EEA7ADEBA24190A340084CC9A4119C",
+        "tabName": "Representante Legal",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "taxID",
+            "apiKey": "taxID",
+            "column": "Taxid",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "firstName",
+            "apiKey": "firstName",
+            "column": "Firstname",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "lastname1",
+            "apiKey": "lastname1",
+            "column": "Lastname1",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "lastname2",
+            "apiKey": "lastname2",
+            "column": "Lastname2",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "powerDate",
+            "apiKey": "powerDate",
+            "column": "Power_Date",
+            "type": "date",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "notaryName",
+            "apiKey": "notaryName",
+            "column": "Notary_Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Orep_Representative_Info_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
       }
     },
     "endpoints": [
@@ -1070,6 +1456,36 @@
         "path": "/actividadesDelIae/:id",
         "entity": "actividadesDelIae",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/representanteLegal",
+        "entity": "representanteLegal",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/representanteLegal/:id",
+        "entity": "representanteLegal",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/representanteLegal",
+        "entity": "representanteLegal",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/representanteLegal/:id",
+        "entity": "representanteLegal",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/representanteLegal/:id",
+        "entity": "representanteLegal",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -1109,6 +1525,17 @@
         "delete": true,
         "listUrl": "/sws/neo/organization/actividadesDelIae",
         "detailUrl": "/sws/neo/organization/actividadesDelIae/{id}",
+        "supportedFilters": []
+      },
+      "representanteLegal": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/organization/representanteLegal",
+        "detailUrl": "/sws/neo/organization/representanteLegal/{id}",
         "supportedFilters": []
       }
     },
@@ -1229,12 +1656,107 @@
         "description": "CRUD flags for 'organization' should all be booleans"
       },
       {
+        "id": "t-crud-flags-representanteLegal",
+        "category": "crud-flags",
+        "entity": "representanteLegal",
+        "runner": "node",
+        "description": "CRUD flags for 'representanteLegal' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-information-aeat390Isperson",
+        "category": "default-value-type",
+        "entity": "information",
+        "field": "aeat390Isperson",
+        "runner": "node",
+        "description": "Default value for 'aeat390Isperson' in information should be a string"
+      },
+      {
         "id": "t-default-value-type-organization-etgoBusinessType",
         "category": "default-value-type",
         "entity": "organization",
         "field": "etgoBusinessType",
         "runner": "node",
         "description": "Default value for 'etgoBusinessType' in organization should be a string"
+      },
+      {
+        "id": "t-displaylogic-evaluable-information-aeat390Firstname",
+        "category": "displaylogic-evaluable",
+        "entity": "information",
+        "field": "aeat390Firstname",
+        "runner": "node",
+        "description": "Display logic for 'aeat390Firstname' in information should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-information-aeat390RepName",
+        "category": "displaylogic-evaluable",
+        "entity": "information",
+        "field": "aeat390RepName",
+        "runner": "node",
+        "description": "Display logic for 'aeat390RepName' in information should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-information-aeat390RepNif",
+        "category": "displaylogic-evaluable",
+        "entity": "information",
+        "field": "aeat390RepNif",
+        "runner": "node",
+        "description": "Display logic for 'aeat390RepNif' in information should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-information-aeat390Surname1",
+        "category": "displaylogic-evaluable",
+        "entity": "information",
+        "field": "aeat390Surname1",
+        "runner": "node",
+        "description": "Display logic for 'aeat390Surname1' in information should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-information-aeat390Surname2",
+        "category": "displaylogic-evaluable",
+        "entity": "information",
+        "field": "aeat390Surname2",
+        "runner": "node",
+        "description": "Display logic for 'aeat390Surname2' in information should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-information-aeat390Firstname",
+        "category": "displaylogic-valid",
+        "entity": "information",
+        "field": "aeat390Firstname",
+        "runner": "node",
+        "description": "Display logic for 'aeat390Firstname' in information should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-information-aeat390RepName",
+        "category": "displaylogic-valid",
+        "entity": "information",
+        "field": "aeat390RepName",
+        "runner": "node",
+        "description": "Display logic for 'aeat390RepName' in information should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-information-aeat390RepNif",
+        "category": "displaylogic-valid",
+        "entity": "information",
+        "field": "aeat390RepNif",
+        "runner": "node",
+        "description": "Display logic for 'aeat390RepNif' in information should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-information-aeat390Surname1",
+        "category": "displaylogic-valid",
+        "entity": "information",
+        "field": "aeat390Surname1",
+        "runner": "node",
+        "description": "Display logic for 'aeat390Surname1' in information should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-information-aeat390Surname2",
+        "category": "displaylogic-valid",
+        "entity": "information",
+        "field": "aeat390Surname2",
+        "runner": "node",
+        "description": "Display logic for 'aeat390Surname2' in information should be valid JS"
       },
       {
         "id": "t-field-presence-actividadesDelIae-default",
@@ -1267,6 +1789,54 @@
         "field": "epiaeType",
         "runner": "node",
         "description": "Field 'epiaeType' should be present in actividadesDelIae"
+      },
+      {
+        "id": "t-field-presence-information-aeat390Firstname",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "aeat390Firstname",
+        "runner": "node",
+        "description": "Field 'aeat390Firstname' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-aeat390Isperson",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "aeat390Isperson",
+        "runner": "node",
+        "description": "Field 'aeat390Isperson' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-aeat390RepName",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "aeat390RepName",
+        "runner": "node",
+        "description": "Field 'aeat390RepName' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-aeat390RepNif",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "aeat390RepNif",
+        "runner": "node",
+        "description": "Field 'aeat390RepNif' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-aeat390Surname1",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "aeat390Surname1",
+        "runner": "node",
+        "description": "Field 'aeat390Surname1' should be present in information"
+      },
+      {
+        "id": "t-field-presence-information-aeat390Surname2",
+        "category": "field-presence",
+        "entity": "information",
+        "field": "aeat390Surname2",
+        "runner": "node",
+        "description": "Field 'aeat390Surname2' should be present in information"
       },
       {
         "id": "t-field-presence-information-etgoEmail",
@@ -1349,6 +1919,54 @@
         "description": "Field 'socialName' should be present in organization"
       },
       {
+        "id": "t-field-presence-representanteLegal-firstName",
+        "category": "field-presence",
+        "entity": "representanteLegal",
+        "field": "firstName",
+        "runner": "node",
+        "description": "Field 'firstName' should be present in representanteLegal"
+      },
+      {
+        "id": "t-field-presence-representanteLegal-lastname1",
+        "category": "field-presence",
+        "entity": "representanteLegal",
+        "field": "lastname1",
+        "runner": "node",
+        "description": "Field 'lastname1' should be present in representanteLegal"
+      },
+      {
+        "id": "t-field-presence-representanteLegal-lastname2",
+        "category": "field-presence",
+        "entity": "representanteLegal",
+        "field": "lastname2",
+        "runner": "node",
+        "description": "Field 'lastname2' should be present in representanteLegal"
+      },
+      {
+        "id": "t-field-presence-representanteLegal-notaryName",
+        "category": "field-presence",
+        "entity": "representanteLegal",
+        "field": "notaryName",
+        "runner": "node",
+        "description": "Field 'notaryName' should be present in representanteLegal"
+      },
+      {
+        "id": "t-field-presence-representanteLegal-powerDate",
+        "category": "field-presence",
+        "entity": "representanteLegal",
+        "field": "powerDate",
+        "runner": "node",
+        "description": "Field 'powerDate' should be present in representanteLegal"
+      },
+      {
+        "id": "t-field-presence-representanteLegal-taxID",
+        "category": "field-presence",
+        "entity": "representanteLegal",
+        "field": "taxID",
+        "runner": "node",
+        "description": "Field 'taxID' should be present in representanteLegal"
+      },
+      {
         "id": "t-field-type-actividadesDelIae-default",
         "category": "field-type",
         "entity": "actividadesDelIae",
@@ -1379,6 +1997,54 @@
         "field": "epiaeType",
         "runner": "node",
         "description": "Field 'epiaeType' should have type 'string' in actividadesDelIae"
+      },
+      {
+        "id": "t-field-type-information-aeat390Firstname",
+        "category": "field-type",
+        "entity": "information",
+        "field": "aeat390Firstname",
+        "runner": "node",
+        "description": "Field 'aeat390Firstname' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-aeat390Isperson",
+        "category": "field-type",
+        "entity": "information",
+        "field": "aeat390Isperson",
+        "runner": "node",
+        "description": "Field 'aeat390Isperson' should have type 'boolean' in information"
+      },
+      {
+        "id": "t-field-type-information-aeat390RepName",
+        "category": "field-type",
+        "entity": "information",
+        "field": "aeat390RepName",
+        "runner": "node",
+        "description": "Field 'aeat390RepName' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-aeat390RepNif",
+        "category": "field-type",
+        "entity": "information",
+        "field": "aeat390RepNif",
+        "runner": "node",
+        "description": "Field 'aeat390RepNif' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-aeat390Surname1",
+        "category": "field-type",
+        "entity": "information",
+        "field": "aeat390Surname1",
+        "runner": "node",
+        "description": "Field 'aeat390Surname1' should have type 'string' in information"
+      },
+      {
+        "id": "t-field-type-information-aeat390Surname2",
+        "category": "field-type",
+        "entity": "information",
+        "field": "aeat390Surname2",
+        "runner": "node",
+        "description": "Field 'aeat390Surname2' should have type 'string' in information"
       },
       {
         "id": "t-field-type-information-etgoEmail",
@@ -1459,6 +2125,54 @@
         "field": "socialName",
         "runner": "node",
         "description": "Field 'socialName' should have type 'string' in organization"
+      },
+      {
+        "id": "t-field-type-representanteLegal-firstName",
+        "category": "field-type",
+        "entity": "representanteLegal",
+        "field": "firstName",
+        "runner": "node",
+        "description": "Field 'firstName' should have type 'string' in representanteLegal"
+      },
+      {
+        "id": "t-field-type-representanteLegal-lastname1",
+        "category": "field-type",
+        "entity": "representanteLegal",
+        "field": "lastname1",
+        "runner": "node",
+        "description": "Field 'lastname1' should have type 'string' in representanteLegal"
+      },
+      {
+        "id": "t-field-type-representanteLegal-lastname2",
+        "category": "field-type",
+        "entity": "representanteLegal",
+        "field": "lastname2",
+        "runner": "node",
+        "description": "Field 'lastname2' should have type 'string' in representanteLegal"
+      },
+      {
+        "id": "t-field-type-representanteLegal-notaryName",
+        "category": "field-type",
+        "entity": "representanteLegal",
+        "field": "notaryName",
+        "runner": "node",
+        "description": "Field 'notaryName' should have type 'string' in representanteLegal"
+      },
+      {
+        "id": "t-field-type-representanteLegal-powerDate",
+        "category": "field-type",
+        "entity": "representanteLegal",
+        "field": "powerDate",
+        "runner": "node",
+        "description": "Field 'powerDate' should have type 'string' in representanteLegal"
+      },
+      {
+        "id": "t-field-type-representanteLegal-taxID",
+        "category": "field-type",
+        "entity": "representanteLegal",
+        "field": "taxID",
+        "runner": "node",
+        "description": "Field 'taxID' should have type 'string' in representanteLegal"
       },
       {
         "id": "t-rule-declared-A-adir-Certificado-Digital-a-Organizaci-n",
@@ -1969,54 +2683,6 @@
         "description": "System field 'aeat303PersonSurnames' should exist in backend but not frontend for information"
       },
       {
-        "id": "t-system-field-information-aeat390Firstname",
-        "category": "system-field",
-        "entity": "information",
-        "field": "aeat390Firstname",
-        "runner": "node",
-        "description": "System field 'aeat390Firstname' should exist in backend but not frontend for information"
-      },
-      {
-        "id": "t-system-field-information-aeat390Isperson",
-        "category": "system-field",
-        "entity": "information",
-        "field": "aeat390Isperson",
-        "runner": "node",
-        "description": "System field 'aeat390Isperson' should exist in backend but not frontend for information"
-      },
-      {
-        "id": "t-system-field-information-aeat390RepName",
-        "category": "system-field",
-        "entity": "information",
-        "field": "aeat390RepName",
-        "runner": "node",
-        "description": "System field 'aeat390RepName' should exist in backend but not frontend for information"
-      },
-      {
-        "id": "t-system-field-information-aeat390RepNif",
-        "category": "system-field",
-        "entity": "information",
-        "field": "aeat390RepNif",
-        "runner": "node",
-        "description": "System field 'aeat390RepNif' should exist in backend but not frontend for information"
-      },
-      {
-        "id": "t-system-field-information-aeat390Surname1",
-        "category": "system-field",
-        "entity": "information",
-        "field": "aeat390Surname1",
-        "runner": "node",
-        "description": "System field 'aeat390Surname1' should exist in backend but not frontend for information"
-      },
-      {
-        "id": "t-system-field-information-aeat390Surname2",
-        "category": "system-field",
-        "entity": "information",
-        "field": "aeat390Surname2",
-        "runner": "node",
-        "description": "System field 'aeat390Surname2' should exist in backend but not frontend for information"
-      },
-      {
         "id": "t-system-field-information-aPRMPaymentDescription",
         "category": "system-field",
         "entity": "information",
@@ -2369,6 +3035,78 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for organization"
       },
       {
+        "id": "t-system-field-representanteLegal-active",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-client",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-createdBy",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-creationDate",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-id",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-lineNo",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "System field 'lineNo' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-organization",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-updated",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for representanteLegal"
+      },
+      {
+        "id": "t-system-field-representanteLegal-updatedBy",
+        "category": "system-field",
+        "entity": "representanteLegal",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for representanteLegal"
+      },
+      {
         "id": "t-visibility-actividadesDelIae",
         "category": "visibility",
         "entity": "actividadesDelIae",
@@ -2388,23 +3126,32 @@
         "entity": "organization",
         "runner": "node",
         "description": "Entity 'organization' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-representanteLegal",
+        "category": "visibility",
+        "entity": "representanteLegal",
+        "runner": "node",
+        "description": "Entity 'representanteLegal' should only expose visible fields in frontend"
       }
     ],
     "summary": {
-      "total": 157,
+      "total": 197,
       "byCategory": {
         "action-endpoint": 2,
-        "crud-flags": 3,
-        "default-value-type": 1,
-        "field-presence": 14,
-        "field-type": 14,
+        "crud-flags": 4,
+        "default-value-type": 2,
+        "displaylogic-evaluable": 5,
+        "displaylogic-valid": 5,
+        "field-presence": 26,
+        "field-type": 26,
         "rule-declared": 52,
         "selector-endpoint": 5,
-        "system-field": 63,
-        "visibility": 3
+        "system-field": 66,
+        "visibility": 4
       },
       "byRunner": {
-        "node": 157,
+        "node": 197,
         "junit": 0
       }
     }
