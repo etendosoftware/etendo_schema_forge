@@ -157,7 +157,7 @@ const headerCriteria = (url = lastHeaderUrl()) => JSON.parse(headerParams(url).g
 // render helper
 // ---------------------------------------------------------------------------
 
-function renderPanel({ data = {}, apiBaseUrl = API_BASE, ...fetchOpts } = {}) {
+function renderPanel({ data = {}, apiBaseUrl = API_BASE, props = {}, ...fetchOpts } = {}) {
   installFetch(fetchOpts);
   return render(
     <ReversedInvoicesPanel
@@ -171,6 +171,7 @@ function renderPanel({ data = {}, apiBaseUrl = API_BASE, ...fetchOpts } = {}) {
       api={{}}
       catalogs={{}}
       isActive
+      {...props}
     />
   );
 }
@@ -932,6 +933,17 @@ describe('TC-09 — processed completed invoice renders the panel read-only', ()
 
     expect(screen.queryByTestId('btn__addReversedInvoice')).not.toBeInTheDocument();
     expect(screen.queryByTestId('btn__addFirstRectificacion')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('btn__deleteLine')).not.toBeInTheDocument();
+
+    await expandFirstRow();
+    expect(screen.getByTestId('checkbox__isCorrective')).toBeDisabled();
+  });
+
+  it('ETP-5830: a read-only role gets the same locked panel on a draft invoice', async () => {
+    renderPanel({ lines: [LINE()], props: { accessReadOnly: true } });
+    await screen.findAllByText('10000067');
+
+    expect(screen.queryByTestId('btn__addReversedInvoice')).not.toBeInTheDocument();
     expect(screen.queryByTestId('btn__deleteLine')).not.toBeInTheDocument();
 
     await expandFirstRow();

@@ -694,6 +694,7 @@ export default function ReversedInvoicesPanel({
   onGoToSavedRecord,
   autoOpenAdd,
   restoreDraft,
+  accessReadOnly = false,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -1044,7 +1045,7 @@ export default function ReversedInvoicesPanel({
   // get add/edit/delete — only explicit false blocks, so unsaved records
   // (field not yet enriched by the backend) keep the actions
   const notRectificative = data?.isRectificative === false || data?.isRectificative === 'false';
-  const isReadOnly = (processed && !isVoid) || notRectificative;
+  const isReadOnly = accessReadOnly || (processed && !isVoid) || notRectificative; // ETP-5830: role tier
 
   // ── render ─────────────────────────────────────────────────────────────────
   const showEmptyState = !loading && lines.length === 0 && !addingLine;

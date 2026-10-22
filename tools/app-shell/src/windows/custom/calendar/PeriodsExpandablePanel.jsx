@@ -120,7 +120,7 @@ async function postAction(apiFetch, path, fieldValues) {
   return res.json();
 }
 
-export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
+export default function PeriodsExpandablePanel({ parentId, apiBaseUrl, readOnly = false }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -291,7 +291,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
               <Checkbox
                 checked={allSelected}
                 indeterminate={selectedPeriods.length > 0 && !allSelected}
-                disabled={bulkRunning || selectablePeriods.length === 0}
+                disabled={readOnly || bulkRunning || selectablePeriods.length === 0}
                 onChange={toggleAllPeriods}
                 aria-label={ui('periodsSelectAll')}
                 data-testid="period-select-all"
@@ -316,7 +316,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
                 <TableCell className="w-10" data-testid={`period-select-cell-${period.id}`}>
                   <Checkbox
                     checked={selected}
-                    disabled={!selectable || bulkRunning}
+                    disabled={readOnly || !selectable || bulkRunning}
                     onChange={() => togglePeriodSelection(period.id)}
                     aria-label={ui('periodsSelectPeriod').replace('{name}', formatPeriodName(period, locale))}
                     data-testid={`period-select-${period.id}`}
@@ -340,7 +340,8 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
                     data-testid="Tag__711967" />
                 </TableCell>
                 <TableCell className="text-right" data-testid="TableCell__711967">
-                  <Button
+                  {/* ETP-5830 — a read-only role sees the periods but cannot open/close them. */}
+                  {!readOnly && <Button
                     type="button"
                     variant="outline"
                     size="sm"
@@ -349,7 +350,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
                     disabled={periodPending}
                   >
                     {ui('openClosePeriod')}
-                  </Button>
+                  </Button>}
                 </TableCell>
               </TableRow>
             );

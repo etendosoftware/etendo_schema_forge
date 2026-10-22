@@ -31,6 +31,12 @@
 # Copying the core's templates/ after this repo's would silently reintroduce
 # an already-fixed rendering bug.
 #
+# This repo's helpers also import `report-i18n` from the PUBLISHED CLI package,
+# which the image does not install; step 2b below rewrites that single import to
+# the relative form (the variant the cross-repo parity contract allows), because
+# core's `cli/src` is part of this context. Skipping it produces an image that
+# dies on startup — see step 2b's comment.
+#
 # USAGE
 #   ./scripts/assemble-report-server-context.sh <output-dir> [--clean]
 #   CORE_DIR=/path/to/schema_forge_core ./scripts/assemble-report-server-context.sh /tmp/ctx
@@ -115,6 +121,30 @@ cp -R "$CORE_DIR/cli/src" "$OUT_DIR/cli/src"
 rm -rf "$OUT_DIR/artifacts" "$OUT_DIR/templates"
 cp -R "$REPO_ROOT/artifacts" "$OUT_DIR/artifacts"
 cp -R "$REPO_ROOT/templates" "$OUT_DIR/templates"
+
+# 2b. Make the copied helper module resolvable in this tree.
+#
+# The canonical `templates/reports/helpers/report-html-helpers.js` imports the shared
+# report-i18n module from the PUBLISHED `@etendosoftware/schema-forge-cli` package, which
+# this image does not install (`tools/report-server/package.json` has three deps). The
+# assembled tree is the hybrid the mirror form exists for: core's `cli/src` was copied
+# above, so the RELATIVE specifier — the one variant the cross-repo parity contract
+# allows — resolves here. Without this rewrite the container dies on startup with
+# `ERR_MODULE_NOT_FOUND: Cannot find package '@etendosoftware/schema-forge-cli'` before
+# answering a single request (ETP-4910: it had been unbootable since ETP-5013 switched
+# the canonical copy to the package specifier, unnoticed because this job's deploy steps
+# are skipped while the AWS variables are unset).
+#
+# The rewrite itself lives in scripts/sync-report-helpers.mjs, which owns the definition
+# of the two forms (parity.json records both) — never re-implement it here.
+node "$REPO_ROOT/scripts/sync-report-helpers.mjs" --relativize-import "$OUT_DIR"
+
+if grep -rq --include="*.js" "@etendosoftware/schema-forge-cli" "$OUT_DIR/templates/reports/helpers/"; then
+  echo "ERROR: the assembled helpers still import a package this image does not install." >&2
+  echo "       templates/reports/helpers/report-html-helpers.js must carry the relative" >&2
+  echo "       '../../../cli/src/report-i18n.js' specifier in the context (see step 2b)." >&2
+  exit 1
+fi
 
 # 3. Drift guard.
 #
