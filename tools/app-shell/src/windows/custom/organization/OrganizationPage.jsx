@@ -18,6 +18,8 @@ import OrgLogoField from './OrgLogoField.jsx';
 import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
 import ActividadesIaeSection from './ActividadesIaeSection.jsx';
+import Modelo390IdentitySection from './Modelo390IdentitySection.jsx';
+import { isEtendoTrue, getAeat390IdentityErrors, buildAeat390InfoPayload } from './representanteLegal.js';
 // ETP-5391 — reused as-is from fiscal-config (NOT forked): the backend
 // (`GET/POST/DELETE /sws/neo/certificate?orgId=...`, NeoCertificateHelper.java) is
 // already organization-scoped, not per fiscal system, so the same component that
@@ -49,6 +51,13 @@ const emptyForm = {
   email: '',
   phone: '',
   web: '',
+  // Modelo 390 identity (ETP-5716) — AD_OrgInfo EM_AEAT390_* columns.
+  aeat390Isperson: false,
+  aeat390Firstname: '',
+  aeat390Surname1: '',
+  aeat390Surname2: '',
+  aeat390RepNif: '',
+  aeat390RepName: '',
 };
 
 // BUG-1 (QA rejection round): the backend rejects (500) when a required field is blank —
@@ -98,6 +107,11 @@ function getTaxIdErrorKey(form) {
   return getTaxIdError(form.taxID);
 }
 
+// ETP-5716 — the Modelo 390 natural-person identity (Nombre / Primer apellido required, the
+// representative NIF and name both-or-neither, a non-empty representative NIF must be valid) is
+// checked by `getAeat390IdentityErrors` in representanteLegal.js — only while "Persona física"
+// is on, the fields are hidden otherwise.
+
 const EMAIL_FIELD_DESCRIPTOR = { key: 'email' };
 const WEBSITE_FIELD_DESCRIPTOR = { key: 'web', inputPrefix: 'https://' };
 const PHONE_FIELD_DESCRIPTOR = { key: 'phone' };
@@ -133,6 +147,12 @@ function buildFormFromData(header, info) {
     email: info?.etgoEmail ?? '',
     phone: info?.etgoPhone ?? '',
     web: info?.etgoWeb ?? '',
+    aeat390Isperson: isEtendoTrue(info?.aeat390Isperson),
+    aeat390Firstname: info?.aeat390Firstname ?? '',
+    aeat390Surname1: info?.aeat390Surname1 ?? '',
+    aeat390Surname2: info?.aeat390Surname2 ?? '',
+    aeat390RepNif: info?.aeat390RepNif ?? '',
+    aeat390RepName: info?.aeat390RepName ?? '',
   };
 }
 
@@ -141,15 +161,29 @@ function buildFormFromData(header, info) {
  * (sentence-case title + description) and a flexible right column (fields).
  * `divider` draws the border between sections — every section but the last one.
  */
+/** DOM ids of the sections another window can deep-link to (`/organization#<id>`). */
+export const ORG_SECTION_ANCHOR = Object.freeze({
+  fiscal: 'org-section-fiscal',
+  iae: 'org-section-iae',
+  modelo390: 'org-section-390',
+});
+
+/** The section id a location hash names (`#org-section-iae`), or `null` when it names none. */
+export function sectionAnchorFromHash(hash) {
+  const id = String(hash ?? '').replace(/^#/, '');
+  return Object.values(ORG_SECTION_ANCHOR).includes(id) ? id : null;
+}
+
 function FieldError({ message, testId }) {
   if (!message) return null;
   return <p role="alert" className="text-xs text-destructive mt-0.5" data-testid={testId}>{message}</p>;
 }
 
-function SectionRow({ titleKey, descKey, divider = true, testId, children }) {
+function SectionRow({ titleKey, descKey, divider = true, testId, anchorId, children }) {
   const ui = useUI();
   return (
     <section
+      id={anchorId}
       className={
         'grid gap-2 py-4' + (divider ? ' border-b border-border' : '')
       }
@@ -193,6 +227,14 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       setSeededBaseline(JSON.stringify(seeded));
     }
   }, [loading, error, header, info]);
+
+  // Deep link to a section (`/organization#org-section-iae`, e.g. "Editar en Organización" from a
+  // Modelo 390 incident, ETP-5716): once the page is rendered, scroll to it.
+  useEffect(() => {
+    if (loading || error) return;
+    const anchor = sectionAnchorFromHash(typeof window !== 'undefined' ? window.location.hash : '');
+    if (anchor) document.getElementById(anchor)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }, [loading, error]);
 
   const baseline = useMemo(() => buildFormFromData(header, info), [header, info]);
   const isDirty = useMemo(
@@ -239,6 +281,13 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       toast.error(ui(taxIdErrorKey));
       return;
     }
+    const identityErrors = getAeat390IdentityErrors(form);
+    const identityErrorFields = Object.keys(identityErrors);
+    if (identityErrorFields.length > 0) {
+      setFieldErrors(Object.fromEntries(identityErrorFields.map(f => [f, ui(identityErrors[f])])));
+      toast.error(ui(identityErrors[identityErrorFields[0]]));
+      return;
+    }
     const formatErrorKey = getInvalidFormatErrorKey(form);
     if (formatErrorKey) {
       toast.error(ui(formatErrorKey));
@@ -260,6 +309,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
           etgoEmail: form.email,
           etgoPhone: form.phone,
           etgoWeb: form.web,
+          // Blank → null, representative NIF normalized (buildAeat390InfoPayload).
+          ...buildAeat390InfoPayload(form),
         },
       });
       await refetch();
@@ -393,6 +444,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionFiscal"
           descKey="orgSectionFiscalDesc"
+          anchorId={ORG_SECTION_ANCHOR.fiscal}
           testId="OrganizationPage__section-fiscal"
           data-testid="SectionRow__a5f503">
           <div className="grid grid-cols-2 gap-4">
@@ -582,7 +634,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionIae"
           descKey="orgSectionIaeDesc"
-          divider={false}
+          anchorId={ORG_SECTION_ANCHOR.iae}
           testId="OrganizationPage__section-iae"
           data-testid="SectionRow__a5f503">
           <ActividadesIaeSection
@@ -590,6 +642,26 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             orgId={orgId}
             data-testid="ActividadesIaeSection__a5f503" />
+        </SectionRow>
+
+        {/* Representante legal / Modelo 390 (ETP-5716) — the toggle and the natural-person
+            fields are `information` fields, part of `form` and saved with the page; the
+            representatives grid (shown when the org is not a natural person) persists row by
+            row on its own, like the IAE grid above. See Modelo390IdentitySection.jsx. */}
+        <SectionRow
+          titleKey="orgSection390"
+          descKey="orgSection390Desc"
+          anchorId={ORG_SECTION_ANCHOR.modelo390}
+          divider={false}
+          testId="OrganizationPage__section-390"
+          data-testid="SectionRow__a5f503">
+          <Modelo390IdentitySection
+            form={form}
+            fieldErrors={fieldErrors}
+            onFieldChange={updateField}
+            apiBaseUrl={apiBaseUrl}
+            orgId={orgId}
+            data-testid="Modelo390IdentitySection__a5f503" />
         </SectionRow>
         </div>
       </div>

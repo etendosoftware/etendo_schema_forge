@@ -2896,7 +2896,7 @@ no amount, and its title, banner and buttons are computed:
 | `facturaVenta` | Factura de venta | Factura creada | `soViewInvoice` | feminine | sales-order confirm, goods-shipment invoicing (single / bulk / row Confirmar), sales-quotation «Facturar directamente» |
 | `facturaCompra` | Factura de compra | Factura creada | `poViewInvoice` | feminine | purchase-order confirm, goods-receipt invoicing (single / bulk / row Confirmar) |
 | `facturaRectificativa` | Factura rectificativa | Factura rectificativa creada | `soViewInvoice` | feminine | return-material-receipt |
-| `facturaRectificativaCompra` | Factura rectificativa de compra | Factura rectificativa de compra creada | `poViewInvoice` | feminine | return-to-vendor-shipment |
+| `facturaRectificativaCompra` | Factura rectificativa | Factura rectificativa creada | `poViewInvoice` | feminine | return-to-vendor-shipment (same wording as `facturaRectificativa`; the type only differs in purchases routing / `data-doc-type`) |
 | `devolucionCompra` | Devolución de compra | Devolución de compra creada | `confirmResultModal.view.devolucion` | feminine | goods-receipt «Crear devolución» (opens `/return-to-vendor-shipment/{id}`) |
 | `pedidoVenta` | Pedido de venta | Pedido creado | `sqViewOrder` | masculine | sales-quotation «Crear pedido» |
 

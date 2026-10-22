@@ -174,3 +174,23 @@ describe('FmListPage — declManualDataPatch (ETP-5338 Bug A fix)', () => {
     expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ manualData: null }));
   });
 });
+
+// ETP-5716 — "Crear declaración sustitutiva" (detail page of a presented 390) creates a
+// declaration outside the list: FiscalModelsPage pushes it down as a one-shot `declAdded`, which
+// the list inserts and opens.
+describe('FmListPage — declAdded (ETP-5716)', () => {
+  it('adds the created declaration to the list and opens it, once', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '349': true, '390': true });
+    const existing = makeDecl({ id: '390-2026-ord', model: '390', period: '0A', status: 'submitted_ack' });
+    const onSelect = vi.fn();
+    const { rerender } = render(
+      <FmListPage declarations={[existing]} declAdded={null} {...baseProps} onSelect={onSelect} />
+    );
+    await waitForCatalogLoad();
+    const created = { id: '390-2026-sub', model: '390', year: 2026, period: '0A', type: 'com', status: 'draft', manualData: { identification: { sustitutiva: true } } };
+    rerender(<FmListPage declarations={[existing]} declAdded={{ decl: created }} {...baseProps} onSelect={onSelect} />);
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: '390-2026-sub', type: 'com' })));
+    await waitFor(() => expect(document.querySelectorAll('tbody tr').length).toBe(2));
+  });
+});
+

@@ -1366,6 +1366,22 @@ test.describe('My feature — sales-order', () => {
 - **Per-window expected buttons** — if your overlay/feature is gated by the custom window file (`onClone`, `onEmail`, `menuActions`, `documentPreview`), parametrize the asserts so each window verifies its own wiring (catches regressions where a custom window stops passing a handler).
 - **Numeric field clearing normalises to `defaultValue`** — when a user clears a numeric inline-add or inline-edit field and moves focus away, `DataTable.jsx` and `InlineLinesPanel.jsx` automatically substitute the field's `defaultValue` (or `min` if `defaultValue` is absent) before the save payload is built. In tests, assert the intercepted POST/PATCH body contains the expected numeric value (e.g. `0` for discount, `1` for quantity), never `undefined` or `''`. Do not assert that the input displays empty after blur — it will display the normalised value. See `docs/feedback.md` (ETP-4277) for the full root-cause explanation.
 
+### Mocking the shared `LoginStep` SSO button (Google)
+
+The shared `LoginStep` (`etendo-go-core`) renders its Google button only when
+`getConfiguredSsoProviders()` finds a non-empty `import.meta.env.VITE_GOOGLE_CLIENT_ID`
+(`src/onboarding/sso.js`), and a Vite build bakes that value at build time — so a mocked
+run has no SSO surface unless the E2E build is configured for it. `scripts/run-e2e-full.sh`
+sets a public placeholder for the mocked suite (`VITE_GOOGLE_CLIENT_ID`, a Google Web
+client id is a public identifier, not a secret).
+
+The provider SDK itself is the boundary a spec stubs, the way the unit test mocks
+`onboarding/sso`: define `window.google.accounts.id` with `page.addInitScript` — its
+`initialize` captures the credential callback and its `renderButton` renders a button whose
+click fires that callback. `loadGoogleIdentityScript()` short-circuits on an existing
+`window.google.accounts.id`, so Google's CDN is never contacted. Example:
+`e2e/tests/flows/system/user-invitation.mocked.spec.js`.
+
 ### Gotcha: a route pattern ending in a bare `word**` does NOT match a sub-path after `word`
 
 Playwright's glob matcher treats `**` as "any characters" only where it is written — `**` glued directly onto a literal (no `/` immediately before it) does **not** cross path separators the way you'd expect. `page.route('**/sws/neo/<entity>/header**', ...)` matches `/header` bare and `/header?query=...` (query string is still "more characters" after the literal), but **not** `/header/{id}`, `/header/defaults`, or `/header/action/...` — any URL with an actual `/` after the literal falls through to whatever more-generic route was registered before it (commonly the catch-all `**/sws/**` installed by `login()`), which silently returns an empty/default payload. The failure this produces looks nothing like a mocking bug: disabled buttons, empty tabs, hidden "Add Line", timeouts waiting for data that was "definitely mocked" — because the specific route handler is just never invoked for that request.
