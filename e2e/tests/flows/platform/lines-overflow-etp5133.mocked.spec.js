@@ -659,6 +659,25 @@ async function openFullNameLines(page, win, viewport) {
   return panel;
 }
 
+/**
+ * Waits until the header strip has caught up with the body's horizontal scroll. InlineLinesPanel
+ * copies the body's `scrollLeft` onto the header from the body's `scroll` event, which fires on the
+ * next frame — so right after anything scrolls the body (a click that reveals a cell), the header
+ * still sits at the old offset for a frame. Settled = both offsets equal over two frames in a row.
+ */
+async function waitForHeaderScrollSync(panel) {
+  const body = panel.locator(':scope > div').nth(1);
+  await expect.poll(() => body.evaluate(async (bodyEl) => {
+    const panelEl = bodyEl.parentElement;
+    const headerEl = panelEl.querySelector('[data-testid^="column-header-"]').closest('.overflow-x-hidden');
+    const read = () => [bodyEl.scrollLeft, headerEl.scrollLeft];
+    const first = read();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const second = read();
+    return first[0] === second[0] && second[0] === second[1];
+  }), { message: 'header scroll caught up with the body' }).toBe(true);
+}
+
 /** Clip/scroll facts of a no-truncate cell and everything inside it. */
 function readCellFit(cell) {
   return cell.evaluate((el) => {
@@ -721,12 +740,23 @@ test.describe('Lines grid — long product name shown in full and aligned (QA F-
         await shortRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).click();
         await expect(shortRow.getByTestId('field-product')).toBeVisible();
         // Clicking a cell that sits partly past the grid's right edge scrolls the body to reveal it
-        // (narrow viewports, the side panel) and the header follows — so re-read the header here.
+        // (narrow viewports, the side panel) and the header follows — so re-read the header here,
+        // once it has caught up: it mirrors the body from the body's `scroll` event, one frame later.
+        await waitForHeaderScrollSync(panel);
         const headerNextInEdit = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
         const editNext = await shortRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).boundingBox();
         expect(Math.abs(editNext.x - headerNextInEdit.x), `${NEXT_COLUMN_KEY} x header vs edit row`).toBeLessThanOrEqual(1);
-        const editProduct = await shortRow.locator('[data-cell-key="product"]').boundingBox();
-        expect(Math.abs(editProduct.width - headerProduct.width), 'product width header vs edit row').toBeLessThanOrEqual(1);
+        // The edit row swaps the read cell for the LookupTrigger; compare once that render settled,
+        // against the header as it is now (a real misalignment still times out and fails here).
+        await expect.poll(async () => {
+          const [editProduct, headerNow] = await Promise.all([
+            shortRow.locator('[data-cell-key="product"]').boundingBox(),
+            panel.getByTestId('column-header-product').boundingBox(),
+          ]);
+          return Math.abs(editProduct.width - headerNow.width);
+        }, { message: 'product width header vs edit row' }).toBeLessThanOrEqual(1);
+        expect(Math.abs((await panel.getByTestId('column-header-product').boundingBox()).width - headerProduct.width),
+          'entering edit mode must not resize the product column').toBeLessThanOrEqual(1);
         await page.keyboard.press('Escape');
 
         // 5. ...and in the open add-row (DataTable's `<colgroup>`): the add-row cells lead with the
