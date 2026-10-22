@@ -121,6 +121,10 @@ export function CurrencyRatePicker({
   const hasRecord = recordId && recordId !== 'new';
   const fetchId = hasRecord ? recordId : 'new';
   const rateDate = rateDateField ? toCalendarISO(formData?.[rateDateField]) : null;
+  // The form's organization scopes the rates (a NEW document has no saved org yet, and its org can
+  // differ from the session's), so the list rate matches the rate the save will compute.
+  const rawOrg = formData?.organization;
+  const organizationId = typeof rawOrg === 'string' ? rawOrg : (rawOrg?.id ?? null);
 
   const selectedOption = options.find(o => o.id === value);
   const isOrgCurrency = selectedOption?.isOrgCurrency === true;
@@ -144,7 +148,10 @@ export function CurrencyRatePicker({
     if (!apiBaseUrl) return undefined;
     let cancelled = false;
     setLoading(true);
-    const query = rateDate ? `?date=${encodeURIComponent(rateDate)}` : '';
+    const params = new URLSearchParams();
+    if (rateDate) params.set('date', rateDate);
+    if (organizationId) params.set('organization', organizationId);
+    const query = params.toString() ? `?${params.toString()}` : '';
     (async () => {
       try {
         const res = await apiFetch(`/${entityPath}/${fetchId}/action/currencyOptions${query}`, { token });
@@ -159,7 +166,7 @@ export function CurrencyRatePicker({
       }
     })();
     return () => { cancelled = true; };
-  }, [fetchId, rateDate, reloadKey, entityPath, apiBaseUrl, token, apiFetch]);
+  }, [fetchId, rateDate, organizationId, reloadKey, entityPath, apiBaseUrl, token, apiFetch]);
 
   // Auto-focus the search input when dropdown opens
   useEffect(() => {

@@ -333,12 +333,12 @@ The behavior is identical to Sales Order — see
   synchronized with the saved currency/date so that newly added lines have their
   prices converted automatically from the pricelist currency to the order
   currency.
-- The header callout raises a separate `noExchangeRateAvailable` warning on the
-  same event. Since ETP-4838 both checks resolve availability through
-  `NeoExchangeRateService.hasRate(...)` — client-or-system scoped, with the
-  inverse-direction fallback — so they can no longer disagree. See
-  `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of
-  truth".
+- The header callout no longer raises a `noExchangeRateAvailable` warning
+  (ETP-5840): on a change of `currency` or `orderDate` it returns the
+  recalculated rate as `updates.eTGOCurrencyRate` (`null` when no conversion
+  range covers the quotation date). See `sales-order.md` §
+  "`NeoExchangeRateService.hasRate` — the single source of truth" for the
+  history.
 
 ### Automated evidence
 

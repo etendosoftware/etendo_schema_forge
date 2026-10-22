@@ -247,15 +247,15 @@ Two *different* server paths answer "is there a rate?" for the same currency cha
 | Path | Trigger | Effect |
 |---|---|---|
 | `GET /sws/neo/validate-exchange-rate` | the frontend, before applying the dropdown change — **removed by ETP-5840** | (formerly) reverted the dropdown + `noConversionRateError` toast |
-| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | appends a `WARNING` message `noExchangeRateAvailable` |
+| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | (ETP-4838–ETP-5840) appended a `WARNING` message `noExchangeRateAvailable`; **since ETP-5840** it returns the recalculated rate instead, as `updates.eTGOCurrencyRate = {"value": rate\|null}` (`DocumentCurrencyRate.applyToCallout`) |
 
-Both now resolve availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error. They can no longer disagree.
+Until ETP-5840 both resolved availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error — so they could not disagree. Today neither surface asks "is there a rate?": the callout computes the rate itself and a missing one is refused at save/complete (`ETGO_ExchangeRateMissingOnSave` / `…OnComplete`, see `docs/ui-customization.md` §22).
 
 Before ETP-4838 the callout path ran its own private copy of the query in `AbstractOrderHeaderHandler` and `AbstractInvoiceHeaderHandler`, filtered by `ad_client_id = ?` only. Once ETP-4474 moved the currencyLayer rates to the System client, those copies stopped finding them: the frontend accepted the change (`hasRate: true`) while the callout warned "no rate available" for the very same pair and date. The warning was cosmetic — the document completed and posted with the correct rate — but it fired on **every** manual currency change across purchase orders, sales orders, sales quotations, and both invoice windows.
 
 The warning only ever fires when the user edits the `currency` field by hand. The common flow, where the price list sets the currency, never sets `currency` as the callout trigger field — which is why the regression went unnoticed for three weeks.
 
-**Open follow-up:** the callout returns the i18n *key* (`noExchangeRateAvailable`), not a sentence, and `useCallout.js` toasts it verbatim — so on the (now rare) occasions the warning is legitimate, the user sees the raw camelCase key. Tracked separately; ETP-4838 covers only the false positive.
+**Resolved by ETP-5840:** the callout used to return the i18n *key* (`noExchangeRateAvailable`) as a warning, which `useCallout.js` toasted verbatim. The warning is gone — the callout now answers with `updates.eTGOCurrencyRate` (the rate valid on the order date, or `null`) — and the `noExchangeRateAvailable` / `noConversionRateError` locale keys were removed.
 
 ### Currency change handling (ETP-4027 functional model)
 

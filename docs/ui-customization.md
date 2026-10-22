@@ -2966,7 +2966,8 @@ threads `documentDateField` into the header `<Form>` calls; no generator change 
 
 **Behavior**
 
-- Options come from `GET {entity}/{id|new}/action/currencyOptions?date=yyyy-MM-dd`, fetched
+- Options come from `GET {entity}/{id|new}/action/currencyOptions?date=yyyy-MM-dd&organization=<form org>`
+  (the org scopes a NEW document's rates; a saved one uses its own org), fetched
   eagerly on load and again whenever the record or the reference date changes, plus on every
   open. ALL selectable currencies are listed; one with no range on the date has `rate: null`
   and shows «—» (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
