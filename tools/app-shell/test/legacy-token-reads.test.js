@@ -62,10 +62,11 @@ function stripComments(source) {
 }
 
 /**
- * A read is a legacy key inside a storage accessor call. Matching the storage API as well as
- * the bare key means a bare mention in real code (`const k = 'sf_auth_token'`) is caught too,
- * while the same string passed to something unrelated (a label, a test fixture outside
- * `__tests__`) still surfaces for a human to judge.
+ * A read is a legacy key handed to a storage accessor: `localStorage.getItem('sf_auth_token')`
+ * or the bracket form `localStorage['sf_admin_token']`. Anchoring on the storage API (rather than
+ * on the bare key alone) is deliberate — a bare key mention in real code can be a label or an
+ * unrelated constant, while a key reaching a storage accessor is unambiguously a credential
+ * lookup. That is why both the `getItem` call form and the property-access form are listed.
  */
 const LEGACY_READ = new RegExp(
   `(?:localStorage|sessionStorage)\\s*\\.\\s*getItem\\s*\\(\\s*['"\`](?:${LEGACY_KEYS.join('|')})['"\`\\s]`
