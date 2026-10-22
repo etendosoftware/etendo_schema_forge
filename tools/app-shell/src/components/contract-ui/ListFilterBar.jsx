@@ -4,7 +4,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ChevronDown, CalendarDays, Filter, Loader2 } from 'lucide-react';
 import { useLocale, useUI } from '@etendosoftware/app-shell-core';
 import { useDistinctValues } from '@/hooks/useDistinctValues.js';
-import { compareStatusCodes, statusLabel } from '@/lib/statusBadge.js';
+import { compareStatusCodes, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
+import { StatusTag } from '@/components/ui/status-tag';
 import { AdvancedFilterBuilder } from './AdvancedFilterBuilder.jsx';
 import { DistinctValuesList } from './DistinctValuesList.jsx';
 import { DateRangePopoverContent } from '@/components/ui/date-range-popover.jsx';
@@ -16,7 +17,7 @@ import { computePresetRange, toIsoDate } from './datePresetFilter.js';
 // #828FA3; `[&_svg]:` is needed because the core Button forces `[&_svg]:size-4` on its children.
 // The chevron is the exception: `!size-4` (16px box, ~8px glyph as in Figma) must beat the
 // parent `[&_svg]:size-5` selector, which outranks a plain class on the icon itself.
-const TOOLBAR_SELECT_CLASS = 'gap-1.5 text-sm leading-6 font-medium text-[#121217] h-10 px-3 rounded-lg bg-card [&_svg]:size-5 [&_svg]:text-[#828FA3]';
+const TOOLBAR_SELECT_CLASS = 'gap-1.5 text-sm leading-6 font-medium text-[#121217] h-10 px-3 rounded-lg bg-card data-[state=open]:border-[hsl(var(--foreground))] [&_svg]:size-5 [&_svg]:text-[#828FA3]';
 
 /**
  * Quick-filter toolbar rendered above the list table.
@@ -183,23 +184,31 @@ export function ListFilterBar({
     if (c === false) return 'false';
     return c;
   };
+  // ETP-5561 — a code is listed only if it produces a visible label. Whitespace-only
+  // codes (or codes whose label resolves to blank) would otherwise render as empty rows
+  // in the menu, e.g. a window with no records for its status column.
+  const isListableStatusCode = (c) => {
+    if (c == null || String(c).trim() === '') return false;
+    const label = labelForStatus(c);
+    return label != null && String(label).trim() !== '';
+  };
   const mergedStatusCodes = useMemo(() => {
     if (!statusCol) return [];
     const seen = new Set();
     const out = [];
     for (const entry of statusDistinct.values) {
       const c = normalizeCode(entry?.id);
-      if (c == null || c === '') continue;
+      if (!isListableStatusCode(c)) continue;
       if (!seen.has(c)) { seen.add(c); out.push(c); }
     }
     const q = statusDistinct.search.trim().toLowerCase();
     for (const c of inMemoryStatusCodes) {
-      if (seen.has(c)) continue;
+      if (seen.has(c) || !isListableStatusCode(c)) continue;
       if (q && !labelForStatus(c).toLowerCase().includes(q) && !String(c).toLowerCase().includes(q)) continue;
       seen.add(c);
       out.push(c);
     }
-    if (activeStatusCode && !seen.has(activeStatusCode)) {
+    if (activeStatusCode && !seen.has(activeStatusCode) && isListableStatusCode(activeStatusCode)) {
       seen.add(activeStatusCode);
       out.push(activeStatusCode);
     }
@@ -210,6 +219,19 @@ export function ListFilterBar({
     if (!activeStatusCode) return ui('allStatuses');
     return labelForStatus(activeStatusCode);
   }, [activeStatusCode, dictionary, ui]);
+
+  // Same tag (StatusTag + getStatusTone) the grid's status column renders. The wrapper reserves
+  // the right gutter for the selected-row check on every row (no shift) and lets a long label
+  // truncate with an ellipsis instead of overflowing the menu.
+  const renderStatusOption = (code, label) => (
+    <span className="flex min-w-0 max-w-full pr-4" title={label} data-testid="StatusTag__filter-option">
+      <StatusTag
+        status={code}
+        label={label}
+        tone={getStatusTone(code)}
+        className="!inline-block min-w-0 max-w-full truncate tracking-[-0.005em]" />
+    </span>
+  );
 
   const handleStatusSelect = (code) => {
     if (!statusCol) return;
@@ -316,6 +338,7 @@ export function ListFilterBar({
           <PopoverTrigger asChild data-testid="PopoverTrigger__6d5e90">
             <Button
               data-testid="filter-status"
+              aria-haspopup="listbox"
               variant="outline"
               size="sm"
               className={[
@@ -332,12 +355,13 @@ export function ListFilterBar({
               <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__6d5e90">
+          <PopoverContent align="start" className="w-60 p-0" data-testid="PopoverContent__6d5e90">
             <DistinctValuesList
               activeCode={activeStatusCode}
               allLabel={ui('allStatuses')}
               codes={mergedStatusCodes}
               labelFor={labelForStatus}
+              renderOption={renderStatusOption}
               distinct={statusDistinct}
               onSelect={(code) => {
                 handleStatusSelect(code);
@@ -356,6 +380,7 @@ export function ListFilterBar({
           <PopoverTrigger asChild data-testid="PopoverTrigger__6d5e90">
             <Button
               data-testid="filter-type"
+              aria-haspopup="listbox"
               variant="outline"
               size="sm"
               className={[
@@ -372,7 +397,7 @@ export function ListFilterBar({
               <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__6d5e90">
+          <PopoverContent align="start" className="w-60 p-0" data-testid="PopoverContent__6d5e90">
             <DistinctValuesList
               activeCode={activeTypeCode}
               allLabel={ui('allTypes')}

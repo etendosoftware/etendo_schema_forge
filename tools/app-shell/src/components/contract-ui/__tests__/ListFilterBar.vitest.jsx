@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/ListFilterBar.jsx
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 // Not mocked: the real fixed-order catalog, so the expected order is derived
 // from the same source the component sorts with (ETP-4913).
@@ -23,21 +23,31 @@ vi.mock('@/lib/utils', () => ({
 // payload (e.g. to populate the backend-sourced `values` array and exercise
 // the merge loops in mergedTypeCodes/mergedStatusCodes, which the default
 // empty-array mock below never reaches).
-const { distinctValuesOverride } = vi.hoisted(() => ({
+const { distinctValuesOverride, realListFlag } = vi.hoisted(() => ({
   distinctValuesOverride: { current: null },
+  // When true, the REAL DistinctValuesList renders and the distinct hook keeps its own
+  // search state (like the production hook), so menus can be driven end to end.
+  realListFlag: { current: false },
 }));
 
-vi.mock('@/hooks/useDistinctValues.js', () => ({
-  useDistinctValues: () => distinctValuesOverride.current || {
-    values: [],
-    loading: false,
-    loadingMore: false,
-    hasMore: false,
-    search: '',
-    setSearch: () => {},
-    loadMore: () => {},
-  },
-}));
+vi.mock('@/hooks/useDistinctValues.js', async () => {
+  const { useState } = await import('react');
+  return {
+    useDistinctValues: () => {
+      const [search, setSearch] = useState('');
+      const base = distinctValuesOverride.current || {
+        values: [],
+        loading: false,
+        loadingMore: false,
+        hasMore: false,
+        search: '',
+        setSearch: () => {},
+        loadMore: () => {},
+      };
+      return realListFlag.current ? { ...base, search, setSearch } : base;
+    },
+  };
+});
 
 const lastAdvancedFilterBuilderProps = { current: null };
 vi.mock('../AdvancedFilterBuilder.jsx', () => ({
@@ -48,12 +58,16 @@ vi.mock('../AdvancedFilterBuilder.jsx', () => ({
 }));
 
 const lastDistinctValuesListProps = { current: null };
-vi.mock('../DistinctValuesList.jsx', () => ({
-  DistinctValuesList: (props) => {
-    lastDistinctValuesListProps.current = props;
-    return <div data-testid="distinct-values-list" />;
-  },
-}));
+vi.mock('../DistinctValuesList.jsx', async () => {
+  const actual = await vi.importActual('../DistinctValuesList.jsx');
+  return {
+    DistinctValuesList: (props) => {
+      lastDistinctValuesListProps.current = props;
+      if (realListFlag.current) return <actual.DistinctValuesList {...props} />;
+      return <div data-testid="distinct-values-list" />;
+    },
+  };
+});
 
 // Mock the Calendar component
 vi.mock('@/components/ui/calendar.jsx', () => ({
@@ -75,6 +89,7 @@ import { ListFilterBar } from '../ListFilterBar.jsx';
 
 afterEach(() => {
   distinctValuesOverride.current = null;
+  realListFlag.current = false;
 });
 
 const COLUMNS = [
@@ -1212,5 +1227,269 @@ describe('ListFilterBar root — flowInParent', () => {
     // The controls are still rendered, as direct children of the contents root.
     expect(root).toContainElement(screen.getByTestId('filter-advanced'));
     expect(screen.getByText('allStatuses')).toBeInTheDocument();
+  });
+});
+
+
+// Real DistinctValuesList + real Radix popovers: the status/type menus are driven the way a
+// user drives them (mouse and keyboard), instead of through the captured-props stub.
+describe('ListFilterBar status and type menus (real list)', () => {
+  const STATUS_COLS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'documentStatus', label: 'Status', type: 'status' },
+  ];
+  const TYPE_COLS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'docType', label: 'Document Type', type: 'string', isTypeFilter: true },
+  ];
+  const rowsOf = (...codes) => codes.map((c, i) => ({ id: `r${i}`, documentStatus: c }));
+  const distinctOf = (...ids) => ({
+    values: ids.map((id) => ({ id })),
+    loading: false,
+    loadingMore: false,
+    hasMore: false,
+    search: '',
+    setSearch: () => {},
+    loadMore: () => {},
+  });
+
+  beforeEach(() => {
+    realListFlag.current = true;
+  });
+
+  const renderStatus = (props = {}) => render(
+    <ListFilterBar columns={STATUS_COLS} columnFilters={{}} onFilterChange={vi.fn()} {...props} />,
+  );
+  const openStatus = async (user) => {
+    await user.click(screen.getByTestId('filter-status'));
+    return screen.findByRole('listbox');
+  };
+  const optionTexts = () => screen.getAllByRole('option').map((o) => o.textContent);
+
+  describe('trigger and popover chrome', () => {
+    it('declares aria-haspopup="listbox" on both the status and type triggers', () => {
+      render(<ListFilterBar columns={[...STATUS_COLS, TYPE_COLS[1]]} columnFilters={{}} onFilterChange={vi.fn()} />);
+      expect(screen.getByTestId('filter-status')).toHaveAttribute('aria-haspopup', 'listbox');
+      expect(screen.getByTestId('filter-type')).toHaveAttribute('aria-haspopup', 'listbox');
+    });
+
+    it('reflects the open state on the trigger (dark border while open, closed afterwards)', async () => {
+      const user = userEvent.setup();
+      renderStatus({ rows: rowsOf('DR') });
+      const trigger = screen.getByTestId('filter-status');
+      expect(trigger).toHaveAttribute('data-state', 'closed');
+      expect(trigger.className).toContain('data-[state=open]:border-[hsl(var(--foreground))]');
+      await openStatus(user);
+      expect(trigger).toHaveAttribute('data-state', 'open');
+      await user.keyboard('{Escape}');
+      expect(trigger).toHaveAttribute('data-state', 'closed');
+    });
+
+    it('renders both the status and type popover content at w-60', async () => {
+      const user = userEvent.setup();
+      render(<ListFilterBar columns={[...STATUS_COLS, TYPE_COLS[1]]} rows={rowsOf('DR')} columnFilters={{}} onFilterChange={vi.fn()} />);
+      await openStatus(user);
+      expect(screen.getByRole('listbox').closest('[data-testid="PopoverContent__6d5e90"]')).toHaveClass('w-60');
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByTestId('filter-type'));
+      const typeList = await screen.findByRole('listbox');
+      expect(typeList.closest('[data-testid="PopoverContent__6d5e90"]')).toHaveClass('w-60');
+    });
+  });
+
+  describe('blank status codes', () => {
+    it('adds no row for blank backend codes, whitespace in-memory codes or a whitespace active code', async () => {
+      const user = userEvent.setup();
+      distinctValuesOverride.current = distinctOf('', ' ', '\t', 'DR', 'CO');
+      renderStatus({
+        rows: rowsOf('  ', 'DR'),
+        columnFilters: { documentStatus: { mode: 'enumLabel', value: ['   '], originalValue: '   ' } },
+      });
+      await openStatus(user);
+      expect(optionTexts()).toEqual(['allStatuses', 'Draft', 'Complete']);
+    });
+
+    it('shows only the all-statuses row with empty rows and an empty backend list', async () => {
+      const user = userEvent.setup();
+      renderStatus({ rows: [] });
+      await openStatus(user);
+      expect(optionTexts()).toEqual(['allStatuses']);
+      expect(screen.queryByTestId('distinct-values-no-results')).not.toBeInTheDocument();
+    });
+
+    it('still lists valid codes (including booleans), deduped, in the fixed business order', async () => {
+      const user = userEvent.setup();
+      distinctValuesOverride.current = distinctOf('CO', 'DR', true, false, 'DR');
+      renderStatus({ rows: rowsOf('CO', 'VO') });
+      await openStatus(user);
+      const rowsInOrder = screen.getAllByRole('option').slice(1);
+      const tones = rowsInOrder.map((o) => o.querySelector('.status-tag').className.match(/status-tag--(\w+)/)[1]);
+      // false/DR (neutral) precede true/CO (success); VO (destructive) closes the list.
+      expect(tones).toEqual(['neutral', 'neutral', 'success', 'success', 'destructive']);
+      expect(rowsInOrder).toHaveLength(5);
+    });
+
+    it('sorts the same code set identically whatever the arrival order of backend and in-memory codes', async () => {
+      const user = userEvent.setup();
+      distinctValuesOverride.current = distinctOf('VO', 'CO');
+      const first = renderStatus({ rows: rowsOf('DR', 'UE') });
+      await openStatus(user);
+      const a = optionTexts();
+      first.unmount();
+      distinctValuesOverride.current = distinctOf('DR', 'UE');
+      renderStatus({ rows: rowsOf('CO', 'VO') });
+      await openStatus(user);
+      expect(optionTexts()).toEqual(a);
+      expect(a).toHaveLength(5);
+    });
+  });
+
+  describe('search inside the status menu', () => {
+    it('shows only "no results" when the search matches nothing', async () => {
+      const user = userEvent.setup();
+      renderStatus({ rows: rowsOf('DR', 'CO') });
+      await openStatus(user);
+      await user.type(screen.getByRole('combobox'), 'zzzz');
+      expect(await screen.findByTestId('distinct-values-no-results')).toHaveTextContent('noResults');
+      expect(screen.queryAllByRole('option')).toHaveLength(0);
+    });
+
+    it('reopens with an empty search box and the full list after closing mid-search', async () => {
+      const user = userEvent.setup();
+      renderStatus({ rows: rowsOf('DR', 'CO') });
+      await openStatus(user);
+      await user.type(screen.getByRole('combobox'), 'zzzz');
+      await screen.findByTestId('distinct-values-no-results');
+      await user.keyboard('{Escape}');
+      await openStatus(user);
+      expect(screen.getByRole('combobox')).toHaveValue('');
+      expect(optionTexts()).toEqual(['allStatuses', 'Draft', 'Complete']);
+    });
+  });
+
+  describe('status tags', () => {
+    const toneCases = [['CO', 'success'], ['DR', 'neutral'], ['UE', 'warning'], ['VO', 'destructive'], ['true', 'success'], ['false', 'neutral']];
+
+    it.each(toneCases)('renders code %s as a %s tag matching getStatusTone', async (code, tone) => {
+      const user = userEvent.setup();
+      const { getStatusTone } = await import('@/lib/statusBadge.js');
+      expect(getStatusTone(code)).toBe(tone);
+      distinctValuesOverride.current = distinctOf(code);
+      renderStatus();
+      await openStatus(user);
+      const tag = screen.getAllByRole('option')[1].querySelector('.status-tag');
+      expect(tag).toHaveClass(`status-tag--${tone}`);
+      expect(screen.getAllByTestId('StatusTag__filter-option')).toHaveLength(1);
+      expect(screen.getAllByRole('option')[0].querySelector('[data-testid="StatusTag__filter-option"]')).toBeNull();
+    });
+
+    it('selects the code and closes the menu when a tag is clicked', async () => {
+      const user = userEvent.setup();
+      const onFilterChange = vi.fn();
+      renderStatus({ rows: rowsOf('CO'), onFilterChange });
+      await openStatus(user);
+      await user.click(screen.getByText('Complete'));
+      expect(onFilterChange).toHaveBeenCalledWith('documentStatus', { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' });
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it('keeps the check and the coloured tag on the selected row', async () => {
+      const user = userEvent.setup();
+      renderStatus({
+        rows: rowsOf('CO', 'DR'),
+        columnFilters: { documentStatus: { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' } },
+      });
+      await openStatus(user);
+      const selected = screen.getAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true');
+      expect(within(selected).getByTestId('Check__55c679')).toBeInTheDocument();
+      expect(selected.querySelector('.status-tag')).toHaveClass('status-tag--success');
+    });
+
+    it('renders no tag on the all-statuses row', async () => {
+      const user = userEvent.setup();
+      renderStatus({ rows: rowsOf('CO') });
+      await openStatus(user);
+      expect(screen.getAllByRole('option')[0].querySelector('.status-tag')).toBeNull();
+    });
+
+    it('renders no status tag in the type menu', async () => {
+      const user = userEvent.setup();
+      distinctValuesOverride.current = distinctOf('AP', 'AR');
+      render(<ListFilterBar columns={TYPE_COLS} columnFilters={{}} onFilterChange={vi.fn()} />);
+      await user.click(screen.getByTestId('filter-type'));
+      await screen.findByRole('listbox');
+      expect(screen.getAllByRole('option')).toHaveLength(3);
+      expect(document.querySelector('.status-tag')).toBeNull();
+      expect(screen.queryByTestId('StatusTag__filter-option')).not.toBeInTheDocument();
+    });
+
+    it('keeps the trigger label as plain text, not a tag', async () => {
+      renderStatus({
+        rows: rowsOf('CO'),
+        columnFilters: { documentStatus: { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' } },
+      });
+      const trigger = screen.getByTestId('filter-status');
+      expect(trigger).toHaveTextContent('Complete');
+      expect(trigger.querySelector('.status-tag')).toBeNull();
+    });
+
+    it('truncates a long label and exposes it as the wrapper title', async () => {
+      const user = userEvent.setup();
+      // An unmapped code is its own label, so a long code stands in for a long label.
+      const longLabel = 'A_VERY_LONG_UNMAPPED_STATUS_LABEL_THAT_CANNOT_FIT';
+      renderStatus({ rows: rowsOf(longLabel) });
+      await openStatus(user);
+      const row = screen.getAllByRole('option')[1];
+      const tag = row.querySelector('.status-tag');
+      expect(tag).toHaveClass('truncate', 'max-w-full');
+      expect(tag).toHaveTextContent(longLabel);
+      expect(row.querySelector(`[title="${longLabel}"]`)).not.toBeNull();
+    });
+  });
+
+  describe('keyboard flow', () => {
+    it.each([['{Enter}'], [' ']])('Tab to the trigger then %j opens the menu and focuses the combobox input', async (key) => {
+      const user = userEvent.setup();
+      renderStatus({ rows: rowsOf('DR') });
+      await user.tab();
+      // Advanced-filter funnel may precede the status trigger; tab until the trigger has focus.
+      for (let i = 0; i < 5 && document.activeElement !== screen.getByTestId('filter-status'); i += 1) {
+        await user.tab();
+      }
+      expect(screen.getByTestId('filter-status')).toHaveFocus();
+      await user.keyboard(key);
+      expect(await screen.findByRole('combobox')).toHaveFocus();
+    });
+
+    it('ArrowDown twice then Enter selects the option, closes the menu and returns focus to the trigger', async () => {
+      const user = userEvent.setup();
+      const onFilterChange = vi.fn();
+      renderStatus({ rows: rowsOf('DR', 'CO'), onFilterChange });
+      const trigger = screen.getByTestId('filter-status');
+      trigger.focus();
+      await user.keyboard('{Enter}');
+      await screen.findByRole('combobox');
+      await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+      expect(onFilterChange).toHaveBeenCalledWith('documentStatus', { mode: 'enumLabel', value: ['DR'], originalValue: 'DR' });
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
+    it('Escape on a reopened menu closes it and returns focus to the trigger', async () => {
+      const user = userEvent.setup();
+      renderStatus({ rows: rowsOf('DR') });
+      const trigger = screen.getByTestId('filter-status');
+      trigger.focus();
+      await user.keyboard('{Enter}');
+      await screen.findByRole('combobox');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      await user.keyboard('{Enter}');
+      await screen.findByRole('combobox');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
   });
 });
