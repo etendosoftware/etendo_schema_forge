@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isNoTruncateColumn, contentWidthPx, withContentWidths, NO_TRUNCATE_CELL_CHROME_PX,
+  addRowDraftRow, rowsWithDraft,
 } from '../linesContentWidth.js';
 
 // Node has no OffscreenCanvas, so measureTextPx takes the deterministic 8px/char cell estimate.
@@ -56,6 +57,28 @@ describe('linesContentWidth', () => {
     it('returns the same array when nothing changes (stable memo input)', () => {
       const columns = [{ key: 'description', type: 'string' }, LOOKUP];
       assert.equal(withContentWidths(columns, []), columns);
+    });
+  });
+
+  // QA pass 3 — the add-row's picked-but-unsaved identifier, as the pseudo-row both siblings measure.
+  describe('addRowDraftRow / rowsWithDraft', () => {
+    const DESC = { key: 'description', type: 'string' };
+
+    it('keeps only the identifiers of no-truncate columns, never a raw FK id', () => {
+      const values = { product: 'P9', 'product$_identifier': 'Picked', description: 'typed', quantity: 3 };
+      assert.deepEqual(addRowDraftRow([LOOKUP, DESC], values), { 'product$_identifier': 'Picked' });
+    });
+
+    it('is null when nothing has been picked yet', () => {
+      assert.equal(addRowDraftRow([LOOKUP, DESC], { product: 'P9' }), null);
+      assert.equal(addRowDraftRow([LOOKUP], { 'product$_identifier': '' }), null);
+      assert.equal(addRowDraftRow([LOOKUP], undefined), null);
+    });
+
+    it('appends the draft to the saved rows, or returns them untouched without one', () => {
+      const data = [{ id: 'l1' }];
+      assert.equal(rowsWithDraft(data, null), data);
+      assert.deepEqual(rowsWithDraft(data, { 'product$_identifier': 'x' }), [{ id: 'l1' }, { 'product$_identifier': 'x' }]);
     });
   });
 });

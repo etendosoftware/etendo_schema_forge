@@ -16,9 +16,9 @@ import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, listHeaderMinWidthPx, listHeaderFont } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
-import { withContentWidths } from '@/lib/linesContentWidth.js';
+import { withContentWidths, isNoTruncateColumn, addRowDraftRow, rowsWithDraft } from '@/lib/linesContentWidth.js';
 import { useFontsReady } from '@/hooks/useFontsReady.js';
-import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
+import { useLinesScrollHost, useAddRowScrollHostWidth, usePublishLinesAddRowDraft } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
@@ -1210,6 +1210,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
           onKeyDown={handleKeyDown}
           title={lookupTitle}
           drawerKey={drawerKey}
+          noTruncate={isNoTruncateColumn(col)}
           data-testid="LookupField__eb5261" />
       </TableCell>
     );
@@ -1894,7 +1895,7 @@ function coerceFieldValues(valuesRef, fields) {
 /**
  * Inline field that shows selected value and opens modal on click/focus.
  */
-function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContext, token, onSelect, onKeyDown, inputRef, title, drawerKey = 'default', isInvalid }) {
+function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContext, token, onSelect, onKeyDown, inputRef, title, drawerKey = 'default', isInvalid, noTruncate = false }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const Drawer = LOOKUP_DRAWERS[drawerKey] || LOOKUP_DRAWERS.default;
@@ -1935,9 +1936,9 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
           data-testid="Search__eb5261" />
         {value ? (
-          // ETP-5133 — the add-row cell still truncates until the line is saved (the column only
-          // widens to the saved lines' widest value), so the full name stays reachable on hover.
-          <span className="truncate text-foreground" title={typeof value === 'string' ? value : undefined}>{value}</span>
+          // ETP-5133 — a no-truncate column (e.g. the product) is already widened to the picked
+          // value (the add-row draft), so it shows in full; the title stays for every column.
+          <span className={`${noTruncate ? 'whitespace-nowrap' : 'truncate'} text-foreground`} title={typeof value === 'string' ? value : undefined}>{value}</span>
         ) : (
           <span className="truncate text-muted-foreground">{placeholder}</span>
         )}
@@ -3248,6 +3249,14 @@ export function DataTable({
   // their headers when neither any saved row nor the add-row activates them.
   const [addRowValues, setAddRowValues] = useState({});
   useEffect(() => { if (!addRow?.active) setAddRowValues({}); }, [addRow?.active]);
+  // ETP-5133 (QA pass 3) — the identifier the open add-row has picked for a no-truncate column
+  // (e.g. the product), as one pseudo-row: the column widens to it before the line is saved. Kept
+  // stable across unrelated keystrokes (memoized on its serialized form) so neither this table nor
+  // the sibling InlineLinesPanel it is published to re-measures for nothing.
+  const addRowDraftSignature = addRow?.active && (hideHeader || linesLayout === 'inlineEditable')
+    ? JSON.stringify(addRowDraftRow(columns, addRowValues))
+    : 'null';
+  const addRowDraft = useMemo(() => JSON.parse(addRowDraftSignature), [addRowDraftSignature]);
 
   useEffect(() => {
     setOptimisticToggles({});
@@ -3342,8 +3351,8 @@ export function DataTable({
     // ETP-5833 — the lines/add-row modes get the lines-side absorber, applied to the same
     // `visibleColumns` InlineLinesPanel derives, so header, rows and add-row agree on it.
     // ETP-5133 (QA pass 3, F-2) — same for the width of a no-truncate column (e.g. product),
-    // sized for its widest value in `data` exactly as InlineLinesPanel sizes it.
-    if (hideHeader || linesLayout === 'inlineEditable') return withContentWidths(withLinesAbsorberColumn(base), data);
+    // sized for its widest value in `data` (+ the add-row draft) exactly as InlineLinesPanel sizes it.
+    if (hideHeader || linesLayout === 'inlineEditable') return withContentWidths(withLinesAbsorberColumn(base), rowsWithDraft(data, addRowDraft));
     // ETP-5833 (QA) — a list header never wraps, so each column's floor also covers its rendered
     // header: measured from the label the header actually shows (resolved here with the same
     // `resolveColumnLabel`/`t`/locale as renderColumnHeaderCell), never from row data. Header,
@@ -3355,7 +3364,7 @@ export function DataTable({
       ...col,
       headerMinWidthPx: listHeaderMinWidthPx(col, renderedHeaderLabel(col, locale, t), headerFont),
     })));
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout, locale, t, headerFontsReady]);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, addRowDraft, capabilities, hideHeader, linesLayout, locale, t, headerFontsReady]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
   // separators, symbol, right alignment, numeric filter) — it does not by itself
@@ -3494,6 +3503,8 @@ export function DataTable({
   // mode alone), in which case the hook returns null and rendering falls
   // through to the classic in-place `<table>` below, unchanged.
   const addRowScrollHost = useLinesScrollHost(ilpTrailing && addRow?.active ? entity : null);
+  // ETP-5133 (QA pass 3) — hand the add-row draft to the sibling InlineLinesPanel (same key).
+  usePublishLinesAddRowDraft(ilpTrailing && addRow?.active ? entity : null, addRowDraft);
   // ETP-5133 follow-up (BUG-1) — live `clientWidth` of that host, kept in sync
   // via a ResizeObserver; see useAddRowScrollHostWidth's own doc for why it
   // measures on a layout effect. Also called unconditionally, also before the

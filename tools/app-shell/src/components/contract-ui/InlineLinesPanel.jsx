@@ -27,10 +27,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { columnFlex, isLineGridColumn, withLinesAbsorberColumn } from '@/lib/linesColumnWidth.js';
-import { isNoTruncateColumn, withContentWidths } from '@/lib/linesContentWidth.js';
+import { isNoTruncateColumn, withContentWidths, rowsWithDraft } from '@/lib/linesContentWidth.js';
 import { useFontsReady } from '@/hooks/useFontsReady.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
-import { registerLinesScrollHost, unregisterLinesScrollHost } from '@/lib/linesScrollHost.js';
+import { registerLinesScrollHost, unregisterLinesScrollHost, useLinesAddRowDraft } from '@/lib/linesScrollHost.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
@@ -1358,13 +1358,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // derives the same width from the same `columns` + `data` props. `fontsReady`
   // re-measures once the web font has loaded — the same signal DataTable uses,
   // so the rows and the add-row never measure with different faces.
+  // QA pass 3 — `addRowDraft` is the identifier the sibling add-row has picked
+  // but not saved yet (published by DataTable, lib/linesScrollHost.js), so the
+  // column widens on the pick; null again once the add-row closes.
   const fontsReady = useFontsReady();
+  const addRowDraft = useLinesAddRowDraft(entity);
   const visibleColumns = useMemo(
     () => withContentWidths(withLinesAbsorberColumn((columns || []).filter(c => (
       isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
-    ))), data),
+    ))), rowsWithDraft(data, addRowDraft)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fontsReady only triggers the re-measure
-    [columns, hiddenColumns, data, fontsReady]
+    [columns, hiddenColumns, data, addRowDraft, fontsReady]
   );
   // Whether the row reserves the 158px action slot after its last column. Until
   // ETP-5600 the LAST column, when an `amount`, disappeared on hover to make room

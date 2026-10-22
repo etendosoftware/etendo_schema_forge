@@ -26,13 +26,15 @@ const CELL_FONT = '400 14px Inter, system-ui, sans-serif';
 // Per-character estimate where no canvas can measure (jsdom, node): the upper end of Inter 400 at
 // 14px, so the estimate errs wide, never narrow.
 const CELL_FALLBACK_CHAR_PX = 8;
-// Horizontal chrome around the text, sized for the WIDER of the two cell modes so the column does
-// not change width when a line enters edit mode:
+// Horizontal chrome around the text, sized for the WIDEST of the three ways the value is shown, so
+// the column does not change width when a line enters edit mode or the add-row picks a value:
 //  - read mode: the cell's `cellPaddingX` on both sides = 24px;
 //  - edit mode (LookupTrigger): cell padding 3 + 3, button border 1 + 1, button `px-2` 8 + 8,
-//    search icon 14, `gap-2` 8 = 46px.
+//    search icon 14, `gap-2` 8 = 46px;
+//  - add-row (DataTable's LookupField): `<td>` `px-2` 8 + 8, button border 1 + 1, button `px-2`
+//    8 + 8, search icon 14, `gap-2` 8 = 56px.
 // Plus 2px of rounding slack between the measured text and the laid-out glyphs.
-export const NO_TRUNCATE_CELL_CHROME_PX = 48;
+export const NO_TRUNCATE_CELL_CHROME_PX = 58;
 
 /**
  * Whether a lines-grid column shows its full value instead of ellipsizing it. An explicit
@@ -73,4 +75,30 @@ export function withContentWidths(columns, rows) {
     return { ...col, contentWidthPx: px };
   });
   return changed ? next : columns;
+}
+
+/**
+ * The add-row's not-yet-saved values reduced to what the no-truncate width needs: one pseudo-row
+ * holding the picked identifier (`<key>$_identifier`) of every no-truncate column, or `null` when
+ * nothing has been picked. Only identifiers are kept — a raw FK id must never be measured as if
+ * it were the label. DataTable measures `[...data, draft]` for its add-row and publishes the draft
+ * (lib/linesScrollHost.js) so InlineLinesPanel measures the very same rows: one source, one width.
+ */
+export function addRowDraftRow(columns, values) {
+  if (!values) return null;
+  let draft = null;
+  for (const col of columns ?? []) {
+    if (!isNoTruncateColumn(col)) continue;
+    const identifierKey = `${col.key}$_identifier`;
+    const identifier = values[identifierKey];
+    if (typeof identifier !== 'string' || identifier === '') continue;
+    draft = { ...draft, [identifierKey]: identifier };
+  }
+  return draft;
+}
+
+/** `data` plus the add-row draft (when there is one) — the rows a no-truncate column is sized for. */
+export function rowsWithDraft(data, draft) {
+  if (!draft) return data;
+  return [...(data ?? []), draft];
 }

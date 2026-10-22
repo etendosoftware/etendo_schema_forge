@@ -476,8 +476,9 @@ test.describe('ETP-5133 — Lines overflow scoped to avoid sidebar overlap (mock
 // and the open add-row. Overflow of the row is absorbed by the grid's own
 // horizontal scroll, which drags the header along.
 //
-// Known, accepted gap (not asserted): in the add-row BEFORE saving, a picked
-// product label may still truncate (it carries a title tooltip).
+// Picking a product in the add-row BEFORE saving widens the column the same
+// way (the add-row draft, lib/linesScrollHost.js); that path is pinned by
+// linesAddRowColumnAlignment.vitest.jsx, not asserted here.
 // ---------------------------------------------------------------------------
 
 const LONG_PRODUCT = 'Monitor 24" Full HD LG 24M38H-B IPS 1920x1080 75Hz HDMI VGA FreeSync Negro';

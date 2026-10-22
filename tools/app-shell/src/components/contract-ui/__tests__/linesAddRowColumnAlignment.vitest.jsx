@@ -29,7 +29,7 @@
  *
  * Harness/mocks follow linesDateField.vitest.jsx, which renders the same two components.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import React, { createRef } from 'react';
 import { DataTable, growColumnWidth, getTableContainerStyle } from '../DataTable.jsx';
@@ -63,7 +63,13 @@ vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: () => <span data-testid="selector-input" />,
   default: () => null,
 }));
-vi.mock('../ProductSearchDrawer.jsx', () => ({ default: () => null }));
+// The default lookup drawer: renders nothing until opened, then one button that picks the
+// product named by `globalThis.__pickLabel` (the add-row pick tests below set it).
+vi.mock('../ProductSearchDrawer.jsx', () => ({
+  default: ({ open, onSelect }) => (open
+    ? <button type="button" data-testid="drawer-pick" onClick={() => onSelect({ id: 'p9', label: globalThis.__pickLabel })} />
+    : null),
+}));
 
 // ── Column sets ───────────────────────────────────────────────────────────────
 // The real Producto > Costo tab (artifacts/product/generated/web/product/CostingTable.jsx):
@@ -521,5 +527,106 @@ describe('no-truncate lookup column — the widened basis is shared by header, r
     const { headerLayout, addRowLayout } = layoutsFor(optedOut, DATA);
     expect(headerLayout.growBases).toEqual([192, 224]);
     expect(addRowLayout.growBases).toEqual([192, 224]);
+  });
+});
+
+// ── No-truncate column widened by an add-row pick BEFORE save (ETP-5133, QA pass 3) ──
+// The designer's rule is "no ellipsis", and the new line is part of the table (CP-4): picking a
+// long product in the add-row must widen the column right away — header, saved lines and the
+// add-row itself, all from the one shared measurement — and cancelling the add-row must fall back
+// to the width the saved lines dictate. Both siblings are mounted together, exactly as the
+// generated `LinesTable.jsx` does (same `columns` + `data`, same `entity`).
+describe('no-truncate lookup column — an add-row pick widens the column before save', () => {
+  const LONG_PICK = 'Monitor 27" QHD Dell UltraSharp U2723QE con hub USB-C y soporte ergonómico';
+  const COLUMNS = [
+    { key: 'product', column: 'M_Product_ID', type: 'selector', lookup: true, label: 'Product' },
+    { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+    { key: 'quantity', column: 'QtyOrdered', type: 'quantity', label: 'Quantity' },
+  ];
+  // The generated add-line descriptor: the product is a `search` + `lookup` field.
+  const FIELDS = [
+    { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product' },
+    { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+    { key: 'quantity', column: 'QtyOrdered', type: 'quantity', label: 'Quantity' },
+  ];
+  const DATA = [{ id: 'l1', product: 'p1', 'product$_identifier': 'Short', description: 'x', quantity: 1 }];
+  const pickedPx = Math.ceil(contentWidthPx(COLUMNS[0], [{ 'product$_identifier': LONG_PICK }]));
+  const addRowRef = createRef();
+
+  function Siblings({ active }) {
+    return (
+      <>
+        <InlineLinesPanel
+          columns={COLUMNS}
+          data={DATA}
+          entity="lines-pick"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          lineFormActive={active}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />
+        <DataTable
+          columns={COLUMNS}
+          data={DATA}
+          entity="lines-pick"
+          specName="sales-invoice"
+          token="test"
+          apiBaseUrl="/api"
+          selectable
+          hideHeader
+          hideDataRows
+          linesLayout="inlineEditable"
+          addRow={{ ref: addRowRef, active, fields: FIELDS, onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {} }}
+        />
+      </>
+    );
+  }
+
+  function addRowProductColWidth() {
+    const table = screen.getByTestId('inline-add-cell-product').closest('table');
+    // [selection checkbox] [product] ... — the product is the second <col>.
+    return styleProp(table.querySelectorAll('colgroup > col')[1], 'width');
+  }
+
+  async function pickLongProduct() {
+    globalThis.__pickLabel = LONG_PICK;
+    await act(async () => { fireEvent.click(screen.getByTestId('inline-add-field-product')); });
+    await act(async () => { fireEvent.click(screen.getByTestId('drawer-pick')); });
+  }
+
+  afterEach(() => { delete globalThis.__pickLabel; });
+
+  it('the picked identifier needs more than the 192px selector basis (precondition)', () => {
+    expect(pickedPx).toBeGreaterThan(192);
+  });
+
+  it('widens the header, the saved line and the add-row to the picked identifier, with no ellipsis', async () => {
+    render(<Siblings active />);
+    expect(styleProp(screen.getByTestId('column-header-product'), 'flex')).toBe('1 0 192px');
+
+    await pickLongProduct();
+
+    const expectedFlex = `1 0 ${pickedPx}px`;
+    expect(styleProp(screen.getByTestId('column-header-product'), 'flex')).toBe(expectedFlex);
+    const savedCell = screen.getByTestId('line-row-l1').querySelector('[data-cell-key="product"]');
+    expect(styleProp(savedCell, 'flex')).toBe(expectedFlex);
+    // jsdom has no layout, so the measured host is 0px wide: the grow <col> is its bare basis.
+    expect(addRowProductColWidth()).toBe(`${pickedPx}px`);
+
+    const label = screen.getByText(LONG_PICK);
+    expect(label.className).not.toContain('truncate');
+    expect(label).toHaveAttribute('title', LONG_PICK);
+  });
+
+  it('falls back to the width the saved lines dictate when the add-row is cancelled', async () => {
+    const { rerender } = render(<Siblings active />);
+    await pickLongProduct();
+    expect(styleProp(screen.getByTestId('column-header-product'), 'flex')).toBe(`1 0 ${pickedPx}px`);
+
+    rerender(<Siblings active={false} />);
+    expect(styleProp(screen.getByTestId('column-header-product'), 'flex')).toBe('1 0 192px');
   });
 });
