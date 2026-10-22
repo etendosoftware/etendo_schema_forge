@@ -870,12 +870,19 @@ export default function ReversedInvoicesPanel({
   // saved row, so a refusal (e.g. EM_AEAT349_ORIG_NOT_POSTED) cannot flash the fields open and
   // shut again. The row only changes once the re-read after the PATCH has landed.
   const [aeatSavingId, setAeatSavingId] = useState(null);
+  // Synchronous twin of aeatSavingId: two clicks in the same task run before React re-renders, so
+  // the state alone would let the second one through and send a second PATCH. The state only
+  // drives the spinner/disabled UI; this ref is the actual in-flight guard.
+  const aeatInFlightRef = useRef(false);
 
   async function patchAeatGroup(lineId, payload) {
+    if (aeatInFlightRef.current) return;
+    aeatInFlightRef.current = true;
     setAeatSavingId(lineId);
     try {
       await patchLine(lineId, payload);
     } finally {
+      aeatInFlightRef.current = false;
       setAeatSavingId(null);
     }
   }
@@ -891,7 +898,7 @@ export default function ReversedInvoicesPanel({
 
   function handleFieldSave(lineId, line, key, value) {
     if (AEAT_GROUP.includes(key)) {
-      if (aeatSavingId) return;
+      if (aeatSavingId || aeatInFlightRef.current) return;
       // The group is not kept as a pending edit (see aeatSavingId): the row holds server values.
       const val = f => (f === key ? value : line?.[f]);
       const corr = val('aEAT349IsCorrective');

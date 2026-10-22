@@ -1188,6 +1188,19 @@ describe('ETP-5059 — the AEAT-349 group on a saved row, edge cases', () => {
     expect(screen.queryByText(/EUR/)).toBeNull();
     for (const input of screen.getAllByTestId('AmountInput__4395d6')) expect(input.value).not.toMatch(/EUR/);
   });
+
+  it('two synchronous clicks on the corrective box send exactly one PATCH', async () => {
+    renderPanel({ lines: [LINE()], years: YEARS });
+    await expandFirstRow();
+    const el = box();
+
+    // Same task, no render in between: the second click must not slip past the saving guard.
+    el.click(); el.click();
+
+    await waitFor(() => expect(box()).toHaveAttribute('aria-checked', 'true'));
+    expect(patchCalls()).toHaveLength(1);
+    expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
+  });
 });
 
 describe('ETP-5059 — a multi-month draft left on the default period', () => {
