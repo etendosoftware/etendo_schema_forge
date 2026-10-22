@@ -290,7 +290,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, bpId, multiple, sele
 // AEAT349_CINVREV_TRG0 refuses any other. When the calendar has no such year the select offers
 // nothing and the backend's own message (EM_AEAT349_CINVREV_NO_YEAR) explains why on save. While
 // the stored value is empty, the original's year is shown, since that is what the trigger fills.
-function YearPickerSelect({ apiBaseUrl, token, value, displayValue, originalYear, onChange, readOnly }) {
+function YearPickerSelect({ apiBaseUrl, token, value, displayValue, originalYear, onChange, readOnly, disabled = false }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
   const [years, setYears] = useState(null);
@@ -332,7 +332,7 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, originalYear
   return (
     <select
       value={shown}
-      disabled={years === null || options.length === 0}
+      disabled={disabled || years === null || options.length === 0}
       onChange={e => {
         const opt = options.find(y => y.id === e.target.value);
         onChange(e.target.value, opt?.label ?? '');
@@ -367,7 +367,7 @@ function AmountInput({ label, value }) {
 
 // ── AeatGrid ─────────────────────────────────────────────────────────────────
 // Renders the 4 AEAT-349 conditional fields in a 4-column grid.
-function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, readOnly, labelOverrides }) {
+function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, readOnly, saving = false, labelOverrides }) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -400,6 +400,7 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, readOnly, la
           displayValue={data?.['aEAT349CYear$_identifier'] ?? ''}
           originalYear={orig?.year}
           readOnly={readOnly}
+          disabled={saving}
           onChange={(val, lbl) => {
             onChange('aEAT349CYear', val);
             onChange('aEAT349CYear$_identifier', lbl ?? '');
@@ -415,7 +416,7 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, readOnly, la
         </label>
         <select
           value={shownPeriod}
-          disabled={readOnly || periodOptions.length === 0}
+          disabled={readOnly || saving || periodOptions.length === 0}
           data-testid="select__aeat349Period"
           className="flex h-10 w-full rounded-lg border border-border-control bg-card px-3 text-sm focus:outline-none disabled:opacity-70"
           onChange={e => {
@@ -452,6 +453,7 @@ function ExpandedForm({
   onSave,
   saving,
   model349Active,
+  aeatSaving = false,
 }) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
@@ -594,9 +596,10 @@ function ExpandedForm({
               type="button"
               role="checkbox"
               aria-checked={corrective}
-              disabled={readOnly}
+              aria-busy={aeatSaving || undefined}
+              disabled={readOnly || aeatSaving}
               onClick={() => {
-                if (readOnly) return;
+                if (readOnly || aeatSaving) return;
                 const next = corrective ? 'N' : 'Y';
                 onChange('aEAT349IsCorrective', next);
                 onFieldSave?.('aEAT349IsCorrective', next);
@@ -605,11 +608,14 @@ function ExpandedForm({
                 'mt-0.5 h-5 w-5 shrink-0 rounded-sm border border-border-control shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
                 'flex items-center justify-center transition-colors focus-visible:outline-none',
                 corrective ? 'bg-primary text-primary-foreground border-primary' : 'bg-card',
-                readOnly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
+                readOnly || aeatSaving ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
               ].join(' ')}
               data-testid="checkbox__isCorrective"
             >
-              {corrective && (
+              {aeatSaving && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="checkbox__isCorrective-saving" />
+              )}
+              {!aeatSaving && corrective && (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
@@ -632,6 +638,7 @@ function ExpandedForm({
               apiBaseUrl={apiBaseUrl}
               token={token}
               readOnly={readOnly}
+              saving={aeatSaving}
               labelOverrides={labelOverrides}
               data-testid="AeatGrid__4395d6" />
           )}
@@ -767,9 +774,11 @@ export default function ReversedInvoicesPanel({
     ? ui('rectDocPurchase') : ui('rectDocSales');
 
   // ── data fetching ──────────────────────────────────────────────────────────
-  const fetchLines = useCallback(async () => {
+  // `silent`: re-read after a write without swapping the rows for the loading line, so an open
+  // row does not collapse and re-open around every save.
+  const fetchLines = useCallback(async ({ silent = false } = {}) => {
     if (!recordId || !apiBaseUrl) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await apiFetch(`/reversedInvoices?_startRow=0&_endRow=200`);
       if (!res.ok) return;
@@ -779,7 +788,7 @@ export default function ReversedInvoicesPanel({
       setLines(rows);
       onCountChange?.(rows.length);
     } catch { /* silent */ } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [recordId, apiBaseUrl, token, onCountChange, apiFetch]);
 
@@ -841,9 +850,24 @@ export default function ReversedInvoicesPanel({
         toast.error(msg);
       }
       dropPendingKeys(lineId, payload);
-      fetchLines();
+      await fetchLines({ silent: true });
     } catch {
       toast.error(ui('rectSaveError'));
+    }
+  }
+
+  // Line whose AEAT-349 group is being saved. While set, that row's checkbox and pickers are
+  // disabled and keep showing the SERVER values: the group is never applied optimistically on a
+  // saved row, so a refusal (e.g. EM_AEAT349_ORIG_NOT_POSTED) cannot flash the fields open and
+  // shut again. The row only changes once the re-read after the PATCH has landed.
+  const [aeatSavingId, setAeatSavingId] = useState(null);
+
+  async function patchAeatGroup(lineId, payload) {
+    setAeatSavingId(lineId);
+    try {
+      await patchLine(lineId, payload);
+    } finally {
+      setAeatSavingId(null);
     }
   }
 
@@ -858,18 +882,19 @@ export default function ReversedInvoicesPanel({
 
   function handleFieldSave(lineId, line, key, value) {
     if (AEAT_GROUP.includes(key)) {
-      const edits = { ...(pendingEdits[lineId] || {}), [key]: value };
-      const val = f => edits[f] ?? line?.[f];
+      if (aeatSavingId) return;
+      // The group is not kept as a pending edit (see aeatSavingId): the row holds server values.
+      const val = f => (f === key ? value : line?.[f]);
       const corr = val('aEAT349IsCorrective');
       if (corr !== 'Y' && corr !== true) {
-        patchLine(lineId, { aEAT349IsCorrective: 'N' });
+        patchAeatGroup(lineId, { aEAT349IsCorrective: 'N' });
         return;
       }
       if (key === 'aEAT349IsCorrective') {
-        patchLine(lineId, { aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
+        patchAeatGroup(lineId, { aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
         return;
       }
-      patchLine(lineId, {
+      patchAeatGroup(lineId, {
         aEAT349IsCorrective: 'Y',
         aEAT349CYear: val('aEAT349CYear') || null,
         aEAT349Period: val('aEAT349Period') || null,
@@ -881,6 +906,8 @@ export default function ReversedInvoicesPanel({
   }
 
   function handleChange(lineId, key, value) {
+    // AEAT-349 group keys (and the year's identifier) wait for the server — see aeatSavingId.
+    if (AEAT_GROUP.includes(key) || key === 'aEAT349CYear$_identifier') return;
     setPendingEdits(p => ({ ...p, [lineId]: { ...p[lineId], [key]: value } }));
   }
 
@@ -1120,6 +1147,7 @@ export default function ReversedInvoicesPanel({
                           bpId={data?.businessPartner}
                           recordId={recordId}
                           model349Active={model349Active}
+                          aeatSaving={aeatSavingId === line.id}
                           data-testid="ExpandedForm__4395d6" />
                       </td>
                     </tr>
