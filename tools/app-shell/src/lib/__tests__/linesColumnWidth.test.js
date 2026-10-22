@@ -196,6 +196,25 @@ describe('linesColumnWidth', () => {
         assert.equal(columnFlex({ type: 'selector', contentWidthPx: 0 }, 1), '0 0 192px');
         assert.equal(columnFlex({ type: 'selector' }, 1), '0 0 192px');
       });
+
+      // A lookup that also declares `minWidth` (the GL journal account column, 220px): the larger of
+      // the two wins as the basis, and the `minWidth` branch's grow term (1) is kept at any idx.
+      describe('combined with an explicit minWidth on a lookup (GL journal account)', () => {
+        const ACCOUNT = { type: 'selector', lookup: true, minWidth: 220 };
+
+        it('a measured content wider than minWidth raises the basis and keeps grow', () => {
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 301.2 }, 0), '1 0 302px');
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 301.2 }, 3), '1 0 302px');
+        });
+
+        it('a measured content narrower than minWidth leaves the minWidth basis', () => {
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 180 }, 1), '1 0 220px');
+        });
+
+        it('a measured content equal to minWidth leaves the basis unchanged', () => {
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 220 }, 1), '1 0 220px');
+        });
+      });
     });
 
     // A `boolean`+`badge` column normally gets the generic 152px basis, but the

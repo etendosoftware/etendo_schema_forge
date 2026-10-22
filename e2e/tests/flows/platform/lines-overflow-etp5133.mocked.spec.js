@@ -477,13 +477,62 @@ test.describe('ETP-5133 — Lines overflow scoped to avoid sidebar overlap (mock
 // horizontal scroll, which drags the header along.
 //
 // Picking a product in the add-row BEFORE saving widens the column the same
-// way (the add-row draft, lib/linesScrollHost.js); that path is pinned by
-// linesAddRowColumnAlignment.vitest.jsx, not asserted here.
+// way (the add-row draft, lib/linesScrollHost.js): the add-row DataTable
+// publishes the picked identifier and InlineLinesPanel measures it with the
+// saved lines. Asserted below in the real browser (header / rows / add-row
+// width and the next column's x), and cancelling the add-row falls back to
+// the width the saved lines dictate.
+//
+// purchase-invoice is the CP-7 case: its DetailSidePanel (attachments,
+// 320px) narrows the grid, so the widened row must overflow into the grid's
+// own scroll, not into the side panel.
 // ---------------------------------------------------------------------------
 
 const LONG_PRODUCT = 'Monitor 24" Full HD LG 24M38H-B IPS 1920x1080 75Hz HDMI VGA FreeSync Negro';
+// Longer than LONG_PRODUCT, so picking it in the add-row must widen the column further.
+const LONGER_PICK = `${LONG_PRODUCT} con brazo articulado doble y cable HDMI de 2 metros`;
+const PICK_PRODUCT_ID = 'prod-longer-pick';
 
 const FULL_NAME_WINDOWS = [
+  {
+    slug: 'purchase-invoice',
+    explicitFlag: true,
+    hasSidePanel: true, // decisions.json → attachments: true → DetailSidePanel (CP-7)
+    headerEntity: 'header',
+    lineEntity: 'lines',
+    headerId: 'mock-fullname-pinv-001',
+    header: {
+      id: 'mock-fullname-pinv-001',
+      documentNo: 'PINV-FULLNAME-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      businessPartner: 'bp-1',
+      'businessPartner$_identifier': 'Proveedor Test S.L.',
+      transactionDocument: 'doc-type-ap-invoice',
+      'transactionDocument$_identifier': 'AP Invoice',
+      partnerAddress: 'addr-1',
+      priceList: 'pl-1',
+      paymentTerms: 'pt-1',
+      paymentMethod: 'pm-1',
+      invoiceDate: '2026-08-01',
+      accountingDate: '2026-08-01', // requiredHeaderFields gate "Añadir línea"
+      grandTotalAmount: 382.9,
+      currency: 'eur-1',
+      'currency$_identifier': 'EUR',
+    },
+    lines: [
+      {
+        id: 'pinv-fullname-line-1', product: 'prod-1', 'product$_identifier': 'Aceite de Oliva 1L',
+        description: 'Pedido especial cocina central', invoicedQuantity: 10, listPrice: 12.5,
+        etgoDiscount: 5, tax: 'tax-1', 'tax$_identifier': 'IVA 21%', grossAmount: 118.75,
+      },
+      {
+        id: 'pinv-fullname-line-2', product: 'prod-monitor', 'product$_identifier': LONG_PRODUCT,
+        description: 'Puesto de trabajo', invoicedQuantity: 2, listPrice: 119.0,
+        etgoDiscount: 0, tax: 'tax-1', 'tax$_identifier': 'IVA 21%', grossAmount: 287.98,
+      },
+    ],
+  },
   {
     slug: 'sales-invoice',
     explicitFlag: true,
@@ -560,6 +609,7 @@ const FULL_NAME_WINDOWS = [
 ];
 
 const FULL_NAME_VIEWPORTS = [
+  { width: 1024, height: 768 },
   { width: 1280, height: 800 },
   { width: 1366, height: 768 },
 ];
@@ -582,6 +632,16 @@ async function openFullNameLines(page, win, viewport) {
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ items: [{ id: win.header.partnerAddress, label: 'Sede Central', name: 'Sede Central' }] }),
+  }));
+  // Product selector — feeds the ProductSearchDrawer opened from the add-row's product cell.
+  await page.route('**/selectors/M_Product_ID{/**,}**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      items: [{ id: PICK_PRODUCT_ID, label: LONGER_PICK, name: LONGER_PICK, searchKey: 'MON-ARM', standardPrice: 149 }],
+      hasMore: false,
+      totalCount: 1,
+    }),
   }));
   await page.addInitScript(() => {
     try { localStorage.setItem('sidebar-expanded', 'true'); } catch { /* noop */ }
@@ -631,6 +691,15 @@ test.describe('Lines grid — long product name shown in full and aligned (QA F-
         expect(fit.ellipsized, 'product cell ellipsizes').toBe(0);
         expect(fit.scrollers, 'product cell scrolls on its own').toBe(0);
 
+        // 1b. CP-7 — with the attachments side panel open, the widened grid overflows into its own
+        // scroll; the panel never spills over the side panel.
+        if (win.hasSidePanel) {
+          const sidePanel = page.locator('div[style*="width: 320px"]').first();
+          await expect(sidePanel).toBeVisible();
+          const [panelBox, sideBox] = await Promise.all([panel.boundingBox(), sidePanel.boundingBox()]);
+          expect(panelBox.x + panelBox.width, 'lines grid spills over the side panel').toBeLessThanOrEqual(sideBox.x + 1);
+        }
+
         // 2. Header product cell has the width of the body product cells (both rows).
         const headerProduct = await panel.getByTestId('column-header-product').boundingBox();
         // The column really widened past its 192px selector basis (the name would clip there).
@@ -651,8 +720,11 @@ test.describe('Lines grid — long product name shown in full and aligned (QA F-
         // 4. ...and in an edit row (a click on a cell opens the line for editing).
         await shortRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).click();
         await expect(shortRow.getByTestId('field-product')).toBeVisible();
+        // Clicking a cell that sits partly past the grid's right edge scrolls the body to reveal it
+        // (narrow viewports, the side panel) and the header follows — so re-read the header here.
+        const headerNextInEdit = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
         const editNext = await shortRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).boundingBox();
-        expect(Math.abs(editNext.x - headerNext.x), `${NEXT_COLUMN_KEY} x header vs edit row`).toBeLessThanOrEqual(1);
+        expect(Math.abs(editNext.x - headerNextInEdit.x), `${NEXT_COLUMN_KEY} x header vs edit row`).toBeLessThanOrEqual(1);
         const editProduct = await shortRow.locator('[data-cell-key="product"]').boundingBox();
         expect(Math.abs(editProduct.width - headerProduct.width), 'product width header vs edit row').toBeLessThanOrEqual(1);
         await page.keyboard.press('Escape');
@@ -692,6 +764,60 @@ test.describe('Lines grid — long product name shown in full and aligned (QA F-
         const headerNext = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
         const rowNext = await longRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).boundingBox();
         expect(Math.abs(rowNext.x - headerNext.x), 'header and body scrolled together').toBeLessThanOrEqual(1);
+      });
+
+      test(`add-row pick of a longer product widens the column before save — ${label}`, async ({ page }) => {
+        const panel = await openFullNameLines(page, win, viewport);
+        const shortRow = panel.getByTestId(`line-row-${win.lines[0].id}`);
+        const longRow = panel.getByTestId(`line-row-${win.lines[1].id}`);
+        const rowLead = (await shortRow.getByTestId('dimensions-panel-toggle').count()) > 0 ? 2 : 1;
+        const headerProduct = () => panel.getByTestId('column-header-product').boundingBox();
+
+        await page.getByTestId('action-add-line').click();
+        const addRow = page.getByTestId('inline-add-row');
+        await expect(addRow).toBeVisible();
+        const savedWidth = (await headerProduct()).width;
+
+        // Pick the longer product through the real lookup drawer.
+        await addRow.getByTestId('inline-add-field-product').click();
+        await expect(page.getByTestId('product-search-drawer')).toBeVisible();
+        await page.getByTestId(`product-search-option-${PICK_PRODUCT_ID}`).click();
+        await expect(page.getByTestId('product-search-drawer')).toBeHidden();
+        const productField = addRow.getByTestId('inline-add-field-product');
+        await expect(productField).toContainText(LONGER_PICK);
+
+        // 1. The column widened past the saved lines' width.
+        await expect.poll(async () => (await headerProduct()).width).toBeGreaterThan(savedWidth + 20);
+
+        // 2. The add-row label shows the whole picked name: no ellipsis, no clipping.
+        const fit = await readCellFit(productField);
+        expect(fit.ellipsized, 'add-row product label ellipsizes').toBe(0);
+        expect(fit.overflowing, 'add-row product label overflows its box').toBe(0);
+
+        // 3. Header, both saved rows and the add-row share the widened product width, and the
+        // column after the product keeps one x everywhere.
+        const headerKeys = await panel.locator('[data-testid^="column-header-"]').evaluateAll((els) =>
+          els.map((el) => el.getAttribute('data-testid').replace('column-header-', '')));
+        const addCells = await addRow.evaluate((row) =>
+          [...row.querySelectorAll(':scope > td')].map((c) => { const r = c.getBoundingClientRect(); return { x: r.x, width: r.width }; }));
+        const product = await headerProduct();
+        const headerNext = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
+        for (const row of [shortRow, longRow]) {
+          const productBox = await row.locator('[data-cell-key="product"]').boundingBox();
+          expect(Math.abs(productBox.width - product.width), 'product width header vs row').toBeLessThanOrEqual(1);
+          const nextBox = await row.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).boundingBox();
+          expect(Math.abs(nextBox.x - headerNext.x), `${NEXT_COLUMN_KEY} x header vs row`).toBeLessThanOrEqual(1);
+        }
+        const addProduct = addCells[headerKeys.indexOf('product') + rowLead];
+        const addNext = addCells[headerKeys.indexOf(NEXT_COLUMN_KEY) + rowLead];
+        expect(Math.abs(addProduct.width - product.width), 'product width header vs add-row').toBeLessThanOrEqual(1);
+        expect(Math.abs(addNext.x - headerNext.x), `${NEXT_COLUMN_KEY} x header vs add-row`).toBeLessThanOrEqual(1);
+
+        // 4. Cancelling the add-row drops the draft: the column falls back to the saved lines' width.
+        await productField.focus();
+        await page.keyboard.press('Escape');
+        await expect(addRow).toBeHidden();
+        await expect.poll(async () => Math.round((await headerProduct()).width)).toBe(Math.round(savedWidth));
       });
     }
   }

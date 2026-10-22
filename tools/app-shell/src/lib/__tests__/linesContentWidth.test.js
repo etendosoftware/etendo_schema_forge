@@ -38,6 +38,25 @@ describe('linesContentWidth', () => {
       assert.equal(contentWidthPx(LOOKUP, rows), 26 * CHAR_PX + NO_TRUNCATE_CELL_CHROME_PX);
     });
 
+    // QA gap: a line that only carries the raw FK id (no `$_identifier`, e.g. a row not yet
+    // enriched). `resolveIdentifier` falls back to the raw value, so the column is sized for the
+    // id exactly as the cell renders it. Current behavior, pinned as-is.
+    it('measures the raw id when a line carries no identifier (falls back like the cell)', () => {
+      const rawId = '95E2A8B50A254B2AAE6774B8C2F28120';
+      assert.equal(contentWidthPx(LOOKUP, [{ product: rawId }]), rawId.length * CHAR_PX + NO_TRUNCATE_CELL_CHROME_PX);
+    });
+
+    it('prefers the identifier over the raw id on the same line', () => {
+      const rows = [{ product: '95E2A8B50A254B2AAE6774B8C2F28120', 'product$_identifier': 'Pan' }];
+      assert.equal(contentWidthPx(LOOKUP, rows), 3 * CHAR_PX + NO_TRUNCATE_CELL_CHROME_PX);
+    });
+
+    it('measures a numeric value by its rendered digits, zero included', () => {
+      const col = { key: 'lineNo', type: 'integer', noTruncate: true };
+      assert.equal(contentWidthPx(col, [{ lineNo: 10 }, { lineNo: 12345 }]), 5 * CHAR_PX + NO_TRUNCATE_CELL_CHROME_PX);
+      assert.equal(contentWidthPx(col, [{ lineNo: 0 }]), 1 * CHAR_PX + NO_TRUNCATE_CELL_CHROME_PX);
+    });
+
     it('is 0 with no rows or only empty values', () => {
       assert.equal(contentWidthPx(LOOKUP, []), 0);
       assert.equal(contentWidthPx(LOOKUP, undefined), 0);

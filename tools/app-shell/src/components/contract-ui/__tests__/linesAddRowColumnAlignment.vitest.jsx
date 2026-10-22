@@ -630,3 +630,97 @@ describe('no-truncate lookup column — an add-row pick widens the column before
     expect(styleProp(screen.getByTestId('column-header-product'), 'flex')).toBe('1 0 192px');
   });
 });
+
+// ── No-truncate column follows `data` as it changes (ETP-5133, QA gap) ────────────────────
+// The width is a pure function of the rows both siblings receive: a line whose identifier grows
+// (e.g. after an edit) widens the column, and deleting the longest line shrinks it back — on the
+// header, every saved line AND the sibling add-row `<colgroup>`, re-measured on the same rerender.
+describe('no-truncate lookup column — widens and shrinks as `data` changes', () => {
+  const LONG = 'Impresora Multifunción Láser Color Brother MFC-L8900CDW con fax y dúplex automático';
+  const MEDIUM = 'Teclado mecánico inalámbrico retroiluminado';
+  const COLUMNS = [
+    { key: 'product', column: 'M_Product_ID', type: 'selector', lookup: true, label: 'Product' },
+    { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+    { key: 'quantity', column: 'QtyOrdered', type: 'quantity', label: 'Quantity' },
+  ];
+  const FIELDS = [
+    { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product' },
+    { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+    { key: 'quantity', column: 'QtyOrdered', type: 'quantity', label: 'Quantity' },
+  ];
+  const line = (id, identifier) => ({ id, product: `p-${id}`, 'product$_identifier': identifier, description: 'd', quantity: 1 });
+  const widthFor = (identifier) => Math.ceil(contentWidthPx(COLUMNS[0], [{ 'product$_identifier': identifier }]));
+  const addRowRef = createRef();
+
+  function Siblings({ data }) {
+    return (
+      <>
+        <InlineLinesPanel
+          columns={COLUMNS}
+          data={data}
+          entity="lines-data-change"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          lineFormActive
+          onSelectionChange={vi.fn()}
+          onUpdateRow={vi.fn().mockResolvedValue()}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />
+        <DataTable
+          columns={COLUMNS}
+          data={data}
+          entity="lines-data-change"
+          specName="sales-invoice"
+          token="test"
+          apiBaseUrl="/api"
+          selectable
+          hideHeader
+          hideDataRows
+          linesLayout="inlineEditable"
+          addRow={{ ref: addRowRef, active: true, fields: FIELDS, onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {} }}
+        />
+      </>
+    );
+  }
+
+  /** The product width on all three surfaces: header flex, every saved cell flex, add-row <col>. */
+  function productWidths(ids) {
+    const table = screen.getByTestId('inline-add-cell-product').closest('table');
+    return {
+      header: styleProp(screen.getByTestId('column-header-product'), 'flex'),
+      rows: ids.map((id) => styleProp(
+        screen.getByTestId(`line-row-${id}`).querySelector('[data-cell-key="product"]'), 'flex')),
+      addRow: styleProp(table.querySelectorAll('colgroup > col')[1], 'width'),
+    };
+  }
+
+  it('the fixtures need more than the 192px selector basis, LONG more than MEDIUM (precondition)', () => {
+    expect(widthFor(MEDIUM)).toBeGreaterThan(192);
+    expect(widthFor(LONG)).toBeGreaterThan(widthFor(MEDIUM));
+  });
+
+  it('widens every surface when a line identifier grows', () => {
+    const { rerender } = render(<Siblings data={[line('a', 'Pan'), line('b', 'Sal')]} />);
+    expect(productWidths(['a', 'b'])).toEqual({ header: '1 0 192px', rows: ['1 0 192px', '1 0 192px'], addRow: '192px' });
+
+    rerender(<Siblings data={[line('a', 'Pan'), line('b', LONG)]} />);
+    const px = widthFor(LONG);
+    expect(productWidths(['a', 'b'])).toEqual({ header: `1 0 ${px}px`, rows: [`1 0 ${px}px`, `1 0 ${px}px`], addRow: `${px}px` });
+  });
+
+  it('shrinks every surface to the next-widest line when the longest line is deleted', () => {
+    const { rerender } = render(<Siblings data={[line('a', MEDIUM), line('b', LONG)]} />);
+    expect(productWidths(['a', 'b']).header).toBe(`1 0 ${widthFor(LONG)}px`);
+
+    rerender(<Siblings data={[line('a', MEDIUM)]} />);
+    const px = widthFor(MEDIUM);
+    expect(productWidths(['a'])).toEqual({ header: `1 0 ${px}px`, rows: [`1 0 ${px}px`], addRow: `${px}px` });
+  });
+
+  it('falls back to the 192px basis once only short lines remain', () => {
+    const { rerender } = render(<Siblings data={[line('a', 'Pan'), line('b', LONG)]} />);
+    rerender(<Siblings data={[line('a', 'Pan')]} />);
+    expect(productWidths(['a'])).toEqual({ header: '1 0 192px', rows: ['1 0 192px'], addRow: '192px' });
+  });
+});

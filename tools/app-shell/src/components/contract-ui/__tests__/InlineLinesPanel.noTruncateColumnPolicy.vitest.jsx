@@ -208,6 +208,22 @@ describe('InlineLinesPanel — no-truncate default for lookup selectors (ETP-513
     expect(span).toHaveAttribute('title', LONG_PRODUCT);
   });
 
+  // The opt-out also skips the width measurement: the column keeps its type basis instead of
+  // widening to the long identifier (the arithmetic itself is pinned in
+  // linesAddRowColumnAlignment.vitest.jsx; `columnFlex` is stubbed in this file).
+  it('measures the long identifier for the default lookup, never for one with noTruncate: false', () => {
+    const measuredLong = () => measureTextPx.mock.calls.some(([value]) => value === LONG_PRODUCT);
+
+    measureTextPx.mockClear();
+    const { unmount } = renderPanel({ columns: [LOOKUP_SELECTOR, COLUMNS[1]] });
+    expect(measuredLong()).toBe(true);
+    unmount();
+
+    measureTextPx.mockClear();
+    renderPanel({ columns: [{ ...LOOKUP_SELECTOR, noTruncate: false }, COLUMNS[1]] });
+    expect(measuredLong()).toBe(false);
+  });
+
   it('still truncates a plain (non-lookup) selector column', () => {
     const cell = productCell([{ ...LOOKUP_SELECTOR, lookup: false }, COLUMNS[1]]);
     const span = cell.querySelector('span');
