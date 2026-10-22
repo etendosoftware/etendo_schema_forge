@@ -202,6 +202,9 @@ const ACCEPTED_BY_TARGET = {
     Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
     N: ['No', 'False', '0'],
   },
+  // ETP-5730 — the Yes/No flags of the product import (coded 'true'/'false').
+  stocked: { true: ['Sí', 'Yes', 'Y', '1', 'Verdadero'], false: ['No', 'N', '0', 'Falso'] },
+  returnable: { true: ['Sí', 'Yes', 'Y', '1', 'Verdadero'], false: ['No', 'N', '0', 'Falso'] },
   productType: {
     I: ['Articulo', 'Item', 'Producto', 'Bien'],
     S: ['Servicio', 'Service'],
@@ -300,6 +303,9 @@ describe('the shipped windows resolve their sources', () => {
       salesPrice: 'eTGOSalePrice',
       purchasePrice: 'eTGOPurchasePrice',
       category: 'productCategory$_identifier',
+      taxCategory: 'taxCategory$_identifier',
+      stocked: 'stocked',
+      returnable: 'returnable',
       // ETP-5350 — cost lives on the `costing` entity, not on the product header row, so the
       // descriptor declares both targets sourceless and the export emits an empty cell.
       cost: '',

@@ -106,3 +106,35 @@ describe('ETP-5350 — product cost import i18n keys', () => {
     }
   });
 });
+
+/**
+ * ETP-5730 — Product import: Tax Category and the four Yes/No flags.
+ *
+ * `useUI()` echoes the KEY when a locale has no entry, so a missing one prints the raw key as a
+ * column header of the downloaded template or inside an error shown to the user. See the
+ * sibling `etp5350-product-cost-import-keys` guard for the reasoning behind each family.
+ */
+const PRODUCT_IMPORT_KEYS = [
+  'importHeaderTaxCategory', 'importHeaderStocked', 'importHeaderReturnable',
+  'importExampleProductTaxCategory', 'importExampleYes',
+  'importAcceptedYesNo', 'importFieldStocked', 'importFieldReturnable',
+  'importErrorTaxCategoryUnresolved',
+];
+
+describe('ETP-5730 — product import i18n keys', () => {
+  it.each(Object.entries(DICTIONARIES))('%s declares every key with a non-empty value', (name, dictionary) => {
+    for (const key of PRODUCT_IMPORT_KEYS) {
+      const value = dictionary.genericLabels?.[key];
+      expect(typeof value, `${name}.genericLabels['${key}']`).toBe('string');
+      expect(value.trim(), `${name}.genericLabels['${key}'] is empty`).not.toBe('');
+    }
+  });
+
+  it('translates the error message and keeps the {value} placeholder in every locale', () => {
+    const key = 'importErrorTaxCategoryUnresolved';
+    expect(esES.genericLabels[key]).not.toBe(enUS.genericLabels[key]);
+    for (const [name, dictionary] of Object.entries(DICTIONARIES)) {
+      expect(dictionary.genericLabels[key], `${name} must interpolate {value}`).toContain('{value}');
+    }
+  });
+});
