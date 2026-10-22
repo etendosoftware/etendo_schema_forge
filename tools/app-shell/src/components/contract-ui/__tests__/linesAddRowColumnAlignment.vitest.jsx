@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/lib/linesColumnWidth.js
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/lib/linesContentWidth.js
 /**
  * ETP-5245 — the add-row must reserve the SAME column widths as the header above it.
  *
@@ -33,6 +34,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import React, { createRef } from 'react';
 import { DataTable, growColumnWidth, getTableContainerStyle } from '../DataTable.jsx';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
+import { contentWidthPx } from '@/lib/linesContentWidth.js';
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -147,8 +149,8 @@ function readHeaderLayout() {
  * React wrote without ever going through jsdom's CSSOM, so the calc()
  * expression survives intact.
  */
-function readAddRowLayout(columns) {
-  const html = renderToStaticMarkup(addRowElement(columns));
+function readAddRowLayout(columns, data = []) {
+  const html = renderToStaticMarkup(addRowElement(columns, data));
   const colgroupHtml = /<colgroup>([\s\S]*?)<\/colgroup>/.exec(html)?.[1] ?? '';
   const colTags = colgroupHtml.match(/<col\b[^>]*>/g) ?? [];
   let fixedPx = 0;
@@ -193,11 +195,11 @@ function parseGrowWidth(width) {
   return { fixedPx, basisPx, growCount };
 }
 
-function renderHeader(columns) {
+function renderHeader(columns, data = []) {
   return render(
     <InlineLinesPanel
       columns={columns}
-      data={[]}
+      data={data}
       entity="costing"
       token="test"
       apiBaseUrl="/api"
@@ -213,11 +215,11 @@ function renderHeader(columns) {
 // don't touch `<col>` widths, e.g. the `<td>` count) and `readAddRowLayout`
 // (server-rendered markup — the only reliable way to read a `<col>` width
 // that may contain `max(...)`, see its own doc comment).
-function addRowElement(columns) {
+function addRowElement(columns, data = []) {
   return (
     <DataTable
       columns={columns}
-      data={[]}
+      data={data}
       entity="costing"
       specName="product"
       token="test"
@@ -238,18 +240,18 @@ function addRowElement(columns) {
   );
 }
 
-function renderAddRow(columns) {
-  return render(addRowElement(columns));
+function renderAddRow(columns, data = []) {
+  return render(addRowElement(columns, data));
 }
 
 /** Renders both renderers for the same columns and returns their width budgets. */
-function layoutsFor(columns) {
-  const header = renderHeader(columns);
+function layoutsFor(columns, data = []) {
+  const header = renderHeader(columns, data);
   const headerLayout = readHeaderLayout();
   header.unmount();
 
-  const addRow = renderAddRow(columns);
-  const addRowLayout = readAddRowLayout(columns);
+  const addRow = renderAddRow(columns, data);
+  const addRowLayout = readAddRowLayout(columns, data);
   return { headerLayout, addRowLayout, addRow };
 }
 
@@ -434,5 +436,90 @@ describe('date vs string column basis — saved rows, header and add-row agree',
     expect(headerLayout.growBases).toEqual([224]);
     expect(addRowLayout.growBases).toEqual([224]);
     expect(addRowLayout.calcGrowCount).toBe(1);
+  });
+});
+
+
+// ── No-truncate column widened from data (ETP-5133, QA pass 3 F-2) ───────────────────
+// A lookup selector (`type: 'selector', lookup: true`) is no-truncate by DEFAULT (no explicit
+// `noTruncate` flag — the shape sales-quotation's product is generated with). Its basis is raised
+// to the width of its widest value in `data` (`withContentWidths` → `columnFlex`). The header strip,
+// every saved line AND the sibling add-row `<colgroup>` must all read that SAME widened basis, or
+// the column after the product lands at a different x in the add-row than in the header. The
+// sibling InlineLinesPanel suites stub `columnFlex`, so only this file sees the real arithmetic.
+describe('no-truncate lookup column — the widened basis is shared by header, rows and add-row', () => {
+  const LONG_PRODUCT = 'Monitor 24" Full HD LG 24M38H-B con altavoces integrados y soporte VESA';
+  const LOOKUP_COLUMNS = [
+    { key: 'product', column: 'M_Product_ID', type: 'selector', lookup: true, label: 'Product' },
+    { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+    { key: 'quantity', column: 'QtyOrdered', type: 'quantity', label: 'Quantity' },
+  ];
+  const DATA = [
+    { id: 'l1', product: 'p1', 'product$_identifier': 'Short', description: 'x', quantity: 1 },
+    { id: 'l2', product: 'p2', 'product$_identifier': LONG_PRODUCT, description: 'y', quantity: 2 },
+  ];
+  // Width the widest value needs, chrome included — computed by the real module so the test does
+  // not depend on whether jsdom measures through a canvas or the per-character fallback.
+  const widenedPx = Math.ceil(contentWidthPx(LOOKUP_COLUMNS[0], DATA));
+
+  function renderPanel() {
+    return render(
+      <InlineLinesPanel
+        columns={LOOKUP_COLUMNS}
+        data={DATA}
+        entity="costing"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+  }
+
+  it('the long identifier needs more than the 192px selector basis (precondition)', () => {
+    expect(widenedPx).toBeGreaterThan(192);
+  });
+
+  it('widens the product header and every product cell to the same basis, keeps the plain column at 224px', () => {
+    renderPanel();
+    const expectedFlex = `1 0 ${widenedPx}px`;
+    expect(styleProp(screen.getByTestId('column-header-product'), 'flex')).toBe(expectedFlex);
+    for (const id of ['l1', 'l2']) {
+      const productCell = screen.getByTestId(`line-row-${id}`).querySelector('[data-cell-key="product"]');
+      expect(styleProp(productCell, 'flex')).toBe(expectedFlex);
+      const descCell = screen.getByTestId(`line-row-${id}`).querySelector('[data-cell-key="description"]');
+      expect(styleProp(descCell, 'flex')).toBe('1 0 224px');
+    }
+    expect(styleProp(screen.getByTestId('column-header-description'), 'flex')).toBe('1 0 224px');
+  });
+
+  it('shows the full long identifier with no ellipsis class in read mode', () => {
+    renderPanel();
+    const productCell = screen.getByTestId('line-row-l2').querySelector('[data-cell-key="product"]');
+    expect(productCell.textContent).toBe(LONG_PRODUCT);
+    expect(productCell.querySelector('.truncate')).toBeNull();
+  });
+
+  it('the add-row colgroup grows the product from the SAME widened basis as the header', () => {
+    const { headerLayout, addRowLayout } = layoutsFor(LOOKUP_COLUMNS, DATA);
+    expect(headerLayout.growBases).toEqual([widenedPx, 224]);
+    expect(addRowLayout.growBases).toEqual(headerLayout.growBases);
+    expect(addRowLayout.calcFixedPx).toBe(headerLayout.fixedPx);
+    expect(addRowLayout.calcGrowCount).toBe(2);
+  });
+
+  it('without data the product keeps the default 192px selector basis on both renderers', () => {
+    const { headerLayout, addRowLayout } = layoutsFor(LOOKUP_COLUMNS, []);
+    expect(headerLayout.growBases).toEqual([192, 224]);
+    expect(addRowLayout.growBases).toEqual([192, 224]);
+  });
+
+  it('an explicit noTruncate: false opts the lookup out — no widening on either renderer', () => {
+    const optedOut = [{ ...LOOKUP_COLUMNS[0], noTruncate: false }, ...LOOKUP_COLUMNS.slice(1)];
+    const { headerLayout, addRowLayout } = layoutsFor(optedOut, DATA);
+    expect(headerLayout.growBases).toEqual([192, 224]);
+    expect(addRowLayout.growBases).toEqual([192, 224]);
   });
 });

@@ -1,4 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/lib/linesContentWidth.js
+// @covers tools/app-shell/src/lib/linesColumnWidth.js
 import { test, expect } from '@playwright/test';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { login } from '../../helpers/auth.js';
@@ -455,5 +458,240 @@ test.describe('ETP-5133 — Lines overflow scoped to avoid sidebar overlap (mock
       const outPath = resolve(EVIDENCE_DIR, `ETP-5133-${win.slug}-lines-overlap-after.png`);
       await captureScreenshot(page, { path: outPath, fullPage: false });
     });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// QA pass 3, defect F-2 — a long product name is shown in FULL and the grid
+// stays aligned.
+//
+// The product column is no-truncate (`isNoTruncateColumn`): an explicit
+// `noTruncate: true` on sales-invoice's LinesTable, and BY DEFAULT on
+// sales-quotation (a `type: 'selector', lookup: true` column with no flag).
+// The column widens to its widest value (`withContentWidths` -> `columnFlex`),
+// the one width source the header strip, every line and the sibling add-row
+// `<colgroup>` (DataTable) read — so the cell neither clips nor scrolls on its
+// own, and the column after it keeps one x across header, rows, an edit row
+// and the open add-row. Overflow of the row is absorbed by the grid's own
+// horizontal scroll, which drags the header along.
+//
+// Known, accepted gap (not asserted): in the add-row BEFORE saving, a picked
+// product label may still truncate (it carries a title tooltip).
+// ---------------------------------------------------------------------------
+
+const LONG_PRODUCT = 'Monitor 24" Full HD LG 24M38H-B IPS 1920x1080 75Hz HDMI VGA FreeSync Negro';
+
+const FULL_NAME_WINDOWS = [
+  {
+    slug: 'sales-invoice',
+    explicitFlag: true,
+    headerEntity: 'header',
+    lineEntity: 'lines',
+    headerId: 'mock-fullname-sinv-001',
+    header: {
+      id: 'mock-fullname-sinv-001',
+      documentNo: 'SINV-FULLNAME-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      businessPartner: 'bp-2',
+      'businessPartner$_identifier': 'Cliente Ejemplo S.A.',
+      transactionDocument: 'doc-type-ar-invoice',
+      'transactionDocument$_identifier': 'AR Invoice',
+      partnerAddress: 'addr-2',
+      priceList: 'pl-2',
+      paymentTerms: 'pt-1',
+      paymentMethod: 'pm-1',
+      invoiceDate: '2026-08-01',
+      accountingDate: '2026-08-01', // requiredHeaderFields gate "Añadir línea"
+      grandTotalAmount: 250.4,
+      currency: 'eur-1',
+      'currency$_identifier': 'EUR',
+    },
+    lines: [
+      {
+        id: 'sinv-fullname-line-1', product: 'prod-4', 'product$_identifier': 'Vino Tinto 750ml',
+        description: 'Caja de 6 unidades', invoicedQuantity: 12, listPrice: 9.5,
+        etgoDiscount: 0, tax: 'tax-1', 'tax$_identifier': 'IVA 21%', grossAmount: 137.94,
+      },
+      {
+        id: 'sinv-fullname-line-2', product: 'prod-monitor', 'product$_identifier': LONG_PRODUCT,
+        description: 'Puesto de trabajo', invoicedQuantity: 2, listPrice: 119.0,
+        etgoDiscount: 0, tax: 'tax-1', 'tax$_identifier': 'IVA 21%', grossAmount: 287.98,
+      },
+    ],
+  },
+  {
+    slug: 'sales-quotation',
+    explicitFlag: false,
+    headerEntity: 'quotation',
+    lineEntity: 'quotationLine',
+    headerId: 'mock-fullname-quot-001',
+    header: {
+      id: 'mock-fullname-quot-001',
+      documentNo: 'CQ-FULLNAME-001',
+      documentStatus: 'DR',
+      'documentStatus$_identifier': 'Borrador',
+      businessPartner: 'bp-5',
+      'businessPartner$_identifier': 'Hostelería del Sur S.L.',
+      partnerAddress: 'addr-5',
+      priceList: 'pl-2',
+      paymentTerms: 'pt-1',
+      orderDate: '2026-08-01',
+      validUntil: '2026-09-01',
+      grandTotalAmount: 458.15,
+      currency: 'eur-1',
+      'currency$_identifier': 'EUR',
+    },
+    lines: [
+      {
+        id: 'quot-fullname-line-1', product: 'prod-14', 'product$_identifier': 'Pan Artesanal',
+        description: 'Elaboración diaria', orderedQuantity: 30, listPrice: 3.5,
+        discount: 5, tax: 'tax-2', 'tax$_identifier': 'IVA 10%', lineGrossAmount: 109.73,
+      },
+      {
+        id: 'quot-fullname-line-2', product: 'prod-monitor', 'product$_identifier': LONG_PRODUCT,
+        description: 'Puesto de trabajo', orderedQuantity: 2, listPrice: 119.0,
+        discount: 0, tax: 'tax-1', 'tax$_identifier': 'IVA 21%', lineGrossAmount: 287.98,
+      },
+    ],
+  },
+];
+
+const FULL_NAME_VIEWPORTS = [
+  { width: 1280, height: 800 },
+  { width: 1366, height: 768 },
+];
+
+// The column right after the product in both windows' generated LinesTable.
+const NEXT_COLUMN_KEY = 'description';
+
+async function openFullNameLines(page, win, viewport) {
+  await login(page);
+  await installMocks(page, win);
+  // partnerAddress is a dependent selector that self-heals to the first option returned; answer
+  // with the header's own value so "Añadir línea" (gated on a complete header) keeps rendering.
+  // Registered last: the selector URL also matches the header route.
+  await page.route('**/selectors/C_BPartner_Location_ID/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [{ id: win.header.partnerAddress, label: 'Sede Central', name: 'Sede Central' }] }),
+  }));
+  await page.route('**/selectors/C_BPartner_Location_ID**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [{ id: win.header.partnerAddress, label: 'Sede Central', name: 'Sede Central' }] }),
+  }));
+  await page.addInitScript(() => {
+    try { localStorage.setItem('sidebar-expanded', 'true'); } catch { /* noop */ }
+  });
+  await page.setViewportSize(viewport);
+  await page.goto(`/${win.slug}/${win.headerId}`);
+  await page.waitForSelector('[data-testid="detail-view"]', { timeout: 10_000 }).catch(() => {});
+  await page.getByTestId('tab-lines').click();
+  const panel = page.getByTestId('inline-lines-panel');
+  await panel.waitFor({ timeout: 10_000 });
+  await expect(panel.getByTestId(`line-row-${win.lines[1].id}`)).toBeVisible();
+  // The web font must be in before measuring: the column is sized from the measured text.
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(200);
+  return panel;
+}
+
+/** Clip/scroll facts of a no-truncate cell and everything inside it. */
+function readCellFit(cell) {
+  return cell.evaluate((el) => {
+    const nodes = [el, ...el.querySelectorAll('*')];
+    return {
+      text: el.innerText.trim(),
+      overflowing: nodes.filter((n) => n.scrollWidth > n.clientWidth + 1 && n.clientWidth > 0).length,
+      ellipsized: nodes.filter((n) => getComputedStyle(n).textOverflow === 'ellipsis').length,
+      scrollers: nodes.filter((n) => ['auto', 'scroll'].includes(getComputedStyle(n).overflowX)
+        && n.scrollWidth > n.clientWidth).length,
+    };
+  });
+}
+
+test.describe('Lines grid — long product name shown in full and aligned (QA F-2)', () => {
+  for (const win of FULL_NAME_WINDOWS) {
+    for (const viewport of FULL_NAME_VIEWPORTS) {
+      const label = `${win.slug}${win.explicitFlag ? '' : ' (no explicit noTruncate)'} @${viewport.width}`;
+
+      test(`full product name, header/rows/edit/add-row aligned — ${label}`, async ({ page }) => {
+        const panel = await openFullNameLines(page, win, viewport);
+        const longRow = panel.getByTestId(`line-row-${win.lines[1].id}`);
+        const shortRow = panel.getByTestId(`line-row-${win.lines[0].id}`);
+        const productCell = longRow.locator('[data-cell-key="product"]');
+
+        // 1. The whole name is visible: no clipping, no ellipsis, no scrollbar inside the cell.
+        const fit = await readCellFit(productCell);
+        expect(fit.text).toBe(LONG_PRODUCT);
+        expect(fit.overflowing, 'product cell content overflows its box').toBe(0);
+        expect(fit.ellipsized, 'product cell ellipsizes').toBe(0);
+        expect(fit.scrollers, 'product cell scrolls on its own').toBe(0);
+
+        // 2. Header product cell has the width of the body product cells (both rows).
+        const headerProduct = await panel.getByTestId('column-header-product').boundingBox();
+        // The column really widened past its 192px selector basis (the name would clip there).
+        expect(headerProduct.width).toBeGreaterThan(300);
+        for (const row of [shortRow, longRow]) {
+          const box = await row.locator('[data-cell-key="product"]').boundingBox();
+          expect(Math.abs(box.width - headerProduct.width), 'product width header vs row').toBeLessThanOrEqual(1);
+          expect(Math.abs(box.x - headerProduct.x), 'product x header vs row').toBeLessThanOrEqual(1);
+        }
+
+        // 3. The column after the product keeps one x in header and rows.
+        const headerNext = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
+        for (const row of [shortRow, longRow]) {
+          const box = await row.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).boundingBox();
+          expect(Math.abs(box.x - headerNext.x), `${NEXT_COLUMN_KEY} x header vs row`).toBeLessThanOrEqual(1);
+        }
+
+        // 4. ...and in an edit row (a click on a cell opens the line for editing).
+        await shortRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).click();
+        await expect(shortRow.getByTestId('field-product')).toBeVisible();
+        const editNext = await shortRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).boundingBox();
+        expect(Math.abs(editNext.x - headerNext.x), `${NEXT_COLUMN_KEY} x header vs edit row`).toBeLessThanOrEqual(1);
+        const editProduct = await shortRow.locator('[data-cell-key="product"]').boundingBox();
+        expect(Math.abs(editProduct.width - headerProduct.width), 'product width header vs edit row').toBeLessThanOrEqual(1);
+        await page.keyboard.press('Escape');
+
+        // 5. ...and in the open add-row (DataTable's `<colgroup>`): the add-row cells lead with the
+        // dimensions expand-chevron cell (when the grid has a `dimensionsPanel`, as the saved rows
+        // do) and the checkbox cell, then the columns in header order.
+        const rowLead = (await shortRow.getByTestId('dimensions-panel-toggle').count()) > 0 ? 2 : 1;
+        await page.getByTestId('action-add-line').click();
+        const addRow = page.getByTestId('inline-add-row');
+        await expect(addRow).toBeVisible();
+        const headerKeys = await panel.locator('[data-testid^="column-header-"]').evaluateAll((els) =>
+          els.map((el) => el.getAttribute('data-testid').replace('column-header-', '')));
+        const addCells = await addRow.evaluate((row) =>
+          [...row.querySelectorAll(':scope > td')].map((c) => { const r = c.getBoundingClientRect(); return { x: r.x, width: r.width }; }));
+        const productIdx = headerKeys.indexOf('product') + rowLead;
+        const nextIdx = headerKeys.indexOf(NEXT_COLUMN_KEY) + rowLead;
+        // Re-read the header: opening the add-row must not have moved it.
+        const headerProductNow = await panel.getByTestId('column-header-product').boundingBox();
+        const headerNextNow = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
+        expect(Math.abs(addCells[productIdx].width - headerProductNow.width), 'product width header vs add-row').toBeLessThanOrEqual(1);
+        expect(Math.abs(addCells[nextIdx].x - headerNextNow.x), `${NEXT_COLUMN_KEY} x header vs add-row`).toBeLessThanOrEqual(1);
+      });
+
+      test(`horizontal body scroll moves the header with it — ${label}`, async ({ page }) => {
+        const panel = await openFullNameLines(page, win, viewport);
+        const body = panel.locator(':scope > div').nth(1);
+        const { scrollWidth, clientWidth } = await body.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+        // Precondition: the widened product makes the row overflow, so there is something to scroll.
+        expect(scrollWidth).toBeGreaterThan(clientWidth);
+
+        const longRow = panel.getByTestId(`line-row-${win.lines[1].id}`);
+        const nextBefore = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
+        await body.evaluate((el) => { el.scrollLeft = 120; });
+        await expect.poll(async () => (await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox()).x)
+          .toBeLessThan(nextBefore.x - 100);
+        const headerNext = await panel.getByTestId(`column-header-${NEXT_COLUMN_KEY}`).boundingBox();
+        const rowNext = await longRow.locator(`[data-cell-key="${NEXT_COLUMN_KEY}"]`).boundingBox();
+        expect(Math.abs(rowNext.x - headerNext.x), 'header and body scrolled together').toBeLessThanOrEqual(1);
+      });
+    }
   }
 });
