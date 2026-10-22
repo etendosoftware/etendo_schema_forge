@@ -51,6 +51,12 @@
       "etblkpAccountingstatus",
       "etblkpBulkposting"
     ],
+    "exposeProcesses": false,
+    "readOnlyResources": [
+      "product-costing",
+      "sales-invoice-exchangeRates",
+      "purchase-invoice-exchangeRates"
+    ],
     "failClosed": true
   },
   "entities": {
@@ -957,16 +963,7 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/goodsReceipt/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Goods Receipt",
         "functionalSummary": "This window should let a purchasing user acknowledge that a vendor delivery has physically arrived, capture what was actually received, and complete the receipt so downstream purchasing documents can reflect that intake.",
@@ -2317,16 +2314,12 @@
       "publicApi": true,
       "operations": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "LIST",
-        "PATCH"
+        "LIST"
       ],
       "fields": {
         "cost": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "cost",
           "type": "passthrough",
           "dataType": {
@@ -2338,7 +2331,7 @@
         },
         "starting_date": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "startingDate",
           "type": "passthrough",
           "dataType": {
@@ -2350,7 +2343,7 @@
         },
         "ending_date": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "endingDate",
           "type": "passthrough",
           "dataType": {
@@ -2802,18 +2795,191 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/header/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Purchase Invoice",
+        "functionalSummary": "Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.",
+        "functionalCapabilities": [
+          "Create and edit a purchase invoice header with the supplier, invoice dates, payment terms, payment method, and the supplier invoice reference (`POReference`, displayed as \"Document No.\" / \"Nº documento\") alongside the other payable-identifying fields used by this workflow.",
+          "Add and review invoice lines so the document reflects what the supplier billed, including product, description, quantity, unit price, discount, tax, and line gross amount.",
+          "Review invoice totals at document level, including net amount, gross amount, paid amount, and outstanding amount when those values are available from the header or payment schedule data.",
+          "Inspect the invoice from the list without immediately leaving the list route, then move into full edit mode when needed.",
+          "Understand the payable relationship to the originating purchase order, related goods receipts, and downstream payment-out records.",
+          "Open payment detail flows when the invoice is completed and still has an amount pending.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/purchase-invoice.md"
+      },
+      "source": {
+        "artifact": "purchase-invoice",
+        "contractVersion": "0.5.0",
+        "backendEntity": true
+      }
+    },
+    "purchase-invoice-lines": {
+      "publicName": "purchase-invoice-lines",
+      "specName": "purchase-invoice",
+      "entityName": "lines",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "product": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "product",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Product",
+          "handlerId": null,
+          "relationship": {
+            "resource": "product",
+            "cardinality": "one",
+            "foreignKey": "product"
+          }
+        },
+        "description": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "description",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoiced_quantity": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "invoicedQuantity",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "list_price": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "listPrice",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "discount": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoDiscount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "tax": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "tax",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Tax",
+          "handlerId": null
+        },
+        "uom": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "uOM",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "UOM",
+          "handlerId": null
+        },
+        "gross_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "grossAmount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "project": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "project",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Project",
+          "handlerId": null
+        },
+        "costcenter": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "costcenter",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "CostCenter",
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "purchase-invoice",
+        "entityName": "header",
+        "foreignKey": "invoice",
+        "pathSegment": "lines"
+      },
+      "functional": {
+        "functionalName": "Purchase Invoice — Lines",
         "functionalSummary": "Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.",
         "functionalCapabilities": [
           "Create and edit a purchase invoice header with the supplier, invoice dates, payment terms, payment method, and the supplier invoice reference (`POReference`, displayed as \"Document No.\" / \"Nº documento\") alongside the other payable-identifying fields used by this workflow.",
@@ -2839,11 +3005,7 @@
       "publicApi": true,
       "operations": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "LIST",
-        "PATCH"
+        "LIST"
       ],
       "fields": {
         "currency": {
@@ -2870,7 +3032,7 @@
         },
         "rate": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "rate",
           "type": "passthrough",
           "dataType": {
@@ -2881,7 +3043,7 @@
         },
         "foreign_amount": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "foreignAmount",
           "type": "passthrough",
           "dataType": {
@@ -3149,16 +3311,7 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/header/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Purchase Order",
         "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
@@ -3596,16 +3749,7 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/returnMaterialReceipt/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Return Material Receipt",
         "functionalSummary": "Receive material back into stock after a sales-side return flow. The window is oriented around a receipt header that captures who is returning goods, where the material is received, and which sales order provides the source context, then child lines that record the returned products and quantities against that source document.",
@@ -3919,16 +4063,7 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/returnToVendorShipment/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Return to Vendor Shipment",
         "functionalSummary": "This window should let a purchasing user complete the physical outbound shipment that sends returned goods back to a vendor. It sits after the return-to-vendor authorization step and before any vendor credit-memo settlement, so its business meaning is operational shipment execution rather than commercial approval or invoicing.",
@@ -4358,18 +4493,192 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/header/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Sales Invoice",
+        "functionalSummary": "This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.",
+        "functionalCapabilities": [
+          "browse sales invoices by document number, invoice date, business partner, status, and gross total;",
+          "open an invoice from the list into a lateral preview, then move into full record editing when needed;",
+          "create or update a draft invoice header with at least business partner, partner address, invoice date, payment method, and payment terms;",
+          "add invoice lines with product, invoiced quantity, net unit price, discount, tax, and resulting amounts, or import eligible lines from completed shipments or completed (not fully invoiced) sales orders for the same customer;",
+          "review subtotal, derived tax, and total amounts from the invoice itself;",
+          "inspect installment-level payment-plan data and open payment details from the payment-status badge or preview;",
+          "register or review downstream customer payment activity from the invoice payment modal when payment actions are available;",
+          "clone an invoice and navigate to the new invoice record;"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-invoice.md"
+      },
+      "source": {
+        "artifact": "sales-invoice",
+        "contractVersion": "0.92.0",
+        "backendEntity": true
+      }
+    },
+    "sales-invoice-lines": {
+      "publicName": "sales-invoice-lines",
+      "specName": "sales-invoice",
+      "entityName": "lines",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "product": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "product",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Product",
+          "handlerId": null,
+          "relationship": {
+            "resource": "product",
+            "cardinality": "one",
+            "foreignKey": "product"
+          }
+        },
+        "description": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "description",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoiced_quantity": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "invoicedQuantity",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "list_price": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "listPrice",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "discount": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoDiscount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "tax": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "tax",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Tax",
+          "handlerId": null
+        },
+        "uom": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "uOM",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "UOM",
+          "handlerId": null
+        },
+        "gross_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "grossAmount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "project": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "project",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Project",
+          "handlerId": null
+        },
+        "costcenter": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "costcenter",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Costcenter",
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "sales-invoice",
+        "entityName": "header",
+        "foreignKey": "invoice",
+        "pathSegment": "lines"
+      },
+      "functional": {
+        "functionalName": "Sales Invoice — Lines",
         "functionalSummary": "This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.",
         "functionalCapabilities": [
           "browse sales invoices by document number, invoice date, business partner, status, and gross total;",
@@ -4396,11 +4705,7 @@
       "publicApi": true,
       "operations": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "LIST",
-        "PATCH"
+        "LIST"
       ],
       "fields": {
         "currency": {
@@ -4427,7 +4732,7 @@
         },
         "rate": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "rate",
           "type": "passthrough",
           "dataType": {
@@ -4438,7 +4743,7 @@
         },
         "foreign_amount": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "foreignAmount",
           "type": "passthrough",
           "dataType": {
@@ -4695,16 +5000,7 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/header/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Sales Order",
         "functionalSummary": "This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.",
@@ -5074,16 +5370,7 @@
           "handlerId": null
         }
       },
-      "processes": [
-        {
-          "action": "complete",
-          "method": "POST",
-          "path": "/quotation/:id/action/documentAction",
-          "body": {
-            "docAction": "CO"
-          }
-        }
-      ],
+      "processes": [],
       "functional": {
         "functionalName": "Sales Quotation",
         "functionalSummary": "Let a sales user prepare a customer quotation, review commercial terms before commitment, and turn an accepted quotation into a downstream sales document without re-entering the header and line data.",

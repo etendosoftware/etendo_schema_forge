@@ -9,7 +9,10 @@ import {
   fiscalMonitorWindows,
   generateManifest,
   isCurated,
+  exposeProcesses,
+  isLinesEntity,
   isPublicField,
+  readOnlyResources,
   neverExposedFields,
   publicFieldName,
   publicFunctionalText,
@@ -193,6 +196,77 @@ describe('buildEntity — operations', () => {
   it('keeps every write operation, PATCH included, when the resource has a writable field', () => {
     const entity = build('sales-order', formFields);
     assert.deepEqual([...entity.operations].sort(), ['DELETE', 'GET', 'LIST', 'PATCH', 'POST', 'PUT']);
+  });
+});
+
+describe('buildEntity — conservative base exposure', () => {
+  it('publishes no process while the exposeProcesses policy flag is off', () => {
+    const contract = contractFor('sales-order', formFields);
+    contract.backendContract.processEndpoints = [{ entity: 'header', action: 'complete' }];
+    const entity = buildEntity({ specName: 'sales-order', entityName: 'header', contract, functional, parent: null, rawEntity: null });
+    assert.equal(exposeProcesses, false);
+    assert.deepEqual(entity.processes, []);
+  });
+
+  it('publishes the read-only resource list as GET/LIST with every field out', () => {
+    assert.ok(readOnlyResources.has('product-costing'));
+    const entity = build('product-costing', formFields);
+    assert.deepEqual(entity.operations, ['GET', 'LIST']);
+    assert.ok(Object.values(entity.fields).every((field) => field.direction === 'out'));
+    const childContract = contractFor('sales-invoice', formFields, { entityName: 'exchangeRates' });
+    childContract.frontendContract.window.primaryEntity = 'header';
+    const child = buildEntity({ specName: 'sales-invoice', entityName: 'exchangeRates', contract: childContract, functional, parent: null, rawEntity: null });
+    assert.equal(child.publicName, 'sales-invoice-exchangeRates');
+    assert.deepEqual(child.operations, ['GET', 'LIST']);
+  });
+
+  it('recognizes the lines entity by its key plus the window linesLayout', () => {
+    assert.equal(isLinesEntity('lines', { linesLayout: 'inlineEditable' }), true);
+    assert.equal(isLinesEntity('lines', {}), false);
+    assert.equal(isLinesEntity('exchangeRates', { linesLayout: 'inlineEditable' }), false);
+  });
+});
+
+describe('generateManifest — lines survive explicit child visibility', () => {
+  let root;
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'public-api-manifest-lines-'));
+    const tab = (tableName) => ({ tableName, tabName: tableName, fields: [{ name: 'description', visibility: 'editable', form: true, type: 'string' }] });
+    const contract = {
+      version: '1.0.0',
+      frontendContract: {
+        window: { name: 'Doc', primaryEntity: 'header', category: 'sales', linesLayout: 'inlineEditable' },
+        entities: { header: tab('d_head'), lines: tab('d_line'), exchangeRates: tab('d_rate'), other: tab('d_other') },
+      },
+      backendContract: {
+        entities: {},
+        endpoints: ['header', 'lines', 'exchangeRates', 'other'].flatMap((entity) => ['POST', 'PUT'].map((method) => ({ entity, method }))),
+        processEndpoints: [],
+      },
+    };
+    const child = (tableName) => ({
+      tableName,
+      fields: [
+        { name: 'id', type: 'id', visibility: 'system', columnName: `${tableName}_id` },
+        { name: 'doc', type: 'foreignKey', visibility: 'system', reference: { targetTable: 'd_head', keyColumn: 'd_head_id' } },
+      ],
+    });
+    mkdirSync(join(root, 'doc'), { recursive: true });
+    writeFileSync(join(root, 'doc', 'contract.json'), JSON.stringify(contract));
+    writeFileSync(join(root, 'doc', 'decisions.json'), JSON.stringify({ window: { secondaryTabs: { exchangeRates: {} } } }));
+    writeFileSync(join(root, 'doc', 'schema-raw.json'), JSON.stringify({
+      entities: [
+        { tableName: 'd_head', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'd_head_id' }] },
+        child('d_line'), child('d_rate'), child('d_other'),
+      ],
+    }));
+  });
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  it('keeps lines with CRUD next to the declared secondary tabs, and still drops undeclared children', async () => {
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'none') });
+    assert.deepEqual(Object.keys(entities).sort(), ['doc', 'doc-exchangeRates', 'doc-lines']);
+    assert.deepEqual([...entities['doc-lines'].operations].sort(), ['GET', 'LIST', 'PATCH', 'POST', 'PUT']);
   });
 });
 
