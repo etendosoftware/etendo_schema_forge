@@ -13,7 +13,7 @@ import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
-import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, listTableMinWidthPx } from '@/lib/linesColumnWidth.js';
+import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, listHeaderMinWidthPx, listHeaderFont } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
@@ -2458,6 +2458,32 @@ function StickyHeaderRow({ elRef, attachSeq, minWidthPx, children }) {
  * cycle as any other column via `onSort(part.key)`. The direction arrow shows
  * only on the currently active part (single active part at a time).
  */
+// ETP-5833 (QA) — one-shot flag that flips to true when `document.fonts.ready` resolves. The list
+// header floor measures labels with canvas; while Inter is still swapping in (`display=swap`) that
+// measures the fallback face, so `visibleColumns` depends on this flag to re-measure exactly once
+// when the real font is in. True from the start when the fonts are already loaded or the
+// FontFaceSet API is missing (jsdom, old browsers).
+function useHeaderFontsReady() {
+  const [ready, setReady] = useState(() => {
+    const fonts = typeof document === 'undefined' ? undefined : document.fonts;
+    return !fonts?.ready || fonts.status === 'loaded';
+  });
+  useEffect(() => {
+    if (ready) return undefined;
+    let alive = true;
+    document.fonts.ready.then(() => { if (alive) setReady(true); }, () => {});
+    return () => { alive = false; };
+  }, [ready]);
+  return ready;
+}
+
+// The text a plain-list header renders for `col`: its resolved label, or for a `multiField`
+// column the part labels joined by its separator (renderMultiFieldHeaderCell).
+function renderedHeaderLabel(col, locale, t) {
+  if (!Array.isArray(col.parts) || col.parts.length === 0) return resolveColumnLabel(col, locale, t);
+  return col.parts.map(part => resolveColumnLabel(part, locale, t)).join(col.partSeparator ?? ' & ');
+}
+
 function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader }) {
   const separator = col.partSeparator ?? ' & ';
   return (
@@ -3199,6 +3225,7 @@ export function DataTable({
   const ui = useUI();
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
+  const headerFontsReady = useHeaderFontsReady();
   // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
   const capabilities = useCapabilitiesSafe();
   // ETP-5245 — last-resort currency for `amount` cells whose row carries none of
@@ -3327,8 +3354,21 @@ export function DataTable({
     // ETP-5510 — plain list only (the lines/add-row modes size from columnFlex and must stay
     // aligned with InlineLinesPanel): guarantee one width-less column to absorb leftover
     // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
-    return hideHeader || linesLayout === 'inlineEditable' ? base : withImplicitGrowColumn(base);
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout]);
+    // ETP-5833 — the lines/add-row modes get the lines-side absorber, applied to the same
+    // `visibleColumns` InlineLinesPanel derives, so header, rows and add-row agree on it.
+    if (hideHeader || linesLayout === 'inlineEditable') return withLinesAbsorberColumn(base);
+    // ETP-5833 (QA) — a list header never wraps, so each column's floor also covers its rendered
+    // header: measured from the label the header actually shows (resolved here with the same
+    // `resolveColumnLabel`/`t`/locale as renderColumnHeaderCell), never from row data. Header,
+    // colgroup, body cells and listTableMinWidthPx all read it through columnMinWidthPx.
+    // `headerFontsReady` re-runs this once the web font has loaded (see useHeaderFontsReady); the
+    // font is resolved once per pass, not per column.
+    const headerFont = listHeaderFont();
+    return withImplicitGrowColumn(base.map(col => ({
+      ...col,
+      headerMinWidthPx: listHeaderMinWidthPx(col, renderedHeaderLabel(col, locale, t), headerFont),
+    })));
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout, locale, t, headerFontsReady]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
   // separators, symbol, right alignment, numeric filter) — it does not by itself
