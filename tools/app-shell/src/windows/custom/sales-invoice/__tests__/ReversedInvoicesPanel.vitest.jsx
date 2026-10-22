@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
+//
 // ETP-4404 / ETP-5381 — ReversedInvoicesPanel unit suite (Jira TC map in each test title).
 //
 // The panel is the "Rectificaciones" accordion custom tab shared by the
@@ -33,9 +35,10 @@ vi.mock('sonner', () => ({
 }));
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import ReversedInvoicesPanel from '../ReversedInvoicesPanel.jsx';
+import esES from '../../../../locales/es_ES.json';
 
 const RECORD_ID = 'rec-1';
 const API_BASE = '/sws/neo/sales-invoice';
@@ -84,7 +87,7 @@ function serveHeader(url, rows, { serverIgnoresSearch = false } = {}) {
 function installFetch({
   lines = [], headerInvoices = [], years = [], postResponse = null, patchResponse = null,
   deleteResponse = null, activeModels = { '349': true }, catalogOk = true,
-  serverIgnoresSearch = false, originals = ORIGINALS,
+  serverIgnoresSearch = false, originals = ORIGINALS, patchGate = null,
 } = {}) {
   fetchCalls = [];
   let postSeq = 0;
@@ -118,6 +121,8 @@ function installFetch({
       return resolved ?? { ok: true, json: async () => ({}) };
     }
     if (method === 'PATCH') {
+      // A pending gate holds the PATCH open, so a test can observe the row WHILE it is saving.
+      if (patchGate) await patchGate;
       if (patchResponse) return patchResponse;
       // An accepted PATCH lands on the row, so the panel's re-read sees it — as the server would.
       const id = String(url).split('/').pop();
@@ -192,6 +197,27 @@ function findYearSelect() {
 }
 
 const optionValues = (select) => within(select).getAllByRole('option').map(o => o.value);
+const optionLabels = (select) => within(select).getAllByRole('option').map(o => o.textContent);
+const linesReads = () => fetchCalls.filter(c => c.method === 'GET' && c.url.includes('/reversedInvoices'));
+
+/** A promise the test resolves by hand — holds a PATCH open. */
+function deferred() {
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  return { promise, resolve };
+}
+
+/**
+ * Records whether the panel's loading line (`ui('loading')`) EVER appears from now on — a re-read
+ * that is not silent swaps the rows for it for a moment, which a final-state assertion would miss.
+ */
+function watchLoadingLine() {
+  let seen = false;
+  const check = () => { if (screen.queryByText('loading')) seen = true; };
+  const observer = new MutationObserver(check);
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  return { seen: () => { check(); return seen; }, stop: () => observer.disconnect() };
+}
 
 // ── picker interaction helpers ───────────────────────────────────────────────
 // The draft row's trigger is a button whose LABEL is the state of the selection: the
@@ -716,6 +742,45 @@ describe('ETP-5381 — draft multi-select fans out into one POST per invoice', (
 });
 
 // ---------------------------------------------------------------------------
+// ETP-5059 — re-picking the original on a draft drops the period chosen for the previous one
+// ---------------------------------------------------------------------------
+
+describe('ETP-5059 — a draft re-pick resets the 349 period to the new original', () => {
+  const MAY = CO('inv-may', '10000091', '2026-05-01', 'Cliente SL');
+  const AUG = CO('inv-aug', '10000095', '2026-08-10', 'Cliente SL');
+
+  it('re-picking clears the chosen period: options follow the new original and the POST carries no year/period', async () => {
+    renderPanel({ headerInvoices: [MAY, AUG], years: [{ id: 'y2026', fiscalYear: '2026' }] });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+    await pickInDraft('inv-may');
+
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['05', '2T']));
+    fireEvent.change(findPeriodSelect(), { target: { value: '2T' } });
+    expect(findPeriodSelect()).toHaveValue('2T');
+
+    // Swap May for August: the picker reopens pre-seeded with the current pick.
+    openDraftPicker('10000091');
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+    togglePickerRow('inv-may');
+    togglePickerRow('inv-aug');
+    applyPicker();
+
+    // The period options are the NEW original's month and quarter, defaulting to the month.
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['08', '3T']));
+    expect(findPeriodSelect()).toHaveValue('08');
+
+    fireEvent.click(screen.getByTestId('btn__saveNewLine'));
+    await waitFor(() => expect(postCalls()).toHaveLength(1));
+    const body = postCalls()[0].body;
+    expect(body).toEqual({ invoice: RECORD_ID, aEAT349IsCorrective: 'Y', reversedInvoice: 'inv-aug' });
+    expect(body).not.toHaveProperty('aEAT349Period');
+    expect(body).not.toHaveProperty('aEAT349CYear');
+    expect(patchCalls()).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // TC-08 — corrective full save (AEAT-349 group batching)
 // ---------------------------------------------------------------------------
 
@@ -752,6 +817,83 @@ describe('TC-08 — ticking saves at once; year and period are bound to the orig
     fireEvent.change(findPeriodSelect(), { target: { value: '2T' } });
     await waitFor(() => expect(patchCalls()).toHaveLength(1));
     // The year goes as null so the trigger fills the original's year (a legacy wrong one cannot block).
+    expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: '2T' });
+  });
+
+  it('TC-08: while the tick PATCH is pending the box is busy and NOT ticked; it ticks after the re-read', async () => {
+    const gate = deferred();
+    renderPanel({ lines: [LINE()], years: YEARS, patchGate: gate.promise });
+    await expandFirstRow();
+    const box = () => screen.getByTestId('checkbox__isCorrective');
+
+    fireEvent.click(box());
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+
+    // Saving: busy, disabled, spinner — and no optimistic tick, so no AEAT grid either.
+    await waitFor(() => expect(box()).toHaveAttribute('aria-busy', 'true'));
+    expect(box()).toBeDisabled();
+    expect(screen.getByTestId('checkbox__isCorrective-saving')).toBeInTheDocument();
+    expect(box()).toHaveAttribute('aria-checked', 'false');
+    expect(findPeriodSelect()).toBeUndefined();
+    expect(screen.queryByText('rectBaseProducts')).not.toBeInTheDocument();
+
+    // A second click while saving fires nothing.
+    fireEvent.click(box());
+    expect(patchCalls()).toHaveLength(1);
+
+    gate.resolve();
+    // The row changes only once the re-read brought back what the server stored.
+    await waitFor(() => expect(box()).toHaveAttribute('aria-checked', 'true'));
+    expect(box()).not.toHaveAttribute('aria-busy');
+    expect(box()).not.toBeDisabled();
+    expect(screen.queryByTestId('checkbox__isCorrective-saving')).not.toBeInTheDocument();
+    expect(screen.getByText('rectBaseProducts')).toBeInTheDocument();
+    expect(patchCalls()).toHaveLength(1);
+  });
+
+  it('TC-08: while a period PATCH is pending both pickers are disabled and keep the server value', async () => {
+    const gate = deferred();
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2026', 'aEAT349CYear$_identifier': '2026', aEAT349Period: '06' })],
+      years: YEARS,
+      patchGate: gate.promise,
+    });
+    await expandFirstRow();
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['06', '2T']));
+    await waitFor(() => expect(findYearSelect()).not.toBeDisabled());
+
+    fireEvent.change(findPeriodSelect(), { target: { value: '2T' } });
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+
+    await waitFor(() => expect(findPeriodSelect()).toBeDisabled());
+    expect(findYearSelect()).toBeDisabled();
+    expect(screen.getByTestId('checkbox__isCorrective')).toHaveAttribute('aria-busy', 'true');
+    // No optimistic apply: the select still shows what the server holds.
+    expect(findPeriodSelect()).toHaveValue('06');
+
+    gate.resolve();
+    await waitFor(() => expect(findPeriodSelect()).toHaveValue('2T'));
+    expect(findPeriodSelect()).not.toBeDisabled();
+    expect(patchCalls()).toHaveLength(1);
+  });
+
+  it('TC-08: a legacy stored year outside the original\'s stays visible; a period change sends year null', async () => {
+    // Saved before ETP-5059 with the 2024 year, although the original is of 2026.
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2024', 'aEAT349CYear$_identifier': '2024', aEAT349Period: '06' })],
+      years: YEARS,
+    });
+    await expandFirstRow();
+
+    const yearSelect = findYearSelect();
+    // The allowed year (the original's) plus the stored legacy one, shown with its identifier.
+    await waitFor(() => expect(optionValues(yearSelect)).toEqual(['y2026', 'y2024']));
+    expect(optionLabels(yearSelect)).toEqual(['2026', '2024']);
+    expect(yearSelect).toHaveValue('y2024');
+
+    fireEvent.change(findPeriodSelect(), { target: { value: '2T' } });
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    // The legacy year is NOT re-sent: null lets the trigger fill the original's year.
     expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: '2T' });
   });
 
@@ -806,6 +948,8 @@ describe('TC-10 — Periodo offers only the original invoice\'s month and quarte
     // Original dated 2026-06-05 → June and the second quarter.
     await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['06', '2T']));
     expect(findPeriodSelect()).toHaveValue('06');
+    // The annual code is never offered to a row that does not already store it.
+    expect(optionValues(findPeriodSelect())).not.toContain('0A');
   });
 
   it('TC-10: a legacy stored code outside the pair stays visible instead of being masked', async () => {
@@ -814,6 +958,55 @@ describe('TC-10 — Periodo offers only the original invoice\'s month and quarte
 
     await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['06', '2T', '0A']));
     expect(findPeriodSelect()).toHaveValue('0A');
+    // Labelled as the annual period, not shown as a bare code. The i18n mock returns the key;
+    // es_ES resolves that key to "Anual", so the user reads "0A - Anual".
+    const annual = within(findPeriodSelect()).getAllByRole('option').find(o => o.value === '0A');
+    expect(annual).toHaveTextContent('0A - rectPeriodAnnual');
+    expect(esES.genericLabels.rectPeriodAnnual).toBe('Anual');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5059 — the 349 year/period derive from the original's invoice date as a CALENDAR date.
+// Run west of Greenwich: a UTC-midnight parse (`new Date('2026-04-01')`) reads as 31 March there,
+// which would offer March and the first quarter — the previous year, for an invoice of 1 January.
+// ---------------------------------------------------------------------------
+
+describe('ETP-5059 — the original\'s month, quarter and year survive a negative UTC offset', () => {
+  const originalTz = process.env.TZ;
+  beforeAll(() => { process.env.TZ = 'America/Argentina/Buenos_Aires'; });
+  afterAll(() => { process.env.TZ = originalTz; });
+
+  const YEARS = [{ id: 'y2025', fiscalYear: '2025' }, { id: 'y2026', fiscalYear: '2026' }];
+
+  it('the environment really shifts a UTC-midnight parse (otherwise the cases below prove nothing)', () => {
+    expect(new Date('2026-04-01').getDate()).toBe(31);
+  });
+
+  it('an original dated 2026-04-01 offers exactly 04 and 2T', async () => {
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', reversedInvoice: 'inv-apr' })],
+      originals: { 'inv-apr': '2026-04-01' },
+      years: YEARS,
+    });
+    await expandFirstRow();
+
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['04', '2T']));
+    expect(findPeriodSelect()).toHaveValue('04');
+    await waitFor(() => expect(optionValues(findYearSelect())).toEqual(['y2026']));
+  });
+
+  it('an original dated 2026-01-01 offers 01 / 1T and the year 2026, never 2025', async () => {
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', reversedInvoice: 'inv-jan' })],
+      originals: { 'inv-jan': '2026-01-01' },
+      years: YEARS,
+    });
+    await expandFirstRow();
+
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['01', '1T']));
+    await waitFor(() => expect(optionValues(findYearSelect())).toEqual(['y2026']));
+    expect(optionLabels(findYearSelect())).toEqual(['2026']);
   });
 });
 
@@ -865,6 +1058,30 @@ describe('ETP-5027 — rejected PATCH surfaces the backend message as a toast', 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(TRIGGER_MSG));
     // Toast ONLY: an existing row has no draft form to anchor an inline message
     expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
+  });
+
+  it('a refused tick leaves the box unticked, shows no AEAT grid and re-reads silently', async () => {
+    renderPanel({
+      lines: [LINE()],
+      years: YEARS,
+      patchResponse: { ok: false, json: async () => ({ error: { message: TRIGGER_MSG } }) },
+    });
+    await expandFirstRow();
+    const readsBefore = linesReads().length;
+    const loadingLine = watchLoadingLine();
+
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(TRIGGER_MSG));
+    // The re-read after the refusal happened…
+    await waitFor(() => expect(linesReads().length).toBe(readsBefore + 1));
+    await waitFor(() => expect(screen.getByTestId('checkbox__isCorrective')).not.toHaveAttribute('aria-busy'));
+    // …without the loading line, and the row is still expanded on the unticked box.
+    expect(loadingLine.seen()).toBe(false);
+    loadingLine.stop();
+    expect(screen.getByTestId('checkbox__isCorrective')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByText('rectBaseProducts')).not.toBeInTheDocument();
+    expect(findPeriodSelect()).toBeUndefined();
   });
 
   it('falls back to the generic message when the rejected PATCH body is unparseable', async () => {
