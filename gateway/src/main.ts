@@ -86,11 +86,11 @@ Collections accept \`page[number]\` (from 1) and \`page[size]\` (default 50, max
 Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...", "title": "Not Found", "detail": "<Etendo's message>", "meta": {"hint": "..."}}]}\`. \`detail\` carries Etendo's own message; \`code\` and \`meta.hint\` appear when Etendo provides them.
 
 - \`200\` / \`201\`: the request completed; \`204\`: a record was deleted (no body).
-- \`400\`: invalid input, unsupported field, invalid query parameter (see \`source.parameter\`), or invalid operation payload.
-- \`401\`: missing, malformed, or invalid credentials.
+- \`400\`: invalid input, unsupported field, invalid query parameter (see \`source.parameter\`), or invalid operation payload. A create or update missing mandatory fields answers one error per field, code \`missing_required_field\`, with \`source.pointer\` (\`/data/attributes/<name>\` or \`/data/relationships/<name>\`).
+- \`401\`: missing, malformed, or invalid credentials. Error code: \`unauthorized\`.
 - \`402\`: the tenant is blocked.
 - \`403\`: the credential does not have the required scope or organization access.
-- \`404\`: the resource or record does not exist.
+- \`404\`: the resource or record does not exist. Error codes: \`not_found\`, \`unknown_action\`.
 - \`406\` / \`415\`: the \`Accept\` or \`Content-Type\` header is not JSON:API (or JSON).
 - \`409\`: the \`type\`/\`id\` does not match the URL, or the record is in use.
 - \`412\`: the record changed since it was read (\`If-Match\` does not match its current version). Error codes: \`stale_record\` (the record changed), \`precondition_failed\` (\`If-Match\` is not a valid ETag).

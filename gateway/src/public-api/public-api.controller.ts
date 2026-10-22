@@ -39,6 +39,7 @@ import {
   badGateway,
   parseUpstreamError,
   upstreamException,
+  missingFieldsException,
   type JsonApiError,
 } from './json-api-http.ts';
 import { neoListParams, pagination, parseListQuery, type ListQuery } from './json-api-query.ts';
@@ -64,6 +65,8 @@ export function toEtag(version: unknown): string | undefined {
   if (typeof version !== 'string' || !NEO_TIMESTAMP.test(version)) return undefined;
   return `"${Buffer.from(version, 'utf8').toString('base64url')}"`;
 }
+
+const STALE_RECORD_HINT = 'Read the record again and retry with its new ETag in If-Match.';
 
 // A 412 whose body carries a stable machine-readable `code`.
 function preconditionFailed(message: string, code: 'precondition_failed' | 'stale_record'): PreconditionFailedException {
@@ -306,7 +309,9 @@ export class PublicApiController {
     const declared = (entity as { processes?: PublicApiProcess[] }).processes?.find(
       (process) => process.action === action && process.method?.toUpperCase() === 'POST',
     );
-    if (!declared) throw new NotFoundException(`Unknown action ${action} for ${entityName}`);
+    if (!declared) {
+      throw new NotFoundException({ statusCode: 404, error: 'Not Found', code: 'unknown_action', message: `Unknown action ${action} for ${entityName}` });
+    }
     this.assertRecordId(id);
     const url = `${this.neoBaseUrl}/sws/neo/${entity.specName}${declared.path.replace(':id', encodeURIComponent(id))}`;
     let response: Response;
@@ -535,11 +540,16 @@ export class PublicApiController {
       if (response.status === 409 && parseUpstreamError(upstream).code === 'stale_record' && this.concurrencyPath(entityName)) {
         const conflict = upstreamException(409, upstream).getResponse() as { errors: JsonApiError[] };
         throw new HttpException(
-          { errors: conflict.errors.map((error) => ({ ...error, status: '412', title: 'Precondition Failed' })) },
+          {
+            errors: conflict.errors.map((error) => ({
+              ...error, status: '412', title: 'Precondition Failed',
+              meta: { ...error.meta, hint: STALE_RECORD_HINT },
+            })),
+          },
           HttpStatus.PRECONDITION_FAILED,
         );
       }
-      throw upstreamException(response.status, upstream);
+      throw (response.status === 400 ? missingFieldsException(entity, upstream) : undefined) ?? upstreamException(response.status, upstream);
     }
     return this.toSuccessDocument(response, entityName, method, id, res, list);
   }
