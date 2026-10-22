@@ -1405,7 +1405,14 @@ export default function LocationEditorModal({
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
                             onClick={handleSave}
-                            disabled={saveDisabled}
+                            // ETP-5806 follow-up — `aria-disabled`, NOT the native `disabled`
+                            // attribute: a natively-disabled button never fires `onClick`, so
+                            // `handleSave` (which sets `attemptedSave`) could never run while a
+                            // mandatory field was empty, and the "Este campo es obligatorio"
+                            // messages below were dead code. `handleSave` itself still refuses
+                            // to save while `saveDisabled` is true (see its own guard) — this
+                            // only lets the click register so the validation messages can show.
+                            aria-disabled={saveDisabled}
                             // Referenced by the `create-contact` walkthrough's closing step
                             // (tools/app-shell/src/walkthrough/flows/create-contact.json).
                             // Renaming it breaks a shipped tour.
