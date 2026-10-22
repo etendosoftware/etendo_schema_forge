@@ -141,7 +141,13 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   bypass.
 - **Guided tour (ETP-5577).** `walkthrough/flows/accounting-calendar.json` ("Calendario contable")
   walks through creating next year with **Nuevo**, opening a year, its **Periods** tab and the
-  **Abrir/Cerrar Periodo** action. The steps on the year list declare `route: "/calendar"`, so
+  **Abrir/Cerrar Periodo** action. The "open a year" step targets the **current** fiscal year (the
+  one the review card shows, provided by `CalendarWindow` through `CurrentFiscalYearContext`), not
+  the first row: `YearTableWithCloseStatus` marks that row's Year cell (a block span filling the
+  cell) with `data-current-fiscal-year`, and the step advances only on a click inside that cell,
+  so ticking the row's selection checkbox does not advance it. If the current year is unknown or
+  not in the list, the first row's Year cell is marked instead. The steps on the year list declare
+  `route: "/calendar"`, so
   "Atrás" from inside a year goes back to the list; the tour never returns into a year after
   leaving it (that step could not name the year's URL). Productive tenants only (`PRODUCTIVE_ONLY_FLOW_IDS`): it is
   offered by the top-bar launcher and by the review row's **Ver guía**. See
