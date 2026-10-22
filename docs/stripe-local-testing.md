@@ -488,7 +488,9 @@ Configuration resolves in this order (`ConfigPropertyReader`):
 price, checkout sells `legacy-productive` at `etendo.go.checkout.price.id` — enough for every
 recipe in this guide. To test the plan catalog instead, create a plan in the Classic **Plans**
 window with a Test Mode **Provider Price ID** (active, recurring, `interval_count = 1`); its display
-price is derived from Stripe on save, and from the next request on the fallback is retired. Full
+price is derived from Stripe on save, and from the next request on the fallback is retired. Every
+listed plan appears as its own card on the **Plan** step of `/upgrade`
+(`upgrade-plan-card-<planKey>`, ETP-5049), with the catalog's name, description and price. Full
 procedure: `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6.2.
 
 ### Use `Openbravo.properties`, not environment variables

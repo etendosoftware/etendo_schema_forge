@@ -84,14 +84,21 @@ Two consequences follow, and neither is hypothetical:
 6. **Branch B — the account lookup failed.** The checkout is shown anyway. The backend is the
    authority on whether payment is required, so a failed lookup in the browser must not block
    a legitimate upgrade.
-7. **Branch C — the account already owns at least one environment.** The page presents the
-   Free and Productive plans. Selecting Productive opens the Add-ons step, which remains in the
-   flow for every origin. When the current authenticated environment is a demo, this step offers
+7. **Branch C — the account already owns at least one environment.** The page is a three-step
+   checkout — **Plan → Add-ons → Payment**. The **Plan** step shows the plan catalog
+   (`GET /sws/go/plans`, ETP-5046) as one selectable card per plan, each with the catalog's name,
+   description and price, so a plan added to `ETGO_PLAN` appears with no frontend change
+   (ETP-5049). A single plan is preselected; with several, the user picks one, and nothing is
+   preselected for them. While the catalog loads, fails (with a retry), is empty, or answers
+   401, the step says so and offers no way forward — there is no plan key to send. Choosing a
+   card opens the Add-ons step, which remains in the flow for every origin. When the current authenticated environment is a demo, this step offers
    product and contact transfer choices. When the current environment is already productive, it
    explains that the new environment starts without demo data and offers no transfer controls.
    Back from Add-ons returns to the plan step; Continue opens payment. Back from payment returns
    to Add-ons, preserving the current form and transfer selections.
-8. **The user enters the new environment name on the payment step.** A productive-origin
+8. **The user enters the new environment name on the payment step.** The payment step shows the
+   plan chosen on the Plan step as a read-only summary (`upgrade-plan-summary`: name and price) —
+   it has no second chooser — and the checkout sends that plan's `planKey`, never a price. A productive-origin
    purchase starts with a blank name so the current environment is not mistaken for the target.
    A demo-origin purchase can select an exact source environment; the request carries its
    `demoClientId`, not a name-based lookup. The backend validates that this ID is a demo owned by
@@ -397,7 +404,8 @@ The paid flow has separate contracts for the commercial purchase and environment
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /sws/go/billing/offers` | Returns the current productive offer's `amountMinor`, `currency`, and recurring `interval`. The backend retrieves these from the configured Stripe Price. |
+| `GET /sws/go/plans` | Lists the purchasable plans of the plan catalog (`planKey`, `name`, `description`, `displayPrice`, `currency`, `billingInterval`) — never a provider price id. The upgrade page's only quote source (§3.3). |
+| `GET /sws/go/billing/offers` | Returns the configured productive offer's `amountMinor`, `currency`, and recurring `interval`, retrieved from the configured Stripe Price. **No frontend caller since ETP-5049** — the upgrade page quotes the plan catalog only. |
 | `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. A company name the account already uses for a productive environment is refused with 409 `CLIENT_NAME_IN_USE` before Stripe is contacted; any other match (another account, the account's demo) is allowed. A name shaped like a provisioning name (`PEND-` + 32 hex) is reserved (400). |
 | `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |
 | `GET /sws/go/billing/purchases/{purchaseId}` | Reads one account-scoped purchase, including its fixed demo source and created `clientId` when available. |
@@ -451,16 +459,20 @@ carries a price, the **legacy price fallback** lists and sells `legacy-productiv
 configured `etendo.go.checkout.price.id`; the first priced plan retires it with no redeploy (design:
 `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6–§6.2).
 
+The upgrade page quotes **only** the plan catalog (ETP-5049). Its Plan step renders one card per
+catalog plan with the catalog's `displayPrice` (a decimal string, so no float rounding in transit)
+formatted through `formatCurrency` and phrased by `billingInterval`; an interval the page does not
+know renders as the bare amount rather than a wrong cadence. While the catalog is loading, has
+failed, is empty or answers 401, no price is shown and the checkout cannot proceed — the page never
+falls back to a second quote source, so it cannot advertise one price and charge another.
 `GET /sws/go/billing/offers` still projects the **configured** Price (`unit_amount`, `currency`,
-recurring interval), not the plan catalog. The upgrade page quotes the plan catalog and uses the
-offer only while that lookup is in flight or has failed. Both projections reject unavailable,
-inactive, non-recurring, or unsupported interval prices rather than displaying a locally
-maintained fallback that could disagree with checkout.
+recurring interval); before ETP-5049 the page used it as a price preview while the catalog lookup
+was in flight or had failed, and it has no frontend caller now. Both projections reject
+unavailable, inactive, non-recurring, or unsupported interval prices rather than displaying a
+locally maintained fallback that could disagree with checkout.
 
-The browser formats Stripe's integer `amountMinor` using the returned currency, including
-zero-decimal and compatibility currencies, then displays the returned interval. If the offer
-cannot be retrieved, the page does not invent a fallback amount. Card details are entered on
-Stripe's hosted page; the Etendo GO browser neither collects nor mints payment tokens. The
+Card details are entered on Stripe's hosted page; the Etendo GO browser neither collects nor mints
+payment tokens, and it never holds a provider price id — it sends the chosen plan's `planKey`. The
 checkout request ID is an internal correlation key, not proof of payment by itself.
 
 ## 3.4 The plan marker
