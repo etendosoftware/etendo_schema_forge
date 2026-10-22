@@ -119,7 +119,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
   7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
   8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
-  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully.
+  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it; only Admin/client-admin (sidebar exemption above) or a role with a hand-made grant does.
   10. As GOAdmin or GOClient Admin, confirm all three anchor entries are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
 
 ### 3. Generated/custom window loading
@@ -394,7 +394,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Sorting is tracked in hook state and can switch to the companion `$_identifier` field when present so foreign-key sorts are alphabetical.
   - Selecting a row uses the record data already present in the list and fetches that record's children; loading by id is the path that fetches the full record and its children.
   - `handleNew()` requests `/<entity>/defaults`, normalizes returned values, and pre-fills the form when defaults exist. Combo-style fields (Price List, Payment Terms) are pre-selected by the backend; Search-type fields (Contact, Business Partner) are left empty for the user to fill explicitly.
-  - While the defaults request is in flight the hook exposes `defaultsLoading: true` and `DetailView` shows the loading gate for the new-record route, so the user cannot type into a form whose values are about to be merged (ETP-4741). The 4-second timeout is a UX budget, not a correctness mechanism: when it fires it releases the gate so the user can start working, and nothing else — the request is **not** aborted and the session is **not** invalidated, so a response arriving later still merges. That late merge is also what fires `DetailView`'s initial-callout chain, which is latched on `editing` becoming non-empty and would never fire on a form left permanently empty (one residual gap in that latch is recorded under "Failure or edge behavior" below). When the merge runs — before or after the release — it skips any field the user already changed (and its `$_identifier` companion). Each `handleNew()` emits at most one `defaults_block` timing event: exactly one for the session that survives to settlement (`status`: `ok`/`error`/`timeout` — see `docs/ops/app-shell-observability.md`); a session superseded by a newer `handleNew()` **before it settles** emits none. Invalidation is reserved for genuinely superseded sessions: a newer `handleNew()`, or loading an existing record (`handleSelect` or `fetchById`) while the defaults request is still pending — the latter neutralizes it, aborting the request (still possible after the timeout, which keeps the abort handle), discarding its late response, releasing `defaultsLoading` immediately, and — when the session had not already settled — emitting no `defaults_block` event. A session that already settled as `timeout` and is only afterwards superseded or neutralized keeps that one event: the timing handle is one-shot, so no second event can follow.
+  - While the defaults request is in flight the hook exposes `defaultsLoading: true` and `DetailView` shows the loading gate for the new-record route, so the user cannot type into a form whose values are about to be merged (ETP-4741). The 4-second timeout is a UX budget, not a correctness mechanism: when it fires it releases the gate so the user can start working, and nothing else — the request is **not** aborted and the session is **not** invalidated, so a response arriving later still merges. The settle is also what arms `DetailView`'s one-shot initial-callout chain (ETP-4744): the chain waits for `defaultsPending` to clear — not for `editing` to merely become non-empty — and only then computes its trigger list from the merged state, so the defaulted selectors still fire their callouts even when the user typed into a plain, non-selector field while the request was in flight. A form left permanently empty fires nothing and leaves the latch unarmed. When the merge runs — before or after the release — it skips any field the user already changed (and its `$_identifier` companion). Each `handleNew()` emits at most one `defaults_block` timing event: exactly one for the session that survives to settlement (`status`: `ok`/`error`/`timeout` — see `docs/ops/app-shell-observability.md`); a session superseded by a newer `handleNew()` **before it settles** emits none. Invalidation is reserved for genuinely superseded sessions: a newer `handleNew()`, or loading an existing record (`handleSelect` or `fetchById`) while the defaults request is still pending — the latter neutralizes it, aborting the request (still possible after the timeout, which keeps the abort handle), discarding its late response, releasing `defaultsLoading` immediately, and — when the session had not already settled — emitting no `defaults_block` event. A session that already settled as `timeout` and is only afterwards superseded or neutralized keeps that one event: the timing handle is one-shot, so no second event can follow.
   - Before a `POST`, `handleSave()` validates that all visible required fields have a value. `EntityForm` registers only currently-visible fields via `registerFields(displayFields)` so hidden fields never block the save. If any required field is empty, `fieldErrors` is set and each offending field renders a red border with an inline "Required" message — the POST is not sent.
   - If the backend still returns a structured `400 MISSING_REQUIRED_FIELDS` response, the `fields` array is parsed and mapped to `fieldErrors` as a second validation layer.
   - New records use `POST`; existing records use `PATCH` with changed fields only.
@@ -403,7 +403,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - List refresh and pagination logout on HTTP 401.
   - If the defaults endpoint fails, the form still opens with an empty object and `defaultsLoading` returns to false. If it merely overruns the 4s budget, `defaultsLoading` also returns to false, but the request keeps running and its defaults are applied when they land.
   - **ETP-5002 — the required-field gate defers to a pending defaults session.** The hook exposes a second flag, `defaultsPending`, tracking the *request* window rather than the UX window: it goes true with `defaultsLoading` and clears only when the response lands, the request errors, or the session is neutralized — the 4s timer deliberately does **not** touch it. `useEntity` passes `deferBlocking: defaultsPending && !editing?.id` into `useFormValidity`, so while a NEW record's defaults are still in the air the ETP-4933 required-field gate blocks nothing. Without this, the two flags disagreed in exactly the window the budget opens: `defaultsLoading` released the form, the still-flying default left a required field empty, and the gate disabled the primary action on a value the user was never meant to type. `purchase-order` is the concrete case — `warehouse` is `required: true` with no contract default, so every new PO whose defaults request overran 4s rendered **both** Guardar and Confirmar disabled, tooltip "Completa primero los campos obligatorios: Almacén", which is how the rectificativa integration specs failed. The moment the session settles the gate applies in full: if the defaults arrived without the required field, it blocks — correctly, because now we know nobody is going to fill it. The deferral is scoped to new records because an existing one has no defaults session (`fetchById` neutralizes any in flight) and its own `skipUnchangedInvalid` policy already spares untouched empties. The backend's `MISSING_REQUIRED_FIELDS` validation remains the net underneath the deferral window.
-  - Known gap (pre-existing, narrowed but not closed by ETP-4741): `DetailView`'s initial-callout latch arms on `editing` becoming non-empty for **any** reason, including the user typing into a plain non-selector field. If that happens before the defaults land — only possible in the window between the 4s gate release and a late response — the latch is consumed while no selector field has a value yet, so the defaults still merge but the callout chain never runs. See `docs/feedback.md` (`[2026-07-31] ETP-4741`).
+  - The initial-callout latch is armed by the arrival of the defaults session, not by `editing` becoming non-empty (ETP-4744, closing the residual gap recorded for ETP-4741). `DetailView` calls `resolveInitialCalloutTriggers` (detailViewHelpers.jsx), which only reports `ready` once `defaultsPending` is false and the form holds a value, and computes the trigger list from the merged state. A user typing into a plain, non-selector field during the window between the 4s gate release and a late response no longer consumes the one-shot latch, so the defaults merge **and** the chain runs. See `docs/feedback.md` (`[2026-07-31] ETP-4741`, `[2026-10-16] ETP-4744`).
   - Partial or empty batches stop pagination.
   - Save blocked by missing required fields surfaces per-field `fieldErrors` highlights and a toast; the record is not created.
   - Save and child-row creation failures surface `saveError` and toast feedback; delete and process failures surface toast feedback.
@@ -517,6 +517,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   5. Confirm "Match Rule"/"Reglas de matcheo" and "Periods"/"Períodos" do NOT appear anywhere in the matrix (hidden-only in `menu.json`), even for a role known to hold real `AD_Window_Access` on them.
   6. Confirm "Fiscal Monitor", "Fiscal Models", and "Not Posted Documents" appear in the matrix with cells that track their proxy's access (SII Monitor / Tax Report / the proxy process, respectively) rather than always showing full access.
   7. Pick a role with no access to the SII Monitor window and confirm "Fiscal Monitor" is also absent from that role's real sidebar (not just shown as "none" in the matrix) — this is the sidebar-visibility side effect, not only an admin-matrix display change.
+- **Admin-only and capability-only rows (ETP-5830):** five matrix rows are deliberate and stay: *Relación albarán-factura* (window `107`, granted by the ETP-5075 template lines), and four Admin-only configuration windows with no template grant — *Centro de costos*, *Proyecto*, *Organización* (`110`) and *Secuencias de documentos* (`112`). They show a check for Admin and a dash for the four template roles. Hiding one would mean adding it to `UI_EXCLUDED_WINDOW_IDS`, which also hides it from the NEO/MCP UI view, so they are not hidden. *Proceso Contable* (`acct-process-monitor`) never appears: it is a capability page gated by `isAdminOrClientAdmin` with no `AD_Window_ID`, so the window-access matrix has nothing to show. Making it appear would need a permission-anchor pseudo-window like Smart Scan's.
 
 ### 6d. Informes subsection (ETP-5402, same `/roles` page)
 
@@ -882,3 +883,57 @@ because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an 
 a gratuitous accounting reversal. Full reference, including the `isPosted` /
 `runPreUnpost` contracts and why the helper is a plain module rather than a hook:
 [`../ui-customization.md`](../ui-customization.md) §9e.
+
+## Read-only role access — every write path is gated — ETP-5830
+
+A window whose role tier is `read-only` (`useWindowAccess(windowId)`, from `SFWindowAccessMap`)
+renders with `window.readOnly = true`. `DetailView` turns that into two signals:
+
+- `windowReadOnly` — the static window flag **or** the role tier. Drives header, lines and sub-tabs.
+- `menuActionsReadOnly` — the role tier only. Drives the kebab menu, the `/new` route and attachments.
+
+What a read-only role gets, surface by surface:
+
+| Surface | Read-only behaviour | Where |
+|---|---|---|
+| Header form, "Nuevo", processes, kebab | not editable / hidden | `DetailView.jsx`, `DetailMoreActionsMenu.jsx` (ETP-5116) |
+| `/new` reached by URL | redirected to the list, with no defaults fetch (skipped for `?embedded=1`) | `useNewRouteEditingReset` in `detailViewHelpers.jsx` |
+| "Open the add row" hand-offs (`openAddSecondaryLine`, `openCustomTabAdd` router state on `/{id}`) | not gated: they are router state, not URL, and only an in-app save sets them, which a read-only role cannot do | `DetailView.jsx` deep-link effect |
+| Sub-tab tables (inline and non-inline) | no "+ Añadir", no inline edit, no delete, no hover pencil; an empty tab shows an empty table, not the add illustration (same as `readOnlyLogic` tabs) | `SecondaryTableTab` — `tabReadOnly = windowReadOnly \|\| readOnlyLogic` |
+| Sub-tab sidebar detail / form sub-tabs | read-only form, no Save/Delete | sidebar + `SecondaryFormTab` |
+| Sub-tabs with a `customAddModal` (Contactos → Dirección) | row click opens nothing — the address modal has no read-only mode | `resolveSecondaryRowClickHandler` |
+| Custom `Panel` sub-tabs and `CustomLines` | receive `editing=false` / `readOnly` | `SecondaryPanelTab`, primary Panel |
+| Attachments tab | no upload dropzone, no delete, no description edit; download and preview kept | `AttachmentsTab` `accessReadOnly` |
+
+`AttachmentsTab` has three independent signals; only `accessReadOnly` (the role tier) hides the
+dropzone. A completed document keeps accepting attachments (`isDocumentReadOnly` is ignored,
+ETP-5526), and `readOnly` alone removes deletion only (ETP-5432). Attachment errors now go through
+`translateBackendError`, so the backend's `accessDeniedToSpec` 403 shows as a translated toast,
+not the raw English message.
+
+Custom panels that write on their own each take the signal explicitly: Contactos → Financiero
+(`BillingPreferencesForm`, `FiscalDefaultsSection`), Calendario → Períodos
+(`PeriodsExpandablePanel`), Producto → precios (`ProductPriceBar`), Activos → amortización
+(`AssetsAmortizationPanel`), the SIF tab (`SifTab` / `useSifFieldPatcher` `locked`), facturas
+rectificadas (`ReversedInvoicesPanel`), and the purchase-invoice OCR uploader (`OcrSidePanel`,
+never mounted on `/new` for a read-only role). A new custom panel that writes must read
+`editing` / `readOnly` / `accessReadOnly` the same way — the role tier does not reach it by itself.
+
+**Why the PO/SO "Confirmar" asymmetry happened (ETP-5116), and why it matters for new code.** A
+read-only role could reactivate a Sales Order but not a Purchase Order. The cause was not grants
+or `processes`: `DetailMoreActionsMenu` never checked `windowReadOnly`. Sales Order declares a
+`menuActions` reactivate entry, Purchase Order declares none, so PO only *looked* gated because
+it had nothing to show. The same exposure existed in every window with `menuActions`. Lesson: a
+surface that renders actions must check the read-only signal itself; "it works on window X" proves
+nothing if X has nothing to render there.
+
+- **Automated evidence:** `DetailView.secondaryTabs.vitest.js` (sub-tab table, sidebar, form tab,
+  `customAddModal`, Panel forwarding), `detailViewHelpers.vitest.js` (`/new` redirect),
+  `AttachmentsTab.vitest.jsx` / `useAttachments.vitest.jsx` (dropzone, delete, translated 403),
+  and the panel suites `PeriodsExpandablePanel`, `FiscalDefaultsSection`, `ProductPriceBar`,
+  `OcrSidePanel`.
+- **Manual verification path:** with a role whose tier for Contactos is `read-only`, open a
+  contact: no "+ Añadir" in Persona / Cuenta bancaria / Dirección, a Dirección row opens nothing,
+  the Financiero panel is all disabled, the attachments tab shows files but no dropzone. Open
+  `/contacts/new` directly and confirm it lands on the list. Repeat the attachments check on
+  Payment terms, Product category and Business partner category.

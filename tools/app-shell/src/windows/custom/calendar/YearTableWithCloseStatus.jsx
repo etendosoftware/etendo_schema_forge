@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { createContext, forwardRef, useContext, useMemo } from 'react';
 import { DataTable } from '@/components/contract-ui';
 import { Tag } from '@/components/ui/tag';
 import { useUI } from '@/i18n';
@@ -73,11 +73,36 @@ const columns = [
 
 const filters = [];
 
+// ETP-5577: the fiscal year the First Steps card calls current (`useCalendarReview().year`, the
+// year containing today), provided by CalendarWindow from the review state it already fetched.
+export const CurrentFiscalYearContext = createContext(null);
+
+// Marks the Year cell of that year so the "Ver guía" tour targets it instead of the first row,
+// which is the newest year and may have no periods. A block span inside the cell, not a row
+// attribute: the tour listens for clicks on it, so the row's selection checkbox cannot advance
+// the step. When the current year is unknown or not in the list, the first row is marked.
+function withCurrentYearMarker(currentYear, rows) {
+  const list = rows ?? [];
+  const marked = (list.find((r) => currentYear != null && String(r.fiscalYear) === String(currentYear))
+    ?? list[0])?.id;
+  return columns.map((col) => (col.key !== 'fiscalYear' ? col : {
+    ...col,
+    render: (row) => (
+      <span className="block" {...(marked != null && row.id === marked ? { 'data-current-fiscal-year': '' } : {})}>
+        {row.fiscalYear}
+      </span>
+    ),
+  }));
+}
+
 const YearTableWithCloseStatus = forwardRef(function YearTableWithCloseStatus(props, ref) {
+  const currentYear = useContext(CurrentFiscalYearContext);
+  const tableColumns = useMemo(
+    () => withCurrentYearMarker(currentYear, props.data), [currentYear, props.data]);
   return (
     <DataTable
       ref={ref}
-      columns={columns}
+      columns={tableColumns}
       filters={filters}
       {...props}
       data-testid="DataTable__413aee" />

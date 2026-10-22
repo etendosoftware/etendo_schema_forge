@@ -1,5 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 // ETP-5414 — QA rejection, two bugs fixed on this panel:
@@ -28,6 +29,12 @@ vi.mock('@/components/ui/checkbox', () => ({
   ),
 }));
 
+// ETP-5758 — the bulk delete's outcome toast is asserted below.
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+}));
+
+import { toast } from 'sonner';
 import AssetsAmortizationPanel from '../AssetsAmortizationPanel.jsx';
 
 function mockFetchReturning(rows) {
@@ -159,3 +166,133 @@ describe('AssetsAmortizationPanel — plan total vs. previouslyDepreciatedAmt (E
     expect(totalCell.className).not.toContain('text-destructive');
   });
 });
+
+// ETP-5758 — the panel's bulk trash goes through the generic useBatchDeleteDialog: it asks for
+// confirmation first (it used to delete straight away), the dialog stays open and locked while the
+// DELETEs run, and a one-line 4xx refusal toasts the backend's own reason.
+describe('AssetsAmortizationPanel — bulk delete confirmation (ETP-5758)', () => {
+  const ROWS = [
+    { id: 'line-1', sEQNoAsset: 1, amortizationPercentage: 50, amortizationAmount: 100, 'amortization$_identifier': 'Period 1' },
+    { id: 'line-2', sEQNoAsset: 2, amortizationPercentage: 50, amortizationAmount: 100, 'amortization$_identifier': 'Period 2' },
+  ];
+
+  /** GETs return ROWS; DELETEs follow `onDelete(id)` (default: pending until released). */
+  function mockFetch(onDelete) {
+    const pending = [];
+    const fn = vi.fn((url, opts) => {
+      if (opts?.method === 'DELETE') {
+        const id = String(url).match(/\/amortizationLine\/([^/?]+)$/)?.[1];
+        if (onDelete) return onDelete(id);
+        return new Promise((resolve) => { pending.push(resolve); });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ response: { data: ROWS } }) });
+    });
+    fn.release = () => pending.forEach((r) => r({ ok: true }));
+    return fn;
+  }
+  const deleteCalls = () => global.fetch.mock.calls.filter(([, opts]) => opts?.method === 'DELETE');
+  const getCalls = () => global.fetch.mock.calls.filter(([, opts]) => !opts?.method || opts.method === 'GET');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  async function renderAndSelect(which = 'all') {
+    renderInRouter(<AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1' }} />);
+    await waitFor(() => expect(screen.getByText('Period 1')).toBeInTheDocument());
+    if (which === 'all') fireEvent.click(screen.getByRole('checkbox', { name: 'selectAll' }));
+    else fireEvent.click(screen.getAllByRole('checkbox', { name: 'selectRow' })[0]);
+    await waitFor(() => expect(screen.getByTitle('delete')).toBeInTheDocument());
+  }
+
+  it('never offers the delete toolbar to a read-only role, even with rows selected (ETP-5830)', async () => {
+    global.fetch = mockFetch();
+    renderInRouter(<AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1' }} accessReadOnly />);
+    await waitFor(() => expect(screen.getByText('Period 1')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('checkbox', { name: 'selectAll' }));
+
+    expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+    expect(deleteCalls()).toHaveLength(0);
+  });
+
+  it('the trash opens the shared confirmation and sends no DELETE yet', async () => {
+    global.fetch = mockFetch();
+    await renderAndSelect();
+
+    fireEvent.click(screen.getByTitle('delete'));
+
+    expect(await screen.findByTestId('batch-delete-confirm')).toBeInTheDocument();
+    expect(screen.getByTestId('DialogTitle__batch-delete')).toHaveTextContent('bulkDeleteConfirmTitle');
+    expect(screen.getByTestId('DialogDescription__batch-delete')).toHaveTextContent('bulkDeleteConfirmMessage');
+    expect(deleteCalls()).toHaveLength(0);
+  });
+
+  it('Cancel closes the confirmation without sending any DELETE or refetching', async () => {
+    global.fetch = mockFetch();
+    await renderAndSelect();
+    const getsBefore = getCalls().length;
+
+    fireEvent.click(screen.getByTitle('delete'));
+    fireEvent.click(await screen.findByTestId('Button__batch-delete-cancel'));
+
+    await waitFor(() => expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument());
+    expect(deleteCalls()).toHaveLength(0);
+    expect(getCalls()).toHaveLength(getsBefore);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('stays open and locked (spinner, in-progress wording, aria-busy, disabled trash) until the batch settles', async () => {
+    global.fetch = mockFetch();
+    await renderAndSelect();
+
+    fireEvent.click(screen.getByTitle('delete'));
+    fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(deleteCalls()).toHaveLength(2));
+    expect(deleteCalls().map(([url]) => String(url))).toEqual([
+      expect.stringContaining('/amortizationLine/line-1'),
+      expect.stringContaining('/amortizationLine/line-2'),
+    ]);
+    expect(screen.getByTestId('batch-delete-spinner')).toBeInTheDocument();
+    expect(screen.getByTestId('batch-delete-confirm')).toHaveTextContent('bulkDeleteInProgress');
+    expect(screen.getByTestId('batch-delete-confirm')).toBeDisabled();
+    expect(screen.getByTestId('Button__batch-delete-cancel')).toBeDisabled();
+    expect(screen.getByTestId('DialogDescription__batch-delete')).toHaveTextContent('bulkDeleteInProgressMessage');
+    expect(screen.getByTestId('DialogContent__batch-delete')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByTitle('delete')).toBeDisabled();
+
+    fireEvent.keyDown(document.activeElement || document.body, { key: 'Escape' });
+    expect(screen.getByTestId('batch-delete-confirm')).toBeInTheDocument();
+
+    const getsBefore = getCalls().length;
+    await act(async () => { global.fetch.release(); });
+
+    await waitFor(() => expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument());
+    expect(toast.success).toHaveBeenCalledWith('bulkDeleteAllSucceeded');
+    // At least one line went: the panel refetches.
+    await waitFor(() => expect(getCalls().length).toBeGreaterThan(getsBefore));
+  });
+
+  it('a ONE-line 4xx refusal toasts the backend reason (not the counter) and does not refetch', async () => {
+    const reason = 'The amortization of this line is already processed.';
+    global.fetch = mockFetch(() => Promise.resolve({
+      ok: false,
+      status: 409,
+      json: async () => ({ message: reason }),
+    }));
+    await renderAndSelect('one');
+    const getsBefore = getCalls().length;
+
+    fireEvent.click(screen.getByTitle('delete'));
+    fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(toast.error).toHaveBeenCalledWith(reason);
+    expect(toast.error).not.toHaveBeenCalledWith('bulkDeleteAllFailed');
+    expect(deleteCalls()).toHaveLength(1);
+    expect(getCalls()).toHaveLength(getsBefore);
+    await waitFor(() => expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument());
+    expect(screen.getAllByRole('checkbox', { name: 'selectRow' })[0]).toHaveAttribute('aria-checked', 'true');
+  });
+});
+

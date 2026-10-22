@@ -1624,3 +1624,26 @@ Run against `develop` + this change, local env (`localhost:3100`, GOClient), aft
 Automated: Vitest 453 files / 9296 tests, `node --test` 2408 tests, Playwright mocked (`product-logistics-nonstockable-types`, `product-pricing`) 7/7 — all green. Not exercised live: the `en_US` "Stocked" label and the CSV export download (covered by `importExportColumns` unit tests).
 
 Observations unrelated to the change: the tax-category default shown on a new product is the System row `IVA Normal (FF808181)` (a local-data row, `IsDefault='Y'`, renamed in the DB itself); the create-product popup does not prefill `Nombre` with the lookup text.
+
+## ETP-5680 — Tax category follows the product type
+
+The Tax Category field (`taxCategory`, `C_TaxCategory_ID`, "Grupo de impuestos") follows the Product Type live in the form: **Service (`S`) -> "IVA Normal Servicios"**; **Item (`I`), Resource (`R`), Expense (`E`) -> "IVA Normal"**. Categories are matched by `C_TaxCategory.Name` inside the tenant (own client, then the System client), active rows only.
+
+- **Frontend — `ProductStockDefaultsWatcher.jsx`** (the existing `headerExtra.customForm`, so no `decisions.json` change). On a real `productType` transition it calls `GET /product/defaults?productType=<type>` through `useApiFetch` and applies `defaults.typeTaxCategory` with `onChange('taxCategory', id)` plus `taxCategory$_identifier`.
+- **Never on load.** The watcher fires only for the same record (`prev.id === curr.id`) when the previous type was defined; a brand-new record (no id) may go from "no type" to its first type. Opening an existing product, loading another record, or a data refresh never fetches nor touches the tax category (a saved Article with "Exento" stays "Exento"). Saving never recalculates and the backend PATCH never touches `taxCategory`.
+- **Manual override** is allowed; a later type change overwrites it again (no "touched" tracking). Responses are latest-wins: a slow reply for an earlier type is dropped.
+- **Missing category:** `typeTaxCategory` is only present in the `/defaults` payload when the tenant has the named category. If absent, the request fails, or the name does not exist, the field is left as it is (no error).
+- **Backend — `ProductDefaultsHandler.java`:** `/product/defaults` accepts the optional `productType` query parameter and adds `typeTaxCategory` (+ `$_identifier`), separate from `taxCategory` (the IsDefault fallback) so the UI can tell "no match". The handler reads the parameter from the hook context's query map: `NeoSubEndpointDispatcher` now forwards the `/defaults` query string to `NeoHookDispatcher`, which exposes it as `NeoContext.getQueryParams()` (previously the sub-endpoint hook context had none, and `RequestContext` did not carry it on the live path). `POST /product` with `productType` and no `taxCategory` is filled by type; with no type, or when the tenant lacks the named category, it keeps the previous IsDefault fallback. An explicit `taxCategory` always wins.
+- **Initial value of a new form.** `GET /product/defaults` WITHOUT `productType` (a new form opening) now overwrites `taxCategory` with the category of the type the payload defaults to (`defaults.productType`, Item) — it used to be the IsDefault row (several clients have more than one IsDefault tax category, so that pick was nondeterministic). A new Article therefore starts as "IVA Normal". A tenant lacking the named category keeps the IsDefault value. This lives in the same handler, so it also applies to MCP `etendo_defaults`.
+- **Quick-create popups** (document lines via `lookupCreateTargets` / `RecordCreateModal`) embed the Product window; `DetailView` renders `formFooter` also when embedded, so the same watcher runs there.
+- **Out of scope / unchanged:** the OCR flow (`ProductResolverPopup.jsx`, ETP-5585 line-tax logic).
+- Tests: `ProductStockDefaultsWatcher.vitest.jsx`, `ProductDefaultsHandlerTest.java`.
+- Manual check: create an Article -> "IVA Normal"; switch to Service -> "IVA Normal Servicios"; set "Exento" on a saved Article and reload -> still "Exento"; change the type -> overwritten; quick-create a product from a sales invoice line and switch its type.
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `ProductAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## Read-only role tier: price tab — ETP-5830
+
+With a `read-only` tier, `ProductPriceBar` shows every tariff and its prices but hides "+ Añadir tarifa" and the delete button, and disables the price steppers (`accessReadOnly`, passed by `DetailView` from the role tier). Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

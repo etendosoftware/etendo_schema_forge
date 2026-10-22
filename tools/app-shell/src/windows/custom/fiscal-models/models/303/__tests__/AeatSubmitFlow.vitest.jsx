@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatSubmitFlow.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/fiscalModelsUtils.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/submission390.js
 // Vitest tests for AeatSubmitFlow — the ETP-4456 Phase 2 AEAT 303 electronic
 // submission flow. Covers the pure helpers (response-status branching,
 // NRC/test-mode body shape, error-code-to-message mapping) plus the
@@ -24,7 +25,9 @@ vi.mock('lucide-react', () => ({
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AEAT_SUBMIT_390 } from '../../390/submission390.js';
 import AeatSubmitFlow, {
+  AEAT_SUBMIT_303,
   buildAeatSubmitBody,
   buildLocalDeclarationData,
   classifySubmitOutcome,
@@ -889,5 +892,111 @@ describe('AeatSubmitFlow — NRC required marker (ETP-5027)', () => {
     expect(container.querySelector('.fm-aeat-required-mark')).toBeNull();
     fireEvent.click(checkbox);
     expect(container.querySelector('.fm-aeat-required-mark')).toBeInTheDocument();
+  });
+});
+
+// ETP-5716 — the flow is parameterised by a model adapter; the 303 page passes none and keeps the
+// default (AEAT_SUBMIT_303). The Modelo 390 adapter posts to /fiscal390/submit, has no NRC, no
+// client pre-flight and requires the conformity check.
+describe('AeatSubmitFlow — model adapters (ETP-5716)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const DECL_390 = { id: 'decl-390', year: 2026, period: '0A', model: '390' };
+
+  function render390(props = {}) {
+    return render(
+      <AeatSubmitFlow
+        decl={DECL_390}
+        adapter={AEAT_SUBMIT_390}
+        orgIdent={ORG_IDENT}
+        identChecks={{ sustitutiva: true, formerStatement: '3901234567890' }}
+        summary={{ result: 360 }}
+        token="tok"
+        apiBaseUrl="/sws/neo/fiscal-models"
+        onSuccess={vi.fn()}
+        onClose={vi.fn()}
+        {...props} />,
+    );
+  }
+
+  it('defaults to the 303 adapter (no conformity check rendered)', () => {
+    renderFlow();
+    expect(screen.queryByTestId('AeatSubmitFlow__conformity')).toBeNull();
+    expect(AEAT_SUBMIT_303.requireConformity).toBe(false);
+  });
+
+  it('390: no NRC field, Sustitutiva type label, submit disabled until the conformity check is marked', () => {
+    render390();
+    expect(screen.queryByTestId('AeatSubmitFlow__nrc')).toBeNull();
+    expect(screen.getByText('fm.m349.type.substitutive')).toBeInTheDocument();
+    const submit = screen.getByTestId('AeatSubmitFlow__submit');
+    expect(submit).toBeDisabled();
+    // Looks disabled (no `--active`) and says what is missing.
+    expect(submit.className).not.toContain('fm-btn--save-pill--active');
+    expect(submit.getAttribute('title')).toBe('fm.aeat.submit_hint.conformity');
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__conformity'));
+    expect(submit).not.toBeDisabled();
+    expect(submit.className).toContain('fm-btn--save-pill--active');
+    expect(submit.getAttribute('title')).toBeNull();
+  });
+
+  it('390: the conformity check comes before "Validar sin presentar", whose slot collapses while unchecked', () => {
+    render390();
+    const conformity = screen.getByTestId('AeatSubmitFlow__conformity');
+    const testMode = screen.getByTestId('AeatSubmitFlow__testMode');
+    expect(conformity.compareDocumentPosition(testMode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('AeatSubmitFlow__testModeSlot').className).toContain('fm-aeat-testmode-slot--collapsible');
+  });
+
+  it('303: the test-mode slot keeps its reserved space (not collapsible)', () => {
+    renderFlow();
+    expect(screen.getByTestId('AeatSubmitFlow__testModeSlot').className).not.toContain('--collapsible');
+  });
+
+  it('303: the enabled submit button keeps the active look and has no hint', () => {
+    renderFlow();
+    const submit = screen.getByTestId('AeatSubmitFlow__submit');
+    expect(submit).not.toBeDisabled();
+    expect(submit.className).toContain('fm-btn--save-pill--active');
+    expect(submit.getAttribute('title')).toBeNull();
+  });
+
+  it('390: posts to /fiscal390/submit with year, period and id only, and reports the result', async () => {
+    const onResult = vi.fn();
+    const onSuccess = vi.fn();
+    stableApiFetch.mockReturnValueOnce(jsonResponse({
+      status: 'SUCCESS', testMode: false, csv: 'CSV1', justificanteNumber: '3909999999999', errors: [], warnings: [],
+    }));
+    render390({ onResult, onSuccess });
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__conformity'));
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__submit'));
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+    const [path, init] = stableApiFetch.mock.calls[0];
+    expect(path).toBe('/fiscal390/submit?year=2026&period=0A&id=decl-390');
+    expect(JSON.parse(init.body)).toMatchObject({ testMode: false, nrc: '', presenterNif: 'B20868352' });
+    expect(onResult.mock.calls[0][0].justificanteNumber).toBe('3909999999999');
+    expect(onSuccess).toHaveBeenCalledWith('submitted_ack');
+    expect(screen.getByText('3909999999999')).toBeInTheDocument();
+  });
+
+  it('390: an AEAT error is shown with its code and does not report a success', async () => {
+    const onSuccess = vi.fn();
+    stableApiFetch.mockReturnValueOnce(jsonResponse({
+      status: 'ERROR', testMode: false, errors: ['E390001 NIF del declarante no identificado'], warnings: [],
+    }));
+    render390({ onSuccess });
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__conformity'));
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__submit'));
+    expect(await screen.findByText('E390001 NIF del declarante no identificado')).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('390: BLOCKING_INCIDENTS maps to its own message', () => {
+    expect(resolveErrorCodeKey('BLOCKING_INCIDENTS')).toBe('fm.aeat.error.blockingIncidents');
+  });
+
+  it('390 adapter: download names carry the model and the exercise', () => {
+    expect(AEAT_SUBMIT_390.pdfName(DECL_390, 'justificante')).toBe('390_justificante_2026.pdf');
+    expect(AEAT_SUBMIT_390.showNrc()).toBe(false);
   });
 });

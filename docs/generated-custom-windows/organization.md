@@ -32,10 +32,10 @@ Backed by the real Etendo Classic AD_Window **`Organization`, ID `110`** — thi
 | `9F030341690C4BB3A3C15835AEC0FF39` | Warehouse | `AD_Org_Warehouse` | No |
 | `910CA3AD36CA47F2B92B7AB9484EF47B` | Actividades del IAE | `EPIAE_OrgInfo_Epigraph` | **Yes** (ETP-4975) — hand-built editable grid, see "Actividades del IAE (ETP-4975)" below |
 | `25301674D3CB4FCBBC285C5AAD232376` | Certificado Digital | `ETSG_Certificate` | No |
-| `53EEA7ADEBA24190A340084CC9A4119C` | Representante Legal | `OREP_Representative_Info` | No |
+| `53EEA7ADEBA24190A340084CC9A4119C` | Representante Legal | `OREP_Representative_Info` | **Yes** (ETP-5716) — curated as a `secondaryTabs` NEO entity for the Modelo 390, see "Representante Legal and Modelo 390 identity (ETP-5716)" below |
 | `A40755889D614B358959BBA14D9B669A` | Email Configuration | `C_POC_CONFIGURATION` | No |
 
-The other 9 tabs (Period Control ×3, General Ledgers, Intrastat, Data Sets, Warehouse, IAE, Certificado Digital, Representante Legal, Email Configuration) are entirely out of scope for this ticket — none of their fields are extracted, curated, or exposed anywhere in this window.
+The other 9 tabs (Period Control ×3, General Ledgers, Intrastat, Data Sets, Warehouse, IAE, Certificado Digital, Representante Legal, Email Configuration) were entirely out of scope for ETP-4749. Two of them were curated later: Actividades del IAE (ETP-4975) and Representante Legal (ETP-5716).
 
 ## Window-access gate (ETP-5395 Fix 3)
 
@@ -185,6 +185,16 @@ The contract/NEO CRUD layer (`GET/POST/PUT/PATCH/DELETE /sws/neo/organization/ac
 - **`tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx`** — the editable grid: Epígrafe IAE / Clave / Código (all `CreatableSearchSelect` with `serverSearch: true` — not the plain `SelectorInput` other lines tables like `AmortizationLinesTable.jsx` use, because `SelectorInput`'s search box sends a `search` query param the real NEO Headless backend does not read, so it never actually filtered; `CreatableSearchSelect`'s `serverSearch` mode sends the `q` param the backend expects, debounced 300ms — `selectorUrl` built from `apiBaseUrl` + `/actividadesDelIae/selectors/<column>`, column names, not the camelCase field key, per NEO Headless's `GET /sws/neo/{spec}/{entity}/selectors/{columnName}`) and a `default` checkbox, plus add/delete row affordances (`AddLineButton`, inline add-row with explicit save/cancel icons rather than InlineLinesPanel's click-outside auto-submit — an intentional simplification, open for REVIEW). A `TriangleAlert` inline hint appears next to `epiaeCode` on any row that is `default = true` with no code set, and an `Info` tooltip on the "Código" column header explains why the field matters. Every field change (selector pick, default toggle, delete, new row) persists immediately via its own API call — this section is **not** part of `form`/the page's unsaved-changes banner, matching the row-level-save convention lines tables already use elsewhere (e.g. `AmortizationLinesTable.jsx`).
 - **`tools/app-shell/src/windows/custom/organization/useActividadesIae.js`** — fetch/create/update/delete hook, sibling to `useOrganizationData.js` (same spec base pattern: `${neoBase(apiBaseUrl)}/organization`). List reads use `?parentId=<orgId>`; creates send `parentId` in the body so `NeoCrudHandler#injectParentIdAsProperty` resolves the FK server-side without the client needing to know the column name.
 
+**Modelo 390 cap — 1 main + 5 others (ETP-5716).** The classic Modelo 390 generator
+(`AEAT390Report2022`) writes the main activity plus at most 5 others into a fixed-size
+`formattedCodeArray`; a 6th non-main activity raises an `ArrayIndexOutOfBoundsException` at
+"Generar". The grid therefore stops at 6 rows (`IAE_MAX_ACTIVITIES` / `iaeCapState` in
+`useActividadesIae.js`): at the cap the "Añadir" button is disabled with a hint
+(`orgIaeCapHint`). Existing data is never hidden — an organization that already has more than 5
+non-main activities (created before the cap, or in Classic) sees every row plus an amber warning
+(`orgIaeOverCapWarning`) asking to remove the extra ones before generating the 390. Missing main
+activity / activity code checks for the 390 are still pending (390 incidents phase).
+
 **Single-default rule (design decision, no AD callout ported):** the Classic callout `org.openbravo.erpCommon.ad_callouts.SL_IsDefault` on the `default` field could not be classified (`rules-raw.json`: `complexity: "unknown"`, `confidence: "low"`, `warning: "Source not found"`) and stays un-curated, same as this window's other 68 extracted rules. Its net effect — at most one default row per organization — is replicated by hand in `useActividadesIae.js`'s `enforceSingleDefault(keepId)`: whenever a row is turned **on** (`default: true`), every *other* row belonging to the organization is explicitly `PATCH`ed to `default: false` — a real API call per sibling row, not just a local state flip — before the list is refetched. This runs both when toggling an existing row's checkbox and when submitting a new row with `default` already checked. A failed sweep on one sibling is swallowed per-row so one bad row can't block the others from being corrected.
 
 **Concurrent-toggle fix (QA, ETP-4975):** `enforceSingleDefault` used to read its "who else is default" snapshot straight from `state.rows`, closed over at call time — that snapshot only advances once a `refetch()`'s `setState` actually lands, never optimistically at the moment a toggle fires. Two "Principal" checkboxes flipped back-to-back, before either PATCH round-trip settled, each read the OTHER row as still `default:false` in their own stale closure, so neither swept the other — both persisted `default:true` server-side with no corrective PATCH ever issued. The fix is a `rowsRef` (a ref mirroring `state.rows`) that `enforceSingleDefault` also writes its own optimistic mark into, synchronously, before doing anything async — a fresh, always-current source of truth instead of the stale closured snapshot. Because a JS async function runs its synchronous prefix to completion before yielding, "mark self default:true, then look for other rows already marked default:true" is effectively atomic across overlapping calls, so whichever call resumes second still sees and sweeps the first call's mark, even though neither call ever awaited a fresh reload.
@@ -216,6 +226,134 @@ time) and were NOT included in the ETP-5432 severity correction above — they k
 `warning` severity.
 
 **A separate, unrelated missing-required-fields banner also converted to a toast (ETP-5432 pt.10) — stays `warning` severity.** `FmModel303Page.jsx`'s "missing required identification fields" banner (`fm.validation.missing_required_banner`, e.g. "Tipo de declaración" left blank) was a second, independent fixed inline banner on the same page — unrelated to the IAE guard. It was also converted to a toast (`showMissingRequiredFieldsReminder(t, missingFieldNames)`, fired from a mount effect), but — unlike the IAE guard above — it was deliberately left at the default `warning` severity; the user's error-severity correction named the IAE message specifically. Full write-up: `docs/generated-custom-windows/fiscal-models.md`.
+## Representante Legal and Modelo 390 identity (ETP-5716)
+
+The Modelo 390 (annual VAT summary, `org.openbravo.module.aeat390.es`) fills the declarant identity
+and its legal representative from two places, and both are now exposed through NEO so GO can
+replicate Classic:
+
+- **`AD_OrgInfo` "Modelo 390" field group** (Classic: Organization > Information, seq 140–190). If
+  `EM_AEAT390_ISPERSON = 'Y'` (natural person), the report reads the declarant's
+  `EM_AEAT390_FIRSTNAME`/`SURNAME1`/`SURNAME2` and the representative's `EM_AEAT390_REP_NIF`/`REP_NAME`.
+- **`OREP_Representative_Info`** (module `org.openbravo.module.organization.representative.es`,
+  Classic tab "Representante Legal", window 110, tab level 1). If the organization is NOT a natural
+  person, the report uses the **first 3 rows ordered by `LINE`** as its legal representatives
+  (name, NIF, power-of-attorney date, notary).
+
+### Data model
+
+`decisions.json` changes (the UI that consumes them is described under "UI" below):
+
+| Entity | Field | Visibility | Notes |
+|---|---|---|---|
+| `information` | `aeat390Isperson` | editable (boolean) | "Persona Física 390". AD-mandatory, default `N`. No display logic |
+| `information` | `aeat390Firstname`, `aeat390Surname1`, `aeat390Surname2` | editable (text, 60) | Declarant name/surnames. Optional. Display logic `@EM_Aeat390_Isperson@='Y'`, carried through from the raw AD (no override in `decisions.json`) |
+| `information` | `aeat390RepNif` (20), `aeat390RepName` (60) | editable (text) | Natural-person representative. Optional. Same display logic |
+| `representanteLegal` | `taxID` ("CIF/NIF", 20), `firstName` ("Nombre"), `lastname1` ("Primer Apellido"), `powerDate` ("Fecha Poder", date), `notaryName` ("Notaría") | editable, required | Matches the Classic AD mandatory flags |
+| `representanteLegal` | `lastname2` ("Segundo Apellido") | editable, optional | |
+| `representanteLegal` | `lineNo` | system | Same convention as `actividadesDelIae`. The AD default `@SQL=SELECT COALESCE(MAX(LINE),0)+10 ... WHERE AD_Org_ID=@AD_Org_ID@` is resolved by NEO both on `GET .../representanteLegal/defaults?parentId=<orgId>` and on create (`NeoMandatoryDefaultsService`): verified live, two consecutive creates got `lineNo` 10 and 20 |
+| `representanteLegal` | `organization`, `active` (`fromConfig` `Y`), `client`, `id`, audit columns | system | Same as `actividadesDelIae` |
+
+`representanteLegal` is declared under `window.secondaryTabs` (`tabOrder: 20`, after the IAE tab)
+with `addLineFields` `taxID, firstName, lastname1, lastname2, powerDate, notaryName`.
+`OrganizationPage.jsx` is hand-built and does not render the generated `secondaryTabs` scaffold, so
+the visible section is a hand-written component, as with the IAE grid.
+
+### NEO API
+
+Same contract as `actividadesDelIae` (spec segment `organization`, not `organizaci-n`):
+
+- List: `GET /sws/neo/organization/representanteLegal?parentId=<orgId>&_limit=100`. Rows are not
+  returned ordered by line, so sort by `lineNo` (with `_sortBy=lineNo` or on the client); the 390
+  reads the first 3.
+- Create: `POST /sws/neo/organization/representanteLegal` with
+  `{ taxID, firstName, lastname1, lastname2, powerDate: "yyyy-MM-dd", notaryName, parentId: <orgId> }`.
+  Leave `lineNo` out so the server assigns `MAX+10`.
+- Update / delete: `PATCH` / `DELETE /sws/neo/organization/representanteLegal/{id}`.
+- The `aeat390*` fields are read and written on the existing `information` entity
+  (`/sws/neo/organization/information`), the same record the page already loads.
+
+### UI
+
+A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 390"**
+(`orgSection390`), placed last, right after "Actividades del IAE". Its body is
+`Modelo390IdentitySection.jsx`:
+
+- **"Persona física" switch** (`information.aeat390Isperson`). It is a page-form field: flipping it
+  shows the unsaved-changes banner and is persisted by the page's Save, in the same
+  `PATCH /information/{orgId}` as the rest of `AD_OrgInfo`. The branch below follows the form value,
+  so flipping it previews the other branch before saving.
+- **ON — natural person:** Nombre, Primer apellido, Segundo apellido, NIF del representante legal,
+  Nombre del representante legal (`aeat390Firstname/Surname1/Surname2/RepNif/RepName`). Also page-form
+  fields, saved with the page; inputs are capped at the AD lengths (60, and 20 for the NIF). The AD
+  columns are optional, but the classic module adds two DB checks on `AD_OrgInfo`, mirrored by
+  `getAeat390IdentityErrors` (`representanteLegal.js`) so the save never reaches them:
+  - `EM_AEAT390_ISPERSON_MAND_CH` — a natural person needs **Nombre** and **Primer apellido**
+    (marked with a red asterisk; inline `fieldRequired`);
+  - `EM_AEAT390_REPR_FIS_CH` — the representative **NIF and name are both empty or both filled**
+    (inline `org390RepPairRequired` on the empty one).
+
+  A non-empty representative NIF must also pass `getTaxIdError`
+  (`tools/app-shell/src/lib/taxIdValidation.js`, the same validator as the organization NIF). Any of
+  these errors blocks Save with inline errors and a toast. The checks only run while the switch is
+  ON — the fields are hidden otherwise.
+
+  **Payload** (`buildAeat390InfoPayload`): blank values are sent as `null`, never `''` — an empty
+  string would satisfy the classic NOT NULL checks and then write an empty name into the 390 file —
+  and the representative NIF is stored **normalized** (`normalizeTaxId`: trimmed, `.`/`-`/spaces
+  removed, uppercased), the same value the validator judged. Classic does not normalize: its file
+  writer uppercases, keeps only `[A-Za-z0-9. ]` and truncates to 9, so a raw `12.345.678-Z` would
+  reach the file as `12.345.67`.
+- **OFF — legal representatives grid** (`RepresentantesLegalesSection.jsx` +
+  `useRepresentantesLegales.js`). Columns: Línea, CIF/NIF, Nombre y apellidos, Fecha del poder,
+  Notaría, edit/delete. Rows are listed by `lineNo` ascending (requested with `_sortBy=lineNo` and
+  sorted again on the client by `sortByLineNo`), and the first 3 **active** rows carry a small
+  **"390"** marker; the other rows are shown in muted text. A hint above the table states that only
+  the first 3 by line are sent. Line numbers are not editable — the server assigns `MAX+10` on
+  create, so a new representative always goes last.
+  - **Inactive rows:** GO never deactivates a representative (`active` is a system field, default
+    `Y`), but a row deactivated in Classic still comes back in the list. It gets no marker
+    (`activeRepresentatives` / `isActiveRepresentative`). Classic reads the first 3 **active**
+    representatives by line: `AEAT390ReportDao.getOrgRepresentatives` uses
+    `OBDal.createCriteria(RepresentativeInfo.class)`, and OBCriteria filters on active by default.
+    The grid's "390" marker and the 390 page's read-only "Representante" card
+    (`toRepresentatives`, `useOrg390Identity.js`) follow the same rule, so there is no divergence:
+    an inactive row is skipped and the next active one by line takes its place.
+  - **No representative with a NIF:** an amber hint (`orgRepLegalEntityHint`, "Las personas
+    jurídicas deben indicar al menos un representante legal con NIF: sin él no se puede generar ni
+    presentar el Modelo 390") when none of the first 3 active rows by line has a `taxID`
+    (`hasDeclarableRepresentative`). It mirrors the **blocking** 390 incident
+    `NO_LEGAL_REPRESENTATIVE`: the AEAT rejects a legal entity's 390 with no representative NIF
+    (`PAR012`), so the 390 page disables Generar / Presentar until one is added here. Classic still
+    generates the file with blank representative positions; the grid itself is never locked.
+  - The representative `taxID` is stored normalized (`normalizeTaxId`, in
+    `buildRepresentativePayload`), for the same reason as the natural-person NIF above.
+- **Add / edit** open a form card below the table (not an inline row: six fields, one a date picker,
+  do not fit in a row at 1280px). Inline validation before any request (`getRepresentativeErrors` in
+  `representanteLegal.js`): required `taxID`, `firstName`, `lastname1`, `powerDate`, `notaryName`
+  (`fieldRequired`), AD lengths (`fieldMaxLengthError`), and the NIF format via `getTaxIdError`.
+  Each create/update/delete persists immediately through its own request, like the IAE grid — the grid
+  is not part of the page's unsaved-changes form. Backend errors are toasted with the server message
+  (`extractApiErrorMessage`) and the form stays open.
+- **Dates:** `powerDate` is a date-only value. It is edited with the shared `DateField`, normalised to
+  `yyyy-MM-dd` with local getters (`toCalendarISO`, built on `parseCalendarDate`) before it is sent,
+  and displayed with `formatCalendarDate` in the UI locale — no timezone shift.
+
+### Section deep links (ETP-5716)
+
+Three sections carry a DOM id another window can link to — `/organization#<id>` — and the page
+scrolls to it once loaded (`sectionAnchorFromHash`, `ORG_SECTION_ANCHOR` in `OrganizationPage.jsx`;
+an unknown hash is ignored):
+
+| Id | Section |
+|---|---|
+| `org-section-fiscal` | Datos fiscales (NIF, razón social) |
+| `org-section-iae` | Actividades del IAE |
+| `org-section-390` | Representante legal / Modelo 390 |
+
+Used by "Editar en Organización" of the Modelo 390 incidents (`fiscal-models.md`, "Incidents"):
+the link names the section where the incident is fixed.
+
 ## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
 
 Three `AD_OrgInfo` columns — `EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`,
@@ -322,31 +460,41 @@ case list, deliberately).
 
 - **Country is derived, not a real field**: `deriveCountryFromIdentifier()` in `OrganizationPage.jsx` takes the last `" - "`-separated segment of the fiscal address's `$_identifier` string (e.g. `"... - España"`). There is no dedicated read-only country field on this window's contract. If one is added later, prefer it over this heuristic.
 - **Country flag is a small hardcoded lookup**: `countryFlag.js` maps a handful of country names to flag emoji for the read-only País pill. Unknown country names render without a flag (no crash) — extend the map if a new country shows up.
+- **Representative NIF forms K/L/M are rejected** (ETP-5716 verification): `taxIdValidation.js`'s
+  person pattern (`^\d{8}[A-Z]$`) and its Java mirror `SpanishTaxIdValidator` do not accept the
+  valid NIF K/L/M forms (letter + 7 digits + control). Out of scope here — it needs the same change
+  on both sides.
 - **No dedicated `organization` NEO entity for the fiscal address**: see "Fiscal address workaround" above — this is the accepted, permanent shape, not a pending fix.
 
 ## Automated evidence
 
-- `artifacts/organization/decisions.json` — `layoutType: "custom"`, `organization` + `information` entities curated (UI-exposed); `actividadesDelIae` curated as `window.secondaryTabs` (ETP-4975 — see "Actividades del IAE" above); the remaining out-of-scope tabs stay excluded.
+- `artifacts/organization/decisions.json` — `layoutType: "custom"`, `organization` + `information` entities curated (UI-exposed); `actividadesDelIae` curated as `window.secondaryTabs` (ETP-4975 — see "Actividades del IAE" above); `representanteLegal` curated as `window.secondaryTabs` and the six `information.aeat390*` fields un-discarded (ETP-5716 — see "Representante Legal and Modelo 390 identity" above); the remaining out-of-scope tabs stay excluded.
 - `cli/config/regen-windows.json` — `organization` registered (`windowId: "110"`).
 - `tools/app-shell/src/menu.json` — `organization` entry under the Settings group.
 - `tools/app-shell/src/windows/registry.js` — `organization` in `customLoaders`.
 - `tools/app-shell/src/windows/custom/organization/index.jsx` — pipeline-generated scaffold, imports `OrganizationPage`.
-- `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx` — the hand-built page: 4 sections (Identidad, Datos fiscales, Datos de contacto, Actividades del IAE), unsaved-changes banner, field mapping.
+- `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx` — the hand-built page: sections Identidad, Datos fiscales, Certificado digital, Datos de contacto, Actividades del IAE and Representante legal / Modelo 390 (ETP-5716), unsaved-changes banner, field mapping (including the six `information.aeat390*` fields and the representative-NIF check).
 - `tools/app-shell/src/windows/custom/organization/useOrganizationData.js` — fetch/save hook (`organization` + `information`; `etgoEmail`/`etgoPhone`/`etgoWeb` are plain `information` fields, no Business Partner fetch).
 - `tools/app-shell/src/windows/custom/organization/OrgLogoField.jsx` — logo upload with initials fallback; PNG/JPG/SVG, 2 MB cap.
 - `tools/app-shell/src/windows/custom/organization/BusinessTypeCards.jsx` — Empresa/Autónomo selection cards.
 - `tools/app-shell/src/windows/custom/organization/countryFlag.js` — country-name → flag-emoji lookup for the read-only País pill.
 - `tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx` — editable IAE-activities grid (ETP-4975): selectors, default checkbox, add/delete rows, missing-code hint.
 - `tools/app-shell/src/windows/custom/organization/useActividadesIae.js` — fetch/create/update/delete hook + `enforceSingleDefault()` (ETP-4975 single-default rule) + `rowsRef` concurrent-toggle fix (QA).
+- `tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx` — "Persona física" switch + natural-person fields, or the representatives grid (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx` — legal representatives grid, "390" marker on the first 3 by line, add/edit form card with inline validation (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/useRepresentantesLegales.js` — list (line-ordered) / create (no `lineNo`) / update / delete hook (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/representanteLegal.js` — pure helpers: `sortByLineNo`, `toCalendarISO`, `buildRepresentativePayload`, `getRepresentativeErrors`, AD length constants (ETP-5716).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatSubmitFlow.jsx` — `isMissingDefaultIaeActivity()`/`checkMissingIaeGuard()` pure helpers + the last-period pre-flight guard on "Marcar como Presentado" (ETP-4975); feedback is now `showIaeActivityReminder(t, navigate, { severity: 'error' })`, not a banner (ETP-5432 pt.10 — see "Modelo 303 pre-flight guard" above).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx` — the mirror last-period pre-flight guard on "Generar fichero 303" (`handleGenerate`), reusing `isMissingDefaultIaeActivity()`/`checkMissingIaeGuard()` from `AeatSubmitFlow.jsx` (ETP-4975); plus (ETP-5432 pt.10) a proactive mount-effect check and the same guard now also covering `handlePresent`'s two direct manual "Registrar/Presentar" paths, all three firing the error-severity toast instead of the removed `genError`/`missingIaeGuard` banner state.
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js` — `isLastPeriodOfYear()`, extracted and shared with both guards above.
 - `tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx` / `InlineSearchCombo.jsx` — QA-found pagination fixes (scroll-triggered "load more" was cutting results short) plus the `searchGenerationRef` fix (ETP-4975 BUG-2): a new search fired while a scroll-page fetch was still in flight could otherwise let the stale page's results land after the new search's, since both fixes share the same "tag every fetch with its search generation, discard a resolved fetch whose generation is no longer current" pattern.
 - `tools/app-shell/src/lib/imageUpload.js` — `sanitizeImageName()`, shared by this window's `OrgLogoField.jsx` and the generic `ImageField.jsx` (contract-ui): truncates upload filenames to AD_Image's 60-char `Name` limit.
 - `tools/app-shell/src/windows/custom/organization/__tests__/useOrganizationData.vitest.js` — load/save behavior (including the direct AD_OrgInfo contact columns), error handling.
-- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.
+- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.; plus (ETP-5716) the Modelo 390 identity fields: seeding from `information`, Save payload with the six `aeat390*` fields, and the representative-NIF block.
 - `tools/app-shell/src/windows/custom/organization/__tests__/ActividadesIaeSection.vitest.jsx` — grid rendering, selector picks, default toggle, add/delete rows, missing-code hint (ETP-4975).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useActividadesIae.vitest.jsx` — load/create/update/delete, `enforceSingleDefault` sweep behavior including the per-row-swallowed-failure case (ETP-4975).
+- `tools/app-shell/src/windows/custom/organization/__tests__/useRepresentantesLegales.vitest.jsx` — line ordering (server param + client sort), create omits `lineNo` and carries `parentId`, `yyyy-MM-dd` power date, update/delete, and the `representanteLegal.js` validation helpers (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/__tests__/Modelo390IdentitySection.vitest.jsx` — "Persona física" switches person fields vs grid, "390" marker on the first 3 rows, required/NIF inline validation, create/edit/delete, save-error toast (ETP-5716).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/AeatSubmitFlow.missingIaeGuard.vitest.jsx` — the "Marcar como Presentado" pre-flight guard: blocks/proceeds cases, fail-open on fetch error (ETP-4975); updated for ETP-5432 pt.10 to assert `showIaeActivityReminder` is called with `{ severity: 'error' }` instead of asserting on banner/CTA text.
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/FmModel303Page.missingIaeGuard.vitest.jsx` — the mirror "Generar fichero" pre-flight guard, same case matrix (ETP-4975); updated the same way for the toast, plus (ETP-5432 pt.10) a new describe block covering `handlePresent`'s two manual "Registrar/Presentar" paths — including an async-timing test that keeps the guard's own fetch pending to prove `handlePresent` genuinely awaits it rather than racing ahead — and mocking fixes so a double-prefixed/malformed guard URL 404s in the test the same way it would against the real backend (see "Double-prefixed URL bug" above).
 - `tools/app-shell/src/lib/__tests__/imageUpload.test.js` — `sanitizeImageName()` truncation/extension-preservation cases.
@@ -387,3 +535,17 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 13. Mark a row as "Principal" without picking a Código and confirm a warning icon appears next to that row's Código selector (tooltip: "Falta el código…"); confirm hovering the info icon next to the "Código" column header explains why it matters for Modelo 303. Confirm save is NOT blocked either way (visual hint only).
 14. Delete a row via the trash icon and confirm it disappears from the list and does not reappear on reload.
 15. Open Fiscal → Modelo 303 for a period whose organization has NO default IAE activity with a code, select the last period of the year (4T quarterly, or December for monthly), and attempt to submit. Confirm a translated banner appears ("Esta organización necesita al menos una actividad del IAE marcada como principal…") with a "Ir a Organización" button that navigates to `/organization`, and that the request never reaches the backend's submit endpoint. Repeat for a non-last period (e.g. 1T/2T/3T or any month before 12) with the same missing data and confirm submission proceeds normally (the guard only applies to the last period). Then add/mark a valid default IAE row with a code and confirm the last-period submission proceeds past this guard.
+16. **Modelo 390 identity — natural person (ETP-5716).** In "Representante legal / Modelo 390", turn
+    "Persona física" on, leave Nombre and Primer apellido empty and Save: both show "Requerido" inline
+    and nothing is saved. Fill them, type only "Nombre del representante legal" and Save: the NIF
+    field shows "Debe rellenar ambos…". Type the NIF as ` 12.345.678-z ` with a name and Save: it
+    saves, and after a reload the NIF shows `12345678Z`. Clear Segundo apellido and Save: in the DB
+    `EM_AEAT390_SURNAME2` is `NULL`, not `''`.
+17. **Legal representatives (ETP-5716).** With "Persona física" off and no representatives, an amber
+    hint says legal entities must declare at least one with a NIF, and the 390 of the organization
+    shows the blocking `NO_LEGAL_REPRESENTATIVE` incident (Generar / Presentar disabled). Add a
+    representative with NIF `12.345.678-Z`: the grid shows `12345678Z`. With a row deactivated in
+    Classic, confirm it gets no "390" marker and the marker moves to the next active row.
+18. **IAE cap (ETP-5716).** With 1 main + 5 other activities, "Añadir actividad del IAE" is disabled
+    with the "Máximo alcanzado" hint. On an organization that already has more than 5 non-main
+    activities, every row is still listed and an amber warning asks to remove the extra ones.

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
+
 const NON_STOCKABLE_PRODUCT_TYPES = new Set(['S', 'E', 'R']);
 
 // ETP-5696: the sheet no longer exposes Sale/Purchase ("Availability"); they are always saved as true.
@@ -29,8 +31,29 @@ const isTrue = v => v === true || v === 'Y' || v === 'true';
  *
  * Renders nothing.
  */
-export default function ProductStockDefaultsWatcher({ data, onChange }) {
+export default function ProductStockDefaultsWatcher({ data, onChange, entity = 'product', apiBaseUrl }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
+  // Latest-wins guard: a slow response for an earlier type must not overwrite a later pick.
+  const taxRequestRef = useRef(0);
+  useEffect(() => () => { taxRequestRef.current += 1; }, []);
   const prevRef = useRef({ id: data?.id, snapshot: null, productType: data?.productType });
+
+  // GET /product/defaults?productType=X; the backend returns `typeTaxCategory` only when the
+  // tenant has the category named for the type, so a missing name leaves the field untouched.
+  const applyTaxCategoryForType = async (productType) => {
+    const requestId = ++taxRequestRef.current;
+    try {
+      const res = await apiFetch(`/${entity}/defaults?productType=${encodeURIComponent(productType)}`);
+      if (!res.ok || requestId !== taxRequestRef.current) return;
+      const json = await res.json();
+      const defaults = json?.defaults || {};
+      if (!defaults.typeTaxCategory || requestId !== taxRequestRef.current) return;
+      onChange?.('taxCategory', defaults.typeTaxCategory);
+      onChange?.('taxCategory$_identifier', defaults['typeTaxCategory$_identifier'] ?? '');
+    } catch {
+      // Best effort: any failure leaves the tax category as the user has it.
+    }
+  };
 
   useEffect(() => {
     const prev = prevRef.current;
@@ -39,7 +62,12 @@ export default function ProductStockDefaultsWatcher({ data, onChange }) {
     const snapshot = EDITABLE_FIELDS.map(k => data?.[k]);
     prevRef.current = { id: currId, snapshot, productType: currType };
 
-    if (prev.id !== currId) return; // different record loaded, not a live edit
+    if (prev.id !== currId) {
+      // Different record loaded, not a live edit: drop any tax-category reply still in flight so it
+      // can never land on the newly loaded record.
+      taxRequestRef.current += 1;
+      return;
+    }
 
     if (prev.productType !== currType) {
       const wasNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(prev.productType);
@@ -47,6 +75,12 @@ export default function ProductStockDefaultsWatcher({ data, onChange }) {
       if (wasNonStockable !== isNonStockable) {
         onChange?.('stocked', !isNonStockable);
         onChange?.('returnable', !isNonStockable);
+      }
+      // ETP-5680: only a live productType change (same record, a previous defined type) reaches
+      // here, so opening/loading a saved product never touches its tax category. A brand-new
+      // record (no id) may go from undefined to its first type.
+      if (currType && (prev.productType || !currId)) {
+        applyTaxCategoryForType(currType);
       }
     }
 

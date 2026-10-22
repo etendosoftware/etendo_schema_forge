@@ -192,7 +192,7 @@ const PRICE_ROW_GRID = 'grid grid-cols-[minmax(120px,300px)_minmax(192px,201px)_
 // Hit at 1280x720 with the rail expanded and the 320 px sidebar.
 const PRICE_STACK_BELOW_PX = 780;
 
-export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api, onCountChange }) {
+export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api, onCountChange, accessReadOnly = false }) {
   const ui = useUI();
   const [panelRef, panelWidth] = useElementWidth();
   // 0 = not measured yet (jsdom, first commit): keep the side-by-side layout.
@@ -550,7 +550,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
           {/* Spacer over the "Unit price" column */}
           <div className="min-w-0" aria-hidden="true" />
           <div className="min-w-0 flex justify-end">
-            {!adding && (
+            {!adding && !accessReadOnly && ( // ETP-5830: a read-only role sees prices, cannot change them
               // Same control as "Add line" in the order/invoice lines panels (shared
               // AddLineButton). It hardcodes data-testid="action-add-line", which is not
               // unique in this window (the Accounting secondary tab renders one too), so the
@@ -671,7 +671,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                   <PriceStepper
                     value={row.standardPrice}
                     prefix={currencySymbol}
-                    disabled={saving}
+                    disabled={saving || accessReadOnly}
                     onCommit={v => patchField(row, 'standardPrice', v)}
                     data-testid="PriceStepper__d76b90" />
                 </div>
@@ -680,13 +680,13 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                   <PriceStepper
                     value={row.listPrice}
                     prefix={currencySymbol}
-                    disabled={saving}
+                    disabled={saving || accessReadOnly}
                     onCommit={v => patchField(row, 'listPrice', v)}
                     data-testid="PriceStepper__d76b90" />
                 </div>
                 {/* Delete */}
                 <div className="flex items-center h-10 shrink-0">
-                  <button
+                  {!accessReadOnly && <button
                     type="button"
                     onClick={() => handleDelete(row)}
                     disabled={saving}
@@ -695,7 +695,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     className="w-8 h-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive disabled:opacity-40 opacity-0 group-hover/row:opacity-100 transition-all"
                   >
                     {saving ? <Loader2 size={18} className="animate-spin" data-testid="Loader2__d76b90" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />}
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>

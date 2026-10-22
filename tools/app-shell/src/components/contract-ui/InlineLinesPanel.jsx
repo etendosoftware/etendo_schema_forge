@@ -8,8 +8,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Layers, Pencil, Search } from 'lucide-react';
-import { IconicTrashIcon } from '@/components/ui/custom-icons';
+import { Layers, Search } from 'lucide-react';
+import { IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -26,9 +26,11 @@ import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
-import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
+import { columnFlex, isLineGridColumn, withLinesAbsorberColumn } from '@/lib/linesColumnWidth.js';
+import { isNoTruncateColumn, withContentWidths, rowsWithDraft } from '@/lib/linesContentWidth.js';
+import { useFontsReady } from '@/hooks/useFontsReady.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
-import { registerLinesScrollHost, unregisterLinesScrollHost } from '@/lib/linesScrollHost.js';
+import { registerLinesScrollHost, unregisterLinesScrollHost, useLinesAddRowDraft } from '@/lib/linesScrollHost.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
@@ -47,6 +49,8 @@ import {
   ROW_ACTION_BUTTON_NEUTRAL,
   ROW_ACTION_BUTTON_DESTRUCTIVE,
   ROW_ACTION_BUTTON_ACTIVE,
+  LINE_STICKY_ACTIONS_SLOT,
+  LINE_STICKY_ACTIONS_BAND,
 } from './rowVisuals.js';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
@@ -216,8 +220,9 @@ function makeRowClickHandler(onRowClick, row) {
  * instant (`transition-none` — no fade), no border change, `hover:relative
  * hover:z-20` so the shadow spills onto the rows below instead of being covered
  * by them. Unlike a `<tr>`, a flex row never overlaps the row above, so the
- * previous row's `border-b` (this row's top separator) stays visible on hover
- * without DataTable's ROW_LIFT_TOP_SEPARATOR redraw. A read-only (completed)
+ * previous row's `border-b` (this row's top separator) and its own stay visible on
+ * hover: document lines keep both separators, whereas DataTable's list rows drop
+ * them (ROW_LIFT_HOVER_NO_BORDERS). A read-only (completed)
  * document's lines do not lift: Figma shows no hover there.
  *
  * `isEditing` keeps the row lifted with the same Shadows/lg and a z-index, on top
@@ -233,7 +238,9 @@ function computeRowClassName({ isHighlighted, isEditing, hasRowClick, isSelected
   if (isSelected) {
     backgroundClass = ROW_CHECKED_BG;
   } else if (isHighlighted) {
-    backgroundClass = 'bg-muted/40';
+    // `--row-hover-bg` (ETP-5600): the composited tint, so the sticky action band's
+    // gradient (LINE_STICKY_ACTIONS_BAND) ends on the row's real colour, not white.
+    backgroundClass = 'bg-muted/40 [--row-hover-bg:color-mix(in_srgb,hsl(var(--muted))_40%,hsl(var(--card)))]';
   } else {
     backgroundClass = 'bg-card';
   }
@@ -278,6 +285,38 @@ export function computeBodyScrollClassName({ reserveShadowRoom, hasHorizontalOve
   return 'overflow-x-auto pb-4 -mb-4 pointer-events-none [&>*]:pointer-events-auto';
 }
 
+/** Right spacer appended to the header and to every line (the Figma right margin). */
+const LINE_RIGHT_SPACER_PX = 48;
+
+/**
+ * ETP-5600 (QA pass 2) — the full width, in px, of one line's flex track: the sum of
+ * every fixed slot (chevron, checkbox, action slot, 48px right spacer) and every
+ * column's flex basis. Every column is `flex-shrink: 0` with `min-width: 0`, so this
+ * is exactly the width the cells take when they overflow the scroll box — the
+ * box's `scrollWidth`.
+ *
+ * A line row is a block-level flex container, so without it the row is only as wide
+ * as the scroll box while its cells overflow it: the row's background, `border-b`
+ * and hover/edit Shadows/lg stopped at the visible width measured from the row start,
+ * and scrolled to the right the lift looked cut in half (the trailing columns and the
+ * action strip had none). Used as the row's `minWidth`: with room to spare the row
+ * still fills the box (grow columns share the surplus exactly as the header does,
+ * whose own track has the same widths), and with overflow it spans the whole track.
+ * The sticky action strip is unaffected: its containing block just becomes the full
+ * row, so it still pins to the visible right edge.
+ */
+export function computeLineTrackWidthPx({ visibleColumns, hasDimensionsPanel, reserveActionSlot }) {
+  const basisPx = (visibleColumns ?? []).reduce((sum, col, idx) => {
+    const basis = Number.parseFloat(String(columnFlex(col, idx)).trim().split(/\s+/).pop());
+    return sum + (Number.isFinite(basis) ? basis : 0);
+  }, 0);
+  return (hasDimensionsPanel ? CHEVRON_COLUMN_WIDTH : 0)
+    + CHECKBOX_COLUMN_WIDTH
+    + basisPx
+    + (reserveActionSlot ? ACTION_SLOT_WIDTH_PX : 0)
+    + LINE_RIGHT_SPACER_PX;
+}
+
 /**
  * ETP-5600 — whether `ref`'s box scrolls horizontally (`scrollWidth` beyond
  * `clientWidth`, 1px slack for subpixel rounding). Re-measured on every resize
@@ -310,7 +349,7 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * Sonar's threshold.
  *
  * ETP-4610 — `extraActions` is a generic extension slot: any number of extra
- * icon buttons can be rendered ahead of the built-in Pencil/Trash pair. Each
+ * icon buttons can be rendered ahead of the built-in Edit/Trash pair. Each
  * entry is `{ key, icon: LucideIcon, tooltip, onClick, testId? }` — the same
  * shape InlineLinesPanel's own `rowActions` prop accepts (see below), so a
  * caller-provided action and an internally-computed one (e.g. the
@@ -329,27 +368,39 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * ETP-5600 — the buttons are the list quick actions' Figma Icon Button sm (32x32,
  * Round, Tertiary, 20px icon): the same `ROW_ACTION_BUTTON_*` classes from
  * rowVisuals.js that RowQuickActions uses, so a list row and a document line show
- * identical buttons. Delete is the Iconic trash. The pill behind them stays off
- * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` (RowQuickActions' gap) keeps four 32px
- * buttons (Add dimensions + a caller action + Edit + Delete) inside the 160px
- * `ACTION_SLOT_WIDTH_PX` slot, and they fit the 40px (`h-10`) line row.
+ * identical buttons. Edit is the Iconic edit (its testid stays `Pencil__3b7ec2`),
+ * Delete the Iconic trash. The pill behind them stays off
+ * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` (2px, the list band's gap) makes four 32px
+ * buttons (Add dimensions + a caller action + Edit + Delete) plus the band's 12px
+ * padding exactly the 158px `ACTION_SLOT_WIDTH_PX` slot (the Figma band width), and
+ * they fit the 40px (`h-10`) line row.
+ *
+ * ETP-5600 (QA pass 2) — the strip always has its own slot after the last
+ * column (an editable table always reserves it, see `resolveTrailingColumn`),
+ * so scrolled to the end it never covers data. While the actions show, the slot
+ * turns `sticky right-0` (`LINE_STICKY_ACTIONS_SLOT`) and pins to the VISIBLE
+ * right edge of the horizontal scroll box — with overflow the buttons used to
+ * sit past that edge, cut off. The buttons sit in the list's "Sticky Acciones"
+ * band (`LINE_STICKY_ACTIONS_BAND`, the gradient ending on the line's
+ * `--row-hover-bg`), so whatever column it floats over fades out behind an
+ * opaque background; the rest of the slot is transparent and click-through.
  * The edit button of the line being edited keeps the hover overlay at rest
  * (`ROW_ACTION_BUTTON_ACTIVE`): the row is lifted too, but the button is what the
  * user pressed, so the cue stays on it — the same overlay hover shows, so it reads
  * as "this button is engaged" without a new colour.
  */
 function renderRowActionStrip({
-  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
+  showActions, reserveActionSlot, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
 }) {
   if (!showActions && !reserveActionSlot) return null;
   return (
     <div
-      className="flex items-center justify-end gap-2 pr-1"
-      style={{ flex: actionStripFlex }}
+      className={showActions ? LINE_STICKY_ACTIONS_SLOT : 'flex'}
+      style={{ flex: `0 0 ${ACTION_SLOT_WIDTH_PX}px` }}
       data-testid="line-actions"
     >
       {showActions && (
-        <div className={`flex items-center gap-0.5 h-10 px-2 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
+        <div className={`${LINE_STICKY_ACTIONS_BAND} ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
           {extraActions.map(({ key, icon: Icon, tooltip, onClick, testId }) => (
             <button
               key={key}
@@ -370,7 +421,7 @@ function renderRowActionStrip({
             onClick={onEdit}
             className={isEditing ? `${ROW_ACTION_BUTTON_NEUTRAL} ${ROW_ACTION_BUTTON_ACTIVE}` : ROW_ACTION_BUTTON_NEUTRAL}
           >
-            <Pencil className="h-5 w-5" data-testid="Pencil__3b7ec2" />
+            <IconicEditIcon className="h-5 w-5" data-testid="Pencil__3b7ec2" />
           </button>
           {canDelete && (
             <button
@@ -503,8 +554,8 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
           </div>
         );
       })}
-      {reserveActionSlot && <div style={{ flex: '0 0 160px' }} aria-hidden="true" />}
-      <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+      {reserveActionSlot && <div style={{ flex: `0 0 ${ACTION_SLOT_WIDTH_PX}px` }} aria-hidden="true" />}
+      <div style={{ width: LINE_RIGHT_SPACER_PX, flexShrink: 0 }} aria-hidden="true" />
     </div>
   );
 }
@@ -522,11 +573,13 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
  */
 // ETP-5133 — ellipsis policy is per-column, not a blanket default: most
 // columns (e.g. description) should ellipsize with a hover tooltip, but a
-// column can opt out via `noTruncate` (e.g. product) to show the FULL text
-// instead, scrolling horizontally within its own cell when it overflows
-// rather than being cut off. `overflowX: 'auto'` on the cell is what makes
-// that scroll possible; ReadCell and LookupTrigger (below) are what stop
-// clipping the text with `truncate` in the first place.
+// no-truncate column (`isNoTruncateColumn`: an explicit `noTruncate`, or by
+// default any lookup selector, e.g. product) shows the FULL text instead.
+// QA pass 3 (F-2) — the cell no longer scrolls on its own (`overflowX: 'auto'`
+// drew a mini scrollbar per cell and read as a cut name): the COLUMN widens to
+// its widest value (`withContentWidths` → `columnFlex`, the one width source the
+// header, every line and the add-row share) and the grid's own horizontal scroll
+// absorbs the overflow. ReadCell and LookupTrigger (below) drop `truncate` for it.
 //
 // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
 // + 1px border = 9px of internal padding. Reducing the cell's outer
@@ -536,32 +589,28 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
 //
 // Extracted out of renderLineCell so the truncate/numeric-alignment policy
 // scores against its own function, not the base cell renderer's.
-function computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx }) {
+function computeLineCellStyle({ editable, isNumeric, col, idx }) {
   return {
     padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
     flex: columnFlex(col, idx),
     justifyContent: isNumeric ? 'flex-end' : 'flex-start',
     textAlign: isNumeric ? 'right' : 'left',
     minWidth: 0,
-    ...(noTruncate ? { overflowX: 'auto' } : null),
   };
 }
 
 function renderLineCell({
-  col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+  col, idx, row, isEditing, isDocumentReadOnly,
   visibleColumns, hasRowClick,
   entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
   locale, t, ui, onCommit, onCellClick, cellBadges,
 }) {
-  const isTrailing = col === trailingColumn;
-  // The trailing column is hidden when the action strip is showing,
-  // so the icons can take its space. Other amount columns stay visible.
-  if (isTrailing && showActions) return null;
-
+  // ETP-5600 — no cell is ever hidden for the action strip any more: an editable
+  // table reserves its own slot, and a read-only one never shows the strip.
   const isNumeric = NUMERIC_TYPES.has(col.type);
   const editable = isEditing && isCellEditable(col);
-  const noTruncate = col.noTruncate === true;
-  const baseStyle = computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx });
+  const noTruncate = isNoTruncateColumn(col);
+  const baseStyle = computeLineCellStyle({ editable, isNumeric, col, idx });
 
   const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
   const cellContent = editable ? (
@@ -636,11 +685,12 @@ function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContex
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const Drawer = resolveLookupDrawer(field.lookupDrawer);
-  // ETP-5133 — `noTruncate` (e.g. product) shows the full value instead of
-  // ellipsizing it: the button itself scrolls horizontally when the text
-  // overflows its width, rather than clipping it. Every other lookup/popup
-  // field (the default) keeps truncating with no behavior change.
-  const noTruncate = field.noTruncate === true;
+  // ETP-5133 — a no-truncate field (`isNoTruncateColumn`, e.g. product) shows
+  // the full value instead of ellipsizing it; its column is already sized for
+  // the widest value (see computeLineCellStyle's comment), so the button needs
+  // no scroll of its own. A lookup that opts out (`noTruncate: false`) keeps
+  // truncating with no behavior change.
+  const noTruncate = isNoTruncateColumn(field);
   const labelClassName = noTruncate ? 'flex-1 whitespace-nowrap' : 'flex-1 truncate';
   return (
     <>
@@ -648,10 +698,7 @@ function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContex
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className={[
-          'w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors',
-          noTruncate ? 'overflow-x-auto' : '',
-        ].filter(Boolean).join(' ')}
+        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors"
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -763,14 +810,13 @@ function renderEnumReadCell(row, col, ui) {
   return <span className="block truncate" title={label || undefined}>{label}</span>;
 }
 
-// ETP-5133 — per-column ellipsis policy (see `noTruncate` in renderLineCell): most columns
-// ellipsize with a hover tooltip, but a column can opt out (e.g. product) to show the full
-// value instead — the cell itself scrolls horizontally when it overflows (see the
-// `overflowX: 'auto'` on renderLineCell's wrapper), so no `truncate` and no tooltip needed
-// here (the text is already fully visible/reachable). Extracted out of ReadCell so this
+// ETP-5133 — per-column ellipsis policy (see `isNoTruncateColumn` in renderLineCell): most
+// columns ellipsize with a hover tooltip, but a no-truncate column (e.g. product) shows the
+// full value instead — its column is sized for the widest value and the grid scrolls, so no
+// `truncate` and no tooltip needed here (the text is already fully visible). Extracted out of ReadCell so this
 // branch's own nested check scores against its own function, not the type-dispatcher's.
 function renderStringReadCell(display, col) {
-  if (col.noTruncate) {
+  if (isNoTruncateColumn(col)) {
     return <span className="block whitespace-nowrap">{display}</span>;
   }
   return <span className="block truncate" title={display || undefined}>{display}</span>;
@@ -1306,20 +1352,31 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // `hasDimensionsPanel` below. ETP-4803 — the exclusion itself now lives in
   // `isLineGridColumn` (linesColumnWidth.js), shared with DataTable's hidden
   // add-row colgroup, so the two renderers can't diverge on this again.
-  const visibleColumns = useMemo(
-    () => (columns || []).filter(c => (
-      isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
-    )),
-    [columns, hiddenColumns]
-  );
-  // The LAST column disappears on hover to make room for the action strip — its
-  // width matches the strip so the swap is invisible. This only applies to monetary
-  // tables (sales-quotation, etc.), where that last column is an `amount`.
-  // For tabs without a trailing amount column (Cuenta Bancaria, Persona, and every
-  // tab whose amount sits mid-row) we instead ALWAYS reserve the 160px slot, so
-  // values don't reflow when hovering.
   //
-  // ETP-5245 — this deliberately checks ONLY the last visible column. It used to
+  // ETP-5133 (QA pass 3, F-2) — `withContentWidths` sizes every no-truncate
+  // column (e.g. product) for its widest value in `data`; DataTable's add-row
+  // derives the same width from the same `columns` + `data` props. `fontsReady`
+  // re-measures once the web font has loaded — the same signal DataTable uses,
+  // so the rows and the add-row never measure with different faces.
+  // QA pass 3 — `addRowDraft` is the identifier the sibling add-row has picked
+  // but not saved yet (published by DataTable, lib/linesScrollHost.js), so the
+  // column widens on the pick; null again once the add-row closes.
+  const fontsReady = useFontsReady();
+  const addRowDraft = useLinesAddRowDraft(entity);
+  const visibleColumns = useMemo(
+    () => withContentWidths(withLinesAbsorberColumn((columns || []).filter(c => (
+      isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
+    ))), rowsWithDraft(data, addRowDraft)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fontsReady only triggers the re-measure
+    [columns, hiddenColumns, data, addRowDraft, fontsReady]
+  );
+  // Whether the row reserves the 158px action slot after its last column. Until
+  // ETP-5600 the LAST column, when an `amount`, disappeared on hover to make room
+  // for the strip instead (monetary tables: sales-quotation, etc.); since then that
+  // swap survives only as a layout rule for READ-ONLY tables (see below), where a
+  // trailing amount still takes the slot's place.
+  //
+  // ETP-5245 — the trailing rule deliberately checks ONLY the last visible column. It used to
   // scan backwards for the last column *of type amount* anywhere in the row, but
   // the action strip is always appended at the END of the flex row: suppressing a
   // cell that isn't the last one deletes a slot from the middle/start, so every
@@ -1333,12 +1390,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // The predicate itself lives in `@/lib/linesActionSlot.js` because DataTable's
   // add-row companion table must reserve the very same slot — see that module's
   // header for why the two renderers may never answer this question apart.
-  const trailingColumn = useMemo(() => resolveTrailingColumn(visibleColumns), [visibleColumns]);
-  const reserveActionSlot = trailingColumn == null;
-  // Action strip must be the same width as the trailing column it replaces on hover.
-  const actionStripFlex = trailingColumn
-    ? columnFlex(trailingColumn, visibleColumns.indexOf(trailingColumn))
-    : `0 0 ${ACTION_SLOT_WIDTH_PX}px`;
+  //
+  // ETP-5600 (QA pass 2) — an editable (draft) table now ALWAYS reserves the
+  // slot: the strip is sticky to the visible right edge of the scroll box and
+  // needs room of its own past the last column, so the trailing amount is no
+  // longer hidden on hover. A read-only table never shows the strip and keeps
+  // the former rule, so completed documents keep their layout.
+  const reserveActionSlot = useMemo(
+    () => resolveTrailingColumn(visibleColumns, { editable: !isDocumentReadOnly }) == null,
+    [visibleColumns, isDocumentReadOnly],
+  );
 
   // ETP-4529 — at most one column may declare `type: 'dimensionsPanel'` (see
   // artifacts/{window}/generated/web/{window}/LinesTable.jsx for a caller
@@ -1367,6 +1428,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // the box: no add-row host (`lineFormActive`) and no balance-footer row (its
   // render below is gated by the same two values). See computeBodyScrollClassName.
   const reserveShadowRoom = !isDocumentReadOnly && !lineFormActive && !balanceFooter && selectableRows.length > 0;
+  // ETP-5600 — every line spans its whole track, not just the scroll box's visible
+  // width, so its background, border and lift cover the overflowing cells too.
+  const lineTrackWidthPx = useMemo(
+    () => computeLineTrackWidthPx({ visibleColumns, hasDimensionsPanel, reserveActionSlot }),
+    [visibleColumns, hasDimensionsPanel, reserveActionSlot],
+  );
   const bodyHasHorizontalOverflow = useHorizontalOverflow(bodyScrollRef, reserveShadowRoom, visibleColumns, selectableRows.length);
 
   // Prune deleted IDs from the selection Set — keeps the master checkbox in sync
@@ -1617,7 +1684,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               {resolveColumnLabel(col, locale, t)}
             </div>
           ))}
-          {/* Reserve the same 160 px slot the action strip will occupy so the
+          {/* Reserve the same 158px slot the action strip will occupy so the
               header columns align with the body rows even when hovering — and
               so DataTable's add-row colgroup (same predicate, see
               `@/lib/linesActionSlot.js`) lines its inputs up with these headers. */}
@@ -1626,7 +1693,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           )}
           {/* Right spacer — mirrors the Figma right margin without adding padding
               to the root (which would clip the row border-b lines). */}
-          <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ width: LINE_RIGHT_SPACER_PX, flexShrink: 0 }} aria-hidden="true" />
         </div>
       </div>
       {/* Body rows — ETP-5133: scoped horizontal scroll so a wide column set
@@ -1666,7 +1733,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           <div
             data-testid={`line-row-${row.id}`}
             className={computeRowClassName({ isHighlighted, isEditing, hasRowClick: Boolean(onRowClick), isSelected, isReadOnly: isDocumentReadOnly })}
-            style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
+            style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, minWidth: lineTrackWidthPx, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
             onKeyDown={makeRowKeyHandler(isEditing, handleCancelEdit, handleConfirmEdit)}
@@ -1698,7 +1765,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             </div>
             {/* Cells */}
             {visibleColumns.map((col, idx) => renderLineCell({
-              col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+              col, idx, row, isEditing, isDocumentReadOnly,
               visibleColumns, hasRowClick: Boolean(onRowClick),
               entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
               locale, t, ui, onCommit: commitField, onCellClick: handleCellClick, cellBadges,
@@ -1718,7 +1785,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 next to the row's own Edit action and read as a duplicate
                 button (see docs/feedback.md). */}
             {renderRowActionStrip({
-              showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
+              showActions, reserveActionSlot, isEditing, isDeleting, ui,
               onEdit: () => handleEditClick(row),
               onDelete: () => handleDeleteClick(row),
               canDelete,
@@ -1735,7 +1802,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                   .map(action => ({ ...action, onClick: () => action.onClick(row) })),
               ],
             })}
-            <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+            <div style={{ width: LINE_RIGHT_SPACER_PX, flexShrink: 0 }} aria-hidden="true" />
           </div>
           {/* ETP-4529 — full-width dimensions sub-row, directly below the expanded
               data row. Mirrors AmortizationLinesTable's expand `<tr>` structure:

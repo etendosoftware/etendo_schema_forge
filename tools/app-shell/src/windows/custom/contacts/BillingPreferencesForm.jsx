@@ -38,7 +38,7 @@ function resolveId(value) {
 // cells (their input starts 28px below the cell top) and the `h-9` row (= FIELD_HEIGHT)
 // centres the switch on that input line, level with the Condiciones de pago selector.
 
-function BlockingToggle({ id, label, value, onCheckedChange, 'data-testid': testId }) {
+function BlockingToggle({ id, label, value, onCheckedChange, disabled = false, 'data-testid': testId }) {
   return (
     <div className="pt-7">
       <div className="flex items-center gap-2 h-9">
@@ -46,6 +46,7 @@ function BlockingToggle({ id, label, value, onCheckedChange, 'data-testid': test
           id={id}
           checked={value}
           onCheckedChange={onCheckedChange}
+          disabled={disabled}
           aria-label={label}
           data-testid={testId ?? 'PillToggle__7f0756'} />
         <label htmlFor={id} className="text-sm font-medium text-[hsl(var(--foreground))] cursor-pointer">
@@ -56,7 +57,7 @@ function BlockingToggle({ id, label, value, onCheckedChange, 'data-testid': test
   );
 }
 
-function DiscountSelect({ value, options, onChange, loading }) {
+function DiscountSelect({ value, options, onChange, loading, disabled = false }) {
   const ui = useUI();
   return (
     <div className="relative">
@@ -67,7 +68,7 @@ function DiscountSelect({ value, options, onChange, loading }) {
         className="h-10 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card pl-8 pr-3 text-sm appearance-none cursor-pointer shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors disabled:cursor-not-allowed"
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
-        disabled={loading}
+        disabled={loading || disabled}
       >
         <option value="">{ui('none')}</option>
         {options.map(o => (
@@ -137,6 +138,8 @@ export default function BillingPreferencesForm(props) {
   const { data, api, token, onChange, apiBaseUrl } = props;
   const bpId = data?.id;
   const canEditBillingPreferences = Boolean(bpId);
+  // ETP-5830 — DetailView passes `editing === false` for a read-only role; every control below obeys it.
+  const readOnly = props.editing === false;
   const apiBase = apiBaseUrl ?? api?.baseUrl ?? '';
   const apiFetch = useApiFetch(apiBase);
   const organizationId = resolveId(data?.organization ?? data?.adOrgId ?? data?.ad_org_id);
@@ -334,6 +337,7 @@ export default function BillingPreferencesForm(props) {
             options={discountOptions}
             onChange={handleDiscountChange}
             loading={discountLoading || saving}
+            disabled={readOnly}
             data-testid="DiscountSelect__7f0756" />
         </div>
       )}
@@ -349,11 +353,13 @@ export default function BillingPreferencesForm(props) {
               label={ui('customer')}
               checked={!!data?.customer}
               onChange={(val) => onChange?.('customer', val)}
+              disabled={readOnly}
               data-testid="SquareCheckbox__7f0756-customer" />
             {data?.customer && (
               <>
                 <EntityForm
                   {...props}
+                  readOnly={readOnly}
                   onChange={handleCustomerChange}
                   fields={customerBillingFields}
                   selectorContext={customerSelectorContext}
@@ -363,6 +369,7 @@ export default function BillingPreferencesForm(props) {
                       label={ui('customerBlockField')}
                       value={data?.customerBlocking}
                       onCheckedChange={(next) => onChange?.('customerBlocking', next, 'Customer_Blocking')}
+                      disabled={readOnly}
                       data-testid="BlockingToggle__7f0756-customer" />
                   )}
                   data-testid="EntityForm__7f0756-customer" />
@@ -376,11 +383,13 @@ export default function BillingPreferencesForm(props) {
               label={ui('vendor')}
               checked={!!data?.vendor}
               onChange={(val) => onChange?.('vendor', val)}
+              disabled={readOnly}
               data-testid="SquareCheckbox__7f0756-vendor" />
             {data?.vendor && (
               <>
                 <EntityForm
                   {...props}
+                  readOnly={readOnly}
                   onChange={handleVendorChange}
                   fields={vendorBillingFields}
                   selectorContext={vendorSelectorContext}
@@ -390,6 +399,7 @@ export default function BillingPreferencesForm(props) {
                       label={ui('vendorBlockField')}
                       value={data?.vendorBlocking}
                       onCheckedChange={(next) => onChange?.('vendorBlocking', next, 'Vendor_Blocking')}
+                      disabled={readOnly}
                       data-testid="BlockingToggle__7f0756-vendor" />
                   )}
                   data-testid="EntityForm__7f0756-vendor" />

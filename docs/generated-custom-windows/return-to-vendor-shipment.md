@@ -255,7 +255,7 @@ covers the precedence fix.
 On a **completed** shipment with no return invoice yet, the "Crear Factura Rectificativa"
 button opens `CreateInvoiceConfirmModal.jsx` ("Gestionar documentos"). Before this fix, clicking
 its primary "Crear →" button closed the modal **synchronously**, then the invoice-creation
-request ran with no visible UI, and `ConfirmResultModal` ("Factura rectificativa de compra
+request ran with no visible UI, and `ConfirmResultModal` ("Factura rectificativa
 creada") only appeared once the request resolved — on a slow connection this looked like the
 click did nothing. The sibling **draft**-status flow (`ConfirmInOutModal.jsx`, opened from the
 same shared `ConfirmWithCreditButtonBase.jsx` for `status === 'DR'`) never had this problem: it
@@ -482,7 +482,7 @@ shipment, post-completion «Crear Factura Rectificativa» (`ConfirmWithCreditBut
 (`ReturnWindowShell` → `useRowConfirmAction`, `invoiceDocType: 'facturaRectificativaCompra'`) — is
 announced by the shared `ConfirmResultModal` as a `facturaRectificativaCompra` doc (it used to be
 typed `facturaCompra`, titled by `returnToVendor.invoiceCreatedTitle`, now removed). The popup reads
-«Factura rectificativa de compra creada», one card «Factura rectificativa de compra · Completada ·
+«Factura rectificativa creada», one card «Factura rectificativa · Completada ·
 Nº …» (no amount), «Cerrar» + «Ver factura» → `/purchase-invoice/{id}`. Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
 
 **Manual verification.** On a completed shipment with no invoice, run «Crear Factura Rectificativa»
@@ -597,3 +597,37 @@ try a return of a never-invoiced receipt (400 with the new wording).
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the document's accounting date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a return allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<return id>)` lists every action and, for that record, says `availableNow`
+  (true or false) and, when false, `unavailableReason`; `documentAction` also carries `availableValuesNow`. Unavailable
+  actions stay listed (never hidden). **Advice only**: it never blocks a call; the handlers still validate everything.
+  Without `id` each action shows when it applies (`availableWhen`, `valuesByStatus`).
+- `documentAction` on the record is the document's next default action (what its Process button would run); `--` means none,
+  the document is in a final state.
+- A draft takes `CO` only. A completed return cannot be reactivated or voided through MCP: `documentAction` offers CO alone, a
+  `docAction` of RE or RC answers 422 saying so.
+- Applies to a draft: the import actions. Applies to a completed document: `rectifiableInvoices`, `createReturnInvoice`.
+- `createReturnInvoice` applies to a completed return that has **no** factura rectificativa yet: the availability reads the same
+  query as `hasReturnInvoice`, because a second call is not refused and would create a duplicate.
+- Response keys the window adds to a record (`sourceReceipts`, `returnInvoices`, `hasReturnInvoice`, `linesCount`, `invoiceStatus`) are declared, so `fields:[…]` projections do not list them under
+  `unknownFields`.
+- Posting a just-completed document (`post`) can answer **409 `costNotCalculated`** with `retryAfterSeconds: 30`: cost is
+  calculated in the background about every 30 seconds, nothing was posted (`posted` stays as Etendo set it, `NC`), and the same
+  post succeeds a moment later. The SPA reads the same flat `message` / `messageKeys`; REST also sends `Retry-After`.
+- The tool accepts entity names with other capitals (`Header` is routed as `header`), and a refusal keyed 20501 ("Documento ya
+  procesado") carries a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35. The spec prompt (`agent-prompts/<window>/spec.md`) says the same to the agent.
+
+### Booking the return over MCP: `post` / `unpost`, never `Posted` — ETP-5714
+
+The return's accounting is booked with the `post` and `unpost` actions, exactly what the window's Post / Unpost buttons call. They are
+listed in `etendo_schema(view:"actions")`: `post` applies to a completed document that is not posted, `unpost` to a completed one that
+is (`availableNow` says so for a given record). A `post` right after completing can answer **409 `costNotCalculated`** (wait
+`retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
+`Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
+

@@ -33,7 +33,7 @@ A user should be able to:
 - Implementation type: custom window override registered in `tools/app-shell/src/windows/registry.js`, built on top of the generated goods-receipt window
 - Window shape: master-child window with a header record (`goodsReceipt`) and child received lines (`goodsReceiptLine`).
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
-- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference. **ETP-5133:** the `product` column is a lookup selector, so it never ellipsizes — it widens to the longest product name of the loaded lines and of the product just picked in the open add-row, and the grid scrolls horizontally on overflow; see the `noTruncate` row in `docs/decisions-reference.md`.
 - **Create a product from the line's product selector (ETP-5254):** the product lookup drawer opened from a line shows a pinned `+ Crear producto` row at the top. It opens a popup that **mounts the Products window itself** — its own form, its own primary tabs and its own **Precio / Costo / Contabilidad / Adjuntos** strip — on a private memory router inside this page, with the app chrome dropped. Nothing is reimplemented, so a tab or field added to the Products window appears here with no change. Saving happens with the window's own `Guardar`; `Completado` then closes the popup and selects the new product in the line. Cancelling before saving leaves the receipt untouched, and Escape closes only the popup — the drawer comes back with the search intact. The line still arrives at **price 0** unless a price is set for the document's tariff, in which case the user types it on the line. The popup creates no cost line: that rule belongs to the Products window, which states and enforces it there (ETP-5245), so a stockable product created here still needs its cost set. The create row is reachable by pointer and Tab, not through the arrow-key ring. Full mechanism, why nesting a router is legal, the seven in-scope specs and the known limitations: `docs/ui-customization.md` section 19.
 - **Preview panel** (`GoodsReceiptPreview.jsx`): rendered via `renderPreview` prop on the generated app. Opens from row selection. Shows document header, a General tab with receipt stats (BP, warehouse, PO link, invoice %, date), a Messages tab, and a History tab, plus an `invoicePreviewEdit` button that opens the record for editing. **Corrected (2026-09):** this doc previously claimed the preview exposed a "Create Invoice" action opening a `ReceiptInvoicePreview` component — that component does not exist in `tools/app-shell/src/windows/custom/goods-receipt/`. The preview panel has no invoice-creation trigger of its own; `Create Invoice` lives on the form-view topbar (`GoodsReceiptActions.jsx`, see below) and, since 2026-09, on the list selection bar (`BulkInvoiceFromReceipt.jsx` — see "Bulk invoice creation from the list"). The PO identifier in the stats panel is a clickable link that closes the preview and navigates to `/purchase-order/:id`. This window does **not** expose any document-email / "send by email" access — the send-document feature is intentionally disabled (`window.sendDocument.enabled = false` in `decisions.json`), so no email action appears on rows, in the preview panel, or in the form action bar (ETP-4372).
 - **ETP-4729 — Eye row quick-action removed**: `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` sets `hideEyeCount` on the list wrapper, so the preview no longer opens from a hover "eye" icon on the row. Goods Receipt is out of scope for the ETP-4729 unified printable-documents work, so its preview remains reachable only by selecting/opening the row, not via that quick-action icon.
@@ -757,3 +757,35 @@ Discovery and edge cases of the goods receipt import (ETP-5713 review):
 - `headerLinked` / `salesOrder` report the truth: if the header already links purchase order X and the lines come only from purchase order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
 - A goods receipt or purchase order of another client answers 404 exactly like a missing one.
 - The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.
+
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a goods receipt allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<goods receipt id>)` lists every action and, for that record, says `availableNow`
+  (true or false) and, when false, `unavailableReason`; `documentAction` also carries `availableValuesNow`. Unavailable
+  actions stay listed (never hidden). **Advice only**: it never blocks a call; the handlers still validate everything.
+  Without `id` each action shows when it applies (`availableWhen`, `valuesByStatus`).
+- `documentAction` on the record is the document's next default action (what its Process button would run); `--` means none,
+  the document is in a final state.
+- A draft takes `CO` only. A completed goods receipt cannot be reactivated or voided through MCP: `documentAction` offers CO alone, a
+  `docAction` of RE or RC answers 422 saying so, and the document is corrected with a return (`createPurchaseReturn`).
+- Applies to a draft: the import actions. Applies to a completed document: `createPurchaseInvoice`, `createPurchaseReturn`.
+- Response keys the window adds to a record (`invoiceStatus` and `returnStatus` percentages, `linkedInvoices`, `linkedReturns`, `linkedOrders`) are declared, so `fields:[…]` projections do not list them under
+  `unknownFields`.
+- Posting a just-completed document (`post`) can answer **409 `costNotCalculated`** with `retryAfterSeconds: 30`: cost is
+  calculated in the background about every 30 seconds, nothing was posted (`posted` stays as Etendo set it, `NC`), and the same
+  post succeeds a moment later. The SPA reads the same flat `message` / `messageKeys`; REST also sends `Retry-After`.
+- The tool accepts entity names with other capitals (`Header` is routed as `header`), and a refusal keyed 20501 ("Documento ya
+  procesado") carries a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35. The spec prompt (`agent-prompts/<window>/spec.md`) says the same to the agent.
+
+### Booking the goods receipt over MCP: `post` / `unpost`, never `Posted` — ETP-5714
+
+The goods receipt's accounting is booked with the `post` and `unpost` actions, exactly what the window's Post / Unpost buttons call. They are
+listed in `etendo_schema(view:"actions")`: `post` applies to a completed document that is not posted, `unpost` to a completed one that
+is (`availableNow` says so for a given record). A `post` right after completing can answer **409 `costNotCalculated`** (wait
+`retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
+`Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
+

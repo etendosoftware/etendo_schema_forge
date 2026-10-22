@@ -64,6 +64,7 @@
 | [TDD-anex.md](TDD-anex.md) | API versioning implementation details |
 | [plans/etp-5396-demo-to-pro-prd.md](plans/etp-5396-demo-to-pro-prd.md) | ETP-5396 — Demo-to-PRO product requirements, account billing, trial/grace policy and acceptance criteria; proposed, not implemented |
 | [plans/etp-5396-demo-to-pro-technical-design.md](plans/etp-5396-demo-to-pro-technical-design.md) | ETP-5396 — Final ETP-5045-2 baseline; modular boundaries for new billing/access logic and a thin legacy bridge, without refactoring existing Stripe coupling |
+| [plans/grid-customization-evaluation.md](plans/grid-customization-evaluation.md) | ETP-5834 — Grid customization (resize/reorder/visibility) and saved views: current-state evidence, option matrix (extend vs TanStack vs AG Grid vs MUI X), recommendation, saved-views contract proposal, rollout/rollback; decision PENDING human approval |
 | [conventions.md](conventions.md) | Edge case conventions (13 rules for extraction, validation, DB access) |
 | [decisions-versioning.md](decisions-versioning.md) | Decisions.json versioning system: writing migrations, batch upgrades, FAQ |
 

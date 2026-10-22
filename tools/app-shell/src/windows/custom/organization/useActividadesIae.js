@@ -23,6 +23,32 @@ import { neoBase } from '@/components/related-documents/helpers.js';
  * (`NeoCrudHandler#injectParentIdAsProperty`) — the client never needs to know the
  * FK column name (`Ad_Org_ID`/`organization`).
  */
+/**
+ * The classic Modelo 390 generator (org.openbravo.module.aeat390.es, `AEAT390Report2022`) writes
+ * the main activity plus at most 5 others: a 6th non-main activity overflows its fixed-size
+ * `formattedCodeArray` and the generation fails with an ArrayIndexOutOfBoundsException. The grid
+ * therefore stops at 1 main + 5 others.
+ */
+export const IAE_MAX_SECONDARY_ACTIVITIES = 5;
+export const IAE_MAX_ACTIVITIES = IAE_MAX_SECONDARY_ACTIVITIES + 1;
+
+const isIaeDefault = (row) => row?.default === true || row?.default === 'Y';
+
+/**
+ * Cap state of the IAE grid for `rows`:
+ *   atCap    the grid already holds 1 + 5 activities — "Añadir" is disabled;
+ *   overCap  more than 5 non-main activities exist (data created before the cap, or in Classic)
+ *            — never hidden, a warning asks the user to remove some before generating the 390.
+ */
+export function iaeCapState(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const secondary = list.filter(r => !isIaeDefault(r)).length;
+  return {
+    atCap: list.length >= IAE_MAX_ACTIVITIES,
+    overCap: secondary > IAE_MAX_SECONDARY_ACTIVITIES,
+  };
+}
+
 export function useActividadesIae(orgId, apiBaseUrl) {
   const iaeApiFetch = useApiFetch(`${neoBase(apiBaseUrl)}/organization`);
 
