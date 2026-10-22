@@ -167,6 +167,19 @@ function selectorFlex(col, idx) {
  * Used by InlineLinesPanel's flex column layout.
  */
 export function columnFlex(col, idx) {
+  const flex = typeColumnFlex(col, idx);
+  // ETP-5133 (QA pass 3, F-2) — a no-truncate column (see `linesContentWidth.js`) carries the
+  // width its widest value needs. It only ever RAISES the type basis (never shrinks it) and
+  // keeps the grow/shrink terms, so the absorber choice and every fixed column are unchanged.
+  // Header, body rows, new/edit row, totals row and the add-row colgroup all read their widths
+  // from here, so they keep agreeing with each other.
+  const contentPx = col.contentWidthPx;
+  if (typeof contentPx !== 'number' || contentPx <= 0) return flex;
+  const [grow, shrink, basis] = flex.split(' ');
+  return contentPx > Number.parseFloat(basis) ? `${grow} ${shrink} ${Math.ceil(contentPx)}px` : flex;
+}
+
+function typeColumnFlex(col, idx) {
   // ETP-5332 — closes the gap ETP-5133's own review (linesColumnWidth.test.js's
   // "KNOWN GAP" case) flagged and left unfixed because no window declared `col.minWidth`
   // yet: `1 1` (shrinkable) let THIS one column collapse toward zero at a narrow
@@ -231,6 +244,7 @@ const FALLBACK_CHAR_PX = 7;
 const HEADER_FONT_WEIGHT_SIZE = '600 12px';
 
 const labelWidthCache = new Map();
+const MEASURE_CACHE_MAX = 500;
 let measureContext;
 
 // `OffscreenCanvas` is feature-detected rather than a DOM <canvas>: jsdom implements <canvas>
@@ -279,11 +293,21 @@ function fontReady(font) {
  * font + label, but only once the font has loaded (see `fontReady`).
  */
 export function measureHeaderLabelPx(label, font = listHeaderFont()) {
-  // A React node (custom header markup) cannot be measured as text: it keeps the type basis.
-  if (typeof label !== 'string' && typeof label !== 'number') return 0;
-  const text = String(label);
+  return measureTextPx(label, font);
+}
+
+/**
+ * Width in px of `value` rendered with the CSS `font` — the measurement behind
+ * `measureHeaderLabelPx`, also used for cell text (ETP-5133, `linesContentWidth.js`). Same canvas
+ * path, cache and font-loading rule; `fallbackCharPx` is the per-character estimate used where no
+ * canvas can measure (pick the upper end for the font so the estimate errs wide). 0 for a
+ * non-text value (a React node) or an empty string.
+ */
+export function measureTextPx(value, font, fallbackCharPx = FALLBACK_CHAR_PX) {
+  if (typeof value !== 'string' && typeof value !== 'number') return 0;
+  const text = String(value);
   if (text === '') return 0;
-  const estimate = Math.ceil(text.length * FALLBACK_CHAR_PX);
+  const estimate = Math.ceil(text.length * fallbackCharPx);
   const ctx = canvasContext();
   if (!ctx) return estimate;
   const cacheKey = `${font}|${text}`;
@@ -292,7 +316,12 @@ export function measureHeaderLabelPx(label, font = listHeaderFont()) {
   ctx.font = font;
   const measured = Math.ceil(ctx.measureText(text)?.width ?? 0);
   const width = measured > 0 ? measured : estimate;
-  if (measured > 0 && fontReady(font)) labelWidthCache.set(cacheKey, width);
+  if (measured > 0 && fontReady(font)) {
+    // ponytail: bounded cache — cell values (ETP-5133) are unbounded, unlike header labels; a
+    // full reset is enough at this size (no LRU needed).
+    if (labelWidthCache.size >= MEASURE_CACHE_MAX) labelWidthCache.clear();
+    labelWidthCache.set(cacheKey, width);
+  }
   return width;
 }
 

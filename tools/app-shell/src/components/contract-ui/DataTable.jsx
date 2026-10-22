@@ -16,7 +16,9 @@ import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, withLinesAbsorberColumn, listTableMinWidthPx, listHeaderMinWidthPx, listHeaderFont } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
-import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
+import { withContentWidths, isNoTruncateColumn, addRowDraftRow, rowsWithDraft } from '@/lib/linesContentWidth.js';
+import { useFontsReady } from '@/hooks/useFontsReady.js';
+import { useLinesScrollHost, useAddRowScrollHostWidth, usePublishLinesAddRowDraft } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
@@ -451,6 +453,18 @@ function HorizontalScrollThumb({ elRef, attachSeq, bottomOffsetPx }) {
 function flexSpec(col, idx) {
   const [g, , b] = columnFlex(col, idx).split(' ');
   return { grow: parseInt(g, 10), basis: parseInt(b, 10) };
+}
+
+// ETP-5133 (QA pass 3) — the identifier the open add-row has picked for a no-truncate column
+// (e.g. the product), as one pseudo-row: the column widens to it before the line is saved. Kept
+// stable across unrelated keystrokes (memoized on its serialized form) so neither this table nor
+// the sibling InlineLinesPanel it is published to re-measures for nothing. Extracted out of
+// DataTable's body so its conditions score against this hook (Sonar S3776).
+function useAddRowDraft({ addRow, hideHeader, linesLayout, columns, addRowValues }) {
+  const addRowDraftSignature = addRow?.active && (hideHeader || linesLayout === 'inlineEditable')
+    ? JSON.stringify(addRowDraftRow(columns, addRowValues))
+    : 'null';
+  return useMemo(() => JSON.parse(addRowDraftSignature), [addRowDraftSignature]);
 }
 
 // Precomputes the flex specs for hideHeader (add-row-only) mode's colgroup,
@@ -1208,6 +1222,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
           onKeyDown={handleKeyDown}
           title={lookupTitle}
           drawerKey={drawerKey}
+          noTruncate={isNoTruncateColumn(col)}
           data-testid="LookupField__eb5261" />
       </TableCell>
     );
@@ -1892,7 +1907,7 @@ function coerceFieldValues(valuesRef, fields) {
 /**
  * Inline field that shows selected value and opens modal on click/focus.
  */
-function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContext, token, onSelect, onKeyDown, inputRef, title, drawerKey = 'default', isInvalid }) {
+function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContext, token, onSelect, onKeyDown, inputRef, title, drawerKey = 'default', isInvalid, noTruncate = false }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const Drawer = LOOKUP_DRAWERS[drawerKey] || LOOKUP_DRAWERS.default;
@@ -1933,7 +1948,9 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
           data-testid="Search__eb5261" />
         {value ? (
-          <span className="truncate text-foreground">{value}</span>
+          // ETP-5133 — a no-truncate column (e.g. the product) is already widened to the picked
+          // value (the add-row draft), so it shows in full; the title stays for every column.
+          <span className={`${noTruncate ? 'whitespace-nowrap' : 'truncate'} text-foreground`} title={typeof value === 'string' ? value : undefined}>{value}</span>
         ) : (
           <span className="truncate text-muted-foreground">{placeholder}</span>
         )}
@@ -2458,25 +2475,6 @@ function StickyHeaderRow({ elRef, attachSeq, minWidthPx, children }) {
  * cycle as any other column via `onSort(part.key)`. The direction arrow shows
  * only on the currently active part (single active part at a time).
  */
-// ETP-5833 (QA) — one-shot flag that flips to true when `document.fonts.ready` resolves. The list
-// header floor measures labels with canvas; while Inter is still swapping in (`display=swap`) that
-// measures the fallback face, so `visibleColumns` depends on this flag to re-measure exactly once
-// when the real font is in. True from the start when the fonts are already loaded or the
-// FontFaceSet API is missing (jsdom, old browsers).
-function useHeaderFontsReady() {
-  const [ready, setReady] = useState(() => {
-    const fonts = typeof document === 'undefined' ? undefined : document.fonts;
-    return !fonts?.ready || fonts.status === 'loaded';
-  });
-  useEffect(() => {
-    if (ready) return undefined;
-    let alive = true;
-    document.fonts.ready.then(() => { if (alive) setReady(true); }, () => {});
-    return () => { alive = false; };
-  }, [ready]);
-  return ready;
-}
-
 // The text a plain-list header renders for `col`: its resolved label, or for a `multiField`
 // column the part labels joined by its separator (renderMultiFieldHeaderCell).
 function renderedHeaderLabel(col, locale, t) {
@@ -3225,7 +3223,7 @@ export function DataTable({
   const ui = useUI();
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
-  const headerFontsReady = useHeaderFontsReady();
+  const headerFontsReady = useFontsReady();
   // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
   const capabilities = useCapabilitiesSafe();
   // ETP-5245 — last-resort currency for `amount` cells whose row carries none of
@@ -3263,6 +3261,7 @@ export function DataTable({
   // their headers when neither any saved row nor the add-row activates them.
   const [addRowValues, setAddRowValues] = useState({});
   useEffect(() => { if (!addRow?.active) setAddRowValues({}); }, [addRow?.active]);
+  const addRowDraft = useAddRowDraft({ addRow, hideHeader, linesLayout, columns, addRowValues });
 
   useEffect(() => {
     setOptimisticToggles({});
@@ -3356,19 +3355,21 @@ export function DataTable({
     // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
     // ETP-5833 — the lines/add-row modes get the lines-side absorber, applied to the same
     // `visibleColumns` InlineLinesPanel derives, so header, rows and add-row agree on it.
-    if (hideHeader || linesLayout === 'inlineEditable') return withLinesAbsorberColumn(base);
+    // ETP-5133 (QA pass 3, F-2) — same for the width of a no-truncate column (e.g. product),
+    // sized for its widest value in `data` (+ the add-row draft) exactly as InlineLinesPanel sizes it.
+    if (hideHeader || linesLayout === 'inlineEditable') return withContentWidths(withLinesAbsorberColumn(base), rowsWithDraft(data, addRowDraft));
     // ETP-5833 (QA) — a list header never wraps, so each column's floor also covers its rendered
     // header: measured from the label the header actually shows (resolved here with the same
     // `resolveColumnLabel`/`t`/locale as renderColumnHeaderCell), never from row data. Header,
     // colgroup, body cells and listTableMinWidthPx all read it through columnMinWidthPx.
-    // `headerFontsReady` re-runs this once the web font has loaded (see useHeaderFontsReady); the
+    // `headerFontsReady` re-runs this once the web font has loaded (see useFontsReady); the
     // font is resolved once per pass, not per column.
     const headerFont = listHeaderFont();
     return withImplicitGrowColumn(base.map(col => ({
       ...col,
       headerMinWidthPx: listHeaderMinWidthPx(col, renderedHeaderLabel(col, locale, t), headerFont),
     })));
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout, locale, t, headerFontsReady]);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, addRowDraft, capabilities, hideHeader, linesLayout, locale, t, headerFontsReady]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
   // separators, symbol, right alignment, numeric filter) — it does not by itself
@@ -3506,7 +3507,10 @@ export function DataTable({
   // host yet (e.g. every standalone unit test that mounts DataTable in this
   // mode alone), in which case the hook returns null and rendering falls
   // through to the classic in-place `<table>` below, unchanged.
-  const addRowScrollHost = useLinesScrollHost(ilpTrailing && addRow?.active ? entity : null);
+  const addRowHostKey = ilpTrailing && addRow?.active ? entity : null;
+  const addRowScrollHost = useLinesScrollHost(addRowHostKey);
+  // ETP-5133 (QA pass 3) — hand the add-row draft to the sibling InlineLinesPanel (same key).
+  usePublishLinesAddRowDraft(addRowHostKey, addRowDraft);
   // ETP-5133 follow-up (BUG-1) — live `clientWidth` of that host, kept in sync
   // via a ResizeObserver; see useAddRowScrollHostWidth's own doc for why it
   // measures on a layout effect. Also called unconditionally, also before the
