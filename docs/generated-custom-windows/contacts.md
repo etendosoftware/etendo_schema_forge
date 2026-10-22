@@ -1542,3 +1542,15 @@ on the Contacts window (`/contacts`), not on a Business Partner page or a redire
 Saving an account field of the Customer Accounting and Vendor Accounting areas now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `CustomerAccountingHandler` / `VendorAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
 
 `employeeAccounting` (`C_BP_Employee_Acct`) is not guarded: both its account fields are `discarded`, so it accepts no write. Exposing them requires wiring the guard for `contacts/employeeAccounting` first.
+
+## Read-only role tier: sub-tabs, Financiero and attachments — ETP-5830
+
+With a `read-only` tier on Contactos:
+
+- **Persona / Cuenta bancaria / Dirección:** no "+ Añadir", no inline edit, no delete, no hover pencil.
+- **Dirección:** clicking a row opens nothing. `LocationEditorModal` has no read-only mode, so a read-only role cannot open the address popup at all; the row in the table is what it sees. Accepted trade-off.
+- **Financiero:** credit limit, Cliente/Proveedor, discount, payment selects, *Bloquear* and the SII/TicketBAI defaults are all disabled (`BillingPreferencesForm` and `FiscalDefaultsSection` read `editing === false`).
+- **Attachments:** files are listed and downloadable; no upload, no delete.
+- **`/contacts/new` by URL** redirects to the list.
+
+Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

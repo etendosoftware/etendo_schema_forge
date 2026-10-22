@@ -201,6 +201,13 @@ describe('GoodsShipmentActions', () => {
       expect(screen.getByText('createInvoiceBtn')).toBeInTheDocument();
     });
 
+    it('places "Create Return" before "Create Invoice" so the primary action is rightmost (ETP-5690)', () => {
+      renderActions({ data: { ...defaultProps.data, canCreateReturn: true } });
+      const ret = screen.getByText('createReturn').closest('button');
+      const inv = screen.getByText('createInvoiceBtn').closest('button');
+      expect(ret.compareDocumentPosition(inv) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('does NOT render when invoiceStatus is 100 (fully invoiced)', () => {
       renderActions({ data: { ...defaultProps.data, invoiceStatus: 100 } });
       expect(screen.queryByText('createInvoiceBtn')).not.toBeInTheDocument();

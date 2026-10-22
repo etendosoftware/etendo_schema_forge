@@ -26,7 +26,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
-import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
+import { columnFlex, isLineGridColumn, withLinesAbsorberColumn } from '@/lib/linesColumnWidth.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
 import { registerLinesScrollHost, unregisterLinesScrollHost } from '@/lib/linesScrollHost.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
@@ -1353,9 +1353,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // `isLineGridColumn` (linesColumnWidth.js), shared with DataTable's hidden
   // add-row colgroup, so the two renderers can't diverge on this again.
   const visibleColumns = useMemo(
-    () => (columns || []).filter(c => (
+    () => withLinesAbsorberColumn((columns || []).filter(c => (
       isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
-    )),
+    ))),
     [columns, hiddenColumns]
   );
   // Whether the row reserves the 158px action slot after its last column. Until

@@ -1655,3 +1655,6 @@ The import no longer waits for `/sws/neo/batch` to answer: `useWindowImportDialo
 - Code: `tools/app-shell/src/components/copilot/ocr/ingest/useBatch.js`, `contract-ui/useWindowImportDialog.js`; engine side (`importEngine.js`, `schema_forge_core`); server side `com.etendoerp.go` `BatchJobService` (docs §4.3.7). Tests: `useBatch.vitest.jsx`, `ListView.importLabels.vitest.jsx`, core `importEngine.test.js`, Java `BatchJobServiceTest`.
 - Manual check: import a 200-row CSV, watch the bar advance, kill/restart Tomcat mid-import and reopen: the dialog reports the unlisted rows as unknown and the created products are not duplicated by Reintentar.
 
+## Read-only role tier: price tab — ETP-5830
+
+With a `read-only` tier, `ProductPriceBar` shows every tariff and its prices but hides "+ Añadir tarifa" and the delete button, and disables the price steppers (`accessReadOnly`, passed by `DetailView` from the role tier). Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
