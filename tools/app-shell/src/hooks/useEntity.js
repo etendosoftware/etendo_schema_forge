@@ -2588,7 +2588,13 @@ export function useEntity(entity, childEntity, {
     const handleProcessSuccess = useCallback((process) => {
         const specificKey = `${process.columnName ?? process.name}Completed`;
         const specificMsg = ui(specificKey);
-        const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
+        const defaultProcessCompleted = ui('processCompleted');
+        const fallbackDefault = defaultProcessCompleted !== 'processCompleted'
+            ? defaultProcessCompleted
+            : 'Process completed';
+        const fallbackMsg = process.label
+            ? `${ui(process.label) || process.label} ${ui('completed')}`
+            : fallbackDefault;
         toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
         window.dispatchEvent(new CustomEvent('neo:processSuccess', {
             detail: {
