@@ -97,6 +97,28 @@ function envelopeFromJob(job) {
 }
 
 /**
+ * One poll attempt. It answers the job envelope, or the error to throw at once (`fatal`: the job
+ * is gone) or the error to count as a failed attempt (`retry`: the server or the network did not
+ * answer yet).
+ */
+async function pollOnce(apiFetch, url) {
+  let res;
+  try {
+    res = await apiFetch(url, { baseUrl: '', method: 'GET' });
+  } catch (e) {
+    return { retry: true, error: e };
+  }
+  const job = await readJson(res);
+  if (res.status === 404) {
+    return { fatal: true, error: jobError(404, `Batch job not found (${res.status})`) };
+  }
+  if (!res.ok || !job) {
+    return { retry: true, error: jobError(res.status, `Batch job status failed (${res.status})`) };
+  }
+  return { job };
+}
+
+/**
  * Polls a job until it is done. A transient poll failure does not abort the wait — the job lives
  * on the server — but five in a row throw, which the import engine reads as "outcome unknown"
  * (rows are never resent, so nothing is duplicated). A 404 means the job is gone.
@@ -105,26 +127,16 @@ async function pollJob(apiFetch, url, { onProgress, pollIntervalMs, signal }) {
   let failures = 0;
   for (;;) {
     if (signal?.aborted) throw abortError();
-    let res;
-    try {
-      res = await apiFetch(url, { baseUrl: '', method: 'GET' });
-    } catch (e) {
+    const attempt = await pollOnce(apiFetch, url);
+    if (attempt.fatal) throw attempt.error;
+    if (!attempt.job) {
       failures += 1;
-      if (failures >= MAX_CONSECUTIVE_POLL_FAILURES) throw e;
-      await sleep(pollIntervalMs, signal);
-      continue;
-    }
-    const job = await readJson(res);
-    if (res.status === 404) throw jobError(404, `Batch job not found (${res.status})`);
-    if (!res.ok || !job) {
-      failures += 1;
-      if (failures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-        throw jobError(res.status, `Batch job status failed (${res.status})`);
-      }
+      if (failures >= MAX_CONSECUTIVE_POLL_FAILURES) throw attempt.error;
       await sleep(pollIntervalMs, signal);
       continue;
     }
     failures = 0;
+    const { job } = attempt;
     onProgress?.({ processedRows: job.processedRows ?? 0, totalRows: job.totalRows ?? 0 });
     if (job.done) return envelopeFromJob(job);
     await sleep(pollIntervalMs, signal);
