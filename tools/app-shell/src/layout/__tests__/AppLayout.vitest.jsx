@@ -13,6 +13,8 @@ import enUS from '@/locales/en_US.json';
 const LABELS = enUS.genericLabels;
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => LABELS[key] ?? key,
+  // ETP-5049 — BillingStatusBanner formats the grace end date in the UI locale.
+  useLocaleSwitch: () => ({ locale: 'en_US' }),
 }));
 
 // NoAccessScreen now renders a logout escape hatch (ETP-4514) via useLogout(),

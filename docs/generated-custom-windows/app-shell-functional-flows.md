@@ -212,6 +212,43 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Narrow the window and confirm the block wraps onto its own row instead of crushing the bar.
   3. On a productive tenant, confirm the whole bar is gone.
 
+#### 3.2a The failed-payment banner (`BillingStatusBanner`, ETP-5049)
+
+- **Why:** a failed renewal payment turns the subscription `PAST_DUE`, and the environment keeps
+  working for the grace period (`etendo.go.billing.grace.days`, default 15) before every request is
+  refused with 402. Without this banner the first in-app signal was the blocked screen, although
+  most failed payments are fixable within grace.
+- **Where:** `tools/app-shell/src/components/billing/BillingStatusBanner.jsx`, mounted by
+  `AppLayoutInner` (`layout/AppLayout.jsx`) above the top bar, in the normal authenticated layout
+  only. Not in an embedded (chromeless) window, never on the blocked screen.
+- **The decision is pure:** `paymentGraceWarning(environment, now)` in
+  `lib/environmentPresentation.js`, fed by the current environment from `GET /sws/go/environments`
+  (`useEnvironmentSwitch`). It answers `null` unless `subscriptionStatus === 'PAST_DUE'` and
+  `graceEndsAt` is an instant still ahead. `graceEndsAt` is the backend's own grace end (the same
+  `EnvironmentAccessPolicy.graceEndsAt` the 402 gate decides on), so the banner disappears exactly
+  when the blocked screen takes over.
+- **Copy and CTA:** *"Your last payment failed. This environment will be blocked on {date}."* —
+  the date is the viewer's local calendar day of the `graceEndsAt` instant, formatted with
+  `formatCalendarDate` in the UI locale.
+  - Owner (`ownedByAccount: true`, the signal ETP-5742 gates re-subscription on, via
+    `ownsEnvironmentSubscription`): **Update payment** → `/account`, where the Subscription section
+    opens the Stripe Customer Portal.
+  - Anyone else: *"Contact your company's administrator."*, no button.
+- **Escalation:** more than 3 days (`BILLING_WARNING_ESCALATION_DAYS`) before `graceEndsAt` it is
+  amber and can be dismissed for the browser session (sessionStorage key
+  `etendo:billing-warning-dismissed:<clientId>:<graceEndsAt>`, so a new failed payment warns
+  again; storage failures only mean it shows again). In the last 3 days it is red
+  (`data-variant="destructive"`, `role="alert"`) and has no close button.
+- **Hidden on `/account`:** the CTA's own destination already shows the grace countdown next to
+  the portal button. It stays on `/upgrade` and `/companies`, where nothing else says it.
+- **Test ids:** `billing-status-banner` (with `data-variant`), `billing-status-banner-message`,
+  `billing-status-banner-cta`, `billing-status-banner-member-hint`,
+  `billing-status-banner-dismiss`.
+- **i18n keys:** `billingPaymentFailedBanner`, `billingUpdatePaymentCta`,
+  `billingPaymentFailedContactAdmin` (en_US, es_ES, es_AR).
+- **Manual verification path:** `docs/stripe-local-testing.md`, the end-to-end walk-through,
+  Step 5; or the local lifecycle tool (`docs/etp-5396-local-lifecycle-tool.md`, check 3).
+
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
 - **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx` (layout) and

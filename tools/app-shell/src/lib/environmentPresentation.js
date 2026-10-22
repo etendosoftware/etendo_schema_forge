@@ -48,7 +48,57 @@ export function isCanceledSubscription(environment) {
  * `ownedByAccount: true` qualifies; the backend checks ownership again and refuses anyone else.
  */
 export function canReactivateSubscription(environment) {
-  return isCanceledSubscription(environment) && environment.ownedByAccount === true;
+  return isCanceledSubscription(environment) && ownsEnvironmentSubscription(environment);
+}
+
+/**
+ * Whether this account owns the environment and so pays for it: the same signal ETP-5742 gates
+ * re-subscription on. Only an explicit `ownedByAccount: true` qualifies; an invited member, or a
+ * backend that predates the field, does not. The backend checks ownership again on every billing
+ * call, so this only decides which copy and CTA to show.
+ */
+export function ownsEnvironmentSubscription(environment) {
+  return environment?.ownedByAccount === true;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The last stretch of a deadline (in days) in which a billing warning escalates. */
+export const BILLING_WARNING_ESCALATION_DAYS = 3;
+
+/**
+ * ETP-5049 — the in-environment warning for a failed renewal payment, or `null` when there is none.
+ *
+ * A PAST_DUE subscription keeps the environment usable until `graceEndsAt` (an ISO instant the
+ * backend computes with the same rule the 402 gate decides on), so the warning is shown only while
+ * that instant is still ahead. Once it has passed, the gate's blocked screen takes over. No
+ * `graceEndsAt` (no due date, or a backend without lifecycle metadata) means no warning.
+ *
+ * `graceEndsAt` is a genuine instant, not a calendar date, so it is parsed as one; the caller
+ * formats its LOCAL calendar day, which is the day the block actually happens for the viewer.
+ *
+ * @returns {null | { graceEndsAt: Date, escalated: boolean, canPay: boolean }}
+ *   `escalated` — inside the last {@link BILLING_WARNING_ESCALATION_DAYS} days: more prominent and
+ *   not dismissible. `canPay` — the account owns the environment and can fix the payment method.
+ */
+export function paymentGraceWarning(environment, now = new Date()) {
+  if (environment?.subscriptionStatus !== 'PAST_DUE' || !environment.graceEndsAt) return null;
+  const endsAt = new Date(environment.graceEndsAt);
+  const remainingMs = endsAt.getTime() - now.getTime();
+  if (Number.isNaN(remainingMs) || remainingMs <= 0) return null;
+  return {
+    graceEndsAt: endsAt,
+    escalated: remainingMs <= BILLING_WARNING_ESCALATION_DAYS * DAY_MS,
+    canPay: ownsEnvironmentSubscription(environment),
+  };
+}
+
+/**
+ * Session-scoped dismissal key for the payment warning. It names the grace window, not only the
+ * client, so a later failed payment (a new `graceEndsAt`) is warned about again.
+ */
+export function paymentGraceWarningDismissKey(clientId, graceEndsAt) {
+  return `etendo:billing-warning-dismissed:${clientId || ''}:${graceEndsAt || ''}`;
 }
 
 /** A canceled productive environment keeps its "Productive" badge although its plan reads free. */

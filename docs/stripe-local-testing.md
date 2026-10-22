@@ -950,14 +950,13 @@ exists that answers `400 PLAN_NOT_AVAILABLE`.
 {
   "requestId": "<server-generated-id>",
   "checkoutUrl": "https://checkout.stripe.com/c/pay/...",
-  "mode": "subscription",
-  "priceId": "price_..."
+  "mode": "subscription"
 }
 ```
 
-Open `checkoutUrl` in the browser. The request carries no card number, CVC, amount, currency or
-Price ID; the `priceId` in the answer is the one the server chose (a known leftover,
-`com.etendoerp.go/docs/open-and-notable-topics.md` §4.8). A missing secret key or webhook secret
+Open `checkoutUrl` in the browser. Neither the request nor the answer carries a card number, CVC,
+amount, currency or Price ID: the server picks the price from the plan and keeps it to itself
+(`com.etendoerp.go/docs/open-and-notable-topics.md` §4.8). A missing secret key or webhook secret
 fails closed with `503 CHECKOUT_NOT_CONFIGURED`, and so does an active plan with no provider price;
 the client must not fall back to a mock card form.
 
@@ -1437,8 +1436,22 @@ STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_requ
   created, for a real renewal it is the end of the paid period (§1, "The grace anchor is the end
   of the paid period").
 - Expect the tenant to stay **allowed**: it is inside its grace window (§1 lifecycle matrix).
-- There is no in-app warning during grace today; only `/account` shows the grace state
-  (`graceDaysRemaining`). Tracked in ETP-5049.
+- Expect the in-app warning (ETP-5049), without a restart once the environment list is read
+  again (reload the SPA): a banner above the top bar of the environment, `billing-status-banner`,
+  reading "Your last payment failed. This environment will be blocked on <date>." The date is the
+  local calendar day of `graceEndsAt` on `GET /sws/go/environments` (the grace anchor plus
+  `etendo.go.billing.grace.days`, the same instant the `402` gate decides on).
+  - Signed in as the **owner** (`ownedByAccount: true`): an **Update payment** button that opens
+    `/account`, where the Subscription section shows `graceDaysRemaining` and **Manage
+    subscription** opens the Customer Portal. As an invited member: "Contact your company's
+    administrator." and no button.
+  - More than 3 days before `graceEndsAt` the banner is amber and has a close button; closing it
+    hides it for the browser session (sessionStorage, per company and grace window). In the last 3
+    days it turns red (`data-variant="destructive"`) and cannot be closed. To see that state, move
+    the anchor so fewer than 3 days of grace remain (`grace_anchor - interval '13 days'` with the
+    default 15) and reload.
+  - It is not shown on `/account` itself (the CTA's own destination already shows the grace
+    state), and not once `graceEndsAt` has passed: then the blocked screen of Step 6 takes over.
 
 **Step 6 — Grace runs out.** Move the anchor past the grace window (`etendo.go.billing.grace.days`,
 default 15):

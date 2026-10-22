@@ -572,7 +572,11 @@ line, so a report that looks empty for one property but not others is the sympto
 A paid tenant stays usable while its subscription is `active`. When a renewal payment fails, Stripe
 tells Etendo through a webhook and the subscription becomes `past_due`: the tenant keeps working
 for a **grace period** (`etendo.go.billing.grace.days`, default 15 days) counted from the end of
-the period the customer already paid for. After that — or at once when the subscription is
+the period the customer already paid for. During grace the environment says so: a banner above
+its top bar (`BillingStatusBanner`, ETP-5049) warns that the last payment failed and names the day
+the environment will be blocked, offers the owner *Update payment* (`/account`) and tells anyone
+else to contact the company's administrator; it turns red and cannot be closed in the last 3 days.
+After that — or at once when the subscription is
 canceled, or when a demo's trial runs out — the tenant is **blocked**.
 
 Blocked means every request into the tenant's data is refused with HTTP 402, whatever the door:
