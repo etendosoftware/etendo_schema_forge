@@ -3,7 +3,7 @@
   "generatedFrom": "artifacts/*/contract.json",
   "policy": {
     "entitySelection": "primary-entity-and-schema-linked-children-per-base-window",
-    "fieldSelection": "curated-publicApi-else-window-form",
+    "fieldSelection": "curated-publicApi-else-form-plus-readonly-list",
     "excludedCategories": [
       "accounting",
       "configuration",
@@ -525,6 +525,17 @@
           "reference": null,
           "handlerId": null
         },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -545,6 +556,17 @@
             "type": "string"
           },
           "reference": "Costcenter",
+          "handlerId": null
+        },
+        "processed": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "processed",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
           "handlerId": null
         },
         "document_no": {
@@ -844,6 +866,28 @@
           "reference": null,
           "handlerId": null
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -864,6 +908,18 @@
             "type": "string"
           },
           "reference": "CostCenter",
+          "handlerId": null
+        },
+        "invoice_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "invoiceStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
           "handlerId": null
         },
         "currency": {
@@ -1140,6 +1196,28 @@
           "reference": null,
           "handlerId": null
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -1389,6 +1467,17 @@
           "type": "passthrough",
           "dataType": {
             "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
           },
           "reference": null,
           "handlerId": null
@@ -1646,6 +1735,17 @@
           "reference": null,
           "handlerId": null
         },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "id": {
           "sourceVisibility": "system",
           "direction": "out",
@@ -1784,6 +1884,17 @@
             "foreignKey": "warehouse"
           }
         },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "project": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -1804,6 +1915,17 @@
             "type": "string"
           },
           "reference": "Costcenter",
+          "handlerId": null
+        },
+        "processed": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "processed",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
           "handlerId": null
         },
         "id": {
@@ -2500,6 +2622,29 @@
           "reference": null,
           "handlerId": null
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "grand_total_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "grandTotalAmount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "currency": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -2509,6 +2654,29 @@
             "type": "string"
           },
           "reference": "Currency",
+          "handlerId": null
+        },
+        "outstanding_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "outstandingAmount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
           "handlerId": null
         },
         "project": {
@@ -2531,6 +2699,52 @@
             "type": "string"
           },
           "reference": "CostCenter",
+          "handlerId": null
+        },
+        "aeatsii_estado": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "aeatsiiEstado",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "tbai_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGOTbaiStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "delivery_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGODeliveryStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "due_date": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGODueDate",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date"
+          },
+          "reference": null,
           "handlerId": null
         },
         "id": {
@@ -2592,6 +2806,17 @@
         "PATCH"
       ],
       "fields": {
+        "currency": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "currency",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Currency",
+          "handlerId": null
+        },
         "to_currency": {
           "sourceVisibility": "readOnly",
           "direction": "out",
@@ -2802,6 +3027,17 @@
           "reference": "PriceList",
           "handlerId": null
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
@@ -2835,6 +3071,30 @@
             "type": "string"
           },
           "reference": "Currency",
+          "handlerId": null
+        },
+        "deliv_status_purchase": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGODelivStatusPurchase",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoice_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGOInvoiceStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
           "handlerId": null
         },
         "id": {
@@ -3219,6 +3479,40 @@
           "reference": "BusinessPartnerLocation",
           "handlerId": null
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoice_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "invoiceStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "source_shipment_doc_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
@@ -3510,6 +3804,40 @@
             "foreignKey": "warehouse"
           }
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoice_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "invoiceStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "source_receipt_doc_no": {
           "sourceVisibility": "readOnly",
           "direction": "out",
@@ -3792,6 +4120,17 @@
           "reference": "PaymentMethod",
           "handlerId": null
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
@@ -3825,6 +4164,29 @@
             "type": "string"
           },
           "reference": "Currency",
+          "handlerId": null
+        },
+        "posted": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "posted",
+          "type": "passthrough",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "outstanding_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "outstandingAmount",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
           "handlerId": null
         },
         "price_list": {
@@ -3870,6 +4232,63 @@
             "type": "string"
           },
           "reference": "Costcenter",
+          "handlerId": null
+        },
+        "etvfac_invoice_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "etvfacInvoiceStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "aeatsii_estado": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "aeatsiiEstado",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "tbai_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGOTbaiStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "delivery_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGODeliveryStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "due_date": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGODueDate",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date"
+          },
+          "reference": null,
           "handlerId": null
         },
         "id": {
@@ -3932,6 +4351,17 @@
         "PATCH"
       ],
       "fields": {
+        "currency": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "currency",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Currency",
+          "handlerId": null
+        },
         "to_currency": {
           "sourceVisibility": "readOnly",
           "direction": "out",
@@ -4131,6 +4561,17 @@
             "foreignKey": "warehouse"
           }
         },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
         "grand_total_amount": {
           "sourceVisibility": "readOnly",
           "direction": "out",
@@ -4164,6 +4605,30 @@
             "type": "string"
           },
           "reference": "Currency",
+          "handlerId": null
+        },
+        "delivery_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGODeliveryStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "invoice_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGOInvoiceStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reference": null,
           "handlerId": null
         },
         "id": {
@@ -4489,6 +4954,17 @@
             "type": "string"
           },
           "reference": "Reject_Reason",
+          "handlerId": null
+        },
+        "document_status": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "documentStatus",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
           "handlerId": null
         },
         "grand_total_amount": {

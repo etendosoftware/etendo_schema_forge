@@ -109,7 +109,11 @@ export function isCurated(source) {
 
 // Decides whether a frontend-contract field is published.
 // - Curated entity: only fields with `publicApi.exposed: true`.
-// - Non-curated entity: the fields its window form shows (`form !== false`).
+// - Non-curated entity (until the functional team curates it field by field):
+//   the fields its window form shows (`form !== false`), plus the read-only
+//   fields its window list shows (`visibility === 'readOnly' && grid !== false`),
+//   e.g. document status and totals. The added fields are read-only, so they
+//   are published `out`.
 // - Fiscal monitors are never derived: their curation belongs to the Spanish
 //   localization team, so without it they publish only `id` and `updated`.
 // - `system` / `discarded` fields and `neverExposedFields` are never published.
@@ -118,7 +122,8 @@ export function isPublicField(field, { curated, specName }) {
   if (neverExposedFields.has(field.name)) return false;
   if (curated) return field.publicApi?.exposed === true;
   if (fiscalMonitorWindows.has(specName)) return false;
-  return field.form !== false;
+  if (field.form !== false) return true;
+  return field.visibility === 'readOnly' && field.grid !== false;
 }
 
 function publicName(specName, entityName, primaryEntity) {
@@ -456,7 +461,7 @@ export async function generateManifest({
     generatedFrom: 'artifacts/*/contract.json',
     policy: {
       entitySelection: 'primary-entity-and-schema-linked-children-per-base-window',
-      fieldSelection: 'curated-publicApi-else-window-form',
+      fieldSelection: 'curated-publicApi-else-form-plus-readonly-list',
       excludedCategories: [...excludedCategories],
       excludedWindows: [...excludedWindows],
       excludedChildTabs: excludedChildTabs.map((pattern) => pattern.source),
