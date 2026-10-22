@@ -34,10 +34,14 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), message: vi.fn() },
 }));
 
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
+import {
+  registerErrorTranslator, resetErrorTranslatorForTests,
+} from '@etendosoftware/app-shell-core/auth';
 import ReversedInvoicesPanel from '../ReversedInvoicesPanel.jsx';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import esES from '../../../../locales/es_ES.json';
 
 const RECORD_ID = 'rec-1';
@@ -88,9 +92,11 @@ function installFetch({
   lines = [], headerInvoices = [], years = [], postResponse = null, patchResponse = null,
   deleteResponse = null, activeModels = { '349': true }, catalogOk = true,
   serverIgnoresSearch = false, originals = ORIGINALS, patchGate = null,
+  originalReadOk = true, patchNetworkFailures = 0,
 } = {}) {
   fetchCalls = [];
   let postSeq = 0;
+  let patchSeq = 0;
   global.fetch = vi.fn(async (url, opts = {}) => {
     const method = opts.method ?? 'GET';
     const body = opts.body ? JSON.parse(opts.body) : null;
@@ -105,6 +111,7 @@ function installFetch({
     // Single-record read of an original invoice: `{apiBaseUrl}/header/{id}`.
     const single = method === 'GET' && String(url).match(/\/header\/([^/?]+)/);
     if (single) {
+      if (!originalReadOk) return { ok: false, status: 500, json: async () => ({}) };
       const id = decodeURIComponent(single[1]);
       const row = headerInvoices.find(r => r.id === id)
         ?? (originals[id] ? { id, invoiceDate: originals[id] } : null);
@@ -123,6 +130,10 @@ function installFetch({
     if (method === 'PATCH') {
       // A pending gate holds the PATCH open, so a test can observe the row WHILE it is saving.
       if (patchGate) await patchGate;
+      // The first N PATCHes never get an HTTP answer — what a dropped connection looks like to
+      // the real apiFetch, which turns it into its translated NetworkError.
+      patchSeq += 1;
+      if (patchSeq <= patchNetworkFailures) throw new TypeError('Failed to fetch');
       if (patchResponse) return patchResponse;
       // An accepted PATCH lands on the row, so the panel's re-read sees it — as the server would.
       const id = String(url).split('/').pop();
@@ -146,7 +157,7 @@ const headerCriteria = (url = lastHeaderUrl()) => JSON.parse(headerParams(url).g
 // render helper
 // ---------------------------------------------------------------------------
 
-function renderPanel({ data = {}, ...fetchOpts } = {}) {
+function renderPanel({ data = {}, apiBaseUrl = API_BASE, ...fetchOpts } = {}) {
   installFetch(fetchOpts);
   return render(
     <ReversedInvoicesPanel
@@ -156,7 +167,7 @@ function renderPanel({ data = {}, ...fetchOpts } = {}) {
         businessPartner: BP_ID, ...data,
       }}
       token="tkn"
-      apiBaseUrl={API_BASE}
+      apiBaseUrl={apiBaseUrl}
       api={{}}
       catalogs={{}}
       isActive
@@ -1007,6 +1018,205 @@ describe('ETP-5059 — the original\'s month, quarter and year survive a negativ
     await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['01', '1T']));
     await waitFor(() => expect(optionValues(findYearSelect())).toEqual(['y2026']));
     expect(optionLabels(findYearSelect())).toEqual(['2026']);
+  });
+
+  it('an original dated 2026-03-31 (last day of a quarter) offers 03 / 1T, never 04 / 2T', async () => {
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', reversedInvoice: 'inv-mar' })],
+      originals: { 'inv-mar': '2026-03-31' },
+      years: YEARS,
+    });
+    await expandFirstRow();
+
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['03', '1T']));
+    expect(findPeriodSelect()).toHaveValue('03');
+    await waitFor(() => expect(optionValues(findYearSelect())).toEqual(['y2026']));
+  });
+
+  it('an original dated 2025-12-31 (last day of the year) offers 12 / 4T and the year 2025', async () => {
+    renderPanel({
+      lines: [LINE({ aEAT349IsCorrective: 'Y', reversedInvoice: 'inv-dec' })],
+      originals: { 'inv-dec': '2025-12-31' },
+      years: YEARS,
+    });
+    await expandFirstRow();
+
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['12', '4T']));
+    expect(findPeriodSelect()).toHaveValue('12');
+    await waitFor(() => expect(optionValues(findYearSelect())).toEqual(['y2025']));
+    expect(optionLabels(findYearSelect())).toEqual(['2025']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5059 — the 349 group outside the happy path: spec, read-only, double click, network
+// failure, multi-month draft, failed original read and the base amounts' formatting.
+// ---------------------------------------------------------------------------
+
+describe('ETP-5059 — the AEAT-349 group on a saved row, edge cases', () => {
+  const YEARS = [{ id: 'y2025', fiscalYear: '2025' }, { id: 'y2026', fiscalYear: '2026' }];
+  const PURCHASE_BASE = '/sws/neo/purchase-invoice';
+  const TRANSLATED_NETWORK = 'No se pudo completar la acción. Intenta nuevamente.';
+
+  beforeEach(() => {
+    registerErrorTranslator((key) => (key === 'networkErrorRetry' ? TRANSLATED_NETWORK : key));
+  });
+  afterEach(() => {
+    resetErrorTranslatorForTests();
+  });
+
+  const box = () => screen.getByTestId('checkbox__isCorrective');
+
+  it('on a purchase invoice the original is read and the group PATCHed under the purchase spec', async () => {
+    renderPanel({
+      apiBaseUrl: PURCHASE_BASE,
+      lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2026', 'aEAT349CYear$_identifier': '2026', aEAT349Period: '06' })],
+      years: YEARS,
+    });
+    await expandFirstRow();
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['06', '2T']));
+
+    fireEvent.change(findPeriodSelect(), { target: { value: '2T' } });
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+
+    const originalReads = fetchCalls.filter(c => c.method === 'GET' && /\/header\/inv-orig-1/.test(c.url));
+    expect(originalReads.length).toBeGreaterThan(0);
+    for (const read of originalReads) expect(read.url).toMatch(new RegExp(`^${PURCHASE_BASE}/header/inv-orig-1`));
+    expect(patchCalls()[0].url).toBe(`${PURCHASE_BASE}/reversedInvoices/line-1`);
+    // Nothing of this row leaks to the sales spec.
+    expect(fetchCalls.some(c => c.url.startsWith(API_BASE))).toBe(false);
+  });
+
+  it('a read-only processed row reads neither the original nor the fiscal calendar and shows the stored values', async () => {
+    renderPanel({
+      data: { processed: true, documentStatus: 'CO' },
+      lines: [LINE({ aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2025', 'aEAT349CYear$_identifier': '2025', aEAT349Period: '0A' })],
+      years: YEARS,
+    });
+    await expandFirstRow();
+    await waitFor(() => expect(findPeriodSelect()).toBeDefined());
+    // Let any effect that would fetch run and reach the stub.
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+
+    expect(fetchCalls.some(c => /\/header\//.test(c.url))).toBe(false);
+    expect(fetchCalls.some(c => c.url.includes('/fiscal-calendar'))).toBe(false);
+
+    // Stored period, labelled as the annual one, disabled.
+    expect(findPeriodSelect()).toBeDisabled();
+    expect(findPeriodSelect()).toHaveValue('0A');
+    expect(optionValues(findPeriodSelect())).toEqual(['0A']);
+    expect(optionLabels(findPeriodSelect())).toEqual(['0A - rectPeriodAnnual']);
+    // Stored year, as a disabled read-only input.
+    const yearInput = screen.getByDisplayValue('2025');
+    expect(yearInput).toBeDisabled();
+    expect(box()).toBeDisabled();
+  });
+
+  it('a network failure on the PATCH shows the translated network message; the box stays unticked and a retry PATCHes again', async () => {
+    renderPanel({ lines: [LINE()], years: YEARS, patchNetworkFailures: 1 });
+    await expandFirstRow();
+
+    fireEvent.click(box());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(TRANSLATED_NETWORK));
+    expect(toast.error).not.toHaveBeenCalledWith('rectSaveError');
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    for (const [msg] of vi.mocked(toast.error).mock.calls) expect(String(msg)).not.toMatch(/Failed to fetch/);
+    await waitFor(() => expect(box()).not.toHaveAttribute('aria-busy'));
+    expect(box()).toHaveAttribute('aria-checked', 'false');
+    expect(box()).not.toBeDisabled();
+    expect(findPeriodSelect()).toBeUndefined();
+
+    // Retry: a NEW PATCH goes out and, accepted this time, the box ticks.
+    fireEvent.click(box());
+    await waitFor(() => expect(patchCalls()).toHaveLength(2));
+    expect(patchCalls()[1].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
+    await waitFor(() => expect(box()).toHaveAttribute('aria-checked', 'true'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('a non-network refusal still shows the backend text, not the network message', async () => {
+    renderPanel({
+      lines: [LINE()],
+      years: YEARS,
+      patchResponse: { ok: false, json: async () => ({ error: { message: TRIGGER_MSG } }) },
+    });
+    await expandFirstRow();
+    fireEvent.click(box());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(TRIGGER_MSG));
+    expect(toast.error).not.toHaveBeenCalledWith(TRANSLATED_NETWORK);
+  });
+
+  it('a failed read of the original leaves both pickers disabled on "—"; ticking still PATCHes', async () => {
+    renderPanel({ lines: [LINE()], years: YEARS, originalReadOk: false });
+    await expandFirstRow();
+
+    fireEvent.click(box());
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
+    await waitFor(() => expect(box()).toHaveAttribute('aria-checked', 'true'));
+
+    // The original's read was attempted and failed.
+    expect(fetchCalls.some(c => c.method === 'GET' && /\/header\/inv-orig-1/.test(c.url))).toBe(true);
+    expect(findPeriodSelect()).toBeDisabled();
+    expect(optionLabels(findPeriodSelect())).toEqual(['—']);
+    await waitFor(() => expect(optionLabels(findYearSelect())).toEqual(['—']));
+    expect(findYearSelect()).toBeDisabled();
+  });
+
+  it('the 349 bases render through formatCurrency with thousands separators and no "EUR" prefix', async () => {
+    renderPanel({
+      lines: [LINE({
+        aEAT349IsCorrective: 'Y', aEAT349CYear: 'y2026', 'aEAT349CYear$_identifier': '2026', aEAT349Period: '06',
+        aEAT349BPBaseAmount: 2854.2, aEAT349BPBaseAmountS: 1234567.5,
+      })],
+      years: YEARS,
+    });
+    await expandFirstRow();
+    await screen.findByText('rectBaseProducts');
+
+    // formatCurrency puts a no-break space before the symbol; compare the readable form AND the
+    // canonical output, so a hand-rolled formatter (no grouping, en-US) cannot pass.
+    const amountOf = (label) => screen.getByText(label).closest('div').querySelector('input').value;
+    const readable = (v) => v.replace(/\s/g, ' ');
+    expect(readable(amountOf('rectBaseProducts'))).toBe('2.854,20 €');
+    expect(readable(amountOf('rectBaseServices'))).toBe('1.234.567,50 €');
+    expect(amountOf('rectBaseProducts')).toBe(formatCurrency('EUR', 2854.2));
+    expect(amountOf('rectBaseServices')).toBe(formatCurrency('EUR', 1234567.5));
+    // No leftover fixed currency prefix, neither as text nor inside the value.
+    expect(screen.queryByText(/EUR/)).toBeNull();
+    for (const input of screen.getAllByTestId('AmountInput__4395d6')) expect(input.value).not.toMatch(/EUR/);
+  });
+});
+
+describe('ETP-5059 — a multi-month draft left on the default period', () => {
+  it('POSTs every row with no aEAT349Period and no aEAT349CYear, so each takes its own original\'s', async () => {
+    renderPanel({
+      headerInvoices: [
+        CO('inv-may', '10000091', '2026-05-01', 'Cliente SL'),
+        CO('inv-aug', '10000095', '2026-08-10', 'Cliente SL'),
+      ],
+      years: [{ id: 'y2026', fiscalYear: '2026' }],
+    });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+    await pickInDraft('inv-may', 'inv-aug');
+
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+    // The pickers follow the FIRST selected original; the period is left on its default.
+    await waitFor(() => expect(optionValues(findPeriodSelect())).toEqual(['05', '2T']));
+    expect(findPeriodSelect()).toHaveValue('05');
+
+    fireEvent.click(screen.getByTestId('btn__saveNewLine'));
+
+    await waitFor(() => expect(postCalls()).toHaveLength(2));
+    expect(postCalls().map(c => c.body.reversedInvoice)).toEqual(['inv-may', 'inv-aug']);
+    for (const call of postCalls()) {
+      expect(call.body).toEqual({ invoice: RECORD_ID, aEAT349IsCorrective: 'Y', reversedInvoice: call.body.reversedInvoice });
+      expect(call.body).not.toHaveProperty('aEAT349Period');
+      expect(call.body).not.toHaveProperty('aEAT349CYear');
+    }
+    expect(patchCalls()).toHaveLength(0);
   });
 });
 
