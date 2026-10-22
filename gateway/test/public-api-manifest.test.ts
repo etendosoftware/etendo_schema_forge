@@ -74,15 +74,8 @@ test('publishes no internal ticket or Jira reference in the functional texts', (
   }
 });
 
-test('publishes processes only when the base policy exposes them, and only complete', () => {
-  // The conservative base (ETP-5879) publishes no document completion.
-  if (manifest.policy.exposeProcesses === false) {
-    for (const [name, entity] of Object.entries(manifest.entities) as Array<[string, any]>) {
-      assert.deepEqual(entity.processes, [], name);
-    }
-    return;
-  }
-  assert.ok(manifest.entities['sales-order'].processes.some((p: any) => p.action === 'complete'));
+test('publishes only complete, and never on child resources or fiscal monitors', () => {
+  // Actions are opt-in per window (window.publicApi.actions in decisions.json).
   for (const [name, entity] of Object.entries(manifest.entities) as Array<[string, any]>) {
     if (entity.parent || entity.group === 'Fiscal Monitors') assert.deepEqual(entity.processes, [], name);
     for (const process of entity.processes) assert.equal(process.action, 'complete', name);

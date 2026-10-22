@@ -1112,6 +1112,7 @@
       }
     },
     "exchangeRates": {
+      "publicApi": { "readOnly": true },
       "fields": {
         "active": {
           "visibility": "system"

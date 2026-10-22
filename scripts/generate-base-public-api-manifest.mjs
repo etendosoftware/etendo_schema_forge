@@ -85,25 +85,6 @@ export const neverExposedFields = new Set([
   'etblkpBulkposting',
 ]);
 
-// The base exposes no document completion or any other process: the code that
-// derives `complete` from the document workflow stays, behind this flag.
-export const exposeProcesses = false;
-
-// Public resources published read-only (GET/LIST, every field `out`).
-// TEMPORARY: until the functional team curates these resources field by field,
-// the base does not let an integration write them.
-export const readOnlyResources = new Set([
-  'product-costing',
-  'sales-invoice-exchangeRates',
-  'purchase-invoice-exchangeRates',
-]);
-
-// Public fields published read-only (`direction: out`) inside a writable resource,
-// as { publicResourceName: [publicFieldName] }.
-// TEMPORARY: lasts until the functional team curates the fields; the app assigns
-// contacts.search_key from its own sequence, so a client value was silently overwritten.
-export const readOnlyFields = { 'contacts': ['search_key'] };
-
 // Structural marker of a window's lines entity: the entity keyed `lines` in a
 // window that declares `linesLayout` renders it as its inline lines grid.
 export function isLinesEntity(entityName, windowContract) {
@@ -231,13 +212,14 @@ function openApiType(fieldType) {
 
 /**
  * Public actions of a top-level resource (POST /<resource>/:id/actions/<action>).
- * Structural: v1 exposes only `complete`, derived from the window's draftMode
+ * Structural: v1 knows only `complete`, derived from the window's draftMode
  * completion flow (the document-action column, whose body NEO reads as
- * `docAction`). Declared processEndpoints are not public actions.
+ * `docAction`), and only when the window opts in with `window.publicApi.actions`
+ * in decisions.json. Declared processEndpoints are not public actions.
  */
-function buildProcesses({ source, entityName }) {
+function buildProcesses({ source, entityName, actions }) {
   const draft = source?.draftMode;
-  if (draft?.enabled && draft.processField === 'documentAction' && draft.processValue) {
+  if (actions.includes('complete') && draft?.enabled && draft.processField === 'documentAction' && draft.processValue) {
     return [{
       action: 'complete',
       method: 'POST',
@@ -258,7 +240,32 @@ export function inputFieldsOf(decisions, entityName) {
   return Array.isArray(list) ? list : [];
 }
 
-export function buildEntity({ specName, entityName, contract, functional, parent, rawEntity, inputFields = [] }) {
+// Exposure policy declared by the product cell in decisions.json:
+// - `window.publicApi.actions: ["complete"]`: actions the window publishes (absent: none).
+// - `entities.<entity>.publicApi.readOnly: true`: GET/LIST only, every field `out`.
+// - `entities.<entity>.fields.<field>.publicApi.readOnly: true` (or the entity-level list
+//   `entities.<entity>.publicApi.readOnlyFields: ["field"]`): the field is `out`.
+// Field names are the internal (contract) names. Platform guardrails
+// (`neverExposedFields`, fiscal monitors) are applied by the generator and win over this.
+export function exposurePolicyOf(decisions, entityName) {
+  const entity = decisions?.entities?.[entityName];
+  const actions = decisions?.window?.publicApi?.actions;
+  const listed = entity?.publicApi?.readOnlyFields;
+  const readOnlyFields = new Set(Array.isArray(listed) ? listed : []);
+  for (const [name, field] of Object.entries(entity?.fields ?? {})) {
+    if (field?.publicApi?.readOnly === true) readOnlyFields.add(name);
+  }
+  return {
+    actions: Array.isArray(actions) ? actions : [],
+    readOnly: entity?.publicApi?.readOnly === true,
+    readOnlyFields,
+  };
+}
+
+export function buildEntity({
+  specName, entityName, contract, functional, parent, rawEntity, inputFields = [],
+  policy = { actions: [], readOnly: false, readOnlyFields: new Set() },
+}) {
   const source = contract.frontendContract.entities[entityName];
   const backend = contract.backendContract ?? {};
   const backendEntity = backend.entities?.[entityName] ?? {};
@@ -279,7 +286,7 @@ export function buildEntity({ specName, entityName, contract, functional, parent
   const readOnlyFiscalMonitor = fiscalMonitorWindows.has(specName);
   if (readOnlyFiscalMonitor) operations = ['GET', 'LIST'];
   const pubName = publicName(specName, entityName, contract.frontendContract.window.primaryEntity);
-  const readOnlyResource = readOnlyResources.has(pubName);
+  const readOnlyResource = policy.readOnly;
   if (readOnlyResource) operations = ['GET', 'LIST'];
   const writable = !readOnlyResource && endpoints.some((endpoint) => writeMethods.has(endpoint.method));
 
@@ -293,7 +300,7 @@ export function buildEntity({ specName, entityName, contract, functional, parent
     }
     fields[apiName] = {
       sourceVisibility: field.visibility,
-      direction: writable && field.visibility === 'editable' && !readOnlyFields[pubName]?.includes(apiName) ? 'inout' : 'out',
+      direction: writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out',
       internalPath: field.name,
       type: 'passthrough',
       dataType: openApiType(field.type),
@@ -381,7 +388,7 @@ export function buildEntity({ specName, entityName, contract, functional, parent
     ...(readOnlyFiscalMonitor ? { group: 'Fiscal Monitors' } : {}),
     operations,
     fields,
-    processes: readOnlyFiscalMonitor || parent || !exposeProcesses ? [] : buildProcesses({ source, entityName }),
+    processes: readOnlyFiscalMonitor || parent || !policy.actions.length ? [] : buildProcesses({ source, entityName, actions: policy.actions }),
     ...(parent ? {
       parent: {
         resource: parent.resource,
@@ -500,7 +507,7 @@ export async function generateManifest({
         // Keep the generated resource available, but make the missing guide
         // explicit so documentation work can fill the gap without guessing.
       }
-      const entity = buildEntity({ specName: entry.name, entityName, contract, functional, parent, rawEntity, inputFields: inputFieldsOf(decisions, entityName) });
+      const entity = buildEntity({ specName: entry.name, entityName, contract, functional, parent, rawEntity, inputFields: inputFieldsOf(decisions, entityName), policy: exposurePolicyOf(decisions, entityName) });
       entities[entity.publicName] = entity;
     }
   }
@@ -539,9 +546,13 @@ export async function generateManifest({
       excludedWindows: [...excludedWindows],
       excludedChildTabs: excludedChildTabs.map((pattern) => pattern.source),
       excludedFields: [...neverExposedFields],
-      exposeProcesses,
-      readOnlyResources: [...readOnlyResources],
-      readOnlyFields,
+      // Mechanism, not a list of windows: what a window publishes beyond the
+      // conservative default is declared in its own decisions.json.
+      guardrails: ['neverExposedFields', 'fiscalMonitors'],
+      actions: 'window.publicApi.actions in decisions.json (absent means none)',
+      readOnlyResources: 'entities.<entity>.publicApi.readOnly in decisions.json',
+      readOnlyFields: 'fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json',
+      inputFields: 'entities.<entity>.publicApi.inputFields in decisions.json',
       failClosed: true,
     },
     entities,

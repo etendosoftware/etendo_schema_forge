@@ -10,11 +10,9 @@ import {
   generateManifest,
   inputFieldsOf,
   isCurated,
-  exposeProcesses,
+  exposurePolicyOf,
   isLinesEntity,
   isPublicField,
-  readOnlyResources,
-  readOnlyFields,
   neverExposedFields,
   publicFieldName,
   publicFunctionalText,
@@ -243,36 +241,70 @@ describe('buildEntity — operations', () => {
 });
 
 describe('buildEntity — conservative base exposure', () => {
-  it('publishes no process while the exposeProcesses policy flag is off', () => {
+  const completeContract = () => {
     const contract = contractFor('sales-order', formFields);
-    contract.backendContract.processEndpoints = [{ entity: 'header', action: 'complete' }];
-    const entity = buildEntity({ specName: 'sales-order', entityName: 'header', contract, functional, parent: null, rawEntity: null });
-    assert.equal(exposeProcesses, false);
+    contract.frontendContract.entities.header.draftMode = {
+      enabled: true, processField: 'documentAction', processValue: 'CO',
+    };
+    return contract;
+  };
+  const buildWith = (decisions) => buildEntity({
+    specName: 'sales-order', entityName: 'header', contract: completeContract(), functional,
+    parent: null, rawEntity: null, policy: exposurePolicyOf(decisions, 'header'),
+  });
+
+  it('publishes no action unless the window opts in with window.publicApi.actions', () => {
+    assert.deepEqual(buildWith(null).processes, []);
+    assert.deepEqual(buildWith({ window: { publicApi: {} } }).processes, []);
+    assert.deepEqual(buildWith({ window: { publicApi: { actions: [] } } }).processes, []);
+    const entity = buildWith({ window: { publicApi: { actions: ['complete'] } } });
+    assert.deepEqual(entity.processes.map((process) => process.action), ['complete']);
+  });
+
+  it('never publishes actions on a fiscal monitor, whatever the decisions say', () => {
+    const contract = completeContract();
+    const entity = buildEntity({
+      specName: [...fiscalMonitorWindows][0], entityName: 'header', contract, functional,
+      parent: null, rawEntity: null, policy: { actions: ['complete'], readOnly: false, readOnlyFields: new Set() },
+    });
     assert.deepEqual(entity.processes, []);
   });
 
-  it('publishes the read-only resource list as GET/LIST with every field out', () => {
-    assert.ok(readOnlyResources.has('product-costing'));
-    const entity = build('product-costing', formFields);
+  it('publishes an entity with publicApi.readOnly as GET/LIST with every field out', () => {
+    const decisions = { entities: { exchangeRates: { publicApi: { readOnly: true } } } };
+    const policy = exposurePolicyOf(decisions, 'exchangeRates');
+    assert.equal(policy.readOnly, true);
+    const contract = contractFor('sales-invoice', formFields, { entityName: 'exchangeRates' });
+    const entity = buildEntity({ specName: 'sales-invoice', entityName: 'exchangeRates', contract, functional, parent: null, rawEntity: null, policy });
     assert.deepEqual(entity.operations, ['GET', 'LIST']);
     assert.ok(Object.values(entity.fields).every((field) => field.direction === 'out'));
-    const childContract = contractFor('sales-invoice', formFields, { entityName: 'exchangeRates' });
-    childContract.frontendContract.window.primaryEntity = 'header';
-    const child = buildEntity({ specName: 'sales-invoice', entityName: 'exchangeRates', contract: childContract, functional, parent: null, rawEntity: null });
-    assert.equal(child.publicName, 'sales-invoice-exchangeRates');
-    assert.deepEqual(child.operations, ['GET', 'LIST']);
+    assert.equal(exposurePolicyOf(decisions, 'header').readOnly, false);
   });
 
-  it('publishes contacts.search_key as out while the other editable fields stay inout', () => {
-    assert.deepEqual(readOnlyFields.contacts, ['search_key']);
-    const entity = build('contacts', [
+  it('publishes a field with publicApi.readOnly as out while the other editable fields stay inout', () => {
+    const fields = [
       { name: 'searchKey', visibility: 'editable', form: true, type: 'string' },
       { name: 'name', visibility: 'editable', form: true, type: 'string' },
-    ]);
+    ];
+    const byField = exposurePolicyOf({ entities: { header: { fields: { searchKey: { publicApi: { readOnly: true } } } } } }, 'header');
+    const byList = exposurePolicyOf({ entities: { header: { publicApi: { readOnlyFields: ['searchKey'] } } } }, 'header');
+    for (const policy of [byField, byList]) {
+      const entity = buildEntity({ specName: 'contacts', entityName: 'header', contract: contractFor('contacts', fields), functional, parent: null, rawEntity: null, policy });
+      assert.equal(entity.fields.search_key.direction, 'out');
+      assert.equal(entity.fields.name.direction, 'inout');
+    }
+    assert.equal(build('product', fields).fields.search_key.direction, 'inout');
+  });
+
+  it('lets a read-only field work on a curated entity too', () => {
+    const fields = [
+      { name: 'searchKey', visibility: 'editable', type: 'string', publicApi: { exposed: true } },
+      { name: 'name', visibility: 'editable', type: 'string', publicApi: { exposed: true } },
+    ];
+    const policy = exposurePolicyOf({ entities: { header: { fields: { searchKey: { publicApi: { readOnly: true } } } } } }, 'header');
+    const entity = buildEntity({ specName: 'contacts', entityName: 'header', contract: contractFor('contacts', fields), functional, parent: null, rawEntity: null, policy });
     assert.equal(entity.fields.search_key.direction, 'out');
     assert.equal(entity.fields.name.direction, 'inout');
-    const other = build('product', [{ name: 'searchKey', visibility: 'editable', form: true, type: 'string' }]);
-    assert.equal(other.fields.search_key.direction, 'inout');
   });
 
   it('recognizes the lines entity by its key plus the window linesLayout', () => {

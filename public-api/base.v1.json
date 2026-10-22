@@ -51,17 +51,14 @@
       "etblkpAccountingstatus",
       "etblkpBulkposting"
     ],
-    "exposeProcesses": false,
-    "readOnlyResources": [
-      "product-costing",
-      "sales-invoice-exchangeRates",
-      "purchase-invoice-exchangeRates"
+    "guardrails": [
+      "neverExposedFields",
+      "fiscalMonitors"
     ],
-    "readOnlyFields": {
-      "contacts": [
-        "search_key"
-      ]
-    },
+    "actions": "window.publicApi.actions in decisions.json (absent means none)",
+    "readOnlyResources": "entities.<entity>.publicApi.readOnly in decisions.json",
+    "readOnlyFields": "fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json",
+    "inputFields": "entities.<entity>.publicApi.inputFields in decisions.json",
     "failClosed": true
   },
   "entities": {

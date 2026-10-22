@@ -949,6 +949,7 @@
       "exclude": true
     },
     "exchangeRates": {
+      "publicApi": { "readOnly": true },
       "fields": {
         "active": {
           "visibility": "system"

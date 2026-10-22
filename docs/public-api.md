@@ -123,6 +123,9 @@ Some fields are never published, whether curated or derived. The manifest lists 
 | `accountNo`, `bankName`, `displayedAccount`, `iBAN`, `swiftCode` | Bank account identifiers of a business partner. |
 | `etblkpAccountingstatus`, `etblkpBulkposting` | Accounting bulk-posting fields; accounting is outside the public API scope. |
 
+To configure what a window publishes (fields, read-only, input-only fields, actions) step by step, see
+[Public API configuration](public-api-configuration.md).
+
 ### Name derivation
 
 `scripts/generate-base-public-api-manifest.mjs` passes `publicApi.name` (or the field name when
@@ -236,8 +239,9 @@ The route table is fixed controller code; resource and child lookup use the mani
 `POST /api/v1/{resource}/{id}/actions/{action}` runs a named action declared in the manifest's
 `processes` (each entry has a public `action` name, `method`, `path` and optional `body`).
 
-- **Declared actions.** `complete` exists on every resource whose window has a completion flow
-  (`draftMode` with `processField: documentAction`); the generator derives it structurally and sends
+- **Declared actions.** `complete` exists on a resource whose window has a completion flow
+  (`draftMode` with `processField: documentAction`) **and** opts in with `window.publicApi.actions: ["complete"]`
+  in its `decisions.json` (absent means no actions; see [Public API configuration](public-api-configuration.md)); the generator derives it structurally and sends
   `{"docAction": "<processValue>"}` to `POST /sws/neo/{specName}{path}`. In v1 `complete` is the only
   public action: declared `processEndpoints` are not exposed. Fiscal monitors and child resources
   declare none.
