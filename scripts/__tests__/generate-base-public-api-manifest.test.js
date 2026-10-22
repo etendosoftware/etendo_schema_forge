@@ -13,6 +13,7 @@ import {
   isLinesEntity,
   isPublicField,
   readOnlyResources,
+  readOnlyFields,
   neverExposedFields,
   publicFieldName,
   publicFunctionalText,
@@ -218,6 +219,18 @@ describe('buildEntity — conservative base exposure', () => {
     const child = buildEntity({ specName: 'sales-invoice', entityName: 'exchangeRates', contract: childContract, functional, parent: null, rawEntity: null });
     assert.equal(child.publicName, 'sales-invoice-exchangeRates');
     assert.deepEqual(child.operations, ['GET', 'LIST']);
+  });
+
+  it('publishes contacts.search_key as out while the other editable fields stay inout', () => {
+    assert.deepEqual(readOnlyFields.contacts, ['search_key']);
+    const entity = build('contacts', [
+      { name: 'searchKey', visibility: 'editable', form: true, type: 'string' },
+      { name: 'name', visibility: 'editable', form: true, type: 'string' },
+    ]);
+    assert.equal(entity.fields.search_key.direction, 'out');
+    assert.equal(entity.fields.name.direction, 'inout');
+    const other = build('product', [{ name: 'searchKey', visibility: 'editable', form: true, type: 'string' }]);
+    assert.equal(other.fields.search_key.direction, 'inout');
   });
 
   it('recognizes the lines entity by its key plus the window linesLayout', () => {

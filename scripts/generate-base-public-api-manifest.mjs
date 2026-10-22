@@ -98,6 +98,12 @@ export const readOnlyResources = new Set([
   'purchase-invoice-exchangeRates',
 ]);
 
+// Public fields published read-only (`direction: out`) inside a writable resource,
+// as { publicResourceName: [publicFieldName] }.
+// TEMPORARY: lasts until the functional team curates the fields; the app assigns
+// contacts.search_key from its own sequence, so a client value was silently overwritten.
+export const readOnlyFields = { 'contacts': ['search_key'] };
+
 // Structural marker of a window's lines entity: the entity keyed `lines` in a
 // window that declares `linesLayout` renders it as its inline lines grid.
 export function isLinesEntity(entityName, windowContract) {
@@ -277,7 +283,7 @@ export function buildEntity({ specName, entityName, contract, functional, parent
     }
     fields[apiName] = {
       sourceVisibility: field.visibility,
-      direction: writable && field.visibility === 'editable' ? 'inout' : 'out',
+      direction: writable && field.visibility === 'editable' && !readOnlyFields[pubName]?.includes(apiName) ? 'inout' : 'out',
       internalPath: field.name,
       type: 'passthrough',
       dataType: openApiType(field.type),
@@ -508,6 +514,7 @@ export async function generateManifest({
       excludedFields: [...neverExposedFields],
       exposeProcesses,
       readOnlyResources: [...readOnlyResources],
+      readOnlyFields,
       failClosed: true,
     },
     entities,

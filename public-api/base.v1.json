@@ -57,6 +57,11 @@
       "sales-invoice-exchangeRates",
       "purchase-invoice-exchangeRates"
     ],
+    "readOnlyFields": {
+      "contacts": [
+        "search_key"
+      ]
+    },
     "failClosed": true
   },
   "entities": {
@@ -76,7 +81,7 @@
       "fields": {
         "search_key": {
           "sourceVisibility": "editable",
-          "direction": "inout",
+          "direction": "out",
           "internalPath": "searchKey",
           "type": "passthrough",
           "dataType": {
