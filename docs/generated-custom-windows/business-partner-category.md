@@ -116,7 +116,10 @@ flags are copied into a contact when the contact is created; they never change e
 **Header — "Tipo de contacto".** `etgoIscustomer` declares `customRenderer: "ContactTypeField"`
 (`span: 4`). The component has `ownsLabel = true`, so it draws the legend "Tipo de contacto *
 (lo heredan solo los contactos nuevos)" and the two checkboxes "Cliente" / "Proveedor/Acreedor";
-it writes `etgoIsvendor` (declared `form: false`) through EntityForm's `onFieldChange`. A new
+both are the shared `SquareCheckbox` (`windows/custom/shared/SquareCheckbox.jsx`), so they look
+like the generic "Valor por defecto" checkbox of the same form (square `border-primary` box with a
+check mark), are keyboard-toggled with Space and are dimmed and inert when the form is read-only
+(`disabled`). It writes `etgoIsvendor` (declared `form: false`) through EntityForm's `onFieldChange`. A new
 category starts with both unchecked. On an existing record each toggle autosaves (`onCommit`,
 the window's `autoSaveOnBlur`); unchecking the last type is refused by the backend and the error
 toast reads "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor"

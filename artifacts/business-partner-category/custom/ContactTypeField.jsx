@@ -1,5 +1,6 @@
 import { useLabel, useUI } from '@/i18n';
 import { CUSTOMER_FIELD, VENDOR_FIELD, isChecked } from './bpCategoryContactTypes.js';
+import { SquareCheckbox } from '@/windows/custom/shared/SquareCheckbox.jsx';
 import { useNotifyOnHeaderSave } from './useAssociatedContactsNotice.js';
 
 const TYPE_OPTIONS = [
@@ -43,20 +44,16 @@ export default function ContactTypeField({ record, readOnly, onFieldChange, onCo
       </legend>
       <div className="flex flex-wrap items-center gap-x-10 gap-y-2">
         {TYPE_OPTIONS.map(({ field, column }) => (
-          // A native checkbox inside its <label>: the visible text is its accessible name and
-          // Space toggles it from the keyboard.
-          <label
+          // The shared square checkbox, so these two match "Valor por defecto" (EntityForm's
+          // boolean renderer) in the same form. Its native input stays focusable: the label text
+          // is its accessible name and Space toggles it.
+          <SquareCheckbox
             key={field}
-            className={`flex items-center gap-2.5 text-sm font-medium text-foreground ${readOnly ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-            <input
-              type="checkbox"
-              checked={isChecked(record?.[field])}
-              disabled={readOnly}
-              onChange={() => toggle(field)}
-              className="h-4 w-4 shrink-0 rounded accent-[hsl(var(--primary))] disabled:cursor-not-allowed"
-              data-testid={`field-${field}`} />
-            <span>{t(column)}</span>
-          </label>
+            label={t(column)}
+            checked={isChecked(record?.[field])}
+            disabled={readOnly}
+            onChange={() => toggle(field)}
+            data-testid={`field-${field}`} />
         ))}
       </div>
     </fieldset>
