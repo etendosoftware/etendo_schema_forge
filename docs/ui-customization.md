@@ -2986,20 +2986,26 @@ threads `documentDateField` into the header `<Form>` calls; no generator change 
   otherwise drop it: the user-touched guard (so recalculation overrides a manual rate) and the
   empty-value guard (so «no range» clears a stale rate). On invoices an `invoiceDate` change
   recalculates too, because its callout also cascades `accountingDate`.
-- Saving a foreign currency with an empty rate is refused by the backend with an
-  already-translated message, shown verbatim by the save toast (`translateBackendError` passes
-  unmatched text through); the form stays in edit. The org currency needs no rate.
+- Saving a foreign currency with an empty rate is refused by the backend (HTTP 422,
+  `exchange_rate_missing`); the toast composes the sentence from the refusal's identity (or shows
+  the backend prose for an unkeyed refusal) and the form stays in edit. The org currency needs no
+  rate.
 - The list-row Confirm of orders (`useOrderWindow.jsx`) no longer pre-checks
   `validate-exchange-rate`; the backend completion check is the authority. The quotation
-  confirm modal only blocks when the document itself has no rate on a foreign currency.
+  confirm modal only blocks when the document itself has no rate on a foreign currency, with the
+  same sentence as the backend completion refusal (`backendError.exchangeRateMissingOnComplete`).
 
 **i18n keys:** `currencyRateSearchPlaceholder`, `currencyRateSelectPlaceholder`,
 `currencyRateEdit`, `currencyRateNotAvailable`, `currencyRatesAtDate` (plus the existing
 `noResults`, `confirm`, `cancel`, `loading`).
 
-**Known gap:** on a NEW document a rate applied by a callout (not typed or picked) is
-excluded from the create POST by the ETP-5537 rule 1 (`eTGOCurrencyRate` is not a mounted
-form field and a callout value is not user-authored), so the backend recomputes it on create.
+**Create.** On a NEW document a rate applied by a callout (not typed or picked) is left out of
+the create POST by the ETP-5537 rule 1 (`eTGOCurrencyRate` is not a mounted form field), which is
+fine: the backend computes the rate on create from the reference date whenever it is absent.
+
+**Refusals.** The save and complete refusals carry their identity (`ETGO_ExchangeRateMissingOnSave`
+/ `ETGO_ExchangeRateMissingOnComplete` + params) and are composed in the UI locale by
+`backendErrors.js` — see `docs/i18n-guide.md`, mechanism 3.
 
 ## Decision tree: which option to use?
 

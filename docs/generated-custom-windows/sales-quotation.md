@@ -326,7 +326,9 @@ The behavior is identical to Sales Order — see
   cancelado» flow was removed). The rate is recalculated by the header callout on
   every `orderDate`/`currency` change (empty when there is no range, overriding a
   manual rate), and the confirm modal only blocks a foreign-currency quotation
-  whose own `eTGOCurrencyRate` is empty (`noExchangeRateAvailable`).
+  whose own `eTGOCurrencyRate` is empty, with the same sentence as the backend
+  completion refusal (`backendError.exchangeRateMissingOnComplete`). Convertquotation /
+  createDraftInvoice refusals are translated from their identity (`translateBackendErrorBody`).
 - A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef`
   synchronized with the saved currency/date so that newly added lines have their
   prices converted automatically from the pricelist currency to the order

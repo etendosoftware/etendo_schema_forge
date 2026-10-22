@@ -5,6 +5,7 @@ import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal.
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 
 const OPTION_ORDER = 'order';
 const OPTION_INVOICE = 'invoice';
@@ -123,7 +124,9 @@ export default function QuotationConfirmModal({
           const session = await fetchOptionalJson(`${baseNeoUrl}/session`, token);
           const orgCurrency = session?.organization?.['currency$_identifier'];
           if (orgCurrency && docCurrency !== orgCurrency) {
-            setError(ui('noExchangeRateAvailable'));
+            // Same sentence the backend completion check answers with (ETP-5840).
+            setError(ui('backendError.exchangeRateMissingOnComplete',
+              { orgCurrency, documentCurrency: docCurrency }));
             setLoading(false);
             return;
           }
@@ -137,9 +140,10 @@ export default function QuotationConfirmModal({
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
+          // ETP-5840 — translated from the refusal's identity (e.g. the missing exchange rate).
           throw new Error(
             ui('sqOrderConfirmedError')
-            + (err?.response?.message || err?.message || `Error (${res.status})`)
+            + translateBackendErrorBody(err, ui, `Error (${res.status})`)
           );
         }
         // ETP-4779 — the sales order now exists; let the "Documentos" section
@@ -189,9 +193,7 @@ export default function QuotationConfirmModal({
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
-          throw new Error(
-            err?.response?.message || err?.message || `Error (${res.status})`
-          );
+          throw new Error(translateBackendErrorBody(err, ui, `Error (${res.status})`));
         }
         // ETP-4779 — see rationale above (order path).
         window.dispatchEvent(new CustomEvent('sales-quotation:document-created'));

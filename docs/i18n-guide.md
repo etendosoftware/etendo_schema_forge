@@ -483,6 +483,23 @@ Three matching mechanisms coexist — know all three before adding a new backend
    `AD_MESSAGE_TRL` rows are never exported and drift per environment (production said
    "Grupo de Terceros").
 
+   A second composer covers the exchange-rate refusals (ETP-5840, `translateExchangeRateMissing`).
+   A foreign-currency quotation, order or invoice with an empty rate is refused with HTTP 422 on
+   every channel:
+
+   | Refusal | `messageKeys` | `messageParams` | Locale keys |
+   |---|---|---|---|
+   | Save | `ETGO_ExchangeRateMissingOnSave` + `ETGO_RateRefDateAccounting` \| `ETGO_RateRefDateOrder` \| `ETGO_RateRefDateQuotation` | `orgCurrency`, `documentCurrency`, `date` (`yyyy-MM-dd`, shown via `formatCalendarDate`), `dateField`, `referenceDate` | `backendError.exchangeRateMissingOnSave`, `backendError.rateReferenceDate.accounting` / `.order` / `.quotation` (the `{field}` label) |
+   | Complete | `ETGO_ExchangeRateMissingOnComplete` | `orgCurrency`, `documentCurrency` | `backendError.exchangeRateMissingOnComplete` |
+
+   Paths that carry the identity for these: header save and Save & Complete (`useEntity`'s
+   `extractErrorMessage`), `DetailView`'s `extractErrorMessage`, `useDocumentAction` /
+   `useNeoAction` consumers (row kebab, more-actions menu, bulk bar), and the order / quotation
+   confirm modals, which read the parsed body through `translateBackendErrorBody(body, ui, fallback)`
+   — the helper for a call site that has to parse the JSON itself. The quotation confirm modal's
+   own pre-check reuses `backendError.exchangeRateMissingOnComplete`, so it reads exactly like the
+   backend refusal.
+
    Rules for a params composer:
    - It runs **before** `BACKEND_ERROR_KEY_MAP` and only when params are present. Do not also add
      its keys to the map: that route is param-less and the first recognised key wins, so the rich

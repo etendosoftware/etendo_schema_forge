@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 // `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
 import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
 import { ETGO_DTO_PRODUCT_ID } from '../../../../tools/app-shell/src/lib/documentTotals.js';
+import { translateBackendErrorBody } from '../../../../tools/app-shell/src/lib/backendErrors.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'OrderCreateInvoice.jsx'), 'utf8');
@@ -1113,9 +1114,12 @@ describe('OrderCreateInvoice', () => {
     const flatErrBody = (message = REAL_MESSAGE) => ({ status: 'error', message });
 
     describe('ConfirmModal.handleConfirm — Step 1 (documentAction/confirm)', () => {
+      // ETP-5840: Step 1 goes through translateBackendErrorBody (message + identity). The real
+      // helper runs here with an identity `ui`, so an unkeyed body still yields its raw message.
       function resolveMessage(e, processRes) {
         const expr = extractCallExprAfter(src, 'action/documentAction', 'throw new Error(');
-        return new Function('e', 'processRes', `return ${expr};`)(e, processRes);
+        return new Function('e', 'processRes', 'ui', 'translateBackendErrorBody', `return ${expr};`)(
+          e, processRes, (k) => k, translateBackendErrorBody);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {
