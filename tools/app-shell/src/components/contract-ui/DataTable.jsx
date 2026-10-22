@@ -455,6 +455,18 @@ function flexSpec(col, idx) {
   return { grow: parseInt(g, 10), basis: parseInt(b, 10) };
 }
 
+// ETP-5133 (QA pass 3) — the identifier the open add-row has picked for a no-truncate column
+// (e.g. the product), as one pseudo-row: the column widens to it before the line is saved. Kept
+// stable across unrelated keystrokes (memoized on its serialized form) so neither this table nor
+// the sibling InlineLinesPanel it is published to re-measures for nothing. Extracted out of
+// DataTable's body so its conditions score against this hook (Sonar S3776).
+function useAddRowDraft({ addRow, hideHeader, linesLayout, columns, addRowValues }) {
+  const addRowDraftSignature = addRow?.active && (hideHeader || linesLayout === 'inlineEditable')
+    ? JSON.stringify(addRowDraftRow(columns, addRowValues))
+    : 'null';
+  return useMemo(() => JSON.parse(addRowDraftSignature), [addRowDraftSignature]);
+}
+
 // Precomputes the flex specs for hideHeader (add-row-only) mode's colgroup,
 // plus the totals growColumnWidth() needs: how many columns grow, the summed
 // basis of every FIXED (non-growing) slot, and the summed basis of every
@@ -3249,14 +3261,7 @@ export function DataTable({
   // their headers when neither any saved row nor the add-row activates them.
   const [addRowValues, setAddRowValues] = useState({});
   useEffect(() => { if (!addRow?.active) setAddRowValues({}); }, [addRow?.active]);
-  // ETP-5133 (QA pass 3) — the identifier the open add-row has picked for a no-truncate column
-  // (e.g. the product), as one pseudo-row: the column widens to it before the line is saved. Kept
-  // stable across unrelated keystrokes (memoized on its serialized form) so neither this table nor
-  // the sibling InlineLinesPanel it is published to re-measures for nothing.
-  const addRowDraftSignature = addRow?.active && (hideHeader || linesLayout === 'inlineEditable')
-    ? JSON.stringify(addRowDraftRow(columns, addRowValues))
-    : 'null';
-  const addRowDraft = useMemo(() => JSON.parse(addRowDraftSignature), [addRowDraftSignature]);
+  const addRowDraft = useAddRowDraft({ addRow, hideHeader, linesLayout, columns, addRowValues });
 
   useEffect(() => {
     setOptimisticToggles({});
@@ -3502,9 +3507,10 @@ export function DataTable({
   // host yet (e.g. every standalone unit test that mounts DataTable in this
   // mode alone), in which case the hook returns null and rendering falls
   // through to the classic in-place `<table>` below, unchanged.
-  const addRowScrollHost = useLinesScrollHost(ilpTrailing && addRow?.active ? entity : null);
+  const addRowHostKey = ilpTrailing && addRow?.active ? entity : null;
+  const addRowScrollHost = useLinesScrollHost(addRowHostKey);
   // ETP-5133 (QA pass 3) — hand the add-row draft to the sibling InlineLinesPanel (same key).
-  usePublishLinesAddRowDraft(ilpTrailing && addRow?.active ? entity : null, addRowDraft);
+  usePublishLinesAddRowDraft(addRowHostKey, addRowDraft);
   // ETP-5133 follow-up (BUG-1) — live `clientWidth` of that host, kept in sync
   // via a ResizeObserver; see useAddRowScrollHostWidth's own doc for why it
   // measures on a layout effect. Also called unconditionally, also before the
