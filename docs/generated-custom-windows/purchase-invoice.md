@@ -1905,7 +1905,7 @@ Four links, each of which has to carry the data:
 
 | Step | File | Role |
 |---|---|---|
-| 1 | `ocrDocTypes.js` → `extraHeaderFields` | asks the vision model for the address/contact block |
+| 1 | module `ocr-config.json` (`com.etendoerp.go`, `src/com/etendoerp/go/schemaforge/ocr/`) | the extraction schema and question asked of the vision model, incl. the address/contact block; served by `GET /sws/neo/ocrconfig` and read by `useOcrConfig.js` (ETP-5715) |
 | 2 | `ocrDocTypes.js` → `createPrefilledFrom` | maps extracted payload keys → **contact-form field ids** |
 | 3 | `kinds/EntityField.jsx` | builds the `prefilled` map (generic — reads the config, no per-window code) |
 | 4 | `CreateContactModalAdapter.jsx` → `buildOcrContactSeed` | narrows the map to the `businessPartner` **header** fields and hands it to `RecordCreateModal` as `initialData` |
@@ -1915,7 +1915,7 @@ Four links, each of which has to carry the data:
 `buildOcrContactSeed` only forwards `name` (via `buildContactSeed`, which also sets `customer`/
 `vendor` from the invoice's purchase direction), `taxID`, `etgoEmail` and `etgoPhone`. Adding a
 new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
-`buildOcrContactSeed`; a genuinely new extraction field is one `extraHeaderFields` entry.
+`buildOcrContactSeed`; a genuinely new extraction field is one property in the module's `ocr-config.json` (schema, `required` list and description), not an entry in the SPA — the MCP's document-reading tools read the same file.
 
 ### Contact category follows the document (ETP-5654)
 
@@ -2041,8 +2041,8 @@ modal, vendor lookup or batch; it is wired per document type through
 **Extracted.** Two nested objects are requested next to the existing `vendor_name` / `tax_id`
 (unchanged): `issuer` and `receiver`, each `{ name, tax_id_raw, tax_id_label, tax_id_type }`, all
 nullable. `tax_id_type` (`vat | national_tax_id | company_registration | personal_id | unknown`) is
-**informational only** — the comparison runs whatever it says. `buildOcrSchema.js` supports the
-nested shape through a `kind: 'object'` field with `properties`.
+**informational only** — the comparison runs whatever it says. The nested shape is a plain nested object schema in the module's
+`ocr-config.json` (the SPA no longer builds the schema: `buildOcrSchema.js` was removed in ETP-5715).
 
 **Organization id.** `GET /sws/neo/session` → `organization.taxId` (`AD_OrgInfo.TaxID`), read
 lazily through `apiFetch` only when a receiver id was extracted. A blank or `?` value reads as "no tax id".
@@ -2081,7 +2081,7 @@ stops being true: a new extraction starts, the file is removed, or another file 
 (`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient toasts with default options.
 
 Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
-`useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
+`useOcrFlow.flow.vitest.jsx`; the schema's shape is guarded by the module's `OcrConfigTest` and `useOcrConfig.vitest.jsx` covers the load.
 
 ## OCR reader — line tax preselection — ETP-5585
 
