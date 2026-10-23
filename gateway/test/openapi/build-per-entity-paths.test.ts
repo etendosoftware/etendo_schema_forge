@@ -1,3 +1,4 @@
+// @covers gateway/src/openapi/build-per-entity-paths.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPerEntityOpenApiPaths } from '../../src/openapi/build-per-entity-paths.ts';
@@ -137,4 +138,61 @@ test('documents PATCH for writable child resources in the public contract', () =
   };
   const item = buildPerEntityOpenApiPaths(childSchema)['/api/v1/product/{parentId}/lines/{id}'];
   assert.ok(item.patch);
+});
+
+// ---- ETP-5369: JSON:API errors, media types and request shape ---------------
+
+const writableSchema = (() => {
+  const crud = structuredClone(schema);
+  crud.entities.product.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  return crud;
+})();
+
+test('every operation documents the error responses it can answer, as JSON:API error documents', () => {
+  const paths = buildPerEntityOpenApiPaths(writableSchema);
+  const read = ['400', '401', '402', '403', '404', '406', '502'];
+  const write = ['400', '401', '402', '403', '404', '406', '409', '415', '422', '502'];
+  const remove = ['400', '401', '402', '403', '404', '406', '409', '502'];
+  const expected: Array<[string, string, string[]]> = [
+    ['/api/v1/product', 'get', read], ['/api/v1/product/{id}', 'get', read],
+    ['/api/v1/product', 'post', write], ['/api/v1/product/{id}', 'put', write], ['/api/v1/product/{id}', 'patch', write],
+    ['/api/v1/product/{id}', 'delete', remove],
+  ];
+  for (const [path, method, statuses] of expected) {
+    const responses = paths[path][method].responses;
+    for (const status of statuses) {
+      assert.ok(responses[status], `${method} ${path} documents ${status}`);
+      const content = responses[status].content!;
+      assert.deepEqual(Object.keys(content).sort(), ['application/json', 'application/vnd.api+json']);
+      assert.equal(content['application/vnd.api+json'].schema.required?.[0], 'errors');
+    }
+  }
+});
+
+test('DELETE documents 204 with no body and no other success status', () => {
+  const remove = buildPerEntityOpenApiPaths(writableSchema)['/api/v1/product/{id}'].delete;
+  const success = Object.keys(remove.responses).filter((status) => status.startsWith('2'));
+  assert.deepEqual(success, ['204']);
+  assert.equal(remove.responses['204'].content, undefined);
+});
+
+test('request bodies are JSON:API documents with a required data member and no required attributes', () => {
+  const paths = buildPerEntityOpenApiPaths(writableSchema);
+  for (const operation of [paths['/api/v1/product'].post, paths['/api/v1/product/{id}'].put, paths['/api/v1/product/{id}'].patch]) {
+    const content = operation.requestBody!.content;
+    assert.deepEqual(Object.keys(content).sort(), ['application/json', 'application/vnd.api+json']);
+    const body = content['application/vnd.api+json'].schema;
+    assert.deepEqual(body.required, ['data']);
+    const resource = body.properties!.data as unknown as { required?: string[]; properties: Record<string, unknown> };
+    assert.equal(resource.required, undefined, 'attributes may be omitted (relationships-only bodies)');
+    assert.ok('attributes' in resource.properties);
+  }
+});
+
+test('a single-record response documents data as one object and a collection as an array', () => {
+  const paths = buildPerEntityOpenApiPaths(writableSchema);
+  const single = paths['/api/v1/product/{id}'].get.responses['200'].content!['application/vnd.api+json'].schema.properties!.data as any;
+  const list = paths['/api/v1/product'].get.responses['200'].content!['application/vnd.api+json'].schema.properties!.data as any;
+  assert.equal(single.type, 'object');
+  assert.equal(list.type, 'array');
 });
