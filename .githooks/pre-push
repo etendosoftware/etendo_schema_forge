@@ -69,7 +69,8 @@ PUSH_REFS=""
 # ----------------------------------------------------------------------------
 # Hooks-Verified: every commit being pushed must carry a valid trailer, proving
 # the pre-commit hooks were installed and ran for that exact tree.
-# Set HOOKS_VERIFY_SKIP=1 to bypass (e.g. when pushing imported/legacy history).
+# HOOKS_VERIFY_SKIP=1 exists only for maintenance pushes of imported history;
+# CI's verify check applies regardless.
 # ----------------------------------------------------------------------------
 if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
   . "$SCRIPT_DIR/lib/hooks-proof.sh"
@@ -102,8 +103,9 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
       printf '     %s  %s\n' "$(git rev-parse --short "$sha")" "$(git log -1 --format=%s "$sha")"
     done
     echo ""
-    echo "   This means the git hooks were not active when those commits were made"
-    echo "   (or the content changed afterwards)."
+    echo "   They were made without the git hooks, or changed after them (an amend with"
+    echo "   --no-verify, a rebase that resolved a conflict). CI's verify check refuses"
+    echo "   them too."
     # Resolve the exact base so the fix can be copy-pasted instead of derived by
     # hand — reading it off the list above is the step people get wrong.
     REBASE_BASE="$(hooks_rebase_base $UNVERIFIED || true)"
@@ -120,7 +122,6 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
       echo "   (<base> = the parent of the oldest commit listed above; it could not be"
       echo "    resolved automatically here.)"
     fi
-    echo "   Bypass (discouraged): HOOKS_VERIFY_SKIP=1 git push"
     exit 1
   fi
   echo "✔ Hooks-Verified trailer present on all pushed commits."
@@ -161,7 +162,7 @@ LAST_FAILED_FILE="$REPO_DIR/tmp/pre-push/last-failed-step"
 # Fail fast: Check for uncommitted or untracked changes
 if [ -n "$(git status --porcelain)" ]; then
   echo "❌ ERROR: You have uncommitted or untracked changes in your working tree."
-  echo "   Please commit or stash them before pushing, or use 'git push --no-verify' to bypass."
+  echo "   Commit or stash them before pushing: the checks below must see what you push."
   echo "   Uncommitted files:"
   git status --porcelain
   exit 1
@@ -517,7 +518,6 @@ check_go_module_push_sync() {
   echo "   would disagree."
   echo "👉 Push com.etendoerp.go first, then re-run this push:"
   echo "     git -C etendo_core/modules/com.etendoerp.go push origin $expected_branch"
-  echo "   or bypass with 'git push --no-verify'."
   echo "========================================================================="
   record_failure "com.etendoerp.go not fully pushed (blocks step 4 comparison)"
   STEP_OK=0
@@ -538,7 +538,7 @@ check_go_module_push_sync() {
 # so a mocked failure never prevents integration from also running and being
 # reported — same "collect everything, don't stop at the first problem"
 # contract as the rest of this hook.
-# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS. WIP bypass: git push --no-verify.
+# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS.
 # backend_url defaults to the LOCAL environment's own configured context (read from
 # ../config/Openbravo.properties' context.url) rather than a hardcoded /etendo — different
 # developer machines legitimately deploy under different context names (e.g. /etendogoclean).
@@ -911,7 +911,6 @@ process.stdout.write(r.windows.filter(w=>{\
     echo "👉 Either regenerate + commit (make regen ONLY=<window>), or the pinned"
     echo "   core package (@etendosoftware/schema-forge-cli) is missing/behind a"
     echo "   generator feature the committed artifacts already rely on."
-    echo "   Bypass with 'git push --no-verify'."
     echo "========================================================================="
     mkdir -p "$(dirname "$LAST_FAILED_FILE")"
     echo "3" > "$LAST_FAILED_FILE"
@@ -1037,7 +1036,7 @@ if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
   done
   echo ""
   echo "   Fix everything listed, then re-push (each is re-checked together —"
-  echo "   no need to push once per problem). Bypass with 'git push --no-verify'."
+  echo "   no need to push once per problem)."
   echo "=========================================="
   exit 1
 fi
