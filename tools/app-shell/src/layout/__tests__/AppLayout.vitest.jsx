@@ -1519,3 +1519,63 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
   });
 });
+
+/**
+ * ETP-5049 — the failed-payment banner (BillingStatusBanner) is mounted above the top bar, as part
+ * of the chrome. The banner's own behaviour has its suite
+ * (src/components/billing/__tests__/BillingStatusBanner.vitest.jsx); here only the mount is under
+ * test: it shows in the normal shell and is stripped, like the rest of the chrome, when embedded.
+ * The real banner renders, driven by the same useEnvironmentSwitch mock as the rest of this file.
+ */
+describe('AppLayout — failed-payment banner mount (ETP-5049)', () => {
+  const defaultProps = { menuGroups: [{ label: 'Sales', items: [] }] };
+  const DEFAULT_SWITCH = {
+    environments: [],
+    switchTo: switchToMock,
+    switching: null,
+    currentClientId: 'CLIENT-CURRENT',
+  };
+  const graceEndsAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.sessionStorage.clear();
+    // Pinned, not inherited from earlier blocks (clearAllMocks keeps return values).
+    useAuthOptionalMock.mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useAccessLoadError).mockReturnValue(false);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/sales-order/123' });
+    useEnvironmentSwitchMock.mockReturnValue({
+      ...DEFAULT_SWITCH,
+      environments: [{
+        clientId: 'CLIENT-CURRENT',
+        clientName: 'Current Corp',
+        subscriptionStatus: 'PAST_DUE',
+        graceEndsAt,
+        ownedByAccount: true,
+      }],
+    });
+  });
+
+  afterEach(() => {
+    useEnvironmentSwitchMock.mockReturnValue(DEFAULT_SWITCH);
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
+  });
+
+  it('shows the banner, with its CTA, in the normal shell', () => {
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.getByTestId('billing-status-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('billing-status-banner-cta')).toBeInTheDocument();
+    expect(screen.getByTestId('top-bar')).toBeInTheDocument();
+  });
+
+  it.each(['1', 'interactive'])('does not render the banner when embedded=%s', (embedded) => {
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(`embedded=${embedded}`), vi.fn()]);
+    render(<AppLayout {...defaultProps} />);
+    // The page itself still renders: only the chrome is stripped.
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+    expect(screen.queryByTestId('billing-status-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
+  });
+});
