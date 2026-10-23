@@ -20983,6 +20983,7 @@
     "backendError.invoiceStatusDimensionsLocked": "El proyecto y el centro de costos no se pueden modificar en una factura anulada o cerrada. Actualiza la factura para ver su estado actual.",
     "backendError.invoiceSiiSentReferenceLocked": "Esta factura de compra ya se ha enviado al SII, por lo que no se puede modificar el número de factura del proveedor.",
     "backendError.invoiceReactivateFiscalRectified": "No se puede reactivar esta factura: ya ha sido aceptada por {fiscalSystem} y está rectificada por: {rectificativas}.",
+    "backendError.invoiceRectificationExceedsOriginal": "No se puede completar esta rectificativa: el importe ya rectificado contra la factura original superaría el total de esa factura.",
     "backendError.documentAlreadyPosted": "Este documento ya está contabilizado. Actualízalo para ver su estado actual.",
     "backendError.glJournalPeriodMismatch": "El período del asiento ({period}) no contiene su fecha contable ({accountingDate}). Cambia el período o la fecha y vuelve a completarlo.",
     "backendError.accountIsSummary": "La cuenta seleccionada es de nivel (resumen) y no admite asientos. Elige una cuenta de movimiento.",

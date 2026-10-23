@@ -459,6 +459,12 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_InvoiceFieldsLockedStatus: 'backendError.invoiceStatusDimensionsLocked',
   ETGO_InvoiceFieldsLockedSiiSent: 'backendError.invoiceSiiSentReferenceLocked',
   ETGO_InvoiceReactivateFiscalRectified: 'backendError.invoiceReactivateFiscalRectified',
+  // ETP-5745 CP-9 — com.etendoerp.go RectificationTotalGuard: completing a rectificativa whose
+  // total, added to every other COMPLETED rectificativa of the same origin, would exceed the
+  // origin invoice's own total. `messageParams.originTotal`/`rectifiedTotal` are dropped here —
+  // same rationale as the CashCloseSupport matchers below: a raw BigDecimal string pasted into
+  // Spanish copy renders the wrong decimal separator and no currency symbol.
+  ETGO_InvoiceRectificationExceedsOriginal: 'backendError.invoiceRectificationExceedsOriginal',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
