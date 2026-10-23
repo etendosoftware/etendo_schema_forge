@@ -39,7 +39,7 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 8 | `f-overpay-sales-invoice` | Cobro mayor que la factura | Factura, Cobro | 👁 | verificar |
 | 9 | `f-undo-collection` | Deshacer un cobro registrado por error | Cobro, Factura | ✅ | verificar |
 | 10 | `f-credit-note` | Factura rectificativa | Factura (Rectificaciones) | 👁 | no |
-| 11 | `f-void-invoice` | Anular una factura emitida | Factura | ✅ | no |
+| 11 | `f-void-invoice` | Anular una factura emitida (solo vale la rectificativa) | Factura | 👁 | no |
 | 12 | `w-send-invoice` | Enviar una factura por correo | Factura | 👁 | verificar |
 | 13 | `f-customer-return` | Devolución de un cliente | Albarán, Albarán de devolución | 👁 | verificar |
 | | **Consultas** | | | | |
@@ -144,7 +144,8 @@ Un archivo por flujo en [`okr-o2-flows/`](okr-o2-flows/):
   Conviene que las pruebas usen un cliente propio (`Cliente MCPFLOW`) para no depender de eso.
 - **Una factura emitida se puede borrar:** Reactivar la devuelve a borrador y la descontabiliza sola;
   después "Eliminar" la borra. Deja un hueco en la numeración y el presupuesto de origen sigue
-  diciendo "Cerrado - Factura creada" (ver `f-void-invoice`).
+  diciendo "Cerrado - Factura creada" (ver `f-void-invoice`). En la prueba, borrarla cuenta como
+  falla: solo vale la rectificativa (decidido, Valentin, 23 oct).
 - **Un cobro procesado se puede borrar** (con aviso de que revierte el movimiento y el asiento) y la
   factura vuelve a pendiente. El catálogo D9 decía "debe negarse"; se corrigió.
 - **El PDF de la factura de venta sale titulado "AR Invoice"** (en inglés) en una empresa en castellano.
