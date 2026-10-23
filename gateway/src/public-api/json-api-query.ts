@@ -65,7 +65,7 @@ export function kindOf(field: QueryField): FieldKind | undefined {
 }
 
 /** One criterion in the format the Etendo grids send: `{ fieldName, operator, value }`. */
-export interface NeoClause { fieldName: string; operator: string; value: string | number }
+export interface NeoClause { fieldName: string; operator: string; value: string | number | Array<string | number> }
 
 export interface ListQuery {
   pageNumber: number;
@@ -203,7 +203,8 @@ function buildClauses(fieldName: string, kind: FieldKind, operator: FilterOperat
       if (part === '') throw invalidQueryParameter(parameter, 'The value list must not contain empty items.');
       return parseScalar(kind, part, parameter);
     });
-    return [{ fieldName, operator: 'inSet', value: values.join(',') }];
+    // Core's AdvancedQueryBuilder reads an inSet value as a JSON array, never as a joined string.
+    return [{ fieldName, operator: 'inSet', value: values }];
   }
   return [{ fieldName, operator: NEO_OPERATORS[operator], value: parseScalar(kind, raw, parameter) }];
 }

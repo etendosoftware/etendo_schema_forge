@@ -302,7 +302,7 @@ test('HTTP: filter, sort and page parameters are parsed and reach NEO as criteri
   assert.deepEqual(JSON.parse(params.get('criteria')!), [
     { fieldName: 'name', operator: 'iContains', value: 'wid' },
     { fieldName: 'name', operator: 'notEqual', value: 'x' },
-    { fieldName: 'id', operator: 'inSet', value: 'p-1,p-2' },
+    { fieldName: 'id', operator: 'inSet', value: ['p-1', 'p-2'] },
   ]);
   assert.deepEqual(result.json.meta, { page: { number: 2, size: 10, total: 12 } });
   assert.equal(result.json.links.self, '/api/v1/product?filter[name][contains]=wid&filter[name][ne]=x&filter[id][in]=p-1,p-2&sort=-name&page[number]=2&page[size]=10');

@@ -856,7 +856,7 @@ test('list forwards the validated window, sort and one criteria param to NEO', a
   assert.equal(params.getAll('criteria').length, 1);
   assert.deepEqual(JSON.parse(params.get('criteria')!), [
     { fieldName: 'name', operator: 'iContains', value: 'ac' },
-    { fieldName: 'taxID', operator: 'inSet', value: 'A,B' },
+    { fieldName: 'taxID', operator: 'inSet', value: ['A', 'B'] },
   ]);
   assert.equal(result.data.length, 10);
   assert.deepEqual(result.meta, { page: { number: 3, size: 10, total: 95 } });
