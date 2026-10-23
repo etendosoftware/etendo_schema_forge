@@ -153,7 +153,16 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // auto-set the SII "Tipo de Factura" field (aeatsiiClaveTipo) to 'R' (Factura
   // rectificativa). Keyed on recordId+isRectificative so a document-type change
   // mid-session re-fires. Never clobbers a value that is already 'R'.
+  //
+  // ETP-5745 CP-10: sales-only. This effect used to also force `aeatsiiClaveTipoFc` to
+  // 'R' on purchase invoices, even though `PURCHASE_CLAVE_TIPO_FC_OPTIONS` never offers
+  // 'R' as a choice — the UI silently set a value the user never picked and the dropdown
+  // doesn't even show, and it then failed the (correct) reference-list validation on save
+  // (MCP's direct-DAL write skips both this effect and that validation, so it never saw
+  // the failure). Purchase-side corrective-invoice support (rectification-reason handling,
+  // AEAT XML payload) isn't implemented yet, so purchase invoices stay at 'F1' for now.
   useEffect(() => {
+    if (isPurchaseInvoice) return;
     if (!showSii || !isDraft || !recordId) return;
     if (!data?.isRectificative) return;
     const currentVal = data?.[siiTypeField];
@@ -163,7 +172,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     siiRectifTypeRef.current = key;
     onChange?.(siiTypeField, 'R');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
+  }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
 
   // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
