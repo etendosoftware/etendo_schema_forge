@@ -3,9 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Contactos (`/contacts`), Categoría de Contacto (`/business-partner-category`).
-- **Pedido funcional:** "Dá de alta a la empresa Cliente MCPFLOW como cliente, con el correo
-  compras@mcpflow.test. Después cambiale el teléfono a 600 000 000. Al final, borralo: lo cargué
-  por error."
+- **Pedido funcional:** "Agregá a Cliente MCPFLOW como cliente, su correo es compras@mcpflow.test. Después cambiale el teléfono a 600 000 000 y al final borralo, que lo cargué mal."
 - **Verificación:** el contacto existe con ese correo y ese teléfono antes del borrado; después del
   borrado ya no aparece.
 - **Datos previos:** ninguno. Obligatorios: razón social, categoría de contacto (por defecto

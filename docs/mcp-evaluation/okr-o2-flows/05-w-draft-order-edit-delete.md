@@ -3,9 +3,8 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Pedido (`/sales-order`).
-- **Pedido funcional:** "Empezá un pedido para Cliente MCPFLOW con 5 Cervezas, pero no lo confirmes.
-  Ahora cambiá la cantidad a 4. Al final el cliente se arrepintió: borrá ese pedido."
-- **Verificación:** mientras existe, el pedido está en borrador con 4 unidades; al final no existe.
+- **Pedido funcional:** "Anotá un pedido de 5 Cervezas para Cliente MCPFLOW. Mejor que sean 4. Al final se arrepintió: borralo."
+- **Verificación:** al final no queda ningún pedido activo de 4 Cervezas para ese cliente: borrado si quedó en borrador, o anulado si lo confirmó. Antes del final, el pedido tuvo 4 unidades.
 - **Datos previos:** cliente y producto.
 - **Evidencia UI:** 👁 un pedido guardado sin confirmar queda en "Borrador" con botón Eliminar; un
   pedido completado no lo tiene. Obligatorios de cabecera: contacto, fecha, dirección, moneda,

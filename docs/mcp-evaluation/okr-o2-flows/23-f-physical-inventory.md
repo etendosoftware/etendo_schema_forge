@@ -3,7 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Inventario físico (`/physical-inventory`).
-- **Pedido funcional:** "Contamos el almacén principal: hay 280 Aguas. Ajustá el stock a ese número."
+- **Pedido funcional:** "Contamos y en el almacén principal hay 280 Aguas. Corregilo."
 - **Verificación:** inventario completado en el almacén principal con una línea de Agua contada en
   280; el stock del Agua queda en 280.
 - **Datos previos:** producto con stock conocido.

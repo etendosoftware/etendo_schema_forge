@@ -10,9 +10,14 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 
 ## Cómo leer cada flujo
 
-- **Pedido funcional:** lo que recibe el agente. Está escrito como lo pediría un usuario sin contexto:
-  no nombra tools, tablas, campos técnicos ni ids. `MCPFLOW` es el marcador que identifica lo
-  que crea la prueba.
+- **Pedido funcional:** lo que recibe el agente, tal cual lo escribiría una persona que pide algo.
+  **No explica cómo hacerlo** (ni pasos, ni ventanas, ni procesos del sistema), no da contexto que
+  el usuario no daría y no nombra tools, tablas, campos técnicos ni ids. Lo que la prueba mide es
+  si las tools y su documentación alcanzan para que el agente lo resuelva solo (decidido, Valentin,
+  23 oct). Lo que la prueba prepara antes va en "Datos previos", nunca en el pedido. `MCPFLOW` es el
+  marcador que identifica lo que crea la prueba.
+- **La verificación mide el resultado, no el camino:** si hay más de una forma válida de llegar,
+  todas pasan, salvo que el flujo diga explícitamente que una es incorrecta (p. ej. `f-void-invoice`).
 - **Verificación:** lo que se lee de vuelta para dar el flujo por hecho (estado, importe, valor).
 - **Datos previos:** lo que tiene que existir antes (lo crea el setup de la prueba, no el agente).
 - **Evidencia UI** (recorrido del 23 oct en un local-env sobre `develop`, empresa GOClient):

@@ -3,8 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Cobro (`/payment-in`), Factura (`/sales-invoice`).
-- **Pedido funcional:** "El cobro de 20 € de Cliente MCPFLOW lo registré por error: todavía no nos
-  pagó. Borralo; la factura tiene que quedar pendiente."
+- **Pedido funcional:** "Me equivoqué: el cobro de 20 € de Cliente MCPFLOW no existió, todavía no nos pagó. Borralo."
 - **Verificación:** el cobro ya no existe y la factura vuelve a estar pendiente por el total. Falla
   si dice que lo borró y sigue ahí, o si lo "arregla" con una devolución o un cobro negativo.
 - **Datos previos:** factura completada con un cobro confirmado.

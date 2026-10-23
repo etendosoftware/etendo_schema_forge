@@ -3,8 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Producto (`/product`).
-- **Pedido funcional:** "Dá de alta el producto Producto MCPFLOW, que compramos a 4 € y vendemos a
-  9 €. Después cambiale la descripción a 'caja de 6'. Al final borralo."
+- **Pedido funcional:** "Agregá un producto nuevo, Producto MCPFLOW: lo compramos a 4 € y lo vendemos a 9 €. Después ponele de descripción 'caja de 6' y al final borralo."
 - **Verificación:** el producto existe con los dos precios y la descripción; después del borrado no.
 - **Datos previos:** ninguno. Obligatorios: código, nombre, tipo, categoría, unidad y grupo de
   impuesto (los selectores vienen con valor por defecto).

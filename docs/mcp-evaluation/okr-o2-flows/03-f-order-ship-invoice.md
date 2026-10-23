@@ -3,8 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Pedido (`/sales-order`), Albarán (`/goods-shipment`), Factura (`/sales-invoice`).
-- **Pedido funcional:** "Cliente MCPFLOW nos pidió 3 Aguas. Cargá el pedido, prepará la entrega
-  desde el almacén principal y facturá lo entregado."
+- **Pedido funcional:** "Cliente MCPFLOW nos pidió 3 Aguas. Mandáselas y facturáselas."
 - **Verificación:** pedido completado con 1 línea (3 × Agua); albarán completado con 3 unidades
   enlazado al pedido; factura completada por el mismo total (43,56 € con la tarifa del seed),
   "Entregado 100 %".

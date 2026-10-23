@@ -3,8 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Usuarios (`/user`), Roles (`/roles`), Organización (`/organization`), Secuencias de documentos (`/document-sequence`).
-- **Pedido funcional:** "Dá de alta a usuario.mcpflow@example.com con permisos de ventas. Después
-  decime con qué prefijo salen numeradas nuestras facturas de venta."
+- **Pedido funcional:** "Dale acceso a usuario.mcpflow@example.com con permisos de ventas. Y decime con qué prefijo salen numeradas nuestras facturas de venta."
 - **Verificación:** el usuario existe con el rol de ventas; la respuesta dice "FV".
 - **Evidencia UI:** ✅ alta, edición y baja de usuario (al crearlo manda la invitación por correo).
   👁 Roles es una matriz de permisos por ventana (59 filas); Organización es una ficha única

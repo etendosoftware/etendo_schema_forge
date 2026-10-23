@@ -3,8 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Configuración Fiscal (`/fiscal-config`), Monitor Fiscal (`/fiscal-monitor`), Modelos Fiscales (`/fiscal-models`).
-- **Pedido funcional:** "¿Tenemos configurado el envío de facturas a Hacienda? ¿Qué modelos de
-  impuestos tenemos presentados este año?"
+- **Pedido funcional:** "¿Tenemos configurado el envío de facturas a Hacienda? ¿Qué modelos de impuestos presentamos este año?"
 - **Verificación:** la respuesta dice que no hay sistema fiscal configurado y que no hay modelos (es
   el estado del seed).
 - **Evidencia UI:** 👁 Monitor: "No hay sistema fiscal configurado para esta organización";

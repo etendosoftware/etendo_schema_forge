@@ -4,8 +4,7 @@ Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Pedido, Albarán y Factura de Compras (`/purchase-order`, `/goods-receipt`,
   `/purchase-invoice`) y Relación albarán-factura (`/matched-purchase-invoices`, solo lectura).
-- **Pedido funcional:** "Pedile 10 Cervezas a Proveedor Mayorista para el almacén principal. Ya
-  llegaron: registrá la recepción y cargá su factura con el número MCPFLOW-FC-1."
+- **Pedido funcional:** "Pedile 10 Cervezas a Proveedor Mayorista. Ya llegaron y nos mandó la factura MCPFLOW-FC-1: cargá todo."
 - **Verificación:** pedido completado; albarán de compra completado con 10 unidades; factura de
   compra completada con esa referencia; en Relación albarán-factura aparece el vínculo entre la
   línea del albarán y la de la factura; el stock sube en 10.

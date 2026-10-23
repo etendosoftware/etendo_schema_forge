@@ -3,7 +3,7 @@
 Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 
 - **Ventanas:** Factura de compra (`/purchase-invoice`), Pago (`/payment-out`).
-- **Pedido funcional:** "Pagale por transferencia a Proveedor Mayorista la factura MCPFLOW-FC-1."
+- **Pedido funcional:** "Pagale a Proveedor Mayorista la factura MCPFLOW-FC-1 por transferencia."
 - **Verificación:** la factura queda pagada (saldo pendiente 0) y hay un pago por ese importe.
 - **Datos previos:** factura de compra completada.
 - **Evidencia UI:** 👁 Pago no tiene "Nuevo" en la lista: se paga desde la factura, igual que el
