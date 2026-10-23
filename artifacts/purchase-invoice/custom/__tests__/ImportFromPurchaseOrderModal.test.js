@@ -1,3 +1,4 @@
+// @covers artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
@@ -57,7 +58,12 @@ describe('ImportFromPurchaseOrderModal — source shape', () => {
     assert.match(src, /fetchLines=\{fetchLines\}/);
     assert.match(src, /getDocDisplay=\{getDocDisplay\}/);
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
-    assert.match(src, /afterImport=\{afterImport\}/);
+  });
+
+  it('spreads the shared global-discount props bound to the purchase-invoice header', () => {
+    assert.match(src, /useOrderGlobalDiscountImport\(\{ headerEndpoint: 'purchase-invoice\/header' \}\)/);
+    assert.match(src, /<ImportLinesModal[\s\S]*\{\.\.\.globalDiscountProps\}/);
+    assert.doesNotMatch(src, /afterImport=/);
   });
 
   // ETP-5381: the sales side had drifted to `cOrderlineId`, a key absent from
@@ -254,4 +260,32 @@ describe('ImportFromPurchaseOrderModal — duplicate detection via the order lin
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.sharedContext.alreadyImportedOrderLines.has('ol9'), false);
   });
+});
+
+describe('ImportFromPurchaseOrderModal — fetchDocuments invoice global-discount context', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  for (const { name, invLines, invoiceHeader, expected } of [
+    {
+      name: 'invoice with a % and lines',
+      invLines: [{ id: 'il1' }],
+      invoiceHeader: { etgoTotalDiscount: '5.00' },
+      expected: { invoiceGlobalDiscount: 5, invoiceHasLines: true },
+    },
+    {
+      name: 'invoice without % nor lines',
+      invLines: [],
+      invoiceHeader: { etgoTotalDiscount: 0 },
+      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false },
+    },
+  ]) {
+    it(`exposes the invoice % and whether it has lines: ${name}`, async () => {
+      installFetch({ orders: [], invLines, invoiceHeader });
+      const { sharedContext } = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+      assert.equal(sharedContext.invoiceGlobalDiscount, expected.invoiceGlobalDiscount);
+      assert.equal(sharedContext.invoiceHasLines, expected.invoiceHasLines);
+    });
+  }
 });
