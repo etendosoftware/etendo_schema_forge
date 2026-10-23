@@ -403,7 +403,10 @@ etendo.go.flags.environment-access-enforcement-off=true
 With it on, a blocked tenant is allowed and the log shows `Environment access enforcement is
 switched off: neo would have refused tenant <id> (SUBSCRIPTION_REQUIRED) and allowed it`, and
 `GET /sws/go/environments` reports that tenant's `accessState` as `ALLOWED` (its
-`subscriptionStatus` and trial fields still show the facts). Remove
+`subscriptionStatus` and trial fields still show the facts). Since ETP-5051 each environment
+also carries `accessEnforced: false` while the switch is on for it; the SPA's failed-payment
+banner then drops its "will be blocked on <date>" sentence for a neutral "payment still overdue"
+(`docs/generated-custom-windows/app-shell-functional-flows.md` §3.2a). Remove
 the line (or set `false`) to enforce again. On ConfigCat it can be targeted per tenant through the
 `clientId` attribute.
 
@@ -419,9 +422,14 @@ account's subscription is read or which portal session is opened.
   the purchase has no environment yet; "Mis empresas" uses it to put `renewalAt` on the right row,
   ETP-5734). Since ETP-5049 it also carries the plan catalog view of the subscription —
   `planKey`, `planName` and the plan's included `planQuotas` (field reference:
-  `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, *The subscription page*). No UI
-  reads them yet: the `/account` Subscription section still shows `plan`, the live Stripe product
-  name; showing the catalog plan name and the quotas there arrives with ETP-5051. An account with
+  `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, *The subscription page*). Since
+  ETP-5051 each `planQuotas` item also carries `consumptionSource`, `consumed` (null = not measured
+  yet), `verdict` (`ALLOW`/`WARN`/`DENY`, null for mode `off`), `periodStart` and `periodEnd`. The
+  `/account` Subscription section shows `planName` (falling back to `plan`, the live Stripe product
+  name) and a read-only list of the quotas: catalog name, "consumed of included unit" with the
+  period word ("per year" on a yearly plan), a state badge for WARN/DENY, "(not measured yet)" for
+  a null `consumed`, and "Your plan has no usage limits." for a plan with an empty `planQuotas`
+  (`docs/generated-custom-windows/app-shell-functional-flows.md` §3.2a-bis). An account with
   none returns `200 {"hasSubscription": false}`, never a `404` — free and grandfathered accounts
   must still render the page.
   **`renewalAt` is the renewal date; the environment's stored `renewalDueAt` is not.** The latter

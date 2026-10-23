@@ -252,22 +252,60 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   (`upgrade-page-shell`, `fixed inset-0 z-50`) drawn over the layout, so the banner would be
   invisible there yet still in the accessibility tree — escalated, an unseen `role="alert"`. It
   stays on `/companies` and on every in-environment page, where nothing else says it.
-- **Known limitation — the kill switch (accepted, not a bug to fix here):** with the backend kill
-  switch `environment-access-enforcement-off` on for the tenant, the environment is **not** blocked
-  on `graceEndsAt`, but the banner still says it will be; after that date the banner hides itself
-  and no blocked screen follows, so the tenant keeps working with no warning. The banner cannot
-  know: during grace `accessState` is `ALLOWED` whether or not the switch is on (the switch is
-  consulted only when access would be refused), and no other field of `GET /sws/go/environments`
-  reveals it. Accepted because the switch is a rare incident lever and the failed payment is still
-  real. A fix would need a backend field (e.g. `accessEnforced` per environment) for the banner to
-  read. Full record: `com.etendoerp.go/docs/open-and-notable-topics.md` §4.17.
+- **The kill switch — neutral wording (ETP-5051, `open-and-notable-topics.md` §4.17):** with the
+  backend kill switch `environment-access-enforcement-off` on for the tenant, the environment is
+  **not** blocked on `graceEndsAt`. `GET /sws/go/environments` now carries `accessEnforced` per
+  environment; when it is explicitly `false`, `paymentGraceWarning` returns a `neutral` warning and
+  the banner reads *"Your last payment failed and is still overdue."* — no block date, never
+  escalated (amber, dismissible), and it stays up for as long as the subscription is `PAST_DUE`,
+  also past `graceEndsAt`, because no blocked screen will take over. A backend that does not send
+  the field is treated as enforcing (today's behaviour).
 - **Test ids:** `billing-status-banner` (with `data-variant`), `billing-status-banner-message`,
   `billing-status-banner-cta`, `billing-status-banner-member-hint`,
   `billing-status-banner-dismiss`.
-- **i18n keys:** `billingPaymentFailedBanner`, `billingUpdatePaymentCta`,
-  `billingPaymentFailedContactAdmin` (en_US, es_ES, es_AR).
+- **i18n keys:** `billingPaymentFailedBanner`, `billingPaymentOverdueBanner` (neutral),
+  `billingUpdatePaymentCta`, `billingPaymentFailedContactAdmin` (en_US, es_ES, es_AR).
 - **Manual verification path:** `docs/stripe-local-testing.md`, the end-to-end walk-through,
   Step 5; or the local lifecycle tool (`docs/etp-5396-local-lifecycle-tool.md`, check 3).
+
+#### 3.2a-bis The plan-quota banner (`QuotaStatusBanner`, ETP-5051)
+
+- **Why:** a plan quota in `block` mode refuses new records of its kind once reached (403
+  `QUOTA_EXCEEDED`). Entering the environment is never refused for a quota (report-only), so this
+  banner is where the user first hears that a limit is close or reached.
+- **Where:** `tools/app-shell/src/components/billing/QuotaStatusBanner.jsx`, mounted by
+  `AppLayoutInner` right under `BillingStatusBanner`, normal layout only (not embedded).
+- **Data:** the `quotas` array of `POST /sws/go/session/environment` — only the items whose
+  `verdict` is `WARN` or `DENY`. Every entry is followed by a full page load, so the answer is
+  stashed per client in sessionStorage (`etendo:environment-quotas:<clientId>`) by
+  `rememberEnvironmentQuotas` in `lib/planQuotas.js` and read back by `readEnvironmentQuotas`. Today
+  only the in-app company switcher (`useEnvironmentSwitch.switchTo`) writes it; the entry calls
+  inside `@etendosoftware/etendo-go-core` (login auto-enter, environment picker, setup progress)
+  discard the answer and need the same call in core before the banner shows on first login.
+- **Copy:** one line per item, DENY first, built from the catalog `resourceName`, `consumed`,
+  `includedQty`, `unitLabel` and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
+  `warn`-mode quota already past its limit / `quotaBannerWarn`). Red with `role="alert"` when any
+  item is DENY, amber otherwise. Dismissible for the browser session; the dismissal key names the
+  reported verdicts, so a new alert shows again.
+- **CTA:** the owner (`ownsEnvironmentSubscription`) gets **View plan usage** → `/account`; anyone
+  else reads *"Contact your company's administrator."*. Hidden on `/account` and `/upgrade`, for the
+  same reasons as the payment banner.
+- **Test ids:** `quota-status-banner` (with `data-variant`), `quota-status-banner-items`,
+  `quota-status-banner-item` (with `data-verdict`), `quota-status-banner-cta`,
+  `quota-status-banner-member-hint`, `quota-status-banner-dismiss`.
+
+#### 3.2a-ter Write refused by a plan quota (ETP-5051)
+
+- A NEO write (REST single, `/sws/neo/batch`, MCP) refused because a quota is exhausted answers
+  **403** with `error.code === 'QUOTA_EXCEEDED'` and `error.quota` (the quota item).
+- `translateBackendError` (`lib/backendErrors.js`) turns it into
+  `backendError.quotaExceeded` — *"{resource}: your plan limit has been reached ({usage}). New
+  records of this kind cannot be created."* — from the structured `quota` when the caller has the
+  body (`translateBackendErrorBody`, `parseBackendError`/`translateBackendErrorResponse`, the
+  `useEntity` save path), and from the fixed prose `Quota exceeded: <name> (<consumed>/<included>
+  <unit>)` when a caller forwards only the message. It is never shown as the generic
+  "no access" refusal, and it cannot open the blocked-environment screen (that one is the 402 in
+  core's `apiFetch`).
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
