@@ -247,8 +247,11 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `etendo:billing-warning-dismissed:<clientId>:<graceEndsAt>`, so a new failed payment warns
   again; storage failures only mean it shows again). In the last 3 days it is red
   (`data-variant="destructive"`, `role="alert"`) and has no close button.
-- **Hidden on `/account`:** the CTA's own destination already shows the grace countdown next to
-  the portal button. It stays on `/upgrade` and `/companies`, where nothing else says it.
+- **Hidden on `/account` and `/upgrade`:** `/account` is the CTA's own destination and already
+  shows the grace countdown next to the portal button. `/upgrade` is a full-screen overlay
+  (`upgrade-page-shell`, `fixed inset-0 z-50`) drawn over the layout, so the banner would be
+  invisible there yet still in the accessibility tree — escalated, an unseen `role="alert"`. It
+  stays on `/companies` and on every in-environment page, where nothing else says it.
 - **Test ids:** `billing-status-banner` (with `data-variant`), `billing-status-banner-message`,
   `billing-status-banner-cta`, `billing-status-banner-member-hint`,
   `billing-status-banner-dismiss`.

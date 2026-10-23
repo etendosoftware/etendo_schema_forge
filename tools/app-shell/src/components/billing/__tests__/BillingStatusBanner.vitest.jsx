@@ -104,7 +104,16 @@ describe('BillingStatusBanner — when it shows', () => {
     expect(queryBanner()).not.toBeInTheDocument();
   });
 
-  it.each(['/upgrade', '/accounting', '/'])('is shown on %s', (path) => {
+  // Repro (ETP-5049 review W3): UpgradePage is a `fixed inset-0 z-50` overlay, so a banner
+  // mounted under it was invisible yet still in the accessibility tree — and, escalated, an
+  // announced `role="alert"` nobody could see or act on.
+  it.each(['/upgrade', '/upgrade/x'])('is hidden on %s, which is a full-screen overlay', (path) => {
+    pathRef.current = path;
+    render(<BillingStatusBanner />);
+    expect(queryBanner()).not.toBeInTheDocument();
+  });
+
+  it.each(['/companies', '/accounting', '/'])('is shown on %s', (path) => {
     pathRef.current = path;
     render(<BillingStatusBanner />);
     expect(banner()).toBeInTheDocument();

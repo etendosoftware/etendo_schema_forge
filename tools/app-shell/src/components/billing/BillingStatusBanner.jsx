@@ -15,7 +15,9 @@ const BANNER_DATE = { day: 'numeric', month: 'long', year: 'numeric' };
 
 // `/account` is where "Update payment" leads: its Subscription section already shows the grace
 // countdown next to the portal button, so the banner would only repeat it and link to itself.
-const HIDDEN_ON_PATHS = ['/account'];
+// `/upgrade` is a full-screen overlay (`fixed inset-0 z-50`) drawn over the layout: the banner
+// would be invisible under it yet still in the accessibility tree, an unseen `role="alert"`.
+const HIDDEN_ON_PATHS = ['/account', '/upgrade'];
 function isHiddenOnPath(pathname) {
   return HIDDEN_ON_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }

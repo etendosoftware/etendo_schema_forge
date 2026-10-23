@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/upgrade/api.js
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {

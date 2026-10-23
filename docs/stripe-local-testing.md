@@ -1451,7 +1451,7 @@ STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_requ
     the anchor so fewer than 3 days of grace remain (`grace_anchor - interval '13 days'` with the
     default 15) and reload.
   - It is not shown on `/account` itself (the CTA's own destination already shows the grace
-    state), and not once `graceEndsAt` has passed: then the blocked screen of Step 6 takes over.
+    state) nor on `/upgrade` (a full-screen overlay), and not once `graceEndsAt` has passed: then the blocked screen of Step 6 takes over.
 
 **Step 6 — Grace runs out.** Move the anchor past the grace window (`etendo.go.billing.grace.days`,
 default 15):
