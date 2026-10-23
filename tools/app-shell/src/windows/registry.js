@@ -352,8 +352,6 @@ export function buildWindowMap() {
   // does the router unless the item says otherwise. `redirect` keeps a retired window's old
   // links working; `routeOnly` keeps a window that is only reached through an in-app link
   // (overview page buttons, row actions) registered while it stays out of the sidebar.
-  // Retired windows routed this way (menu.json `redirect` to /calendar): 'fiscal-calendar',
-  // 'open-close-period-control'. Named here because sf-validate-pipeline's F3 looks for them in this file.
   const registerRedirect = (item) => {
     map[item.name] = {
       name: item.name,
