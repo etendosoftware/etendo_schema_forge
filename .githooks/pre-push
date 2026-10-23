@@ -798,6 +798,47 @@ run_step_1() {
   run_step "1" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid" "$key"
 }
 
+# Test hygiene (reuse-first protocol, docs/testing/test-reuse-policy.md): the same
+# scripts/check-test-hygiene.js the PR's `test-hygiene (reuse-first protocol)` job runs, over
+# the same change set (BASE_REF...HEAD). It takes well under a second and only looks at the
+# changed test files itself, so it is not relevance-gated and never cached. The mode comes from
+# TEST_HYGIENE_MODE in .github/workflows/ratchet-guards.yml, so the hook and CI share ONE switch:
+# `annotate` prints the findings and never blocks; `block` blocks the push exactly when CI would.
+run_test_hygiene() {
+  local name="Running test-hygiene check (reuse-first protocol)"
+  if [ -z "$BASE_REF" ]; then
+    echo "==> $name... SKIPPED ⚠️  (no target branch to diff against)"
+    record_summary_row "$name" "-" "SKIPPED" ""
+    return 0
+  fi
+  local mode out findings status=0 start=$SECONDS duration
+  mode="$(sed -n -E 's/^[[:space:]]*TEST_HYGIENE_MODE:[[:space:]]*([a-z]+).*/\1/p' \
+    "$REPO_DIR/.github/workflows/ratchet-guards.yml" 2>/dev/null | head -n 1)"
+  [ -n "$mode" ] || mode=annotate
+  out="$(cd "$REPO_DIR" && node scripts/check-test-hygiene.js --base "$BASE_REF" --head HEAD --mode "$mode" 2>&1)" || status=$?
+  duration=$(( SECONDS - start ))
+  findings="$(printf '%s\n' "$out" | grep -cE '^::(warning|error)' || true)"
+  if [ "$status" -ne 0 ]; then
+    echo "==> $name... FAILED ❌ (${duration}s, mode: $mode)"
+  elif [ "$findings" -gt 0 ]; then
+    echo "==> $name... ${findings} WARNING(S) ⚠️  (${duration}s, mode: $mode — not blocking)"
+  else
+    echo "==> $name... SUCCESS ✅ (${duration}s)"
+  fi
+  # GitHub annotation lines (`::warning file=F,line=N,title=T::msg`) shown as `F:N [T] msg`.
+  if [ "$findings" -gt 0 ] || [ "$status" -ne 0 ]; then
+    printf '%s\n' "$out" \
+      | sed -E 's/^::(warning|error) file=([^,]*),line=([0-9]+),title=([^:]*)::/   \2:\3 [\4] /; s/^::(warning|error) title=([^:]*)::/   [\2] /'
+  fi
+  if [ "$status" -ne 0 ]; then
+    record_failure "$name"
+    record_summary_row "$name" "$duration" "FAILED" "${findings} finding(s)"
+  else
+    record_summary_row "$name" "$duration" "OK" "${findings} warning(s), mode: ${mode}"
+  fi
+  return 0
+}
+
 # Domain boundary check disabled: repos are now split at the repo level
 # (schema_forge_core vs etendo_schema_forge), so the monorepo cross-domain
 # check no longer applies. Re-enable by uncommenting the call.
@@ -984,6 +1025,7 @@ if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ]; then
 else
   run_step_0
   run_step_1
+  run_test_hygiene
   run_step_2
   run_step_3
   run_step_4

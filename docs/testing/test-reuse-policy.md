@@ -121,6 +121,13 @@ it by opening the test.
 **Rollout:** annotate-only (warnings, the job passes) until **2026-10-10**, then blocking. Each
 workflow has one switch, `TEST_HYGIENE_MODE: annotate` → `block`, next to a dated comment.
 
+**Pre-push (functional repo):** `.githooks/pre-push` runs the same `scripts/check-test-hygiene.js`
+over the same change set (`<target branch>...HEAD`) right after the data-testid check, and prints
+each finding as `file:line [rule] message`. It reads the mode from `TEST_HYGIENE_MODE` in
+`ratchet-guards.yml`, so flipping that one switch also flips the hook: `annotate` shows the
+findings without blocking the push, `block` blocks it exactly when CI would fail. With no target
+branch to diff against, the step is skipped and says so.
+
 The assertion heuristic accepts any `expect…(` / `assert…(` call in the block body, including
 helpers such as `expectRow(...)`. If the assertion lives in a helper with another name, the
 warning is a false positive; rename the helper or assert in the block.
