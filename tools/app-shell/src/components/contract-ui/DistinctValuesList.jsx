@@ -118,7 +118,9 @@ export function DistinctValuesList({
       if (optionCount === 0) return;
       e.preventDefault();
       const step = e.key === 'ArrowDown' ? 1 : -1;
-      setActiveIndex((i) => (i < 0 ? (step === 1 ? 0 : optionCount - 1) : Math.min(optionCount - 1, Math.max(0, i + step))));
+      // From "none", ArrowDown lands on the first option and ArrowUp on the last.
+      const fromNone = step === 1 ? 0 : optionCount - 1;
+      setActiveIndex((i) => (i < 0 ? fromNone : Math.min(optionCount - 1, Math.max(0, i + step))));
     } else if (e.key === 'Enter' && activeIndex >= 0 && activeIndex < optionCount) {
       e.preventDefault();
       onSelect(options[activeIndex]);
