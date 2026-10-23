@@ -645,24 +645,11 @@ Purchase invoices carry the same currency/exchange-rate editing model already sh
 
 ### Exchange rate on the accounting date (ETP-5840)
 
-- The rate reference date of an invoice is **`accountingDate` («Fecha contable», `DateAcct`)**,
-  not `invoiceDate`. `CurrencyRatePicker` resolves it structurally (`resolveRateDateField`: the
-  header field bound to `DateAcct`), so `window.documentDateField` stays `invoiceDate` and keeps
-  driving the `invoiceDate → accountingDate` cascade.
-- The dropdown lists every selectable currency with its rate on the `accountingDate` currently in
-  the form (`currencyOptions?date=`); a currency with no range shows «—» and selecting it leaves
-  the rate empty for the user to type with the pencil (available on new and saved invoices unless
-  the currency is the org's own, `isOrgCurrency`).
-- Changing `currency`, `accountingDate` or `invoiceDate` (which cascades `accountingDate`)
-  recalculates `eTGOCurrencyRate` through the header callout, overriding a manual rate; empty
-  when there is no range. No change is reverted anymore («Cambio de moneda cancelado» is gone).
-- Saving a foreign-currency invoice with an empty rate is refused by the backend with a
-  translated message; the form stays in edit. The «Tipos de cambio» tab refetches when the saved
-  rate changes (`EXCHANGE_RATES_TAB_KEY` effect in `DetailView`).
-- **Classic vs NEO:** every NEO path (UI, REST single/batch, MCP) requires the document's own
-  rate. The classic Etendo completion keeps its fallback and still accepts a general conversion
-  rate (`C_Conversion_Rate`) for a document without one — the backend leaves that path untouched.
-- Full reference: `docs/ui-customization.md` §22.
+Purchase invoices behave exactly like sales invoices: the rate is taken on the **`accountingDate`**
+(«Fecha contable»), recalculated by the header callout on every change of `currency`,
+`accountingDate` or `invoiceDate`, and saving a foreign-currency invoice with an empty rate is
+refused. Full description (including classic vs NEO completion): `sales-invoice.md` § "Exchange
+rate on the accounting date (ETP-5840)" and `docs/ui-customization.md` §22.
 
 ### Backend wiring
 
