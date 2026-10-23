@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/documentEmailSend.js
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   buildEmailContractCommand,

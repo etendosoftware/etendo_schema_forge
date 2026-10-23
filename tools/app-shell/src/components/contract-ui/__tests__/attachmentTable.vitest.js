@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/attachmentTable.js
 import { describe, expect, it } from 'vitest';
 import { attachmentTableOf } from '../attachmentTable.js';
 

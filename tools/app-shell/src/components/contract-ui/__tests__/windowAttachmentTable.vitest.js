@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/windowAttachmentTable.js
 import { describe, expect, it } from 'vitest';
 import { resolveAttachmentTable } from '../windowAttachmentTable.js';
 
