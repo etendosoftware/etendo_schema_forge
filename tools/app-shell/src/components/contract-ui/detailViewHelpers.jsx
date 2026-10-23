@@ -496,6 +496,29 @@ export function isDocumentDateCascadeTarget(key, triggerField, documentDateField
   return key === 'accountingDate' && !!documentDateField && triggerField === documentDateField;
 }
 
+/**
+ * True when `key` is the document's exchange rate (`eTGOCurrencyRate`, AD column
+ * `EM_ETGO_Currency_Rate`) and the callout that returned it was triggered by a change of
+ * the rate's inputs: the currency, the window's declared document date, or the accounting
+ * date (`DateAcct`, the rate reference date of documents that carry one).
+ *
+ * ETP-5840. The backend recalculates the rate from the conversion ranges valid on the
+ * reference date every time one of those inputs changes, and that recalculation must win
+ * over a manual rate (a manual rate is only kept until the date or the currency changes)
+ * and must also be able to CLEAR the rate when no range covers the new date. Without this
+ * exemption the user-touched guard keeps a manual rate forever and the empty-value guard
+ * keeps a stale rate whenever the new date has no range.
+ *
+ * Driven by field names that are the same in every document window (no spec identity), so
+ * it covers quotations, orders and invoices alike.
+ */
+export function isCurrencyRateRecalcTarget(key, triggerField, documentDateField) {
+  if (key !== 'eTGOCurrencyRate' || !triggerField) return false;
+  return triggerField === 'currency'
+    || triggerField === 'accountingDate'
+    || (!!documentDateField && triggerField === documentDateField);
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
   const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
@@ -510,7 +533,8 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
     const userHasValue = currentVal !== '' && currentVal != null;
-    if ((entry.value === '' || entry.value == null) && userHasValue) {
+    const isRateRecalc = isCurrencyRateRecalcTarget(key, triggerField, documentDateField);
+    if ((entry.value === '' || entry.value == null) && userHasValue && !isRateRecalc) {
       continue;
     }
     // Protect user-touched fields from being overwritten by collateral updates
@@ -523,7 +547,8 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // field's callout, it is the whole purpose of the document date's own callout,
     // and classic re-applies it on every change.
     if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue
-        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)) {
+        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)
+        && !isRateRecalc) {
       continue;
     }
     appliedFields.set(key, entry.value);

@@ -219,7 +219,8 @@ export function DetailView({
   titleField = 'documentNo',
   // Name of the header field holding this document's primary date (e.g. "orderDate"
   // for orders/quotations, "invoiceDate" for invoices). Used for exchange-rate lookups
-  // and other document-date-dependent logic. Defaults to "orderDate" for backward
+  // (a header DateAcct field wins for the rate — resolveRateDateField) and other
+  // document-date-dependent logic. Defaults to "orderDate" for backward
   // compatibility with windows that don't declare window.documentDateField.
   documentDateField = 'orderDate',
   windowName,
@@ -1392,18 +1393,15 @@ export function DetailView({
     // Mark these fields so the next onChange doesn't re-trigger callout
     calloutAppliedRef.current = appliedFields;
 
-    // Currency change validation is handled inside handleChangeWithCallout (synchronous
-    // dropdown-change path). The callout response handler intentionally no longer applies
-    // any conversion to pending lines — under the simplified ETP-4027 model, conversion
-    // only applies to lines added AFTER the saved currency change.
+    // The callout response handler intentionally applies no conversion to pending lines —
+    // under the ETP-4027 model, conversion only applies to lines added AFTER the saved
+    // currency change. The recalculated eTGOCurrencyRate (ETP-5840) is a plain field update.
   }, [calloutResult]);
 
   // Fire the callout (and related validation) for a user-initiated field change.
   // Extracted from handleChangeWithCallout so the same logic can be triggered either
   // synchronously on change (default) or deferred to blur (opt-in: field.calloutOn === 'blur').
-  // `previousCurrency` is the currency value captured BEFORE hook.handleChange ran, used
-  // only by the currency rate-validation path; pass null when not a currency change.
-  const fireCallout = useCallback((field, value, previousCurrency = null) => {
+  const fireCallout = useCallback((field, value) => {
     // Skip companion/auxiliary fields — they don't have callouts
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
@@ -1426,43 +1424,10 @@ export function DetailView({
     if (!value || value === '') return;
     if (!/^[0-9A-Fa-f]{32}$/.test(value) && !/^-?\d+(\.\d+)?$/.test(value) && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
 
-    // Currency change validation (ETP-4027 simplified model): if no conversion rate
-    // exists between the org base currency and the newly selected currency for the
-    // order date, revert the dropdown to the previous value and surface an error.
-    // Skipped when the new currency equals the org currency (no rate needed) and when
-    // there is no previous currency yet (initial set, e.g. defaults).
-    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
-      const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
-      if (orderDate) {
-        const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-        (async () => {
-          const revert = () => {
-            toast.error(ui('noConversionRateError', { date: orderDate }));
-            hook.handleChange('currency', previousCurrency);
-          };
-          try {
-            const sessionRes = await apiFetch(`${neoBase}/session`, { token, baseUrl: '' });
-            if (!sessionRes.ok) { revert(); return; }
-            const session = await sessionRes.json();
-            const orgCurrencyId = session?.currencyId;
-            // No rate needed when changing TO the org currency — that's just removing
-            // the conversion. Allow without validation.
-            if (!orgCurrencyId || orgCurrencyId === value) return;
-            const rateRes = await apiFetch(
-              `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
-              { token, baseUrl: '' },
-            );
-            if (!rateRes.ok) { revert(); return; }
-            const rateData = await rateRes.json();
-            if (!rateData?.hasRate || !rateData.rate) { revert(); return; }
-            // Rate exists — change stays. The sync effect on hook.selected.currency
-            // will pick it up after the user saves the header.
-          } catch {
-            revert();
-          }
-        })();
-      }
-    }
+    // ETP-5840: no client-side currency-change validation. A currency without a conversion
+    // range on the rate reference date is a legal choice (empty rate the user can type); the
+    // header callout recalculates eTGOCurrencyRate and the backend rejects saving a foreign
+    // currency with an empty rate.
 
     // ETP-4772: bump this field's generation right before dispatching — this is
     // a genuine new value for it. The snapshot taken now travels with the
@@ -1477,23 +1442,13 @@ export function DetailView({
     // latter is a stale closure captured before this render's hook.handleChange commits,
     // so it always lags one change behind for the field that just triggered the callout.
     executeCallout(field, value, pendingEditingRef.current, dispatchSnapshot);
-  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField, apiFetch]);
+  }, [executeCallout]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
   // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
   // EntityForm's DeferredInput, which calls this same onChange once on blur — so the
   // deferral lives entirely in the input component and this handler stays uniform.
   const handleChangeWithCallout = useCallback((field, value) => {
-    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
-    // revert the dropdown if the rate check fails. The closure preserves the old
-    // hook.editing reference, but capturing explicitly keeps intent clear.
-    //
-    // This one deliberately reads hook.editing, NOT pendingEditingRef: here we WANT the
-    // last-committed value (the currency to revert TO if the rate lookup fails). Switching
-    // it to the fresh ref would capture the value the user just picked, making the revert a
-    // no-op. Do not "fix" this for consistency with the ref used below.
-    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
-
     hook.handleChange(field, value);
     // Keep the synchronous snapshot current immediately — hook.handleChange's setEditing
     // is async/batched, so without this, a same-tick chain of onChange calls (e.g. a
@@ -1502,8 +1457,8 @@ export function DetailView({
     // right below, and by any sibling onChange in the same batch) sees the fresh value.
     pendingEditingRef.current = { ...pendingEditingRef.current, [field]: value };
 
-    fireCallout(field, value, previousCurrency);
-  }, [hook.handleChange, hook.editing, fireCallout]);
+    fireCallout(field, value);
+  }, [hook.handleChange, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
@@ -2438,6 +2393,7 @@ export function DetailView({
                               labelOverrides={labelOverrides}
                               registerFields={hook.registerFields}
                               fieldErrors={hook.fieldErrors}
+                              documentDateField={documentDateField}
                               onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
                               trailing={inlineTrailing}
                               data-testid="Form__fa3275" />
@@ -2466,6 +2422,7 @@ export function DetailView({
                                   labelOverrides={labelOverrides}
                                   registerFields={hook.registerFields}
                                   fieldErrors={hook.fieldErrors}
+                                  documentDateField={documentDateField}
                                   onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
                                   data-testid="Form__fa3275" />
                               </div>
@@ -3076,6 +3033,7 @@ export function DetailView({
                               selectorContext={selectorContextByEntity[entity]}
                               labelOverrides={labelOverrides}
                               fieldErrors={hook.fieldErrors}
+                              documentDateField={documentDateField}
                               data-testid="Form__fa3275" />
                           </div>
                         )}
