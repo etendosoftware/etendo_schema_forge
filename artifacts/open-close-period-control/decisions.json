@@ -79,11 +79,11 @@
           "badge": true,
           "columnType": "enum",
           "enumVariants": {
-            "O": "green",
+            "O": "blue",
             "N": "neutral",
-            "C": "red",
-            "P": "red",
-            "M": "orange"
+            "C": "green",
+            "P": "green",
+            "M": "yellow"
           },
           "gridOrder": 1
         },
@@ -190,10 +190,10 @@
           "badge": true,
           "columnType": "enum",
           "enumVariants": {
-            "O": "green",
+            "O": "blue",
             "N": "neutral",
-            "C": "red",
-            "P": "red"
+            "C": "green",
+            "P": "green"
           },
           "gridOrder": 2
         },
