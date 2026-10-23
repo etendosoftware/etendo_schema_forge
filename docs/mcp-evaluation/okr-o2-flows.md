@@ -64,317 +64,38 @@ lectura).
 
 ## Flujos
 
-### 1. `w-customer-crud` — Alta, cambio y baja de un cliente
-- **Ventanas:** Contactos (`/contacts`), Categoría de Contacto (`/business-partner-category`).
-- **Pedido funcional:** "Dá de alta a la empresa Cliente MCPFLOW como cliente, con el correo
-  compras@mcpflow.test. Después cambiale el teléfono a 600 000 000. Al final, borralo: lo cargué
-  por error."
-- **Verificación:** el contacto existe con ese correo y ese teléfono antes del borrado; después del
-  borrado ya no aparece.
-- **Datos previos:** ninguno. Obligatorios: razón social, categoría de contacto (por defecto
-  «Cliente») y clave NIF del país.
-- **Evidencia UI:** ✅ alta (después del arreglo de secuencia, ver Hallazgos) y alta/edición/baja
-  de una categoría de contacto. 👁 edición y baja del contacto (hay botón Eliminar en la ficha).
-- **Holded:** alta, cambio y baja sí; no tiene tool para listar ni leer contactos, así que la
-  verificación de su lado depende de la respuesta del alta.
+Un archivo por flujo en [`okr-o2-flows/`](okr-o2-flows/):
 
-### 2. `f-quotation-to-invoice` — Presupuesto aceptado y facturado
-- **Ventanas:** Presupuesto (`/sales-quotation`), Factura (`/sales-invoice`).
-- **Pedido funcional:** "Hacele un presupuesto a Cliente MCPFLOW por 2 Fernet. Lo aceptó: facturalo
-  directamente, sin pedido ni albarán."
-- **Verificación:** hay un presupuesto de ese cliente con 1 línea (2 × Fernet) y una factura
-  **completada** relacionada, con el mismo total.
-- **Datos previos:** cliente y producto existentes.
-- **Evidencia UI:** ✅ presupuesto 1000000 → "Enviar a evaluación" → Confirmar → "Facturar
-  directamente" → factura FV1000001 completada (106,48 €). La otra opción es "Crear pedido de venta".
-- **Holded:** presupuestos sí (crear, aceptar); facturar no (no hay alta de facturas por MCP).
-
-### 3. `f-order-ship-invoice` — Pedido → albarán → factura
-- **Ventanas:** Pedido (`/sales-order`), Albarán (`/goods-shipment`), Factura (`/sales-invoice`).
-- **Pedido funcional:** "Cliente MCPFLOW nos pidió 3 Aguas. Cargá el pedido, prepará la entrega
-  desde el almacén principal y facturá lo entregado."
-- **Verificación:** pedido completado con 1 línea (3 × Agua); albarán completado con 3 unidades
-  enlazado al pedido; factura completada por el mismo total (43,56 € con la tarifa del seed),
-  "Entregado 100 %".
-- **Datos previos:** cliente con dirección, producto con stock, **período contable del día abierto**
-  (ver Hallazgos).
-- **Evidencia UI:** ✅ pedido PV1000000 → Confirmar (con "Crear albarán") → albarán 1000000 →
-  Confirmar (con "Crear factura de venta") → factura FV1000000 completada.
-- **Holded:** pedido y albarán sí; factura no.
-
-### 4. `w-draft-order-edit-delete` — Corregir y descartar un pedido en borrador
-- **Ventanas:** Pedido (`/sales-order`).
-- **Pedido funcional:** "Empezá un pedido para Cliente MCPFLOW con 5 Cervezas, pero no lo confirmes.
-  Ahora cambiá la cantidad a 4. Al final el cliente se arrepintió: borrá ese pedido."
-- **Verificación:** mientras existe, el pedido está en borrador con 4 unidades; al final no existe.
-- **Datos previos:** cliente y producto.
-- **Evidencia UI:** 👁 un pedido guardado sin confirmar queda en "Borrador" con botón Eliminar; un
-  pedido completado no lo tiene. Obligatorios de cabecera: contacto, fecha, dirección, moneda,
-  tarifa, condiciones de pago y **almacén** (no se completa solo; sin almacén no deja guardar).
-- **Holded:** pedidos de venta: crear, modificar y borrar sí.
-
-### 5. `f-collect-invoice` — Cobro parcial y saldo restante
-- **Ventanas:** Factura (`/sales-invoice`), Cobro (`/payment-in`).
-- **Pedido funcional:** "Cliente MCPFLOW nos pagó 20 € en efectivo a cuenta de su última factura.
-  Registralo y decime cuánto le queda por pagar."
-- **Verificación:** la factura queda "Parcial · 20,00 € de 43,56 €", con un cobro de 20 € en estado
-  "Cobro depositado" en caja; la respuesta dice 23,56 €.
-- **Datos previos:** una factura completada pendiente de cobro.
-- **Evidencia UI:** ✅ desde la factura: "Pendiente" → Cobros de la factura → Añadir cobro (importe,
-  fecha, método, cuenta) → Confirmar. El cobro aparece en Cobro (filtro por defecto: últimos 30
-  días). Un cobro procesado ofrece "Reactivar" y "Eliminar".
-- **Holded:** pagos sí; el cobro contra una factura depende de poder leerla (verificar).
-
-### 6. `f-credit-note` — Factura rectificativa
-- **Ventanas:** Factura (`/sales-invoice`, pestaña Rectificaciones; filtro "Factura rectificativa").
-- **Pedido funcional:** "Una de las 3 Aguas que le facturamos a Cliente MCPFLOW vino rota. Hacele la
-  rectificativa por esa unidad."
-- **Verificación:** existe una factura rectificativa completada, ligada a la original, por 1 unidad.
-- **Datos previos:** factura completada.
-- **Evidencia UI:** 👁 la factura completada tiene pestaña Rectificaciones y el menú ⋮ ofrece
-  "Reactivar" y "Contabilizar". No ejecutado.
-- **Holded:** no (no crea facturas ni notas de crédito por MCP; solo las lee).
-
-### 7. `f-customer-return` — Devolución de un cliente
-- **Ventanas:** Albarán (`/goods-shipment`), Albarán de devolución (`/return-material-receipt`).
-- **Pedido funcional:** "Cliente MCPFLOW nos devolvió 1 de las Aguas que le entregamos. Registrá la
-  devolución al almacén principal."
-- **Verificación:** albarán de devolución completado, con "Albarán origen" el de la entrega y 1
-  unidad; el stock del producto sube en 1.
-- **Datos previos:** albarán de venta completado.
-- **Evidencia UI:** 👁 el albarán completado tiene el botón "Crear Devolución"; la devolución pide
-  contacto, fecha, almacén, dirección y opcionalmente el albarán de origen. No ejecutado.
-- **Holded:** verificar.
-
-### 8. `w-quick-sale` — Venta rápida de mostrador
-- **Ventanas:** Venta Rápida (`/quick-sales-order`, prueba de concepto).
-- **Pedido funcional:** "Vendé en mostrador 2 Aguas a un cliente anónimo, cobradas en efectivo."
-- **Verificación:** queda una venta en el historial con 2 × Agua y su cobro en efectivo.
-- **Datos previos:** ninguno (cliente anónimo por defecto).
-- **Evidencia UI:** 👁 pantalla tipo TPV: cliente (por defecto "Cliente Anónimo"), productos por
-  categoría con stock, carrito, pago efectivo/tarjeta/transferencia, "Confirmar Pago" e Historial.
-- **Holded:** no hay equivalente de TPV por MCP.
-- **Nota:** en Venta Rápida el Agua sale a 5,00 € y en el pedido a 12,00 € (tarifa distinta).
-
-### 9. `f-purchase-receive-invoice` — Pedido de compra → recepción → factura
-- **Ventanas:** Pedido, Albarán y Factura de Compras (`/purchase-order`, `/goods-receipt`,
-  `/purchase-invoice`) y Relación albarán-factura (`/matched-purchase-invoices`, solo lectura).
-- **Pedido funcional:** "Pedile 10 Cervezas a Proveedor Mayorista para el almacén principal. Ya
-  llegaron: registrá la recepción y cargá su factura con el número MCPFLOW-FC-1."
-- **Verificación:** pedido completado; albarán de compra completado con 10 unidades; factura de
-  compra completada con esa referencia; en Relación albarán-factura aparece el vínculo entre la
-  línea del albarán y la de la factura; el stock sube en 10.
-- **Datos previos:** proveedor con dirección y producto.
-- **Evidencia UI:** 👁 obligatorios del pedido: contacto, fecha, dirección, **fecha de entrega
-  esperada**, almacén, condiciones de pago, moneda y tarifa. La factura de compra pide además
-  tipo de documento, fecha contable y método de pago. No ejecutado.
-- **Holded:** pedido de compra y recepción sí; factura de compra (purchases/bills) verificar.
-
-### 10. `f-pay-purchase-invoice` — Pagar una factura de proveedor
-- **Ventanas:** Factura de compra (`/purchase-invoice`), Pago (`/payment-out`).
-- **Pedido funcional:** "Pagale por transferencia a Proveedor Mayorista la factura MCPFLOW-FC-1."
-- **Verificación:** la factura queda pagada (saldo pendiente 0) y hay un pago por ese importe.
-- **Datos previos:** factura de compra completada.
-- **Evidencia UI:** 👁 Pago no tiene "Nuevo" en la lista: se paga desde la factura, igual que el
-  cobro (flujo 5). 📄 guía `payment-out.md`.
-- **Holded:** pagos sí; verificar el vínculo con la compra.
-
-### 11. `f-vendor-return` — Devolución a proveedor
-- **Ventanas:** Albarán de compra (`/goods-receipt`), Albarán de devolución de compras
-  (`/return-to-vendor-shipment`).
-- **Pedido funcional:** "Dos de las Cervezas que recibimos de Proveedor Mayorista vinieron
-  vencidas. Devolvéselas."
-- **Verificación:** albarán de devolución completado, con origen la recepción y 2 unidades; el
-  stock baja en 2.
-- **Datos previos:** albarán de compra completado.
-- **Evidencia UI:** 👁 botón "Crear Devolución" en el albarán de compra completado.
-- **Holded:** verificar.
-
-### 12. `w-quick-purchase` — Compra rápida
-- **Ventanas:** Compra Rápida (`/quick-purchase-order`, prueba de concepto).
-- **Pedido funcional:** "Armá un pedido rápido de 6 Quesos Sardos y mandáselo por correo a su
-  proveedor."
-- **Verificación:** existe el pedido de compra con 6 × Queso Sardo para ese proveedor.
-- **Evidencia UI:** 👁 filtro de proveedor, productos, carrito, "Pedidos Anteriores" y envío por
-  Email, WhatsApp o PDF.
-- **Holded:** no hay equivalente; el envío por correo de pedidos existe (`send`).
-
-### 13. `w-product-crud` — Alta, cambio y baja de un producto
-- **Ventanas:** Producto (`/product`).
-- **Pedido funcional:** "Dá de alta el producto Producto MCPFLOW, que compramos a 4 € y vendemos a
-  9 €. Después cambiale la descripción a 'caja de 6'. Al final borralo."
-- **Verificación:** el producto existe con los dos precios y la descripción; después del borrado no.
-- **Datos previos:** ninguno. Obligatorios: código, nombre, tipo, categoría, unidad y grupo de
-  impuesto (los selectores vienen con valor por defecto).
-- **Evidencia UI:** ✅ alta, edición (releída) y baja. 👁 los precios van en la pestaña Precio
-  (tarifas); no se cargaron.
-- **Holded:** alta, cambio y baja sí; no tiene tool para listar ni leer productos.
-
-### 14. `w-product-category-crud` — Categoría de producto
-- **Ventanas:** Categoría del producto (`/product-category`).
-- **Pedido funcional:** "Creá la categoría de productos MCPFLOW Bebidas sin alcohol, ponele una
-  descripción y después borrala."
-- **Verificación:** la categoría existe con esa descripción y después ya no.
-- **Evidencia UI:** ✅ alta, edición y baja. Rechaza un identificador repetido ("Ya existe un
-  registro con este identificador").
-- **Holded:** verificar.
-
-### 15. `w-warehouse-crud` — Almacén
-- **Ventanas:** Almacén (`/warehouse`).
-- **Pedido funcional:** "Abrimos un depósito nuevo en Calle MCPFLOW 1, Madrid. Dalo de alta como
-  almacén, después corregile el nombre a Depósito MCPFLOW Norte y al final borralo."
-- **Verificación:** el almacén existe con esa dirección y nombre; después ya no.
-- **Datos previos:** ninguno. Obligatorios: identificador, nombre y dirección.
-- **Evidencia UI:** 👁 formulario y botón Eliminar; la ficha tiene pestañas Productos,
-  Transacciones y Contabilidad. No se completó la dirección.
-- **Holded:** almacenes sí (verificar alta y baja).
-
-### 16. `f-physical-inventory` — Recuento de stock
-- **Ventanas:** Inventario físico (`/physical-inventory`).
-- **Pedido funcional:** "Contamos el almacén principal: hay 280 Aguas. Ajustá el stock a ese número."
-- **Verificación:** inventario completado en el almacén principal con una línea de Agua contada en
-  280; el stock del Agua queda en 280.
-- **Datos previos:** producto con stock conocido.
-- **Evidencia UI:** 👁 obligatorios: fecha, nombre y almacén; un inventario del seed tiene 4 líneas
-  y está contabilizado. 📄 la guía describe generar líneas de conteo y confirmar.
-- **Holded:** parcial (ajuste de stock directo, sin documento de recuento).
-
-### 17. `f-warehouse-transfer` — Pasar stock entre almacenes
-- **Ventanas:** Movimiento entre almacenes (`/goods-movements`).
-- **Pedido funcional:** "Pasá 5 Fernet del almacén principal al secundario."
-- **Verificación:** movimiento procesado con 1 línea (5 × Fernet, de principal a secundario); el
-  stock baja en uno y sube en el otro.
-- **Datos previos:** dos almacenes (el seed tiene Almacen Principal y Almacén Secundario).
-- **Evidencia UI:** 👁 obligatorios: nombre y fecha; hay 2 movimientos de ejemplo procesados.
-- **Holded:** verificar.
-
-### 18. `f-internal-consumption` — Consumo interno
-- **Ventanas:** Consumo interno (`/internal-consumption`).
-- **Pedido funcional:** "Usamos 2 Quesos Sardos para una degustación. Descontalos del stock como
-  consumo interno."
-- **Verificación:** consumo confirmado con 2 × Queso Sardo; el stock baja en 2.
-- **Evidencia UI:** 👁 obligatorios: fecha y nombre; lista vacía en el seed. 📄 se confirma solo con
-  líneas; se puede anular y contabilizar.
-- **Holded:** no.
-
-### 19. `q-stock-report` — Consultar el stock
-- **Ventanas:** Informes de inventario (`/report-viewer?category=inventory`).
-- **Pedido funcional:** "¿Cuántas unidades de cada producto tenemos en el almacén principal?"
-- **Verificación:** la respuesta coincide producto por producto con el stock real.
-- **Evidencia UI:** 👁 un informe, "Reporte de Stock", exportable a PDF, XLSX y CSV.
-- **Holded:** verificar (productos sin lectura).
-
-### 20. `f-bank-account-transfer` — Cuenta nueva y transferencia
-- **Ventanas:** Cuentas (`/financial-account`).
-- **Pedido funcional:** "Abrimos una cuenta en el banco MCPFLOW. Dala de alta y pasale 500 € desde la
-  caja."
-- **Verificación:** la cuenta existe; la caja baja 500 € y la cuenta nueva sube 500 €.
-- **Evidencia UI:** 👁 3 cuentas en el seed (Caja, Cuenta de Banco, Tarjeta); "Nueva cuenta" abre un
-  formulario modal; también hay "Reglas de matcheo". Transferencias y depósitos están cubiertos por
-  la suite `treasury` (catálogo D6–D8).
-- **Holded:** cuentas bancarias y movimientos sí (verificar transferencia).
-
-### 21. `w-subaccount` — Subcuenta contable
-- **Ventanas:** Plan de cuentas (`/chart-of-accounts`).
-- **Pedido funcional:** "Necesito una cuenta contable para los gastos de MCPFLOW Publicidad, dentro de
-  los gastos. Creala y después cambiale el nombre a MCPFLOW Marketing."
-- **Verificación:** la subcuenta existe bajo el grupo de gastos, con el nombre final.
-- **Evidencia UI:** 👁 "Nueva subcuenta" abre un modal con nombre, código y tipo de cuenta.
-- **Holded:** plan de cuentas sí (verificar alta).
-
-### 22. `w-cost-center-project` — Centro de costos y proyecto
-- **Ventanas:** Centro de costos (`/cost-center`), Proyecto (`/service-project`).
-- **Pedido funcional:** "Creá el centro de costos MCPFLOW Tienda y el proyecto MCPFLOW Reforma.
-  Agregale una descripción a cada uno y después borralos."
-- **Verificación:** los dos existen con su descripción y después ya no.
-- **Evidencia UI:** ✅ alta, edición (releída) y baja de los dos. Obligatorios: identificador y nombre.
-- **Holded:** proyectos sí; centros de costos no.
-
-### 23. `f-open-period` — Año fiscal y apertura de período
-- **Ventanas:** Calendario (`/calendar`), Esquema contable (`/general-ledger-configuration`).
-- **Pedido funcional:** "No puedo facturar con fecha de hoy porque el mes está cerrado. Abrí el
-  período contable del mes actual."
-- **Verificación:** el período del mes actual figura "Todos abiertos"; después se puede completar un
-  documento con fecha de hoy.
-- **Evidencia UI:** ✅ Calendario → año 2026 → Períodos → "Abrir/Cerrar Periodo" → Abierto. También
-  ✅ alta, edición y baja de un año fiscal (2031). 👁 Esquema contable es una pantalla de 4 pestañas
-  (General, Valores por defecto, Dimensiones, Cuentas generales): queda como consulta.
-- **Holded:** no.
-
-### 24. `f-asset-amortization` — Activo y su amortización
-- **Ventanas:** Categoría de activo (`/asset-group`), Activos (`/assets`), Amortización (`/amortization`).
-- **Pedido funcional:** "Compramos una impresora MCPFLOW por 1.200 €. Dala de alta como activo y
-  generá su amortización."
-- **Verificación:** el activo existe con ese valor; hay una amortización con líneas para ese activo.
-- **Datos previos:** categoría de activo (el seed trae «Genérico»).
-- **Evidencia UI:** ✅ alta, edición y baja de categoría de activo y de activo. 👁 un activo del seed
-  muestra "Crear amortización" y la pestaña Plan de amortización. Amortización no tiene "Nuevo": se
-  genera desde el activo.
-- **Holded:** no.
-
-### 25. `f-manual-journal-post` — Asiento manual y contabilización
-- **Ventanas:** Asientos Manuales (`/manual-journals`), Documentos no contabilizados (`/not-posted-documents`).
-- **Pedido funcional:** "Registrá un asiento por 100 €: gasto de alquiler contra caja, descripción
-  MCPFLOW Alquiler. Después contabilizalo."
-- **Verificación:** asiento completado con débitos = créditos = 100 €; no aparece en Documentos no
-  contabilizados.
-- **Evidencia UI:** 👁 obligatorios: fecha, período y descripción; líneas aparte. 📄 no deja guardar
-  si débito ≠ crédito; solo se borra en borrador. Documentos no contabilizados lista lo pendiente y
-  contabiliza de a uno o en lote.
-- **Holded:** asientos contables sí (verificar alta).
-
-### 26. `q-financial-reports` — Informes financieros
-- **Ventanas:** Informes de finanzas (`/report-viewer?category=finance`).
-- **Pedido funcional:** "¿Cuánto nos deben los clientes y desde hace cuánto? Y pasame el balance de
-  situación del año."
-- **Verificación:** el total por cobrar coincide con las facturas pendientes; el balance cuadra
-  (activo = pasivo + patrimonio).
-- **Evidencia UI:** 👁 8 informes, todos en PDF, XLSX y CSV: Antigüedad de Pagos, Antigüedad de
-  Cobros, Balance de Situación, Pérdidas y Ganancias, Libro Mayor, Diario de Asientos, Balance de
-  Sumas y Saldos, Informe de Impuestos.
-- **Holded:** parcial (cobros pendientes sí; balance verificar).
-
-### 27. `q-taxes-and-rates` — Impuestos, categorías y tipos de cambio
-- **Ventanas:** Impuesto (`/tax`), Categoría de Impuesto (`/tax-category`), Rangos de conversión (`/conversion-rates`).
-- **Pedido funcional:** "¿Qué IVA se le aplica a una venta normal en España? ¿Y a cuánto está hoy el
-  dólar contra el euro?"
-- **Verificación:** la respuesta da el tipo general vigente y el tipo de cambio cargado.
-- **Evidencia UI:** 👁 Impuesto (75) y Categoría (38) sin "Nuevo", solo Editar; Rangos de conversión
-  (2) solo lectura, con marca Synced para los descargados automáticamente.
-- **Holded:** impuestos sí (lectura); tipos de cambio verificar.
-
-### 28. `q-fiscal-status` — Situación fiscal de la empresa
-- **Ventanas:** Configuración Fiscal (`/fiscal-config`), Monitor Fiscal (`/fiscal-monitor`), Modelos Fiscales (`/fiscal-models`).
-- **Pedido funcional:** "¿Tenemos configurado el envío de facturas a Hacienda? ¿Qué modelos de
-  impuestos tenemos presentados este año?"
-- **Verificación:** la respuesta dice que no hay sistema fiscal configurado y que no hay modelos (es
-  el estado del seed).
-- **Evidencia UI:** 👁 Monitor: "No hay sistema fiscal configurado para esta organización";
-  Configuración Fiscal abre un asistente (SII/TBAI/Verifactu) con "Omitir" y "Continuar"; Modelos
-  Fiscales: catálogo (0) con filtros de año, modelo y estado.
-- **Holded:** no.
-- **Nota:** se deja como consulta a propósito: configurar el envío a Hacienda no es reversible.
-
-### 29. `w-commercial-setup` — Tarifa y condiciones de pago
-- **Ventanas:** Tarifa (`/price-list`), Condiciones de pago (`/payment-term`).
-- **Pedido funcional:** "Creá la tarifa de venta MCPFLOW Mayoristas y una condición de pago a 45
-  días. Después cambiales la descripción y el nombre, y al final borralas."
-- **Verificación:** las dos existen con los valores editados y después ya no.
-- **Evidencia UI:** ✅ alta, edición (releída) y baja de las dos. Condiciones de pago **rechaza una
-  segunda condición con los mismos días** ("Ya existe la condición de pago … con esos días"):
-  sirve también para una prueba `e-`.
-- **Holded:** tarifas sí (verificar alta); condiciones de pago verificar.
-
-### 30. `w-company-users-numbering` — Usuarios, roles, datos de la empresa y numeración
-- **Ventanas:** Usuarios (`/user`), Roles (`/roles`), Organización (`/organization`), Secuencias de documentos (`/document-sequence`).
-- **Pedido funcional:** "Dá de alta a usuario.mcpflow@example.com con permisos de ventas. Después
-  decime con qué prefijo salen numeradas nuestras facturas de venta."
-- **Verificación:** el usuario existe con el rol de ventas; la respuesta dice "FV".
-- **Evidencia UI:** ✅ alta, edición y baja de usuario (al crearlo manda la invitación por correo).
-  👁 Roles es una matriz de permisos por ventana (59 filas); Organización es una ficha única
-  editable (datos fiscales, IAE, representantes); Secuencias (6, sin alta ni baja) edita prefijo y
-  próximo número.
-- **Holded:** no hay usuarios por MCP; series de numeración sí (lectura).
+1. [`w-customer-crud`](okr-o2-flows/01-w-customer-crud.md)
+2. [`f-quotation-to-invoice`](okr-o2-flows/02-f-quotation-to-invoice.md)
+3. [`f-order-ship-invoice`](okr-o2-flows/03-f-order-ship-invoice.md)
+4. [`w-draft-order-edit-delete`](okr-o2-flows/04-w-draft-order-edit-delete.md)
+5. [`f-collect-invoice`](okr-o2-flows/05-f-collect-invoice.md)
+6. [`f-credit-note`](okr-o2-flows/06-f-credit-note.md)
+7. [`f-customer-return`](okr-o2-flows/07-f-customer-return.md)
+8. [`w-quick-sale`](okr-o2-flows/08-w-quick-sale.md)
+9. [`f-purchase-receive-invoice`](okr-o2-flows/09-f-purchase-receive-invoice.md)
+10. [`f-pay-purchase-invoice`](okr-o2-flows/10-f-pay-purchase-invoice.md)
+11. [`f-vendor-return`](okr-o2-flows/11-f-vendor-return.md)
+12. [`w-quick-purchase`](okr-o2-flows/12-w-quick-purchase.md)
+13. [`w-product-crud`](okr-o2-flows/13-w-product-crud.md)
+14. [`w-product-category-crud`](okr-o2-flows/14-w-product-category-crud.md)
+15. [`w-warehouse-crud`](okr-o2-flows/15-w-warehouse-crud.md)
+16. [`f-physical-inventory`](okr-o2-flows/16-f-physical-inventory.md)
+17. [`f-warehouse-transfer`](okr-o2-flows/17-f-warehouse-transfer.md)
+18. [`f-internal-consumption`](okr-o2-flows/18-f-internal-consumption.md)
+19. [`q-stock-report`](okr-o2-flows/19-q-stock-report.md)
+20. [`f-bank-account-transfer`](okr-o2-flows/20-f-bank-account-transfer.md)
+21. [`w-subaccount`](okr-o2-flows/21-w-subaccount.md)
+22. [`w-cost-center-project`](okr-o2-flows/22-w-cost-center-project.md)
+23. [`f-open-period`](okr-o2-flows/23-f-open-period.md)
+24. [`f-asset-amortization`](okr-o2-flows/24-f-asset-amortization.md)
+25. [`f-manual-journal-post`](okr-o2-flows/25-f-manual-journal-post.md)
+26. [`q-financial-reports`](okr-o2-flows/26-q-financial-reports.md)
+27. [`q-taxes-and-rates`](okr-o2-flows/27-q-taxes-and-rates.md)
+28. [`q-fiscal-status`](okr-o2-flows/28-q-fiscal-status.md)
+29. [`w-commercial-setup`](okr-o2-flows/29-w-commercial-setup.md)
+30. [`w-company-users-numbering`](okr-o2-flows/30-w-company-users-numbering.md)
 
 ## Hallazgos del recorrido (23 oct)
 
