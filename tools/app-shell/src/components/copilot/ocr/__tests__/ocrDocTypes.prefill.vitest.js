@@ -29,8 +29,10 @@ const moduleConfig = existsSync(CONFIG_PATH)
   : null;
 const describeWithModule = moduleConfig ? describe : describe.skip;
 
+// Vitest still runs the factory of a skipped describe to collect its tests, so this must not throw
+// when the module is not checked out (moduleConfig is null there).
 function schemaOf(docTypeId) {
-  return moduleConfig.docTypes.find(d => d.id === docTypeId).schema;
+  return moduleConfig?.docTypes.find(d => d.id === docTypeId)?.schema;
 }
 
 describeWithModule.each(OCR_DOC_TYPES.map(d => [d.id, d]))('OCR doc type %s — pre-fill mapping', (_id, docType) => {
