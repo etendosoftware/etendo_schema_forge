@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineSearchCombo.jsx
 // ETP-5005 — first-page loading feedback for InlineSearchCombo's server-side search, plus
 // the fetch-timing split that followed it (opening fetches IMMEDIATELY, typing is debounced
 // at TYPED_SEARCH_DEBOUNCE_MS = 1000ms — was a single shared 300ms debounce for both).

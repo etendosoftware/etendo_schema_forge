@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineSearchCombo.jsx
 // InlineSearchCombo server-search pagination (ETP-4975) — mirrors
 // CreatableSearchSelect-pagination.vitest.jsx's coverage for the header selector,
 // applied to the inline grid combo (used for line-level FK fields such as an

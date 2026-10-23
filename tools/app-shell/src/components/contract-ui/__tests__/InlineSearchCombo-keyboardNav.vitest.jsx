@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineSearchCombo.jsx
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
