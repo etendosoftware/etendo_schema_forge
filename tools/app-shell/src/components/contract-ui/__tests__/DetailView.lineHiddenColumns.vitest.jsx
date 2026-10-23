@@ -28,7 +28,7 @@ import { render, screen } from '@testing-library/react';
 // ETP-4610 additions (below, after the ETP-4530 test): the `dimensionsPanelFieldKeys`
 // prop lets a SPECIFIC window instance widen which keys `lineHiddenColumns` trusts as
 // dimension macros, beyond the global `DIMENSION_MACRO_KEYS` allowlist in DetailView.jsx.
-// One test proves the fix (simple-g-l-journal can now config-hide 'product'), a separate
+// One test proves the fix (manual-journals can now config-hide 'product'), a separate
 // test proves the ETP-4530 non-regression still holds (sales-invoice-shaped instances
 // never declare 'product' in that prop, so it stays protected).
 
@@ -318,15 +318,15 @@ describe('DetailView — lineHiddenColumns forwarded to the line grid (ETP-4543)
   });
 
   // FIX — ETP-4610 (originally flagged as a gap by a GitHub Copilot review on PR 975,
-  // then closed within the same ticket). `simple-g-l-journal`'s generated HeaderPage now
+  // then closed within the same ticket). `manual-journals`'s generated HeaderPage now
   // forwards `dimensionsPanelFieldKeys={['businessPartner', 'product', 'project',
   // 'costCenter']}` — the same field keys its `decisions.json` flags `dimensionsPanel:
-  // true` for the lines entity (see artifacts/simple-g-l-journal/decisions.json and
+  // true` for the lines entity (see artifacts/manual-journals/decisions.json and
   // schema_forge_core's `generate-frontend.js` `dimensionsPanelFieldKeys` computation).
   // DetailView's `trustedDimensionKeys` widens the dimension-macro allowlist with this
   // prop SCOPED TO THIS WINDOW INSTANCE ONLY, so 'product' is now trusted here even
   // though it stays out of the global `DIMENSION_MACRO_KEYS` constant.
-  it('closes the gap: hides product for simple-g-l-journal when dimensionsPanelFieldKeys declares it (ETP-4610 fix)', () => {
+  it('closes the gap: hides product for manual-journals when dimensionsPanelFieldKeys declares it (ETP-4610 fix)', () => {
     displayLogicByEntity.current[DETAIL_ENTITY] = {
       readOnly: {},
       visibility: { product: false, project: false },
@@ -334,7 +334,7 @@ describe('DetailView — lineHiddenColumns forwarded to the line grid (ETP-4543)
     render(
       <DetailView
         {...BASE_PROPS}
-        windowName="simple-g-l-journal"
+        windowName="manual-journals"
         dimensionsPanelFieldKeys={['businessPartner', 'product', 'project', 'costCenter']}
       />
     );

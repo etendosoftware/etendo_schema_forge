@@ -45,7 +45,7 @@
     },
     "summaryFields": [],
     "customComponents": {
-      "bottomSection": "SimpleGLJournalBottomPanel"
+      "bottomSection": "ManualJournalsBottomPanel"
     },
     "actions": {
       "documentAction": {

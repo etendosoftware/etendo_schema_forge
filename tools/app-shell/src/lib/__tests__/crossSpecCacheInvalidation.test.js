@@ -77,7 +77,7 @@ describe('entitiesInvalidatedByWrite', () => {
     ['cost-center write → selector (ETP-5681)', '/sws/neo/cost-center/costCenter/ABC', ['selector']],
     ['project write → selector (ETP-5681)', '/sws/neo/project/project/ABC', ['selector']],
     ['service-project write → selector (ETP-5681)', '/sws/neo/service-project/project/ABC', ['selector']],
-    ['cost-center only in the query string → nothing', '/sws/neo/simple-g-l-journal/gLJournal?x=cost-center', []],
+    ['cost-center only in the query string → nothing', '/sws/neo/manual-journals/gLJournal?x=cost-center', []],
     ['a spec mapped to no entity → nothing', '/sws/neo/sales-order/header', []],
     ['empty string → nothing', '', []],
     ['null → nothing', null, []],

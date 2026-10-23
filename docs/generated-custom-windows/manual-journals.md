@@ -22,9 +22,12 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 
 ## Interaction model
 
-- **Route:** `/simple-g-l-journal`, `/simple-g-l-journal/:recordId`.
+- **Route:** `/manual-journals`, `/manual-journals/:recordId`.
+  The spec was `simple-g-l-journal` until ETP-5720 (same `ETGO_SF_SPEC` ID). The old URL still works: a hidden
+  `menu.json` item with `redirect` + `redirectKeepPath` sends `/simple-g-l-journal/<id>?<query>` to
+  `/manual-journals/<id>?<query>`. MCP/REST callers must use `manual-journals`; the old spec name is gone.
 - **Visibility:** visible from the **Finance** menu as **Manual Journals** (es: **Asientos Manuales**), wired via `menus["Manual Journals"]` in both locales.
-- **Implementation type:** generated window with one custom component, `custom/SimpleGLJournalBottomPanel.jsx` (registers the lines empty state — ETP-5611). CRUD runs through NEO Headless generic CRUD. A `GlJournalHeaderHandler` (`@Named("glJournalHeaderHandler")`) injects `C_AcctSchema_ID` from the session on POST, forces the schema currency (DEFAULTS + POST), mirrors the date into `documentDate`, and routes Complete (CO) and Reactivate (RE) through `FIN_AddPaymentFromJournal` — see "ETP-5611" below.
+- **Implementation type:** generated window with one custom component, `custom/ManualJournalsBottomPanel.jsx` (registers the lines empty state — ETP-5611). CRUD runs through NEO Headless generic CRUD. A `GlJournalHeaderHandler` (`@Named("glJournalHeaderHandler")`) injects `C_AcctSchema_ID` from the session on POST, forces the schema currency (DEFAULTS + POST), mirrors the date into `documentDate`, and routes Complete (CO) and Reactivate (RE) through `FIN_AddPaymentFromJournal` — see "ETP-5611" below.
 - **Window shape:** master-detail. The header entity is `gLJournal` (table `GL_Journal`) and the line entity is `gLJournalLine` (table `GL_JournalLine`). The two Classic auxiliary tabs — `Fact_Acct` (posting result) and `C_Conversion_Rate_Document` (document rates) — are **dropped** (`exclude: true`) for V1.
 - **Lines tab layout:** `decisions.json` does not declare `window.linesLayout`, but `DetailView.jsx` defaults the prop to `'inlineEditable'` when a window omits it, so at runtime this window renders lines through `InlineLinesPanel` — inline cell editing on the grid — not a classic `DataTable` + side-panel `DetailForm` (`shouldShowDetailFormSidebar` never mounts a side panel once `linesLayout === 'inlineEditable'`). The lines table shows three columns — Account, Debit, Credit (ETP-5210 dropped Description, ETP-5611 dropped LineNo; see "Line entry" below); existing rows are edited inline via the pencil hover action, per-line dimensions are edited via the row's "Add dimensions" hover action, and the Open Items / Asset fields are set at line-creation time through the add-row form.
 - An **Attachments** tab is available in the detail tab strip.
@@ -133,7 +136,7 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 
 ## Manual verification
 
-1. Open `/simple-g-l-journal` and create a new header. Confirm the form shows the six base fields, in order — Accounting Date (labeled **Fecha**/**Date**), Period, Description, Currency (read-only, the schema currency), Opening, Multi-Ledger — that no Document Date appears, and that no Document No, Document Type, or the four non-reversed dimension fields (Asset, Campaign, User1, User2) appear. Save the header and confirm it persists (no "Completá todos los campos requeridos" toast).
+1. Open `/manual-journals` and create a new header. Confirm the form shows the six base fields, in order — Accounting Date (labeled **Fecha**/**Date**), Period, Description, Currency (read-only, the schema currency), Opening, Multi-Ledger — that no Document Date appears, and that no Document No, Document Type, or the four non-reversed dimension fields (Asset, Campaign, User1, User2) appear. Save the header and confirm it persists (no "Completá todos los campos requeridos" toast).
 2. (Config-dependent, ETP-4529) With the client's accounting-dimension display config enabled, confirm Business Partner, Product, Project, and Cost Center also render on the main form; with it disabled, confirm they do not.
 3. Open the saved record and add a line: pick an account and enter a debit of 100 (leave credit empty), then submit the row. Confirm the line saves (no false "required fields" toast — Open Items unchecked and the empty credit must not block it). Confirm the lines grid shows exactly three columns — Account, Debit, Credit — with **no LineNo** (ETP-5611) and **no Description column** (ETP-5210), and that **Account** is the sole growing column (`columnWidth: 220`). Confirm the totals row directly below the line (`data-testid="balance-footer-row"`) shows 100.00 under the **Débito** column (`"balance-footer-debit"`), a blank cell under **Crédito**, and that both cells are pixel-aligned under their grid columns — and that the Save button is disabled.
 4. Add a second line with a credit of 100 (debit 0). Confirm the totals row now shows 100.00 under both **Débito** and **Crédito**, still column-aligned, and that Save becomes enabled.
@@ -220,7 +223,7 @@ still separately gates `asset` behind the Open Items checkbox.
 The regeneration described above had not actually landed in the committed `contract.json`/
 `GLJournalLineTable.jsx` (zero `dimensionsPanel` references found there while validating
 ETP-4610) — likely lost across the `epic/ETP-3504` merges preceding this branch. Re-ran
-`make regen ONLY=simple-g-l-journal SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed clean
+`make regen ONLY=manual-journals SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed clean
 (`sf-validate-pipeline`, 0 violations, additive version bump, no unrelated translation drift).
 Separately, `InlineLinesPanel` no longer renders the `dimensionsPanel` type as a grid column in
 its own `inlineEditable` layout — "Añadir dimensiones" is now a hover action next to Edit/Delete,
@@ -278,7 +281,7 @@ action, no posting integration … Posted and documentType are kept as hidden sy
 Posting arrives in workstream D") described the window's **V1** scope and had gone stale — it
 predates this ticket and is **not** part of the ETP-4917 change set, but it is flatly wrong
 against the `decisions.json` this documentation pass read in full, so it is corrected here rather
-than left standing. Current state, verified directly against `artifacts/simple-g-l-journal/decisions.json`
+than left standing. Current state, verified directly against `artifacts/manual-journals/decisions.json`
 and `com.etendoerp.go`'s `DocumentPostingService`:
 
 - **`window.draftMode`** is enabled: `{"processField": "documentAction", "processValue": "CO",
@@ -317,7 +320,7 @@ and one shared input change.
 | 2 | Editing Fecha only updated `DateAcct` | Handler mirrors `accountingDate → documentDate` on every CRUD write (body on POST, record on PATCH/PUT). Data-fix **R47** (`cli/src/data-fixes/sql/20261005T160407Z__R47-gl-journal-draft-datedoc-sync.sql`) aligns existing **drafts** (`DateDoc := DateAcct`); completed/posted journals are never touched. |
 | 3 | "N° de Línea" column | `lines.lineNo` → `system`; Account narrowed to 220 px. |
 | 4 | Lines reordered after entering one | Not account order: NEO returned child lists in `id` (random UUID) order. NEO now applies the AD tab's `HQL_OrderBy_Clause` (`lineNo` here) when a child-tab list has no explicit sort — generic, see `neo-headless.md`. |
-| 5 | No empty state | `customComponents.bottomSection: "SimpleGLJournalBottomPanel"` registers the shared `LinesEmptyState`. "+ Añadir líneas" appears only once the header is saved (keyed on `data.id`); before that, only the message. |
+| 5 | No empty state | `customComponents.bottomSection: "ManualJournalsBottomPanel"` registers the shared `LinesEmptyState`. "+ Añadir líneas" appears only once the header is saved (keyed on `data.id`); before that, only the message. |
 | 6 | Currency editable | `header.currency` → `readOnly`; handler forces the schema currency on DEFAULTS and POST. |
 | 7 | Print button | `window.hidePrint: true` (detail and list). |
 | 8 | Post offered in any status | `menuActions.post` gains `visibleWhenStatus: "CO"` (AND `posted = false`). |
@@ -356,7 +359,7 @@ the contract for agents. See `docs/decisions-reference.md`.
 
 **Existing data** (journals already stored with a foreign document type, posted ones carrying it and the foreign GL category into `Fact_Acct`) is repaired by the corrective data-fix `R50-gl-journal-foreign-doctype` (ETP-5719): it also advances the tenant's own GLJ sequence past the numbers already used, so its next journal does not collide. See `docs/etendo-ad/onboarding-gaps.md`, gap A10.
 
-**List title.** The list page used the AD window name (`"Simple G/L Journal"`), translated as "Asientos Manuales Simplificados", while the menu and breadcrumb read "Asientos Manuales". The `"Simple G/L Journal"` locale label (`windows` + `menus`, en_US/es_ES/es_AR) now reads "Manual Journals" / "Asientos Manuales". The URL and spec name stay `simple-g-l-journal` (a rename to `manual-journals` is tracked separately in ETP-5720). Guarded by `tools/app-shell/src/locales/__tests__/window-list-titles.vitest.js`.
+**List title.** The list page used the AD window name (`"Simple G/L Journal"`), translated as "Asientos Manuales Simplificados", while the menu and breadcrumb read "Asientos Manuales". The `"Simple G/L Journal"` locale label (`windows` + `menus`, en_US/es_ES/es_AR) now reads "Manual Journals" / "Asientos Manuales". The URL and spec name stay `manual-journals` (a rename to `manual-journals` is tracked separately in ETP-5720). Guarded by `tools/app-shell/src/locales/__tests__/window-list-titles.vitest.js`.
 
 ## Selectors: load on open, active records, posting accounts — ETP-5681
 
@@ -407,3 +410,13 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 ## ETP-5693 — Posting accounts only, on write
 
 Saving an account field of a journal line (`accountingCombination`) now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via the new `@NeoExtension` `GLJournalLineHandler`, against the parent journal's accounting schema; a line cannot move to another journal on update (`com.etendoerp.go`, see `neo-headless.md`).
+
+## ETP-5720 — spec renamed to `manual-journals`
+
+The spec, artifact directory, URL and custom component (`ManualJournalsBottomPanel`) were renamed from
+`simple-g-l-journal`. The `ETGO_SF_SPEC` row was renamed in place (ID `A663F1D570E54E918F1B25C1F22C047E`),
+so entities and fields keep their IDs. A dev DB that still has the old name must run
+`UPDATE etgo_sf_spec SET name='manual-journals' WHERE etgo_sf_spec_id='A663F1D570E54E918F1B25C1F22C047E'`
+before its next `sf-push-neo`, or the push creates a second spec. `GLJournalLineHandler`'s
+`@NeoExtension(spec = "manual-journals")` must match the spec name: a mismatch is silent (the handler simply
+stops running).

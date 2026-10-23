@@ -56,7 +56,7 @@ vi.mock('./quickActionsStyle.js', () => ({
   QUICK_ACTIONS_PILL_CLASS: 'pill',
 }));
 
-// Three columns of varying types/widths (mirrors simple-g-l-journal: a string
+// Three columns of varying types/widths (mirrors manual-journals: a string
 // "Cuenta" column plus the two amount columns balanceFooter targets) so the
 // column-width alignment assertion below is meaningful — a fixture where every
 // column shared the same width could pass even if the totals row used its own

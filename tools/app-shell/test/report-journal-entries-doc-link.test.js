@@ -133,8 +133,8 @@ describe('report-journal-entries — doc_window CASE branches (ETP-5013)', () =>
     );
   });
 
-  it('maps GL_JOURNAL to simple-g-l-journal', () => {
-    assert.match(DOC_WINDOW_CASE, /UPPER\(adt\.tablename\)\s*=\s*'GL_JOURNAL'\s+THEN\s+'simple-g-l-journal'/i);
+  it('maps GL_JOURNAL to manual-journals', () => {
+    assert.match(DOC_WINDOW_CASE, /UPPER\(adt\.tablename\)\s*=\s*'GL_JOURNAL'\s+THEN\s+'manual-journals'/i);
   });
 
   it('maps M_INVENTORY to physical-inventory', () => {
@@ -285,7 +285,7 @@ const WINDOW_CASES = [
   },
   // ETP-5128: GL_JOURNAL and FIN_PAYMENT branches added after
   // FIN_FINACC_TRANSACTION, before the ELSE NULL fallback.
-  { doc_window: 'simple-g-l-journal', document_type: 'GL Journal' },
+  { doc_window: 'manual-journals', document_type: 'GL Journal' },
   { doc_window: 'payment-in', document_type: 'AR Receipt' },
   { doc_window: 'payment-out', document_type: 'AP Payment' },
   // ETP-5128: a Bank/Cash Reconciliation post. Like FIN_FINACC_TRANSACTION,
