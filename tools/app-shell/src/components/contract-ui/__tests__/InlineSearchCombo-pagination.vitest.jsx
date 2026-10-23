@@ -261,8 +261,13 @@ describe('InlineSearchCombo — serverSearch pagination (ETP-4975)', () => {
 // ---------------------------------------------------------------------------
 
 describe('InlineSearchCombo — current-selection resolution off the loaded page (ETP-5846)', () => {
+  // The suites below assign `global.fetch` DIRECTLY (the file's existing pattern).
+  // `vi.restoreAllMocks()` only restores spies created with `vi.spyOn`, so it does NOT undo a
+  // direct assignment — without an explicit restore the mocked fetch leaks into the next suite.
+  const originalFetch = global.fetch;
   afterEach(() => {
     vi.restoreAllMocks();
+    global.fetch = originalFetch;
   });
 
   function committedCombo(overrides = {}) {
@@ -364,6 +369,97 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true');
     const lookups = global.fetch.mock.calls.filter(([url]) => url.includes('q='));
     expect(lookups).toHaveLength(1);
+  });
+
+  // The lookup is a LOOKUP, not a page: it must happen ONCE per open, no matter how many pages
+  // the user scrolls through afterwards. Every "load more" changes `serverResults`, so without an
+  // explicit guard the `q=<label>` request re-fires on each page append (and again when the
+  // lookup resolved nothing) — extra traffic on every scroll, contradicting the documented
+  // "one lookup per open" contract.
+  it('resolves the current selection ONCE per open, no matter how many pages are appended', async () => {
+    const page0 = makePage(0, 50); // full page -> hasMore stays true
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(jsonOk(page0))                                       // page 0 on open
+      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]))          // the resolution
+      .mockResolvedValueOnce(jsonOk(makePage(50, 50)))                             // "load more" page 1
+      .mockResolvedValueOnce(jsonOk(makePage(100, 50)));                          // "load more" page 2
+
+    await committedCombo();
+    await openViaChip();
+
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
+
+    const panel = screen.getByTestId('inline-add-options-tax');
+
+    // Scroll twice, letting each page actually LAND.
+    setScrollGeometry(panel, { scrollHeight: 1000, clientHeight: 500, scrollTop: 950 });
+    fireEvent.scroll(panel);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    setScrollGeometry(panel, { scrollHeight: 2000, clientHeight: 500, scrollTop: 1950 });
+    fireEvent.scroll(panel);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+
+    // Exactly ONE resolution request, despite two page appends.
+    const resolutionCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('q=IVA+4%25'));
+    expect(resolutionCalls).toHaveLength(1);
+
+    // The other three calls are the list's own pages (offset 0, 50 and 100).
+    const listCalls = global.fetch.mock.calls.filter(([url]) => !String(url).includes('q='));
+    expect(listCalls).toHaveLength(3);
+    expect(listCalls[1][0]).toContain('offset=50');
+    expect(listCalls[2][0]).toContain('offset=100');
+
+    // The resolved row is still marked, and still appears exactly once.
+    expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByTestId('inline-add-option-tax-tax-77')).toHaveLength(1);
+  });
+
+  it('does not re-resolve the current selection when the lookup found nothing', async () => {
+    // The lookup resolved NOTHING (the selector context forbids the id). The attempt still counts:
+    // re-firing it on every page append would be pure waste.
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(jsonOk(makePage(0, 50)))     // page 0 on open (no tax-77)
+      .mockResolvedValueOnce(jsonOk(makePage(900, 2)))    // the resolution: nothing matches
+      .mockResolvedValueOnce(jsonOk(makePage(50, 50)));    // "load more" page 1
+
+    await committedCombo();
+    await openViaChip();
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+    const panel = screen.getByTestId('inline-add-options-tax');
+    setScrollGeometry(panel, { scrollHeight: 1000, clientHeight: 500, scrollTop: 950 });
+    fireEvent.scroll(panel);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+
+    const resolutionCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('q=IVA+4%25'));
+    expect(resolutionCalls).toHaveLength(1);
+  });
+
+  it('resolves the current selection again after the combo was closed and reopened', async () => {
+    // The "one lookup per open" guard must be scoped to ONE open: closing ends it, and the next
+    // open of the same cell resolves again (the row was dropped when the panel unmounted).
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(jsonOk(makePage(0, 5)))                              // page 0 on open
+      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]))          // the resolution
+      .mockResolvedValueOnce(jsonOk(makePage(0, 5)))                              // page 0 on reopen
+      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]));         // the resolution again
+
+    await committedCombo();
+    await openViaChip();
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
+
+    // Close the panel (the combo closes on blur) and reopen it through the chip.
+    fireEvent.blur(screen.getByTestId('inline-add-field-tax'));
+    await waitFor(() => expect(screen.queryByTestId('inline-add-options-tax')).not.toBeInTheDocument(), { timeout: 2000 });
+
+    fireEvent.click(screen.getByTestId('inline-add-field-tax-chip'));
+    await screen.findByTestId('inline-add-field-tax');
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+    const resolutionCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('q=IVA+4%25'));
+    expect(resolutionCalls).toHaveLength(2);
+    expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true');
   });
 
   it('abandons an in-flight resolution when the user starts typing a new search', async () => {
