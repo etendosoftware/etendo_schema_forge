@@ -40,6 +40,7 @@ import {
   originInvoicesDepsKey,
   movementDefinition,
   returnDefinition,
+  idsOf,
 } from './relatedSources.js';
 
 /**
@@ -119,6 +120,7 @@ export const SALES_RELATED_DOCS = {
       record?.salesOrder ?? '',
       getArSubtype(record),
       originInvoicesDepsKey(record),
+      idsOf(record?.rectifyingInvoices),
     ].join('|'),
     sources: [
       {
@@ -139,6 +141,11 @@ export const SALES_RELATED_DOCS = {
         select: record => (record?.sourceInvoice ? [record.sourceInvoice] : []),
       },
       originInvoicesSource('sales-invoice'),
+      // The mirror of originInvoicesSource: the rectificativa(s) that rectify THIS invoice
+      // (SalesInvoiceHeaderHandler#enrichRectifyingInvoices, ETP-5745 CP-12). Without this, the
+      // ORIGINAL invoice never showed its own rectifications here — only a rectificativa could
+      // show what it rectifies, via originInvoicesSource above.
+      selectSource('rectifyingInvoices', 'sales-invoice', 'rectifyingInvoices'),
     ],
   },
 

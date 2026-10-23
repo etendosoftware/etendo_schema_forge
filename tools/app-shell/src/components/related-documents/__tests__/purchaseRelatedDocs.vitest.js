@@ -102,6 +102,15 @@ describe('PURCHASE_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['purchase-invoice:i0'],
     },
     {
+      // ETP-5745 CP-12 — mirror of originInvoices: from the ORIGINAL purchase invoice, the
+      // rectificativa(s) that rectify it (PurchaseInvoiceHeaderHandler#enrichRectifyingInvoices).
+      name: 'purchase-invoice: rectifyingInvoices read synchronously from the enriched field',
+      spec: 'purchase-invoice',
+      record: { id: 'i0', rectifyingInvoices: [{ id: 'i1', documentNo: 'FCR1' }] },
+      backend: {},
+      expected: ['purchase-invoice:i1'],
+    },
+    {
       name: 'purchase-invoice: order, receipts and origin invoices together, in that order',
       spec: 'purchase-invoice',
       record: {

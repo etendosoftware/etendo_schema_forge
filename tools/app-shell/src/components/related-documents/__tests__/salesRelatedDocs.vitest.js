@@ -136,6 +136,17 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['sales-invoice:i0'],
     },
     {
+      // ETP-5745 CP-12 — the mirror of originInvoices: from the ORIGINAL invoice, the
+      // rectificativa(s) that rectify it (SalesInvoiceHeaderHandler#enrichRectifyingInvoices).
+      // A synchronous `select`, not a `fetch`: the backend already enriches the field on the
+      // detail GET, so no extra round trip is needed.
+      name: 'sales-invoice: rectifyingInvoices read synchronously from the enriched field',
+      spec: 'sales-invoice',
+      record: { id: 'i0', rectifyingInvoices: [{ id: 'i1', documentNo: 'FVR1' }, { id: 'i2', documentNo: 'FVR2' }] },
+      backend: {},
+      expected: ['sales-invoice:i1', 'sales-invoice:i2'],
+    },
+    {
       name: 'goods-shipment: read from the detail record only',
       spec: 'goods-shipment',
       record: { id: 's1', linkedOrders: [{ id: 'o1' }], linkedInvoices: [{ id: 'i1' }], returnReceipts: [{ id: 'r1' }] },

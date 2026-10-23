@@ -17,6 +17,7 @@ import {
   originInvoicesDepsKey,
   movementDefinition,
   returnDefinition,
+  idsOf,
 } from './relatedSources.js';
 
 export const PURCHASE_RELATED_DOCS = {
@@ -34,7 +35,11 @@ export const PURCHASE_RELATED_DOCS = {
     spec: 'purchase-invoice',
     entity: 'header',
     refreshEvent: 'purchase-invoice:document-created',
-    depsKey: record => [record?.salesOrder ?? '', originInvoicesDepsKey(record)].join('|'),
+    depsKey: record => [
+      record?.salesOrder ?? '',
+      originInvoicesDepsKey(record),
+      idsOf(record?.rectifyingInvoices),
+    ].join('|'),
     sources: [
       {
         key: 'order',
@@ -47,6 +52,9 @@ export const PURCHASE_RELATED_DOCS = {
       },
       selectSource('receipts', doc => (doc.isReturn === true ? 'return-to-vendor' : 'goods-receipt'), 'linkedReceipts'),
       originInvoicesSource('purchase-invoice'),
+      // The mirror of originInvoicesSource: the rectificativa(s) that rectify THIS invoice
+      // (PurchaseInvoiceHeaderHandler#enrichRectifyingInvoices, ETP-5745 CP-12).
+      selectSource('rectifyingInvoices', 'purchase-invoice', 'rectifyingInvoices'),
     ],
   },
 
