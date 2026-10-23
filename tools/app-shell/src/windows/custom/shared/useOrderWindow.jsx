@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
-import { fetchOptionalJson } from './pdfUtils.js';
 import { useSavedPreviewRecord } from './useSavedPreviewRecord.js';
 import { useRowEmailModal } from './useRowEmailModal.jsx';
 import OrderPreview from './OrderPreview.jsx';
@@ -137,30 +136,12 @@ export function useOrderWindow({
           key: 'confirm',
           label: ui(confirmLabelKey),
           visible: status === 'DR',
-          onClick: async ({ row: r }) => {
-            const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-            const docCurrency = r['currency$_identifier'] || r.currency;
-            if (docCurrency && r.orderDate) {
-              try {
-                const session = await fetchOptionalJson(`${base}/session`, token);
-                const orgCurrency = session?.organization?.['currency$_identifier'];
-                const orgCurrencyId = session?.organization?.currency;
-                if (orgCurrency && docCurrency !== orgCurrency) {
-                  const fromCurrency = r.currency || docCurrency;
-                  const toCurrency = orgCurrencyId ?? orgCurrency;
-                  const rateData = await fetchOptionalJson(
-                    `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrency)}&toCurrency=${encodeURIComponent(toCurrency)}&date=${encodeURIComponent(r.orderDate)}`,
-                    token,
-                  );
-                  if (rateData && !rateData.hasRate) {
-                    toast.error(ui('noExchangeRateAvailable'));
-                    return;
-                  }
-                }
-              } catch { /* non-fatal — allow confirmation to proceed */ }
-            }
-            setConfirmRow(r);
-          },
+          // ETP-5840 — no client-side exchange-rate pre-check. It used to query
+          // validate-exchange-rate on the order date and ignored a manual eTGOCurrencyRate,
+          // so it blocked documents that did carry a rate. The document's own rate is now the
+          // only source of truth and the backend completion check rejects an empty one with a
+          // translated message, which ConfirmModal surfaces as is.
+          onClick: ({ row: r }) => setConfirmRow(r),
         },
         {
           key: 'manage',

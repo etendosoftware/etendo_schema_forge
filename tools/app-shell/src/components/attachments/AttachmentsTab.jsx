@@ -48,6 +48,9 @@ import { buildTypesLabel } from './attachmentPolicy';
  *                       endpoint DOES reject it for a non-draft fiscal declaration
  *                       (409), but no generic per-record status check exists — see
  *                       NeoAttachmentsHelper#handleDelete.
+ *   accessReadOnly    - The role only has read access to the window (ETP-5830; DetailView
+ *                       passes its role-tier signal). Hides the dropzone and every
+ *                       delete action; download stays.
  *   isDocumentReadOnly - Accepted and deliberately IGNORED since ETP-5526; see the
  *                       note above `effectiveReadOnly` below. Kept in the signature
  *                       because DetailView passes it to every tab-placement custom
@@ -84,6 +87,7 @@ export default function AttachmentsTab({
   onGoToSavedRecord,
   isDocumentReadOnly,
   readOnly = false,
+  accessReadOnly = false,
 }) {
   const ui = useUI();
   // ── Two signals, now DELIBERATELY asymmetric (ETP-5526). Read before "fixing". ──
@@ -109,9 +113,11 @@ export default function AttachmentsTab({
   //   — it is the ticket's intended behaviour change. Re-adding it to this expression,
   //   or back to the dropzone's `disabled`, reverts a deliberate product decision.
   //
-  // Consequence, known and accepted: there is currently no way to express a fully
-  // read-only attachments view through this component.
-  const effectiveReadOnly = !!readOnly;
+  //   `accessReadOnly` — the role only has read access to the window (ETP-5830, DetailView
+  //   wires the role tier, not the document state). The one fully read-only view: no
+  //   upload, no delete; download stays. ETP-5526 is untouched because it is about the
+  //   document's state, not about who is looking at it.
+  const effectiveReadOnly = !!readOnly || !!accessReadOnly;
   const saveBeforeAttach = !!config.saveBeforeAttach;
   const needsSavedRecord = !!isNew && !saveBeforeAttach;
   const [isSavingBeforeAttach, setIsSavingBeforeAttach] = useState(false);
@@ -248,7 +254,7 @@ export default function AttachmentsTab({
         <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground" data-testid="attachments-save-first-hint">
           {ui('attachmentsSaveFirstHint')}
         </p>
-      ) : (
+      ) : !accessReadOnly && (
         <UploadDropzone
           onFiles={handleUpload}
           config={effectiveConfig}

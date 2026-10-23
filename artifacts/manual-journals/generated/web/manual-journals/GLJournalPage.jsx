@@ -8,7 +8,7 @@ import GLJournalForm from './GLJournalForm';
 import GLJournalLineTable from './GLJournalLineTable';
 import GLJournalLineForm from './GLJournalLineForm';
 import { AttachmentsTab } from '@/components/attachments';
-import SimpleGLJournalBottomPanel from '../../../custom/SimpleGLJournalBottomPanel';
+import ManualJournalsBottomPanel from '../../../custom/ManualJournalsBottomPanel';
 import catalogs from './mockCatalogs';
 
 
@@ -72,8 +72,8 @@ const addLineFields = {
 // @sf-generated-end addLineFields:gLJournalLine
 
 export const api = {
-  "specName": "simple-g-l-journal",
-  "baseUrl": "/sws/neo/simple-g-l-journal",
+  "specName": "manual-journals",
+  "baseUrl": "/sws/neo/manual-journals",
   "crud": {
     "gLJournal": {
       "get": true,
@@ -82,8 +82,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/simple-g-l-journal/gLJournal",
-      "detailUrl": "/sws/neo/simple-g-l-journal/gLJournal/{id}",
+      "listUrl": "/sws/neo/manual-journals/gLJournal",
+      "detailUrl": "/sws/neo/manual-journals/gLJournal/{id}",
       "supportedFilters": [
         "description",
         "accountingDate",
@@ -100,8 +100,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/simple-g-l-journal/gLJournalLine",
-      "detailUrl": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}",
+      "listUrl": "/sws/neo/manual-journals/gLJournalLine",
+      "detailUrl": "/sws/neo/manual-journals/gLJournalLine/{id}",
       "supportedFilters": []
     }
   },
@@ -112,7 +112,7 @@ export const api = {
       "column": "C_Period_ID",
       "reference": "Period",
       "inputMode": "search",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/period"
+      "url": "/sws/neo/manual-journals/gLJournal/selectors/period"
     },
     {
       "entity": "gLJournal",
@@ -120,7 +120,7 @@ export const api = {
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "selector",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/currency"
+      "url": "/sws/neo/manual-journals/gLJournal/selectors/currency"
     },
     {
       "entity": "gLJournal",
@@ -128,7 +128,7 @@ export const api = {
       "column": "C_Bpartner_ID",
       "reference": "BPartner",
       "inputMode": "search",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/businessPartner"
+      "url": "/sws/neo/manual-journals/gLJournal/selectors/businessPartner"
     },
     {
       "entity": "gLJournal",
@@ -136,7 +136,7 @@ export const api = {
       "column": "M_Product_ID",
       "reference": "Product",
       "inputMode": "search",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/product"
+      "url": "/sws/neo/manual-journals/gLJournal/selectors/product"
     },
     {
       "entity": "gLJournal",
@@ -144,7 +144,7 @@ export const api = {
       "column": "C_Project_ID",
       "reference": "Project",
       "inputMode": "selector",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/project"
+      "url": "/sws/neo/manual-journals/gLJournal/selectors/project"
     },
     {
       "entity": "gLJournal",
@@ -152,7 +152,7 @@ export const api = {
       "column": "C_Costcenter_ID",
       "reference": "Costcenter",
       "inputMode": "selector",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/costCenter"
+      "url": "/sws/neo/manual-journals/gLJournal/selectors/costCenter"
     },
     {
       "entity": "gLJournalLine",
@@ -160,7 +160,7 @@ export const api = {
       "column": "C_ValidCombination_ID",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/accountingCombination"
+      "url": "/sws/neo/manual-journals/gLJournalLine/selectors/accountingCombination"
     },
     {
       "entity": "gLJournalLine",
@@ -168,7 +168,7 @@ export const api = {
       "column": "C_Bpartner_ID",
       "reference": "BPartner",
       "inputMode": "search",
-      "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/businessPartner"
+      "url": "/sws/neo/manual-journals/gLJournalLine/selectors/businessPartner"
     },
     {
       "entity": "gLJournalLine",
@@ -176,7 +176,7 @@ export const api = {
       "column": "M_Product_ID",
       "reference": "Product",
       "inputMode": "selector",
-      "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/product"
+      "url": "/sws/neo/manual-journals/gLJournalLine/selectors/product"
     },
     {
       "entity": "gLJournalLine",
@@ -184,7 +184,7 @@ export const api = {
       "column": "C_Project_ID",
       "reference": "Project",
       "inputMode": "search",
-      "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/project"
+      "url": "/sws/neo/manual-journals/gLJournalLine/selectors/project"
     },
     {
       "entity": "gLJournalLine",
@@ -192,7 +192,7 @@ export const api = {
       "column": "A_Asset_ID",
       "reference": "Asset",
       "inputMode": "selector",
-      "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/asset"
+      "url": "/sws/neo/manual-journals/gLJournalLine/selectors/asset"
     },
     {
       "entity": "gLJournalLine",
@@ -200,7 +200,7 @@ export const api = {
       "column": "C_Costcenter_ID",
       "reference": "Costcenter",
       "inputMode": "selector",
-      "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/costCenter"
+      "url": "/sws/neo/manual-journals/gLJournalLine/selectors/costCenter"
     }
   ],
   "actions": [
@@ -208,7 +208,7 @@ export const api = {
       "entity": "gLJournal",
       "field": "documentAction",
       "column": "DocAction",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/documentAction",
+      "url": "/sws/neo/manual-journals/gLJournal/{id}/action/documentAction",
       "processId": "5BE14AA10165490A9ADEFB7532F7FA94",
       "processType": "classic"
     },
@@ -216,13 +216,13 @@ export const api = {
       "entity": "gLJournal",
       "field": "processNow",
       "column": "Processing",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/processNow"
+      "url": "/sws/neo/manual-journals/gLJournal/{id}/action/processNow"
     },
     {
       "entity": "gLJournal",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/etblkpBulkposting",
+      "url": "/sws/neo/manual-journals/gLJournal/{id}/action/etblkpBulkposting",
       "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
@@ -230,7 +230,7 @@ export const api = {
       "entity": "gLJournalLine",
       "field": "aPRMAddPayment",
       "column": "EM_Aprm_Addpayment",
-      "url": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}/action/aPRMAddPayment",
+      "url": "/sws/neo/manual-journals/gLJournalLine/{id}/action/aPRMAddPayment",
       "processId": "DE1B382FDD2540199D223586F6E216D0",
       "processType": "classic"
     }
@@ -287,7 +287,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
         hidePrint
         dimensionsPanelFieldKeys={["businessPartner","product","project","costCenter"]}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "GL_Journal", config: {} } }]}
-        bottomSection={SimpleGLJournalBottomPanel}
+        bottomSection={ManualJournalsBottomPanel}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO' && !(data?.posted === 'Y' || data?.posted === true), labelKey: 'reactivate', successKey: 'reactivated', documentAction: 'RE',  },
           { key: 'post', label: 'Post', visible: status === 'CO' && !(data?.posted === 'Y' || data?.posted === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },

@@ -4,7 +4,7 @@ import YearPage from '@generated/fiscal-calendar/generated/web/fiscal-calendar/Y
 import AccountingPanel from './AccountingPanel.jsx';
 import PeriodsExpandablePanel from './PeriodsExpandablePanel.jsx';
 import YearCloseStatusBadge from './YearCloseStatusBadge.jsx';
-import YearTableWithCloseStatus from './YearTableWithCloseStatus.jsx';
+import YearTableWithCloseStatus, { CurrentFiscalYearContext } from './YearTableWithCloseStatus.jsx';
 import { useYearCloseStatus } from './useYearCloseStatus.js';
 import { useYearHasPeriods } from './useYearHasPeriods.js';
 import { useCalendarReview } from '@/pages/first-steps/useCalendarReview.js';
@@ -145,7 +145,7 @@ export default function CalendarWindow(props) {
   //
   // ETP-5577 (H1): the range preselects the start month of the calendar's current fiscal year,
   // because a new year with a different start would overlap it (the backend answers 409).
-  const { fiscalYearStart } = useCalendarReview();
+  const { fiscalYearStart, year: currentYear } = useCalendarReview();
   const processesForCalendar = useMemo(
     () => (hasPeriods === true ? [] : [withFiscalYearStartDefault(fiscalYearStart)]),
     [hasPeriods, fiscalYearStart]
@@ -162,7 +162,7 @@ export default function CalendarWindow(props) {
   }, [closed]);
 
   return (
-    <>
+    <CurrentFiscalYearContext.Provider value={currentYear ?? null}>
       <YearPage
         {...props}
         apiBaseUrl={yearApiBaseUrl}
@@ -193,6 +193,6 @@ export default function CalendarWindow(props) {
           onSaved={() => { setUndoCloseYearTarget(null); window.location.reload(); }}
           data-testid="UndoCloseYearModal__5e732c" />
       )}
-    </>
+    </CurrentFiscalYearContext.Provider>
   );
 }

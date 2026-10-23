@@ -48,9 +48,13 @@ vi.mock('../YearCloseStatusBadge.jsx', () => ({
   },
 }));
 
-vi.mock('../YearTableWithCloseStatus.jsx', () => ({
-  default: () => <div data-testid="year-table-with-close-status-stub" />,
-}));
+vi.mock('../YearTableWithCloseStatus.jsx', async () => {
+  const { createContext } = await import('react');
+  return {
+    CurrentFiscalYearContext: createContext(null),
+    default: () => <div data-testid="year-table-with-close-status-stub" />,
+  };
+});
 
 vi.mock('@/windows/custom/fiscal-calendar/CloseYearModal', () => ({
   default: (props) => {

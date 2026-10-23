@@ -3699,3 +3699,83 @@ CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-lin
   stricter than (or equal to) the version already applied — a guard that would have blocked a
   row the old version already repaired cannot undo it. `--dry-run` never executes `@apply`/`@report`
   (only `@check`): validate an edited `@apply` in a `BEGIN … ROLLBACK` session instead.
+
+## ETP-5801 — R50: return shipments with another tenant's RTV doctype (2026-10-21)
+
+Fix: `20261021T120000Z__R50-inout-foreign-return-doctype.sql` (corrective-only; preventive is
+ETP-5711 in com.etendoerp.go, CUT not bumped). Sibling of `R50-gl-journal-foreign-doctype`.
+
+- **2026-10-21 — `m_inout_chk_restrictions_trg` blocks a `C_DocType_ID` change on `Processed='Y'`
+  shipments** (RAISE `@20501@`) unless `AD_isTriggerEnabled()='N'`. Any fix repointing a completed
+  shipment's doctype must wrap that one UPDATE in `ad_disable_triggers()` / `ad_enable_triggers()`.
+  `fact_acct` has no triggers. `m_inout_trg_prov` recomputes `MovementType` from the doctype's
+  `IsSOTrx` (`N` -> `V+`) on every UPDATE, so the bypass leaves `MovementType` as stored.
+  Other m_inout triggers (`etblkp_m_inout_status_trg`, delete guards) are irrelevant.
+- **2026-10-21 — `M_InOut` is `AD_Table_ID` `319`** (the `fact_acct` marker for shipment facts).
+- **2026-10-21 — Sequence advance must not be tenant-wide.** Receipts and shipments may share a
+  sequence; the fix computes MAX(all-digit DocumentNo)+1 per `docnosequence_id` over the repointed
+  shipments plus the shipments already on the target doctype, forward-only, own tenant only.
+  Only all-digit DocumentNos of 1 to 9 digits count: `ad_sequence.currentnext` is numeric(10,0), so
+  a longer number would overflow the cast and abort the whole fix for that tenant. Prefixed/suffixed
+  and longer DocumentNos are left out of the MAX (their shipment is still repointed); 999999999
+  + 1 = 1000000000 still fits.
+- **2026-10-21 — `@report` only runs after `@apply`** (`run.js` ~l.406), so a tenant with no own RTV
+  doctype must keep matching `@check` for the report to list it; hence the `@check` does not
+  require a target doctype.
+- **2026-10-21 — Local simulation (BEGIN/ROLLBACK, nothing committed):** local DB has no affected
+  rows, so one processed shipment of tenant `802509E1...` was synthetically pointed at tenant
+  `4028E6C7...`'s RTV doctype: sequence 1000000 -> 10000004, 8 `fact_acct` rows, 1 `m_inout` row
+  updated; `@check` after = 0 rows; `@report` empty.
+- **2026-10-21 — R50-inout-foreign-return-doctype verified through the REAL runner on the local
+  DB** (`--client X --fix <id>`, synthetic shipments + facts, fully cleaned up, table hashes
+  identical afterwards): the `ad_disable_triggers()` flag set inside `@apply` holds for the
+  m_inout UPDATE and does not leak past COMMIT (a fresh connection still gets `@20501@`).
+  Runner needs no flags for the local DB (credentials from gradle.properties); set
+  `SF_DATA_FIX_LOG_DIR` to keep execution logs out of the repo's `logs/data-fixes`. With triggers
+  bypassed `MovementType` stays as stored (a `C-` shipment stayed `C-` on the `issotrx='N'` doctype).
+  These end-to-end runner runs (5 synthetic scenarios + the real-UI reproduction on GOClient) were
+  done on the version BEFORE the 1-to-9-digit length guard and the restriction of the `@report`
+  fact_acct branch to RTV shipments. Those two changes were checked afterwards only in
+  `BEGIN ... ROLLBACK` transactions on the local dev DB, with the real `@apply`/`@report` text and
+  `:client_id` inlined, NOT by a new runner execution: a 23-digit and an exactly 10-digit foreign
+  DocumentNo are still repointed without abort and ignored by the advance; 999999999 is accepted
+  and 1000000000 written; an own-doctype shipment 1000099 gives 1000100; a sequence preset to
+  2000000000 is not rewound; the restricted `@report` is empty on the repaired GOClient rows, still
+  fires for an RTV shipment with a foreign fact and stays silent for a non-RTV shipment.
+
+## ETP-5826 — Extended payment terms (G5 / R52, 2026-10-22)
+
+- **2026-10-22 — Onboarding-imported rows get NO `_TRL` rows from their table's translation
+  trigger.** `DataImportService.importDataFromXML` (core, used by `OnboardingDatasetImportService`)
+  calls `TriggerHandler.getInstance().disable()`, and `c_paymentterm_trg` (like every core `_TRL`
+  trigger) starts with `IF AD_isTriggerEnabled()='N' THEN RETURN`. So "translations come from the
+  trigger" is true for a data-fix or a Classic/NEO insert, NOT for the dataset import. Live: every
+  GO tenant's four seeded terms have exactly one `es_ES` `C_PaymentTerm_Trl` row, `createdby='0'`,
+  created hours/days after the term itself — a later core back-fill, not the import. A data-fix
+  insert, by contrast, gets one row per active system language at once (`en_US` + `es_ES` locally,
+  `IsTranslated='N'`, copy of the base name). **Apply:** don't promise `_TRL` rows at provisioning
+  time for a dataset-only seed; when the base `NAME` is already in the user language (Spanish GO
+  seeds) the gap is invisible, otherwise allowlist the `_TRL` table with real translations (N4).
+- **2026-10-22 — "Dataset-only adding needs no corrective" is about NEW tenants only.** The map's
+  ETP-4341 note read as if adding master data to the GOClient XML never needs a `.sql`. The dataset
+  is read only at provisioning, so existing tenants never see an added row. When the product wants
+  existing tenants to have it (ETP-5826: yes), ship a corrective; R52 is the precedent. Map §1 note
+  now says so.
+- **2026-10-22 — Duplicate rule for "simple" payment terms, shared with `PaymentTermHandler`:** a
+  term counts as "the N-day term" when it has no `C_PaymentTermLine`, `IsDueFixed='N'` and
+  `FixMonthOffset` 0/NULL — in ANY org of the client, active or not. R52's guard and the handler's
+  409 must keep this predicate in lockstep, or the fix seeds a term a user could never have created
+  (or vice versa). Separately, `c_paymentterm_name` is UNIQUE `(ad_client_id, ad_org_id, name)`,
+  so a same-named term of a different shape in the anchor org must be skipped (and reported), not
+  inserted.
+- **2026-10-22 — Anchor org for per-tenant master-data seeds = the org of an existing seeded row.**
+  GO tenants keep their seeded terms in the operative org (GOOrg for GOClient; the tenant org for
+  every other; a "PEND-…" pool-claimed client keeps its placeholder client name while its own org
+  already carries the company name, e.g. "Termos"). Using the org of the seeded `Inmediato`
+  (`Value='I'`, `NetDays=0`) instead of `:org_id` keeps new rows exactly where the existing ones
+  are visible, with no assumption about which org is "the" operative one.
+- **2026-10-22 — Label bookkeeping.** `R51` is already taken on an unmerged branch
+  (`20261021T120000Z__R51-etgo-survey-config-seed.sql`, found only via
+  `git ls-tree` over every `origin/*` ref), so this fix is `R52`. Gap series `G` (payment config)
+  continues with `G5`; the `G` gaps live only in `onboarding-and-datafixes-map.md` §4, not in
+  `onboarding-gaps.md`.

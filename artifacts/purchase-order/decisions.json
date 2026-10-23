@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Order",
+    "agentPrompt": "#REF#agent-prompts/purchase-order/spec.md",
     "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "notesField": "description",
@@ -166,7 +167,13 @@
         "paymentTerms": {
           "form": true,
           "section": "principal",
-          "seq": 80
+          "seq": 80,
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "priceList": {
           "grid": false,
