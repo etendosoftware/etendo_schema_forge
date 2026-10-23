@@ -329,9 +329,14 @@ invoice completed with a total of 0, no payment plan and `paymentComplete = Y`.
 - **`purchase-invoice/lines` now has its own customization**, `PurchaseInvoiceLineHandler`
   (`@NeoExtension(spec = "purchase-invoice", entity = "lines")`, extending `InvoiceLineHandler`). It
   derives, on every channel, the discounted `unitPrice` (`listPrice × (1 − etgoDiscount / 100)`),
-  `lineNetAmount` and `grossAmount` of a created line, and recalculates them when a PATCH / PUT changes the
-  quantity, price, list price, discount, gross price or tax of an existing one. The same rules apply to
-  sales invoice lines (shared `InvoiceLineAmountSupport`).
+  `lineNetAmount`, `grossAmount` and `taxableAmount` of a created line, and recalculates them when a
+  PATCH / PUT changes the quantity, price, list price, discount, gross price or tax of an existing one. The
+  same rules apply to sales invoice lines (shared `InvoiceLineAmountSupport`).
+- **`taxableAmount` is the line's tax base and always equals the stored net.** It is the value the grid
+  and the line form show as "taxable amount". It used to keep `0` or the undiscounted quantity × price
+  (a 100 % discount line had net `0` and `taxableAmount 250`). It now follows the net after the discount,
+  including `0`, on create and on every recalculation; a value the caller sends in a PATCH / PUT wins.
+  Lines already saved are not rewritten, and the tax summary and the totals never read this field.
 - **The discount rule.** A line with a non-zero discount and no explicit gross price: no price or a price
   equal to the list price → the price becomes `listPrice × (1 − d/100)`; a price different from the list
   price is the caller's and is kept (this is the SPA's body, so it is never discounted twice); a price with
