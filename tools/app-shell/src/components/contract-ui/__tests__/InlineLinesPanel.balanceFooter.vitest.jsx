@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * InlineLinesPanel — `balanceFooter` grid-aligned totals row (ETP-5210).
  *

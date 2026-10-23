@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ReportDrawer.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { navigateTo } from '../../helpers/auth.js';

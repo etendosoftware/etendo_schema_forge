@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 import { render, screen } from '@testing-library/react';
 
 // Regression coverage for ETP-4543: line-grid columns gated purely by the
