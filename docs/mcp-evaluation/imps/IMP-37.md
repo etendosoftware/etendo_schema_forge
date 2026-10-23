@@ -62,7 +62,7 @@ Queried against the configuration actually pushed to NEO (2026-08-20):
 | PK (`id`) in the rejection set | 81 | 81 |
 | `IsActive` in the rejection set | 0 | 0 |
 
-Among the 58: `warehouse/storageBin`, `simple-g-l-journal/gLJournalLine`,
+Among the 58: `warehouse/storageBin`, `manual-journals/gLJournalLine`,
 `financial-account/bankStatementLines`, `price-list/productPrice`, `product/costing`,
 `product/productCharacteristic`, `product/billOfMaterials`, `amortization/lines`, and eight
 `contacts/*` entities.

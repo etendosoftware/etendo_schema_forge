@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -203,6 +204,16 @@ describe('AssetsAmortizationPanel — bulk delete confirmation (ETP-5758)', () =
     else fireEvent.click(screen.getAllByRole('checkbox', { name: 'selectRow' })[0]);
     await waitFor(() => expect(screen.getByTitle('delete')).toBeInTheDocument());
   }
+
+  it('never offers the delete toolbar to a read-only role, even with rows selected (ETP-5830)', async () => {
+    global.fetch = mockFetch();
+    renderInRouter(<AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1' }} accessReadOnly />);
+    await waitFor(() => expect(screen.getByText('Period 1')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('checkbox', { name: 'selectAll' }));
+
+    expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+    expect(deleteCalls()).toHaveLength(0);
+  });
 
   it('the trash opens the shared confirmation and sends no DELETE yet', async () => {
     global.fetch = mockFetch();

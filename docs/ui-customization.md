@@ -56,6 +56,38 @@ auto-synced when a generated prop's shape changes.
 
 ---
 
+## Default column widths by field type (ETP-5833)
+
+One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit. The only measured input is the plain-list **header label** (below), which depends on label + locale, never on row data. **One exception, lines grid only (ETP-5133):** a no-truncate column (any lookup selector, or `noTruncate: true` — see `docs/decisions-reference.md`) gets `contentWidthPx` from `withContentWidths()` (`lib/linesContentWidth.js`): the widest identifier among the loaded lines plus the add-row draft (published by `DataTable` through `lib/linesScrollHost.js`), measured with `measureTextPx` in the cell font. `columnFlex()` only ever raises the type basis to it (no maximum), so header, lines, totals and the add-row colgroup stay aligned and the grid's horizontal scroll absorbs the overflow.
+
+| Type | Width (px) | Expands? | Why |
+|---|---|---|---|
+| `string`, `text` | 224 | **yes** (`1 0`) | descriptive: absorb the leftover width |
+| leading `selector`/`search`/`foreignKey` (idx 0) | 192 | yes | the product/identity column; selectors at idx > 0 are fixed |
+| `date` | 176 | no (`0 0`) | sized for the longest representative translated header ("Fecha de presupuesto", ~129px) + 24 padding + sort icon; the value itself needs ~120. Longer labels are covered by the header floor below |
+| `amount` / `price` / `quantity` / `integer` / `decimal` / `number` / `signedDelta` | `amount`: 172 lines / 130 list; 152 (rest) | no | `number` is the type the generator emits for every numeric field; it used to fall to the 120 default. The lines `amount` tier is sized for an editable input; a read-only list cell needs ~120 |
+| `percent` | 152 lines / 104 list | no | compact progress circle |
+| `status` | 184 | no | the pill ("Cobro depositado") clips below it; same in lines and list |
+| `enum`, `select` | 224 | no | value + chevron ("Use Generic Account No."); codes/states do not stretch |
+| `boolean` + `badge` | 152 (240 for the Posted status) | no | the pill |
+| `display: 'tag'` | 144 | no | UoM-style grey pill |
+| `multiField` | 240 (list only) | no | media + title + chip |
+| anything else | 120 | no | safe fallback |
+
+**List header floor (ETP-5833 QA) — no list header is ever truncated.** A plain-list header never wraps (`whitespace-nowrap` + ellipsis), so in list mode a column's width is `max(type basis or col.minWidth, rendered header)`. The rendered header is the label the header actually shows — resolved in `DataTable` with the same `resolveColumnLabel(col, locale, t)` as the header cell (often an AD label from `useLabel`, not `col.label`; for a `multiField`, the joined part labels) — measured by `measureHeaderLabelPx` (`OffscreenCanvas` `measureText` with the header font, `600 12px` + the body font family, resolved once per render pass; a deterministic 7px/char estimate where there is no `OffscreenCanvas` — jsdom, node — or the canvas measures 0. A width is cached only once `document.fonts.check(font)` passes: while Inter is still swapping in, the fallback face is measured but not cached, and `DataTable` re-measures exactly once when `document.fonts.ready` resolves) plus `LIST_HEADER_CHROME_PX` = 42 (cell padding 24 + the sort arrow 14, reserved even when unsorted so a click never resizes, + 4 slack), plus 18 when the computed-freshness clock renders. `DataTable` stores it as `col.headerMinWidthPx` on its list columns only, and `columnMinWidthPx` folds it in, so the header `<th>`, the body `<col>`/cells and `listTableMinWidthPx` agree. Opt-outs: `headClass` (pinned width) and `headerWrap` (the header wraps onto two lines — the default for `percent`; `AttachmentsTable` uses it to keep its 130px dates). The lines grid is not affected: its headers are flex cells that wrap, and its widths come from `columnFlex`, which ignores the floor.
+
+**The absorber is descriptive, not a code.** `withImplicitGrowColumn` / `withLinesAbsorberColumn` skip columns whose AD column (`col.column`) is `DocumentNo` or `Value` (a document number or a search key is a short code) while another descriptive column exists — so on Sales Invoice the business partner, not "Nº documento", takes the leftover width. A code column only absorbs when it is the only descriptive column. The test is structural (the AD column name), never a window or spec name.
+
+Overrides win over the type: `col.minWidth` (decisions `columnWidth`; elastic by the ETP-5332 contract) and `col.grow: true` (decisions `grow`). A plain list always keeps exactly one width-less column to absorb the leftover (`withImplicitGrowColumn`, ETP-5510). On a narrow viewport every column keeps its basis and the scroll container scrolls (`overflow-x: auto`, ETP-5133), so nothing overlaps or becomes unreachable.
+
+**Date with time — documented exception.** There is no `datetime` tier: no list or lines column carries one today (the only `datetime` fields in the contracts are the hidden `created`/`updated` audit columns; the generator maps a visible datetime to `string`, and a `date` column renders date-only). When a datetime column is ever exposed, add its tier together with its renderer (and the generator mapping in `schema_forge_core`).
+
+**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `manual-journals`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
+
+Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the geometry specs `e2e/tests/flows/sales/sales-quotation-list-column-widths.mocked.spec.js` (list) and `e2e/tests/flows/platform/lines-grid-narrow-viewport.mocked.spec.js` (lines), and the `linesAddRowColumnAlignment.vitest.jsx` cases. The implicit absorber is `withImplicitGrowColumn` (list) / `withLinesAbsorberColumn` (lines + add-row): a descriptive non-code column when one exists (never a `tag` pill, never `DocumentNo`/`Value` while something else describes), otherwise the first unpinned column (e.g. the leading amount on Product > Costo). Header floor: `linesColumnWidth.test.js` (*list header floor*) and `DataTable.percentHeader.vitest.jsx` (*plain list header floor*: AD-resolved label drives `<th>`, cells and table min-width; sorting does not move a column).
+
+---
+
 ## Customization options reference
 
 ### 1. `window.statusBar` — declarative summary bar
@@ -240,7 +272,7 @@ container of secondary actions (`window.menuActions`, §5 below), so it belongs 
 group. This is a `DetailView.jsx`-level change, so it affects **every** window that declares
 `menuActions`, not only the 9 migrated above — including `amortization`, `chart-of-accounts`,
 `fiscal-calendar`, `goods-movements`, `matched-purchase-invoices`, `physical-inventory`, and
-`simple-g-l-journal`.
+`manual-journals`.
 
 ---
 
@@ -493,7 +525,7 @@ Parity is locked by `tools/app-shell/src/components/related-documents/__tests__/
 
 ### 7.b `window.attachments` — file attachments tab
 
-Adds a transversal **Attachments** tab to the detail view for uploading, listing, downloading, and deleting files attached to the current record. The tab is **auto-enabled on every window** with `layoutType: "default"` — no opt-in needed. Set `attachments: false` to disable it, or pass an object to tune client-side limits.
+Adds a transversal **Attachments** tab to the detail view for uploading, listing, downloading, and deleting files attached to the current record. The tab is **auto-enabled on every window** with `layoutType: "default"` — no opt-in needed. Set `attachments: false` to disable it, or pass an object to tune client-side limits. **A window that sets `attachments: false` must also set `MCP_CONFIG.attachments.enabled: false` on its root entity in `com.etendoerp.go` sourcedata (`ETGO_SF_ENTITY.xml`), or the MCP will still offer attachments there (ETP-5715).**
 
 **Use when:** the window represents a document/master record where users need to attach supporting files (PDFs, images, spreadsheets). For most transactional windows, no configuration is required — the tab is already there.
 
@@ -1707,7 +1739,7 @@ Clicking either the chevron or the hover action toggles the same expand state �
 
 **Pipeline-generator support (unchanged by ETP-4610):** `generateTableComponent` (`schema_forge_core`'s `cli/src/generate-frontend.js`) still emits this column type directly from `decisions.json` — no generator change was needed for the column-hiding requirement, since `InlineLinesPanel` (a generic component owned entirely by this functional repo, not part of `@etendosoftware/app-shell-core`) decides how the metadata renders, not the generator. Flag a field `"dimensionsPanel": true` (any `grid` value; see `docs/decisions-reference.md`) and the generator collects it into the synthetic column automatically for the pipeline-generated `<Window>LineTable.jsx`/`LinesTable.jsx`/`GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` files. Fully additive — an entity with zero `dimensionsPanel: true` fields generates byte-for-byte the same `columns` array as before.
 
-**Real example:** the generated `LinesTable.jsx` (sales-invoice, purchase-invoice), `GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` (goods-shipment, goods-receipt), and `GLJournalLineTable.jsx` (simple-g-l-journal) — all driven purely by `decisions.json`, all 5 in-scope windows regenerated and validated as part of ETP-4610. `goods-shipment` needed two extra local-DB regen attempts reverted (this sandbox's incomplete `AD_Ref_List_Trl` es_ES data silently strips unrelated translations on this window) before ultimately regenerating clean via the pre-push hook's offline/cached-AD-snapshot pipeline run — see `docs/feedback.md` for the full trail.
+**Real example:** the generated `LinesTable.jsx` (sales-invoice, purchase-invoice), `GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` (goods-shipment, goods-receipt), and `GLJournalLineTable.jsx` (manual-journals) — all driven purely by `decisions.json`, all 5 in-scope windows regenerated and validated as part of ETP-4610. `goods-shipment` needed two extra local-DB regen attempts reverted (this sandbox's incomplete `AD_Ref_List_Trl` es_ES data silently strips unrelated translations on this window) before ultimately regenerating clean via the pre-push hook's offline/cached-AD-snapshot pipeline run — see `docs/feedback.md` for the full trail.
 
 **ETP-5133 cleanup — the hand-written `InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx`/`InvoiceLineTableCustom.jsx` were deleted.** These were the "hand-written `columns` array" example referenced above until this ticket. `docs/feedback.md` (ETP-4543/ETP-4529 entries) already documented them as unreachable from the running app — neither `sales-invoice` nor `purchase-invoice`'s `decisions.json` ever set `window.customLinesComponent`, so `HeaderPage.jsx` always rendered the pipeline-generated `LinesTable.jsx` instead. A live-browser check during ETP-5133 found a fix (`noTruncate` on the `product` column) had been mistakenly applied to this dead file instead of the generated one, which is what prompted finally removing it rather than continuing to carry it as documented dead weight. The generated `LinesTable.jsx` is now the only "hand-written-shape `columns` array" example left for this column type.
 
@@ -1861,7 +1893,7 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
 - `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row; `hideDataRows` suppresses it too (ETP-5771) (see "Add-row and `DataTable`'s generic footer-totals" above).
 
-**Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
+**Real example:** `manual-journals` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
 ---
 
@@ -2038,28 +2070,35 @@ own child count reaches the declared `maxDetailLines`.
 
 #### The "More" overflow menu of the Form View tab strip (ETP-5515)
 
-The Form View's bottom tab strip (`DetailTabStrip.jsx`, rendered by `DetailView`) shows at most
-**4 tabs plus a "Más" / "More" menu** in every window, with or without a sidebar; labels never
-wrap (`whitespace-nowrap`). With 4 tabs or fewer there is no menu. No `decisions.json` option:
-the rule is generic, so it applies to every window, declarative or custom.
+The Form View's bottom tab strip (`DetailTabStrip.jsx`, rendered by `DetailView`) shows **every tab
+when they all fit** in the strip's width and puts only the ones that do not fit behind a
+"Más" / "More" menu (showing the hidden count); there is no fixed cap, so a wide screen shows all
+of them and a narrow one groups the rest. Labels never wrap (`whitespace-nowrap`). When everything
+fits there is no menu. No `decisions.json` option: the rule is generic, so it applies to every
+window, declarative or custom.
 
-- **Dynamic slot.** The last visible tab (4th) is a slot. Picking a hidden tab from the menu puts
-  it in the slot and the tab that was there drops into the menu; selecting any fixed tab (the
-  first three) restores the original arrangement. The arrangement is derived purely from the
+- **Dynamic slot.** The last visible tab (before "Más") is a slot. Picking a hidden tab from the menu puts
+  it in the slot and the tab that was there drops into the menu; selecting any fixed tab (any
+  tab before the slot) restores the original arrangement. The arrangement is derived purely from the
   active tab key (`resolveTabStripLayout` in `detailTabStripLayout.js`), so it also follows
   deep links (`location.state.openSecondaryTab`).
-- **Width-aware.** The limit of 4 is a ceiling: the visible count is `min(4, tabs that fit)` in the
-  strip's own width (`useFittingTabCount.js` + `computeFittingTabCount`), so a 4-tab window gets a
-  "Más" at narrow widths or high zoom and tabs never overlap the side panel. The rest of the rules
-  (slot, reset, active tab always visible) hold for any count. Floor: 1 fixed tab + the slot; if
-  even that does not fit, the strip clips (`min-w-0 overflow-hidden`) instead of overlapping.
+- **Width-aware.** The visible count is the largest number of tabs (up to all of them) that fit in the
+  strip's own width, "Más" included whenever something is hidden (`useFittingTabCount.js` +
+  `computeFittingTabCount`). The rules (slot, reset, active tab always visible) hold for any count.
+  Floor: 1 fixed tab + the slot; if even that does not fit, the strip clips
+  (`min-w-0 overflow-hidden`) instead of overlapping the side panel. While geometry is unknown
+  (jsdom, no `ResizeObserver`, zero width) it falls back to 4 visible tabs.
   Natural widths come from an invisible probe row rendered inside the strip (same box classes as `TabStripButton`, shared via `tabStripButtonBaseCls`; labels and counters are drawn with CSS `::after{content:attr(data-text)}`, so the probe adds no text nodes, test ids or focusable elements to the DOM); a `ResizeObserver`
   on the strip and the probe re-measures on resize, sidebar open/close, zoom and font changes.
-  Without layout (jsdom, no `ResizeObserver`, zero width) it falls back to the count-only rule.
+- **Never left scrolled (CP-3).** The strip is clipped, not scrollable. The probe row lives in its
+  own `overflow-hidden` clip box so it never counts as scrollable overflow of the strip (a wider
+  absolutely positioned row used to inflate `scrollWidth`, so a focus/`scrollIntoView` on the More
+  trigger scrolled the strip and it never scrolled back, cutting off the first tab). On top of that
+  the strip resets `scrollLeft` to 0 on any scroll event and on every re-measure.
 - **Counters** (e.g. "Dirección 1") and the save-first disabled hint travel with the tab into and
   out of the menu.
 - **Test ids.** Visible tabs keep `tab-<key>`; the trigger is `detail-tab-more` and menu entries
-  are `detail-tab-more-item-<key>`. A test that clicks `tab-<key>` for a tab beyond the 4th must
+  are `detail-tab-more-item-<key>`. A test that clicks `tab-<key>` for a tab that may be hidden must
   open `detail-tab-more` first.
 - Hand-built windows that render their own tab strip (e.g. financial-account `DetailTabs`) are not
   affected.
@@ -2667,6 +2706,100 @@ through the exported `resolveContactName(record)` rather than reading `name` dir
 
 ---
 
+### 19c. Inline create from a selector — `allowCreate` + inline-create variants (ETP-5826)
+
+Not the same thing as §19. §19 opens the TARGET window's own form from a lookup drawer; this one is a
+one-input modal for small catalogs whose record can be created from a single value (a name, a number of
+days). Field-level, declared in decisions.json:
+
+```json
+"transactionType": { "allowCreate": true, "createSpec": "transaction-type", "createEntity": "transactionType",
+                     "createLabelKey": "matchRuleTypeCreate", "createTitleKey": "matchRuleTypeCreateTitle",
+                     "createNamePlaceholderKey": "matchRuleTypeNamePlaceholder" }
+```
+
+`EntityForm.renderSearchSelectField` renders `InlineCreateSelector` instead of the plain
+`CreatableSearchSelect` when `allowCreate && createSpec && createEntity` (and the form has an
+`apiBaseUrl`). The "+ create" row is always the first row of the dropdown; it opens `InlineCreateModal`
+pre-filled with the typed text, POSTs to `/sws/neo/{createSpec}/{createEntity}` (`buildCreateUrl` swaps
+the host window's spec segment) through `useApiFetch`, and auto-selects the created record.
+
+**Variants.** How the record is created is a property of the TARGET spec, so it is declared once in
+`tools/app-shell/src/lib/inlineCreateVariants.js` (a plain module next to `paymentTermDays.js`; the generic
+components only read from it), keyed by `createSpec`, and every field pointing at that spec picks it up:
+
+| Variant key | Effect |
+|---|---|
+| `inputLabelKey` / `inputSuffixKey` | Modal input label (default "Name") and a unit after the input. |
+| `inputMode` | The input's `inputMode` (e.g. `numeric`). The input stays `type="text"` so a wrong value gets a message instead of being silently blocked by the browser. |
+| `validate(value)` | `null` or `{ key, params }`; shown under the input, nothing is sent. With a validator the empty input can be submitted so the "required" message shows. |
+| `inputPattern` / `inputMaxLength` | Restrict what the input can hold, as it is typed or pasted. A change that does not match (or is longer) is refused on the spot: the previous value stays and the message `validate` gives for the refused value is shown (else `inputRejectedKey`). A selector pre-fill that does not match opens the modal empty. Use a RegExp without the `g` flag. |
+| `inputRejectedKey` | Message for a refused change that `validate` has no message for (e.g. a trailing space). |
+| `buildBody(value)` | POST body (default `{ name }`). |
+| `sortOptions` | Comparator passed to `CreatableSearchSelect`'s generic `sortOptions` prop. |
+| `errorMessagesByKey` | `{ [backendMessageKey]: (messageParams) => ({ key, params }) \| null }` — a failed create whose `error.messageKeys` holds that key shows the translated message; the builder receives `error.messageParams`. |
+| `fallbackErrorKeysByStatus` | `{ 409: 'i18nKey' }` — only for a failed create that carries **no** backend message key. |
+
+Anything matched by neither goes through the shared `translateBackendError` (`lib/backendErrors.js`: backend
+message keys first, then known backend texts). That is where a backend message key belongs whenever another
+screen can show it too — the variant only maps what is specific to the modal. When nothing translates it, a 4xx
+keeps the backend text (a refusal written for the user), but a 5xx or a status-less failure shows the generic
+translated error, never the raw text (it can carry SQL); a network failure keeps its own translated message.
+`resolveCreateErrorMessage(variant, error)` holds the variant rules, `describeCreateError` in
+`InlineCreateSelector.jsx` the rest. A refused create never selects anything: the modal stays open with the message
+(rendered with `role="alert"`, so screen readers announce it).
+
+Registered: `payment-term` — digits only, at most 3 (`inputPattern: /^\d*$/`, `inputMaxLength: 3`): `5.541`,
+`5,45`, `123abc`, `-5` or `50%` can never be typed or pasted, and the refusal shows "Introduce un número entero de
+días…" (a 4th digit shows the 1–365 range message); `validate` (`lib/paymentTermDays.js`) remains the submit-time
+check for empty, `0` and `> 365`. Body `{ overduePaymentDaysRule: N }`,
+options ordered "Inmediato" first then by days. Errors: `PaymentTermHandler`'s refusals are translated by the
+shared translator, so the Payment Term window's save shows the same text — `ETGO_PaymentTermDaysDuplicate`
+(409) → "Ya existe la condición de pago «{name}» con esos días", `ETGO_PaymentTermNameDuplicate` (409) → "Ya
+existe una condición de pago llamada «{name}» en esta organización", each with "… pero está desactivada.
+Reactívala en Condiciones de pago" when `messageParams.paymentTermActive` is false;
+`ETGO_PaymentTermDaysInvalid` / `ETGO_PaymentTermDaysOutOfRange` (400, `{min}`/`{max}`/`{value}`). The variant
+itself keeps only `fallbackErrorKeysByStatus: { 409: 'paymentTermNameDuplicate' }` for a 409 without a key (the
+C_PaymentTerm `(client, org, name)` unique constraint caught by the generic CRUD path) → "Ya existe una
+condición de pago con ese nombre en esta organización". The existing term is never auto-selected.
+No entry = name-only (match-rule is unchanged).
+
+**Only for roles that can write the target.** The "+ create" row is hidden unless the current role may
+write the window behind `createSpec` — the same rule NEO applies to the POST: an active
+`AD_Window_Access` on that window with `IsReadWrite = 'Y'` (tier `"full"` in `SFWindowAccessMap`), or the
+admin / client-admin bypass (`capabilities.isAdminOrClientAdmin`). `useCanCreateInSpec(createSpec)`
+(`hooks/useCanCreateInSpec.js`, pure rule in `lib/specWriteAccess.js`) resolves the spec to its window
+through `menu.json` (`name` = spec → `windowId`) and reads the role's `windowAccess` map. Applies to every
+`allowCreate` field.
+
+| Situation | "+ create" row |
+|---|---|
+| Admin / client-admin | shown |
+| Role tier `full` on the target window | shown |
+| Tier `read-only`, no grant, or access map not loaded yet / failed | hidden (fail closed) — e.g. the Sales and Purchasing templates have Payment Term (141) read-only |
+| `createSpec` has no `windowId` in `menu.json` (today: `transaction-type`, used by match-rule) | shown, as before: the SPA cannot tell which window authorizes it, and the backend still answers 403 to a role it refuses. Add a `menu.json` entry with the `windowId` to gate it |
+
+Fail closed does not flicker: `windowAccess` is loaded at role selection, before any window renders, and
+the row only exists inside the closed dropdown. With the row hidden the field is an ordinary searchable
+selector.
+
+**Hand-built forms** spread the exported props instead of copying keys:
+`{ key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', ...PAYMENT_TERM_CREATE_FIELD_PROPS }`
+(contacts `BillingPreferencesForm`, both customer and vendor sides).
+
+**Other forms see the new record.** Selector option pages are cached under `entity: 'selector'` for
+the catalog window, keyed by the host document's selector URL, which does not name the target table. A
+POST to the `payment-term` spec is therefore listed in `WRITE_INVALIDATES_ENTITIES`
+(`lib/crossSpecCacheInvalidation.js`), applied centrally by `useApiFetch`: every cached selector page goes
+stale and refetches on its next open — a term created from a contact appears in a purchase invoice's
+dropdown without a reload. A new variant whose records feed other selectors needs the same entry.
+
+**Limitation.** `sortOptions` sorts what has been loaded. In `serverSearch` mode that is the pages fetched
+so far (50 per page), which is fine for short catalogs such as payment terms; it is not a substitute for
+server-side ordering on a large catalog.
+
+---
+
 ### 20. Follow-up documents — `FollowUpDocumentButton` + `draftMode.afterProcess` (ETP-5576)
 
 A generic flow that offers the document that naturally follows a completed one (today:
@@ -2867,7 +3000,7 @@ no amount, and its title, banner and buttons are computed:
 | `facturaVenta` | Factura de venta | Factura creada | `soViewInvoice` | feminine | sales-order confirm, goods-shipment invoicing (single / bulk / row Confirmar), sales-quotation «Facturar directamente» |
 | `facturaCompra` | Factura de compra | Factura creada | `poViewInvoice` | feminine | purchase-order confirm, goods-receipt invoicing (single / bulk / row Confirmar) |
 | `facturaRectificativa` | Factura rectificativa | Factura rectificativa creada | `soViewInvoice` | feminine | return-material-receipt |
-| `facturaRectificativaCompra` | Factura rectificativa de compra | Factura rectificativa de compra creada | `poViewInvoice` | feminine | return-to-vendor-shipment |
+| `facturaRectificativaCompra` | Factura rectificativa | Factura rectificativa creada | `poViewInvoice` | feminine | return-to-vendor-shipment (same wording as `facturaRectificativa`; the type only differs in purchases routing / `data-doc-type`) |
 | `devolucionCompra` | Devolución de compra | Devolución de compra creada | `confirmResultModal.view.devolucion` | feminine | goods-receipt «Crear devolución» (opens `/return-to-vendor-shipment/{id}`) |
 | `pedidoVenta` | Pedido de venta | Pedido creado | `sqViewOrder` | masculine | sales-quotation «Crear pedido» |
 
@@ -2902,6 +3035,72 @@ Overlay `zIndex: 50` (the app's modal tier — see `docs/walkthrough-flows.md`).
 
 Pure helpers `getConfirmResultTypeConfig(type)` and `getConfirmResultCopy(docs, ui)` are exported for
 reuse and tests. Unit coverage: `tools/app-shell/src/components/contract-ui/__tests__/ConfirmResultModal.vitest.jsx`.
+
+### 22. Header currency and exchange rate — `CurrencyRatePicker` (ETP-5840)
+
+Not a `decisions.json` option: `EntityForm` swaps the header `C_Currency_ID` selector for
+`components/contract-ui/CurrencyRatePicker.jsx` on the quotation, order and invoice windows
+(`isCurrencyRateSelectorField`). The rate it edits is the header's hidden
+`eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`, `form: false`), which is the document's only
+exchange rate: totals, previews, the Confirm/Complete check and the invoice «Tipos de cambio»
+tab all read it.
+
+**Rate reference date.** The rate comes from the conversion ranges valid on the reference date
+currently in the FORM (unsaved edits included), resolved structurally by
+`resolveRateDateField(fields, documentDateField)` — exported from `CurrencyRatePicker.jsx`:
+
+| Header form declares | Reference date | Windows today |
+|---|---|---|
+| a field bound to AD column `DateAcct` | that field (`accountingDate`, «Fecha contable») | sales-invoice, purchase-invoice |
+| no `DateAcct` field | `window.documentDateField` | sales-quotation, sales-order, purchase-order (`orderDate`) |
+
+`documentDateField` is deliberately NOT repointed to `accountingDate` on invoices: it also
+drives the `invoiceDate → accountingDate` cascade (`isDocumentDateCascadeTarget`). `DetailView`
+threads `documentDateField` into the header `<Form>` calls; no generator change is involved.
+
+**Behavior**
+
+- Options come from `GET {entity}/{id|new}/action/currencyOptions?date=yyyy-MM-dd&organization=<form org>`
+  (the org scopes a NEW document's rates; a saved one uses its own org), fetched
+  eagerly on load and again whenever the record or the reference date changes, plus on every
+  open. ALL selectable currencies are listed; one with no range on the date has `rate: null`
+  and shows «—» (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
+  dd/mm/yyyy (`currencyRatesAtDate`, `formatCalendarDate`).
+- Selecting a currency ALWAYS stages its rate — `null` when there is no range — so neither the
+  previous currency's rate nor a manual rate survives a currency change. There is no
+  client-side blocking anymore: the old «Cambio de moneda cancelado» revert
+  (`validate-exchange-rate` + `noConversionRateError`) was removed from `DetailView.fireCallout`.
+- The pencil (`currency-rate-pencil`) is offered on new and saved documents whenever the
+  selected option is not the org currency (`isOrgCurrency` from `currencyOptions`; the former
+  `rate === 1` sentinel is gone). A manual rate is kept until the reference date or the
+  currency changes.
+- **Recalculation.** The header callout on `currency`, the declared `documentDateField` and
+  `accountingDate` returns the recalculated `eTGOCurrencyRate` (or `null`).
+  `applyCalloutFieldUpdates` applies it through `isCurrencyRateRecalcTarget`
+  (`detailViewHelpers.jsx`), which exempts exactly that key from the two guards that would
+  otherwise drop it: the user-touched guard (so recalculation overrides a manual rate) and the
+  empty-value guard (so «no range» clears a stale rate). On invoices an `invoiceDate` change
+  recalculates too, because its callout also cascades `accountingDate`.
+- Saving a foreign currency with an empty rate is refused by the backend (HTTP 422,
+  `exchange_rate_missing`); the toast composes the sentence from the refusal's identity (or shows
+  the backend prose for an unkeyed refusal) and the form stays in edit. The org currency needs no
+  rate.
+- The list-row Confirm of orders (`useOrderWindow.jsx`) no longer pre-checks
+  `validate-exchange-rate`; the backend completion check is the authority. The quotation
+  confirm modal only blocks when the document itself has no rate on a foreign currency, with the
+  same sentence as the backend completion refusal (`backendError.exchangeRateMissingOnComplete`).
+
+**i18n keys:** `currencyRateSearchPlaceholder`, `currencyRateSelectPlaceholder`,
+`currencyRateEdit`, `currencyRateNotAvailable`, `currencyRatesAtDate` (plus the existing
+`noResults`, `confirm`, `cancel`, `loading`).
+
+**Create.** On a NEW document a rate applied by a callout (not typed or picked) is left out of
+the create POST by the ETP-5537 rule 1 (`eTGOCurrencyRate` is not a mounted form field), which is
+fine: the backend computes the rate on create from the reference date whenever it is absent.
+
+**Refusals.** The save and complete refusals carry their identity (`ETGO_ExchangeRateMissingOnSave`
+/ `ETGO_ExchangeRateMissingOnComplete` + params) and are composed in the UI locale by
+`backendErrors.js` — see `docs/i18n-guide.md`, mechanism 3.
 
 ## Decision tree: which option to use?
 

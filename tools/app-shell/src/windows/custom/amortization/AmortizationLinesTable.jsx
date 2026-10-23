@@ -24,7 +24,7 @@ import SelectionToolbar from '@/components/contract-ui/SelectionToolbar';
 // longer used here: the entry point moved into the row hover-action strip (the
 // Layers/"Edit dimensions" button below), mirroring the mechanism InlineLinesPanel
 // already uses for the other 5 generated windows (sales-invoice, purchase-invoice,
-// goods-shipment, goods-receipt, simple-g-l-journal). See docs/feedback.md and
+// goods-shipment, goods-receipt, manual-journals). See docs/feedback.md and
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 

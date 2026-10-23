@@ -1,3 +1,5 @@
+// ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
+import { formatCalendarDate } from './dateOnly.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -477,6 +479,12 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_AccountIsInactive: 'backendError.accountIsInactive',
   ETGO_AccountWrongLedger: 'backendError.accountWrongLedger',
   ETGO_LedgerNotUpdatable: 'backendError.ledgerNotUpdatable',
+  // ETP-5826 — com.etendoerp.go PaymentTermHandler: the number of days of a payment term is missing,
+  // not a whole number, or outside the range. `messageParams` { field, min, max, value }. The
+  // duplicate refusals of the same handler need the active/inactive split, see
+  // translatePaymentTermConflict.
+  ETGO_PaymentTermDaysInvalid: 'backendError.paymentTermDaysInvalid',
+  ETGO_PaymentTermDaysOutOfRange: 'backendError.paymentTermDaysOutOfRange',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -579,6 +587,42 @@ function renderInvalidAccountEntity(t, messageKeys, params) {
   return null;
 }
 
+// ETP-5826 — com.etendoerp.go PaymentTermHandler refuses a payment term that duplicates another one
+// of the client, by number of days (ETGO_PaymentTermDaysDuplicate) or by name in the organization
+// (ETGO_PaymentTermNameDuplicate). `messageParams` names the existing term (`paymentTermName`) and
+// says whether it is active (`paymentTermActive`); an inactive one gets a reactivation hint, since
+// creating another term is exactly what the user must not do. Shared by the Payment Term window's
+// save and the "+ Crear condición de pago" modal. Without a name the sentence cannot be built, so the
+// caller falls back to the next route.
+const PAYMENT_TERM_CONFLICT_KEYS = Object.freeze({
+  ETGO_PaymentTermDaysDuplicate: Object.freeze({
+    active: 'backendError.paymentTermDaysDuplicate',
+    inactive: 'backendError.paymentTermDaysDuplicateInactive',
+  }),
+  ETGO_PaymentTermNameDuplicate: Object.freeze({
+    active: 'backendError.paymentTermNameDuplicate',
+    inactive: 'backendError.paymentTermNameDuplicateInactive',
+  }),
+});
+
+function isInactiveFlag(value) {
+  return value === false || value === 'false' || value === 'N';
+}
+
+function translatePaymentTermConflict(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys)) return null;
+  const name = nonEmptyString(messageParams?.paymentTermName);
+  if (!name) return null;
+  for (const raw of messageKeys) {
+    const keys = Object.hasOwn(PAYMENT_TERM_CONFLICT_KEYS, raw) ? PAYMENT_TERM_CONFLICT_KEYS[raw] : null;
+    if (!keys) continue;
+    const key = isInactiveFlag(messageParams.paymentTermActive) ? keys.inactive : keys.active;
+    const translated = resolveLocaleKey(t, key, { name });
+    if (translated) return translated;
+  }
+  return null;
+}
+
 function translateInvalidAccount(messageKeys, messageParams, t) {
   if (!Array.isArray(messageKeys) || !messageKeys.includes(INVALID_ACCOUNT_KEY)) return null;
   if (!messageParams || typeof messageParams !== 'object') return null;
@@ -590,6 +634,76 @@ function translateInvalidAccount(messageKeys, messageParams, t) {
     messageParams.missingProductAccounts);
   if (!base || !entity || groupAccounts === null || productAccounts === null) return null;
   return [base, entity, groupAccounts, productAccounts].filter(Boolean).join(' ');
+}
+
+// ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
+// A foreign-currency quotation/order/invoice with an empty `eTGOCurrencyRate` is refused with
+// HTTP 422 on every channel:
+//   - on save: messageKeys ["ETGO_ExchangeRateMissingOnSave", "ETGO_RateRefDate<Accounting|Order|
+//     Quotation>"], messageParams { orgCurrency, documentCurrency, date (yyyy-MM-dd), dateField,
+//     referenceDate (the same ETGO_RateRefDate* key) };
+//   - on complete: messageKeys ["ETGO_ExchangeRateMissingOnComplete"], messageParams
+//     { orgCurrency, documentCurrency }.
+// Same rules as translateInvalidAccount: runs only with params, fails as a whole (null → the
+// backend's own, already-translated prose), and none of these keys is in BACKEND_ERROR_KEY_MAP.
+const EXCHANGE_RATE_MISSING_ON_SAVE_KEY = 'ETGO_ExchangeRateMissingOnSave';
+const EXCHANGE_RATE_MISSING_ON_COMPLETE_KEY = 'ETGO_ExchangeRateMissingOnComplete';
+// The reference-date identity → the locale key naming that date field for the user.
+const RATE_REFERENCE_DATE_LABEL_KEYS = {
+  ETGO_RateRefDateAccounting: 'backendError.rateReferenceDate.accounting',
+  ETGO_RateRefDateOrder: 'backendError.rateReferenceDate.order',
+  ETGO_RateRefDateQuotation: 'backendError.rateReferenceDate.quotation',
+};
+
+function resolveRateReferenceDateLabel(t, messageKeys, params) {
+  const fromParams = nonEmptyString(params.referenceDate);
+  const refKey = fromParams && RATE_REFERENCE_DATE_LABEL_KEYS[fromParams]
+    ? fromParams
+    : messageKeys.find((k) => RATE_REFERENCE_DATE_LABEL_KEYS[k]);
+  return refKey ? resolveLocaleKey(t, RATE_REFERENCE_DATE_LABEL_KEYS[refKey]) : null;
+}
+
+function translateExchangeRateMissing(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageParams || typeof messageParams !== 'object') return null;
+  const orgCurrency = nonEmptyString(messageParams.orgCurrency);
+  const documentCurrency = nonEmptyString(messageParams.documentCurrency);
+  if (!orgCurrency || !documentCurrency) return null;
+  if (messageKeys.includes(EXCHANGE_RATE_MISSING_ON_SAVE_KEY)) {
+    // Date-only value: formatCalendarDate never shifts the day by the host's timezone; it
+    // answers '—' for an unparseable value, which must not reach the sentence.
+    const rawDate = nonEmptyString(messageParams.date);
+    const date = rawDate ? formatCalendarDate(rawDate) : null;
+    const field = resolveRateReferenceDateLabel(t, messageKeys, messageParams);
+    if (!date || date === '—' || !field) return null;
+    return resolveLocaleKey(t, 'backendError.exchangeRateMissingOnSave',
+      { orgCurrency, documentCurrency, date, field });
+  }
+  if (messageKeys.includes(EXCHANGE_RATE_MISSING_ON_COMPLETE_KEY)) {
+    return resolveLocaleKey(t, 'backendError.exchangeRateMissingOnComplete',
+      { orgCurrency, documentCurrency });
+  }
+  return null;
+}
+
+/**
+ * Translates a failed response body that the caller already parsed — message and identity
+ * (`messageKeys` / `messageParams`) together, for a call site that has to read the JSON itself
+ * (e.g. to inspect a legacy `@Token@` before translating). Looks for the message in the same
+ * envelopes the document-action modals always read (`error.message`, `response.message`,
+ * `response.error`, `message`), so swapping a hand-rolled `e?.error?.message || …` chain for this
+ * only ADDS the identity.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @param {string} fallback text used when the body carries no message
+ * @returns {string} the translated message
+ */
+export function translateBackendErrorBody(body, t, fallback) {
+  const message = body?.error?.message || body?.response?.message || pickBackendErrorText(body) || fallback;
+  return translateBackendError(message, t, {
+    messageKeys: extractBackendMessageKeys(body),
+    messageParams: extractBackendMessageParams(body),
+  });
 }
 
 // `t(key, params)` interpolates `{var}` tokens (single-brace — this codebase's real
@@ -1499,6 +1613,13 @@ export function translateBackendError(msg, t, options = {}) {
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);
   if (invalidAccount !== null) return invalidAccount;
+  // ETP-5840: same position and rules as the Invalid-Account composer.
+  const rateMissing = translateExchangeRateMissing(options.messageKeys, options.messageParams, t);
+  if (rateMissing !== null) return rateMissing;
+
+  // ETP-5826: same reason — the duplicate refusals pick their sentence from a param.
+  const paymentTermConflict = translatePaymentTermConflict(options.messageKeys, options.messageParams, t);
+  if (paymentTermConflict !== null) return paymentTermConflict;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

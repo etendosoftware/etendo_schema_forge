@@ -483,6 +483,23 @@ Three matching mechanisms coexist — know all three before adding a new backend
    `AD_MESSAGE_TRL` rows are never exported and drift per environment (production said
    "Grupo de Terceros").
 
+   A second composer covers the exchange-rate refusals (ETP-5840, `translateExchangeRateMissing`).
+   A foreign-currency quotation, order or invoice with an empty rate is refused with HTTP 422 on
+   every channel:
+
+   | Refusal | `messageKeys` | `messageParams` | Locale keys |
+   |---|---|---|---|
+   | Save | `ETGO_ExchangeRateMissingOnSave` + `ETGO_RateRefDateAccounting` \| `ETGO_RateRefDateOrder` \| `ETGO_RateRefDateQuotation` | `orgCurrency`, `documentCurrency`, `date` (`yyyy-MM-dd`, shown via `formatCalendarDate`), `dateField`, `referenceDate` | `backendError.exchangeRateMissingOnSave`, `backendError.rateReferenceDate.accounting` / `.order` / `.quotation` (the `{field}` label) |
+   | Complete | `ETGO_ExchangeRateMissingOnComplete` | `orgCurrency`, `documentCurrency` | `backendError.exchangeRateMissingOnComplete` |
+
+   Paths that carry the identity for these: header save and Save & Complete (`useEntity`'s
+   `extractErrorMessage`), `DetailView`'s `extractErrorMessage`, `useDocumentAction` /
+   `useNeoAction` consumers (row kebab, more-actions menu, bulk bar), and the order / quotation
+   confirm modals, which read the parsed body through `translateBackendErrorBody(body, ui, fallback)`
+   — the helper for a call site that has to parse the JSON itself. The quotation confirm modal's
+   own pre-check reuses `backendError.exchangeRateMissingOnComplete`, so it reads exactly like the
+   backend refusal.
+
    Rules for a params composer:
    - It runs **before** `BACKEND_ERROR_KEY_MAP` and only when params are present. Do not also add
      its keys to the map: that route is param-less and the first recognised key wins, so the rich
@@ -501,6 +518,16 @@ sonner options: the action is "Ir al calendario" (`periodNotAvailableOpenCalenda
 calendario contable" (`periodNotAvailableReviewCalendar`) for an owner whose review is pending.
 Non-owners always get "Ir al calendario". The 4xx-only keying rule (5xx, 401,
 403 and 404 are never keyed) lives in the backend; see `docs/generated-custom-windows/calendar.md`.
+
+**Payment-term refusals (ETP-5826).** `PaymentTermHandler` (`com.etendoerp.go`) answers with
+key-only `ETGO_*` identities, no AD_MESSAGE behind them (the ETP-5692 pattern). The range refusals
+`ETGO_PaymentTermDaysInvalid` / `ETGO_PaymentTermDaysOutOfRange` are plain `BACKEND_ERROR_KEY_MAP`
+entries interpolating `{min}` / `{max}` / `{value}`. The duplicate refusals
+`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate` are a params composer
+(`translatePaymentTermConflict`, so they are not in the map): it needs `messageParams.paymentTermName`
+and picks the `…Inactive` sentence (with the "Reactívala en Condiciones de pago" hint) when
+`paymentTermActive` is false. Both the Payment Term window's save and the "+ Crear condición de
+pago" inline-create modal go through this one translator — see `docs/ui-customization.md` §19c.
 
 `translateBackendError` tries the message keys first (they are a stable identity; the text is not),
 then the exact-match map, then the parameterized matchers, and returns the original (untranslated)

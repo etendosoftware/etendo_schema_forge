@@ -23,10 +23,11 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Window shape: master-child, with `quotation` as the header entity and `quotationLine` as the child entity.
 - List interaction: the custom wrapper injects a `CustomQuotationTable` (with `dot: false` on the date column). The `DateOrdered` column label is renamed to "Quotation Date" / "Fecha de presupuesto" via `decisions.json → window.labelOverrides`, overriding the global locale label "Order Date" / "Fecha de pedido" for both the list grid and the detail form (the wrapper no longer ships a local `LABEL_OVERRIDES` map; the value flows from decisions through `QuotationPage.jsx`'s generated `labelOverrides` constant). The visible columns, in order, are: Fecha de presupuesto (no dot indicator), Document No., Business Partner, Document Status, Valid Until, and Total Gross Amount. `Valid Until` is placed between Document Status and Total Gross Amount on purpose, so the validity date is adjacent to the total and the user can triage each row by deciding whether the total is still actionable. The wrapper also enables clone-from-grid via the shared `CloneOrderModal` and feeds a `refreshTrigger` counter into the generated `ListView`, so when the user closes the clone result modal the list auto-refreshes and the new draft quotations show up without a manual reload.
 - Record interaction: the detail page shows the quotation header form, a child lines table and line form, the document totals (rendered by `DocumentTotalsPanel` in the bottom section, not as header form/summary fields — ETP-5771), record status, top-bar actions, and a Related Documents tab.
-- Lines tab layout: this window is the pilot for `window.linesLayout = "inlineEditable"`. The Lines tab uses `InlineLinesPanel` (40 px rows in Inter font, pencil + trash hover-action icons on the right). Pencil flips the row into inline edit; trash deletes. All columns are inline-editable. FK fields (product, tax) use `InlineSearchCombo`: a text input with server-side search so the user can filter by typing (e.g., "IVA" filters all IVA rates). Product is a lookup field that opens `ProductSearchDrawer`. The add-line button, related-documents panel, notes panel and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
+- Lines tab layout: this window is the pilot for `window.linesLayout = "inlineEditable"`. The Lines tab uses `InlineLinesPanel` (40 px rows in Inter font, pencil + trash hover-action icons on the right). Pencil flips the row into inline edit; trash deletes. All columns are inline-editable. FK fields (product, tax) use `InlineSearchCombo`: a text input with server-side search so the user can filter by typing (e.g., "IVA" filters all IVA rates). Product is a lookup field that opens `ProductSearchDrawer`. The add-line button, related-documents panel, notes panel and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference. **ETP-5133:** the `product` column is a lookup selector, so it never ellipsizes — it widens to the longest product name of the loaded lines and of the product just picked in the open add-row, and the grid scrolls horizontally on overflow; see the `noTruncate` row in `docs/decisions-reference.md`.
 - **Create a product from the line's product selector (ETP-5254):** the product lookup drawer opened from a line shows a pinned `+ Crear producto` row at the top. It opens a popup that **mounts the Products window itself** — its own form, its own primary tabs and its own **Precio / Costo / Contabilidad / Adjuntos** strip — on a private memory router inside this page, with the app chrome dropped. Nothing is reimplemented, so a tab or field added to the Products window appears here with no change. Saving happens with the window's own `Guardar`; `Completado` then closes the popup and selects the new product in the line. Cancelling before saving leaves the quotation untouched, and Escape closes only the popup — the drawer comes back with the search intact. The line still arrives at **price 0** unless a price is set for the document's tariff, in which case the user types it on the line. The popup creates no cost line: that rule belongs to the Products window, which states and enforces it there (ETP-5245), so a stockable product created here still needs its cost set. The create row is reachable by pointer and Tab, not through the arrow-key ring. Full mechanism, why nesting a router is legal, the seven in-scope specs and the known limitations: `docs/ui-customization.md` section 19.
 - Available record-level affordances in current evidence: duplicate and cancel menu entries, a send-document button, and a draft-only confirmation button.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
+- **Create a payment term from the header selector (ETP-5826):** the `paymentTerms` selector (**Condiciones de pago**) shows a pinned `+ Crear condición de pago` row as the first entry of its dropdown, declared on the `quotation` field in `artifacts/sales-quotation/decisions.json` (`allowCreate` + `createSpec: "payment-term"`). It opens a small modal that asks only for the number of days until due — a whole number from 1 to 365, validated client-side (`lib/paymentTermDays.js`) — and POSTs `{ overduePaymentDaysRule: N }` to `/sws/neo/payment-term/header`; the backend derives the name ("N Días" / "1 Día"), the search key and the rest of the term. The new term is auto-selected on the field. If a term with the same number of days or the same name already exists, the server answers 409 (`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate`) and the modal names that term, or asks to reactivate it in Condiciones de pago when it is inactive (translated by the shared `lib/backendErrors.js`, like the Payment Term window); nothing is created and the existing term is not selected. A server failure never shows raw backend text. The selector's options are sorted by days, with terms whose name has no leading number (e.g. "Inmediato") first. A successful create marks every cached selector page stale, so the new term also appears in the other payment-term selectors on their next open. The row is shown only to roles that may write the Payment Term window (141) — tier `full` or admin / client-admin; the Sales and Purchasing templates hold 141 read-only, so their roles see a plain selector. Full reference: `docs/decisions-reference.md` (`allowCreate`, *Inline-create variants*) and `docs/ui-customization.md` §19c. The action is only reachable while the field is editable: on a processed quotation `paymentTerms` stays read-only (`readOnlyLogic: @Processed@='Y'`).
 
 ## Reactive behavior and dependencies
 
@@ -223,17 +224,15 @@ replaces the standard `SelectorInput` and:
 - Renders each option as `{isoCode} — {rate}` (e.g. `USD — 1.1523`), where
   `rate` is the conversion from the org currency to that currency for the
   quotation's `dateOrdered`.
-- Fetches options lazily from
-  `GET {apiBaseUrl}/quotation/{id}/action/currencyOptions`
-  when the user opens the dropdown. The entity path `'quotation'` is passed via
+- Fetches options from
+  `GET {apiBaseUrl}/quotation/{id|new}/action/currencyOptions?date=<orderDate in the form>`
+  on load, whenever the quotation date changes and when the dropdown opens (ETP-5840). The entity path `'quotation'` is passed via
   the `entityPath` prop, so the URL differs from the sales-order equivalent
   (`header/{id}/action/currencyOptions`).
-- Also fires an eager fetch when `hasRecord` becomes `true` (i.e., after the
-  quotation is first saved and a real `id` is available), so the rate is
-  immediately visible in the trigger without requiring the user to open the
-  dropdown.
-- Shows a pencil icon (`data-testid="currency-rate-pencil"`) when `value &&
-  hasRecord`. Clicking it enters inline-edit mode with a numeric input
+- Lists every selectable currency; one without a conversion range on the date
+  shows «—» and selecting it leaves the rate empty for the user to type.
+- Shows a pencil icon (`data-testid="currency-rate-pencil"`) on new and saved
+  quotations unless the selected option is the org currency (`isOrgCurrency`). Clicking it enters inline-edit mode with a numeric input
   (`data-testid="currency-rate-input"`). Enter confirms and calls
   `onChange('eTGOCurrencyRate', rate, 'EM_ETGO_Currency_Rate')` to stage the
   overridden rate. Escape cancels without change.
@@ -256,8 +255,9 @@ replaces the standard `SelectorInput` and:
 
 The `currencyOptions` endpoint is the same one used by sales-order —
 implemented in `CurrencyOptionsHandler.java` (`com.etendoerp.go`). It filters
-by client and org, returns only currencies that have an active exchange rate for
-the document date, and always includes the org currency with `rate: 1.0`.
+by client and org and, since ETP-5840, returns every selectable currency for the
+`date` it receives (`rate: null` when no range covers it) with an `isOrgCurrency`
+flag. Full reference: `docs/ui-customization.md` §22.
 
 ### Convertquotation — preserved prices
 
@@ -323,20 +323,23 @@ The behavior is identical to Sales Order — see
 (ETP-4027 functional model)". Briefly:
 
 - The `currency` field is always editable on quotations in `DR` or `UE` status.
-- When the user picks a new currency in the dropdown, `DetailView.jsx` validates
-  exchange-rate availability via `validate-exchange-rate` before applying the
-  change. If no rate exists, the dropdown reverts to the previous value and
-  shows a toast.
+- ETP-5840: picking a currency is never reverted anymore (the «Cambio de moneda
+  cancelado» flow was removed). The rate is recalculated by the header callout on
+  every `orderDate`/`currency` change (empty when there is no range, overriding a
+  manual rate), and the confirm modal only blocks a foreign-currency quotation
+  whose own `eTGOCurrencyRate` is empty, with the same sentence as the backend
+  completion refusal (`backendError.exchangeRateMissingOnComplete`). Convertquotation /
+  createDraftInvoice refusals are translated from their identity (`translateBackendErrorBody`).
 - A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef`
   synchronized with the saved currency/date so that newly added lines have their
   prices converted automatically from the pricelist currency to the order
   currency.
-- The header callout raises a separate `noExchangeRateAvailable` warning on the
-  same event. Since ETP-4838 both checks resolve availability through
-  `NeoExchangeRateService.hasRate(...)` — client-or-system scoped, with the
-  inverse-direction fallback — so they can no longer disagree. See
-  `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of
-  truth".
+- The header callout no longer raises a `noExchangeRateAvailable` warning
+  (ETP-5840): on a change of `currency` or `orderDate` it returns the
+  recalculated rate as `updates.eTGOCurrencyRate` (`null` when no conversion
+  range covers the quotation date). See `sales-order.md` §
+  "`NeoExchangeRateService.hasRate` — the single source of truth" for the
+  history.
 
 ### Automated evidence
 

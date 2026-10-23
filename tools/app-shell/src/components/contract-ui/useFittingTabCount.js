@@ -2,7 +2,10 @@ import { useCallback, useLayoutEffect, useState } from 'react';
 import { MAX_VISIBLE_TABS, computeFittingTabCount } from './detailTabStripLayout.js';
 
 /**
- * Width-aware visible-tab count for DetailTabStrip (ETP-5515).
+ * Width-aware visible-tab count for DetailTabStrip (ETP-5515, CP-12).
+ *
+ * There is no fixed cap: every tab is shown when they all fit and "More" only holds what does
+ * not. MAX_VISIBLE_TABS is just the fail-safe used while geometry is unknown.
  *
  * `measureRef` is an invisible row holding one clone of every tab followed by a clone of the
  * "More" trigger, so natural widths are known without ever painting an overflowing layout.
@@ -10,7 +13,7 @@ import { MAX_VISIBLE_TABS, computeFittingTabCount } from './detailTabStripLayout
  * Re-measured in a layout effect after every render (state only changes when the count does)
  * and from a ResizeObserver on both elements, which covers window resize, sidebar open/close,
  * zoom and font loading. Without ResizeObserver or layout (jsdom) the count stays at the
- * ticket's count-only rule, MAX_VISIBLE_TABS.
+ * count-only rule, MAX_VISIBLE_TABS.
  */
 export default function useFittingTabCount({ wrapperRef, measureRef, tabs, activeKey }) {
   const [count, setCount] = useState(MAX_VISIBLE_TABS);
@@ -19,10 +22,14 @@ export default function useFittingTabCount({ wrapperRef, measureRef, tabs, activ
     const wrapper = wrapperRef.current;
     const row = measureRef.current;
     if (!wrapper || !row) return;
+    // The strip is clipped (overflow-hidden), so it must never stay scrolled: a focus or
+    // scrollIntoView on a tab/the More trigger would otherwise leave the first tab cut off.
+    if (wrapper.scrollLeft) wrapper.scrollLeft = 0;
     const widths = Array.from(row.children, (el) => el.offsetWidth);
     const moreWidth = widths.pop() ?? 0;
     setCount(computeFittingTabCount({
       widths, moreWidth, available: wrapper.clientWidth, tabs, activeKey,
+      max: tabs.length, fallback: MAX_VISIBLE_TABS,
     }));
   }, [wrapperRef, measureRef, tabs, activeKey]);
 

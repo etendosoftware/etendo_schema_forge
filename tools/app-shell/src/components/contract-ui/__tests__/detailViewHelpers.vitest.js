@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+// @covers tools/app-shell/src/components/contract-ui/toolbarClasses.js
 //
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //
@@ -9,12 +10,14 @@
 // which is exactly the coupling ETP-4730 set out to remove.
 
 import { describe, it, expect, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
 
 vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (data, field) => (field ? data?.[field] : undefined),
 }));
 
 import {
+  useNewRouteEditingReset,
   evalDisplayLogicRaw,
   deriveTaxRateFromGross,
   normalizePatchFieldValues,
@@ -63,7 +66,9 @@ import {
   getProcessButtonVariant,
   getDangerIconClass,
   isDangerProcess,
+  panelEditing,
 } from '../detailViewHelpers.jsx';
+import * as sharedToolbarClasses from '../toolbarClasses.js';
 
 describe('evalDisplayLogicRaw', () => {
   it('defaults to visible when there is no expression or no parseable clause', () => {
@@ -420,20 +425,16 @@ describe('class-name and small value helpers', () => {
     expect(getInlineEditableShrinkClassName('table')).toBe('');
   });
 
-  it('uses one constant record-toolbar class: p-2 plus the inset bottom rule, no border-b', () => {
-    const cls = getLinesToolbarClassName();
-    expect(cls).toContain('p-2');
-    expect(cls).toContain('shadow-[inset_0_-1px_0_var(--status-neutral-border)]');
-    expect(cls).not.toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', true)).toBe(cls);
+  // The class strings themselves are tested in toolbarClasses.vitest.js (ETP-5736 moved them there).
+  it('re-exports the shared record-toolbar classes', () => {
+    expect(getLinesToolbarClassName).toBe(sharedToolbarClasses.getLinesToolbarClassName);
+    expect(getSaveBtnCls).toBe(sharedToolbarClasses.getSaveBtnCls);
   });
 
-  it('always sizes square buttons h-10 w-10 and the save button h-10', () => {
+  it('always sizes square buttons h-10 w-10', () => {
     expect(getSqBtnSize()).toBe('h-10 w-10');
     expect(getSqBtnSize('default')).toBe('h-10 w-10');
     expect(getSqBtnSize('sm')).toBe('h-10 w-10');
-    expect(getSaveBtnCls()).toContain('h-10');
-    expect(getSaveBtnCls('sm')).toContain('h-10');
   });
 
   it('stacks the side panel below the content until lg', () => {
@@ -1228,5 +1229,52 @@ describe('buildCustomAddModalSeed / buildCustomAddModalOnParentRefresh (ETP-5654
     buildCustomAddModalOnParentRefresh({ hook, parentRecordId: 'p1' })();
     expect(hook.invalidateEntityCache).toHaveBeenCalled();
     expect(hook.fetchById).toHaveBeenCalledWith('p1', { force: true });
+  });
+});
+
+describe('useNewRouteEditingReset — read-only role on the creation route (ETP-5830)', () => {
+  const run = (props) => renderHook(() => useNewRouteEditingReset({
+    recordId: 'new', editing: null, handleNew: vi.fn(), ...props,
+  }));
+
+  it('sends a read-only role on /new back via onReadOnlyNew', () => {
+    const onReadOnlyNew = vi.fn();
+    run({ isNew: true, accessReadOnly: true, onReadOnlyNew });
+    expect(onReadOnlyNew).toHaveBeenCalled();
+  });
+
+  it('redirects once and skips the defaults fetch, even when re-rendered with a new callback', () => {
+    const handleNew = vi.fn();
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = renderHook(({ cb }) => useNewRouteEditingReset({
+      isNew: true, recordId: 'new', editing: null, handleNew, accessReadOnly: true, onReadOnlyNew: cb,
+    }), { initialProps: { cb: first } });
+    rerender({ cb: second });
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    expect(handleNew).not.toHaveBeenCalled();
+  });
+
+  it('leaves a writable role on /new, and a read-only role on an existing record, alone', () => {
+    const onReadOnlyNew = vi.fn();
+    run({ isNew: true, accessReadOnly: false, onReadOnlyNew });
+    run({ isNew: false, recordId: 'R1', accessReadOnly: true, onReadOnlyNew });
+    expect(onReadOnlyNew).not.toHaveBeenCalled();
+  });
+  it('never redirects an embedded form, and runs its defaults fetch as usual', () => {
+    const onReadOnlyNew = vi.fn();
+    const handleNew = vi.fn();
+    run({ isNew: true, accessReadOnly: true, embedded: true, onReadOnlyNew, handleNew });
+    expect(onReadOnlyNew).not.toHaveBeenCalled();
+    expect(handleNew).toHaveBeenCalled();
+  });
+});
+
+describe('panelEditing (ETP-5830)', () => {
+  it('locks a custom panel for a read-only role and passes the record through otherwise', () => {
+    const record = { id: 'R1' };
+    expect(panelEditing(true, record)).toBe(false);
+    expect(panelEditing(false, record)).toBe(record);
   });
 });

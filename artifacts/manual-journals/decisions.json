@@ -3,6 +3,7 @@
   "window": {
     "category": "finance",
     "name": "Simple G/L Journal",
+    "agentPrompt": "#REF#agent-prompts/manual-journals/spec.md",
     "menuActions": [
       {
         "key": "reactivate",
@@ -45,7 +46,7 @@
     },
     "summaryFields": [],
     "customComponents": {
-      "bottomSection": "SimpleGLJournalBottomPanel"
+      "bottomSection": "ManualJournalsBottomPanel"
     },
     "actions": {
       "documentAction": {
