@@ -1386,6 +1386,63 @@ describe('SifTab', () => {
     });
   });
 
+  // ── aeatsiiClaveTipo/aeatsiiClaveTipoFc auto-set-to-R effect (ETP-4783, scoped
+  //    to sales-only by ETP-5745 CP-10) ─────────────────────────────────────────
+  //
+  // CP-10 root cause: this effect used to force `aeatsiiClaveTipoFc` to 'R' on PURCHASE
+  // invoices too, even though `PURCHASE_CLAVE_TIPO_FC_OPTIONS` never offers 'R' as a
+  // choice — the UI silently set a value the user never picked, and it then failed the
+  // (correct) reference-list validation on save. Corrected behavior: purchase invoices
+  // are excluded entirely (`isPurchaseInvoice` guard) and stay at whatever the user set
+  // (defaulting to 'F1'); sales invoices keep the original auto-set behavior unchanged.
+  describe('aeatsiiClaveTipo auto-set-to-R effect (ETP-4783, sales-only per ETP-5745 CP-10)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('sales: auto-sets aeatsiiClaveTipo to R when the invoice is rectificative and no value exists yet', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true }, onChange })} />);
+      expect(onChange).toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+    });
+
+    it('sales: does not re-fire once aeatsiiClaveTipo is already R', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: 'R' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', expect.anything());
+    });
+
+    it('sales: does not fire when the invoice is not rectificative', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: false }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', expect.anything());
+    });
+
+    // ETP-5745 CP-10 — the corrected behavior under test.
+    it('purchase: NEVER auto-sets aeatsiiClaveTipoFc to R, even when the invoice is rectificative', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipoFc', expect.anything());
+    });
+
+    it('purchase: leaves an existing F1 value on aeatsiiClaveTipoFc untouched for a rectificative invoice', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipoFc: 'F1' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipoFc', expect.anything());
+    });
+  });
+
   // ── aeatsiiTipoRectif auto-default effect (ETP-5745 CP-11) ─────────────────
   //
   // `EM_AEATSII_C_INV_RECT_CHK` (the DB check constraint) requires BOTH
