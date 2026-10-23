@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-05-19T17:03:46.080Z",
-  "contractChecksum": "7747449adb3281d4",
+  "updatedAt": "2026-10-22T18:19:27.763Z",
+  "contractChecksum": "bcf0a37c41423f8f",
   "apiPrediction": {
     "specName": "payment-term",
     "baseUrl": "/sws/neo/payment-term",
@@ -48,6 +48,7 @@
         "FixMonthOffset": "Meses de desplazamiento",
         "NetDays": "Días",
         "IsDefault": "Por defecto",
+        "IsNextBusinessDay": "Siguiente día hábil",
         "IsActive": "Activo"
       }
     }
@@ -68,7 +69,8 @@
           "overduePaymentDaysRule": {
             "required": true
           },
-          "default": {}
+          "default": {},
+          "nextBusinessDay": {}
         }
       }
     },
@@ -111,5 +113,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "ad5c1cf43c5ee22b"
+  "checksum": "6284b19cb648d259"
 }

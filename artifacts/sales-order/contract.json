@@ -1,8 +1,8 @@
 {
-  "version": "0.38.0",
+  "version": "0.39.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-10-22T10:48:09.024Z",
-  "checksum": "2c50adad6539a754",
+  "updatedAt": "2026-10-23T12:03:26.879Z",
+  "checksum": "6469d8f3e3d844bd",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -289,6 +289,12 @@
             "sourceRequired": true,
             "reference": "PaymentTerm",
             "inputMode": "selector",
+            "allowCreate": true,
+            "createLabelKey": "paymentTermCreate",
+            "createTitleKey": "paymentTermCreateTitle",
+            "createNamePlaceholderKey": "paymentTermDaysPlaceholder",
+            "createSpec": "payment-term",
+            "createEntity": "header",
             "section": "principal",
             "validation": {
               "required": true,

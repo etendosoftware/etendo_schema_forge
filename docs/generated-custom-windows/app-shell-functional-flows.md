@@ -919,6 +919,12 @@ rectificadas (`ReversedInvoicesPanel`), and the purchase-invoice OCR uploader (`
 never mounted on `/new` for a read-only role). A new custom panel that writes must read
 `editing` / `readOnly` / `accessReadOnly` the same way — the role tier does not reach it by itself.
 
+An inline "+ create" row that writes to **another** spec (`allowCreate`, e.g. "+ Crear condición de
+pago" in every payment-term selector, ETP-5826) is gated by the tier of the **target** window, not the
+host's: `useCanCreateInSpec(createSpec)` hides it unless the role has `full` on that window (or is
+admin / client-admin), fail closed while the access map is not loaded. A spec with no `windowId` in
+`menu.json` (`transaction-type`) is not gated. Rules and table: `docs/ui-customization.md` §19c.
+
 **Why the PO/SO "Confirmar" asymmetry happened (ETP-5116), and why it matters for new code.** A
 read-only role could reactivate a Sales Order but not a Purchase Order. The cause was not grants
 or `processes`: `DetailMoreActionsMenu` never checked `windowReadOnly`. Sales Order declares a

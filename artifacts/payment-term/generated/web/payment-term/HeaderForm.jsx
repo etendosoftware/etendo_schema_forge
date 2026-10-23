@@ -7,6 +7,7 @@ const fields = [
   { key: 'offsetMonthDue', column: 'FixMonthOffset', type: 'number', label: 'Offset Month Due', required: true, section: 'principal' },
   { key: 'overduePaymentDaysRule', column: 'NetDays', type: 'number', label: 'Overdue Payment Days Rule', required: true, section: 'principal' },
   { key: 'default', column: 'IsDefault', type: 'checkbox', labels: {"es_ES":"Por defecto","en_US":"Default"}, label: 'Default', section: 'principal' },
+  { key: 'nextBusinessDay', column: 'IsNextBusinessDay', type: 'checkbox', labels: {"es_ES":"Siguiente día hábil","en_US":"Next business day"}, label: 'Next Business Day', section: 'principal' },
 ];
 // @sf-generated-end fields:header
 
