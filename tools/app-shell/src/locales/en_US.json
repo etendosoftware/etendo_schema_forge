@@ -18529,7 +18529,6 @@
     "previewCardAddPayment": "Add payment",
     "previewCardAddCollection": "Add receipt",
     "previewCardNoPaymentsRecorded": "No payments recorded.",
-    "noExchangeRateAvailable": "No exchange rate available for this currency pair on the document date",
     "priceListFallbackAlert": "Partner's price list is inactive. Using the default price list.",
     "orgCurrencyEquivalent": "Equivalent in {currency}",
     "exchangeRateLabel": "Rate",
@@ -20649,7 +20648,6 @@
     "recordDeleted": "Record deleted",
     "recordsDeleted": "{count} record(s) deleted",
     "recordsCouldNotBeDeleted": "{count} record(s) could not be deleted",
-    "noConversionRateError": "No conversion rate defined between the current and the selected currency for date {date}. Currency change cancelled.",
     "networkError": "Network error",
     "networkErrorRetry": "Could not complete the action. Try again.",
     "savedButCannotOpenRecord": "The record was saved but could not be opened. Please refresh the list.",
@@ -20673,6 +20671,11 @@
     "backendError.invalidAccount.bpOnly": "(Contact: {bp})",
     "backendError.invalidAccount.missingBpGroupAccounts": "Please review the following accounts of the contact category: {accounts}.",
     "backendError.invalidAccount.missingProductAccounts": "Please review the following accounts of the product: {accounts}.",
+    "backendError.exchangeRateMissingOnSave": "There is no exchange rate from {orgCurrency} to {documentCurrency} for {date} ({field}). Enter the Exchange rate on the document or add the conversion rate range in Finance → Conversion Rates.",
+    "backendError.exchangeRateMissingOnComplete": "The document cannot be confirmed: the Exchange rate from {orgCurrency} to {documentCurrency} is missing.",
+    "backendError.rateReferenceDate.accounting": "Accounting date",
+    "backendError.rateReferenceDate.order": "Order date",
+    "backendError.rateReferenceDate.quotation": "Quotation date",
     "backendError.account.nonInvoicedReceipts": "Non-Invoiced Receipts",
     "backendError.account.customerReceivablesNo": "Customer Receivables No.",
     "backendError.account.vendorLiability": "Vendor Liability",
@@ -25774,7 +25777,12 @@
     "rectifyChangeSelection": "Change selection",
     "couldNotLoadInvoicesToRectify": "The invoices to rectify could not be loaded.",
     "rectifyLinkedBadge": "Related",
-    "soGenerateDocsImplied": "Document to create"
+    "soGenerateDocsImplied": "Document to create",
+    "currencyRateSearchPlaceholder": "Search currency...",
+    "currencyRateSelectPlaceholder": "Select {label}...",
+    "currencyRateEdit": "Edit exchange rate",
+    "currencyRateNotAvailable": "No exchange rate for this date. You can type one.",
+    "currencyRatesAtDate": "Rates as of {date}"
   },
   "menus": {
     "Currency": {

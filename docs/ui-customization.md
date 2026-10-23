@@ -82,7 +82,7 @@ Overrides win over the type: `col.minWidth` (decisions `columnWidth`; elastic by
 
 **Date with time — documented exception.** There is no `datetime` tier: no list or lines column carries one today (the only `datetime` fields in the contracts are the hidden `created`/`updated` audit columns; the generator maps a visible datetime to `string`, and a `date` column renders date-only). When a datetime column is ever exposed, add its tier together with its renderer (and the generator mapping in `schema_forge_core`).
 
-**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `simple-g-l-journal`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
+**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `manual-journals`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
 
 Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the geometry specs `e2e/tests/flows/sales/sales-quotation-list-column-widths.mocked.spec.js` (list) and `e2e/tests/flows/platform/lines-grid-narrow-viewport.mocked.spec.js` (lines), and the `linesAddRowColumnAlignment.vitest.jsx` cases. The implicit absorber is `withImplicitGrowColumn` (list) / `withLinesAbsorberColumn` (lines + add-row): a descriptive non-code column when one exists (never a `tag` pill, never `DocumentNo`/`Value` while something else describes), otherwise the first unpinned column (e.g. the leading amount on Product > Costo). Header floor: `linesColumnWidth.test.js` (*list header floor*) and `DataTable.percentHeader.vitest.jsx` (*plain list header floor*: AD-resolved label drives `<th>`, cells and table min-width; sorting does not move a column).
 
@@ -272,7 +272,7 @@ container of secondary actions (`window.menuActions`, §5 below), so it belongs 
 group. This is a `DetailView.jsx`-level change, so it affects **every** window that declares
 `menuActions`, not only the 9 migrated above — including `amortization`, `chart-of-accounts`,
 `fiscal-calendar`, `goods-movements`, `matched-purchase-invoices`, `physical-inventory`, and
-`simple-g-l-journal`.
+`manual-journals`.
 
 ---
 
@@ -1739,7 +1739,7 @@ Clicking either the chevron or the hover action toggles the same expand state �
 
 **Pipeline-generator support (unchanged by ETP-4610):** `generateTableComponent` (`schema_forge_core`'s `cli/src/generate-frontend.js`) still emits this column type directly from `decisions.json` — no generator change was needed for the column-hiding requirement, since `InlineLinesPanel` (a generic component owned entirely by this functional repo, not part of `@etendosoftware/app-shell-core`) decides how the metadata renders, not the generator. Flag a field `"dimensionsPanel": true` (any `grid` value; see `docs/decisions-reference.md`) and the generator collects it into the synthetic column automatically for the pipeline-generated `<Window>LineTable.jsx`/`LinesTable.jsx`/`GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` files. Fully additive — an entity with zero `dimensionsPanel: true` fields generates byte-for-byte the same `columns` array as before.
 
-**Real example:** the generated `LinesTable.jsx` (sales-invoice, purchase-invoice), `GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` (goods-shipment, goods-receipt), and `GLJournalLineTable.jsx` (simple-g-l-journal) — all driven purely by `decisions.json`, all 5 in-scope windows regenerated and validated as part of ETP-4610. `goods-shipment` needed two extra local-DB regen attempts reverted (this sandbox's incomplete `AD_Ref_List_Trl` es_ES data silently strips unrelated translations on this window) before ultimately regenerating clean via the pre-push hook's offline/cached-AD-snapshot pipeline run — see `docs/feedback.md` for the full trail.
+**Real example:** the generated `LinesTable.jsx` (sales-invoice, purchase-invoice), `GoodsShipmentLineTable.jsx`/`GoodsReceiptLineTable.jsx` (goods-shipment, goods-receipt), and `GLJournalLineTable.jsx` (manual-journals) — all driven purely by `decisions.json`, all 5 in-scope windows regenerated and validated as part of ETP-4610. `goods-shipment` needed two extra local-DB regen attempts reverted (this sandbox's incomplete `AD_Ref_List_Trl` es_ES data silently strips unrelated translations on this window) before ultimately regenerating clean via the pre-push hook's offline/cached-AD-snapshot pipeline run — see `docs/feedback.md` for the full trail.
 
 **ETP-5133 cleanup — the hand-written `InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx`/`InvoiceLineTableCustom.jsx` were deleted.** These were the "hand-written `columns` array" example referenced above until this ticket. `docs/feedback.md` (ETP-4543/ETP-4529 entries) already documented them as unreachable from the running app — neither `sales-invoice` nor `purchase-invoice`'s `decisions.json` ever set `window.customLinesComponent`, so `HeaderPage.jsx` always rendered the pipeline-generated `LinesTable.jsx` instead. A live-browser check during ETP-5133 found a fix (`noTruncate` on the `product` column) had been mistakenly applied to this dead file instead of the generated one, which is what prompted finally removing it rather than continuing to carry it as documented dead weight. The generated `LinesTable.jsx` is now the only "hand-written-shape `columns` array" example left for this column type.
 
@@ -1893,7 +1893,7 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
 - `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row; `hideDataRows` suppresses it too (ETP-5771) (see "Add-row and `DataTable`'s generic footer-totals" above).
 
-**Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
+**Real example:** `manual-journals` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
 ---
 
@@ -3035,6 +3035,72 @@ Overlay `zIndex: 50` (the app's modal tier — see `docs/walkthrough-flows.md`).
 
 Pure helpers `getConfirmResultTypeConfig(type)` and `getConfirmResultCopy(docs, ui)` are exported for
 reuse and tests. Unit coverage: `tools/app-shell/src/components/contract-ui/__tests__/ConfirmResultModal.vitest.jsx`.
+
+### 22. Header currency and exchange rate — `CurrencyRatePicker` (ETP-5840)
+
+Not a `decisions.json` option: `EntityForm` swaps the header `C_Currency_ID` selector for
+`components/contract-ui/CurrencyRatePicker.jsx` on the quotation, order and invoice windows
+(`isCurrencyRateSelectorField`). The rate it edits is the header's hidden
+`eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`, `form: false`), which is the document's only
+exchange rate: totals, previews, the Confirm/Complete check and the invoice «Tipos de cambio»
+tab all read it.
+
+**Rate reference date.** The rate comes from the conversion ranges valid on the reference date
+currently in the FORM (unsaved edits included), resolved structurally by
+`resolveRateDateField(fields, documentDateField)` — exported from `CurrencyRatePicker.jsx`:
+
+| Header form declares | Reference date | Windows today |
+|---|---|---|
+| a field bound to AD column `DateAcct` | that field (`accountingDate`, «Fecha contable») | sales-invoice, purchase-invoice |
+| no `DateAcct` field | `window.documentDateField` | sales-quotation, sales-order, purchase-order (`orderDate`) |
+
+`documentDateField` is deliberately NOT repointed to `accountingDate` on invoices: it also
+drives the `invoiceDate → accountingDate` cascade (`isDocumentDateCascadeTarget`). `DetailView`
+threads `documentDateField` into the header `<Form>` calls; no generator change is involved.
+
+**Behavior**
+
+- Options come from `GET {entity}/{id|new}/action/currencyOptions?date=yyyy-MM-dd&organization=<form org>`
+  (the org scopes a NEW document's rates; a saved one uses its own org), fetched
+  eagerly on load and again whenever the record or the reference date changes, plus on every
+  open. ALL selectable currencies are listed; one with no range on the date has `rate: null`
+  and shows «—» (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
+  dd/mm/yyyy (`currencyRatesAtDate`, `formatCalendarDate`).
+- Selecting a currency ALWAYS stages its rate — `null` when there is no range — so neither the
+  previous currency's rate nor a manual rate survives a currency change. There is no
+  client-side blocking anymore: the old «Cambio de moneda cancelado» revert
+  (`validate-exchange-rate` + `noConversionRateError`) was removed from `DetailView.fireCallout`.
+- The pencil (`currency-rate-pencil`) is offered on new and saved documents whenever the
+  selected option is not the org currency (`isOrgCurrency` from `currencyOptions`; the former
+  `rate === 1` sentinel is gone). A manual rate is kept until the reference date or the
+  currency changes.
+- **Recalculation.** The header callout on `currency`, the declared `documentDateField` and
+  `accountingDate` returns the recalculated `eTGOCurrencyRate` (or `null`).
+  `applyCalloutFieldUpdates` applies it through `isCurrencyRateRecalcTarget`
+  (`detailViewHelpers.jsx`), which exempts exactly that key from the two guards that would
+  otherwise drop it: the user-touched guard (so recalculation overrides a manual rate) and the
+  empty-value guard (so «no range» clears a stale rate). On invoices an `invoiceDate` change
+  recalculates too, because its callout also cascades `accountingDate`.
+- Saving a foreign currency with an empty rate is refused by the backend (HTTP 422,
+  `exchange_rate_missing`); the toast composes the sentence from the refusal's identity (or shows
+  the backend prose for an unkeyed refusal) and the form stays in edit. The org currency needs no
+  rate.
+- The list-row Confirm of orders (`useOrderWindow.jsx`) no longer pre-checks
+  `validate-exchange-rate`; the backend completion check is the authority. The quotation
+  confirm modal only blocks when the document itself has no rate on a foreign currency, with the
+  same sentence as the backend completion refusal (`backendError.exchangeRateMissingOnComplete`).
+
+**i18n keys:** `currencyRateSearchPlaceholder`, `currencyRateSelectPlaceholder`,
+`currencyRateEdit`, `currencyRateNotAvailable`, `currencyRatesAtDate` (plus the existing
+`noResults`, `confirm`, `cancel`, `loading`).
+
+**Create.** On a NEW document a rate applied by a callout (not typed or picked) is left out of
+the create POST by the ETP-5537 rule 1 (`eTGOCurrencyRate` is not a mounted form field), which is
+fine: the backend computes the rate on create from the reference date whenever it is absent.
+
+**Refusals.** The save and complete refusals carry their identity (`ETGO_ExchangeRateMissingOnSave`
+/ `ETGO_ExchangeRateMissingOnComplete` + params) and are composed in the UI locale by
+`backendErrors.js` — see `docs/i18n-guide.md`, mechanism 3.
 
 ## Decision tree: which option to use?
 

@@ -247,32 +247,37 @@ Two *different* server paths answer "is there a rate?" for the same currency cha
 
 | Path | Trigger | Effect |
 |---|---|---|
-| `GET /sws/neo/validate-exchange-rate` | the frontend, before applying the dropdown change | reverts the dropdown + `noConversionRateError` toast |
-| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | appends a `WARNING` message `noExchangeRateAvailable` |
+| `GET /sws/neo/validate-exchange-rate` | the frontend, before applying the dropdown change — **removed by ETP-5840** | (formerly) reverted the dropdown + `noConversionRateError` toast |
+| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | (ETP-4838–ETP-5840) appended a `WARNING` message `noExchangeRateAvailable`; **since ETP-5840** it returns the recalculated rate instead, as `updates.eTGOCurrencyRate = {"value": rate\|null}` (`DocumentCurrencyRate.applyToCallout`) |
 
-Both now resolve availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error. They can no longer disagree.
+Until ETP-5840 both resolved availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error — so they could not disagree. Today neither surface asks "is there a rate?": the callout computes the rate itself and a missing one is refused at save/complete (`ETGO_ExchangeRateMissingOnSave` / `…OnComplete`, see `docs/ui-customization.md` §22).
 
 Before ETP-4838 the callout path ran its own private copy of the query in `AbstractOrderHeaderHandler` and `AbstractInvoiceHeaderHandler`, filtered by `ad_client_id = ?` only. Once ETP-4474 moved the currencyLayer rates to the System client, those copies stopped finding them: the frontend accepted the change (`hasRate: true`) while the callout warned "no rate available" for the very same pair and date. The warning was cosmetic — the document completed and posted with the correct rate — but it fired on **every** manual currency change across purchase orders, sales orders, sales quotations, and both invoice windows.
 
 The warning only ever fires when the user edits the `currency` field by hand. The common flow, where the price list sets the currency, never sets `currency` as the callout trigger field — which is why the regression went unnoticed for three weeks.
 
-**Open follow-up:** the callout returns the i18n *key* (`noExchangeRateAvailable`), not a sentence, and `useCallout.js` toasts it verbatim — so on the (now rare) occasions the warning is legitimate, the user sees the raw camelCase key. Tracked separately; ETP-4838 covers only the false positive.
+**Resolved by ETP-5840:** the callout used to return the i18n *key* (`noExchangeRateAvailable`) as a warning, which `useCallout.js` toasted verbatim. The warning is gone — the callout now answers with `updates.eTGOCurrencyRate` (the rate valid on the order date, or `null`) — and the `noExchangeRateAvailable` / `noConversionRateError` locale keys were removed.
 
 ### Currency change handling (ETP-4027 functional model)
 
-The `currency` field on the header form is **always editable on draft orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). The frontend enforces a rate-availability validation at the dropdown change moment, and the per-line conversion runs only on lines added AFTER a save.
+The `currency` field on the header form is **always editable on draft orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). Since ETP-5840 the frontend no longer blocks the change: the rate is recalculated for the order date (empty when no range) and the backend refuses to save a foreign currency with an empty rate. The per-line conversion runs only on lines added AFTER a save.
 
-#### Real-time rate validation in the dropdown
+#### Exchange rate on the order date (ETP-5840 — replaces the dropdown revert)
 
-When the user picks a new currency in the dropdown, `handleChangeWithCallout` (`DetailView.jsx`) runs an async validation:
+The former real-time validation (`validate-exchange-rate` on currency change, revert of the
+dropdown plus the «Cambio de moneda cancelado» toast `noConversionRateError`) is **gone**. Now:
 
-1. Fetch the org base currency ID from `/sws/neo/sales-order/header/session` (field `currencyId`).
-2. If the new currency equals the org currency → skip validation (no rate needed to return to base).
-3. Otherwise fetch `validate-exchange-rate?fromCurrency=<orgId>&toCurrency=<newId>&date=<orderDate>` (uses `hook.selected?.orderDate ?? hook.editing?.orderDate`).
-4. If the response has no rate → call `hook.handleChange('currency', previousCurrency)` to revert the dropdown to the previous value and show a toast `noConversionRateError`.
-5. If the response has a rate → the change stays. The user can save when ready.
+- The currency dropdown lists every selectable currency with its rate on the `orderDate`
+  currently in the form (`currencyOptions?date=`); a currency with no conversion range shows
+  «—» and can be selected — the rate is left empty for the user to type with the pencil.
+- Any change of `orderDate` or `currency` recalculates `eTGOCurrencyRate` through the header
+  callout (overriding a manual rate; empty when there is no range).
+- The pencil is available on new and saved orders unless the currency is the org's own
+  (`isOrgCurrency`).
+- Saving or confirming a foreign-currency order with an empty rate is refused by the backend
+  with a translated message; the list-row Confirm no longer pre-checks the rate.
 
-The validation is best-effort: network or server failures revert the dropdown to be safe, preventing silent currency mismatches.
+Full component reference: `docs/ui-customization.md` §22.
 
 #### Line conversion based on saved state
 

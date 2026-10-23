@@ -12,7 +12,7 @@ import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { ETGO_DTO_PRODUCT_ID } from '@/lib/documentTotals.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
 // ETP-5024 x ETP-4576: this modal used to hand-build its headers, and they were missing
 // `Accept-Language` — the backend (NeoAuthenticator.applyRequestLanguage) silently falls
 // back to AD_User.AD_Language, so the "business partner is on hold" refusal from
@@ -462,7 +462,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${processRes.status})`);
+          // ETP-5840 — translated from the refusal's identity (e.g. the missing exchange rate);
+          // an unkeyed refusal still shows the backend's own sentence.
+          throw new Error(translateBackendErrorBody(e, ui, `Error (${processRes.status})`));
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');

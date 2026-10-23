@@ -11,7 +11,7 @@ import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
@@ -445,8 +445,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          const rawMsg = e?.response?.message || e?.message || `Error (${processRes.status})`;
-          throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('soNoLinesError') : rawMsg);
+          const rawMsg = e?.error?.message || e?.response?.message || e?.message || `Error (${processRes.status})`;
+          // ETP-5840 — translated from the refusal's identity (e.g. the missing exchange rate);
+          // an unkeyed refusal still shows the backend's own sentence.
+          throw new Error(rawMsg.includes('@OrderWithoutLines@')
+            ? ui('soNoLinesError')
+            : translateBackendErrorBody(e, ui, rawMsg));
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');

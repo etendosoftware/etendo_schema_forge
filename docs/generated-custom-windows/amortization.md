@@ -394,7 +394,7 @@ descending. Click the "Fecha contable" column header once — confirm the sort f
 ## ETP-4610 — "Add dimensions" moved from a fixed grid column to a hover action
 
 **Scope addition to ETP-4610**, aligning `AmortizationLinesTable` with the 5 pipeline-generated
-windows (sales-invoice, purchase-invoice, goods-shipment, goods-receipt, simple-g-l-journal)
+windows (sales-invoice, purchase-invoice, goods-shipment, goods-receipt, manual-journals)
 that already moved their "Add dimensions"/dimensions-summary entry point out of a permanent grid
 column and into the row hover-action strip via `InlineLinesPanel`'s generic `rowActions`/
 `dimensionsPanel` mechanism (see `docs/ui-customization.md` §14b/§14c and the corresponding
