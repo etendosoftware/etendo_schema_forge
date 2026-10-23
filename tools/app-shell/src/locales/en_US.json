@@ -17043,6 +17043,7 @@
     "backendError.amortizationCurrencyRequired": "Currency field cannot be empty",
     "backendError.staleRecord": "Someone else changed this record while you were editing it, so your changes were not saved. Reload the record to see the current values.",
     "backendError.invoiceLinesWithoutAmount": "The invoice cannot be completed: the lines of {products} have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.",
+    "backendError.invalidLineDiscount": "The line discount must be between 0 and 100 percent.",
     "backendError.returnQuantityExceeds": "Cannot return {requested} of {product}: only {available} can still be returned from this line ({total} on the source document).",
     "backendError.returnNothingLeftOnLine": "Cannot return {requested} of {product}: nothing is left to return from this line ({total} on the source document).",
     "backendError.returnNothingLeft": "Nothing is left to return from this document: every line has already been returned.",

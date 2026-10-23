@@ -42,11 +42,6 @@ fi
 cd "$REPO_DIR" && "$SF_BIN" sf-validate-pipeline --staged
 EXIT_CODE=$?
 
-if [ $EXIT_CODE -ne 0 ]; then
-  echo ""
-  echo "Tip: 'git commit --no-verify' to bypass (not recommended)."
-fi
-
 # Record that these checks passed for the tree about to be committed, so
 # commit-msg can stamp the Hooks-Verified trailer. See lib/hooks-proof.sh.
 if [ $EXIT_CODE -eq 0 ]; then
