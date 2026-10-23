@@ -18701,7 +18701,6 @@
     "previewCardAddPayment": "Añadir pago",
     "previewCardAddCollection": "Añadir cobro",
     "previewCardNoPaymentsRecorded": "No hay pagos registrados.",
-    "noExchangeRateAvailable": "No hay tipo de cambio disponible para el par de monedas en la fecha del documento",
     "priceListFallbackAlert": "La tarifa del contacto está desactivada. Se usa la tarifa principal.",
     "orgCurrencyEquivalent": "Equivalente en {currency}",
     "exchangeRateLabel": "Tasa",
@@ -20885,7 +20884,6 @@
     "recordDeleted": "Registro eliminado",
     "recordsDeleted": "{count} registro(s) eliminado(s)",
     "recordsCouldNotBeDeleted": "{count} registro(s) no pudieron ser eliminados",
-    "noConversionRateError": "No hay tipo de cambio definido entre la moneda actual y la seleccionada para la fecha {date}. Cambio de moneda cancelado.",
     "networkError": "Error de red",
     "networkErrorRetry": "No se pudo completar la acción. Intenta nuevamente.",
     "savedButCannotOpenRecord": "El registro se guardó pero no se pudo abrir. Actualiza el listado.",
@@ -20909,6 +20907,11 @@
     "backendError.invalidAccount.bpOnly": "(Contacto: {bp})",
     "backendError.invalidAccount.missingBpGroupAccounts": "Revise las siguientes cuentas contables de la categoría de contacto: {accounts}.",
     "backendError.invalidAccount.missingProductAccounts": "Revise las siguientes cuentas contables del producto: {accounts}.",
+    "backendError.exchangeRateMissingOnSave": "No hay tipo de cambio de {orgCurrency} a {documentCurrency} para el {date} ({field}). Indique la Tasa de cambio en el documento o agregue el rango de conversión en Finanzas → Rangos de conversión.",
+    "backendError.exchangeRateMissingOnComplete": "No se puede confirmar el documento: falta la Tasa de cambio de {orgCurrency} a {documentCurrency}.",
+    "backendError.rateReferenceDate.accounting": "Fecha contable",
+    "backendError.rateReferenceDate.order": "Fecha de pedido",
+    "backendError.rateReferenceDate.quotation": "Fecha de presupuesto",
     "backendError.account.nonInvoicedReceipts": "Recibos no facturados",
     "backendError.account.customerReceivablesNo": "Recibos de clientes",
     "backendError.account.vendorLiability": "Pasivo del proveedor",
@@ -26012,7 +26015,12 @@
     "rectifyChangeSelection": "Cambiar selección",
     "couldNotLoadInvoicesToRectify": "No se pudieron cargar las facturas a rectificar.",
     "rectifyLinkedBadge": "Relacionada",
-    "soGenerateDocsImplied": "Documento a generar"
+    "soGenerateDocsImplied": "Documento a generar",
+    "currencyRateSearchPlaceholder": "Buscar moneda...",
+    "currencyRateSelectPlaceholder": "Seleccionar {label}...",
+    "currencyRateEdit": "Editar tipo de cambio",
+    "currencyRateNotAvailable": "No hay tipo de cambio para esta fecha. Puedes indicarlo manualmente.",
+    "currencyRatesAtDate": "Tipos al {date}"
   },
   "menus": {
     "Goods Movement": {

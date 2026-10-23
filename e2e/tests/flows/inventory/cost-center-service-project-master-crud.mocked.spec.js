@@ -1,3 +1,5 @@
+// @covers artifacts/cost-center/decisions.json
+// @covers artifacts/service-project/decisions.json
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -29,7 +31,7 @@ import { login } from '../../helpers/auth.js';
  * NeoSelectorService routes FK selectors through Etendo core's ComboTableData),
  * so a page.route() mock cannot prove or disprove it; only a live-backend spec
  * could, and that would exercise an unrelated consuming window (e.g.
- * simple-g-l-journal, match-rule, amortization) rather than these two windows.
+ * manual-journals, match-rule, amortization) rather than these two windows.
  *
  * Mock mode only: login() seeds a fake token + generic /sws/** catch-all; this
  * spec installs more specific routes AFTER login() so they win (Playwright

@@ -59,7 +59,7 @@ const windowLoaders = {
   'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
-  'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
+  'manual-journals': () => import('@generated/manual-journals/generated/web/manual-journals/index.jsx'),
   'end-year-close': () => import('@generated/end-year-close/generated/web/end-year-close/index.jsx'),
 };
 
@@ -360,7 +360,7 @@ export function buildWindowMap() {
       label: item.label,
       contract: null,
       loader: () => import('./RedirectWindow.jsx').then(
-        (mod) => ({ default: mod.makeRedirectWindow(item.redirect) }),
+        (mod) => ({ default: mod.makeRedirectWindow(item.redirect, item.redirectKeepPath) }),
       ),
     };
   };

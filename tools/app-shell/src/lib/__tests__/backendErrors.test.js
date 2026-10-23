@@ -13,6 +13,7 @@ import {
   parseBackendErrorMessage,
   parseBackendError,
   translateBackendErrorResponse,
+  translateBackendErrorBody,
 } from '../backendErrors.js';
 
 /**
@@ -684,6 +685,84 @@ describe('translateBackendError — Invalid-Account identity (ETP-5175)', () => 
   it('keeps the backend prose when the locale has no entries (t echoes keys)', () => {
     assert.equal(translateBackendError(prose, (key) => key, bpGroupAndProduct), prose);
   });
+});
+
+describe('translateBackendError — exchange-rate refusals rendered from their identity', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  // Whatever the backend wrote in the user's AD language; shown only when the identity cannot be rendered.
+  const prose = 'Missing exchange rate (backend prose)';
+  const currencies = { orgCurrency: 'EUR', documentCurrency: 'USD' };
+  const onSave = (refKey, extra = {}) => ({
+    messageKeys: ['ETGO_ExchangeRateMissingOnSave', refKey],
+    messageParams: { ...currencies, date: '2026-01-15', dateField: 'x', referenceDate: refKey, ...extra },
+  });
+  const onComplete = { messageKeys: ['ETGO_ExchangeRateMissingOnComplete'], messageParams: currencies };
+
+  const rendered = [
+    ['save / order date / es_ES', es, onSave('ETGO_RateRefDateOrder'),
+      'No hay tipo de cambio de EUR a USD para el 15/01/2026 (Fecha de pedido). Indique la Tasa de cambio en el documento o agregue el rango de conversión en Finanzas → Rangos de conversión.'],
+    ['save / accounting date / en_US', en, onSave('ETGO_RateRefDateAccounting'),
+      'There is no exchange rate from EUR to USD for 15/01/2026 (Accounting date). Enter the Exchange rate on the document or add the conversion rate range in Finance → Conversion Rates.'],
+    ['save / unknown referenceDate param falls back to the key list (quotation date)', es,
+      onSave('ETGO_RateRefDateQuotation', { referenceDate: 'ETGO_RateRefDateFuture' }),
+      'No hay tipo de cambio de EUR a USD para el 15/01/2026 (Fecha de presupuesto). Indique la Tasa de cambio en el documento o agregue el rango de conversión en Finanzas → Rangos de conversión.'],
+    ['complete / es_ES', es, onComplete,
+      'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.'],
+    ['complete / en_US', en, onComplete,
+      'The document cannot be confirmed: the Exchange rate from EUR to USD is missing.'],
+  ];
+  for (const [label, t, options, expected] of rendered) {
+    it(`renders ${label}`, () => {
+      assert.equal(translateBackendError(prose, t, options), expected);
+    });
+  }
+
+  it('renders es_AR exactly like es_ES', () => {
+    assert.equal(translateBackendError(prose, ar, onSave('ETGO_RateRefDateOrder')),
+      translateBackendError(prose, es, onSave('ETGO_RateRefDateOrder')));
+  });
+
+  const keepsProse = [
+    ['keys without params (older backend)', { messageKeys: onComplete.messageKeys }],
+    ['the org currency missing', { ...onComplete, messageParams: { documentCurrency: 'USD' } }],
+    ['the document currency missing', { ...onComplete, messageParams: { orgCurrency: 'EUR' } }],
+    ['a save refusal without date', onSave('ETGO_RateRefDateOrder', { date: undefined })],
+    ['a save refusal with an unparseable date', onSave('ETGO_RateRefDateOrder', { date: 'not-a-date' })],
+    ['a save refusal whose reference date is unknown everywhere',
+      { messageKeys: ['ETGO_ExchangeRateMissingOnSave'], messageParams: { ...currencies, date: '2026-01-15', referenceDate: 'ETGO_RateRefDateFuture' } }],
+    ['params but no exchange-rate key', { messageKeys: ['SomethingElse'], messageParams: currencies }],
+  ];
+  for (const [label, options] of keepsProse) {
+    it(`keeps the backend prose for ${label}`, () => {
+      assert.equal(translateBackendError(prose, es, options), prose);
+    });
+  }
+
+  it('keeps the backend prose when the locale has no entries (t echoes keys)', () => {
+    assert.equal(translateBackendError(prose, (key) => key, onComplete), prose);
+  });
+});
+
+describe('translateBackendErrorBody', () => {
+  const es = localeTranslator('es_ES');
+  const completeSentence = 'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.';
+  const identity = { messageKeys: ['ETGO_ExchangeRateMissingOnComplete'], messageParams: { orgCurrency: 'EUR', documentCurrency: 'USD' } };
+  const cases = [
+    ['translates an identity carried in the error envelope', { error: { message: 'prose', ...identity } }, completeSentence],
+    ['translates an identity carried in the response envelope', { response: { message: 'prose', ...identity } }, completeSentence],
+    ['prefers error.message over response.message for an unkeyed body', { error: { message: 'A' }, response: { message: 'B' } }, 'A'],
+    ['reads response.message next', { response: { message: 'B' }, message: 'C' }, 'B'],
+    ['reads a flat message last', { status: 'error', message: 'C' }, 'C'],
+    ['falls back when the body carries no message', {}, 'Error (500)'],
+    ['falls back for a null body', null, 'Error (500)'],
+  ];
+  for (const [label, body, expected] of cases) {
+    it(label, () => {
+      assert.equal(translateBackendErrorBody(body, es, 'Error (500)'), expected);
+    });
+  }
 });
 
 describe('translateBackendError — legacy "Account could not be found" text, new EN wording (ETP-5175)', () => {

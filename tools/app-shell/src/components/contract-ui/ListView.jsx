@@ -157,6 +157,7 @@ function ListFilterBarSection(props) {
           onDeletePreset={props.windowName ? props.deletePreset : null}
           labelOverrides={props.labelOverrides}
           hideStatusFilter={props.hideStatusFilter}
+          buildDistinctQuery={props.hook.buildDistinctQuery}
           flowInParent
           data-testid="ListFilterBar__620cbc" />
       )}
