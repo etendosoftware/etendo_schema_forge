@@ -31,7 +31,6 @@ import { listModels, isKnownModel, getModel, getModelOrDefault, modelTitleKey } 
 import { getListBehavior } from './modelRegistryList.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { apiFetch } from '@/auth/api.js';
 import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 
 // Every registered model, in registry order (ETP-5716). A module-level constant of fixed length:
@@ -906,7 +905,14 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             return null;
           }
           // ETP-5782: carry the backend error code along with the status.
-          const e = await parseBackendError(body === undefined ? r : { json: async () => { if (body === null) throw new Error('empty body'); return body; } });
+          const e = await parseBackendError(body === undefined ? r : {
+            json: async () => {
+              if (body === null) {
+                throw new Error('empty body');
+              }
+              return body;
+            },
+          });
           return Promise.reject({ status: r.status, code: e.code });
         })
         .then(created => {
