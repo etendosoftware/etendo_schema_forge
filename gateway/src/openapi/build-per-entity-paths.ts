@@ -4,6 +4,7 @@ type JsonSchema = {
   type: 'array' | 'object' | 'string';
   properties?: Record<string, FieldSchema>;
   items?: { type: 'object'; properties: Record<string, FieldSchema> };
+  required?: string[];
 };
 
 type FieldSchema = { type: string; format?: string; enum?: string[]; description?: string; properties?: Record<string, FieldSchema>; items?: FieldSchema };
@@ -14,8 +15,8 @@ export interface OpenApiOperation {
   description?: string;
   tags: string[];
   parameters?: Array<{ name: string; in: 'path'; required: true; schema: { type: 'string' } }>;
-  requestBody?: { required: boolean; content: { 'application/json': { schema: { type: 'object'; properties: Record<string, FieldSchema> } } } };
-  responses: Record<string, { description: string; content?: { 'application/json': { schema: JsonSchema } } }>;
+  requestBody?: { required: boolean; content: Record<string, { schema: JsonSchema }> };
+  responses: Record<string, { description: string; content?: Record<string, { schema: JsonSchema }> }>;
   security: Array<Record<string, string[]>>;
 }
 
@@ -31,10 +32,73 @@ type PublicApiEntity = PublicApiSchema['entities'][string] & {
   functional?: FunctionalDocumentation;
   parent?: { resource: string; pathSegment: string; foreignKey: string };
   group?: string;
+  processes?: Array<{ action?: string; method?: string }>;
 };
 
+// Success and error documents are application/vnd.api+json; application/json is
+// listed too because the gateway accepts it on requests and for Accept.
+const JSON_API_MEDIA_TYPE = 'application/vnd.api+json';
+
+function mediaContent(schema: JsonSchema) {
+  return { [JSON_API_MEDIA_TYPE]: { schema }, 'application/json': { schema } };
+}
+
 function response(description: string, schema: JsonSchema, status = '200') {
-  return { [status]: { description, content: { 'application/json': { schema } } } };
+  return { [status]: { description, content: mediaContent(schema) } };
+}
+
+function jsonApiRequestBody(resource: JsonSchema) {
+  return { required: true, content: mediaContent({ type: 'object', required: ['data'], properties: { data: resource as any } }) };
+}
+
+// JSON:API error document, produced by the gateway for every failure
+// (see json-api-http.ts). `detail` carries Etendo's own message for 4xx.
+const ERROR_DOCUMENT_SCHEMA: JsonSchema = {
+  type: 'object',
+  required: ['errors'],
+  properties: {
+    errors: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'HTTP status as a string.' },
+          code: { type: 'string', description: 'Etendo error code when it provides one (for example stale_record).' },
+          title: { type: 'string' },
+          detail: { type: 'string', description: "Etendo's message for the failure." },
+          meta: { type: 'object', description: 'Optional hint and explanation from Etendo.' },
+        },
+      },
+    },
+  } as Record<string, FieldSchema>,
+};
+
+const ERROR_DESCRIPTIONS: Record<string, string> = {
+  '400': 'Invalid request: unknown or read-only field, malformed body, or a value Etendo rejected.',
+  '401': 'Missing, malformed or invalid API key.',
+  '402': 'The tenant is blocked (payment required).',
+  '403': 'The credential has no access to this resource, operation or organization, or lacks the public-api:process scope for an action.',
+  '404': 'The resource or record does not exist, or the operation is not exposed.',
+  '406': 'Accept does not allow application/vnd.api+json or application/json.',
+  '409': 'Conflict: the resource type or id does not match, or the record changed or is in use.',
+  '415': 'The request body is not application/vnd.api+json or application/json.',
+  '422': 'Etendo understood the request but refused it (validation).',
+  '502': 'Etendo could not complete the request. When meta.hint is present the write may already be saved: read the record before re-sending.',
+  '503': 'Etendo is temporarily unavailable (database timeout or lost connection). Retry later.',
+};
+
+// Statuses each kind of operation can answer, besides its success status.
+const READ_ERRORS = ['400', '401', '402', '403', '404', '406', '502', '503'];
+const WRITE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '415', '422', '502', '503'];
+const DELETE_ERRORS = ['400', '401', '402', '403', '404', '406', '409', '502', '503'];
+const ERRORS_BY_METHOD: Record<string, string[]> = { get: READ_ERRORS, delete: DELETE_ERRORS };
+
+function errorResponsesFor(method: string): OpenApiOperation['responses'] {
+  const statuses = ERRORS_BY_METHOD[method] ?? WRITE_ERRORS;
+  return Object.fromEntries(statuses.map((status) => [
+    status,
+    { description: ERROR_DESCRIPTIONS[status], content: mediaContent(ERROR_DOCUMENT_SCHEMA) },
+  ]));
 }
 
 function resourceSchema(entityName: string, entity: PublicApiEntity, properties: Record<string, FieldSchema>): JsonSchema {
@@ -119,7 +183,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
       collection.post = {
         operationId: `create_${entityName}`, summary: `Create ${title}`,
         tags: [tag], description,
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } } } } },
+        requestBody: jsonApiRequestBody(resourceSchema(entityName, entity, properties)),
         responses: response(`${title} record created`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }, '201'),
         security: [{ bearerAuth: [] }],
       };
@@ -130,7 +194,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
         operationId: `${method.toLowerCase()}_${entityName}`, summary: `${method === 'PATCH' ? 'Partially update' : 'Update'} ${title}`,
         tags: [tag], description,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } } } } },
+        requestBody: jsonApiRequestBody(resourceSchema(entityName, entity, properties)),
         responses: response(`${title} record updated`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }),
         security: [{ bearerAuth: [] }],
       };
@@ -153,11 +217,38 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
     const parentParameter = entity.parent
       ? [{ name: 'parentId', in: 'path' as const, required: true as const, schema: { type: 'string' as const } }]
       : [];
+    for (const [method, operation] of [...Object.entries(collection), ...Object.entries(item)]) {
+      Object.assign(operation.responses, errorResponsesFor(method));
+    }
     for (const operation of Object.values(collection)) {
       operation.parameters = [...parentParameter, ...(operation.parameters ?? [])];
     }
     for (const operation of Object.values(item)) {
       operation.parameters = [...parentParameter, ...(operation.parameters ?? [])];
+    }
+    // Business actions: top-level resources only (children are not addressable for actions).
+    if (!entity.parent) {
+      for (const process of entity.processes ?? []) {
+        if (!process.action || process.method?.toUpperCase() !== 'POST') continue;
+        const actionPath = `${itemPath}/actions/${process.action}`;
+        paths[actionPath] = {
+          post: {
+            operationId: `${process.action.replace(/-/g, '_')}_${entityName}`,
+            summary: `${process.action} ${title}`,
+            tags: [tag],
+            description: `Runs the "${process.action}" action on the record, synchronously. No request body is needed. Requires the public-api:process scope (a write-only key gets 403). Answers the record after the action; meta.message carries Etendo's message and meta.alreadyApplied is true when the record was already in the target state (so a retry is safe).`,
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+            responses: {
+              ...response(`${title} record after the action, with meta.message`, {
+                type: 'object',
+                properties: { data: resourceSchema(entityName, entity, properties) as any, meta: { type: 'object', description: 'message, alreadyApplied (when the record was already in the target state) or hint (action done but the record could not be read back).' } },
+              }),
+              ...errorResponsesFor('post'),
+            },
+            security: [{ bearerAuth: [] }],
+          },
+        };
+      }
     }
     if (Object.keys(collection).length) paths[basePath] = collection;
     if (Object.keys(item).length) paths[itemPath] = item;

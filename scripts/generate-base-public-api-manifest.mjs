@@ -127,6 +127,25 @@ function openApiType(fieldType) {
   }
 }
 
+/**
+ * Public actions of a top-level resource (POST /<resource>/:id/actions/<action>).
+ * Structural: v1 exposes only `complete`, derived from the window's draftMode
+ * completion flow (the document-action column, whose body NEO reads as
+ * `docAction`). Declared processEndpoints are not public actions.
+ */
+function buildProcesses({ source, entityName }) {
+  const draft = source?.draftMode;
+  if (draft?.enabled && draft.processField === 'documentAction' && draft.processValue) {
+    return [{
+      action: 'complete',
+      method: 'POST',
+      path: `/${entityName}/:id/action/${draft.processField}`,
+      body: { docAction: draft.processValue },
+    }];
+  }
+  return [];
+}
+
 function buildEntity({ specName, entityName, contract, functional, parent, rawEntity }) {
   const source = contract.frontendContract.entities[entityName];
   const backend = contract.backendContract ?? {};
@@ -225,9 +244,7 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
     ...(readOnlyFiscalMonitor ? { group: 'Fiscal Monitors' } : {}),
     operations,
     fields,
-    processes: (readOnlyFiscalMonitor ? [] : backend.processEndpoints ?? []).filter(
-      (process) => process.entity === entityName
-    ),
+    processes: readOnlyFiscalMonitor || parent ? [] : buildProcesses({ source, entityName }),
     ...(parent ? {
       parent: {
         resource: parent.resource,
