@@ -607,6 +607,250 @@ describe('UpgradePage — plan catalog', () => {
     expect(await screen.findByTestId('upgrade-plan-card-productive-monthly')).toBeInTheDocument();
     expect(screen.getByTestId('upgrade-plan-continue')).toBeEnabled();
   });
+
+  // --- The Plan step as a chooser (ETP-5049) -------------------------------------------------
+
+  const THIRD_PLAN = {
+    planKey: 'productive-plus',
+    name: 'Productive Plus',
+    description: 'More users and storage',
+    displayPrice: '1234.50',
+    currency: 'EUR',
+    billingInterval: 'month',
+  };
+  const PRICE_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
+  /** What a card says for a plan's price under this file's i18n mock: key + formatted amount. */
+  const priceText = plan => displayed(`${PRICE_KEYS[plan.billingInterval]} ${formatCurrency(plan.currency, plan.displayPrice)}`);
+  const card = plan => screen.getByTestId(`upgrade-plan-card-${plan.planKey}`);
+  const selectPlan = plan => userEvent.setup().click(within(card(plan)).getByTestId('upgrade-plan-select'));
+  /** Back to step 1 through the stepper, which is enabled for any step already reached. */
+  async function backToPlanStep(user) {
+    await user.click(screen.getByTestId('upgrade-checkout-step-plan'));
+    await waitFor(() => expect(screen.getByTestId('upgrade-plan-catalog')).toBeInTheDocument());
+  }
+  function expectSelected(plan, selected) {
+    expect(card(plan)).toHaveAttribute('data-selected', String(selected));
+    expect(within(card(plan)).getByTestId('upgrade-plan-select')).toHaveAttribute('aria-pressed', String(selected));
+    const badge = within(card(plan)).queryByTestId('upgrade-plan-selected-badge');
+    if (selected) expect(badge).toHaveTextContent('upgradePlanSelectedBadge');
+    else expect(badge).not.toBeInTheDocument();
+  }
+
+  it.each([
+    ['two', [PRODUCTIVE_PLAN, SECOND_PLAN]],
+    ['three', [PRODUCTIVE_PLAN, SECOND_PLAN, THIRD_PLAN]],
+  ])('shows one card per catalog plan, from the catalog, none preselected (%s plans)', async (_count, catalog) => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: catalog });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const catalogGroup = screen.getByTestId('upgrade-plan-catalog');
+    const cards = within(catalogGroup).getAllByTestId(/^upgrade-plan-card-/);
+    expect(cards.map(element => element.dataset.testid))
+      .toEqual(catalog.map(plan => `upgrade-plan-card-${plan.planKey}`));
+    for (const plan of catalog) {
+      expect(within(card(plan)).getByTestId('upgrade-plan-name')).toHaveTextContent(plan.name);
+      expect(within(card(plan)).getByTestId('upgrade-plan-description')).toHaveTextContent(plan.description);
+      expect(within(card(plan)).getByTestId('upgrade-plan-price')).toHaveTextContent(priceText(plan));
+      expectSelected(plan, false);
+    }
+    expect(screen.queryAllByTestId('upgrade-plan-selected-badge')).toHaveLength(0);
+  });
+
+  it('moves the selected badge, aria-pressed and data-selected with the click', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [PRODUCTIVE_PLAN, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(SECOND_PLAN);
+    // Choosing a card moves on to the add-ons.
+    await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
+    await backToPlanStep(user);
+    expectSelected(SECOND_PLAN, true);
+    expectSelected(PRODUCTIVE_PLAN, false);
+
+    await selectPlan(PRODUCTIVE_PLAN);
+    await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
+    await backToPlanStep(user);
+    expectSelected(PRODUCTIVE_PLAN, true);
+    expectSelected(SECOND_PLAN, false);
+    expect(screen.getAllByTestId('upgrade-plan-selected-badge')).toHaveLength(1);
+  });
+
+  it('summarizes the chosen plan name and price on the Add-ons step', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [PRODUCTIVE_PLAN, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(SECOND_PLAN);
+
+    expect(await screen.findByTestId('upgrade-checkout-summary-plan')).toHaveTextContent('Productive annual');
+    expect(screen.getByTestId('upgrade-checkout-summary-price')).toHaveTextContent(priceText(SECOND_PLAN));
+  });
+
+  it('shows a read-only summary on the Payment step, with no chooser, and sends only the chosen key', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [PRODUCTIVE_PLAN, SECOND_PLAN, THIRD_PLAN],
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(THIRD_PLAN);
+    await user.click(await screen.findByTestId('upgrade-addons-continue'));
+
+    const summary = await screen.findByTestId('upgrade-plan-summary');
+    expect(within(summary).getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive Plus');
+    expect(within(summary).getByTestId('upgrade-plan-summary-price')).toHaveTextContent(priceText(THIRD_PLAN));
+    expect(screen.queryByTestId('upgrade-plan-catalog')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-select')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^upgrade-plan-card-/)).toHaveLength(0);
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-plus');
+    expect(requests[0].body).not.toHaveProperty('priceId');
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/price|amount|1234/i);
+  });
+
+  it('shows the bare amount for a billing interval it does not know', async () => {
+    const weekly = { ...PRODUCTIVE_PLAN, planKey: 'productive-weekly', billingInterval: 'week' };
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [weekly] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const price = within(card(weekly)).getByTestId('upgrade-plan-price');
+    // Never asserted as "per month": no price key at all, only the formatted amount.
+    expect(displayed(price.textContent).trim()).toBe(displayed(formatCurrency('EUR', '49.00')));
+    expect(price).not.toHaveTextContent(/upgradePlanPrice/);
+  });
+
+  it('renders a plan that has no description', async () => {
+    const user = userEvent.setup();
+    const bare = { planKey: 'productive-bare', name: 'Bare', displayPrice: '10.00', currency: 'EUR', billingInterval: 'month' };
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [bare, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(within(card(bare)).getByTestId('upgrade-plan-name')).toHaveTextContent('Bare');
+    expect(within(card(bare)).getByTestId('upgrade-plan-price')).toHaveTextContent(priceText(bare));
+    expect(within(card(bare)).queryByTestId('upgrade-plan-description')).not.toBeInTheDocument();
+
+    await selectPlan(bare);
+    await user.click(await screen.findByTestId('upgrade-addons-continue'));
+    expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Bare');
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-bare');
+  });
+
+  it('says the session expired, and blocks going forward, when the catalog answers 401', async () => {
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ error: { message: 'Invalid or expired token' } }, { ok: false, status: 401 }),
+    });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-plans-session-expired')).toHaveTextContent('upgradeSessionExpired');
+    // Not an unreadable catalog: retrying the same request cannot help.
+    expect(screen.queryByTestId('upgrade-plans-unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plans-retry')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-catalog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-checkout-step-payment')).toBeDisabled();
+    expect(screen.queryByTestId('upgrade-submit')).not.toBeInTheDocument();
+  });
+
+  describe('a catalog re-read on the Payment step', () => {
+    /** Environments fail once, so the Payment step offers a retry that re-reads both lookups. */
+    function environmentsFailingOnce() {
+      let attempt = 0;
+      return () => {
+        attempt += 1;
+        return attempt === 1
+          ? jsonResponse({ error: { message: 'boom' } }, { ok: false, status: 503 })
+          : jsonResponse({ environments: [{ clientName: EXISTING_TENANT, clientId: 'CLIENT-1' }] });
+      };
+    }
+    /** Answers the catalog lookups in order, repeating the last answer. */
+    function plansInSequence(...answers) {
+      let attempt = 0;
+      return () => {
+        const answer = answers[Math.min(attempt, answers.length - 1)];
+        attempt += 1;
+        return answer === 'fail'
+          ? jsonResponse({ message: 'boom' }, { ok: false, status: 503 })
+          : jsonResponse({ plans: answer });
+      };
+    }
+    const plansReads = () => globalThis.fetch.mock.calls
+      .filter(([url]) => String(url).includes('/sws/go/plans')).length;
+    /** The retry re-read both lookups and both have settled. */
+    async function settledAfterReread(expectedReads) {
+      await waitFor(() => expect(plansReads()).toBe(expectedReads));
+      await waitFor(() => expect(screen.queryByTestId('upgrade-environments-unavailable')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByTestId('upgrade-plans-loading')).not.toBeInTheDocument());
+    }
+    async function choosePlanAndReachPayment(user, plan) {
+      await renderUpgradePage({ advanceCheckout: false });
+      await selectPlan(plan);
+      await user.click(await screen.findByTestId('upgrade-addons-continue'));
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent(plan.name);
+    }
+
+    it('keeps the chosen plan when the re-read succeeds', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
+      await user.click(screen.getByTestId('upgrade-submit'));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].body.planKey).toBe('productive-yearly');
+    });
+
+    it('restores the chosen plan when a failed re-read is retried', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN], 'fail', [PRODUCTIVE_PLAN, SECOND_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+      // The re-read failed: the summary gives way to the retry, and nothing can be bought.
+      expect(await screen.findByTestId('upgrade-plans-retry')).toBeInTheDocument();
+      expect(screen.queryByTestId('upgrade-plan-summary')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('upgrade-plans-retry'));
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
+      await user.click(screen.getByTestId('upgrade-submit'));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].body.planKey).toBe('productive-yearly');
+    });
+
+    it('drops the choice, and asks for one, when the catalog no longer offers it', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN], [PRODUCTIVE_PLAN, THIRD_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+      expect(screen.queryByTestId('upgrade-plan-summary')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('upgrade-submit'));
+      expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradePlanRequired');
+      expect(requests).toHaveLength(0);
+    });
+  });
 });
 
 /**
