@@ -8,7 +8,7 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 const CONFIRM_TITLE_KEYS = {
   O: 'periodsBulkConfirmOpenTitle', C: 'periodsBulkConfirmCloseTitle', P: 'periodsBulkConfirmPermanentTitle',
 };
-const ACTION_LABEL_KEYS = { O: 'periodsBulkOpen', C: 'periodsBulkClose', P: 'periodsClosePermanently' };
+const ACTION_LABEL_KEYS = { O: 'periodsBulkOpen', C: 'periodsBulkClose', P: 'periodsBulkClosePermanently' };
 const OK_LABEL_KEYS = { O: 'periodsBulkResultOpened', C: 'periodsBulkResultClosed', P: 'periodsBulkResultPermanentlyClosed' };
 const SKIPPED_LABEL_KEYS = { O: 'periodsBulkResultAlreadyOpen', C: 'periodsBulkResultAlreadyClosed', P: 'periodsBulkResultAlreadyClosed' };
 
