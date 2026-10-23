@@ -55,7 +55,7 @@ Leyenda: `E` = Etendo Go · `H` = Holded · **capacidad** = una plataforma no pu
 | D6 | Depósito manual en cuenta | Saldo de la cuenta sube | ✅ (suite treasury) | verificar |
 | D7 | Transferencia entre cuentas | Una baja, otra sube | ✅ (suite treasury) | verificar |
 | D8 | Transferencia bancaria (PIS) | Movimiento registrado | ✅ (suite treasury) | verificar |
-| D9 | Borrar un cobro ya procesado | **Debe negarse** y no borrar | ✅ (suite treasury) | verificar |
+| D9 | Borrar un cobro ya procesado | El cobro desaparece y la factura vuelve a pendiente (la UI lo permite con aviso; corregido el 23 oct, antes decía "debe negarse") | ✅ (suite treasury) | verificar |
 
 ## E. Compras
 | # | Operación | Verificación objetiva | E | H |
