@@ -16953,6 +16953,7 @@
     "ocrFailed": "The OCR import could not be completed.",
     "ocrNoDataExtracted": "No information could be extracted from the document. Check the file and try again.",
     "ocrExtractTimeout": "Reading the invoice took too long. Please try again.",
+    "ocrConfigUnavailable": "The invoice reading settings could not be loaded.",
     "ocrExtractSessionChanged": "Your session changed while the invoice was being read. Please try again.",
     "ocrLinesCreated": "{count} lines created",
     "ocrReceiverTaxIdMismatch": "The invoice is addressed to a different tax ID ({receiver}) than your organization's. It cannot be loaded.",

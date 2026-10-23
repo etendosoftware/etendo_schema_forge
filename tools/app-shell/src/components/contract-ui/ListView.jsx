@@ -26,6 +26,7 @@ import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/I
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
 import { useListToolbarTabsFit } from './useListToolbarTabsFit.js';
+import SegmentedTabs from './SegmentedTabs.jsx';
 import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
@@ -297,24 +298,19 @@ export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, vie
  * `ViewToggle` is NOT part of it: it keeps its pre-ETP-5509 place after "Filtros".
  */
 function ListToolbarTabs({ subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
+  // Keyed by the raw label (not the translated one) so a tab that moves keeps its focus.
+  const items = subsetFilters.map((sf) => ({
+    key: sf.key || sf.label,
+    label: ui(sf.label),
+    testId: `filter-${sf.key || sf.label?.toLowerCase()}`,
+  }));
   return (
-    <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
-      {subsetFilters.map((sf, i) => (
-        <button
-          key={sf.key || sf.label}
-          onClick={() => onSelectSubset(i)}
-          data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
-          className={[
-            'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
-            activeSubsetIndex === i
-              ? 'bg-card shadow-sm'
-              : 'bg-[hsl(var(--muted))] hover:brightness-95',
-          ].join(' ')}
-        >
-          {ui(sf.label)}
-        </button>
-      ))}
-    </div>
+    <SegmentedTabs
+      items={items}
+      active={activeSubsetIndex}
+      onChange={onSelectSubset}
+      ariaLabel={ui('filters')}
+      data-testid="SegmentedTabs__620cbc" />
   );
 }
 
