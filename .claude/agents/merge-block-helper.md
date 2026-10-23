@@ -117,7 +117,9 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
 2. **develop must already contain main.** `git -C <repo> log --oneline origin/develop..origin/main` lists
    what main has that develop lacks, merge commits included: after every cut there is at least that
    cut's merge. Anything listed → 🔴: name the commits (the previous cut's merge, hotfixes, a test fixed
-   or a task reverted on the cut) and stop until the human has merged a `main → develop` PR.
+   or a task reverted on the cut) and stop until the human has merged the `main → develop` PR.
+   `back-merge-main.yml` opens it whenever main moves; if none is open, the human runs that workflow
+   by hand (Actions → *Back-merge main into develop*).
 3. **Inventory what the cut carries,** per repo, oldest first:
    ```bash
    git -C <repo> log --first-parent --merges --reverse --format='%h %s' origin/main..origin/develop
