@@ -25,6 +25,7 @@ import {
 import {
   PUBLIC_API_SCHEMA,
   PublicApiKeyGuard,
+  type PublicApiKeyRequest,
   type PublicApiEntity,
   type PublicApiField,
   filterOutboundRecord,
@@ -130,7 +131,7 @@ export class PublicApiController {
   @Get(':entityName')
   async list(
     @Param('entityName') entityName: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Query() query: Record<string, unknown> = {},
   ) {
     this.assertTopLevel(entityName);
@@ -143,7 +144,7 @@ export class PublicApiController {
     @Param('parentName') parentName: string,
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Query() query: Record<string, unknown> = {},
   ) {
     const child = this.childOrThrow(parentName, childName);
@@ -158,7 +159,7 @@ export class PublicApiController {
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
     @Param('id') id: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     const child = this.childOrThrow(parentName, childName);
@@ -172,7 +173,7 @@ export class PublicApiController {
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     const child = this.childOrThrow(parentName, childName);
@@ -187,7 +188,7 @@ export class PublicApiController {
     @Param('childName') childName: string,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Headers('if-match') ifMatch?: string,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
@@ -204,7 +205,7 @@ export class PublicApiController {
     @Param('childName') childName: string,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Headers('if-match') ifMatch?: string,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
@@ -221,7 +222,7 @@ export class PublicApiController {
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
     @Param('id') id: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'DELETE');
@@ -232,7 +233,7 @@ export class PublicApiController {
   async get(
     @Param('entityName') entityName: string,
     @Param('id') id: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     this.assertTopLevel(entityName);
@@ -244,7 +245,7 @@ export class PublicApiController {
   async create(
     @Param('entityName') entityName: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     this.assertTopLevel(entityName);
@@ -257,7 +258,7 @@ export class PublicApiController {
     @Param('entityName') entityName: string,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Headers('if-match') ifMatch?: string,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
@@ -272,7 +273,7 @@ export class PublicApiController {
     @Param('entityName') entityName: string,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Headers('if-match') ifMatch?: string,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
@@ -284,7 +285,7 @@ export class PublicApiController {
 
   @Delete(':entityName/:id')
   @HttpCode(204)
-  async remove(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: { neoJwt: string }) {
+  async remove(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: PublicApiKeyRequest) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'DELETE');
     return this.forward(entityName, req, 'DELETE', undefined, id);
@@ -301,7 +302,7 @@ export class PublicApiController {
     @Param('entityName') entityName: string,
     @Param('id') id: string,
     @Param('action') action: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
     @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     this.assertTopLevel(entityName);
@@ -328,6 +329,7 @@ export class PublicApiController {
       });
     }
     if (!response.ok) {
+      if (response.status === 401) req.evictNeoJwt?.();
       throw upstreamException(response.status, await response.json().catch(() => null));
     }
     const answer = (await response.json().catch(() => null)) as Record<string, unknown> | null;
@@ -509,7 +511,7 @@ export class PublicApiController {
 
   private async forward(
     entityName: string,
-    req: { neoJwt: string },
+    req: PublicApiKeyRequest,
     method: string,
     body?: Record<string, unknown>,
     id?: string,
@@ -549,6 +551,9 @@ export class PublicApiController {
           HttpStatus.PRECONDITION_FAILED,
         );
       }
+      // Etendo refused the token (key rotated, revoked, deactivated or deleted): drop it from
+      // the cache so the next request re-exchanges the key instead of replaying it.
+      if (response.status === 401) req.evictNeoJwt?.();
       throw (response.status === 400 ? missingFieldsException(entity, upstream) : undefined) ?? upstreamException(response.status, upstream);
     }
     return this.toSuccessDocument(response, entityName, method, id, res, list);

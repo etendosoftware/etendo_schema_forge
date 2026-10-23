@@ -2,7 +2,7 @@
 // @covers gateway/src/public-api/json-api-request.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UnauthorizedException, BadGatewayException, BadRequestException, ConflictException, NotAcceptableException, UnsupportedMediaTypeException, HttpException, PreconditionFailedException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, ConflictException, NotAcceptableException, UnsupportedMediaTypeException, HttpException, PreconditionFailedException } from '@nestjs/common';
 import { PublicApiController, toEtag, versionFromIfMatch } from '../src/public-api/public-api.controller.ts';
 import { toErrorDocument } from '../src/public-api/json-api-http.ts';
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
@@ -67,6 +67,27 @@ test('propagates a NeoServlet 5xx as a 502, not a raw parse crash', async () => 
     (error: unknown) => error instanceof HttpException && error.getStatus() === 502
   );
 });
+
+test('a NeoServlet 401 evicts the cached token once and still answers 401', async () => {
+  let evictions = 0;
+  const fakeFetch = async () =>
+    new Response(JSON.stringify({ error: { message: 'Token has been revoked', status: 401 } }), { status: 401 });
+  const controller = new PublicApiController(schema, 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const request = { neoJwt: 'jwt-abc', evictNeoJwt: () => { evictions += 1; } };
+  await assert.rejects(() => controller.list('businessPartner', request), (error) => statusOf(error) === 401);
+  assert.equal(evictions, 1);
+});
+
+for (const status of [400, 403, 503]) {
+  test(`a NeoServlet ${status} does not evict the cached token`, async () => {
+    let evictions = 0;
+    const fakeFetch = async () => new Response(JSON.stringify({ error: { message: 'no' } }), { status });
+    const controller = new PublicApiController(schema, 'http://neo.local/etendo', fakeFetch as typeof fetch);
+    const request = { neoJwt: 'jwt-abc', evictNeoJwt: () => { evictions += 1; } };
+    await assert.rejects(() => controller.list('businessPartner', request));
+    assert.equal(evictions, 0);
+  });
+}
 
 test('maps writable public field names to NeoServlet internal paths for create', async () => {
   const crudSchema = structuredClone(schema);
