@@ -1786,6 +1786,26 @@ carried `onSave`/`isDirty` was removed; the form kebab entry's host does not rec
 kebab entry is disabled while the header is dirty instead (see "Unsaved header edits block the form
 send" in the ETP-5700 section).
 
+**Vendor-reference validation message remapped to this window's own label (ETP-5745, 5th fix) —
+this is the authoritative note, verified live against this window.** Classic's purchase-only
+pre-send check (`SIIUtils.invoicePreviousValidations`, `org.openbravo.module.sii`, untouched) names
+the field `POReference` by its classic label, "Referencia del proveedor" — this window renders a
+DIFFERENT label for that same column. `SiiSendHandler.remapDriftedFieldLabels` (`com.etendoerp.go`)
+substitutes it with **"Nº documento"** (es_ES) / **"Document No."** (en_US) before the message
+reaches the SPA.
+- **Verified source:** this window's own `LABEL_OVERRIDES.es_ES.POReference` /
+  `LABEL_OVERRIDES.en_US.POReference` in `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`
+  (mirroring `artifacts/purchase-invoice/decisions.json → window.labelOverrides`) — this is what
+  actually renders on screen for the field, confirmed by filling it in and re-sending to SII
+  successfully.
+- **Two wrong guesses this correction supersedes**, both plausible-looking and both wrong — kept
+  here so nobody re-introduces either: (1) `genericLabels.receivedDocumentnoOrderReference` ("Nº
+  Documento Proveedor") — that key belongs to the Fiscal Monitor's "received" table column, a
+  different screen entirely; (2) the raw `AD_Element` translation for `POReference` ("Nº de
+  referencia", `tools/app-shell/src/locales/es_ES.json → fields.POReference.label`) — that is the
+  GENERIC AD field label before this window's own override is applied, and this window always
+  applies the override.
+
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `etendo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
