@@ -3619,3 +3619,100 @@ describe('translateBackendError — posting-account refusals (ETP-5693)', () => 
     });
   }
 });
+
+// com.etendoerp.go PaymentTermHandler refuses a payment term by key + params: the days are missing,
+// not a whole number or out of range, or the term duplicates another one of the client by days or
+// by name (naming it, and saying whether it is active). Shared by the Payment Term window's save
+// and the "+ Crear condición de pago" modal. Real locale files, so the wording is pinned.
+describe('translateBackendError — payment-term refusals', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  const prose = 'Ya existe una condición de pago simple con 30 días';
+  const conflict = (key, params) => ({ messageKeys: [key], messageParams: params });
+
+  it('days duplicate of an active term names it', () => {
+    assert.equal(
+      translateBackendError(prose, es, conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días', paymentTermActive: true })),
+      'Ya existe la condición de pago «30 Días» con esos días',
+    );
+  });
+
+  it('days duplicate with no active flag is treated as active', () => {
+    assert.equal(
+      translateBackendError(prose, es, conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días' })),
+      'Ya existe la condición de pago «30 Días» con esos días',
+    );
+  });
+
+  for (const flag of [false, 'false', 'N']) {
+    it(`days duplicate of an inactive term (paymentTermActive ${JSON.stringify(flag)}) adds the reactivation hint`, () => {
+      assert.equal(
+        translateBackendError(prose, es, conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '7 Días', paymentTermActive: flag })),
+        'Ya existe la condición de pago «7 Días» con esos días, pero está desactivada. Reactívala en Condiciones de pago',
+      );
+    });
+  }
+
+  it('name duplicate of an active term names it', () => {
+    assert.equal(
+      translateBackendError('duplicate', es, conflict('ETGO_PaymentTermNameDuplicate', { paymentTermName: '45 Días', paymentTermActive: 'Y' })),
+      'Ya existe una condición de pago llamada «45 Días» en esta organización',
+    );
+  });
+
+  it('name duplicate of an inactive term adds the reactivation hint', () => {
+    assert.equal(
+      translateBackendError('duplicate', es, conflict('ETGO_PaymentTermNameDuplicate', { paymentTermName: '45 Días', paymentTermActive: false })),
+      'Ya existe una condición de pago llamada «45 Días» en esta organización, pero está desactivada. '
+        + 'Reactívala en Condiciones de pago',
+    );
+  });
+
+  it('renders the same sentences in es_AR, and in English for en_US', () => {
+    const params = conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días', paymentTermActive: true });
+    assert.equal(translateBackendError(prose, ar, params), translateBackendError(prose, es, params));
+    assert.equal(translateBackendError(prose, en, params), 'The payment term “30 Días” already exists with that number of days');
+  });
+
+  it('a duplicate key without paymentTermName falls through to the backend prose', () => {
+    for (const key of ['ETGO_PaymentTermDaysDuplicate', 'ETGO_PaymentTermNameDuplicate']) {
+      assert.equal(translateBackendError(prose, es, conflict(key, { paymentTermActive: true })), prose, key);
+      assert.equal(translateBackendError(prose, es, { messageKeys: [key] }), prose, key);
+      assert.equal(translateBackendError(prose, es, conflict(key, { paymentTermName: '' })), prose, key);
+    }
+  });
+
+  it('days out of range interpolates min, max and the entered value', () => {
+    assert.equal(
+      translateBackendError('out of range', es, conflict('ETGO_PaymentTermDaysOutOfRange', { field: 'overduePaymentDaysRule', min: 0, max: 365, value: 400 })),
+      'El número de días debe estar entre 0 y 365 (indicado: 400).',
+    );
+    assert.equal(
+      translateBackendError('out of range', en, conflict('ETGO_PaymentTermDaysOutOfRange', { min: 0, max: 365, value: 400 })),
+      'The number of days must be between 0 and 365 (entered: 400).',
+    );
+  });
+
+  it('days invalid (missing / not a whole number) interpolates the range', () => {
+    assert.equal(
+      translateBackendError('invalid', es, conflict('ETGO_PaymentTermDaysInvalid', { field: 'overduePaymentDaysRule', min: 1, max: 365 })),
+      'El número de días es obligatorio y debe ser un número entero entre 1 y 365.',
+    );
+  });
+
+  it('every payment-term backendError key exists in all three locales; the duplicates name the term exactly once', () => {
+    const keys = ['DaysInvalid', 'DaysOutOfRange', 'DaysDuplicate', 'DaysDuplicateInactive', 'NameDuplicate', 'NameDuplicateInactive']
+      .map((suffix) => `backendError.paymentTerm${suffix}`);
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const json = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      for (const key of keys) {
+        assert.equal(typeof json.genericLabels[key], 'string', `${locale}: ${key}`);
+        if (/Duplicate/.test(key)) {
+          assert.equal(json.genericLabels[key].match(/\{name\}/g)?.length, 1, `${locale}: ${key}`);
+        }
+      }
+      assert.match(json.genericLabels['backendError.paymentTermDaysOutOfRange'], /\{min\}.*\{max\}.*\{value\}/, locale);
+    }
+  });
+});

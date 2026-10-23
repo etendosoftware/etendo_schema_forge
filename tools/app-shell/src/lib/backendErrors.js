@@ -482,6 +482,12 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_AccountIsInactive: 'backendError.accountIsInactive',
   ETGO_AccountWrongLedger: 'backendError.accountWrongLedger',
   ETGO_LedgerNotUpdatable: 'backendError.ledgerNotUpdatable',
+  // ETP-5826 — com.etendoerp.go PaymentTermHandler: the number of days of a payment term is missing,
+  // not a whole number, or outside the range. `messageParams` { field, min, max, value }. The
+  // duplicate refusals of the same handler need the active/inactive split, see
+  // translatePaymentTermConflict.
+  ETGO_PaymentTermDaysInvalid: 'backendError.paymentTermDaysInvalid',
+  ETGO_PaymentTermDaysOutOfRange: 'backendError.paymentTermDaysOutOfRange',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -580,6 +586,42 @@ function renderInvalidAccountEntity(t, messageKeys, params) {
   }
   if (messageKeys.includes(INVALID_ACCOUNT_BP_ONLY_KEY)) {
     return resolveLocaleKey(t, 'backendError.invalidAccount.bpOnly', { bp });
+  }
+  return null;
+}
+
+// ETP-5826 — com.etendoerp.go PaymentTermHandler refuses a payment term that duplicates another one
+// of the client, by number of days (ETGO_PaymentTermDaysDuplicate) or by name in the organization
+// (ETGO_PaymentTermNameDuplicate). `messageParams` names the existing term (`paymentTermName`) and
+// says whether it is active (`paymentTermActive`); an inactive one gets a reactivation hint, since
+// creating another term is exactly what the user must not do. Shared by the Payment Term window's
+// save and the "+ Crear condición de pago" modal. Without a name the sentence cannot be built, so the
+// caller falls back to the next route.
+const PAYMENT_TERM_CONFLICT_KEYS = Object.freeze({
+  ETGO_PaymentTermDaysDuplicate: Object.freeze({
+    active: 'backendError.paymentTermDaysDuplicate',
+    inactive: 'backendError.paymentTermDaysDuplicateInactive',
+  }),
+  ETGO_PaymentTermNameDuplicate: Object.freeze({
+    active: 'backendError.paymentTermNameDuplicate',
+    inactive: 'backendError.paymentTermNameDuplicateInactive',
+  }),
+});
+
+function isInactiveFlag(value) {
+  return value === false || value === 'false' || value === 'N';
+}
+
+function translatePaymentTermConflict(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys)) return null;
+  const name = nonEmptyString(messageParams?.paymentTermName);
+  if (!name) return null;
+  for (const raw of messageKeys) {
+    const keys = Object.hasOwn(PAYMENT_TERM_CONFLICT_KEYS, raw) ? PAYMENT_TERM_CONFLICT_KEYS[raw] : null;
+    if (!keys) continue;
+    const key = isInactiveFlag(messageParams.paymentTermActive) ? keys.inactive : keys.active;
+    const translated = resolveLocaleKey(t, key, { name });
+    if (translated) return translated;
   }
   return null;
 }
@@ -1504,6 +1546,10 @@ export function translateBackendError(msg, t, options = {}) {
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);
   if (invalidAccount !== null) return invalidAccount;
+
+  // ETP-5826: same reason — the duplicate refusals pick their sentence from a param.
+  const paymentTermConflict = translatePaymentTermConflict(options.messageKeys, options.messageParams, t);
+  if (paymentTermConflict !== null) return paymentTermConflict;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
