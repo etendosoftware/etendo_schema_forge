@@ -17183,6 +17183,7 @@
     "ocrFailed": "No se pudo completar la importación por OCR.",
     "ocrNoDataExtracted": "No se pudo extraer información del documento. Revisa el archivo e inténtalo de nuevo.",
     "ocrExtractTimeout": "La lectura de la factura tardó demasiado. Vuelva a intentarlo.",
+    "ocrConfigUnavailable": "No se pudo cargar la configuración de lectura de facturas.",
     "ocrExtractSessionChanged": "Su sesión cambió mientras se leía la factura. Vuelva a intentarlo.",
     "ocrLinesCreated": "{count} líneas creadas",
     "ocrReceiverTaxIdMismatch": "La factura está emitida a otro NIF ({receiver}) distinto al de su organización. No se puede cargar.",
