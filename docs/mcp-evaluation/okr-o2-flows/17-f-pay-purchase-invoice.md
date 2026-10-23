@@ -7,5 +7,5 @@ Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
 - **Verificación:** la factura queda pagada (saldo pendiente 0) y hay un pago por ese importe.
 - **Datos previos:** factura de compra completada.
 - **Evidencia UI:** 👁 Pago no tiene "Nuevo" en la lista: se paga desde la factura, igual que el
-  cobro (flujo 5). 📄 guía `payment-out.md`.
+  cobro (`f-collect-invoice`). 📄 guía `payment-out.md`.
 - **Holded:** pagos sí; verificar el vínculo con la compra.
