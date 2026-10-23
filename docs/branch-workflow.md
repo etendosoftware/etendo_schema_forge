@@ -46,24 +46,25 @@ main     (protected — production; PRs must be up to date)
 develop  (protected — staging and integration point; PRs need NOT be up to date)
   ▲ feature/ETP-AAAA  →  PR, mini pipeline
   ▲ feature/ETP-BBBB  →  PR, mini pipeline
-  ▲ main → develop    →  PR before every cut: hotfixes, cut fixes, cut born up to date
+  ▲ main → develop    →  PR right after anything enters main, and before every cut
 ```
 
 ### Hierarchy and merge rules
 
 | Merge | Gate | Who merges |
 |-------|------|------------|
-| `feature → develop` | PR checks: mini pipeline (unit, mocked, Java unit), `Tests`, `Sonar Build`, review, code-owner gate | **Human**, in GitHub, merge commit |
-| `main → develop` | PR checks | **Human**, before every cut |
-| `mergeblock → main` (the cut) | Full Jenkins pipeline, integration included; branch up to date with main | **Human only** |
-| `hotfix → main` | Full pipeline | **Human only**; comes back through `main → develop` |
+| `feature → develop` | PR checks: mini pipeline (schema_forge: `Mocked E2E`; com.etendoerp.go: `goTest`, the Java tests without and with a database), `Tests`, `Sonar Build`, `verify`, review, code-owner gate | **Human**, in GitHub, merge commit |
+| `main → develop` | PR checks | **Human**, right after anything enters main, and before every cut |
+| `mergeblock → main` (the cut) | Full Jenkins pipeline, integration included; every required check green; branch up to date with main | **Human only** |
+| `hotfix → main` | Full pipeline | **Human only**; comes back at once through `main → develop` |
 
 ### Key rules
 
 - **Features branch FROM `develop`** (always `git fetch`/`pull` first for freshness) and PRs **target `develop`**.
 - **Each author resolves their own conflicts with `develop`.** A PR does not have to be up to date with `develop` to merge, only free of conflicts; `main` does require it, and the cut provides it by merging `origin/main` in.
 - **Agents NEVER merge to `develop` or `main`.** Every merge into them is a manual, supervised operation.
-- **Only the cut and hotfixes target `main`.** Feature PRs never do (`.github/workflows/branch-merge-policy.yml` enforces it).
+- **Only the cut and hotfixes target `main`.** Feature PRs and `develop` itself never do (`.github/workflows/branch-merge-policy.yml` enforces it).
+- **Branch protection applies to admins too** (`enforce_admins` on `develop` and `main`): nobody merges with a required check red or pending, and nobody pushes directly. See § Emergency bypass of branch protection.
 - **NEVER use squash merge.** Always use regular merge (`--merge`) to preserve full commit history. Squash discards individual commits and breaks traceability.
 - **Always assign the PR to the current user.**
 - **GitHub usernames must be stored in auto-memory** (not committed). On first interaction, look up the current user's GitHub username and any known reviewers, and save them to auto-memory for future use. **CRITICAL:** Before ANY GitHub operation, read the `github-usernames.md` file from the auto-memory directory (`~/.claude/projects/.../memory/github-usernames.md` — use the absolute path, NEVER a path relative to the project root). NEVER assume, hardcode, or guess a username — if no username is stored, ask the user and save it immediately.
@@ -71,35 +72,36 @@ develop  (protected — staging and integration point; PRs need NOT be up to dat
 ## Daily Cut — develop into main (ETP-5695)
 
 `main` is **production** and `develop` is **staging**, so the cut is a real deploy window. It covers
-all three repos (`etendo_schema_forge`, `schema_forge_core`, `com.etendoerp.go`) together;
-`schema_forge_core` always takes part, since its package version is published there, even when it
-carries no task of its own.
+`etendo_schema_forge` and `com.etendoerp.go` together. `schema_forge_core` is not cut: it goes by
+version (§ schema_forge_core versions).
 
 ### Order of operations
 
 ```
 1. main → develop        before every cut, always
-2. cut                   mergeblock/ETP-XXXX from develop + origin/main, in all three repos
+2. cut                   mergeblock/ETP-XXXX from develop + origin/main, in both repos
 3. mergeblock → main     PR, full pipeline; green → human merges → production
 ```
 
-1. **Bring main into develop, every time.** A `main → develop` PR, merged before cutting. There is
-   always something to bring: after each cut main holds at least that cut's merge commit, plus any
-   hotfix, test fix or revert made on the cut. Before step 2, `git log --oneline origin/develop..origin/main`
-   (merge commits included) must print nothing. Doing it every time gives two things:
+1. **Bring main into develop, every time.** A `main → develop` PR, merged before cutting. Hotfixes
+   and the fixes made on a cut already come back right after they enter main (§ Back to develop);
+   this step brings whatever is left, at least the previous cut's merge commit. Before step 2,
+   `git log --oneline origin/develop..origin/main` (merge commits included) must print nothing. Doing it every time gives two things:
    - **Hotfixes come back.** Until they do, develop (staging) and every branch cut from it run without
      the fix, and the cut is tested without it.
    - **The cut is born up to date.** main requires its PRs to be up to date. When develop already
      contains main, so does the cut branch; otherwise GitHub asks for *Update branch*, which adds an
-     untested merge commit to the cut and re-runs the full pipeline, another half hour.
+     untested merge commit to the cut and re-runs the full pipeline, more than another hour.
 2. **Cut.** Blockie (`merge-block-helper`) lists the tasks merged into develop since main and their
    checks, proposes the cut point (develop's head, or the last commit before a task that went in red)
    and, on an explicit OK, creates `mergeblock/ETP-XXXX` at that commit with `origin/main` merged in.
    After step 1 that merge does nothing; it only matters when the cut point is older than the
    `main → develop` merge (cutting one task earlier) or main moved in between.
-   The human pushes the branches; Clerk opens the PRs to `main` on request.
-3. **Full pipeline.** Jenkins runs everything there, integration included. Green → the human merges
-   in all three repos, and production updates. Red → the failure ladder below.
+   The human pushes the branches; Clerk opens the PRs to `main` on request. Then announce in the
+   team chat which tasks the cut carries; Blockie's list from this step is the usual source.
+3. **Full pipeline.** Jenkins runs everything there, integration included. Only when every required
+   check is green, Jenkins included, the human merges in both repos and production updates (branch
+   protection refuses an earlier merge, admins included). Red → the failure ladder below.
 
 ### Who does what
 
@@ -114,8 +116,9 @@ The cut and `main → develop` are the **only** PRs an agent may open towards `m
 ### Rules
 
 - **Agents never approve and never merge** these PRs. They only open them.
-- **PR title of the cut:** `Release YYYY-MM-DD: Promote develop to main` — plain ASCII, no
-  quotes or apostrophes (Git Police closes a PR whose title carries them, see
+- **PR title of the cut:** `Feature ETP-XXXX: Merge block DD-MM`, where `ETP-XXXX` is the day's
+  merge-block task — plain ASCII, no quotes or apostrophes (Git Police closes a PR whose title
+  carries them, see
   `.claude/agents/workflow.md` § pr_conventions).
 - **Nothing new in develop means no cut.** If `git log origin/main..origin/develop` lists no task
   merge, skip the day.
@@ -127,7 +130,7 @@ Each cut day gets **one Jira task** (`Merge Block DD/MM`, type Task, filed under
 team tracks release work in — Jira bookkeeping only) and **one branch per repo** named after it:
 
 ```
-mergeblock/ETP-XXXX      in schema_forge, schema_forge_core and com.etendoerp.go
+mergeblock/ETP-XXXX      in etendo_schema_forge and com.etendoerp.go
 ```
 
 - **Cut it from `develop` at the agreed commit, after a fresh `git fetch`,** then merge `origin/main`
@@ -156,8 +159,8 @@ the next one. Walk the rungs in order, cheapest first.
 2. **Fix tests only, one attempt.** An outdated test (an assertion, a renamed label, a mock that fell
    short) is fixed on the block branch, in test files only. Product code is never fixed on the cut:
    its author never reviewed that change, made under time pressure. One attempt, since every run of
-   the full pipeline costs about half an hour. The fix reaches develop through the next
-   `main → develop`.
+   the full pipeline costs more than an hour. The fix reaches develop through a `main → develop` PR
+   right after the cut merges (§ Back to develop).
 3. **Revert.** Product code involved, a cause nobody understands, or rung 2 failed: revert the task's
    merge on the block branch (`git revert -m 1 <merge>`).
    - More than one task: revert in **reverse merge order**. If reverting one does not turn the cut
@@ -166,6 +169,39 @@ the next one. Walk the rungs in order, cheapest first.
    - **Revert in develop at once,** through a PR with the same revert, not at the next cut: anyone who
      branches from develop that afternoon would otherwise inherit the broken code and find it in
      their own PR.
+
+### Back to develop
+
+Whatever enters `main` comes back to `develop` at once, through a `main → develop` PR: a hotfix, or a
+test fix or revert made on the cut. Developers and new branches get the fix within minutes instead of
+at the next cut, and their PRs stop failing on it. A clean cut, with no commits of its own, needs
+nothing until the next step 1.
+
+If that PR has conflicts, resolve them on a branch created from `develop` with `origin/main` merged
+in, and open that branch's PR to `develop`: `main` is protected and cannot take the resolution.
+
+### schema_forge_core versions
+
+`schema_forge_core` is not cut. Every merge into its `main` publishes a release (`release.yml`, a
+patch bump of the last tag) and opens `chore/bump-core-0.3.X` against `develop` here
+(`.github/workflows/bump-core-on-release.yml`).
+
+- A task that needs a core change pins that version on its own branch; everyone else gets it when
+  that PR enters `develop`.
+- Two tasks pinning different versions: keep the highest. Releases are published in order from
+  `main`, so it includes the earlier ones.
+- Regenerate the lock with `make bump-core-version VERSION=<version>` instead of merging it by hand.
+
+### Emergency bypass of branch protection
+
+Branch protection on `develop` and `main` applies to admins too (*Do not allow bypassing the above
+settings*). Bypass it only when a fix cannot wait for the pipeline (production affected) or a check
+cannot report (Jenkins down, or a lost webhook already re-triggered without success):
+
+1. Announce in the team chat which PR is merged, why, and who does it.
+2. An admin unticks the setting (Settings → Branches → the branch rule), merges the PR and ticks it
+   again right away.
+3. Re-run what was skipped and leave the reason as a comment on the PR.
 
 ## New Feature Branch Policy (MANDATORY)
 

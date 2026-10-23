@@ -17,6 +17,7 @@
     { "name": "org.openbravo.module.sii", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.sii" },
     { "name": "org.openbravo.module.taxreportlauncher", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.taxreportlauncher" },
     { "name": "org.openbravo.module.aeat303.es", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.aeat303.es" },
+    { "name": "org.openbravo.module.aeat349.es", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.aeat349.es" },
     { "name": "org.openbravo.module.bptaxidkey", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.bptaxidkey" },
     { "name": "com.smf.currency.apiconfig", "kind": "epic", "location": "modules", "remote": "koodu_software/com.smf.currency.apiconfig" },
     { "name": "com.smf.currency.conversionrate", "kind": "epic", "location": "modules", "remote": "koodu_software/com.smf.currency.conversionrate" },

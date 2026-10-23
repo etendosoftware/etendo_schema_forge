@@ -29,6 +29,8 @@ import {evalTabReadOnly} from './evalTabReadOnly.js';
 // like DataTable.jsx's inline-toggle error handling — that only need this one
 // pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
 export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
+// ETP-5736 — leaf module so custom windows can share the record-toolbar classes.
+export {getLinesToolbarClassName, getSaveBtnCls} from './toolbarClasses.js';
 
 /**
  * Header fields that are COMPUTED BY THE BACKEND FROM CHILD ROWS, and that therefore go stale the
@@ -919,14 +921,6 @@ export function getSidebarSlideClassName(isClosingLine) {
   return isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in';
 }
 
-// ETP-5601 — the record (form view) toolbar follows Figma on every window: 8px padding on all
-// sides around 40px controls (56px), with a 1px #E8EAEF bottom rule. The rule is an inset shadow,
-// not a border, so it is painted inside those 56px instead of adding a 57th pixel. It used to
-// vary per window (`toolbarPaddingX`, `toolbarBorderBottom`, `linesLayout`); it no longer does.
-export function getLinesToolbarClassName() {
-  return 'flex items-center justify-between p-2 shadow-[inset_0_-1px_0_var(--status-neutral-border)]';
-}
-
 export function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
   return getLineMenuActions ? extraActionsRef : undefined;
 }
@@ -1079,12 +1073,6 @@ export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLin
 // `toolbarButtonSize` switch ('sm' = 36px, 'default' = 40px) is gone.
 export function getSqBtnSize() {
   return 'h-10 w-10';
-}
-
-// Save, process and extra-action buttons: 40px, Figma's text-sm/leading-6 line, 20px icons
-// (`[&_svg]:size-5` beats the core Button's `[&_svg]:size-4`).
-export function getSaveBtnCls() {
-  return 'h-10 gap-2 leading-6 [&_svg]:size-5';
 }
 
 export function getDocumentReadOnly(lockWhenProcessed, _headerData) {

@@ -291,6 +291,12 @@
     },
     "generalAccounts": {
       "name": "Cuentas generales",
+      "methods": [
+        "GET",
+        "GETBYID",
+        "PUT",
+        "PATCH"
+      ],
       "fields": {
         "suspenseBalancingUse": {
           "visibility": "editable",
