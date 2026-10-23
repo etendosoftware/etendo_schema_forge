@@ -232,10 +232,12 @@ test.describe('Onboarding — Full registration flow', () => {
     await page.locator('#fiscalIdValue').fill('B12345674');
     await expect(startBtn).toBeEnabled();
 
-    // Address label carries the "(opcional)" tag. Fiscal id also renders "opcional"
-    // now (core 0.3.8), so scope to the address field's SetupField label
-    // (<label for="address">…(opcional)</label>) instead of a bare text match.
-    await expect(page.locator('label[for="address"]')).toContainText(/opcional/i);
+    // ETP-5806 — the single free-text address field (label "address", "(opcional)") was
+    // replaced by structured Street/Number/Building Name/City cells. The block itself starts
+    // fully optional (no error until one of Street/Number/City gets a value), and
+    // buildingName stays optional even then — it is the one AddressCell still carrying a
+    // standalone "(opcional)" trailing label, so it is the direct replacement for this check.
+    await expect(page.locator('label[for="buildingName"]')).toContainText(/opcional/i);
 
     // Sector dropdown visible
     await expect(page.locator('#sector')).toBeVisible();
@@ -249,8 +251,11 @@ test.describe('Onboarding — Full registration flow', () => {
     await continueBtn.click();
     await expect(page.locator('#clientName')).toHaveValue('Mi Empresa E2E');
 
-    // Fill optional fields
-    await page.getByRole('textbox', { name: /direcci[oó]n|address/i }).fill('Calle QA 123');
+    // Leave the whole address block untouched — ETP-5806 made it a unit: typing into ANY of
+    // Street/Number/Building Name/City (isAddressBlockStarted) makes Street+Number+City
+    // mandatory together, so there is no longer a single field that stays independently
+    // optional. Not filling it at all is what proves the block is genuinely optional — Start
+    // stays enabled and the submission below still goes through with no address data.
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 7: Start — verify the onboarding request fires
