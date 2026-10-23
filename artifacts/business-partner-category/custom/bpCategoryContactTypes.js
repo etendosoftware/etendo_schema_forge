@@ -12,13 +12,15 @@ export const VENDOR_FIELD = 'etgoIsvendor';
 /**
  * The two account sections of the Accounting tab, in display order. Fields are the
  * `C_BP_Group_Acct` API names; labels come from the AD column (`useLabel`). `required` mirrors the
- * AD (validator F19); it only draws the asterisk — every account is PATCHed on its own.
+ * AD (validator F19); it draws the asterisk and hides the clear button (`AccountSelect`) — every
+ * account is PATCHed on its own, so it never blocks a save.
  */
 export const ACCOUNT_SECTIONS = [
   {
     key: 'customer',
     typeField: CUSTOMER_FIELD,
     titleKey: 'bpCategoryCustomersSection',
+    subtitleKey: 'bpCategoryCustomersSectionSubtitle',
     accounts: [
       { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', required: true },
       { key: 'customerPrepayment', column: 'C_Prepayment_Acct' },
@@ -29,6 +31,7 @@ export const ACCOUNT_SECTIONS = [
     key: 'vendor',
     typeField: VENDOR_FIELD,
     titleKey: 'bpCategoryVendorsSection',
+    subtitleKey: 'bpCategoryVendorsSectionSubtitle',
     accounts: [
       { key: 'vendorLiability', column: 'V_Liability_Acct', required: true },
       { key: 'vendorPrepayment', column: 'V_Prepayment_Acct' },
@@ -55,16 +58,16 @@ export function resolveAccountSections(record) {
   return { noType: sections.length === 0, sections };
 }
 
-/** Field descriptors for EntityForm: the shared account search popup (`lookupDrawer: 'account'`). */
-export function toAccountFields(section) {
-  return section.accounts.map((a) => ({
-    key: a.key,
-    column: a.column,
-    required: !!a.required,
-    type: 'search',
-    lookup: true,
-    lookupDrawer: 'account',
-    reference: 'ValidCombination',
-    inputMode: 'selector',
-  }));
+/**
+ * The NEO selector of an account field of the category's accounting entity — the same endpoint
+ * the generated accounting tabs' account popup uses (`{apiBaseUrl}/{entity}/selectors/{column}`).
+ * The ValidCombination selector lists posting accounts only.
+ *
+ * @param {string|null|undefined} apiBaseUrl  the window's NEO base (`/sws/neo/<spec>`)
+ * @param {string} entity  the accounting entity name
+ * @param {{ column: string }} account  an entry of `ACCOUNT_SECTIONS[].accounts`
+ * @returns {string|null}
+ */
+export function accountSelectorUrl(apiBaseUrl, entity, account) {
+  return apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${account.column}` : null;
 }

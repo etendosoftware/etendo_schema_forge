@@ -1,7 +1,11 @@
 /**
- * SectionShell — the left-column (title + grey subtitle) / right-area (field grid)
- * section pattern used on every tab of this window (see figma-spec.md "Section
- * pattern"). Sections are separated by a hairline rule. Window-local layout.
+ * SectionShell — the left-column (title + grey subtitle) / right-area (field grid) section
+ * pattern of the Esquema contable (General Ledger Configuration) tabs (see that window's
+ * figma-spec.md "Section pattern"). Sections are separated by a hairline rule.
+ *
+ * Generic and window-agnostic: promoted from `windows/custom/general-ledger-configuration/`
+ * (ETP-5791) so the contact category Accounting tab (`BpCategoryAccountingPanel`) renders its
+ * account sections with the same card.
  *
  * @param {object} props
  * @param {string} props.title
@@ -9,7 +13,7 @@
  * @param {boolean} [props.first] — omit the top divider on the first section
  * @param {import('react').ReactNode} props.children — the right area (grid)
  */
-export default function SectionShell({ title, subtitle, first = false, children, 'data-testid': dataTestId }) {
+export function SectionShell({ title, subtitle, first = false, children, 'data-testid': dataTestId }) {
   return (
     <section
       className={`grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-x-8 gap-y-4 py-6 ${first ? '' : 'border-t border-[hsl(var(--border-subtle))]'}`}
@@ -23,3 +27,5 @@ export default function SectionShell({ title, subtitle, first = false, children,
     </section>
   );
 }
+
+export default SectionShell;

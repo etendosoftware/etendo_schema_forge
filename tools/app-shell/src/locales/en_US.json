@@ -20752,6 +20752,8 @@
     "bpCategoryContactTypeHint": "(inherited by new contacts only)",
     "bpCategoryCustomersSection": "Customers",
     "bpCategoryVendorsSection": "Vendor/Creditor",
+    "bpCategoryCustomersSectionSubtitle": "Accounts used to post the invoices and receipts of this category's customers.",
+    "bpCategoryVendorsSectionSubtitle": "Accounts used to post the invoices and payments of this category's vendors and creditors.",
     "bpCategoryNoTypeAccounts": "Check Customer or Vendor/Creditor to set up its accounts.",
     "bpCategoryAccountsSaveFirst": "Save the category to set up its accounts.",
     "bpCategoryNoAccountingRow": "This category has no accounting configuration.",

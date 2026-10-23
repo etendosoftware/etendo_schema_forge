@@ -20988,6 +20988,8 @@
     "bpCategoryContactTypeHint": "(lo heredan solo los contactos nuevos)",
     "bpCategoryCustomersSection": "Clientes",
     "bpCategoryVendorsSection": "Proveedor/Acreedor",
+    "bpCategoryCustomersSectionSubtitle": "Cuentas con las que se contabilizan las facturas y los cobros de los clientes de esta categoría.",
+    "bpCategoryVendorsSectionSubtitle": "Cuentas con las que se contabilizan las facturas y los pagos de los proveedores y acreedores de esta categoría.",
     "bpCategoryNoTypeAccounts": "Marca Cliente o Proveedor/Acreedor para configurar sus cuentas contables.",
     "bpCategoryAccountsSaveFirst": "Guarda la categoría para configurar sus cuentas contables.",
     "bpCategoryNoAccountingRow": "Esta categoría no tiene configuración contable.",

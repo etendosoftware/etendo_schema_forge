@@ -1,6 +1,5 @@
 import { useUI } from '@/i18n';
-import { ToggleRow, AccountSelect } from '@/components/contract-ui';
-import SectionShell from './SectionShell.jsx';
+import { ToggleRow, AccountSelect, SectionShell } from '@/components/contract-ui';
 import { ACCOUNT_OPTIONS } from './mockCatalogs.js';
 
 /**

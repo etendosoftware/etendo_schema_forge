@@ -112,9 +112,16 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 - Custom page: `tools/app-shell/src/windows/custom/general-ledger-configuration/`
 - Artifact: `artifacts/general-ledger-configuration/`
 - Registration already present in `menu.json`, `registry.js`, and `cli/config/regen-windows.json`
-- Generic components promoted from this work:
+- Generic components promoted from this work (all in `tools/app-shell/src/components/contract-ui/`,
+  exported by its `index.js`):
   - `AccountSelect` (was `AccountBadgeSelect` until ETP-5681)
   - `ToggleRow`
+  - `SectionShell` (ETP-5791) — the title/subtitle section card of every tab. It was window-local
+    (`windows/custom/general-ledger-configuration/SectionShell.jsx`) and was **moved** unchanged so
+    the contact category Accounting tab (`BpCategoryAccountingPanel`) renders its account sections
+    with the same card; the four tabs now import it from `@/components/contract-ui`. `Field.jsx`
+    stays window-local (only the General tab uses it; the account tabs label through
+    `AccountSelect`).
 
 ## Known Gaps
 

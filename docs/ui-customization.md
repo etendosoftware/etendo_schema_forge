@@ -295,7 +295,11 @@ passes `CustomLines={<Name>}` to `DetailView` instead of the generated table. Th
 the header's LIVE editing record as `data`, so it can react to unsaved header edits, and it loads
 and writes its own rows. It is gated by `window.detailVisibleWhenCapability` like the tab it
 replaces. Full prop list: `docs/decisions-reference.md` → `customLinesComponent`. Reference:
-`business-partner-category`'s `BpCategoryAccountingPanel` (sections shown per contact type).
+`business-partner-category`'s `BpCategoryAccountingPanel` (sections shown per contact type). For
+account fields laid out in titled sections, compose the shared contract-ui pieces the Esquema
+contable tabs use instead of a look-alike: `SectionShell` (title + subtitle card) holding an
+`AccountSelect` grid; an `AccountSelect` fed by a NEO selector instead of a static catalog takes
+`loadPage={useAccountSelectorPages(selectorUrl)}` (all three from `@/components/contract-ui`).
 
 **A field renderer that edits several columns — `customRenderer` + `ownsLabel` (ETP-5791).** A
 `customRenderer` component also receives `onFieldChange(key, value)` (write a sibling column),

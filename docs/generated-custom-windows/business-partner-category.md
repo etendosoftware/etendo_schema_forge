@@ -138,7 +138,13 @@ header can push the group to row 3 (always on the 3-column grid), behind the tog
 
 **Accounting tab — `BpCategoryAccountingPanel`.** Declared as `window.customLinesComponent`
 (label `customLinesLabel: "Accounting"`). It loads the category's single `C_BP_Group_Acct` row
-(`accounting?parentId=<id>`) and shows two sections:
+(`accounting?parentId=<id>`) and shows two sections. **They look and behave like the account
+tabs of the Esquema contable window** (PO decision, "Valores por defecto" / "Cuentas generales"),
+built from the same shared components, not a look-alike: each section is a `SectionShell` card
+(title + grey subtitle on the left, hairline rule between sections) holding a 1/2/3-column grid
+of `AccountSelect` fields (label with the red required `*`, a search button showing
+`"<code> - <name>"` that opens the centered `SearchPopup`, an ✕ to clear an optional account).
+Section subtitles: `bpCategoryCustomersSectionSubtitle` / `bpCategoryVendorsSectionSubtitle`.
 
 | Section | Accounts |
 |---|---|
@@ -153,8 +159,14 @@ header can push the group to row 3 (always on the 3-column grid), behind the tog
   padlock wording was superseded by the design, so there is no read-only variant
   (`resolveAccountSections` in `custom/bpCategoryContactTypes.js` returns only the checked
   sections).
-- Every account uses the shared account search popup (`lookupDrawer: 'account'`) and is PATCHed
-  on its own. The mandatory accounts of a hidden section never take part in a save: the row is
+- Account catalog: each `AccountSelect` is fed by the field's own NEO selector
+  (`<apiBaseUrl>/accounting/selectors/<column>`, the endpoint the generic `lookupDrawer:
+  'account'` popup uses) through `loadPage={useAccountSelectorPages(url)}`, so search and paging
+  are server-side and only **posting accounts** are listed (`PostingAccountCombinationSelectorPolicy`,
+  the same rule `PostingAccountCombinations` applies to the Esquema contable catalog). The
+  selected label is the row's `<key>$_identifier`. No backend change.
+- Each account is PATCHed on its own (an optional one cleared with ✕ PATCHes `null`; a refused
+  PATCH shows the error toast and restores the previous value). The mandatory accounts of a hidden section never take part in a save: the row is
   created by `c_bp_group_trg` with the accounting schema defaults (verified on the shared DB: all
   739 `C_BP_Group_Acct` rows have receivables, write-off and vendor liability filled).
 - A new (unsaved) category shows "Guarda la categoría para configurar sus cuentas contables.".

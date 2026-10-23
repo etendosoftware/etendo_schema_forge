@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
 import { toast } from 'sonner';
-import { EntityForm } from '@/components/contract-ui';
-import { useUI } from '@/i18n';
+import { AccountSelect, SectionShell, useAccountSelectorPages } from '@/components/contract-ui';
+import { useUI, useLabel } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { extractErrorMessage } from '@/hooks/useEntity.js';
 import { rememberRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
-import { resolveAccountSections, toAccountFields } from './bpCategoryContactTypes.js';
+import { accountSelectorUrl, resolveAccountSections } from './bpCategoryContactTypes.js';
 import { useAssociatedContactsNotice } from './useAssociatedContactsNotice.js';
 
 const ACCOUNTING_ENTITY = 'accounting';
@@ -22,29 +22,42 @@ function Notice({ children, testId }) {
   );
 }
 
-function SectionHeader({ title }) {
+/**
+ * One account of a section: the shared `AccountSelect` fed by the field's NEO selector (posting
+ * accounts only) instead of a static catalog. The selected label is the row's `$_identifier`.
+ */
+function AccountField({ account, row, apiBaseUrl, label, onPick }) {
+  const loadPage = useAccountSelectorPages(accountSelectorUrl(apiBaseUrl, ACCOUNTING_ENTITY, account));
   return (
-    <div className="flex items-center gap-2.5 border-b border-border-subtle pb-2 text-foreground">
-      <h2 className="m-0 text-[15px] font-semibold">{title}</h2>
-    </div>
+    <AccountSelect
+      label={label}
+      required={!!account.required}
+      value={row[account.key] ?? null}
+      displayValue={row[`${account.key}$_identifier`] ?? ''}
+      loadPage={loadPage}
+      onChange={(id, name) => onPick(account.key, id ?? null, name ?? '')}
+      data-testid={`bp-category-acct-${account.key}`}
+    />
   );
 }
 
 /**
  * Contact category — Accounting tab (ETP-5791), declared as `window.customLinesComponent`.
  *
- * Replaces the one-row inline grid with the category's single `C_BP_Group_Acct` row laid out in
- * two sections: Customers (receivables, prepayment, write-off) and Vendor/Creditor (liability,
- * prepayment). A section follows the header's type checkbox LIVE, from the unsaved form state
- * (`data` is DetailView's editing record): the section of an unchecked type is hidden, and its
- * values are never cleared.
+ * Lays the category's single `C_BP_Group_Acct` row out like the account tabs of the Esquema
+ * contable window, with the same shared components: one `SectionShell` card per contact type —
+ * Customers (receivables, prepayment, write-off) and Vendor/Creditor (liability, prepayment) —
+ * each holding an `AccountSelect` grid. A section follows the header's type checkbox LIVE, from
+ * the unsaved form state (`data` is DetailView's editing record): the section of an unchecked
+ * type is hidden, and its values are never cleared.
  *
  * Each account selection is PATCHed on its own, so the mandatory accounts of a hidden section
  * never take part in a save: they keep the values the accounting schema pre-filled when the
  * category was created (c_bp_group_trg).
  */
-export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, api, token, isNew }) {
+export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, isNew }) {
   const ui = useUI();
+  const t = useLabel();
   const apiFetch = useApiFetch(apiBaseUrl);
   const notifyContacts = useAssociatedContactsNotice();
   const [row, setRow] = useState(null);
@@ -73,11 +86,10 @@ export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, 
     return () => { cancelled = true; };
   }, [load]);
 
-  const handleChange = useCallback(async (key, value) => {
+  const handlePick = useCallback(async (key, value, label) => {
     if (!row) return;
-    setRow((prev) => ({ ...prev, [key]: value }));
-    if (key.includes('$_identifier')) return;
     const previous = row;
+    setRow((prev) => ({ ...prev, [key]: value, [`${key}$_identifier`]: value ? label : '' }));
     try {
       const res = await apiFetch(`/${ACCOUNTING_ENTITY}/${row.id}`, {
         method: 'PATCH',
@@ -110,21 +122,28 @@ export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, 
   if (status !== 'ready') return null;
 
   return (
-    <div className="flex flex-col gap-5 px-2 pb-5 pt-4" data-testid="bp-category-accounting-panel">
-      {sections.map((section) => (
-        <section key={section.key} className="flex flex-col gap-3" data-testid={`bp-category-accounts-${section.key}`}>
-          <SectionHeader title={ui(section.titleKey)} />
-          <EntityForm
-            entity={ACCOUNTING_ENTITY}
-            fields={toAccountFields(section)}
-            data={row}
-            onChange={handleChange}
-            cols={3}
-            api={api}
-            token={token}
-            apiBaseUrl={apiBaseUrl}
-            data-testid="EntityForm__bpCategoryAccounts" />
-        </section>
+    <div className="px-1" data-testid="bp-category-accounting-panel">
+      {sections.map((section, idx) => (
+        <SectionShell
+          key={section.key}
+          first={idx === 0}
+          title={ui(section.titleKey)}
+          subtitle={ui(section.subtitleKey)}
+          data-testid={`bp-category-accounts-${section.key}`}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {section.accounts.map((account) => (
+              <AccountField
+                key={account.key}
+                account={account}
+                row={row}
+                apiBaseUrl={apiBaseUrl}
+                label={t(account.column) ?? account.key}
+                onPick={handlePick}
+              />
+            ))}
+          </div>
+        </SectionShell>
       ))}
     </div>
   );
