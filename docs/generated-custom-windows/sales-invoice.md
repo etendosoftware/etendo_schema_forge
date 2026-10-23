@@ -1942,17 +1942,25 @@ ETP-5700 section.
 Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice and
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
 
-**Drifted classic field names in validation messages are remapped (ETP-5745, 5th fix):** classic
-`SIIUtils.invoicePreviousValidations` (`org.openbravo.module.sii`, untouched by this fix — its text is
-correct for Classic's own UI) names a field by its classic label in three of its fixed pre-send
-sentences. Two of those labels have since drifted from their current GO label: *"Referencia del
-proveedor"* → *"Nº documento"* (purchase-only — see `purchase-invoice.md` for the verified source and
-the correction history) and *"Clave tipo factura"* → *"Tipo factura"* (`sifDataTabs.field.invoiceType`,
+**Drifted classic field names in validation messages are fully replaced, bilingually (ETP-5745,
+5th fix):** classic `SIIUtils.invoicePreviousValidations` (`org.openbravo.module.sii`, untouched by
+this fix — its text is correct for Classic's own UI, and it is ALWAYS Spanish regardless of the
+GO session's locale) names a field by its classic label in three of its fixed pre-send sentences.
+Two of those labels have since drifted from their current GO label: *"Referencia del proveedor"* →
+*"Nº documento"* (purchase-only — see `purchase-invoice.md` for the verified source and the
+correction history) and *"Clave tipo factura"* → *"Tipo factura"* (`sifDataTabs.field.invoiceType`,
 the shared `SifTab.jsx` label — same literal text on both windows); *"Descripción SII"* had not
 drifted and is left alone. `SiiSendHandler.remapDriftedFieldLabels` runs right after
-`normalizeErrorShape`, on both the normal send and the registry-error-correction resend path, and
-does a plain literal substring replace on the response's `message` — any message it does not
-recognize (a SOAP fault, a different validation) passes through byte for byte.
+`normalizeErrorShape`, on both the normal send and the registry-error-correction resend path.
+**Bilingual correction:** detection still matches the classic SPANISH sentence (unchanged — correct,
+since classic never localizes it), but the match now replaces the ENTIRE message — not just the
+field name — with a GO-authored sentence resolved in the request's own language via
+`NeoLanguage.currentCode()` and the `NeoHints` catalog (`messages/neo_hints_{es,en}.properties`);
+see `purchase-invoice.md` for the full rationale (why not this module's `ETGO_*` `AD_Message`
+catalog) and the exact es_ES/en_US text for the purchase case — the sales case
+("Clave tipo factura") follows the identical mechanism. Any message that does not match one of the
+two known sentences (a SOAP fault, a different validation) passes through byte for byte, exactly
+as before.
 
 This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
 routing on completion — because `etendo_action` executes the entity's `NeoHandler` hooks

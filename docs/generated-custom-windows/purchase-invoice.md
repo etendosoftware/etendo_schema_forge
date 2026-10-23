@@ -1786,14 +1786,31 @@ carried `onSave`/`isDirty` was removed; the form kebab entry's host does not rec
 kebab entry is disabled while the header is dirty instead (see "Unsaved header edits block the form
 send" in the ETP-5700 section).
 
-**Vendor-reference validation message remapped to this window's own label (ETP-5745, 5th fix) —
-this is the authoritative note, verified live against this window.** Classic's purchase-only
+**Vendor-reference validation message fully replaced with a bilingual GO sentence (ETP-5745, 5th
+fix) — this is the authoritative note, verified live against this window.** Classic's purchase-only
 pre-send check (`SIIUtils.invoicePreviousValidations`, `org.openbravo.module.sii`, untouched) names
-the field `POReference` by its classic label, "Referencia del proveedor" — this window renders a
-DIFFERENT label for that same column. `SiiSendHandler.remapDriftedFieldLabels` (`com.etendoerp.go`)
-substitutes it with **"Nº documento"** (es_ES) / **"Document No."** (en_US) before the message
-reaches the SPA.
-- **Verified source:** this window's own `LABEL_OVERRIDES.es_ES.POReference` /
+the field `POReference` by its classic label, "Referencia del proveedor", in a Spanish-only
+sentence — this window renders a DIFFERENT label for that same column. `SiiSendHandler
+.remapDriftedFieldLabels` (`com.etendoerp.go`) detects the classic sentence (by its Spanish text,
+unchanged — classic never localizes it) and replaces the WHOLE message, not just the field name,
+with a GO-authored sentence in the SPA's own current locale:
+- **es_ES:** "La factura de compra debe contener información en el campo Nº documento."
+- **en_US:** "The purchase invoice must contain information in the Document No. field."
+- **Language source:** `NeoLanguage.currentCode()` — the GO locale `NeoAuthenticator` already
+  applies to the request from its `Accept-Language` header, which every `apiFetch` call sends with
+  the SPA's current locale. This is independent of (and more reliable than) `AD_User.AD_Language`:
+  the SPA's language switcher is a pure client-side toggle that never writes back to the backend.
+- **Text source:** the `NeoHints` catalog (`messages/neo_hints_es.properties` /
+  `neo_hints_en.properties`, `com.etendoerp.go`) — the same hand-authored-bilingual-text mechanism
+  already used for other backend-only messages (e.g. `FinancialAccountBankConnectionSupport`'s
+  PSD2 fetch-interval notice), not this module's `ETGO_*` `AD_Message` catalog: those exist as
+  stable identity tokens the SPA re-translates client-side, and their `AD_Message_Trl` rows are
+  mechanically copied from the English base rather than hand-translated — resolving one
+  server-side would render English regardless of locale, which is no fix at all for a user in
+  English who still saw a Spanish sentence. `SifSendingModal.jsx` (the only consumer of this
+  handler's response) reads `response.message` directly with no further translation step, so the
+  text has to already be correct when it leaves the handler.
+- **Verified GO field label source:** this window's own `LABEL_OVERRIDES.es_ES.POReference` /
   `LABEL_OVERRIDES.en_US.POReference` in `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`
   (mirroring `artifacts/purchase-invoice/decisions.json → window.labelOverrides`) — this is what
   actually renders on screen for the field, confirmed by filling it in and re-sending to SII
