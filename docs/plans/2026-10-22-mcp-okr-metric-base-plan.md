@@ -252,7 +252,8 @@ plan del 14 oct §5.8.
   `f-partial-payment-purchase-invoice`, `f-overpay-purchase-invoice`.
 - **Cobros y tesorería:** `f-collect-full-sales-invoice`, `f-manual-deposit`,
   `f-transfer-between-accounts`, `f-bank-transfer-pis`, `f-collect-partial-invoice`,
-  `e-delete-processed-collection`.
+  `f-undo-collection` (antes `e-delete-processed-collection`: la UI permite borrar el cobro, no se
+  niega).
 - **Productos y stock:** `q-product-prices-stock` *(semilla)*, `w-update-product-price`,
   `w-receive-stock`, `q-low-stock-products`.
 - **Contactos:** `w-create-customer`, `q-find-customer-by-tax-id`, `w-update-customer-address`,
