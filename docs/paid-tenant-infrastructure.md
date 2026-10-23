@@ -618,8 +618,8 @@ block on. Registry entry: `environment-access-enforcement-kill-switch` in `flags
 *A summary for orientation, not the procedure to execute. Follow the canonical operator page —
 "The subscription-model switch" in `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §3
 — which spells out the human gate that step 1 only names (re-verify that production Stripe
-checkout has not gone live, `open-and-notable-topics.md` §2.4, and settle the R37 edge cases of
-§3.11) and gives the full verification queries. Checklist and rationale: design doc §6.2–§6.3
+checkout has not gone live, recorded in R37's `@report`, and settle the R37 edge cases of
+`open-and-notable-topics.md` §3.11) and gives the full verification queries. Checklist and rationale: design doc §6.2–§6.3
 (`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md`).*
 
 **Right after installing, nothing changes in how purchases are recorded.** The system preference
