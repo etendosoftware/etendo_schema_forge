@@ -2228,6 +2228,41 @@ describe('translateBackendError — invoice lines without amount (ETP-5710)', ()
   });
 });
 
+// InvoiceLineAmountSupport.invalidDiscount() (com.etendoerp.go — ETP-5710): HTTP 422,
+// `error.code = invalidLineDiscount`, fixed English sentence. It reaches the user through
+// translateBackendError, so it must read in their language.
+describe('translateBackendError — invalid line discount (ETP-5710)', () => {
+  const KEY = 'backendError.invalidLineDiscount';
+  const RAW = 'The line discount must be between 0 and 100 (percent).';
+  const locale = (loc) => JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8'));
+
+  it('maps the exact server sentence to its key', () => {
+    assert.equal(translateBackendError(RAW, (k) => (k === KEY ? 'traducido' : k)), 'traducido');
+  });
+
+  it('does not match a near-miss sentence', () => {
+    const t = (k) => (k === KEY ? 'traducido' : k);
+    for (const other of [
+      'The line discount must be between 0 and 50 (percent).',
+      'The line discount must be between 0 and 100.',
+      'The header discount must be between 0 and 100 (percent).',
+    ]) {
+      assert.equal(translateBackendError(other, t), other);
+    }
+  });
+
+  it('round-trips through the real en_US, es_ES and es_AR locales', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const dict = locale(loc).genericLabels;
+      const t = (k) => dict[k] ?? k;
+      const out = translateBackendError(RAW, t);
+      assert.equal(out, dict[KEY], `${loc} did not translate the discount refusal`);
+      assert.ok(out && out !== KEY, `${loc} is missing ${KEY}`);
+    }
+    assert.notEqual(locale('es_ES').genericLabels[KEY], RAW);
+  });
+});
+
 // ReturnableQuantity.java / ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711). The
 // over-return refusal names the product and both quantities; the product is free text, so it is
 // located by the fixed delimiters.
