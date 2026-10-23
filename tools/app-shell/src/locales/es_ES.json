@@ -17266,6 +17266,7 @@
     "backendError.amortizationCurrencyRequired": "El campo Moneda no puede estar vacío.",
     "backendError.staleRecord": "Otra persona modificó este registro mientras lo editabas, así que tus cambios no se guardaron. Recarga el registro para ver los valores actuales.",
     "backendError.invoiceLinesWithoutAmount": "No se puede completar la factura: las líneas de {products} tienen cantidad y precio pero importe neto 0. Vuelve a guardar esas líneas para que se recalcule el importe y después complétala.",
+    "backendError.invalidLineDiscount": "El descuento de la línea debe estar entre 0 y 100 (porcentaje).",
     "backendError.returnQuantityExceeds": "No se pueden devolver {requested} de {product}: solo quedan {available} por devolver de esta línea ({total} en el documento de origen).",
     "backendError.returnNothingLeftOnLine": "No se pueden devolver {requested} de {product}: no queda nada por devolver de esta línea ({total} en el documento de origen).",
     "backendError.returnNothingLeft": "No queda nada por devolver de este documento: todas las líneas ya se han devuelto.",

@@ -632,7 +632,9 @@ The MCP publishes `cloneRecord` for this window (declared by `SalesInvoiceHeader
 ## Line discount, update recalculation and completion guard — ETP-5710
 
 `SalesInvoiceLineHandler` shares `InvoiceLineAmountSupport` with the new purchase-invoice line
-customization. Besides deriving `lineNetAmount` / `grossAmount` on a create (ETP-5528), it now applies the
+customization. Besides deriving `lineNetAmount` / `grossAmount` on a create (ETP-5528), and keeping the
+line's tax base (`taxableAmount`, stored but not exposed by the spec, so it cannot be read back through the
+MCP) equal to the stored net, including `0`, it now applies the
 line discount (`unitPrice = listPrice × (1 − etgoDiscount / 100)`, never twice: a price different from the
 list price is the caller's) and recalculates the amounts when a PATCH / PUT changes quantity, price, list
 price, discount, gross price or tax. Without a tax in the body only the net is derived; the gross follows

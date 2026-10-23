@@ -266,6 +266,11 @@ const BACKEND_ERROR_MAP = {
     'backendError.returnNothingLeft',
   'The document must be completed before goods can be returned from it.':
     'backendError.returnSourceNotCompleted',
+  // InvoiceLineAmountSupport.invalidDiscount() (com.etendoerp.go — ETP-5710), `error.code =
+  // invalidLineDiscount` — HTTP 422 for a line discount outside 0..100. The sentence is fixed (no
+  // parameters), so it is an exact-message entry like the ones above.
+  'The line discount must be between 0 and 100 (percent).':
+    'backendError.invalidLineDiscount',
   // ReturnableQuantity.refuseDirectCreate (com.etendoerp.go — ETP-5711): a return line is never
   // created by a plain POST of the line, only by the import / create-from-document actions. Two
   // exact strings (one per direction, they differ only in the action names), one translation.
