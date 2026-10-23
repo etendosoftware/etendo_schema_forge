@@ -129,6 +129,22 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
     expect(btn).not.toHaveTextContent('createReturnInvoice');
   });
 
+  it('renders the document icon (svg) before the label, like "Crear Factura"', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+        postConfirmButtonLabel="Crear Factura Rectificativa"
+      />
+    );
+    const btn = screen.getByTestId('action-create-return-invoice');
+    const svg = btn.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(btn.firstElementChild).toBe(svg);
+    expect(svg).toHaveClass('w-5', 'h-5');
+    expect(btn.textContent).toBe('Crear Factura Rectificativa');
+  });
+
   it('does not render the post-confirm button at all when status is CO but hasReturnInvoice is true', () => {
     render(
       <ConfirmWithCreditButtonBase
