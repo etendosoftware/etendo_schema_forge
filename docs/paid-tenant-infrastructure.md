@@ -409,7 +409,7 @@ The paid flow has separate contracts for the commercial purchase and environment
 | Endpoint | Purpose |
 |---|---|
 | `GET /sws/go/plans` | Lists the purchasable plans of the plan catalog (`planKey`, `name`, `description`, `displayPrice`, `currency`, `billingInterval`) — never a provider price id. The upgrade page's only quote source (§3.3). |
-| `GET /sws/go/billing/offers` | Returns the configured productive offer's `amountMinor`, `currency`, and recurring `interval`, retrieved from the configured Stripe Price. **No frontend caller since ETP-5049** — the upgrade page quotes the plan catalog only. |
+| `GET /sws/go/billing/offers` | Quotes the plan catalog's default plan: the grandfathered `legacy-productive` plan at the configured legacy price while the legacy price fallback is active, otherwise the cheapest purchasable plan of `GET /sws/go/plans` at its own Stripe Price. Returns that plan's `planKey`, `amountMinor`, `currency`, and recurring `interval` read live from the chargeable price, and no provider price id (removed in ETP-5049). **No frontend caller since ETP-5049** — the upgrade page quotes the plan catalog only. |
 | `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. A company name the account already uses for a productive environment is refused with 409 `CLIENT_NAME_IN_USE` before Stripe is contacted; any other match (another account, the account's demo) is allowed. A name shaped like a provisioning name (`PEND-` + 32 hex) is reserved (400). |
 | `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |
 | `GET /sws/go/billing/purchases/{purchaseId}` | Reads one account-scoped purchase, including its fixed demo source and created `clientId` when available. |
@@ -469,11 +469,16 @@ formatted through `formatCurrency` and phrased by `billingInterval`; an interval
 know renders as the bare amount rather than a wrong cadence. While the catalog is loading, has
 failed, is empty or answers 401, no price is shown and the checkout cannot proceed — the page never
 falls back to a second quote source, so it cannot advertise one price and charge another.
-`GET /sws/go/billing/offers` still projects the **configured** Price (`unit_amount`, `currency`,
-recurring interval); before ETP-5049 the page used it as a price preview while the catalog lookup
-was in flight or had failed, and it has no frontend caller now. Both projections reject
-unavailable, inactive, non-recurring, or unsupported interval prices rather than displaying a
-locally maintained fallback that could disagree with checkout.
+`GET /sws/go/billing/offers` quotes the catalog's **default plan** from the Stripe Price checkout
+charges for it: while the legacy price fallback is active, the grandfathered `legacy-productive`
+plan at the configured legacy price (what a checkout that names no plan charges); otherwise the
+cheapest purchasable plan, the first entry of `GET /sws/go/plans`, at its own price. The answer
+carries that plan's `planKey` and no provider price id (both ETP-5049). Before ETP-5049 the page used
+this endpoint as a price preview while the catalog lookup was in flight or had failed; the SPA no
+longer calls it. Both projections reject unavailable, inactive, non-recurring, or unsupported
+interval prices rather than displaying a locally maintained fallback that could disagree with
+checkout. Full contract: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, "The billing
+offer".
 
 Card details are entered on Stripe's hosted page; the Etendo GO browser neither collects nor mints
 payment tokens, and it never holds a provider price id — it sends the chosen plan's `planKey`. The
