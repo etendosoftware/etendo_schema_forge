@@ -1386,6 +1386,70 @@ describe('SifTab', () => {
     });
   });
 
+  // ── aeatsiiTipoRectif auto-default effect (ETP-5745 CP-11) ─────────────────
+  //
+  // `EM_AEATSII_C_INV_RECT_CHK` (the DB check constraint) requires BOTH
+  // aeatsiiMotivoRectif AND aeatsiiTipoRectif non-null once the SII type is 'R' —
+  // on sales (aeatsiiClaveTipo) AND on purchase (aeatsiiClaveTipoFc), since the
+  // constraint's ISSOTRX branches cover both. The field has no UI select (hidden,
+  // form:false in decisions.json); SifTab only ever lets the user set the Motivo.
+  // Before this fix, confirming a rectificativa whose aeatsiiTipoRectif was never
+  // populated (e.g. created via "Import from source invoice") failed with a raw,
+  // untranslated DB constraint violation instead of completing.
+  describe('aeatsiiTipoRectif auto-default effect (ETP-5745 CP-11)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('sales: calls onChange with I when the SII type is R and no value exists yet', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />);
+      expect(onChange).toHaveBeenCalledWith('aeatsiiTipoRectif', 'I');
+    });
+
+    it('purchase: calls onChange with I when the SII type (ClaveTipoFc) is R and no value exists yet', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', aeatsiiClaveTipoFc: 'R' },
+        onChange,
+      })} />);
+      expect(onChange).toHaveBeenCalledWith('aeatsiiTipoRectif', 'I');
+    });
+
+    it('never clobbers an existing aeatsiiTipoRectif value', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R', aeatsiiTipoRectif: 'S' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiTipoRectif', expect.anything());
+    });
+
+    it('does not default when the SII type is not R', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'F1' }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiTipoRectif', expect.anything());
+    });
+
+    it('does not default for a completed (non-draft) invoice', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', aeatsiiClaveTipo: 'R' }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiTipoRectif', expect.anything());
+    });
+
+    it('does not re-fire for the same record on a re-render', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />
+      );
+      expect(onChange.mock.calls.filter(c => c[0] === 'aeatsiiTipoRectif')).toHaveLength(1);
+
+      rerender(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />);
+      expect(onChange.mock.calls.filter(c => c[0] === 'aeatsiiTipoRectif')).toHaveLength(1);
+    });
+  });
+
   // ── dateReadOnly gates the 3 conditional Verifactu fields ──────────────────
 
   describe('dateReadOnly gates the conditional Verifactu fields (draft vs non-draft)', () => {
