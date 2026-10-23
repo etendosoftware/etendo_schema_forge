@@ -23,7 +23,10 @@ const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedCont
  * It expects the caller's `fetchDocuments` to put in `sharedContext`:
  *  - `orderDiscountMap`: `{ [orderId]: pct }` (orders without a global discount may be absent);
  *  - `invoiceGlobalDiscount`: the invoice header's current `etgoTotalDiscount` (null when none);
- *  - `invoiceHasLines`: whether the invoice already has lines.
+ *  - `invoiceHasLines`: whether the invoice already has lines;
+ *  - `invoiceStateKnown`: `true` only when BOTH the invoice header and its lines were read. Any
+ *    other value (a failed GET, or a caller that does not set it) means unknown: no toggle, no
+ *    warning, no PATCH — the lines still import normally.
  *
  * The decision itself is the pure `resolveOrderGlobalDiscount` (orderGlobalDiscountRule.js).
  *
@@ -44,6 +47,7 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
     })),
     invoicePct: sharedContext?.invoiceGlobalDiscount,
     invoiceHasLines: !!sharedContext?.invoiceHasLines,
+    invoiceStateKnown: sharedContext?.invoiceStateKnown === true,
   }), []);
 
   return useMemo(() => {

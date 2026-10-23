@@ -41,7 +41,7 @@ function hookProps() {
 /**
  * A `selection` as ImportLinesModal builds it. `orders` = [{ id, pct }] (documentNo = id).
  */
-function selection({ orders = [], invoicePct = null, invoiceHasLines = false, carryOn, selectedCount = 1 } = {}) {
+function selection({ orders = [], invoicePct = null, invoiceHasLines = false, invoiceStateKnown = true, carryOn, selectedCount = 1 } = {}) {
   const docs = orders.map(o => ({ id: o.id, documentNo: o.id }));
   return {
     selectedDocuments: docs,
@@ -52,6 +52,7 @@ function selection({ orders = [], invoicePct = null, invoiceHasLines = false, ca
       orderDiscountMap: Object.fromEntries(orders.map(o => [o.id, o.pct])),
       invoiceGlobalDiscount: invoicePct,
       invoiceHasLines,
+      invoiceStateKnown,
     },
     extraState: carryOn === undefined ? undefined : { carryGlobalDiscount: carryOn },
     setExtraState: vi.fn(),
@@ -94,6 +95,10 @@ describe('useOrderGlobalDiscountImport — document row', () => {
 describe('useOrderGlobalDiscountImport — selection panel', () => {
   it('renders nothing when no selected order carries a % and the invoice has none', () => {
     expect(renderPanel(selection({ orders: [{ id: 'SO-A', pct: 0 }] }))).toBeNull();
+  });
+
+  it('renders nothing (no toggle, no warning) when the invoice header or lines could not be read', () => {
+    expect(renderPanel(selection({ orders: [{ id: 'SO-A', pct: 10 }], invoiceStateKnown: false }))).toBeNull();
   });
 
   it.each([
@@ -181,8 +186,8 @@ describe('useOrderGlobalDiscountImport — footer hint', () => {
 describe('useOrderGlobalDiscountImport — afterImport header PATCH', () => {
   const ORDERS = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }];
 
-  function afterImportArgs({ selected, imported, invoicePct = null, invoiceHasLines = false, carryOn = true }) {
-    const sel = selection({ orders: ORDERS, invoicePct, invoiceHasLines, carryOn });
+  function afterImportArgs({ selected, imported, invoicePct = null, invoiceHasLines = false, invoiceStateKnown = true, carryOn = true }) {
+    const sel = selection({ orders: ORDERS, invoicePct, invoiceHasLines, invoiceStateKnown, carryOn });
     return {
       documents: sel.documents,
       sharedContext: sel.sharedContext,
@@ -200,6 +205,7 @@ describe('useOrderGlobalDiscountImport — afterImport header PATCH', () => {
     { name: 'invoice-has-lines warning', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceHasLines: true }, result: { carried: false } },
     { name: 'mixed selection whose 0 % order failed to import (B1)', args: { selected: ['SO-A', 'SO-B'], imported: ['SO-A'] }, result: { carried: false } },
     { name: 'nothing imported', args: { selected: ['SO-A'], imported: [] }, result: { carried: false } },
+    { name: 'invoice header or lines could not be read', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceStateKnown: false }, result: { carried: false } },
   ])('no PATCH: $name', async ({ args, result }) => {
     expect(await hookProps().afterImport(afterImportArgs(args))).toEqual(result);
     expect(mockApiFetch).not.toHaveBeenCalled();
@@ -273,6 +279,7 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
             orderDiscountMap: Object.fromEntries(orders.map(o => [o.id, o.pct])),
             invoiceGlobalDiscount: null,
             invoiceHasLines: false,
+            invoiceStateKnown: true,
           },
         })}
         fetchLines={async ({ docId }) => [

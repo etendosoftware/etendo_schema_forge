@@ -10,9 +10,13 @@
  *    `{ docNo, pct }`. An order without a global discount carries `pct = 0`.
  *  - `invoicePct`: the invoice header's current `etgoTotalDiscount` (null / 0 = none).
  *  - `invoiceHasLines`: the invoice already has (visible) lines.
+ *  - `invoiceStateKnown`: `false` when the invoice header or its lines could not be read. The
+ *    invoice % and lines are then unknown, so the outcome is always `none`: nothing is offered and
+ *    nothing is PATCHed, because an unread % could be overwritten and unread lines discounted.
  *
  * Outcomes (`kind`):
- *  - `none`            — nothing to show (no selection, or every order at 0 % and no invoice %).
+ *  - `none`            — nothing to show (no selection, invoice state unknown, or every order at
+ *                        0 % and no invoice %).
  *  - `mixed`           — the selected orders carry different global discounts (warning).
  *  - `invoiceMismatch` — the invoice already has a % that differs from the orders' one, including
  *                        orders at 0 % (warning).
@@ -44,13 +48,15 @@ export function normalizeGlobalDiscountPct(value) {
  * @param {Array<{docNo: string, pct: number|string|null}>} input.selectedOrders
  * @param {number|string|null} input.invoicePct
  * @param {boolean} input.invoiceHasLines
+ * @param {boolean} [input.invoiceStateKnown] `false` = invoice header or lines unread
  * @returns {{kind: 'none'}
  *   | {kind: 'mixed', orders: Array<{docNo: string, pct: number}>, invoicePct: number}
  *   | {kind: 'invoiceMismatch', pct: number, invoicePct: number}
  *   | {kind: 'invoiceHasLines', pct: number, invoicePct: number}
  *   | {kind: 'carry', pct: number, invoicePct: number, matchesInvoice: boolean}}
  */
-export function resolveOrderGlobalDiscount({ selectedOrders, invoicePct, invoiceHasLines }) {
+export function resolveOrderGlobalDiscount({ selectedOrders, invoicePct, invoiceHasLines, invoiceStateKnown }) {
+  if (invoiceStateKnown === false) return { kind: 'none' };
   const orders = (selectedOrders || []).map(o => ({ docNo: o.docNo, pct: normalizeGlobalDiscountPct(o.pct) }));
   const invPct = normalizeGlobalDiscountPct(invoicePct);
   if (orders.length === 0) return { kind: 'none' };

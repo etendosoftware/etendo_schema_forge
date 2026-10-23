@@ -21,11 +21,16 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 
   let invoiceCurrency = null;
   let invoiceGlobalDiscount = null;
+  let invoiceHeaderRead = false;
   if (headerRes.ok) {
     const invoiceHeader = (await headerRes.json())?.response?.data?.[0];
+    invoiceHeaderRead = !!invoiceHeader;
     invoiceCurrency = invoiceHeader?.currency || null;
     invoiceGlobalDiscount = Number(invoiceHeader?.etgoTotalDiscount) || null;
   }
+  // ETP-5828: a failed header or lines GET leaves the invoice % / lines unknown; the shared
+  // global-discount rule then offers no carry and never PATCHes the header.
+  const invoiceStateKnown = invoiceHeaderRead && invLinesRes.ok;
 
   let documents = [];
   let excludedByCurrency = false;
@@ -45,7 +50,9 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   }
   return {
     documents,
-    sharedContext: { alreadyImportedOrderLines, orderDiscountMap, invoiceGlobalDiscount, invoiceHasLines },
+    sharedContext: {
+      alreadyImportedOrderLines, orderDiscountMap, invoiceGlobalDiscount, invoiceHasLines, invoiceStateKnown,
+    },
     excludedByCurrency,
   };
 };

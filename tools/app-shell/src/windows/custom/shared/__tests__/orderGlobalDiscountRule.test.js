@@ -73,6 +73,26 @@ const CASES = [
     expected: { kind: 'carry', pct: 10, invoicePct: 10, matchesInvoice: true },
     carryOn: true, patchOn: false,
   },
+  // Invoice header or lines could not be read: an unread % or unread lines must never be
+  // overwritten / discounted, so nothing is offered and nothing is PATCHed.
+  {
+    name: 'invoice state unknown, read as 0 % without lines',
+    input: { selectedOrders: [order('A', 10)], invoicePct: null, invoiceHasLines: false, invoiceStateKnown: false },
+    expected: { kind: 'none' },
+    carryOn: false, patchOn: false,
+  },
+  {
+    name: 'invoice state unknown, read as the same % as the orders',
+    input: { selectedOrders: [order('A', 10)], invoicePct: 10, invoiceHasLines: false, invoiceStateKnown: false },
+    expected: { kind: 'none' },
+    carryOn: false, patchOn: false,
+  },
+  {
+    name: 'invoice state unknown with orders at different %',
+    input: { selectedOrders: [order('A', 10), order('B', 5)], invoicePct: null, invoiceHasLines: false, invoiceStateKnown: false },
+    expected: { kind: 'none' },
+    carryOn: false, patchOn: false,
+  },
 ];
 
 describe('resolveOrderGlobalDiscount', () => {

@@ -81,11 +81,11 @@ function mockRes(ok, data) {
   return { ok, json: async () => ({ response: { data } }) };
 }
 
-function installFetch({ orders, invLines = [], invoiceHeader }) {
+function installFetch({ orders, invLines = [], invoiceHeader, linesOk = true, headerOk = true }) {
   globalThis.fetch = mock.fn(async (url) => {
     if (url.includes('/sales-order/header?')) return mockRes(true, orders);
-    if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(true, invLines);
-    if (url.includes('/sales-invoice/header/')) return mockRes(true, [invoiceHeader]);
+    if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(linesOk, invLines);
+    if (url.includes('/sales-invoice/header/')) return mockRes(headerOk, [invoiceHeader]);
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
@@ -283,25 +283,40 @@ describe('ImportFromOrderModal — fetchDocuments invoice global-discount contex
     mock.reset();
   });
 
-  for (const { name, invLines, invoiceHeader, expected } of [
+  for (const { name, invLines, invoiceHeader, linesOk = true, headerOk = true, expected } of [
     {
       name: 'invoice with a % and lines',
       invLines: [{ id: 'il1' }],
       invoiceHeader: { etgoTotalDiscount: '5.00' },
-      expected: { invoiceGlobalDiscount: 5, invoiceHasLines: true },
+      expected: { invoiceGlobalDiscount: 5, invoiceHasLines: true, invoiceStateKnown: true },
     },
     {
       name: 'invoice without % nor lines',
       invLines: [],
       invoiceHeader: { etgoTotalDiscount: 0 },
-      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false },
+      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false, invoiceStateKnown: true },
+    },
+    {
+      name: 'header GET non-OK',
+      invLines: [],
+      invoiceHeader: { etgoTotalDiscount: '5.00' },
+      headerOk: false,
+      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false, invoiceStateKnown: false },
+    },
+    {
+      name: 'lines GET non-OK',
+      invLines: [{ id: 'il1' }],
+      invoiceHeader: { etgoTotalDiscount: 0 },
+      linesOk: false,
+      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false, invoiceStateKnown: false },
     },
   ]) {
     it(`exposes the invoice % and whether it has lines: ${name}`, async () => {
-      installFetch({ orders: [], invLines, invoiceHeader });
+      installFetch({ orders: [], invLines, invoiceHeader, linesOk, headerOk });
       const { sharedContext } = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
       assert.equal(sharedContext.invoiceGlobalDiscount, expected.invoiceGlobalDiscount);
       assert.equal(sharedContext.invoiceHasLines, expected.invoiceHasLines);
+      assert.equal(sharedContext.invoiceStateKnown, expected.invoiceStateKnown);
     });
   }
 });
