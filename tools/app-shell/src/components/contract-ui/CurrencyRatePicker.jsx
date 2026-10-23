@@ -55,6 +55,38 @@ function toCalendarISO(raw) {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+// The form's organization id: an FK value is a plain id string, or an object carrying `id`.
+function resolveOrganizationId(formData) {
+  const rawOrg = formData?.organization;
+  return typeof rawOrg === 'string' ? rawOrg : (rawOrg?.id ?? null);
+}
+
+// `?date=…&organization=…` for the currencyOptions action, or '' when neither is known.
+function buildCurrencyOptionsQuery(rateDate, organizationId) {
+  const params = new URLSearchParams();
+  if (rateDate) params.set('date', rateDate);
+  if (organizationId) params.set('organization', organizationId);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+// The option list out of either envelope (`{response: {data}}` or a bare array); [] otherwise.
+function readCurrencyOptions(json) {
+  const list = json?.response?.data ?? json ?? [];
+  return Array.isArray(list) ? list : [];
+}
+
+// The rate the trigger shows. The form's own rate is what will be saved, so it wins. The
+// option's rate is only a fallback when the form has never carried the field (key absent) or
+// for the org currency (whose rate is not a conversion). An explicit null on a foreign currency
+// means "no range on this date" and must render as «—», not as some other date's rate.
+function resolveDisplayRate(formRate, selectedOption, isOrgCurrency) {
+  const stagedRate = formRate != null && formRate !== '' ? parseFloat(formRate) : null;
+  if (stagedRate != null) return stagedRate;
+  const useOptionRate = formRate === undefined || isOrgCurrency;
+  return useOptionRate ? selectedOption?.rate ?? null : null;
+}
+
 /**
  * CurrencyRatePicker — searchable currency selector for document header fields.
  *
@@ -123,19 +155,11 @@ export function CurrencyRatePicker({
   const rateDate = rateDateField ? toCalendarISO(formData?.[rateDateField]) : null;
   // The form's organization scopes the rates (a NEW document has no saved org yet, and its org can
   // differ from the session's), so the list rate matches the rate the save will compute.
-  const rawOrg = formData?.organization;
-  const organizationId = typeof rawOrg === 'string' ? rawOrg : (rawOrg?.id ?? null);
+  const organizationId = resolveOrganizationId(formData);
 
   const selectedOption = options.find(o => o.id === value);
   const isOrgCurrency = selectedOption?.isOrgCurrency === true;
-  // The form's own rate is what will be saved, so it wins. The option's rate is only a
-  // fallback when the form has never carried the field (key absent) or for the org currency
-  // (whose rate is not a conversion). An explicit null on a foreign currency means "no range
-  // on this date" and must render as «—», not as some other date's rate.
-  const formRate = formData?.eTGOCurrencyRate;
-  const stagedRate = formRate != null && formRate !== '' ? parseFloat(formRate) : null;
-  const useOptionRate = formRate === undefined || isOrgCurrency;
-  const displayRate = stagedRate ?? (useOptionRate ? selectedOption?.rate ?? null : null);
+  const displayRate = resolveDisplayRate(formData?.eTGOCurrencyRate, selectedOption, isOrgCurrency);
   const displayIso = selectedOption?.isoCode ?? displayValue ?? value ?? '';
   const showMissingRate = !!value && displayRate == null && !!selectedOption && !isOrgCurrency;
 
@@ -148,17 +172,12 @@ export function CurrencyRatePicker({
     if (!apiBaseUrl) return undefined;
     let cancelled = false;
     setLoading(true);
-    const params = new URLSearchParams();
-    if (rateDate) params.set('date', rateDate);
-    if (organizationId) params.set('organization', organizationId);
-    const query = params.toString() ? `?${params.toString()}` : '';
+    const query = buildCurrencyOptionsQuery(rateDate, organizationId);
     (async () => {
       try {
         const res = await apiFetch(`/${entityPath}/${fetchId}/action/currencyOptions${query}`, { token });
         if (cancelled || !res.ok) return;
-        const json = await res.json();
-        const list = json?.response?.data ?? json ?? [];
-        setOptions(Array.isArray(list) ? list : []);
+        setOptions(readCurrencyOptions(await res.json()));
       } catch {
         // silently fall back — network error or endpoint unavailable
       } finally {
