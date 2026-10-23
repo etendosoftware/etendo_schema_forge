@@ -160,14 +160,18 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
       return ui(key, { count: selection.selectedCount, pct: fmtPct(decision.pct) });
     };
 
-    // Writes the header % only when the toggle is offered, ON, and the invoice has none yet. The
-    // decision is re-evaluated on the documents actually imported (a failed line POST drops its
-    // order from the set). Always a %, never an amount; line discounts are never touched.
-    const afterImport = async ({ importedDocIds, documents, sharedContext, base, invoiceId, extraState }) => {
-      const selectedDocuments = (documents || []).filter(d => importedDocIds.has(d.id));
-      const decision = decide({ selectedDocuments, sharedContext });
+    // Writes the header % only when the toggle is offered, ON, and the invoice has none yet.
+    // The decision is the one the user SAW: it is taken on the selected orders, never on the
+    // imported subset — a failed line POST must not turn a warning into a carry. The imported
+    // subset is only an extra guard that can drop the PATCH (nothing imported), never enable it.
+    // Always a %, never an amount; line discounts are never touched.
+    const afterImport = async ({ importedDocIds, selectedDocIds, documents, sharedContext, base, invoiceId, extraState }) => {
+      const docs = documents || [];
+      const decision = decide({ selectedDocuments: docs.filter(d => selectedDocIds?.has(d.id)), sharedContext });
       const carryOn = carryOnOf(extraState);
       if (!isCarryingGlobalDiscount(decision, carryOn)) return { carried: false };
+      const imported = decide({ selectedDocuments: docs.filter(d => importedDocIds?.has(d.id)), sharedContext });
+      if (imported.kind !== 'carry' || imported.pct !== decision.pct) return { carried: false };
       if (!shouldPatchInvoiceGlobalDiscount(decision, carryOn)) return { carried: true, pct: decision.pct };
       try {
         const res = await apiFetch(`${base}/${headerEndpoint}/${invoiceId}`, {
@@ -180,14 +184,15 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
       }
     };
 
-    const getSuccessToast = ({ count, afterImportResult }) => {
+    const getSuccessToast = ({ count, afterImportResult, partial }) => {
       if (afterImportResult?.failedPct != null) {
         return {
           message: ui('importGlobalDiscountPatchFailed', { pct: fmtPct(afterImportResult.failedPct) }),
           variant: 'warning',
         };
       }
-      if (!afterImportResult?.carried) return null;
+      // Some lines failed: the modal already shows its own warning; only a failed PATCH is added.
+      if (partial || !afterImportResult?.carried) return null;
       const key = count === 1 ? 'importGlobalDiscountImportedOne' : 'importGlobalDiscountImportedMany';
       return { message: ui(key, { count, pct: fmtPct(afterImportResult.pct) }) };
     };

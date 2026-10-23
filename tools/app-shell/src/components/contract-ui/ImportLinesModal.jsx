@@ -58,7 +58,9 @@ export default function ImportLinesModal({
   getDocTotal,           // ({ doc, lines, total, sharedContext }) => number shown as the row total
   renderSelectionPanel,  // (selection) => node rendered between the list and the footer
   getSelectionHint,      // (selection) => string | null overriding the footer "N selected" text
-  getSuccessToast,       // ({ count, importedDocIds, afterImportResult, ...selection }) => { message, variant? } | null
+  getSuccessToast,       // ({ count, importedDocIds, afterImportResult, partial, ...selection }) => { message, variant? } | null
+                         // `partial` = some line imports failed: the modal shows its own warning and
+                         // ALSO shows whatever this returns (e.g. a failed follow-up write).
 }) {
   if (!linesEndpoint && !submitImport) {
     throw new Error('ImportLinesModal: linesEndpoint prop is required unless submitImport is provided');
@@ -269,7 +271,9 @@ export default function ImportLinesModal({
       })
       : undefined;
     if (errors > 0) {
-      toast.warning(`Imported with ${errors} error(s) — review the invoice`);
+      toast.warning(ui('importedLinesWithErrors', { count: importedCount, errors }));
+      const extra = getSuccessToast?.({ ...selection, count: importedCount, importedDocIds, afterImportResult, partial: true });
+      if (extra?.message) (extra.variant === 'warning' ? toast.warning : toast.success)(extra.message);
     } else {
       showSuccessToast({ count: importedCount, importedDocIds, afterImportResult });
     }

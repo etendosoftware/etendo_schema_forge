@@ -17450,7 +17450,7 @@
     "importGlobalDiscountMixedTitle": "Los pedidos seleccionados tienen descuentos globales distintos",
     "importGlobalDiscountMixedBody": "{orders}. Solo se puede llevar el descuento global cuando coincide en todos los pedidos.",
     "importGlobalDiscountInvoiceMismatchTitle": "La factura ya tiene un descuento global del {invoicePct} %",
-    "importGlobalDiscountInvoiceMismatchBody": "No coincide con el {pct} % del pedido. Importa solo pedidos con un descuento global del {invoicePct} %.",
+    "importGlobalDiscountInvoiceMismatchBody": "No coincide con el {pct} % del pedido. Importá solo pedidos con un descuento global del {invoicePct} %.",
     "importGlobalDiscountInvoiceHasLinesTitle": "La factura ya tiene líneas sin descuento global",
     "importGlobalDiscountInvoiceHasLinesBody": "Aplicar el {pct} % afectaría también a esas líneas.",
     "importGlobalDiscountKeepsInvoice": "Se mantiene el descuento total de la factura ({invoicePct} %).",
