@@ -412,11 +412,12 @@ test.describe('List toolbar — crowded main row at 1280×720 (ETP-5509)', () =>
     expectTabGroupPlacement(withDate, windowBySlug('sales-invoice'));
 
     // --- Status filter: pick the status with the longest label. Options carry
-    // no test id either; the first button is the "all statuses" entry.
+    // no test id either; they are role=option rows and the first one is the
+    // "all statuses" entry.
     await statusTrigger.click();
     const statusPopover = page.getByRole('dialog');
     await expect(statusPopover).toBeVisible();
-    const statusOptions = statusPopover.locator('button');
+    const statusOptions = statusPopover.getByRole('option');
     await expect(statusOptions).toHaveCount(ROWS.length + 1);
     const statusLabels = (await statusOptions.allInnerTexts()).map((t) => t.trim());
     const longestStatus = statusLabels.slice(1).reduce((a, b) => (b.length > a.length ? b : a));

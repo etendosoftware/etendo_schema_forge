@@ -11,6 +11,13 @@ import { DistinctValuesList } from './DistinctValuesList.jsx';
 import { DateRangePopoverContent } from '@/components/ui/date-range-popover.jsx';
 import { computePresetRange, toIsoDate } from './datePresetFilter.js';
 
+// Case- and accent-insensitive form of a string for client-side option search
+// ("borr" / "Borr" / "bórr" all match "Borrador"): NFD, strip combining marks, lowercase.
+const normalizeSearchText = (s) => String(s ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase();
+
 // ETP-5601 — Figma's toolbar type: text-sm/leading-6/font-medium in #121217 for every text
 // control, idle or active. An active filter is told apart by its border alone. `text-[#121217]`
 // already has a dark-mode remap in the core stylesheet. Icons are 20px in
@@ -52,6 +59,9 @@ export function ListFilterBar({
   // instead of a nowrap row of their own, so a wrapping parent (the list toolbar's filters
   // cluster) can move them onto a new line one by one when space runs out.
   flowInParent = false,
+  // (excludeKeys) => URL-params string of the list's current filters minus those column
+  // filters (ETP-5561). Absent -> the status options are not narrowed (previous behaviour).
+  buildDistinctQuery = null,
 }) {
   const ui = useUI();
   const dictionary = useLocale();
@@ -102,14 +112,34 @@ export function ListFilterBar({
   }, [rows, statusCol]);
 
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  // The status search is client-side only: the backend matches the stored CODE, not the
+  // translated label, so the typed text is never sent as `_distinctSearch`. The status
+  // value set is small and is fetched whole once per menu open / extraParams change.
+  const [statusSearch, setStatusSearch] = useState('');
 
-  // Backend distinct fetch: paginated, server-side search, ignores active
-  // columnFilters (so the dropdown shows all values available for the
-  // unfiltered dataset).
+  // Backend distinct fetch: paginated, server-side search. Options follow the current view
+  // (subset tab, date range, advanced filter, other column filters) but exclude the status
+  // filter itself, so picking one status keeps the others listed.
+  const statusExtraParams = useMemo(
+    () => (statusCol && buildDistinctQuery ? buildDistinctQuery([statusCol.key]) : ''),
+    [statusCol, buildDistinctQuery],
+  );
   const statusDistinct = useDistinctValues(entity, statusCol?.key, {
     enabled: !!(statusCol && entity && apiBaseUrl && statusMenuOpen),
     apiBaseUrl,
+    extraParams: statusExtraParams,
   });
+  // What DistinctValuesList receives: the hook's state, but with the search box bound to the
+  // LOCAL state. Its unmount cleanup (`setSearch('')`) therefore resets the local text, and
+  // the hook's own search stays '' so typing never refetches.
+  const { values: statusValues, loading: statusLoading, hasMore: statusHasMore,
+    loadMore: statusLoadMore, loadingMore: statusLoadingMore } = statusDistinct;
+  const statusDistinctView = useMemo(() => ({
+    ...statusDistinct,
+    search: statusSearch,
+    setSearch: setStatusSearch,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [statusValues, statusLoading, statusHasMore, statusLoadMore, statusLoadingMore, statusSearch]);
 
   const activeType = columnFilters?.[typeCol?.key]?.value;
   const activeTypeCode = Array.isArray(activeType) ? activeType[0] : null;
@@ -177,8 +207,6 @@ export function ListFilterBar({
   // rows first or reorders once the (uncached) backend distinct-values fetch
   // resolves. Without this, the two sources arrive in different orders and
   // the user sees the options visibly reshuffle on every open.
-  // Local search also filters client-side so in-memory-only codes are hidden
-  // when they don't match what the user typed.
   const normalizeCode = (c) => {
     if (c === true) return 'true';
     if (c === false) return 'false';
@@ -201,10 +229,8 @@ export function ListFilterBar({
       if (!isListableStatusCode(c)) continue;
       if (!seen.has(c)) { seen.add(c); out.push(c); }
     }
-    const q = statusDistinct.search.trim().toLowerCase();
     for (const c of inMemoryStatusCodes) {
       if (seen.has(c) || !isListableStatusCode(c)) continue;
-      if (q && !labelForStatus(c).toLowerCase().includes(q) && !String(c).toLowerCase().includes(q)) continue;
       seen.add(c);
       out.push(c);
     }
@@ -212,8 +238,16 @@ export function ListFilterBar({
       seen.add(activeStatusCode);
       out.push(activeStatusCode);
     }
-    return out.slice().sort(compareStatusCodes);
-  }, [statusCol, statusDistinct.values, statusDistinct.search, inMemoryStatusCodes, activeStatusCode, dictionary]);
+    // Search applies to every merged source (including the active code: when it does not
+    // match the query it is filtered out like any other option). Matches the displayed
+    // label only: raw codes are never shown to the user, so matching them would list
+    // options for reasons the user cannot see.
+    const q = normalizeSearchText(statusSearch.trim());
+    const matched = q
+      ? out.filter((c) => normalizeSearchText(labelForStatus(c)).includes(q))
+      : out;
+    return matched.slice().sort(compareStatusCodes);
+  }, [statusCol, statusValues, statusSearch, inMemoryStatusCodes, activeStatusCode, dictionary]);
 
   const activeStatusLabel = useMemo(() => {
     if (!activeStatusCode) return ui('allStatuses');
@@ -347,7 +381,7 @@ export function ListFilterBar({
               ].join(' ')}
             >
               {activeStatusLabel}
-              {statusDistinct.loading && (
+              {statusLoading && (
                 <Loader2
                   className="h-3.5 w-3.5 animate-spin text-muted-foreground"
                   data-testid="Loader2__6d5e90" />
@@ -362,7 +396,7 @@ export function ListFilterBar({
               codes={mergedStatusCodes}
               labelFor={labelForStatus}
               renderOption={renderStatusOption}
-              distinct={statusDistinct}
+              distinct={statusDistinctView}
               onSelect={(code) => {
                 handleStatusSelect(code);
                 setStatusMenuOpen(false);

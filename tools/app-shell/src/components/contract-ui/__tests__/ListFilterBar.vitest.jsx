@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/ListFilterBar.jsx
-import { render, screen, act, within } from '@testing-library/react';
+import { render, screen, act, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 // Not mocked: the real fixed-order catalog, so the expected order is derived
 // from the same source the component sorts with (ETP-4913).
@@ -15,6 +15,13 @@ vi.mock('@/i18n', () => ({
 }));
 
 // Mock dependencies
+// ListFilterBar reads its dictionary from the core package: pass the real one through unless a
+// test installs a dictionary (e.g. translated status labels with accents).
+vi.mock('@etendosoftware/app-shell-core', async () => {
+  const actual = await vi.importActual('@etendosoftware/app-shell-core');
+  return { ...actual, useLocale: () => localeOverride.current ?? actual.useLocale() };
+});
+
 vi.mock('@/lib/utils', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
@@ -23,8 +30,12 @@ vi.mock('@/lib/utils', () => ({
 // payload (e.g. to populate the backend-sourced `values` array and exercise
 // the merge loops in mergedTypeCodes/mergedStatusCodes, which the default
 // empty-array mock below never reaches).
-const { distinctValuesOverride, realListFlag } = vi.hoisted(() => ({
+const { distinctValuesOverride, realListFlag, distinctCalls, localeOverride } = vi.hoisted(() => ({
+  // Stable dictionary object returned by the core useLocale (status labels come from `statuses`).
+  localeOverride: { current: null },
   distinctValuesOverride: { current: null },
+  // Every (entity, field, options) the component passed to useDistinctValues, in call order.
+  distinctCalls: [],
   // When true, the REAL DistinctValuesList renders and the distinct hook keeps its own
   // search state (like the production hook), so menus can be driven end to end.
   realListFlag: { current: false },
@@ -33,7 +44,8 @@ const { distinctValuesOverride, realListFlag } = vi.hoisted(() => ({
 vi.mock('@/hooks/useDistinctValues.js', async () => {
   const { useState } = await import('react');
   return {
-    useDistinctValues: () => {
+    useDistinctValues: (entity, field, opts) => {
+      distinctCalls.push({ entity, field, opts });
       const [search, setSearch] = useState('');
       const base = distinctValuesOverride.current || {
         values: [],
@@ -88,8 +100,10 @@ vi.mock('@/components/ui/date-range-popover.jsx', () => ({
 import { ListFilterBar } from '../ListFilterBar.jsx';
 
 afterEach(() => {
+  distinctCalls.length = 0;
   distinctValuesOverride.current = null;
   realListFlag.current = false;
+  localeOverride.current = null;
 });
 
 const COLUMNS = [
@@ -1490,6 +1504,289 @@ describe('ListFilterBar status and type menus (real list)', () => {
       await user.keyboard('{Escape}');
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
       expect(trigger).toHaveFocus();
+    });
+  });
+});
+
+describe('ListFilterBar status options follow the current view', () => {
+  const COLS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'documentStatus', label: 'Status', type: 'status' },
+    { key: 'docType', label: 'Document Type', type: 'string', isTypeFilter: true },
+  ];
+  const lastCallFor = (field) => [...distinctCalls].reverse().find((c) => c.field === field);
+  const baseProps = { columns: COLS, columnFilters: {}, onFilterChange: vi.fn(), entity: 'header', apiBaseUrl: '/api' };
+
+  it('builds the status extraParams with the status column key excluded', () => {
+    const buildDistinctQuery = vi.fn(() => 'criteria=abc&active=true');
+    render(<ListFilterBar {...baseProps} buildDistinctQuery={buildDistinctQuery} />);
+    expect(buildDistinctQuery).toHaveBeenCalledWith(['documentStatus']);
+    expect(lastCallFor('documentStatus').opts.extraParams).toBe('criteria=abc&active=true');
+  });
+
+  it('gives the type dropdown no extraParams', () => {
+    render(<ListFilterBar {...baseProps} buildDistinctQuery={() => 'criteria=abc'} />);
+    expect(lastCallFor('docType').opts.extraParams).toBeUndefined();
+  });
+
+  it('passes an empty extraParams when buildDistinctQuery is not provided', () => {
+    render(<ListFilterBar {...baseProps} />);
+    expect(lastCallFor('documentStatus').opts.extraParams).toBe('');
+  });
+
+  it('passes the updated extraParams when buildDistinctQuery output changes', () => {
+    const { rerender } = render(<ListFilterBar {...baseProps} buildDistinctQuery={() => 'active=true'} />);
+    expect(lastCallFor('documentStatus').opts.extraParams).toBe('active=true');
+    rerender(<ListFilterBar {...baseProps} buildDistinctQuery={() => 'active=false'} />);
+    expect(lastCallFor('documentStatus').opts.extraParams).toBe('active=false');
+  });
+
+  it('keeps the active status listed and selected when the narrowed options omit it', async () => {
+    realListFlag.current = true;
+    const user = userEvent.setup();
+    distinctValuesOverride.current = {
+      values: [{ id: 'DR' }], loading: false, loadingMore: false, hasMore: false,
+      search: '', setSearch: () => {}, loadMore: () => {},
+    };
+    render(
+      <ListFilterBar
+        {...baseProps}
+        columnFilters={{ documentStatus: { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' } }}
+        buildDistinctQuery={() => 'active=true'}
+      />,
+    );
+    await user.click(screen.getByTestId('filter-status'));
+    await screen.findByRole('listbox');
+    const options = screen.getAllByRole('option');
+    const complete = options.find((o) => o.textContent === 'Complete');
+    expect(complete).toBeTruthy();
+    expect(complete).toHaveAttribute('aria-selected', 'true');
+    expect(options.map((o) => o.textContent)).toContain('Draft');
+  });
+});
+
+// The status search is client-side: typed text filters the merged option set by its displayed
+// label only (raw codes are never shown to the user) and is never sent to the backend.
+describe('ListFilterBar status menu client-side label search', () => {
+  const COLS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'documentStatus', label: 'Status', type: 'status' },
+    { key: 'docType', label: 'Document Type', type: 'string', isTypeFilter: true },
+  ];
+  const rowsOf = (...codes) => codes.map((c, i) => ({ id: `r${i}`, documentStatus: c }));
+  const distinctOf = (...ids) => ({
+    values: ids.map((id) => ({ id })),
+    loading: false, loadingMore: false, hasMore: false,
+    search: '', setSearch: () => {}, loadMore: () => {},
+  });
+  const renderBar = (props = {}) => render(
+    <ListFilterBar columns={COLS} columnFilters={{}} onFilterChange={vi.fn()} entity="header" apiBaseUrl="/api" {...props} />,
+  );
+  const openStatus = async (user) => {
+    await user.click(screen.getByTestId('filter-status'));
+    return screen.findByRole('listbox');
+  };
+  const optionTexts = () => screen.getAllByRole('option').map((o) => o.textContent);
+  const search = async (user, text) => {
+    const box = screen.getByRole('combobox');
+    await user.clear(box);
+    await user.type(box, text);
+  };
+  const waitForOptions = (expected) => waitFor(() => expect(optionTexts()).toEqual(expected));
+
+  // Spanish status dictionary: the displayed labels differ from the raw codes.
+  beforeEach(() => {
+    realListFlag.current = true;
+    localeOverride.current = {
+      statuses: { DR: { label: 'Borrador' }, CO: { label: 'Completado' }, VO: { label: 'Anulado' } },
+    };
+  });
+
+  it.each([['borr'], ['BORR'], ['bórr']])(
+    'finds a backend-only code by its label for the query %s (case and accent insensitive)',
+    async (query) => {
+      const user = userEvent.setup();
+      distinctValuesOverride.current = distinctOf('DR', 'CO');
+      renderBar({ rows: [] });
+      await openStatus(user);
+      await search(user, query);
+      await waitForOptions(['allStatuses', 'Borrador']);
+    },
+  );
+
+  it('ignores leading and trailing spaces in the query', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR', 'CO');
+    renderBar({ rows: [] });
+    await openStatus(user);
+    await search(user, '  borr  ');
+    await waitForOptions(['allStatuses', 'Borrador']);
+  });
+
+  it('filters backend values by label: "anul" keeps only VO (Anulado) and hides the other codes', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('VO', 'DR', 'CO');
+    renderBar({ rows: [] });
+    await openStatus(user);
+    await search(user, 'anul');
+    await waitForOptions(['allStatuses', 'Anulado']);
+  });
+
+  it('does not match the raw code when the label does not contain the query ("vo" -> no Anulado)', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('VO', 'DR');
+    renderBar({ rows: [] });
+    await openStatus(user);
+    // No displayed label (Anulado, Borrador) contains "vo": only the raw code VO does.
+    await search(user, 'vo');
+    expect(await screen.findByTestId('distinct-values-no-results')).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Anulado' })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+
+  it('does not list an option for a code-only query: "dr" does not list Borrador', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR', 'CO', 'VO');
+    renderBar({ rows: [] });
+    await openStatus(user);
+    await search(user, 'dr');
+    expect(await screen.findByTestId('distinct-values-no-results')).toBeInTheDocument();
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+
+  it('matches "co" through the label Completado only, not through the code CO of other options', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR', 'CO', 'VO');
+    renderBar({ rows: [] });
+    await openStatus(user);
+    await search(user, 'co');
+    await waitForOptions(['allStatuses', 'Completado']);
+  });
+
+  it('hides the active code when the query does not match it and lists it again when the query is cleared', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR', 'CO');
+    renderBar({
+      rows: [],
+      columnFilters: { documentStatus: { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' } },
+    });
+    await openStatus(user);
+    expect(optionTexts()).toContain('Completado');
+    expect(screen.getAllByRole('option').find((o) => o.textContent === 'Completado')).toHaveAttribute('aria-selected', 'true');
+    await search(user, 'borr');
+    await waitForOptions(['allStatuses', 'Borrador']);
+    await user.clear(screen.getByRole('combobox'));
+    await waitFor(() => expect(optionTexts()).toContain('Completado'));
+    expect(screen.getAllByRole('option').find((o) => o.textContent === 'Completado')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps the active code, still selected, when the query matches it', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR');
+    renderBar({
+      rows: [],
+      columnFilters: { documentStatus: { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' } },
+    });
+    await openStatus(user);
+    await search(user, 'comp');
+    await waitForOptions(['allStatuses', 'Completado']);
+    expect(screen.getAllByRole('option').find((o) => o.textContent === 'Completado')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps the fixed business order after filtering', async () => {
+    const user = userEvent.setup();
+    // Arrival order is the reverse of the business order; "o" is in every label.
+    distinctValuesOverride.current = distinctOf('VO', 'CO', 'DR');
+    renderBar({ rows: [] });
+    await openStatus(user);
+    const full = optionTexts();
+    expect(full).toEqual(['allStatuses', 'Borrador', 'Completado', 'Anulado']);
+    await search(user, 'o');
+    await waitFor(() => expect(optionTexts()).toEqual(full));
+    // "l" is in Completado and Anulado only: they stay in business order, not arrival order.
+    await search(user, 'l');
+    await waitFor(() => expect(optionTexts()).toEqual(['allStatuses', 'Completado', 'Anulado']));
+  });
+
+  it('shows the no-results message and no option rows when nothing matches', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR', 'CO');
+    renderBar({ rows: rowsOf('DR') });
+    await openStatus(user);
+    await search(user, 'zzzz');
+    expect(await screen.findByTestId('distinct-values-no-results')).toBeInTheDocument();
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+
+  it('reopens with an empty search box and the full list after closing mid-search with a partial match', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR', 'CO');
+    renderBar({ rows: [] });
+    await openStatus(user);
+    const full = optionTexts();
+    await search(user, 'borr');
+    await waitForOptions(['allStatuses', 'Borrador']);
+    await user.keyboard('{Escape}');
+    await openStatus(user);
+    expect(screen.getByRole('combobox')).toHaveValue('');
+    expect(optionTexts()).toEqual(full);
+  });
+
+  it('never sends the typed text to the backend: the status hook options carry no search and keep the same extraParams', async () => {
+    const user = userEvent.setup();
+    distinctValuesOverride.current = distinctOf('DR', 'CO');
+    renderBar({ rows: [], buildDistinctQuery: () => 'active=true' });
+    await openStatus(user);
+    await search(user, 'borr');
+    await waitForOptions(['allStatuses', 'Borrador']);
+    const statusCalls = distinctCalls.filter((c) => c.field === 'documentStatus');
+    expect(statusCalls.length).toBeGreaterThan(1);
+    for (const call of statusCalls) {
+      expect(call.opts).not.toHaveProperty('search');
+      expect(call.opts.extraParams).toBe('active=true');
+    }
+  });
+
+  describe('against the captured list props (stubbed list)', () => {
+    beforeEach(() => {
+      realListFlag.current = false;
+    });
+
+    it('binds the list search box to local state and leaves the hook setSearch untouched', () => {
+      const hookSetSearch = vi.fn();
+      distinctValuesOverride.current = { ...distinctOf('DR', 'CO'), setSearch: hookSetSearch };
+      renderBar({ rows: [] });
+      fireEvent.click(screen.getByTestId('filter-status'));
+      const view = lastDistinctValuesListProps.current.distinct;
+      expect(view.search).toBe('');
+      act(() => view.setSearch('borr'));
+      expect(hookSetSearch).not.toHaveBeenCalled();
+      expect(lastDistinctValuesListProps.current.distinct.search).toBe('borr');
+      expect(lastDistinctValuesListProps.current.codes).toEqual(['DR']);
+    });
+
+    it('resets the local search when the list unmount cleanup calls setSearch with an empty string', () => {
+      distinctValuesOverride.current = distinctOf('DR', 'CO');
+      renderBar({ rows: [] });
+      fireEvent.click(screen.getByTestId('filter-status'));
+      act(() => lastDistinctValuesListProps.current.distinct.setSearch('borr'));
+      expect(lastDistinctValuesListProps.current.codes).toEqual(['DR']);
+      act(() => lastDistinctValuesListProps.current.distinct.setSearch(''));
+      expect(lastDistinctValuesListProps.current.distinct.search).toBe('');
+      expect(lastDistinctValuesListProps.current.codes).toHaveLength(2);
+    });
+
+    it('routes typing in the type menu through the type hook setSearch and leaves the status codes untouched', () => {
+      const hookSetSearch = vi.fn();
+      distinctValuesOverride.current = { ...distinctOf('AP', 'AR'), setSearch: hookSetSearch };
+      renderBar({ rows: rowsOf('DR', 'CO') });
+      fireEvent.click(screen.getByTestId('filter-type'));
+      act(() => lastDistinctValuesListProps.current.distinct.setSearch('ap'));
+      expect(hookSetSearch).toHaveBeenCalledWith('ap');
+      // Status menu opened afterwards starts with an empty local search and the full list.
+      fireEvent.keyDown(document.activeElement || document.body, { key: 'Escape' });
+      fireEvent.click(screen.getByTestId('filter-status'));
+      expect(lastDistinctValuesListProps.current.distinct.search).toBe('');
     });
   });
 });
