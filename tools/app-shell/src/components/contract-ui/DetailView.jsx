@@ -554,7 +554,7 @@ export function DetailView({
   // INSTANCE itself declared it via `dimensionsPanelFieldKeys` (the lines entity's
   // decisions.json `dimensionsPanel: true` fields, forwarded by generate-frontend.js —
   // see the prop comment on `dimensionsPanelFieldKeys` above). This is what lets
-  // simple-g-l-journal trust 'product' as a dimension macro without reintroducing the
+  // manual-journals trust 'product' as a dimension macro without reintroducing the
   // ETP-4530 regression for sales-invoice/purchase-invoice, whose generated pages never
   // pass 'product' in this prop. Stringified for the memo dep since `dimensionsPanelFieldKeys`
   // defaults to a fresh `[]` reference on every render when the caller omits it.

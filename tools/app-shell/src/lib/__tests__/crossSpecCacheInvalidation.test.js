@@ -78,7 +78,7 @@ describe('entitiesInvalidatedByWrite', () => {
     ['cost-center write → selector (ETP-5681)', '/sws/neo/cost-center/costCenter/ABC', ['selector']],
     ['project write → selector (ETP-5681)', '/sws/neo/project/project/ABC', ['selector']],
     ['service-project write → selector (ETP-5681)', '/sws/neo/service-project/project/ABC', ['selector']],
-    ['cost-center only in the query string → nothing', '/sws/neo/simple-g-l-journal/gLJournal?x=cost-center', []],
+    ['cost-center only in the query string → nothing', '/sws/neo/manual-journals/gLJournal?x=cost-center', []],
     // ETP-5826: a payment term created from a selector must reach the same column in other forms.
     ['payment-term create → selector', '/sws/neo/payment-term/header', ['selector']],
     ['payment-term only in the query string → nothing', '/sws/neo/contacts-x/header?spec=payment-term', []],

@@ -1617,7 +1617,7 @@ export function buildBalanceFooterGridTotals(balanceFooter, balanceState, curren
 export function renderTotalsBlock({ balanceFooter, linesLayout, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
   if (balanceFooter) {
     // ETP-5210 — for the inlineEditable lines grid (the only current
-    // balanceFooter consumer, e.g. simple-g-l-journal), the debit/credit
+    // balanceFooter consumer, e.g. manual-journals), the debit/credit
     // totals are rendered as a column-aligned row INSIDE InlineLinesPanel
     // itself (see `balanceFooter` threaded into <DetailTable> in
     // DetailView.jsx via `buildBalanceFooterGridTotals`) — no separate block
@@ -2736,13 +2736,13 @@ export function shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isD
 // casings are included so the macro is recognized (cacheable, filterable) regardless of
 // which one a given generated entity actually uses.
 //
-// 'product' is deliberately NOT included here, despite simple-g-l-journal's dimensionsPanel
+// 'product' is deliberately NOT included here, despite manual-journals's dimensionsPanel
 // listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
 // candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
 // with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
 // the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
 // this allowlist exists to filter out. Trusting 'product' unconditionally here would fix
-// the gap for simple-g-l-journal but silently reintroduce that already-fixed regression
+// the gap for manual-journals but silently reintroduce that already-fixed regression
 // for every OTHER window that shares this component and has a real, per-record 'product'
 // field. This constant stays GLOBAL and unconditional on purpose.
 //
@@ -2754,10 +2754,10 @@ export function shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isD
 // `dimensionsPanelFieldKeys` prop + `trustedDimensionKeys` memo below). `lineHiddenColumns`
 // and the expanded-row DetailForm's `displayLogic` both trust `DIMENSION_MACRO_KEYS UNION
 // dimensionsPanelFieldKeys`, scoped to the current DetailView instance — so
-// simple-g-l-journal can trust 'product' as a dimension macro without this global constant
+// manual-journals can trust 'product' as a dimension macro without this global constant
 // ever needing to include it, and sales-invoice/purchase-invoice (which never pass
 // 'product' in that prop) are unaffected. See DetailView.lineHiddenColumns.vitest.jsx for
-// both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped
+// both the fix proof (manual-journals) and the non-regression proof (sales-invoice-shaped
 // instances).
 const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 

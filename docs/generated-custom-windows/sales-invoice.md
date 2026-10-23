@@ -1354,10 +1354,10 @@ use `linesLayout: "inlineEditable"` but were never affected by this gap in the f
 neither `M_InventoryLine` nor `M_MovementLine` has a `project`/`costCenter` column at all (no
 such field exists in their `lines` entity — see each window's own doc, "N/A"/"Nunca"), so
 there was nothing to make visible. No window currently uses the classic `linesLayout` —
-`simple-g-l-journal` also resolves to `inlineEditable` (`DetailView.jsx`'s default, since its
+`manual-journals` also resolves to `inlineEditable` (`DetailView.jsx`'s default, since its
 `decisions.json` omits `window.linesLayout`); its line dimension fields render through
 `InlineLinesPanel`'s `dimensionsPanel` expand-row hover action, not `LinesForm.jsx`'s sidebar —
-see `simple-g-l-journal.md`'s "Accounting dimension visibility per section — ETP-4529" section
+see `manual-journals.md`'s "Accounting dimension visibility per section — ETP-4529" section
 for the full write-up.
 
 The generic `hiddenColumns` mechanism on `InlineLinesPanel`/`DetailView` is not

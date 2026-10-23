@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/AccountLookupPopup.jsx
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
-// @covers artifacts/simple-g-l-journal/decisions.json
-// @covers artifacts/simple-g-l-journal/custom/SimpleGLJournalBottomPanel.jsx
+// @covers artifacts/manual-journals/decisions.json
+// @covers artifacts/manual-journals/custom/ManualJournalsBottomPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
@@ -13,7 +13,7 @@ import { login } from '../../helpers/auth.js';
  * row rendered inline inside the lines grid, plus the save-gate that blocks
  * saving while the journal is unbalanced (blockSaveForBalance in DetailView).
  *
- * `simple-g-l-journal` uses `linesLayout: 'inlineEditable'`, so as of ETP-5210
+ * `manual-journals` uses `linesLayout: 'inlineEditable'`, so as of ETP-5210
  * ("Align balance totals under their grid columns") `renderTotalsBlock()`
  * (tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx) early-
  * returns null for this window and the old standalone `BalanceFooterPanel`
@@ -38,7 +38,7 @@ import { login } from '../../helpers/auth.js';
  *   (non-zero total is a separate gate: blockCompleteForBalance in DetailView)
  */
 
-const SPEC = 'simple-g-l-journal';
+const SPEC = 'manual-journals';
 const ENTITY = 'gLJournal';
 const LINE_ENTITY = 'gLJournalLine';
 const RECORD_ID = 'glj-001';
