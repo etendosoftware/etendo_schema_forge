@@ -1,5 +1,6 @@
 // ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
 import { formatCalendarDate } from './dateOnly.js';
+import { extractQuotaExceeded, quotaUsageText } from './planQuotas.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -708,7 +709,54 @@ export function translateBackendErrorBody(body, t, fallback) {
   return translateBackendError(message, t, {
     messageKeys: extractBackendMessageKeys(body),
     messageParams: extractBackendMessageParams(body),
+    quota: extractQuotaExceeded(body),
   });
+}
+
+// ETP-5051 — a NEO write refused because a plan quota is exhausted: HTTP 403 with
+// `{ error: { code: 'QUOTA_EXCEEDED', message, quota: QuotaItem } }`, on REST single, batch and
+// MCP alike. The SPA owns the sentence, built from the catalog name and unit the quota carries, so
+// it is never read as a generic permission refusal and never as the 402 blocked-environment
+// screen (that one is decided in core's apiFetch on the status alone, and a 403 never reaches it).
+//
+// Two ways in, one sentence out:
+//   1. the structured `quota` (`extractQuotaExceeded`), passed by every caller that has the body;
+//   2. the message prose, `Quota exceeded: <resourceName> (<consumed>/<includedQty> <unitLabel>)`,
+//      for the many callers that only forward the message string. Plain string slicing, no regex:
+//      the resource name is operator-editable catalog data (javascript:S5852), and `lastIndexOf`
+//      keeps a name that itself contains " (" intact.
+const QUOTA_EXCEEDED_PREFIX = 'Quota exceeded: ';
+
+function matchQuotaExceededMessage(msg) {
+  if (typeof msg !== 'string') return null;
+  const trimmed = msg.trim();
+  if (!trimmed.startsWith(QUOTA_EXCEEDED_PREFIX) || !trimmed.endsWith(')')) return null;
+  const body = trimmed.slice(QUOTA_EXCEEDED_PREFIX.length, -1);
+  const open = body.lastIndexOf(' (');
+  if (open <= 0) return null;
+  const inner = body.slice(open + 2);
+  const slash = inner.indexOf('/');
+  if (slash <= 0) return null;
+  const rest = inner.slice(slash + 1);
+  const space = rest.indexOf(' ');
+  const unit = space < 0 ? '' : rest.slice(space + 1).trim();
+  return {
+    resourceName: body.slice(0, open),
+    consumed: inner.slice(0, slash).trim(),
+    includedQty: (space < 0 ? rest : rest.slice(0, space)).trim(),
+    // The backend concatenates a null unit as the literal "null".
+    unitLabel: unit && unit !== 'null' ? unit : null,
+  };
+}
+
+function translateQuotaExceeded(quota, t) {
+  if (!quota) return null;
+  const resource = typeof quota.resourceName === 'string' ? quota.resourceName.trim() : '';
+  if (!resource) return resolveLocaleKey(t, 'backendError.quotaExceededGeneric');
+  const usage = quotaUsageText(quota, t);
+  return usage
+    ? resolveLocaleKey(t, 'backendError.quotaExceeded', { resource, usage })
+    : resolveLocaleKey(t, 'backendError.quotaExceededNoUsage', { resource });
 }
 
 // `t(key, params)` interpolates `{var}` tokens (single-brace — this codebase's real
@@ -1532,7 +1580,8 @@ function pickBackendErrorText(data) {
  * for a non-JSON body.
  *
  * @param {Response} res the failed response (its body is consumed)
- * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object}>}
+ * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object, quota?: object}>}
+ *   `quota` — ETP-5051, the exhausted plan quota of a 403 QUOTA_EXCEEDED refusal.
  */
 export async function parseBackendError(res) {
   let data;
@@ -1545,6 +1594,8 @@ export async function parseBackendError(res) {
     message: pickBackendErrorText(data),
     messageKeys: extractBackendMessageKeys(data),
     messageParams: extractBackendMessageParams(data),
+    // Only on a quota refusal, so every other body keeps its three-field shape.
+    ...(extractQuotaExceeded(data) ? { quota: extractQuotaExceeded(data) } : {}),
   };
 }
 
@@ -1563,8 +1614,8 @@ export async function parseBackendErrorMessage(res) {
  * @returns {Promise<string>} the translated message
  */
 export async function translateBackendErrorResponse(res, t) {
-  const { message, messageKeys, messageParams } = await parseBackendError(res);
-  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams });
+  const { message, messageKeys, messageParams, quota } = await parseBackendError(res);
+  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams, quota });
 }
 
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';
@@ -1603,17 +1654,24 @@ function translateSingleMessage(trimmed, t) {
  *
  * @param {string} msg the backend message (already-translated prose, as it crossed the wire)
  * @param {function} t the `ui` function from `useUI()`
- * @param {{messageKeys?: string[], messageParams?: object}} [options] ETP-5316 — the AD_MESSAGE
+ * @param {{messageKeys?: string[], messageParams?: object, quota?: object}} [options] ETP-5316 — the AD_MESSAGE
  *   search keys behind `msg`, when the backend sent them (see `extractBackendMessageKeys`). Tried
  *   FIRST, because a key is a stable identity while the prose it produced may embed per-document
  *   values. ETP-5175 — `messageParams` (see `extractBackendMessageParams`) are the values those
  *   keys interpolate; with them a parameterized message (the Invalid-Account posting failure) is
  *   rendered entirely in the SPA's locale. Omitting either is the earlier behavior and stays fully
  *   supported.
+ *   ETP-5051 — `quota` (see `extractQuotaExceeded` in `planQuotas.js`) is the exhausted plan
+ *   quota of a 403 QUOTA_EXCEEDED write refusal; it wins over every other route.
  * @returns {string} the translated message, or `msg` untouched when nothing matched
  */
 export function translateBackendError(msg, t, options = {}) {
   if (typeof t !== 'function') return msg;
+
+  // ETP-5051: the quota refusal first — its identity is the structured `quota`, or its fixed
+  // prose prefix when the caller forwarded only the message.
+  const quotaExceeded = translateQuotaExceeded(options.quota ?? matchQuotaExceededMessage(msg), t);
+  if (quotaExceeded !== null) return quotaExceeded;
 
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);
