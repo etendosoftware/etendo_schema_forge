@@ -17,6 +17,7 @@
 | [NEO Constraints](neo-pending-constraints.md) | UNIQUE constraints applied to ETGO_SF_* tables (2026-04-13) — regression guard against duplicate inserts |
 | [NEO Duplicates Report 2026-04-13](neo-duplicates-report-2026-04-13.md) | Snapshot of spec/entity/field duplicates found on 2026-04-13 (pre-dedupe), plus the 54 AD-label naming cases |
 | [Widget Endpoints Guide](widget-endpoints.md) | How to create widget endpoints: handler pattern, XML registration, frontend `useWidget` hook, response contracts |
+| [Public API (unified reference)](public-api.md) | **Etendo Go Public API**: the three layers (UI flag, `/oauth2/api-keys` credential API, `/api/v1/*` resource API), field selection (`publicApi` curation or window-form default) and generation chain, gateway contract with ETag/If-Match concurrency, capabilities, OpenAPI endpoint matrix, and a validation checklist. |
 | [Architecture Radar (sf-radar)](architecture-radar.md) | Guide for the sf-radar CLI tool — query and update architecture decisions (optional repo) |
 
 ## Testing

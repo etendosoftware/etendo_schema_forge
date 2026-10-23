@@ -572,7 +572,16 @@
           "handlerId": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/goodsReceipt/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Goods Receipt",
         "functionalSummary": "This window should let a purchasing user acknowledge that a vendor delivery has physically arrived, capture what was actually received, and complete the receipt so downstream purchasing documents can reflect that intake.",
@@ -1470,7 +1479,16 @@
           "handlerId": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Purchase Invoice",
         "functionalSummary": "Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.",
@@ -1596,7 +1614,16 @@
           "handlerId": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Purchase Order",
         "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
@@ -1790,14 +1817,12 @@
       },
       "processes": [
         {
-          "name": "Process Receipt",
+          "action": "complete",
           "method": "POST",
           "path": "/returnMaterialReceipt/:id/action/documentAction",
-          "entity": "returnMaterialReceipt",
-          "columnName": "documentAction",
-          "params": [],
-          "preconditions": [],
-          "steps": 0
+          "body": {
+            "docAction": "CO"
+          }
         }
       ],
       "functional": {
@@ -1923,7 +1948,16 @@
           "handlerId": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/returnToVendorShipment/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Return to Vendor Shipment",
         "functionalSummary": "This window should let a purchasing user complete the physical outbound shipment that sends returned goods back to a vendor. It sits after the return-to-vendor authorization step and before any vendor credit-memo settlement, so its business meaning is operational shipment execution rather than commercial approval or invoicing.",
@@ -2043,7 +2077,16 @@
           "handlerId": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Sales Invoice",
         "functionalSummary": "This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.",
@@ -2169,7 +2212,16 @@
           "handlerId": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/header/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Sales Order",
         "functionalSummary": "This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.",
@@ -2295,7 +2347,16 @@
           "handlerId": null
         }
       },
-      "processes": [],
+      "processes": [
+        {
+          "action": "complete",
+          "method": "POST",
+          "path": "/quotation/:id/action/documentAction",
+          "body": {
+            "docAction": "CO"
+          }
+        }
+      ],
       "functional": {
         "functionalName": "Sales Quotation",
         "functionalSummary": "Let a sales user prepare a customer quotation, review commercial terms before commitment, and turn an accepted quotation into a downstream sales document without re-entering the header and line data.",
