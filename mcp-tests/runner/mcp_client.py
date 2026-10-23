@@ -181,15 +181,29 @@ def _resource_metadata_url(mcp_url: str) -> str:
             raise AuthError(f"{mcp_url} answered {exc.code}, expected a 401 challenge.") from exc
         header = exc.headers.get("WWW-Authenticate", "")
 
-    for part in header.split(","):
-        key, _, value = part.strip().partition("=")
-        if key.strip().lower() == "resource_metadata":
-            return value.strip().strip('"')
+    pointer = _challenge_resource_metadata(header)
+    if pointer:
+        return pointer
     raise AuthError(
         f"{mcp_url} challenged without a resource_metadata pointer: {header!r}. "
         "For the local target this usually means the frontend dev server (port 3100) "
         "is not running — Tomcat does not serve the .well-known documents."
     )
+
+
+def _challenge_resource_metadata(header: str) -> str | None:
+    """The `resource_metadata` parameter of a WWW-Authenticate header, or None.
+
+    The first parameter is glued to the scheme (`Bearer resource_metadata="..."`,
+    as Holded sends it), so the key is the last word before `=`, not the whole
+    segment.
+    """
+    for part in header.split(","):
+        key, _, value = part.strip().partition("=")
+        words = key.split()
+        if words and words[-1].lower() == "resource_metadata":
+            return value.strip().strip('"')
+    return None
 
 
 def _authorization_server_metadata(issuer: str) -> dict[str, Any]:

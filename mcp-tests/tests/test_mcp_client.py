@@ -241,5 +241,22 @@ class WhereTest(unittest.TestCase):
             mcp_client.count_matching({"totalRows": 3}, {"a": 1})
 
 
+class ChallengeResourceMetadataTest(unittest.TestCase):
+    URL = "https://mcp.example/.well-known/oauth-protected-resource"
+
+    def test_pointer_as_first_parameter_glued_to_scheme(self):
+        # Holded's shape (2026-10-23): the only parameter, right after "Bearer".
+        header = f'Bearer resource_metadata="{self.URL}"'
+        self.assertEqual(mcp_client._challenge_resource_metadata(header), self.URL)
+
+    def test_pointer_after_other_parameters(self):
+        header = f'Bearer realm="mcp", error="invalid_token", resource_metadata="{self.URL}"'
+        self.assertEqual(mcp_client._challenge_resource_metadata(header), self.URL)
+
+    def test_no_pointer(self):
+        self.assertIsNone(mcp_client._challenge_resource_metadata('Bearer realm="mcp"'))
+        self.assertIsNone(mcp_client._challenge_resource_metadata(""))
+
+
 if __name__ == "__main__":
     unittest.main()

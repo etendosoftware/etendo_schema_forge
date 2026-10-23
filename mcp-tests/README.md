@@ -35,11 +35,11 @@ Every command below is a `make` target run from the **repository root**.
    | Variable (as named in `config.example.toml`) | For |
    |---|---|
    | `OPENAI_API_KEY` (`[provider] api_key_env`) | The LLM gateway. Without it nothing runs (exit 2). |
-   | `MCP_TEST_TARGET_HOLDED_TOKEN` (`[targets.holded] token_env`) | Holded's API key, sent as a bearer. **Not yet verified against the live server**: if Holded rejects it, switch that target to `auth = "oauth"` and record which one worked in `config.example.toml`. |
 
-   Etendo Go targets use `auth = "oauth"`: the first run opens a browser, and the token is cached
-   in `mcp-tests/.auth/<target>.json` (0600, gitignored). `make mcp-login TARGET=<t>` pre-warms it;
-   it is never required.
+   Every target uses `auth = "oauth"`, Holded included: the first run opens a browser, and the
+   token is cached in `mcp-tests/.auth/<target>.json` (0600, gitignored). `make mcp-login TARGET=<t>`
+   pre-warms it; it is never required. Holded grants no refresh token, so when its token expires
+   run `make mcp-login TARGET=holded` again (or let the next interactive run reopen the browser).
 4. **A reachable target.** `local` is `http://localhost:3100/mcp` and needs `make dev` running (the
    Vite dev server serves the OAuth `.well-known` documents and proxies `/mcp`; Tomcat on `:8080`
    alone does not). Every target that takes part in a comparison needs `platform = "etendo-go"` or

@@ -231,9 +231,9 @@ como no oficial, con el formato de §3.3.
   `discoverability` (7), `sales-order` (4), `treasury` (8), `full-flows` (1).
 - **S8 sin hacer:** nunca se corrió una comparación Etendo vs Holded (no hay `compare.json` en
   `runs/`; última corrida del 2 oct).
-- **Bloqueante:** `config.toml` no tiene target `holded`. Está comentado en `config.example.toml`,
-  marcado *UNVERIFIED*; usa `MCP_TEST_TARGET_HOLDED_TOKEN` (bearer) y, si Holded lo rechaza, OAuth.
-  El OAuth no está verificado.
+- **Bloqueante (resuelto en config el 2026-10-23):** target `holded` con `auth = "oauth"`, igual
+  que Etendo Go. Verificado contra el servidor: PKCE S256, cliente público y registro dinámico en
+  `https://app.holded.com`; no da refresh token. Falta el primer `make mcp-login TARGET=holded`.
 - El texto del OKR está en `docs/plans/drafts/2026-10-15-propuesta-okr-o2.md` (borrador sin
   commitear).
 
@@ -267,5 +267,5 @@ antes de correrla.
 ### 7.4 Riesgos
 
 - **Sesgo de selección:** facturación y cobros favorecen a Etendo; contactos/CRM a Holded.
-- **Login de Holded** sin verificar (bearer primero, OAuth de respaldo): bloquea todo lo demás.
+- **Login de Holded** por OAuth (configurado y verificado el descubrimiento; falta el primer login).
 - **Plazo:** 30 pruebas pilotadas al 1 nov es ajustado; el número del 26 oct sale con lo que haya.

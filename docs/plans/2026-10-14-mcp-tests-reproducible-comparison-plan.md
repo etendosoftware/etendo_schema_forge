@@ -168,11 +168,11 @@ Proposed as new rows in the design's §10, each landing with the slice that impl
   suite keys its per-target blocks by platform. `local`, `experimental` and `staging` are all
   `etendo-go` and share one block.
 - **Holded target:** `[targets.holded] url = "https://mcp.holded.com/mcp"` with `platform = "holded"`.
-  Decided (§9): try the Holded API key as a bearer first — `auth = "bearer"`,
-  `token_env = "MCP_TEST_TARGET_HOLDED_TOKEN"`, which `mcp_client.py` already supports
-  (`mcp_client.py:76-94`, it sends `Authorization: Bearer`). If Holded rejects it, fall back to
-  `auth = "oauth"` (auth code + PKCE with dynamic client registration, already built). Whichever
-  works is written into `config.example.toml` in S3; no new auth code is planned.
+  Decided (§9, revised 2026-10-23): `auth = "oauth"`, the same flow as the Etendo Go targets
+  (auth code + PKCE with dynamic client registration, already built). Verified on 2026-10-23: the
+  401 points at `https://app.holded.com`, which advertises S256, public clients and a registration
+  endpoint; it ignores `scope` and grants no refresh token. The original "API key as bearer first"
+  was dropped. No new auth code was needed.
 
 ### 5.3 Vendor-neutral tasks with per-platform verification
 
@@ -586,7 +586,7 @@ the new targets.
 | 4 | The suite starts from the five `/mcp-comparison` tasks, rewritten to be isolated, and grows incrementally toward 30. The user approves each task; ids are permanent. | §5.8, S7 |
 | 5 | Official numbers run against a freshly initialized local Etendo and a freshly initialized Holded account, and the run records that both were fresh. | §5.9, D50, S6, S8 |
 | 6 | Model `openai/gpt-5.2`. | config |
-| 7 | Holded auth: API key as bearer first, OAuth as fallback. | §5.2, S3 |
+| 7 | Holded auth: OAuth, like Etendo Go (revised 2026-10-23; was "API key as bearer first"). | §5.2, S3 |
 | 8 | Both sides 0/N → tie; token margin 10 %; median calls over successful attempts only. | §5.6 |
 | 9 | Tokens decide on the total, tool catalogue included; the per-task breakdown (priming vs remainder) is shown. | §5.7 |
 | 10 | Item 4 = "the first call did not error". | §3 |
