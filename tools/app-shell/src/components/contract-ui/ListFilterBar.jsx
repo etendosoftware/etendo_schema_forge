@@ -263,7 +263,8 @@ export function ListFilterBar({
         status={code}
         label={label}
         tone={getStatusTone(code)}
-        className="!inline-block min-w-0 max-w-full truncate tracking-[-0.005em]" />
+        className="!inline-block min-w-0 max-w-full truncate tracking-[-0.005em]"
+        data-testid="StatusTag__6d5e90" />
     </span>
   );
 

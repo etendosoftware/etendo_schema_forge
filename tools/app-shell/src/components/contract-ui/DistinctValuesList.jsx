@@ -166,7 +166,8 @@ export function DistinctValuesList({
               selected={!activeCode}
               active={activeIndex === 0}
               onPointerMove={() => setActiveIndex(-1)}
-              onClick={() => onSelect(null)}>
+              onClick={() => onSelect(null)}
+              data-testid="OptionRow__55c679">
               {allLabel}
             </OptionRow>
           )}
@@ -179,7 +180,8 @@ export function DistinctValuesList({
                 selected={activeCode === code}
                 active={activeIndex === idx}
                 onPointerMove={() => setActiveIndex(-1)}
-                onClick={() => onSelect(code)}>
+                onClick={() => onSelect(code)}
+                data-testid="OptionRow__55c679">
                 {renderOption ? renderOption(code, labelFor(code)) : labelFor(code)}
               </OptionRow>
             );
