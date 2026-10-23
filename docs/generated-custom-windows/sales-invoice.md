@@ -1845,7 +1845,7 @@ taxes/totals, creates the payment plan), `DR -> VO` voids, `CO -> RE` reactivate
 first** when the invoice was already posted (the Reactivate menu action carries
 `preUnpost: true`; since ETP-5302 the same two-step sequence runs from the list's bulk bar too,
 via `preUnpostActions={['RE']}`, and both paths share `tools/app-shell/src/lib/preUnpost.js`),
-`CO -> CL` closes.
+`CO -> CL` closes. The same holds through MCP since ETP-5715: `etendo_action` with `docAction RE` and `etendo_action_batch` un-post a posted invoice first (a `steps` list in the answer shows it; if the reactivation then fails the un-post stays, `partial` says so).
 Posting is **not** a `documentAction` value — the prompt explicitly tells the agent never to send
 `PO` here. Since ETP-5692 the header declares two MCP action contracts for the ledger, and the
 prompt names both (the raw AD `posted` button is hidden from agents):

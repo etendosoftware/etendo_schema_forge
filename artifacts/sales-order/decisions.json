@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Order",
+    "agentPrompt": "#REF#agent-prompts/sales-order/spec.md",
     "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,

@@ -53,7 +53,7 @@ single `general-ledger-configuration` window.
 - `artifacts/general-ledger-configuration/figma-spec.md` — the canonical visual
   spec + locked field data-binding treatment (Figma MCP has no read access).
 - `tools/app-shell/src/windows/custom/general-ledger-configuration/*` — the
-  hand-written window (TabBar, 4 tab components, `SectionShell`, `Field`,
+  hand-written window (TabBar — replaced by the shared `SegmentedTabs` in ETP-5736, 4 tab components, `SectionShell`, `Field`,
   `UnbackedHint`, `useGeneralLedgerConfig` hook, `mockCatalogs`). The save hook
   attempts a real aggregate `GET/POST` against NEO with a safe fallback to the
   seeded mock while the backend spec is greenfield.

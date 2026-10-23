@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Order",
+    "agentPrompt": "#REF#agent-prompts/purchase-order/spec.md",
     "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "notesField": "description",
