@@ -1,4 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/general-ledger-configuration/GeneralLedgerConfigPage.jsx
+// @covers tools/app-shell/src/components/contract-ui/SegmentedTabs.jsx
+// @covers tools/app-shell/src/components/contract-ui/toolbarClasses.js
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -25,18 +27,6 @@ vi.mock('../mockCatalogs.js', () => ({
   DEFAULTS_GROUPS: [
     { fields: [{ key: 'bankAsset', required: true }, { key: 'optional', required: false }] },
   ],
-}));
-
-vi.mock('../TabBar.jsx', () => ({
-  default: ({ tabs, active, onChange }) => (
-    <div data-testid="tab-bar">
-      {tabs.map((tab, i) => (
-        <button key={i} onClick={() => onChange(i)} data-active={active === i}>
-          {tab.label}{typeof tab.badge === 'number' ? `:${tab.badge}` : ''}
-        </button>
-      ))}
-    </div>
-  ),
 }));
 
 vi.mock('../GeneralTab.jsx', () => ({
@@ -68,6 +58,7 @@ import GeneralLedgerConfigPage from '../GeneralLedgerConfigPage.jsx';
 import { useGeneralLedgerConfig } from '../useGeneralLedgerConfig.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { toast } from 'sonner';
+import { getLinesToolbarClassName, getSaveBtnCls } from '@/components/contract-ui/toolbarClasses.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function makeHook(overrides = {}) {
@@ -104,9 +95,20 @@ beforeEach(() => {
 describe('GeneralLedgerConfigPage — initial render', () => {
   it('renders the tab bar and the General tab by default', () => {
     renderPage();
-    expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
+    const group = screen.getByRole('group', { name: 'glc.title' });
+    expect(group.querySelectorAll('button')).toHaveLength(4);
+    expect(screen.getByTestId('glc-tab-0')).toHaveClass('bg-card');
+    expect(screen.getByTestId('glc-tab-1')).not.toHaveClass('bg-card');
     expect(screen.getByTestId('general-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('defaults-tab')).not.toBeInTheDocument();
+  });
+
+  // ETP-5736 — the top bar and Save follow the record toolbar through the shared classes.
+  it('uses the shared record-toolbar classes for the bar and the save button', () => {
+    renderPage();
+    expect(screen.getByTestId('glc-toolbar').className).toContain(getLinesToolbarClassName());
+    expect(screen.getByTestId('glc-toolbar').className).not.toContain('border-b');
+    expect(screen.getByTestId('glc-save').className).toContain(getSaveBtnCls());
   });
 
   it('renders the save button with its label', () => {
