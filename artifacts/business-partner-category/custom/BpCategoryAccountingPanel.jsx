@@ -11,6 +11,15 @@ import { useAssociatedContactsNotice } from './useAssociatedContactsNotice.js';
 
 const ACCOUNTING_ENTITY = 'accounting';
 
+// The inline-editable detail column has no horizontal padding of its own; the header form card
+// is `p-2` (decisions `formCardPadding`), so `px-2` lines the section titles up with the header
+// fields on both sides.
+const PANEL_PADDING_X = 'px-2';
+// The tab wrapper already adds `pt-3` (getCustomLinesTabClassName); `pt-2` on the first section
+// gives the same ~20px from the tab underline to the content as the header card has from the
+// toolbar rule to its first label. Later sections keep SectionShell's `py-6`.
+const FIRST_SECTION_PADDING_Y = 'pt-2 pb-6';
+
 function Notice({ children, testId }) {
   return (
     <div
@@ -122,11 +131,12 @@ export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, 
   if (status !== 'ready') return null;
 
   return (
-    <div className="px-1" data-testid="bp-category-accounting-panel">
+    <div className={PANEL_PADDING_X} data-testid="bp-category-accounting-panel">
       {sections.map((section, idx) => (
         <SectionShell
           key={section.key}
           first={idx === 0}
+          paddingY={idx === 0 ? FIRST_SECTION_PADDING_Y : undefined}
           title={ui(section.titleKey)}
           subtitle={ui(section.subtitleKey)}
           data-testid={`bp-category-accounts-${section.key}`}

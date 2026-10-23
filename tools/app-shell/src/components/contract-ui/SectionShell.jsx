@@ -11,12 +11,14 @@
  * @param {string} props.title
  * @param {string} [props.subtitle]
  * @param {boolean} [props.first] — omit the top divider on the first section
+ * @param {string} [props.paddingY] — vertical padding classes (default `py-6`, the Esquema contable
+ *   rhythm); a host with its own top spacing (e.g. a detail tab) can tighten its first section.
  * @param {import('react').ReactNode} props.children — the right area (grid)
  */
-export function SectionShell({ title, subtitle, first = false, children, 'data-testid': dataTestId }) {
+export function SectionShell({ title, subtitle, first = false, paddingY = 'py-6', children, 'data-testid': dataTestId }) {
   return (
     <section
-      className={`grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-x-8 gap-y-4 py-6 ${first ? '' : 'border-t border-[hsl(var(--border-subtle))]'}`}
+      className={`grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-x-8 gap-y-4 ${paddingY} ${first ? '' : 'border-t border-[hsl(var(--border-subtle))]'}`}
       data-testid={dataTestId}
     >
       <div className="lg:pr-4">
