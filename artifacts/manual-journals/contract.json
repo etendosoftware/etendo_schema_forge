@@ -1,14 +1,15 @@
 {
   "version": "0.33.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-10-23T12:35:21.593Z",
-  "checksum": "e6a89c9a476a408a",
+  "updatedAt": "2026-10-23T13:30:59.065Z",
+  "checksum": "53564fab8c003bbb",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
       "name": "Simple G/L Journal",
       "primaryEntity": "gLJournal",
       "category": "finance",
+      "agentPrompt": "Manual journals (G/L journal entries, \"Asientos Manuales\"): double-entry journals posted to the ledger. This spec was named `simple-g-l-journal` until ETP-5720; that name no longer exists. Entity `gLJournal` is the journal header, `gLJournalLine` its lines. To record a journal: (1) etendo_create on `gLJournal` (ledger, currency, document type and date are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) etendo_create on `gLJournalLine` once per line, with parentId = the journal id, an `accountingCombination` that is a posting account of the journal's ledger (summary accounts are rejected) and either `foreignCurrencyDebit` or `foreignCurrencyCredit`; (3) etendo_action `documentAction` with parameters {docAction:\"CO\"} completes it, which requires total debit = total credit > 0; (4) etendo_action `post` posts it to the ledger. A completed journal that is not posted can be reactivated with docAction \"RE\"; a posted one must be unposted first (etendo_action `unpost`).",
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "breadcrumb": "Finance / Manual Journals",
@@ -923,6 +924,7 @@
       "name": "Simple G/L Journal",
       "primaryEntity": "gLJournal",
       "category": "finance",
+      "agentPrompt": "Manual journals (G/L journal entries, \"Asientos Manuales\"): double-entry journals posted to the ledger. This spec was named `simple-g-l-journal` until ETP-5720; that name no longer exists. Entity `gLJournal` is the journal header, `gLJournalLine` its lines. To record a journal: (1) etendo_create on `gLJournal` (ledger, currency, document type and date are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) etendo_create on `gLJournalLine` once per line, with parentId = the journal id, an `accountingCombination` that is a posting account of the journal's ledger (summary accounts are rejected) and either `foreignCurrencyDebit` or `foreignCurrencyCredit`; (3) etendo_action `documentAction` with parameters {docAction:\"CO\"} completes it, which requires total debit = total credit > 0; (4) etendo_action `post` posts it to the ledger. A completed journal that is not posted can be reactivated with docAction \"RE\"; a posted one must be unposted first (etendo_action `unpost`).",
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "breadcrumb": "Finance / Manual Journals",

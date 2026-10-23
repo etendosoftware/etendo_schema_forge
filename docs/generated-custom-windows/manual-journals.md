@@ -420,3 +420,9 @@ so entities and fields keep their IDs. A dev DB that still has the old name must
 before its next `sf-push-neo`, or the push creates a second spec. `GLJournalLineHandler`'s
 `@NeoExtension(spec = "manual-journals")` must match the spec name: a mismatch is silent (the handler simply
 stops running).
+
+MCP agents still holding the old name get `404 Spec not found` with a hint to call `etendo_discover`. To make the
+new name findable there, the window declares `window.agentPrompt` → `agent-prompts/manual-journals/spec.md`
+(persisted to `ETGO_SF_SPEC.AGENT_PROMPT`), which names the old spec and the create/complete/post flow. It is not
+set as `ETGO_SF_SPEC.DESCRIPTION`: the window push writes `description = null` on every upsert, so a hand-set
+description would not survive `make regen PUSH_TO_NEO=1`.
