@@ -297,6 +297,23 @@ describe('TopBar demo banner — fiscal notice and colour (ETP-5364)', () => {
     expect(banner().className).toMatch(/bg-status-warning/);
   });
 
+  // The full boundary in one table: amber above 3 days, red from 3 down and once expired,
+  // including a negative count (the backend does not clamp it), and the plural everywhere
+  // except exactly one day.
+  it.each([
+    [4, 'warning', 'environmentTrialDaysRemaining'],
+    [3, 'destructive', 'environmentTrialDaysRemaining'],
+    [2, 'destructive', 'environmentTrialDaysRemaining'],
+    [1, 'destructive', 'environmentTrialDaysRemainingOne'],
+    [0, 'destructive', 'environmentDemoExpired'],
+    [-2, 'destructive', 'environmentDemoExpired'],
+  ])('with %i day(s) left draws data-variant=%s and labels it %s (ETP-5049)', (days, variant, label) => {
+    environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: days };
+    render(<TopBar title="Inicio" />);
+    expect(banner()).toHaveAttribute('data-variant', variant);
+    expect(banner()).toHaveAttribute('aria-label', label);
+  });
+
   it('uses the singular label with one day left (ETP-5049)', () => {
     environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: 1 };
     render(<TopBar title="Inicio" />);
