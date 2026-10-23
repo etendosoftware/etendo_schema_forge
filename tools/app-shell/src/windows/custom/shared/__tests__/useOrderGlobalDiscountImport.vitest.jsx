@@ -322,6 +322,27 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
     expect(toast.warning).not.toHaveBeenCalled();
   });
 
+  it('toggle ON by default; switched OFF it imports the lines without PATCH and with the default toast', async () => {
+    const orders = [{ id: 'SO-A', pct: 10 }];
+    const { onSuccess } = renderModal({ orders });
+    await selectAllOrdersAndImport(orders);
+
+    const toggle = screen.getByTestId('ImportGlobalDiscount__switch');
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+
+    const postCalls = mockApiFetch.mock.calls.filter(([, opts]) => opts.method === 'POST');
+    expect(postCalls.map(([, opts]) => JSON.parse(opts.body))).toEqual([{ line: 'SO-A-l1' }]);
+    expect(patchCalls()).toEqual([]);
+    expect(toast.success).toHaveBeenCalledWith('linesImportedFromSalesOrder:{"count":1}');
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
   it('B1: orders at 10 % + 0 % show the mixed warning and never PATCH when the 0 % order fails', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }];
     const { onSuccess } = renderModal({ orders, failingLines: ['SO-B-l1'] });
