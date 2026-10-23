@@ -1,9 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
-const artifactsRoot = process.argv[2] ?? 'artifacts';
-const outputPath = process.argv[3] ?? 'public-api/base.v1.json';
-const functionalDocsRoot = process.argv[4] ?? 'docs/generated-custom-windows';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const excludedCategories = new Set([
   // These modules are not part of the public API scope.
@@ -40,15 +37,89 @@ const excludedWindows = new Set([
   'stock-reservation',
   'time-tracking',
   'warehouse-picking-list',
+  // Legacy artifacts with no NeoServlet spec (no ETGO_SF_SPEC row): every
+  // request to them answers "Spec not found", so publishing them would
+  // advertise resources that cannot work.
+  'document',
+  'project',
+  'uom',
 ]);
 
-const excludedChildTabs = [/accounting/i];
+const excludedChildTabs = [
+  /accounting/i,
+  // Bank accounts of a business partner. Their identifiers are excluded
+  // fields, and what remains has no legitimate use on its own; the tab comes
+  // back when the team that owns banking data decides on it.
+  /^bank account$/i,
+];
 
-const fiscalMonitorWindows = new Set([
+export const fiscalMonitorWindows = new Set([
   'monitor-verifactu',
   'sii-monitor',
   'tbai-facturas-enviadas',
 ]);
+
+// Fields that are never published, whether curated or derived from the window
+// form. Deriving the default exposure from the form is opt-out, so this list is
+// the safety net for values that are visible to a logged-in user but must not
+// be readable or writable by an external integration.
+export const neverExposedFields = new Set([
+  // Tenant and organization ownership come from the API key, never from the
+  // caller. NeoServlet also drops `organization` on writes; this keeps it out
+  // of the contract too.
+  'client',
+  'organization',
+  // Grants a contact access to the customer portal: a security decision that
+  // stays in the application.
+  'grantPortalAccess',
+  // Bank account identifiers of a business partner (contacts-bankAccount).
+  // Held back until the team that owns banking data decides on them.
+  'accountNo',
+  'bankName',
+  'displayedAccount',
+  'iBAN',
+  'swiftCode',
+  // Accounting bulk-posting module fields shown on logistic documents.
+  // Accounting is outside the public API scope (excluded category and tabs).
+  'etblkpAccountingstatus',
+  'etblkpBulkposting',
+]);
+
+// Internal references must not reach the public OpenAPI document: the
+// functional texts are written for the team and may cite tickets or people.
+const internalReference = /\bETP-\d+\b|\bjira\b/i;
+
+// Keeps the functional text that is safe to publish: capability lines that cite
+// an internal reference are dropped, and so are such sentences of the summary.
+export function publicFunctionalText({ summary, capabilities }) {
+  return {
+    summary: summary
+      .split(/(?<=[.!?])\s+/)
+      .filter((sentence) => !internalReference.test(sentence))
+      .join(' '),
+    capabilities: capabilities.filter((capability) => !internalReference.test(capability)),
+  };
+}
+
+// An entity is curated when at least one of its fields declares
+// `publicApi.exposed: true`. A curated entity publishes exactly its curation.
+export function isCurated(source) {
+  return (source?.fields ?? []).some((field) => field.publicApi?.exposed === true);
+}
+
+// Decides whether a frontend-contract field is published.
+// - Curated entity: only fields with `publicApi.exposed: true`.
+// - Non-curated entity: the fields its window form shows (`form !== false`).
+// - Fiscal monitors are never derived: their curation belongs to the Spanish
+//   localization team, so without it they publish only `id` and `updated`.
+// - `system` / `discarded` fields and `neverExposedFields` are never published.
+export function isPublicField(field, { curated, specName }) {
+  if (field.visibility === 'system' || field.visibility === 'discarded') return false;
+  if (neverExposedFields.has(field.name)) return false;
+  if (curated) return field.publicApi?.exposed === true;
+  if (fiscalMonitorWindows.has(specName)) return false;
+  return field.form !== false;
+}
 
 function publicName(specName, entityName, primaryEntity) {
   return entityName === primaryEntity ? specName : `${specName}-${entityName}`;
@@ -99,9 +170,10 @@ const publicFieldOverrides = {
   purchasePricelist: 'purchase_price_list',
   vendorBlocking: 'vendor_blocking',
   eTGOLocation: 'location',
+  iBAN: 'iban',
 };
 
-function publicFieldName(internalName) {
+export function publicFieldName(internalName) {
   if (publicFieldOverrides[internalName]) return publicFieldOverrides[internalName];
   const withoutTechnicalPrefix = internalName
     .replace(/^etgo/i, '')
@@ -127,7 +199,7 @@ function openApiType(fieldType) {
   }
 }
 
-function buildEntity({ specName, entityName, contract, functional, parent, rawEntity }) {
+export function buildEntity({ specName, entityName, contract, functional, parent, rawEntity }) {
   const source = contract.frontendContract.entities[entityName];
   const backend = contract.backendContract ?? {};
   const backendEntity = backend.entities?.[entityName] ?? {};
@@ -150,10 +222,10 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
   const writable = endpoints.some((endpoint) => writeMethods.has(endpoint.method));
 
   const fields = {};
+  const curated = isCurated(source);
   for (const field of source.fields ?? []) {
-    if (field.visibility === 'system' || field.visibility === 'discarded') continue;
-    if (field.publicApi?.exposed !== true) continue;
-    const apiName = publicFieldName(field.publicApi.name ?? field.name);
+    if (!isPublicField(field, { curated, specName })) continue;
+    const apiName = publicFieldName(field.publicApi?.name ?? field.name);
     if (fields[apiName]) {
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
     }
@@ -217,6 +289,11 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
   // source to the actual NEO response key.
   if (fields.id) fields.id.internalPath = 'id';
 
+  // A resource with nothing to write is read-only: create, update and delete
+  // would bypass the processes that own those rows (matching, tax recompute).
+  const hasWritableField = Object.values(fields).some((field) => field.direction !== 'out');
+  if (!hasWritableField) operations = operations.filter((operation) => operation === 'GET' || operation === 'LIST');
+
   return {
     publicName: publicName(specName, entityName, contract.frontendContract.window.primaryEntity),
     specName,
@@ -250,128 +327,156 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
   };
 }
 
-const entities = {};
-for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
-  if (!entry.isDirectory() || excludedWindows.has(entry.name)) continue;
-  const contractPath = join(artifactsRoot, entry.name, 'contract.json');
-  let contract;
-  try {
-    contract = JSON.parse(await readFile(contractPath, 'utf8'));
-  } catch {
-    continue;
-  }
-  const category = contract.frontendContract?.window?.category;
-  if (excludedCategories.has(category)) continue;
-  let rawContract;
-  try {
-    rawContract = JSON.parse(await readFile(join(artifactsRoot, entry.name, 'schema-raw.json'), 'utf8'));
-  } catch {
-    rawContract = null;
-  }
-  let decisions;
-  try {
-    decisions = JSON.parse(await readFile(join(artifactsRoot, entry.name, 'decisions.json'), 'utf8'));
-  } catch {
-    decisions = null;
-  }
-  const configuredVisibleChildren = new Set(Object.keys(decisions?.window?.secondaryTabs ?? {}));
-  const hasExplicitChildVisibility = configuredVisibleChildren.size > 0;
-  const primaryEntityName = contract.frontendContract.window.primaryEntity;
-  const primarySource = contract.frontendContract.entities[primaryEntityName];
-  const primaryRaw = rawContract?.entities?.find((candidate) => candidate.tableName === primarySource?.tableName);
-  const primaryTable = primaryRaw?.tableName;
-  const primaryIdField = primaryRaw?.fields?.find((field) => field.type === 'id');
-  for (const entityName of Object.keys(contract.frontendContract?.entities ?? {})) {
-    const source = contract.frontendContract.entities[entityName];
-    const rawEntity = rawContract?.entities?.find((candidate) => candidate.tableName === source?.tableName);
-    const isPrimary = entityName === primaryEntityName;
-    let parent = null;
-    if (!isPrimary && excludedChildTabs.some((pattern) => pattern.test(source.tabName ?? ''))) continue;
-    if (!isPrimary && rawEntity && rawEntity.tableName !== primaryTable && primaryTable && primaryIdField) {
-      const parentField = (rawEntity.fields ?? []).find((field) =>
-        field.visibility === 'system' &&
-        field.type === 'foreignKey' &&
-        field.reference?.targetTable === primaryTable &&
-        field.reference?.keyColumn === primaryIdField.columnName,
+export async function generateManifest({
+  artifactsRoot = 'artifacts',
+  functionalDocsRoot = 'docs/generated-custom-windows',
+} = {}) {
+  const entities = {};
+  for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || excludedWindows.has(entry.name)) continue;
+    const contractPath = join(artifactsRoot, entry.name, 'contract.json');
+    let contract;
+    try {
+      contract = JSON.parse(await readFile(contractPath, 'utf8'));
+    } catch {
+      continue;
+    }
+    const category = contract.frontendContract?.window?.category;
+    if (excludedCategories.has(category)) continue;
+    let rawContract;
+    try {
+      rawContract = JSON.parse(await readFile(join(artifactsRoot, entry.name, 'schema-raw.json'), 'utf8'));
+    } catch {
+      rawContract = null;
+    }
+    if (!rawContract) {
+      throw new Error(
+        `Missing ${join(artifactsRoot, entry.name, 'schema-raw.json')}. It is gitignored, so a clean `
+        + 'checkout does not have it; without it the manifest loses child resources and `updated`. '
+        + `Extract it (make regen ONLY=${entry.name} or npx sf-extract-db) or copy it from a checkout that has it.`
       );
-      if (parentField) {
-        parent = { resource: entry.name, entityName: primaryEntityName, foreignKey: parentField.name };
+    }
+    let decisions;
+    try {
+      decisions = JSON.parse(await readFile(join(artifactsRoot, entry.name, 'decisions.json'), 'utf8'));
+    } catch {
+      decisions = null;
+    }
+    const configuredVisibleChildren = new Set(Object.keys(decisions?.window?.secondaryTabs ?? {}));
+    const hasExplicitChildVisibility = configuredVisibleChildren.size > 0;
+    const primaryEntityName = contract.frontendContract.window.primaryEntity;
+    const primarySource = contract.frontendContract.entities[primaryEntityName];
+    const primaryRaw = rawContract?.entities?.find((candidate) => candidate.tableName === primarySource?.tableName);
+    const primaryTable = primaryRaw?.tableName;
+    const primaryIdField = primaryRaw?.fields?.find((field) => field.type === 'id');
+    for (const entityName of Object.keys(contract.frontendContract?.entities ?? {})) {
+      const source = contract.frontendContract.entities[entityName];
+      const rawEntity = rawContract?.entities?.find((candidate) => candidate.tableName === source?.tableName);
+      const isPrimary = entityName === primaryEntityName;
+      let parent = null;
+      if (!isPrimary && excludedChildTabs.some((pattern) => pattern.test(source.tabName ?? ''))) continue;
+      if (!isPrimary && rawEntity && rawEntity.tableName !== primaryTable && primaryTable && primaryIdField) {
+        const parentField = (rawEntity.fields ?? []).find((field) =>
+          field.visibility === 'system' &&
+          field.type === 'foreignKey' &&
+          field.reference?.targetTable === primaryTable &&
+          field.reference?.keyColumn === primaryIdField.columnName,
+        );
+        if (parentField) {
+          parent = { resource: entry.name, entityName: primaryEntityName, foreignKey: parentField.name };
+        }
+      }
+      // Custom window decisions are the source of truth for which child tabs are
+      // actually visible in that window. Do not publish every schema-linked tab
+      // when the UI intentionally exposes only a curated subset. Standard
+      // windows without an explicit child-tab map retain their linked children.
+      if (!isPrimary && hasExplicitChildVisibility && !configuredVisibleChildren.has(entityName)) continue;
+      // Only expose children whose parent link is explicitly present in the
+      // extracted schema. This prevents unrelated tabs and orphan technical
+      // datasets from becoming public resources by accident.
+      if (!isPrimary && !parent) continue;
+      const functionalPath = join(functionalDocsRoot, `${entry.name}.md`);
+      let functional = {
+        functionalName: contract.frontendContract.window.name ?? entry.name,
+        functionalSummary: `Public API resource for the ${contract.frontendContract.window.name ?? entry.name} window.`,
+        functionalCapabilities: [],
+        functionalDoc: null,
+      };
+      try {
+        const markdown = await readFile(functionalPath, 'utf8');
+        const intent = markdown.match(/^## Intent\n([\s\S]*?)(?=\n## )/m)?.[1]?.trim();
+        if (intent) functional.functionalSummary = intent.split(/\n\s*\n/)[0].replace(/\s+/g, ' ');
+        const capabilities = markdown.match(/^## What this window should allow\n([\s\S]*?)(?=\n## )/m)?.[1] ?? '';
+        const published = publicFunctionalText({
+          summary: functional.functionalSummary,
+          capabilities: capabilities
+            .split('\n')
+            .map((line) => line.match(/^[-*]\s+(.*)$/)?.[1]?.trim())
+            .filter(Boolean),
+        });
+        functional.functionalSummary = published.summary
+          || `Public API resource for the ${functional.functionalName} window.`;
+        functional.functionalCapabilities = published.capabilities.slice(0, 8);
+        functional.functionalDoc = functionalPath;
+      } catch {
+        // Keep the generated resource available, but make the missing guide
+        // explicit so documentation work can fill the gap without guessing.
+      }
+      const entity = buildEntity({ specName: entry.name, entityName, contract, functional, parent, rawEntity });
+      entities[entity.publicName] = entity;
+    }
+  }
+
+  // Resolve relationships only after the complete public resource set is known.
+  // References to excluded resources remain ordinary scalar fields and never
+  // create links to an unavailable API. Contract references use Java entity
+  // naming (for example, `UOM` or `ProductCategory`), while the manifest uses
+  // the exact entity casing from each window. Compare canonical identifiers so
+  // the relationship does not depend on casing or underscore conventions.
+  const canonicalEntityName = (value) => String(value).replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const publicResourceByEntity = new Map(
+    Object.values(entities).map((entity) => [canonicalEntityName(entity.entityName), entity.publicName])
+  );
+  for (const entity of Object.values(entities)) {
+    for (const [publicFieldName, field] of Object.entries(entity.fields)) {
+      if (!field.reference) continue;
+      const resource = publicResourceByEntity.get(canonicalEntityName(field.reference));
+      if (resource) {
+        field.relationship = {
+          resource,
+          cardinality: 'one',
+          foreignKey: publicFieldName,
+        };
       }
     }
-    // Custom window decisions are the source of truth for which child tabs are
-    // actually visible in that window. Do not publish every schema-linked tab
-    // when the UI intentionally exposes only a curated subset. Standard
-    // windows without an explicit child-tab map retain their linked children.
-    if (!isPrimary && hasExplicitChildVisibility && !configuredVisibleChildren.has(entityName)) continue;
-    // Only expose children whose parent link is explicitly present in the
-    // extracted schema. This prevents unrelated tabs and orphan technical
-    // datasets from becoming public resources by accident.
-    if (!isPrimary && !parent) continue;
-    const functionalPath = join(functionalDocsRoot, `${entry.name}.md`);
-    let functional = {
-      functionalName: contract.frontendContract.window.name ?? entry.name,
-      functionalSummary: `Public API resource for the ${contract.frontendContract.window.name ?? entry.name} window.`,
-      functionalCapabilities: [],
-      functionalDoc: null,
-    };
-    try {
-      const markdown = await readFile(functionalPath, 'utf8');
-      const intent = markdown.match(/^## Intent\n([\s\S]*?)(?=\n## )/m)?.[1]?.trim();
-      if (intent) functional.functionalSummary = intent.split(/\n\s*\n/)[0].replace(/\s+/g, ' ');
-      const capabilities = markdown.match(/^## What this window should allow\n([\s\S]*?)(?=\n## )/m)?.[1] ?? '';
-      functional.functionalCapabilities = capabilities
-        .split('\n')
-        .map((line) => line.match(/^[-*]\s+(.*)$/)?.[1]?.trim())
-        .filter(Boolean)
-        .slice(0, 8);
-      functional.functionalDoc = functionalPath;
-    } catch {
-      // Keep the generated resource available, but make the missing guide
-      // explicit so documentation work can fill the gap without guessing.
-    }
-    const entity = buildEntity({ specName: entry.name, entityName, contract, functional, parent, rawEntity });
-    entities[entity.publicName] = entity;
   }
+
+  return {
+    apiVersion: 'v1',
+    generatedFrom: 'artifacts/*/contract.json',
+    policy: {
+      entitySelection: 'primary-entity-and-schema-linked-children-per-base-window',
+      fieldSelection: 'curated-publicApi-else-window-form',
+      excludedCategories: [...excludedCategories],
+      excludedWindows: [...excludedWindows],
+      excludedChildTabs: excludedChildTabs.map((pattern) => pattern.source),
+      excludedFields: [...neverExposedFields],
+      failClosed: true,
+    },
+    entities,
+  };
 }
 
-// Resolve relationships only after the complete public resource set is known.
-// References to excluded resources remain ordinary scalar fields and never
-// create links to an unavailable API. Contract references use Java entity
-// naming (for example, `UOM` or `ProductCategory`), while the manifest uses
-// the exact entity casing from each window. Compare canonical identifiers so
-// the relationship does not depend on casing or underscore conventions.
-const canonicalEntityName = (value) => String(value).replace(/[^a-z0-9]/gi, '').toLowerCase();
-const publicResourceByEntity = new Map(
-  Object.values(entities).map((entity) => [canonicalEntityName(entity.entityName), entity.publicName])
-);
-for (const entity of Object.values(entities)) {
-  for (const [publicFieldName, field] of Object.entries(entity.fields)) {
-    if (!field.reference) continue;
-    const resource = publicResourceByEntity.get(canonicalEntityName(field.reference));
-    if (resource) {
-      field.relationship = {
-        resource,
-        cardinality: 'one',
-        foreignKey: publicFieldName,
-      };
-    }
-  }
+async function main() {
+  const artifactsRoot = process.argv[2] ?? 'artifacts';
+  const outputPath = process.argv[3] ?? 'public-api/base.v1.json';
+  const functionalDocsRoot = process.argv[4] ?? 'docs/generated-custom-windows';
+  const manifest = await generateManifest({ artifactsRoot, functionalDocsRoot });
+  await mkdir(join(outputPath, '..'), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`Wrote ${Object.keys(manifest.entities).length} Base public API entities to ${outputPath}`);
 }
 
-const manifest = {
-  apiVersion: 'v1',
-  generatedFrom: 'artifacts/*/contract.json',
-  policy: {
-    entitySelection: 'primary-entity-and-schema-linked-children-per-base-window',
-    fieldSelection: 'editable-readOnly-until-removed',
-    excludedCategories: [...excludedCategories],
-    excludedWindows: [...excludedWindows],
-    excludedChildTabs: excludedChildTabs.map((pattern) => pattern.source),
-    failClosed: true,
-  },
-  entities,
-};
-
-await mkdir(join(outputPath, '..'), { recursive: true });
-await writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
-console.log(`Wrote ${Object.keys(entities).length} Base public API entities to ${outputPath}`);
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  await main();
+}

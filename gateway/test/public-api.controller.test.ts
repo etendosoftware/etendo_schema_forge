@@ -1,7 +1,8 @@
+// @covers gateway/src/public-api/public-api.controller.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UnauthorizedException, BadGatewayException } from '@nestjs/common';
-import { PublicApiController } from '../src/public-api/public-api.controller.ts';
+import { UnauthorizedException, BadGatewayException, BadRequestException, HttpException, PreconditionFailedException } from '@nestjs/common';
+import { PublicApiController, toEtag, versionFromIfMatch } from '../src/public-api/public-api.controller.ts';
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 
 const schema: PublicApiSchema = {
@@ -176,4 +177,201 @@ test('routes every child CRUD verb through the master path and preserves the par
   assert.deepEqual(JSON.parse(calls[1].body!), { phone: '555', parentId: 'bp-1' });
   assert.deepEqual(JSON.parse(calls[2].body!), { phone: '556' });
   assert.deepEqual(JSON.parse(calls[3].body!), { phone: '557' });
+});
+
+// ── Optimistic concurrency: ETag / If-Match ──────────────────────────────────
+
+const VERSION = '2026-10-15T13:44:37-03:00';
+const NEXT_VERSION = '2026-10-15T13:44:39-03:00';
+
+function versionedSchema() {
+  const versioned = structuredClone(schema) as any;
+  versioned.entities.businessPartner.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  versioned.entities.businessPartner.fields.name.direction = 'inout';
+  versioned.entities.businessPartner.fields.updated = {
+    publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', handlerId: null,
+  };
+  versioned.entities['contact-lines'] = {
+    publicApi: true,
+    publicName: 'contact-lines',
+    specName: 'contacts',
+    entityName: 'locationAddress',
+    operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    parent: { resource: 'businessPartner', entityName: 'businessPartner', pathSegment: 'locations', foreignKey: 'businessPartner' },
+    fields: {
+      phone: { publicApi: true, direction: 'inout', internalPath: 'phone', type: 'passthrough', handlerId: null },
+      updated: { publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', handlerId: null },
+    },
+  };
+  return versioned;
+}
+
+function headerSink() {
+  const headers: Record<string, string> = {};
+  return { headers, setHeader: (name: string, value: string) => { headers[name] = value; } };
+}
+
+function statusOf(error: unknown) {
+  return error instanceof HttpException ? error.getStatus() : undefined;
+}
+
+test('If-Match round-trips the ETag a read returned, for every NEO timestamp form', () => {
+  for (const version of [VERSION, '2026-10-15T16:44:37Z', '2026-10-15T13:44:37-0300', '2026-10-15T13:44:37.123-03:00']) {
+    assert.equal(versionFromIfMatch(toEtag(version)), version, version);
+  }
+});
+
+test('only a canonical NEO timestamp becomes an ETag', () => {
+  for (const value of [null, undefined, '', 'not-a-date', '2026-10-15 13:44:37.123', 1739000000]) {
+    assert.equal(toEtag(value), undefined, String(value));
+  }
+});
+
+test('a missing or wildcard If-Match is a 428 and a foreign one a 412', () => {
+  for (const value of [undefined, '', '  ', '*']) {
+    assert.throws(() => versionFromIfMatch(value), (error) => statusOf(error) === 428, String(value));
+  }
+  assert.throws(() => versionFromIfMatch('*'), /If-Match: \* is not accepted/);
+  const weak = `W/${toEtag(VERSION)}`;
+  const unquoted = toEtag(VERSION)!.slice(1, -1);
+  const notAVersion = `"${Buffer.from('not-a-date', 'utf8').toString('base64url')}"`;
+  const list = `${toEtag(VERSION)}, ${toEtag(NEXT_VERSION)}`;
+  for (const value of [weak, unquoted, notAVersion, list, '"%%%"']) {
+    assert.throws(() => versionFromIfMatch(value), PreconditionFailedException, String(value));
+  }
+});
+
+test('reading a record returns its ETag in the header and as meta.etag', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({ response: { data: [{ id: 'bp-1', name: 'Acme', updated: VERSION }] } }), { status: 200 });
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const res = headerSink();
+  const result = await controller.get('businessPartner', 'bp-1', { neoJwt: 'jwt' } as any, res) as any;
+  // NeoServlet wraps a single record in a one-element array; whether the
+  // gateway unwraps it is a separate contract decision, not this test's.
+  const resource = Array.isArray(result.data) ? result.data[0] : result.data;
+  assert.equal(res.headers.ETag, toEtag(VERSION));
+  assert.equal(resource.meta.etag, toEtag(VERSION));
+  assert.equal(resource.attributes.updated, VERSION);
+});
+
+test('a list carries meta.etag per item and no ETag header', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({ response: { data: [
+    { id: 'bp-1', name: 'A', updated: VERSION },
+    { id: 'bp-2', name: 'B', updated: NEXT_VERSION },
+  ] } }), { status: 200 });
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const result = await controller.list('businessPartner', { neoJwt: 'jwt' } as any) as any;
+  assert.deepEqual(result.data.map((item: any) => item.meta.etag), [toEtag(VERSION), toEtag(NEXT_VERSION)]);
+});
+
+test('an update without If-Match is refused with 428 before reaching Etendo', async () => {
+  let called = false;
+  const fakeFetch = async () => { called = true; return new Response('{}', { status: 200 }); };
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  for (const call of [
+    () => controller.patch('businessPartner', 'bp-1', { name: 'X' }, { neoJwt: 'jwt' } as any),
+    () => controller.update('businessPartner', 'bp-1', { name: 'X' }, { neoJwt: 'jwt' } as any),
+    () => controller.patchChild('businessPartner', 'bp-1', 'locations', 'line-1', { phone: '1' }, { neoJwt: 'jwt' } as any),
+    () => controller.updateChild('businessPartner', 'bp-1', 'locations', 'line-1', { phone: '1' }, { neoJwt: 'jwt' } as any),
+  ]) {
+    await assert.rejects(call, (error) => statusOf(error) === 428);
+  }
+  assert.equal(called, false);
+});
+
+test('a valid If-Match is sent to Etendo as updated and the new ETag is returned', async () => {
+  let sent: Record<string, unknown> = {};
+  const fakeFetch = async (_url: string, init?: RequestInit) => {
+    sent = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({ response: { data: [{ id: 'bp-1', name: 'X', updated: NEXT_VERSION }] } }), { status: 200 });
+  };
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const res = headerSink();
+  await controller.patch('businessPartner', 'bp-1', { name: 'X' }, { neoJwt: 'jwt' } as any, toEtag(VERSION), res);
+  assert.deepEqual(sent, { name: 'X', updated: VERSION });
+  assert.equal(res.headers.ETag, toEtag(NEXT_VERSION));
+});
+
+test('a stale If-Match (Etendo stale_record) is a 412, not a 400', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({
+    status: 409, error: 'stale_record', message: 'This record was modified by someone else after you read it.',
+  }), { status: 409 });
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  await assert.rejects(
+    () => controller.patch('businessPartner', 'bp-1', { name: 'X' }, { neoJwt: 'jwt' } as any, toEtag(VERSION)),
+    (error) => error instanceof PreconditionFailedException && /modified by someone else/.test((error as Error).message),
+  );
+});
+
+test('updated stays read-only in the body; the version travels in If-Match', async () => {
+  let called = false;
+  const fakeFetch = async () => { called = true; throw new Error('must not reach Etendo'); };
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  await assert.rejects(
+    () => controller.patch('businessPartner', 'bp-1', { updated: VERSION }, { neoJwt: 'jwt' } as any, toEtag(VERSION)),
+    /Field "updated" is not writable/,
+  );
+  assert.equal(called, false);
+});
+
+test('a 409 that is not stale_record is still a 400', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({ error: { message: 'Duplicate key' } }), { status: 409 });
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  await assert.rejects(
+    () => controller.patch('businessPartner', 'bp-1', { name: 'X' }, { neoJwt: 'jwt' } as any, toEtag(VERSION)),
+    (error) => error instanceof BadRequestException && /Duplicate key/.test((error as Error).message),
+  );
+});
+
+test('child PUT and PATCH with a valid If-Match send updated and return the new ETag', async () => {
+  const sent: Array<Record<string, unknown>> = [];
+  const fakeFetch = async (_url: string, init?: RequestInit) => {
+    sent.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({ response: { data: [{ id: 'line-1', phone: '1', updated: NEXT_VERSION }] } }), { status: 200 });
+  };
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  for (const call of ['updateChild', 'patchChild'] as const) {
+    const res = headerSink();
+    await controller[call]('businessPartner', 'bp-1', 'locations', 'line-1', { phone: '1' }, { neoJwt: 'jwt' } as any, toEtag(VERSION), res);
+    assert.equal(res.headers.ETag, toEtag(NEXT_VERSION), call);
+  }
+  assert.deepEqual(sent, [{ phone: '1', updated: VERSION }, { phone: '1', updated: VERSION }]);
+});
+
+test('create and a child read return the ETag header', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({ response: { data: [{ id: 'x-1', name: 'A', phone: '1', updated: VERSION }] } }), { status: 200 });
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const created = headerSink();
+  await controller.create('businessPartner', { name: 'A' }, { neoJwt: 'jwt' } as any, created);
+  const read = headerSink();
+  await controller.getChild('businessPartner', 'bp-1', 'locations', 'x-1', { neoJwt: 'jwt' } as any, read);
+  assert.equal(created.headers.ETag, toEtag(VERSION));
+  assert.equal(read.headers.ETag, toEtag(VERSION));
+});
+
+test('a record whose updated is not a canonical timestamp gets no ETag at all', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({ response: { data: [{ id: 'bp-1', name: 'A', updated: '2026-10-15 13:44:37.123' }] } }), { status: 200 });
+  const controller = new PublicApiController(versionedSchema(), 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const res = headerSink();
+  const result = await controller.get('businessPartner', 'bp-1', { neoJwt: 'jwt' } as any, res) as any;
+  const resource = Array.isArray(result.data) ? result.data[0] : result.data;
+  assert.equal(res.headers.ETag, undefined);
+  assert.equal(resource.meta, undefined);
+});
+
+test('a read-only child refuses writes with 404 before reaching Etendo', async () => {
+  const readOnly = versionedSchema();
+  readOnly.entities['contact-lines'].operations = ['GET', 'LIST'];
+  let called = false;
+  const fakeFetch = async () => { called = true; throw new Error('must not reach Etendo'); };
+  const controller = new PublicApiController(readOnly, 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  await assert.rejects(
+    () => controller.createChild('businessPartner', 'bp-1', 'locations', { phone: '1' }, { neoJwt: 'jwt' } as any),
+    /Operation POST is not exposed/,
+  );
+  await assert.rejects(
+    () => controller.removeChild('businessPartner', 'bp-1', 'locations', 'line-1', { neoJwt: 'jwt' } as any),
+    /Operation DELETE is not exposed/,
+  );
+  assert.equal(called, false);
 });
