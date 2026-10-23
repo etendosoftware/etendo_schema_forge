@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-07-21T12:35:20.747Z",
-  "checksum": "7747449adb3281d4",
+  "updatedAt": "2026-10-22T18:19:27.763Z",
+  "checksum": "bcf0a37c41423f8f",
   "frontendContract": {
     "window": {
       "id": "141",
@@ -20,6 +20,7 @@
           "FixMonthOffset": "Meses de desplazamiento",
           "NetDays": "Días",
           "IsDefault": "Por defecto",
+          "IsNextBusinessDay": "Siguiente día hábil",
           "IsActive": "Activo"
         }
       },
@@ -139,6 +140,27 @@
             "validation": {
               "maxLength": 1
             }
+          },
+          {
+            "name": "nextBusinessDay",
+            "apiKey": "nextBusinessDay",
+            "column": "IsNextBusinessDay",
+            "label": "Next Business Day",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 7,
+            "labels": {
+              "es_ES": "Siguiente día hábil",
+              "en_US": "Next business day"
+            },
+            "validation": {
+              "maxLength": 1
+            }
           }
         ],
         "searchableFields": [
@@ -166,6 +188,7 @@
           "FixMonthOffset": "Meses de desplazamiento",
           "NetDays": "Días",
           "IsDefault": "Por defecto",
+          "IsNextBusinessDay": "Siguiente día hábil",
           "IsActive": "Activo"
         }
       }
@@ -277,7 +300,7 @@
             "apiKey": "nextBusinessDay",
             "column": "IsNextBusinessDay",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -437,6 +460,7 @@
         "FixMonthOffset": "Meses de desplazamiento",
         "NetDays": "Días",
         "IsDefault": "Por defecto",
+        "IsNextBusinessDay": "Siguiente día hábil",
         "IsActive": "Activo"
       }
     }
@@ -465,6 +489,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-nextBusinessDay",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Field 'nextBusinessDay' should be present in header"
       },
       {
         "id": "t-field-presence-header-offsetMonthDue",
@@ -505,6 +537,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-nextBusinessDay",
+        "category": "field-type",
+        "entity": "header",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Field 'nextBusinessDay' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-offsetMonthDue",
@@ -698,14 +738,6 @@
         "description": "System field 'maturityDate3' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-nextBusinessDay",
-        "category": "system-field",
-        "entity": "header",
-        "field": "nextBusinessDay",
-        "runner": "node",
-        "description": "System field 'nextBusinessDay' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-organization",
         "category": "system-field",
         "entity": "header",
@@ -754,18 +786,18 @@
       }
     ],
     "summary": {
-      "total": 40,
+      "total": 41,
       "byCategory": {
         "crud-flags": 1,
-        "field-presence": 5,
-        "field-type": 5,
+        "field-presence": 6,
+        "field-type": 6,
         "rule-declared": 9,
         "searchable-filters": 2,
-        "system-field": 17,
+        "system-field": 16,
         "visibility": 1
       },
       "byRunner": {
-        "node": 40,
+        "node": 41,
         "junit": 0
       }
     }
