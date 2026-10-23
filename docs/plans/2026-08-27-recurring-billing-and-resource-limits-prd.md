@@ -57,10 +57,12 @@ This also fails the shipped PRD, which requires the request id to be an idempote
 | Operational tables exposed as Classic windows | 6 AD windows, 5 menu entries: Data-Fix History, Match Rule, Survey Configuration, Schema Forge Configuration, Fiscal Declarations NEO Support, Transaction Type | The Classic surface (§10). `ETGO_DATA_FIX_HISTORY` is the closest analogue: an audit trail deliberately readable without DB access. |
 | CDI handler discovery by `@Named` | `NeoServlet` resolving `NeoHandler` | The counting-strategy SPI (§7). Note the documented trap: `@Named` only, never `@ApplicationScoped`, because a proxied bean loses the non-inherited qualifier and is silently skipped. |
 | Configurable query fragments in AD | `AD_TAB.whereclause`, `AD_REF_TABLE.whereclause`, `AD_VAL_RULE` | The HQL resource restriction (§7.2). |
-| Scheduled job registration | `OnboardingPsd2SyncService` (`AD_Process_Request` + `OBScheduler`) | The aggregation and reconciliation jobs. |
+| Scheduled job registration | `OnboardingPsd2SyncService` (`AD_Process_Request` + `OBScheduler`) — *since removed (ETP-5275); the live precedent for one global request at client 0 is `TenantPoolScheduleStartup` (ETP-5389), which ETP-5048 copies* | The aggregation and reconciliation jobs. |
 | Layered configuration lookup | `PublicUrlResolver.readProperty` | Kill switches and runtime settings. |
 
 One precedent is **absent** and must not be assumed: there is no manually launchable background process in this module. `AD_PROCESS.xml` contains two entries, both `ISBACKGROUND=N`, and zero `AD_MENU` rows point at a process. Giving reconciliation an operator-triggered entry point is design work, not registration (§9).
+
+> **Superseded (2026-10-18, ETP-5048).** ETP-5050 has since shipped the first manually launchable background process (`ETGO_UsageAggregation`, `ISBACKGROUND=Y`, on an `ACTION=P` menu entry) and ETP-5389 a second background process (`ETGO_TenantPoolFill`). ETP-5048's reconciliation copies the ETP-5050 shape; its design of record is `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`.
 
 ---
 
@@ -314,9 +316,9 @@ Already-issued NEO JWTs continue to work until they expire. The accepted window 
 
 With consumption measured by recomputation rather than instrumentation, reconciliation is not a safety net — it is the primary correctness mechanism of the subsystem.
 
-- Scheduled, plus **operator-triggerable from Etendo Classic**. Note §2.3: there is no precedent for a menu-launched process in this module, so this entry point is design work.
+- Scheduled, plus **operator-triggerable from Etendo Classic**. Note §2.3: there is no precedent for a menu-launched process in this module, so this entry point is design work. *(Resolved in ETP-5048: the background process `ETGO_BillingReconciliation` on the System menu entry **Billing Reconciliation**, with a Dry run parameter; the schedule is planted only while the `billing-reconciliation-schedule` flag is on (strictly off by default). Design of record and the boundary with ETP-5396's work record: `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`.)*
 - **Provider to local:** a paid checkout session with no provisioned tenant is repaired by completing provisioning, and the repair is alerted. A Stripe subscription without our correlation metadata is foreign and never touched.
-- **Local to provider:** for every locally active subscription, read the *real* Stripe status. Anything not `active` or `trialing` — cancelled, paused, `incomplete_expired`, absent — is corrected locally. Reading the actual status, rather than only reacting to a deletion event, is what catches paused collection and dashboard actions that emit no event.
+- **Local to provider:** for every locally active subscription, read the *real* Stripe status. A cancelled or `incomplete_expired` subscription is closed locally; an absent one (404) only behind a circuit breaker that stops a wrong key from closing tenants. `past_due`/`unpaid` stay with the webhook's grace logic. **A `paused` subscription, and paused collection, are alert-only:** they never close the row or change access, on any path (the reconciliation, `customer.subscription.updated`, `customer.subscription.paused`), and raise one review alert per pause episode; the episode ends when a path sees the subscription no longer paused, so the next pause alerts again — our checkout sets no trial, so a pause was configured in Stripe by hand and can be resumed. Reading the actual status, rather than only reacting to a deletion event, is what catches dashboard actions that emit no event. *(Decided by Martin on 2026-10-20; once per pause episode rather than once per subscription decided on 2026-10-21; ETP-5048.)*
 - **Abandoned checkouts:** a stale request row is closed only after re-reading the provider. **A row whose provider session id is missing is never closed automatically** — it is alerted for manual review, because closing it is the one unrecoverable answer.
 - Every repair is visible in the Classic windows, not only in a log line, and alerted with a stable structured prefix so drift is visible rather than silently fixed.
 
@@ -338,6 +340,13 @@ Billing must not be the only operational subsystem in the module without an AD s
 Tables are System-level with rows at client `0`, like `ETGO_ACCOUNT`; window access is restricted accordingly, which is the correct restriction for billing data.
 
 The acceptance bar: **no billing or payment question requires reading a log file or the database to answer.**
+
+*Reconciliation process, as decided on 2026-10-21 (ETP-5048; design of record `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`):*
+
+- **Production schedules it by hand** in the Process Request window (System, timing *Schedule*, hourly), like Demo Trial Notices: production is updated by delta and never restarted, so the startup hook that plants the request only serves environments that restart.
+- **The `billing-reconciliation-schedule` flag gates every scheduled run** — the planted request or one an administrator created. A run from the menu, or a Process Request run immediately or later once, is never gated.
+- **A scheduled run while the flag is off is an ERROR** in Process Monitor (it does no work), plus **one internal alert per UTC day**, so a schedule firing for nothing is seen. Turn the flag on and create the Process Request together at go-live.
+- Toward the acceptance bar above, the run result lists the affected items (request or subscription, company, action, reason), in the popup and in the Process Monitor log, and a dry run says what it *would* do.
 
 ---
 
