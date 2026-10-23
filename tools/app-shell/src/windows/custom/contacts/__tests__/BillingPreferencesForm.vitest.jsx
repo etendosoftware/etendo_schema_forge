@@ -246,6 +246,36 @@ describe('BillingPreferencesForm', () => {
       }
     });
 
+    // ETP-5826: both payment-terms selectors offer "+ Crear condición de pago". EntityForm (stubbed
+    // here) renders the create action for any field carrying these props, so the contract is the
+    // field definition each side hands it.
+    it.each(SIDES)('$side: the payment-terms field carries the payment-term create props', ({ terms }) => {
+      renderBoth();
+      const props = lastPropsWithField(terms);
+      // EntityForm only offers the create action when it also has an apiBaseUrl to POST against.
+      expect(props.apiBaseUrl).toBe('/api');
+      const field = props.fields.find((f) => f.key === terms);
+      expect(field).toMatchObject({
+        type: 'selector',
+        inputMode: 'selector',
+        allowCreate: true,
+        createSpec: 'payment-term',
+        createEntity: 'header',
+        createLabelKey: 'paymentTermCreate',
+        createTitleKey: 'paymentTermCreateTitle',
+        createNamePlaceholderKey: 'paymentTermDaysPlaceholder',
+      });
+    });
+
+    it('no other billing field becomes creatable', () => {
+      renderBoth();
+      const creatable = EntityForm.mock.calls
+        .flatMap(([p]) => p.fields ?? [])
+        .filter((f) => f.allowCreate)
+        .map((f) => f.key);
+      expect(new Set(creatable)).toEqual(new Set(['paymentTerms', 'pOPaymentTerms']));
+    });
+
     it('shows only the customer grid when vendor is off', () => {
       renderBoth(vi.fn(), { vendor: false });
       expect(screen.getAllByTestId('entity-form')).toHaveLength(1);

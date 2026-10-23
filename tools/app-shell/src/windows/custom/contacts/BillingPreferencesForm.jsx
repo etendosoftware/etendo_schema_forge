@@ -7,6 +7,7 @@ import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { PAYMENT_TERM_CREATE_FIELD_PROPS } from '@/lib/inlineCreateVariants.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const PRE_SAVE_BILLING_PREF_FIELDS = [
@@ -309,7 +310,15 @@ export default function BillingPreferencesForm(props) {
       inputMode: 'dependent',
       dependsOn: { field: 'paymentMethod', filterKey: 'Fin_Paymentmethod_ID' },
     },
-    { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    // ETP-5826: "+ Crear condición de pago" — same create props as the document windows' field.
+    {
+      key: 'paymentTerms',
+      column: 'C_PaymentTerm_ID',
+      type: 'selector',
+      section: 'principal',
+      inputMode: 'selector',
+      ...PAYMENT_TERM_CREATE_FIELD_PROPS,
+    },
   ];
 
   const vendorBillingFields = [
@@ -324,7 +333,14 @@ export default function BillingPreferencesForm(props) {
       inputMode: 'dependent',
       dependsOn: { field: 'pOPaymentMethod', filterKey: 'PO_Paymentmethod_ID' },
     },
-    { key: 'pOPaymentTerms', column: 'PO_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    {
+      key: 'pOPaymentTerms',
+      column: 'PO_PaymentTerm_ID',
+      type: 'selector',
+      section: 'principal',
+      inputMode: 'selector',
+      ...PAYMENT_TERM_CREATE_FIELD_PROPS,
+    },
   ];
 
   return (
