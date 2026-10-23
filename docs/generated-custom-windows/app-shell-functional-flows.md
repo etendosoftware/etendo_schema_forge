@@ -191,26 +191,83 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Layout: the pair lives in one `flex-1 min-w-[16rem]` block inside the already-`flex-wrap`
     bar, so it takes the leftover width when there is room and drops to a second line of the same
     bar when there is not — it never squeezes the days label or the button.
-- **Colour.** The non-expired state is amber: `status-warning` (`bg`/`foreground`/`border`), the
-  only orange trio the core Tailwind preset defines, which brings its dark-mode values with it.
-  Changing it was a token swap, not new CSS.
-  - ⚠️ **The expired state's classes do not exist.** `status-danger` is defined **nowhere** — not
-    in `@etendosoftware/app-shell-core`'s Tailwind preset (which has `success`, `warning`, `info`
-    and `neutral`) and not in any stylesheet; the red family is called `destructive`. So
-    `bg-status-danger`, `text-status-danger-foreground`, `border-status-danger-border`,
-    `bg-status-danger-border` and `bg-status-danger-foreground` all generate no CSS and the
-    expired banner renders with no background, border or text colour of its own. This is
-    pre-existing and `TopBar.jsx` is the only file in the repo that uses those class names. Left
-    as found: red-vs-amber is a design decision, not a rename.
+- **Colour.** An active trial with more than 3 days left is amber: `status-warning`
+  (`bg`/`foreground`/`border`), the only orange trio the core Tailwind preset defines, which brings
+  its dark-mode values with it.
+- **Escalation (ETP-5049).** With 3 days or fewer left (`BILLING_WARNING_ESCALATION_DAYS`), and
+  once expired, the bar is red: the core preset's `destructive` family (`bg-destructive/10`,
+  `border-destructive`, a solid `bg-destructive` pill and progress fill). `data-variant` on
+  `topbar-demo-trial-indicator` reads `warning` or `destructive`. The state is the pure
+  `demoTrialStatus(environment)` in `lib/environmentPresentation.js`; the CTA (**Ir al pago**,
+  `/upgrade`) stays visible to everyone, as before — upgrading is not owner-gated (an invited
+  member buys a clean productive environment). This bar is the in-environment trial warning:
+  ETP-5049 deliberately did not add a second banner for an ending trial.
+  - Before ETP-5049 the expired state used `status-danger-*` classes, which are not a token of the
+    core preset, so it rendered with no colour of its own. They are gone.
+- **One day left** reads "1 day left" / "Queda 1 día" (`environmentTrialDaysRemainingOne`, picked
+  by `environmentTrialDaysKey`), also in the company list's trial label.
 - **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
   — both caveats' presence and their position after the button, that they are two sibling `<p>`
   neither of which carries the other's text, that no second link is drawn, the wrap classes, the
-  amber token, and the three states that render nothing or keep the caveats.
+  amber token, the destructive variant at 3 and 1 days left and once expired (and no
+  `status-danger` class), the singular day label, and the three states that render nothing or
+  keep the caveats.
 - **Manual verification path:**
   1. On a trial tenant, confirm the bar is amber and the two caveats read to the right of Ir al
      pago, on two separate lines.
   2. Narrow the window and confirm the block wraps onto its own row instead of crushing the bar.
   3. On a productive tenant, confirm the whole bar is gone.
+  4. Set the trial so 3 days or fewer remain (`docs/etp-5396-local-lifecycle-tool.md`) and confirm
+     the bar turns red while still counting down; with 1 day left it reads "Queda 1 día".
+
+#### 3.2a The failed-payment banner (`BillingStatusBanner`, ETP-5049)
+
+- **Why:** a failed renewal payment turns the subscription `PAST_DUE`, and the environment keeps
+  working for the grace period (`etendo.go.billing.grace.days`, default 15) before every request is
+  refused with 402. Without this banner the first in-app signal was the blocked screen, although
+  most failed payments are fixable within grace.
+- **Where:** `tools/app-shell/src/components/billing/BillingStatusBanner.jsx`, mounted by
+  `AppLayoutInner` (`layout/AppLayout.jsx`) above the top bar, in the normal authenticated layout
+  only. Not in an embedded (chromeless) window, never on the blocked screen.
+- **The decision is pure:** `paymentGraceWarning(environment, now)` in
+  `lib/environmentPresentation.js`, fed by the current environment from `GET /sws/go/environments`
+  (`useEnvironmentSwitch`). It answers `null` unless `subscriptionStatus === 'PAST_DUE'` and
+  `graceEndsAt` is an instant still ahead. `graceEndsAt` is the backend's own grace end (the same
+  `EnvironmentAccessPolicy.graceEndsAt` the 402 gate decides on), so the banner disappears exactly
+  when the blocked screen takes over.
+- **Copy and CTA:** *"Your last payment failed. This environment will be blocked on {date}."* —
+  the date is the viewer's local calendar day of the `graceEndsAt` instant, formatted with
+  `formatCalendarDate` in the UI locale.
+  - Owner (`ownedByAccount: true`, the signal ETP-5742 gates re-subscription on, via
+    `ownsEnvironmentSubscription`): **Update payment** → `/account`, where the Subscription section
+    opens the Stripe Customer Portal.
+  - Anyone else: *"Contact your company's administrator."*, no button.
+- **Escalation:** more than 3 days (`BILLING_WARNING_ESCALATION_DAYS`) before `graceEndsAt` it is
+  amber and can be dismissed for the browser session (sessionStorage key
+  `etendo:billing-warning-dismissed:<clientId>:<graceEndsAt>`, so a new failed payment warns
+  again; storage failures only mean it shows again). In the last 3 days it is red
+  (`data-variant="destructive"`, `role="alert"`) and has no close button.
+- **Hidden on `/account` and `/upgrade`:** `/account` is the CTA's own destination and already
+  shows the grace countdown next to the portal button. `/upgrade` is a full-screen overlay
+  (`upgrade-page-shell`, `fixed inset-0 z-50`) drawn over the layout, so the banner would be
+  invisible there yet still in the accessibility tree — escalated, an unseen `role="alert"`. It
+  stays on `/companies` and on every in-environment page, where nothing else says it.
+- **Known limitation — the kill switch (accepted, not a bug to fix here):** with the backend kill
+  switch `environment-access-enforcement-off` on for the tenant, the environment is **not** blocked
+  on `graceEndsAt`, but the banner still says it will be; after that date the banner hides itself
+  and no blocked screen follows, so the tenant keeps working with no warning. The banner cannot
+  know: during grace `accessState` is `ALLOWED` whether or not the switch is on (the switch is
+  consulted only when access would be refused), and no other field of `GET /sws/go/environments`
+  reveals it. Accepted because the switch is a rare incident lever and the failed payment is still
+  real. A fix would need a backend field (e.g. `accessEnforced` per environment) for the banner to
+  read. Full record: `com.etendoerp.go/docs/open-and-notable-topics.md` §4.17.
+- **Test ids:** `billing-status-banner` (with `data-variant`), `billing-status-banner-message`,
+  `billing-status-banner-cta`, `billing-status-banner-member-hint`,
+  `billing-status-banner-dismiss`.
+- **i18n keys:** `billingPaymentFailedBanner`, `billingUpdatePaymentCta`,
+  `billingPaymentFailedContactAdmin` (en_US, es_ES, es_AR).
+- **Manual verification path:** `docs/stripe-local-testing.md`, the end-to-end walk-through,
+  Step 5; or the local lifecycle tool (`docs/etp-5396-local-lifecycle-tool.md`, check 3).
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
