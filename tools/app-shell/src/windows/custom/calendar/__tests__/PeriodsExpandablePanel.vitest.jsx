@@ -118,19 +118,18 @@ describe('PeriodsExpandablePanel', () => {
     await waitFor(() => screen.getByText('January 27'));
 
     const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
-    expect(badge).toHaveAttribute('data-variant', 'blue'); // status "O" -> blue per enumVariants
+    expect(badge).toHaveAttribute('data-variant', 'green'); // status "O" -> green per enumVariants
     expect(badge).toHaveTextContent('Open');
     expect(screen.queryByText('O')).not.toBeInTheDocument();
   });
 
-  // ETP-5592: the app-wide status scale. Closed is the normal end state (green, like a closed
-  // year), yellow means "needs attention", and red is reserved for errors.
+  // ETP-5592 renamed the labels and kept the colours (same as decisions.json enumVariants).
   it.each([
     ['N', 'neutral', 'Never opened'],
-    ['O', 'blue', 'Open'],
-    ['M', 'yellow', 'Mixed'],
-    ['C', 'green', 'Closed'],
-    ['P', 'green', 'Permanently closed'],
+    ['O', 'green', 'Open'],
+    ['M', 'orange', 'Mixed'],
+    ['C', 'red', 'Closed'],
+    ['P', 'red', 'Permanently closed'],
   ])('renders status %s as a %s tag labelled "%s"', async (status, variant, label) => {
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
@@ -329,7 +328,7 @@ describe('PeriodsExpandablePanel — row actions (ETP-5592)', () => {
     await waitFor(() => {
       const badge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
       expect(badge).toHaveTextContent('Closed');
-      expect(badge).toHaveAttribute('data-variant', 'green');
+      expect(badge).toHaveAttribute('data-variant', 'red');
     });
     // The panel stayed mounted: no top-level loading state again.
     expect(screen.queryByTestId('periods-expandable-panel-loading')).not.toBeInTheDocument();

@@ -113,7 +113,7 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   so the button disappears without a manual page reload.
 - On a year's detail, switch between two secondary tabs:
    - **Periods** (the first detail tab) — a list of the year's periods (aggregate status tag, see
-    "Period status scale" below), each row with hover links **Abrir** / **Cerrar** /
+    "Period status labels and colours" below), each row with hover links **Abrir** / **Cerrar** /
     **Cerrar permanentemente…** (ETP-5592). Opening/closing a period is global —
     it affects every document type at once (AD Process 167 opens/closes every `C_PeriodControl`
     row for the period in one transaction); there is no per-document-type breakdown or action in
@@ -339,17 +339,19 @@ ever changes, this needs revisiting.
 - Period metadata fields (`periodNo`, `name`, `startingDate`, `endingDate`, `periodType`) are
   classified `readOnly` — the Periods tab is a status/confirmation view, not a metadata editor.
 
-## Period status scale (ETP-5592)
-The status tag follows the app-wide scale: neutral = not started, yellow = needs attention, green =
-done, red = errors only, so a closed period reads like a closed year.
+## Period status labels and colours (ETP-5592)
+ETP-5592 renamed the labels (the old "Todos …" aggregate names were noise once the
+per-document-type breakdown was removed). The colours were deliberately kept as they were
+(decision 2026-10-23, option D of the analysis), even though red for a closed period departs from
+the app's "red = error" convention.
 
 | Code | Label (es / en) | Tag |
 |---|---|---|
 | N | Nunca abierto / Never opened | neutral |
-| O | Abierto / Open | blue |
-| M | Mixto / Mixed | yellow |
-| C | Cerrado / Closed | green |
-| P | Cerrado permanentemente / Permanently closed | green |
+| O | Abierto / Open | green |
+| M | Mixto / Mixed | orange |
+| C | Cerrado / Closed | red |
+| P | Cerrado permanentemente / Permanently closed | red |
 
 The same mapping lives in `PeriodsExpandablePanel.jsx` (`PERIOD_STATUS_VARIANTS`) and in
 `artifacts/open-close-period-control/decisions.json → enumVariants` (both `status` and
@@ -425,7 +427,7 @@ both bulk buttons are disabled. A failure opens the result dialog with the trans
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
-| status | enum | readOnly | yes | yes | Aggregate tag: N/O/C/P/M (see Period status scale) |
+| status | enum | readOnly | yes | yes | Aggregate tag: N/O/C/P/M (see Period status labels and colours) |
 | calendar | foreignKey | readOnly | yes | yes | |
 | year | foreignKey | readOnly | yes | yes | |
 | name | string | readOnly | yes | yes | e.g. "Jan-2027" |
@@ -545,7 +547,7 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
    retained rather than moved or duplicated. Do not change range on a populated year.
 8. Open a year's detail and confirm **Periods** is the first secondary tab (before **Accounting**,
    ETP-4948). Switch to it and confirm the period list renders chronologically by starting date
-   with aggregate status tags in the colours of "Period status scale", and a count on the tab.
+   with aggregate status tags as in "Period status labels and colours", and a count on the tab.
 9. Hover a period and confirm only the meaningful links show (an open period offers **Cerrar** and
    **Cerrar permanentemente…**, not **Abrir**). Click one, confirm the dialog names the period, accept
    and check the status tag updates. **Cerrar permanentemente…** warns it cannot be undone. Confirm

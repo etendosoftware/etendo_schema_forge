@@ -18,9 +18,8 @@ import { PeriodsBulkConfirmDialog, PeriodsBulkResultDialog, countedLabel } from 
 
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status enumVariants — kept in sync manually since this is a custom component,
-// not generator-driven output. ETP-5592: the app-wide status scale — closed is the normal end
-// state (green, like "Año cerrado"), yellow is "needs attention", red is reserved for errors.
-const PERIOD_STATUS_VARIANTS = { N: 'neutral', O: 'blue', M: 'yellow', C: 'green', P: 'green' };
+// not generator-driven output.
+const PERIOD_STATUS_VARIANTS = { O: 'green', N: 'neutral', C: 'red', P: 'red', M: 'orange' };
 
 // periodControl's LIST endpoint goes through NEO's generic DefaultJsonDataService (classic
 // Openbravo datasource), which does NOT support arbitrary `fieldName=value` query params — a
