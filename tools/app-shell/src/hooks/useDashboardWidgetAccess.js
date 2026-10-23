@@ -10,6 +10,7 @@ import {
   PENDING_TASK_WINDOWS,
   resolvePendingAmountsVisibility,
 } from '@/lib/dashboardWidgetAccess.js';
+import { buildWindowIdBySlug } from '@/lib/specWriteAccess.js';
 
 /**
  * ETP-5088 — Bridges the raw `windowAccess` map (keyed by `AD_Window_ID`) to the window SLUGS the
@@ -18,18 +19,8 @@ import {
  * `menu.json` already carries `name` (slug) -> `windowId` for every window, so no AD_Window_ID is
  * ever hardcoded: change the menu and the gating follows. Entries with no `windowId` (the
  * dashboard itself, custom pages) are skipped — they are not window-backed and nothing gates on
- * them.
+ * them. The builder is shared with `useCanCreateInSpec` (`lib/specWriteAccess.js`).
  */
-function buildWindowIdBySlug(menu) {
-  const bySlug = {};
-  for (const group of menu ?? []) {
-    for (const item of group?.items ?? []) {
-      if (item?.name && item?.windowId) bySlug[item.name] = String(item.windowId);
-    }
-  }
-  return bySlug;
-}
-
 const WINDOW_ID_BY_SLUG = buildWindowIdBySlug(menuConfig?.menu);
 
 /**

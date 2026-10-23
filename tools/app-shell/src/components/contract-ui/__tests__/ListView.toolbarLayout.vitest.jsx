@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
+// @covers tools/app-shell/src/components/contract-ui/SegmentedTabs.jsx
 /**
  * ListView — idle toolbar layout (ETP-5509).
  *

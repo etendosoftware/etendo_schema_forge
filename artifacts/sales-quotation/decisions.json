@@ -160,7 +160,13 @@
           "derivation": null
         },
         "paymentTerms": {
-          "section": "principal"
+          "section": "principal",
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "paymentMethod": {
           "section": "principal"

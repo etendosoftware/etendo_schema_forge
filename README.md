@@ -160,6 +160,7 @@ Branch state of every module repo on the remote. **Fixed on epic** = the module'
 | `org.openbravo.module.sii` | Bitbucket koodu_software | no | yes | +50 | SF+GO | fixed on epic |
 | `org.openbravo.module.taxreportlauncher` | Bitbucket koodu_software | no | yes | +14 | SF+GO | fixed on epic |
 | `org.openbravo.module.aeat303.es` | Bitbucket koodu_software | no | yes | +61 | GO | fixed on epic |
+| `org.openbravo.module.aeat349.es` | Bitbucket koodu_software | no (`master`) | yes | 0 (epic cut from `develop` for ETP-5059; push pending) | GO | fixed on epic |
 | `org.openbravo.module.bptaxidkey` | Bitbucket koodu_software | no | yes | +8 | GO | fixed on epic |
 | `com.smf.currency.apiconfig` | Bitbucket koodu_software | no | yes | +8 | GO | fixed on epic |
 | `com.smf.currency.conversionrate` | Bitbucket koodu_software | no | yes | +15 | GO | fixed on epic |
@@ -226,7 +227,8 @@ git clone -b epic/ETP-3504 git@github.com:etendosoftware/com.etendoerp.copilot.g
 # Bitbucket modules on the epic: localization (ES)
 for m in com.etendoerp.sif.general com.smf.ticketbai com.etendoerp.verifactu \
          org.openbravo.module.aeat347apr.es org.openbravo.module.aeat390.es \
-         org.openbravo.module.aeat303.es org.openbravo.module.intrastat \
+         org.openbravo.module.aeat303.es org.openbravo.module.aeat349.es \
+         org.openbravo.module.intrastat \
          org.openbravo.module.sii org.openbravo.module.taxreportlauncher \
          org.openbravo.module.bptaxidkey; do
   git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/$m.git
