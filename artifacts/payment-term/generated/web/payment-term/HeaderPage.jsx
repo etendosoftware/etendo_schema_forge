@@ -86,6 +86,7 @@ export const api = {
       "FixMonthOffset": "Meses de desplazamiento",
       "NetDays": "Días",
       "IsDefault": "Por defecto",
+      "IsNextBusinessDay": "Siguiente día hábil",
       "IsActive": "Activo"
     }
   }

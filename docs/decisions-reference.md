@@ -1521,9 +1521,44 @@ cell falls back to a plain value (with enum-label / FK identifier resolution).
 | `reference` | string \| null | Auto from targetTable | Catalog name for FK lookup (e.g., `"BusinessPartner"`). Set `null` to omit. |
 | `inputMode` | string \| null | Auto from reference type | `"selector"` (dropdown), `"search"` (searchable), `"dependent"` (cascading). Set `null` to omit. |
 | `searchSelect` | boolean | `false` | **Legacy/ignored (post-ETP-4600).** Since ETP-4600, the searchable combobox (`CreatableSearchSelect`) is the DEFAULT rendering for every `inputMode: "selector"` FK field AND every `type: 'select'` fixed-list enum with options — the plain pick-only dropdown (`SelectorInput`) is only used for the `DocumentType` reference carve-out (which keeps its own `optionTranslator`). Setting `searchSelect: true` is now a no-op; leaving it out (or removing it) does not change rendering. **Not** the same as `searchable` (which enables a field as a list-API filter parameter). |
-| `allowCreate` | boolean | `false` | Opt-in (future): on a selector/enum field, surface the inline "+ create" action in the combobox. Currently OFF for all windows — the flag flows through the pipeline so a field can wire `createLabel`/`onCreateRequest` later without a generator change. |
+| `allowCreate` | boolean | `false` | On an editable FK `selector` field, surface an inline "+ create" action as the FIRST row of the combobox. Takes effect only together with `createSpec` + `createEntity` (and an `apiBaseUrl` on the form): the field then renders `InlineCreateSelector`, whose action opens a small create modal, POSTs the new record to `/sws/neo/{createSpec}/{createEntity}` and auto-selects it. The action is shown only when the role may write `createSpec`'s window (write tier or admin; hidden while access is unloaded; a spec with no `windowId` in `menu.json` is not gated — see `docs/ui-customization.md` §19c). Users: match-rule `transactionType` (name-only) and every payment-term selector (ETP-5826, days variant — see *Inline-create variants* below). |
+| `createSpec` | string | — | NEO spec the new record is created in (kebab-case, e.g. `"transaction-type"`, `"payment-term"`). The host window's `apiBaseUrl` spec segment is swapped for it. Also selects the inline-create **variant**. |
+| `createEntity` | string | — | Entity within `createSpec` that receives the POST (e.g. `"transactionType"`, `"header"`). |
+| `createLabelKey` | string | — | `genericLabels` key of the dropdown action (e.g. `"paymentTermCreate"` → "+ Crear condición de pago"). |
+| `createTitleKey` | string | `createLabelKey` | `genericLabels` key of the modal title. |
+| `createNamePlaceholderKey` | string | — | `genericLabels` key of the modal input placeholder. |
 | `clearable` | boolean | `true` (header) / `!required` (line grid) | Controls the chip's clear (`×`) button. On the header's unified `CreatableSearchSelect`, defaults to `true` (shown) for every selector/enum field, including required ones — the header form has an explicit Save step, so a required field cleared to empty is caught before it ever reaches the backend. On the **line grid**'s `InlineSearchCombo` (`artifacts/{w}/generated/.../DataTable.jsx`, `InlineLinesPanel.jsx`), every field edit auto-saves immediately with no review step, so the `×` defaults to **hidden** whenever `field.required === true` (e.g. Sales Order line's `tax`) — clearing it there always fails against a NOT NULL column and the grid can't turn the resulting generic backend error into a helpful field-level message. Set `"clearable": false` to force-hide it on a specific field regardless of `required`, or `"clearable": true` to force-show it (opt back into the risk) on a required field that has a safe fallback (e.g. a server-side default kicks in on save). |
 | `dependsOn` | object \| null | `null` | Parent field dependency for cascading selectors. |
+
+**Inline-create variants (ETP-5826).** What the create modal asks for is decided by `createSpec`, not by the
+field: `tools/app-shell/src/lib/inlineCreateVariants.js` maps a spec to its input label/suffix,
+`inputMode`, input restriction (`inputPattern` / `inputMaxLength`, checked as the user types or pastes), client-side `validate`, request body, option sort order and error messages (by backend message key,
+then by HTTP status for errors without a key). A spec
+with no entry keeps the original name-only behaviour (POST `{ name }`). Registered today:
+
+| `createSpec` | Modal input | Body | Selector order | Errors |
+|---|---|---|---|---|
+| *(none — default)* | Name (text) | `{ name }` | server order | backend message |
+| `payment-term` | Days until due + "días" suffix, numeric keypad. The input only holds digits, at most 3 (`inputPattern` / `inputMaxLength`): typing or pasting `abc`, `7,5`, `5.541`, `-5` or `50% 30 / 50% 60` is refused on the spot with the not-an-integer message, a 4th digit with the range message. On submit, whole number 1–365 (`lib/paymentTermDays.js`) — distinct messages for empty and out of range (`0`, `366`) | `{ overduePaymentDaysRule: N }` (backend derives "N Días"/"1 Día", search key, next-business-day) | no leading number first ("Inmediato"), then by days | Backend keys `ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate` (name the existing term; an inactive one asks to reactivate it) and `ETGO_PaymentTermDaysInvalid` / `ETGO_PaymentTermDaysOutOfRange` are translated by the shared `lib/backendErrors.js`, as on the Payment Term window; a 409 without a key → `paymentTermNameDuplicate`; an untranslated 4xx keeps the backend text, a 5xx shows the generic error. Never auto-selects the existing term |
+
+The payment-term field props are exported once as `PAYMENT_TERM_CREATE_FIELD_PROPS` (same module) for
+hand-built forms (contacts `BillingPreferencesForm`); a generated window declares the same keys on its
+`paymentTerms` field:
+
+```json
+"paymentTerms": {
+  "allowCreate": true,
+  "createSpec": "payment-term",
+  "createEntity": "header",
+  "createLabelKey": "paymentTermCreate",
+  "createTitleKey": "paymentTermCreateTitle",
+  "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
+}
+```
+
+A successful create marks every cached selector page stale (`crossSpecCacheInvalidation.js`), so the same
+column in another form shows the new record on its next open. Adding a variant is a code change in that
+module (plus its i18n keys), never a decisions.json key. Full guide: `docs/ui-customization.md` §19c.
 
 **`DocumentType` carve-out — saved-value translation is window-scoped (ETP-4737):** the `optionTranslator`
 built for `reference: 'DocumentType'` fields (renames/hides options — reversed/credit/return/rectificativa
