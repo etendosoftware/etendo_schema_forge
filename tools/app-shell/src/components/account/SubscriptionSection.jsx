@@ -9,6 +9,95 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { getSubscription, createPortalSession } from '@/lib/upgrade/api.js';
 import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
+import {
+  QUOTA_VERDICT_DENY,
+  quotaStateKey,
+  quotaUsageWithPeriod,
+} from '@/lib/planQuotas.js';
+
+const QUOTA_PERIOD_DATE = { day: 'numeric', month: 'short', year: 'numeric' };
+const QUOTA_WARNING_BADGE = 'border-status-warning-border bg-status-warning text-status-warning-foreground';
+
+/**
+ * ETP-5051 — the plan's quotas, read-only: what the plan includes and how much of it the current
+ * billing period has used. The data is `planQuotas` of `GET /sws/go/billing/subscription`, the full
+ * `QuotaItem` (see `lib/planQuotas.js`). Rules the copy follows:
+ *
+ * - a plan with an empty `planQuotas` has no limits — unlimited (`open-and-notable-topics.md` §5.1);
+ * - `consumed: null` is "not measured yet", never zero;
+ * - the period word is always shown, so a quota on a yearly plan reads yearly (§5.8);
+ * - WARN / DENY get a state badge; ALLOW and not-evaluated (`verdict: null`, mode `off`) get none.
+ *
+ * `periodStart` / `periodEnd` are the subscription's current period, the same on every item, so
+ * the range is shown once. They are day-level boundaries, formatted through `formatCalendarDate`.
+ */
+function PlanQuotas({ planName, quotas, ui, locale }) {
+  if (!planName) return null;
+  const items = Array.isArray(quotas) ? quotas.filter(Boolean) : [];
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="SubscriptionSection__quotasUnlimited">
+        {ui('subscriptionPlanUnlimited')}
+      </p>
+    );
+  }
+  const withPeriod = items.find((item) => item.periodStart && item.periodEnd);
+  return (
+    <div className="space-y-2" data-testid="SubscriptionSection__quotas">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium">{ui('subscriptionPlanLimits')}</h3>
+        {withPeriod && (
+          <span
+            className="text-xs text-muted-foreground"
+            data-testid="SubscriptionSection__quotaPeriod"
+          >
+            {ui('quotaCurrentPeriod', {
+              start: formatCalendarDate(withPeriod.periodStart, locale, QUOTA_PERIOD_DATE),
+              end: formatCalendarDate(withPeriod.periodEnd, locale, QUOTA_PERIOD_DATE),
+            })}
+          </span>
+        )}
+      </div>
+      <ul className="divide-y rounded-md border">
+        {items.map((item, index) => {
+          const stateKey = quotaStateKey(item);
+          const notMeasured = item.consumed === null || item.consumed === undefined;
+          return (
+            <li
+              key={item.resourceKey || `${item.resourceName}-${index}`}
+              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+              data-testid="SubscriptionSection__quota"
+              data-verdict={item.verdict || ''}
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium" data-testid="SubscriptionSection__quotaName">
+                  {item.resourceName}
+                </p>
+                <p className="text-xs text-muted-foreground" data-testid="SubscriptionSection__quotaUsage">
+                  {quotaUsageWithPeriod(item, ui)}
+                  {notMeasured && (
+                    <span className="ml-1" data-testid="SubscriptionSection__quotaNotMeasured">
+                      {ui('quotaNotMeasured')}
+                    </span>
+                  )}
+                </p>
+              </div>
+              {stateKey && (
+                <Badge
+                  variant={item.verdict === QUOTA_VERDICT_DENY ? 'destructive' : 'outline'}
+                  className={item.verdict === QUOTA_VERDICT_DENY ? undefined : QUOTA_WARNING_BADGE}
+                  data-testid="SubscriptionSection__quotaState"
+                >
+                  {ui(stateKey)}
+                </Badge>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * Maps Stripe's live subscription `status` (lowercase, provider-defined — see
@@ -203,8 +292,10 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
                 className="h-4 w-4 text-muted-foreground"
                 data-testid="CreditCard__769a8e" />
               <span className="text-xs text-muted-foreground">{ui('subscriptionPlan')}</span>
+              {/* ETP-5051 — the catalog plan name when the subscription has a plan row; the live
+                  provider product name (`plan`) otherwise. */}
               <span className="text-sm font-medium" data-testid="SubscriptionSection__plan">
-                {subscription.plan}
+                {subscription.planName || subscription.plan}
               </span>
               <span
                 className="text-sm text-muted-foreground"
@@ -250,6 +341,12 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
                 {ui('subscriptionAccessPaused')}
               </p>
             )}
+
+            <PlanQuotas
+              planName={subscription.planName}
+              quotas={subscription.planQuotas}
+              ui={ui}
+              locale={locale} />
 
             <div>
               <Button

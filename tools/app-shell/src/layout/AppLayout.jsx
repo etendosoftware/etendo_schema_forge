@@ -17,6 +17,7 @@ import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 import TopBar from '@/components/layout/TopBar';
 import { BillingStatusBanner } from '@/components/billing/BillingStatusBanner.jsx';
+import { QuotaStatusBanner } from '@/components/billing/QuotaStatusBanner.jsx';
 import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchContext.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
@@ -562,6 +563,8 @@ function AppLayoutInner({ menuGroups, embedded }) {
       >
         {/* ETP-5049 — failed-payment warning during the grace period, above the whole chrome. */}
         {!embedded && <BillingStatusBanner data-testid="BillingStatusBanner__488148" />}
+        {/* ETP-5051 — plan quotas near or at their limit, as reported on entering the environment. */}
+        {!embedded && <QuotaStatusBanner data-testid="QuotaStatusBanner__488148" />}
         {!embedded && (
           <TopBar
             onBack={meta?.onBack}

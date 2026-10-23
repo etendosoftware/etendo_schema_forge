@@ -4,6 +4,7 @@ import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/s
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
+import { rememberEnvironmentQuotas } from '../lib/planQuotas.js';
 
 export const ENVIRONMENT_LIST_REFRESH_EVENT = 'etendo:refresh-environments';
 
@@ -116,6 +117,9 @@ export function useEnvironmentSwitch({
       // Remembering the environment is a UX preference, deliberately outside the
       // session: logging out must not forget the last tenant entered.
       rememberEnvironment(env.clientId);
+      // ETP-5051 — the entry answer's `quotas` (WARN/DENY plan quotas) must survive the full load
+      // below, so QuotaStatusBanner can report them inside the environment.
+      rememberEnvironmentQuotas(env.clientId, data.quotas);
       // The flag targeting identity belongs to the account, not the tenant, so it
       // survives — but anything cached per tenant must not, hence the full load.
       window.location.href = '/';
