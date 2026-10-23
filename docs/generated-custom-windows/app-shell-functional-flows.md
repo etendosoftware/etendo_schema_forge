@@ -252,6 +252,15 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   (`upgrade-page-shell`, `fixed inset-0 z-50`) drawn over the layout, so the banner would be
   invisible there yet still in the accessibility tree — escalated, an unseen `role="alert"`. It
   stays on `/companies` and on every in-environment page, where nothing else says it.
+- **Known limitation — the kill switch (accepted, not a bug to fix here):** with the backend kill
+  switch `environment-access-enforcement-off` on for the tenant, the environment is **not** blocked
+  on `graceEndsAt`, but the banner still says it will be; after that date the banner hides itself
+  and no blocked screen follows, so the tenant keeps working with no warning. The banner cannot
+  know: during grace `accessState` is `ALLOWED` whether or not the switch is on (the switch is
+  consulted only when access would be refused), and no other field of `GET /sws/go/environments`
+  reveals it. Accepted because the switch is a rare incident lever and the failed payment is still
+  real. A fix would need a backend field (e.g. `accessEnforced` per environment) for the banner to
+  read. Full record: `com.etendoerp.go/docs/open-and-notable-topics.md` §4.17.
 - **Test ids:** `billing-status-banner` (with `data-variant`), `billing-status-banner-message`,
   `billing-status-banner-cta`, `billing-status-banner-member-hint`,
   `billing-status-banner-dismiss`.

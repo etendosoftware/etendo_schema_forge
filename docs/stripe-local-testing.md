@@ -417,8 +417,13 @@ account's subscription is read or which portal session is opened.
   `status`, `renewalAt`, `cancelAtPeriodEnd`), and merges in the stored `graceEndsAt` /
   `graceDaysRemaining` plus `clientId`, the environment the subscription pays for (`null` while
   the purchase has no environment yet; "Mis empresas" uses it to put `renewalAt` on the right row,
-  ETP-5734). An account with none returns `200 {"hasSubscription": false}`, never a
-  `404` — free and grandfathered accounts must still render the page.
+  ETP-5734). Since ETP-5049 it also carries the plan catalog view of the subscription —
+  `planKey`, `planName` and the plan's included `planQuotas` (field reference:
+  `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, *The subscription page*). No UI
+  reads them yet: the `/account` Subscription section still shows `plan`, the live Stripe product
+  name; showing the catalog plan name and the quotas there arrives with ETP-5051. An account with
+  none returns `200 {"hasSubscription": false}`, never a `404` — free and grandfathered accounts
+  must still render the page.
   **`renewalAt` is the renewal date; the environment's stored `renewalDueAt` is not.** The latter
   is the payment-grace anchor: empty while the subscription is current, the end of the last paid
   period once it is past due.

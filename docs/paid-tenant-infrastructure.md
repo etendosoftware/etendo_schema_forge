@@ -585,7 +585,9 @@ the period the customer already paid for. During grace the environment says so: 
 its top bar (`BillingStatusBanner`, ETP-5049) warns that the last payment failed and names the day
 the environment will be blocked, offers the owner *Update payment* (`/account`) and tells anyone
 else to contact the company's administrator; it turns red and cannot be closed in the last 3 days.
-After that — or at once when the subscription is
+(It names that day even when an operator has switched enforcement off for the tenant, which it
+cannot detect — an accepted limitation, `generated-custom-windows/app-shell-functional-flows.md`
+§3.2a.) After that — or at once when the subscription is
 canceled, or when a demo's trial runs out — the tenant is **blocked**.
 
 Blocked means every request into the tenant's data is refused with HTTP 402, whatever the door:
