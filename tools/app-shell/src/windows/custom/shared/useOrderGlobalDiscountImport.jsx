@@ -123,7 +123,10 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
       const carryOn = carryOnOf(selection.extraState);
       const pct = fmtPct(decision.pct);
       let subtitle;
-      if (!carryOn) subtitle = ui('importGlobalDiscountCarryOff');
+      // OFF while the invoice already holds the same %: the header % still applies to every line,
+      // so the "line discount only" wording would be false (Jira CP12 keeps the toggle visible).
+      if (!carryOn && decision.matchesInvoice) subtitle = ui('importGlobalDiscountKeepsInvoice', { invoicePct: pct });
+      else if (!carryOn) subtitle = ui('importGlobalDiscountCarryOff');
       else if (decision.matchesInvoice) subtitle = ui('importGlobalDiscountCarryMatchesInvoice', { pct });
       else subtitle = ui('importGlobalDiscountCarryApplies');
       const title = ui('importGlobalDiscountCarryTitle', { pct });

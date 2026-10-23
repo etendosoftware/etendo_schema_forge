@@ -2499,9 +2499,12 @@ The `id` of every call is the draft sales invoice. `lines` omitted imports every
 - **Preconditions (422):** draft target (`importTargetNotDraft`) with a price list (`importPriceListRequired`),
   completed source (`importSourceNotCompleted`) that is not a return, same business partner, currency and direction.
 - **Header.** The invoice's order reference is left by the native process: the order when every line comes from one
-  order, empty when several are mixed. From an order, `etgoTotalDiscount` takes the order's when positive and the
-  invoice has none yet (or the same), as the modal's `afterImport` does; the discount line is materialised when the
-  invoice is completed.
+  order, empty when several are mixed. From an order, the header `etgoTotalDiscount` takes the order's positive %
+  only when the invoice has no total discount AND had no product lines before the call (the `ETGO_DTO` discount line
+  does not count), or when it already holds that same %. Otherwise the header is kept as it is and the import still
+  succeeds. One order per call, so across several calls the first order imported decides. The «Añadir desde pedido»
+  popup applies the same rule (`resolveOrderGlobalDiscount`, ETP-5828) plus a user toggle; the MCP has no toggle and
+  always carries the % when allowed. The discount line is materialised when the invoice is completed.
 - **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
 - The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
   through `MCP_CONFIG`. `createDraftInvoice` on the sales order or the goods shipment (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/sales-invoice/spec.md`)
