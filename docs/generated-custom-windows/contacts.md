@@ -953,7 +953,7 @@ That mock now reads `BusinessPartnerHandler.LOCATION_COLUMNS` / `CONTACT_COLUMNS
 arrays `queryChildData()` walks — so it can no longer disagree with the code it exercises, but a
 mock still cannot say whether those names exist in the database.
 
-`BusinessPartnerHandlerDbTest` (OBBaseTest) answers that half: it executes both statements against
+`BusinessPartnerHandlerChildDataSqlIntegrationTest` (OBBaseTest) answers that half: it executes both statements against
 the live schema with the same `= ANY(?)` varchar-array binding the handler uses, and asserts each
 result set exposes `c_bpartner_id` plus every column name read by name, and that each returned row
 is readable through them. A wrong column name now fails a test instead of silently emptying a
@@ -1033,7 +1033,7 @@ parity and a full re-import round trip asserted against `buildTemplateCsv`/`mapC
 a Spanish and an English session), `ListViewExport.vitest.js`, the `baseUrl` and
 non-CSV-response cases in `useCsvExport.vitest.jsx`, the `codeLabels` block in `codedValue.vitest.js`, the child-data block
 in com.etendoerp.go `BusinessPartnerHandlerTest` (attachment, a partner with no children, the
-flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerDbTest` (both child
+flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerChildDataSqlIntegrationTest` (both child
 statements executed against the live schema), and `NeoCsvExportServiceTest` — which now covers the flat list envelope, an absent
 column key, a `$_identifier` companion, a non-list GET that must still decline, value
 translation, and an unmapped/blank/malformed `valueMaps`.

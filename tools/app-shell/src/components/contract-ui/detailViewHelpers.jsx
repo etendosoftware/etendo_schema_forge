@@ -29,6 +29,8 @@ import {evalTabReadOnly} from './evalTabReadOnly.js';
 // like DataTable.jsx's inline-toggle error handling — that only need this one
 // pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
 export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
+// ETP-5736 — leaf module so custom windows can share the record-toolbar classes.
+export {getLinesToolbarClassName, getSaveBtnCls} from './toolbarClasses.js';
 
 /**
  * Header fields that are COMPUTED BY THE BACKEND FROM CHILD ROWS, and that therefore go stale the
@@ -423,6 +425,50 @@ export function isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef
 export function bumpFieldGeneration(key, fieldGenerationRef) {
   if (!fieldGenerationRef) return;
   fieldGenerationRef.current[key] = (fieldGenerationRef.current[key] || 0) + 1;
+}
+
+/**
+ * ETP-4744 — decide whether the new-record initial-callout chain must be armed, and which
+ * selector fields it should fire for.
+ *
+ * On a creation route the backend `GET /{entity}/defaults` response is merged into the form
+ * asynchronously, and the values it brings (typically `businessPartner`) are what the chain
+ * fires callouts for, so the derived fields (`priceList`, `paymentTerms`, address…) populate
+ * the way classic Etendo does when a blank document is opened.
+ *
+ * The chain is one-shot: `DetailView` latches it so a chain cannot loop as callouts write
+ * values back. That latch must be armed by the ARRIVAL OF THE DEFAULTS SESSION, not by
+ * `editing` merely becoming non-empty: a user typing into a plain, non-selector field while
+ * `/defaults` is in flight used to consume the latch with an empty trigger list, and since the
+ * latch only resets on `!isNew`, the chain never ran once the defaults merged
+ * (`docs/feedback.md`, [2026-07-31] ETP-4741).
+ *
+ * @param {object} params
+ * @param {boolean} params.isNew whether the route is the creation route
+ * @param {object|null} params.editing current form state
+ * @param {object|null} params.api window api descriptor (`selectors`)
+ * @param {string} params.entity header entity key the selectors belong to
+ * @param {boolean} [params.defaultsPending] true while `GET /{entity}/defaults` is still in
+ *   flight (useEntity's request window; ETP-5002). Optional — an absent value is treated as
+ *   "no defaults session", preserving the behavior of consumers whose hook does not expose it.
+ * @returns {{ reset: boolean, ready: boolean, triggers: Array }} `reset` clears the latch
+ *   (the route left the creation state); `ready` means the latch may be consumed now; `triggers`
+ *   is the (possibly empty) list of selector fields to fire a callout for.
+ */
+export function resolveInitialCalloutTriggers({ isNew, editing, api, entity, defaultsPending = false }) {
+  if (!isNew) return { reset: true, ready: false, triggers: [] };
+  // Wait for the defaults session to settle so the trigger list is computed from the MERGED
+  // state, never from a half-filled form whose defaults are still in the air.
+  if (defaultsPending) return { reset: false, ready: false, triggers: [] };
+  if (!editing || !api?.selectors) return { reset: false, ready: false, triggers: [] };
+  // An empty form has nothing to fire and must not consume the one-shot latch: only arm once
+  // `editing` actually holds a value (the previous `hasValues` guard, kept so the initial
+  // `/new` render and `defaultsPending`-less consumers stay on their prior behavior).
+  const hasValues = Object.values(editing).some(v => v != null && v !== '');
+  if (!hasValues) return { reset: false, ready: false, triggers: [] };
+  const triggers = api.selectors
+    .filter(s => s.entity === entity && s.inputMode !== 'dependent' && editing[s.field]);
+  return { reset: false, ready: true, triggers };
 }
 
 /**
@@ -875,14 +921,6 @@ export function getSidebarSlideClassName(isClosingLine) {
   return isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in';
 }
 
-// ETP-5601 — the record (form view) toolbar follows Figma on every window: 8px padding on all
-// sides around 40px controls (56px), with a 1px #E8EAEF bottom rule. The rule is an inset shadow,
-// not a border, so it is painted inside those 56px instead of adding a 57th pixel. It used to
-// vary per window (`toolbarPaddingX`, `toolbarBorderBottom`, `linesLayout`); it no longer does.
-export function getLinesToolbarClassName() {
-  return 'flex items-center justify-between p-2 shadow-[inset_0_-1px_0_var(--status-neutral-border)]';
-}
-
 export function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
   return getLineMenuActions ? extraActionsRef : undefined;
 }
@@ -1035,12 +1073,6 @@ export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLin
 // `toolbarButtonSize` switch ('sm' = 36px, 'default' = 40px) is gone.
 export function getSqBtnSize() {
   return 'h-10 w-10';
-}
-
-// Save, process and extra-action buttons: 40px, Figma's text-sm/leading-6 line, 20px icons
-// (`[&_svg]:size-5` beats the core Button's `[&_svg]:size-4`).
-export function getSaveBtnCls() {
-  return 'h-10 gap-2 leading-6 [&_svg]:size-5';
 }
 
 export function getDocumentReadOnly(lockWhenProcessed, _headerData) {
