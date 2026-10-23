@@ -161,6 +161,11 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // answer is discarded once the committed value (or the search) changed under it. Mirrors the
   // generation guard `fetchServerResults` applies to its own results.
   const pinRequestRef = useRef(null);
+  // ETP-5846 — id whose resolution was already requested during this open. Every "load more" page
+  // changes `serverResults` and re-runs the resolution effect; without this guard a value that is
+  // on none of the loaded pages would be looked up again on every page. Cleared on open/close and
+  // whenever `value` or the query changes (see the reset effect), so each open resolves at most once.
+  const pinAttemptedRef = useRef(null);
 
   // Resets pagination state before a fresh search (new typed query, or reopening with an
   // empty query) — mirrors the resets CreatableSearchSelect.jsx performs at each of its
@@ -258,6 +263,8 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const id = value == null ? '' : String(value);
     const label = (resolvedLabel || '').trim();
     if (!selectorUrl || !id || !label) return;
+    if (pinAttemptedRef.current === id) return;
+    pinAttemptedRef.current = id;
     const generation = searchGenerationRef.current;
     pinRequestRef.current = { id, generation };
     const queryParams = { ...selectorContext, q: label, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
@@ -432,14 +439,15 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setActiveIndex(-1);
   }, [open, query]);
 
-  // ETP-5846 — a resolved current-selection row belongs to ONE committed value and ONE search.
-  // Drop it when the value changes (including being cleared) or when a new typed query starts, so
-  // a previous selection can never keep being shown as the current one. Closing drops it too — the
-  // panel is unmounted anyway and the next open re-resolves from scratch.
+  // ETP-5846 — a resolved current-selection row belongs to ONE committed value, ONE search and ONE
+  // open. Drop it when the value changes (including being cleared), when a new typed query starts,
+  // and on open/close, so a previous selection can never keep being shown as the current one and
+  // the next open re-resolves from scratch.
   useEffect(() => {
     setPinnedOptions([]);
     pinRequestRef.current = null;
-  }, [value, query]);
+    pinAttemptedRef.current = null;
+  }, [value, query, open]);
 
   // ETP-5846 — when the combo OPENS with a committed value that is nowhere in what it can already
   // show, resolve its row. "Nowhere" covers BOTH catalogs, because the option list is fed by

@@ -332,11 +332,14 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(3);
   });
 
-  it('does not disturb the list pagination: the resolved row never becomes "load more" page 1', async () => {
+  it('does not disturb the list pagination, and resolves the current selection once per open even as pages land', async () => {
     const page0 = makePage(0, 50); // full page -> hasMore stays true
     global.fetch = vi.fn()
       .mockResolvedValueOnce(jsonOk(page0))
-      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]));
+      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]))
+      // Page 1 lands for real and still does not contain the committed id.
+      .mockResolvedValueOnce(jsonOk(makePage(50, 50)))
+      .mockResolvedValue(jsonOk([]));
 
     await committedCombo();
     await openViaChip();
@@ -353,6 +356,14 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     // "Load more" still asks for offset=50 — the resolved row did not shift the offset.
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
     expect(global.fetch.mock.calls[2][0]).toContain('offset=50');
+
+    // Page 1 is appended; the resolved row stays pinned and marked, and the label lookup is NOT
+    // repeated just because `serverResults` changed.
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(101));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true');
+    const lookups = global.fetch.mock.calls.filter(([url]) => url.includes('q='));
+    expect(lookups).toHaveLength(1);
   });
 
   it('abandons an in-flight resolution when the user starts typing a new search', async () => {
