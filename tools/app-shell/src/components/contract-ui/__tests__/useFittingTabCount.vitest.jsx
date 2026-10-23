@@ -69,7 +69,7 @@ describe('useFittingTabCount', () => {
     installResizeObserver();
     const refs = makeRefs({ wrapperWidth: 1000, childWidths: WIDTHS });
     const { result } = run(refs);
-    expect(result.current).toBe(4);
+    expect(result.current).toBe(6); // CP-12: was 4 (the removed fixed cap)
     refs.wrapperRef.current.clientWidth = 260; // 2 visible + More = 250
     act(() => { observers.forEach((o) => o.cb()); });
     expect(result.current).toBe(2);
@@ -84,5 +84,27 @@ describe('useFittingTabCount', () => {
     expect(live.observe).toHaveBeenCalledWith(refs.measureRef.current);
     unmount();
     expect(live.disconnect).toHaveBeenCalled();
+  });
+
+  // CP-3 (ETP-5515 QA): a clipped strip must not stay scrolled after a re-measure.
+  it('resets a scrolled strip to 0 when measuring', () => {
+    installResizeObserver();
+    const refs = makeRefs({ wrapperWidth: 1000, childWidths: WIDTHS });
+    refs.wrapperRef.current.scrollLeft = 168;
+    run(refs);
+    expect(refs.wrapperRef.current.scrollLeft).toBe(0);
+  });
+
+  // CP-12: no 4-tab cap, the count follows the room.
+  it('shows all tabs when they fit and drops the 4 cap', () => {
+    installResizeObserver();
+    const { result } = run(makeRefs({ wrapperWidth: 600, childWidths: WIDTHS }));
+    expect(result.current).toBe(6);
+  });
+
+  it('shows 5 when exactly one tab does not fit', () => {
+    installResizeObserver();
+    const { result } = run(makeRefs({ wrapperWidth: 560, childWidths: WIDTHS }));
+    expect(result.current).toBe(5);
   });
 });

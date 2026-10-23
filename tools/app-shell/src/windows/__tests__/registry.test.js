@@ -64,7 +64,7 @@ describe('buildWindowMap', () => {
 
   it('keeps a hidden redirect window registered', () => {
     const map = buildWindowMap();
-    for (const name of ['business-partner', 'fiscal-calendar', 'open-close-period-control']) {
+    for (const name of ['business-partner', 'fiscal-calendar', 'open-close-period-control', 'simple-g-l-journal']) {
       assert.ok(map[name], `${name} must stay registered to redirect`);
     }
   });

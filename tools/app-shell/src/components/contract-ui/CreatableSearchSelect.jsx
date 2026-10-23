@@ -107,6 +107,12 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *                                      by the fetch-once/static mode (default: name substring).
  * @param {function} [chipLabel]      - `(opt) => string` — chip label for the selected option when it
  *                                      is present in the loaded options (default `displayValue`).
+ * @param {function} [sortOptions]    - `(a, b) => number` comparator applied to the shown option list in
+ *                                      every data mode (ETP-5826: payment terms by number of days, as
+ *                                      the server orders selectors alphabetically). It sorts what has
+ *                                      been loaded — in serverSearch mode, the pages fetched so far —
+ *                                      so it is meant for short catalogs that fit in one page. Pass a
+ *                                      stable (module-level) function; omitted = server order.
  *
  * ## Usage example (address picker wired to LocationEditorModal)
  * ```jsx
@@ -385,6 +391,7 @@ export function CreatableSearchSelect({
   renderOption,
   filterFn,
   chipLabel,
+  sortOptions,
   // Optional flat override for the idle-state placeholder text (e.g. a plain "Select..."),
   // replacing the default "Search {resolvedLabel}..." composition. Every existing caller
   // omits this, so behavior is unchanged unless a caller opts in.
@@ -729,11 +736,14 @@ export function CreatableSearchSelect({
   //   truncation (pagination — see triggerServerSearch/the scroll listener below — is what
   //   grows this list beyond the first page, ETP-4975).
   // - fetch-once mode (default): narrow the pre-fetched list by the typed query locally.
+  // Then, in every mode, the optional `sortOptions` comparator reorders what is shown.
   const filteredOptions = useMemo(() => {
-    if (lookupMode) return lookupResults;
-    if (serverSearch) return serverOptions ?? [];
-    return filterOptionsByQuery(options, query, filterFn);
-  }, [lookupMode, lookupResults, serverSearch, serverOptions, options, query, filterFn]);
+    let shown;
+    if (lookupMode) shown = lookupResults;
+    else if (serverSearch) shown = serverOptions ?? [];
+    else shown = filterOptionsByQuery(options, query, filterFn);
+    return sortOptions ? [...shown].sort(sortOptions) : shown;
+  }, [lookupMode, lookupResults, serverSearch, serverOptions, options, query, filterFn, sortOptions]);
   const panelLoading = lookupMode ? lookupLoading : loading;
 
   // Reset keyboard highlight whenever the dropdown opens/closes or the search text changes —

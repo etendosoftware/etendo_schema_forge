@@ -1643,3 +1643,18 @@ The Tax Category field (`taxCategory`, `C_TaxCategory_ID`, "Grupo de impuestos")
 ## ETP-5693 — Posting accounts only, on write
 
 Saving an account field of the Accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `ProductAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## ETP-5677 — The product import runs as an async job
+
+The import no longer waits for `/sws/neo/batch` to answer: `useWindowImportDialog.postBatch` calls `useBatch.runBatch(operations, { async: true, … })`, so each chunk of `limit.batchSize` rows is submitted as a job (HTTP 202 `{jobId}`) and polled (`GET /sws/neo/batch/jobs/{id}`, every 2 s) until it is done. A long chunk can no longer lose its answer to a proxy idle-timeout while the server keeps writing — the case that marked rows as "server took too long" although the products existed (ETP-5676, QA 14/10).
+
+- **Per-row outcome.** The job commits one product row (the product and its price/cost) at a time. A rejected row does not undo the others; the result lists, per row, whether it was created (with its ids) or why not. **Reintentar** therefore resends only rows that were not created. A row the result does not list (the server running the job stopped, or the job was cancelled) is shown as *unknown*, never resent.
+- **Progress.** The dialog's progress bar follows the job's progress between polls, so a 1000-row file moves smoothly instead of jumping per chunk.
+- **Busy server.** At most 2 active import jobs per user (4 per tenant): a further chunk waits for the server's `Retry-After` and is resubmitted; it is never reported as a row error.
+- **Older backend.** If the server does not know `async`, it answers synchronously and the same code reads that answer unchanged.
+- Code: `tools/app-shell/src/components/copilot/ocr/ingest/useBatch.js`, `contract-ui/useWindowImportDialog.js`; engine side (`importEngine.js`, `schema_forge_core`); server side `com.etendoerp.go` `BatchJobService` (docs §4.3.7). Tests: `useBatch.vitest.jsx`, `ListView.importLabels.vitest.jsx`, core `importEngine.test.js`, Java `BatchJobServiceTest`.
+- Manual check: import a 200-row CSV, watch the bar advance, kill/restart Tomcat mid-import and reopen: the dialog reports the unlisted rows as unknown and the created products are not duplicated by Reintentar.
+
+## Read-only role tier: price tab — ETP-5830
+
+With a `read-only` tier, `ProductPriceBar` shows every tariff and its prices but hides "+ Añadir tarifa" and the delete button, and disables the price steppers (`accessReadOnly`, passed by `DetailView` from the role tier). Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

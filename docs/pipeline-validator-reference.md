@@ -226,6 +226,6 @@ These 22 pre-existing violations (found during P1 audit on 2026-04-16) are `prin
 
 ---
 
-**Bypassing the validator (last resort)**
+**No bypass**
 
-The pre-commit hook (installed in P4) can be bypassed with `git commit --no-verify`. The CI check (installed in P5/P6) will still catch violations on the PR. Document the reason in the PR description if you bypass locally.
+`git commit --no-verify` skips the pre-commit hook, but `.githooks/commit-msg` then leaves the commit without its `Hooks-Verified` trailer, and the pre-push and CI's `verify` check refuse it. Fix the violation instead.

@@ -37,6 +37,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - Detail tab styling (ETP-5600): the inactive General/Financial pill tab gets a light fill on hover (`hover:bg-card/60`, shared `renderPrimaryTabButtons`). The bottom tab strip shows an icon per tab, resolved from the shared `components/contract-ui/tabIcons.js` map: Persona `Users`, Cuenta bancaria `Landmark`, Dirección `MapPin`, Contabilidad cliente/proveedor `ReceiptText`, Attachments its own icon (see `docs/ui-customization.md` → *Bottom tab-strip icons*).
 - Secondary tab layout: the three child work areas use `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right. For `contact` (Persona) and `bankAccount` (Cuenta Bancaria), clicking pencil flips the row into inline edit. For `locationAddress` (Dirección), clicking pencil opens the `LocationEditorModal` instead of inline editing, and so does clicking the row's content; ticking the row's **selection checkbox** only selects the row and never opens the modal (ETP-5029 — the checkbox cell stops the click from reaching the row-body handler, the same way `DataTable` does). When one or more rows are checked, a compact selection bar (28 px buttons) appears anchored below the add-line button. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. See `docs/ui-customization.md` section 13 for the full reference.
+- **Create a payment term from Billing Preferences (ETP-5826):** both **Condiciones de pago** selectors of the Financial tab — `paymentTerms` (customer side, `C_PaymentTerm_ID`) and `pOPaymentTerms` (vendor side, `PO_PaymentTerm_ID`) — show the same pinned `+ Crear condición de pago` row as the document windows (sales/purchase invoice, order, quotation). `BillingPreferencesForm.jsx` is hand-built, so it spreads the shared `PAYMENT_TERM_CREATE_FIELD_PROPS` from `tools/app-shell/src/lib/inlineCreateVariants.js` instead of declaring the keys in `decisions.json`. It opens a small modal that asks only for the number of days until due — a whole number from 1 to 365, validated client-side (`lib/paymentTermDays.js`) — and POSTs `{ overduePaymentDaysRule: N }` to `/sws/neo/payment-term/header`; the backend derives the name ("N Días" / "1 Día"), the search key and the rest of the term. The new term is auto-selected on the field. If a term with the same number of days or the same name already exists, the server answers 409 (`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate`) and the modal names that term, or asks to reactivate it in Condiciones de pago when it is inactive (translated by the shared `lib/backendErrors.js`, like the Payment Term window); nothing is created and the existing term is not selected. A server failure never shows raw backend text. The selector's options are sorted by days, with terms whose name has no leading number (e.g. "Inmediato") first. A successful create marks every cached selector page stale, so the new term also appears in the other payment-term selectors on their next open. The row is shown only to roles that may write the Payment Term window (141) — tier `full` or admin / client-admin; the Sales and Purchasing templates hold 141 read-only, so their roles see a plain selector. Full reference: `docs/decisions-reference.md` (`allowCreate`, *Inline-create variants*) and `docs/ui-customization.md` §19c.
 
 ## Reactive behavior and dependencies
 
@@ -956,7 +957,7 @@ That mock now reads `BusinessPartnerHandler.LOCATION_COLUMNS` / `CONTACT_COLUMNS
 arrays `queryChildData()` walks — so it can no longer disagree with the code it exercises, but a
 mock still cannot say whether those names exist in the database.
 
-`BusinessPartnerHandlerDbTest` (OBBaseTest) answers that half: it executes both statements against
+`BusinessPartnerHandlerChildDataSqlIntegrationTest` (OBBaseTest) answers that half: it executes both statements against
 the live schema with the same `= ANY(?)` varchar-array binding the handler uses, and asserts each
 result set exposes `c_bpartner_id` plus every column name read by name, and that each returned row
 is readable through them. A wrong column name now fails a test instead of silently emptying a
@@ -1036,7 +1037,7 @@ parity and a full re-import round trip asserted against `buildTemplateCsv`/`mapC
 a Spanish and an English session), `ListViewExport.vitest.js`, the `baseUrl` and
 non-CSV-response cases in `useCsvExport.vitest.jsx`, the `codeLabels` block in `codedValue.vitest.js`, the child-data block
 in com.etendoerp.go `BusinessPartnerHandlerTest` (attachment, a partner with no children, the
-flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerDbTest` (both child
+flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerChildDataSqlIntegrationTest` (both child
 statements executed against the live schema), and `NeoCsvExportServiceTest` — which now covers the flat list envelope, an absent
 column key, a `$_identifier` companion, a non-list GET that must still decline, value
 translation, and an unmapped/blank/malformed `valueMaps`.
@@ -1649,3 +1650,15 @@ on the Contacts window (`/contacts`), not on a Business Partner page or a redire
 Saving an account field of the Customer Accounting and Vendor Accounting areas now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `CustomerAccountingHandler` / `VendorAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
 
 `employeeAccounting` (`C_BP_Employee_Acct`) is not guarded: both its account fields are `discarded`, so it accepts no write. Exposing them requires wiring the guard for `contacts/employeeAccounting` first.
+
+## Read-only role tier: sub-tabs, Financiero and attachments — ETP-5830
+
+With a `read-only` tier on Contactos:
+
+- **Persona / Cuenta bancaria / Dirección:** no "+ Añadir", no inline edit, no delete, no hover pencil.
+- **Dirección:** clicking a row opens nothing. `LocationEditorModal` has no read-only mode, so a read-only role cannot open the address popup at all; the row in the table is what it sees. Accepted trade-off.
+- **Financiero:** credit limit, Cliente/Proveedor, discount, payment selects, *Bloquear* and the SII/TicketBAI defaults are all disabled (`BillingPreferencesForm` and `FiscalDefaultsSection` read `editing === false`).
+- **Attachments:** files are listed and downloadable; no upload, no delete.
+- **`/contacts/new` by URL** redirects to the list.
+
+Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

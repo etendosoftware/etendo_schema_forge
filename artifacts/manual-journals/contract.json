@@ -1,19 +1,20 @@
 {
   "version": "0.33.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-10-13T17:27:55.800Z",
-  "checksum": "00c3cdd43a98404e",
+  "updatedAt": "2026-10-23T13:30:59.065Z",
+  "checksum": "53564fab8c003bbb",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
       "name": "Simple G/L Journal",
       "primaryEntity": "gLJournal",
       "category": "finance",
+      "agentPrompt": "Manual journals (G/L journal entries, \"Asientos Manuales\"): double-entry journals posted to the ledger. This spec was named `simple-g-l-journal` until ETP-5720; that name no longer exists. Entity `gLJournal` is the journal header, `gLJournalLine` its lines. To record a journal: (1) etendo_create on `gLJournal` (ledger, currency, document type and date are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) etendo_create on `gLJournalLine` once per line, with parentId = the journal id, an `accountingCombination` that is a posting account of the journal's ledger (summary accounts are rejected) and either `foreignCurrencyDebit` or `foreignCurrencyCredit`; (3) etendo_action `documentAction` with parameters {docAction:\"CO\"} completes it, which requires total debit = total credit > 0; (4) etendo_action `post` posts it to the ledger. A completed journal that is not posted can be reactivated with docAction \"RE\"; a posted one must be unposted first (etendo_action `unpost`).",
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "breadcrumb": "Finance / Manual Journals",
       "customComponents": {
-        "bottomSection": "SimpleGLJournalBottomPanel"
+        "bottomSection": "ManualJournalsBottomPanel"
       },
       "menuActions": [
         {
@@ -923,11 +924,12 @@
       "name": "Simple G/L Journal",
       "primaryEntity": "gLJournal",
       "category": "finance",
+      "agentPrompt": "Manual journals (G/L journal entries, \"Asientos Manuales\"): double-entry journals posted to the ledger. This spec was named `simple-g-l-journal` until ETP-5720; that name no longer exists. Entity `gLJournal` is the journal header, `gLJournalLine` its lines. To record a journal: (1) etendo_create on `gLJournal` (ledger, currency, document type and date are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) etendo_create on `gLJournalLine` once per line, with parentId = the journal id, an `accountingCombination` that is a posting account of the journal's ledger (summary accounts are rejected) and either `foreignCurrencyDebit` or `foreignCurrencyCredit`; (3) etendo_action `documentAction` with parameters {docAction:\"CO\"} completes it, which requires total debit = total credit > 0; (4) etendo_action `post` posts it to the ledger. A completed journal that is not posted can be reactivated with docAction \"RE\"; a posted one must be unposted first (etendo_action `unpost`).",
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "breadcrumb": "Finance / Manual Journals",
       "customComponents": {
-        "bottomSection": "SimpleGLJournalBottomPanel"
+        "bottomSection": "ManualJournalsBottomPanel"
       },
       "menuActions": [
         {
@@ -1809,8 +1811,8 @@
     "processEndpoints": []
   },
   "apiPrediction": {
-    "specName": "simple-g-l-journal",
-    "baseUrl": "/sws/neo/simple-g-l-journal",
+    "specName": "manual-journals",
+    "baseUrl": "/sws/neo/manual-journals",
     "crud": {
       "gLJournal": {
         "get": true,
@@ -1819,8 +1821,8 @@
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/simple-g-l-journal/gLJournal",
-        "detailUrl": "/sws/neo/simple-g-l-journal/gLJournal/{id}",
+        "listUrl": "/sws/neo/manual-journals/gLJournal",
+        "detailUrl": "/sws/neo/manual-journals/gLJournal/{id}",
         "supportedFilters": [
           "description",
           "accountingDate",
@@ -1837,8 +1839,8 @@
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/simple-g-l-journal/gLJournalLine",
-        "detailUrl": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}",
+        "listUrl": "/sws/neo/manual-journals/gLJournalLine",
+        "detailUrl": "/sws/neo/manual-journals/gLJournalLine/{id}",
         "supportedFilters": []
       }
     },
@@ -1849,7 +1851,7 @@
         "column": "C_Period_ID",
         "reference": "Period",
         "inputMode": "search",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/period"
+        "url": "/sws/neo/manual-journals/gLJournal/selectors/period"
       },
       {
         "entity": "gLJournal",
@@ -1857,7 +1859,7 @@
         "column": "C_Currency_ID",
         "reference": "Currency",
         "inputMode": "selector",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/currency"
+        "url": "/sws/neo/manual-journals/gLJournal/selectors/currency"
       },
       {
         "entity": "gLJournal",
@@ -1865,7 +1867,7 @@
         "column": "C_Bpartner_ID",
         "reference": "BPartner",
         "inputMode": "search",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/businessPartner"
+        "url": "/sws/neo/manual-journals/gLJournal/selectors/businessPartner"
       },
       {
         "entity": "gLJournal",
@@ -1873,7 +1875,7 @@
         "column": "M_Product_ID",
         "reference": "Product",
         "inputMode": "search",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/product"
+        "url": "/sws/neo/manual-journals/gLJournal/selectors/product"
       },
       {
         "entity": "gLJournal",
@@ -1881,7 +1883,7 @@
         "column": "C_Project_ID",
         "reference": "Project",
         "inputMode": "selector",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/project"
+        "url": "/sws/neo/manual-journals/gLJournal/selectors/project"
       },
       {
         "entity": "gLJournal",
@@ -1889,7 +1891,7 @@
         "column": "C_Costcenter_ID",
         "reference": "Costcenter",
         "inputMode": "selector",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/costCenter"
+        "url": "/sws/neo/manual-journals/gLJournal/selectors/costCenter"
       },
       {
         "entity": "gLJournalLine",
@@ -1897,7 +1899,7 @@
         "column": "C_ValidCombination_ID",
         "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/accountingCombination"
+        "url": "/sws/neo/manual-journals/gLJournalLine/selectors/accountingCombination"
       },
       {
         "entity": "gLJournalLine",
@@ -1905,7 +1907,7 @@
         "column": "C_Bpartner_ID",
         "reference": "BPartner",
         "inputMode": "search",
-        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/businessPartner"
+        "url": "/sws/neo/manual-journals/gLJournalLine/selectors/businessPartner"
       },
       {
         "entity": "gLJournalLine",
@@ -1913,7 +1915,7 @@
         "column": "M_Product_ID",
         "reference": "Product",
         "inputMode": "selector",
-        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/product"
+        "url": "/sws/neo/manual-journals/gLJournalLine/selectors/product"
       },
       {
         "entity": "gLJournalLine",
@@ -1921,7 +1923,7 @@
         "column": "C_Project_ID",
         "reference": "Project",
         "inputMode": "search",
-        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/project"
+        "url": "/sws/neo/manual-journals/gLJournalLine/selectors/project"
       },
       {
         "entity": "gLJournalLine",
@@ -1929,7 +1931,7 @@
         "column": "A_Asset_ID",
         "reference": "Asset",
         "inputMode": "selector",
-        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/asset"
+        "url": "/sws/neo/manual-journals/gLJournalLine/selectors/asset"
       },
       {
         "entity": "gLJournalLine",
@@ -1937,7 +1939,7 @@
         "column": "C_Costcenter_ID",
         "reference": "Costcenter",
         "inputMode": "selector",
-        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/costCenter"
+        "url": "/sws/neo/manual-journals/gLJournalLine/selectors/costCenter"
       }
     ],
     "actions": [
@@ -1945,7 +1947,7 @@
         "entity": "gLJournal",
         "field": "documentAction",
         "column": "DocAction",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/documentAction",
+        "url": "/sws/neo/manual-journals/gLJournal/{id}/action/documentAction",
         "processId": "5BE14AA10165490A9ADEFB7532F7FA94",
         "processType": "classic"
       },
@@ -1953,13 +1955,13 @@
         "entity": "gLJournal",
         "field": "processNow",
         "column": "Processing",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/processNow"
+        "url": "/sws/neo/manual-journals/gLJournal/{id}/action/processNow"
       },
       {
         "entity": "gLJournal",
         "field": "etblkpBulkposting",
         "column": "EM_Etblkp_Bulkposting",
-        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/etblkpBulkposting",
+        "url": "/sws/neo/manual-journals/gLJournal/{id}/action/etblkpBulkposting",
         "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
@@ -1967,7 +1969,7 @@
         "entity": "gLJournalLine",
         "field": "aPRMAddPayment",
         "column": "EM_Aprm_Addpayment",
-        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}/action/aPRMAddPayment",
+        "url": "/sws/neo/manual-journals/gLJournalLine/{id}/action/aPRMAddPayment",
         "processId": "DE1B382FDD2540199D223586F6E216D0",
         "processType": "classic"
       }
@@ -3363,6 +3365,272 @@
         "description": "Rule 'GL_JournalLine-User2_ID-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-manual-journals-Header-A-Asset-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-A_Asset_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-A_Asset_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-C-AcctSchema-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-C_AcctSchema_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-C_AcctSchema_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-C-Bpartner-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-C_Bpartner_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-C_Bpartner_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-C-Campaign-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-C_Campaign_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-C_Campaign_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-C-Costcenter-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-C_Costcenter_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-C_Costcenter_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-C-Project-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-C_Project_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-C_Project_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-CurrencyRate-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-CurrencyRate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-CurrencyRate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-CurrencyRateType-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-CurrencyRateType-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-CurrencyRateType-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-DocAction-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-DocAction-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-DocAction-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-EM-Etblkp-Bulkposting-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-EM_Etblkp_Bulkposting-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-M-Product-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-M_Product_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-M_Product_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-Posted-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-Posted-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-Posted-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-User1-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-User1_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-User1_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Header-User2-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Header-User2_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Header-User2_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-A-Asset-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-A_Asset_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-A_Asset_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-Account-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-Account_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-Account_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-AmtAcctCr-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-AmtAcctCr-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-AmtAcctCr-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-AmtAcctDr-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-AmtAcctDr-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-AmtAcctDr-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Activity-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Activity_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Activity_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Bpartner-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Bpartner_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Bpartner_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Campaign-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Campaign_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Campaign_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Costcenter-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Costcenter_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Costcenter_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Glitem-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Glitem_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Glitem_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Project-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Project_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Project_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Salesregion-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Salesregion_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Salesregion_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Tax-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Tax_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Tax_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-ValidCombination-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_ValidCombination_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_ValidCombination_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-C-Withholding-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-C_Withholding_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-C_Withholding_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-CurrencyRate-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-CurrencyRate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-CurrencyRate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-CurrencyRateType-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-CurrencyRateType-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-CurrencyRateType-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-EM-Aprm-Addpayment-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-EM_Aprm_Addpayment-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-EM_Aprm_Addpayment-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-FIN-Financial-Account-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-FIN_Financial_Account_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-FIN_Financial_Account_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-FIN-Payment-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-FIN_Payment_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-FIN_Payment_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-FIN-Paymentmethod-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-FIN_Paymentmethod_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-FIN_Paymentmethod_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-M-Product-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-M_Product_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-M_Product_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-Paymentdate-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-Paymentdate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-Paymentdate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-User1-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-User1_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-User1_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-manual-journals-Lines-User2-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "manual-journals-Lines-User2_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'manual-journals-Lines-User2_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-Post",
         "category": "rule-declared",
         "rule": "Post",
@@ -3396,272 +3664,6 @@
         "rule": "SE_CalculateExchangeRate_Rate",
         "runner": "node",
         "description": "Rule 'SE_CalculateExchangeRate_Rate' (callout) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-A-Asset-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-A_Asset_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-A_Asset_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-C-AcctSchema-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-C_AcctSchema_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-C_AcctSchema_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-C-Bpartner-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-C_Bpartner_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-C_Bpartner_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-C-Campaign-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-C_Campaign_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-C_Campaign_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-C-Costcenter-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-C_Costcenter_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-C_Costcenter_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-C-Project-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-C_Project_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-C_Project_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-CurrencyRate-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-CurrencyRate-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-CurrencyRate-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-CurrencyRateType-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-CurrencyRateType-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-CurrencyRateType-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-DocAction-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-DocAction-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-DocAction-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-EM-Etblkp-Bulkposting-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-EM_Etblkp_Bulkposting-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-M-Product-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-M_Product_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-M_Product_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-Posted-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-Posted-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-Posted-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-User1-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-User1_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-User1_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Header-User2-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Header-User2_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Header-User2_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-A-Asset-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-A_Asset_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-A_Asset_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-Account-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-Account_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-Account_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-AmtAcctCr-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-AmtAcctCr-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-AmtAcctCr-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-AmtAcctDr-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-AmtAcctDr-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-AmtAcctDr-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Activity-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Activity_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Activity_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Bpartner-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Bpartner_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Bpartner_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Campaign-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Campaign_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Campaign_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Costcenter-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Costcenter_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Costcenter_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Glitem-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Glitem_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Glitem_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Project-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Project_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Project_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Salesregion-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Salesregion_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Salesregion_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Tax-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Tax_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Tax_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-ValidCombination-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_ValidCombination_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_ValidCombination_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Withholding-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-C_Withholding_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-C_Withholding_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-CurrencyRate-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-CurrencyRate-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-CurrencyRate-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-CurrencyRateType-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-CurrencyRateType-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-CurrencyRateType-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-EM-Aprm-Addpayment-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-EM_Aprm_Addpayment-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-EM_Aprm_Addpayment-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-FIN-Financial-Account-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-FIN_Financial_Account_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-FIN_Financial_Account_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-FIN-Payment-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-FIN_Payment_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-FIN_Payment_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-FIN-Paymentmethod-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-FIN_Paymentmethod_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-FIN_Paymentmethod_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-M-Product-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-M_Product_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-M_Product_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-Paymentdate-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-Paymentdate-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-Paymentdate-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-User1-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-User1_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-User1_ID-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-simple-g-l-journal-Lines-User2-ID-displayLogic",
-        "category": "rule-declared",
-        "rule": "simple-g-l-journal-Lines-User2_ID-displayLogic",
-        "runner": "node",
-        "description": "Rule 'simple-g-l-journal-Lines-User2_ID-displayLogic' (displayLogic) should be declared"
       },
       {
         "id": "t-rule-declared-SL-Journal-MultiAcctSchema-Account-ID",

@@ -35,7 +35,7 @@ function StatusBadge({ isProcessed, ui }) {
   );
 }
 
-export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, token, apiBaseUrl, onCountChange }) {
+export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, token, apiBaseUrl, onCountChange, accessReadOnly = false }) {
   const ui = useUI();
   const navigate = useNavigate();
   const orgCurrency = useCurrency() ?? 'USD';
@@ -289,7 +289,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     <div className="pt-2 pb-5">
       {renderBody()}
       <SelectionToolbar
-        visible={barVisible}
+        visible={barVisible && !accessReadOnly /* ETP-5830: its only action is delete */}
         closing={barClosing}
         onClose={clearSelection}
         closeTitle={ui('close') ?? 'Cerrar'}

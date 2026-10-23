@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 /**
  * ListView — interactive behaviour of the list bar and the state it derives.
  *
@@ -1449,5 +1450,20 @@ describe('ListView — capability-gated columns (ETP-5684)', () => {
     render(<ListView {...defaultProps} />);
     expect(capturedEntityOptions.columnFilters).toEqual({ posted: { operator: 'equals', value: 'Y' } });
     expect(tableProps.sortColumn).toBe('posted');
+  });
+});
+
+describe('ListView — status options query wiring', () => {
+  it('hands the hook buildDistinctQuery to the filter bar', () => {
+    const buildDistinctQuery = vi.fn(() => 'active=true');
+    hookOverrides = { buildDistinctQuery };
+    render(<ListView {...defaultProps} />);
+    expect(filterBarProps.buildDistinctQuery).toBe(buildDistinctQuery);
+  });
+
+  it('still renders the filter bar when the hook does not provide buildDistinctQuery', () => {
+    render(<ListView {...defaultProps} />);
+    expect(screen.getByTestId('list-filter-bar')).toBeInTheDocument();
+    expect(filterBarProps.buildDistinctQuery).toBeUndefined();
   });
 });

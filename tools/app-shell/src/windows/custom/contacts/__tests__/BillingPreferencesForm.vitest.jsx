@@ -133,6 +133,28 @@ describe('BillingPreferencesForm', () => {
       expect(screen.getAllByTestId('entity-form')).toHaveLength(2);
     });
 
+    it('locks every control when the window is not editing (read-only role, ETP-5830)', () => {
+      render(
+        <BillingPreferencesForm
+          data={{ id: 'BP1', customer: true, vendor: true }}
+          token="t"
+          apiBaseUrl="/api"
+          onChange={vi.fn()}
+          editing={false}
+        />,
+      );
+      const forms = EntityForm.mock.calls.map(([p]) => p);
+      expect(forms.length).toBeGreaterThan(0);
+      forms.forEach((p) => expect(p.readOnly).toBe(true));
+      const controls = [
+        ...screen.queryAllByRole('combobox'),
+        ...screen.queryAllByRole('switch'),
+        ...screen.queryAllByRole('checkbox'),
+      ];
+      expect(controls.length).toBeGreaterThan(0);
+      controls.forEach((c) => expect(c).toBeDisabled());
+    });
+
     it.each(SIDES)('$side: the payment-terms field and the Bloquear switch share one EntityForm', ({ side, terms }) => {
       renderBoth();
       const forms = screen.getAllByTestId('entity-form');
@@ -222,6 +244,36 @@ describe('BillingPreferencesForm', () => {
       for (const el of labelLike) {
         expect(sw.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING).toBeFalsy();
       }
+    });
+
+    // ETP-5826: both payment-terms selectors offer "+ Crear condición de pago". EntityForm (stubbed
+    // here) renders the create action for any field carrying these props, so the contract is the
+    // field definition each side hands it.
+    it.each(SIDES)('$side: the payment-terms field carries the payment-term create props', ({ terms }) => {
+      renderBoth();
+      const props = lastPropsWithField(terms);
+      // EntityForm only offers the create action when it also has an apiBaseUrl to POST against.
+      expect(props.apiBaseUrl).toBe('/api');
+      const field = props.fields.find((f) => f.key === terms);
+      expect(field).toMatchObject({
+        type: 'selector',
+        inputMode: 'selector',
+        allowCreate: true,
+        createSpec: 'payment-term',
+        createEntity: 'header',
+        createLabelKey: 'paymentTermCreate',
+        createTitleKey: 'paymentTermCreateTitle',
+        createNamePlaceholderKey: 'paymentTermDaysPlaceholder',
+      });
+    });
+
+    it('no other billing field becomes creatable', () => {
+      renderBoth();
+      const creatable = EntityForm.mock.calls
+        .flatMap(([p]) => p.fields ?? [])
+        .filter((f) => f.allowCreate)
+        .map((f) => f.key);
+      expect(new Set(creatable)).toEqual(new Set(['paymentTerms', 'pOPaymentTerms']));
     });
 
     it('shows only the customer grid when vendor is off', () => {

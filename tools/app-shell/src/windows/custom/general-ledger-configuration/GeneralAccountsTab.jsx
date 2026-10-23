@@ -15,7 +15,8 @@ import { ACCOUNT_OPTIONS } from './mockCatalogs.js';
  * Each account selector is shown only while its toggle is on (the AD display
  * logic `@UseSuspenseBalancing@='Y'` etc., ETP-5682). Turning a toggle off only
  * hides the selector: the stored account is kept, as in Classic, and posting
- * reads it only while the flag is on.
+ * reads it only while the flag is on. While a toggle is on its account is
+ * required (ETP-5724): core posting would silently treat "on, no account" as off.
  * `active` is not surfaced here (system-managed, mirrors the window-level
  * Active flag) — see decisions.json `generalAccounts.active` (visibility:
  * "system").
@@ -54,6 +55,7 @@ export default function GeneralAccountsTab({
               options={accountOptions}
               onChange={(id) => setGeneralAccountsField('suspenseBalancing', id)}
               error={errors.suspenseBalancing}
+              required
               data-testid="glc-acct-suspenseBalancing"
             />
           </div>
@@ -80,6 +82,7 @@ export default function GeneralAccountsTab({
               options={accountOptions}
               onChange={(id) => setGeneralAccountsField('currencyBalancingAcct', id)}
               error={errors.currencyBalancingAcct}
+              required
               data-testid="glc-acct-currencyBalancingAcct"
             />
           </div>

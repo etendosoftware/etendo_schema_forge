@@ -369,4 +369,17 @@ describe('FiscalDefaultsSection', () => {
       expect(onChange).toHaveBeenCalledWith('tbaiIssimplifiedinv', false, 'EM_Tbai_Issimplifiedinv');
     });
   });
+
+  describe('read-only role access (ETP-5830)', () => {
+    it('disables both toggles so a read-only role cannot change them', () => {
+      const onChange = vi.fn();
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={onChange} readOnly />);
+      const siiToggle = screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' });
+      const tbaiToggle = screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' });
+      expect(siiToggle).toBeDisabled();
+      expect(tbaiToggle).toBeDisabled();
+      tbaiToggle.click();
+      expect(onChange).not.toHaveBeenCalled();
+    });
+  });
 });

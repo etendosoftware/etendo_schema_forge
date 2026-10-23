@@ -1,12 +1,29 @@
 // @covers templates/reports/helpers/report-html-helpers.js
+// @covers templates/reports/helpers/parity.json
 // @covers tools/app-shell/vite-plugins/report-api.js
+// @covers scripts/sync-report-helpers.mjs
+// @covers scripts/assemble-report-server-context.sh
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import {
+  REPO_ROOT,
+  HELPERS_DIR,
+  HELPER_MODULES,
+  PARITY_FILE,
+  MIRROR_REPO,
+  canonicalDigest,
+  buildManifest,
+  serializeManifest,
+  compareWithManifest,
+  toMirrorSource,
+} from '../../../scripts/sync-report-helpers.mjs';
 
 // ETP-4908: the server render path (both the local HTML preview and the
 // jsreport PDF/XLSX payload built by report-api.js) registers ONLY the
@@ -288,5 +305,138 @@ describe('report-api.js dev/prod parity — no divergent helper registration', (
       /import\s*\{[^}]*registerReportHelpers[^}]*\}\s*from\s*['"][^'"]*report-html-helpers\.js['"]/,
       'report-api.js must register HTML helpers through the canonical report-html-helpers.js module'
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ETP-4910 — the report helper modules are duplicated across the two repos.
+//
+// `templates/` is not part of any published package, so
+// `templates/reports/helpers/*.js` exists as one physical copy per repo:
+//
+//   * THIS repo — canonical. It is the copy the assembled report-server image
+//     ends up carrying (`scripts/assemble-report-server-context.sh` copies this
+//     repo's `templates/` last, on purpose) and the one the browser bundle imports.
+//   * `schema_forge_core` — a mirror, used when report-server is run from a core
+//     checkout (core dev, core tests).
+//
+// They drifted silently once already: ETP-4908 synced them, then ETP-5107 added
+// the HALF_UP rounding to the canonical copy only, so the mirror kept rendering
+// half-cent amounts one cent lower for ~2.5 months (ETP-4910).
+//
+// The contract is `templates/reports/helpers/parity.json`, committed with
+// identical bytes in both repos and regenerated ONLY by `make sync-report-helpers`:
+// one canonical sha256 per module, plus the one import line the copies are allowed
+// to differ in. Two layers here:
+//
+//   1. this repo's own copy against the manifest (also runs in CI, where no sibling
+//      checkout exists) — an edit that is not synced fails here;
+//   2. the sibling core checkout, when present, against the SAME canonical digest —
+//      the layer that catches a sync committed in only one of the two repos.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PARITY_MANIFEST = JSON.parse(
+  readFileSync(join(REPO_ROOT, HELPERS_DIR, PARITY_FILE), 'utf8'),
+);
+
+/**
+ * The sibling `schema_forge_core` checkout, or null when it is not there (a
+ * functional-only developer's machine, or CI). `SF_CORE_DIR`/`CORE_DIR` win when
+ * set, so a checkout kept elsewhere is still verified instead of silently skipped.
+ */
+function coreCheckoutDir() {
+  const candidates = [
+    process.env.SF_CORE_DIR,
+    process.env.CORE_DIR,
+    join(REPO_ROOT, '..', MIRROR_REPO),
+  ].filter(Boolean);
+  for (const dir of candidates) {
+    if (existsSync(join(dir, 'templates', 'reports', 'helpers', 'report-html-helpers.js'))) return dir;
+  }
+  return null;
+}
+
+describe('report helper modules — cross-repo parity contract (ETP-4910)', () => {
+  it('the manifest is exactly what scripts/sync-report-helpers.mjs generates now', () => {
+    // A hand-edited manifest (e.g. a digest relaxed to match a drifted copy) fails
+    // here: the only way to move it is to run `make sync-report-helpers`, which
+    // rewrites the mirrored copy too.
+    const onDisk = readFileSync(join(REPO_ROOT, HELPERS_DIR, PARITY_FILE), 'utf8');
+    assert.equal(onDisk, serializeManifest(buildManifest()));
+  });
+
+  for (const moduleName of HELPER_MODULES) {
+    it(`${moduleName} matches the canonical digest in parity.json`, () => {
+      const text = readFileSync(join(REPO_ROOT, HELPERS_DIR, moduleName), 'utf8');
+      assert.equal(
+        canonicalDigest(text),
+        PARITY_MANIFEST.sha256[moduleName],
+        `${moduleName} changed without a sync. Run \`make sync-report-helpers\` and commit the ` +
+        'mirrored copy in schema_forge_core as well.',
+      );
+    });
+  }
+
+  it('the canonical helper module imports report-i18n from the published CLI package', () => {
+    const text = readFileSync(join(REPO_ROOT, HELPERS_DIR, 'report-html-helpers.js'), 'utf8');
+    assert.ok(text.includes(PARITY_MANIFEST.importLine.schema_forge));
+    // A copy carrying the mirror's relative specifier would break the browser
+    // bundle and the assembly (this repo has no `cli/src`).
+    assert.ok(!text.includes(PARITY_MANIFEST.importLine.schema_forge_core));
+  });
+
+  it('the sibling schema_forge_core checkout, when present, is in parity too', (t) => {
+    const coreDir = coreCheckoutDir();
+    if (!coreDir) {
+      // Not a silent skip: say which paths were probed, so a checkout that DOES
+      // exist at the standard workspace path is never passed over unnoticed.
+      t.diagnostic(
+        'no sibling schema_forge_core checkout found (probed $SF_CORE_DIR, $CORE_DIR and '
+        + `${join(REPO_ROOT, '..', MIRROR_REPO)}); only this repo's copy was verified`,
+      );
+      return;
+    }
+    const mismatches = compareWithManifest(coreDir, PARITY_MANIFEST);
+    assert.deepEqual(
+      mismatches,
+      [],
+      `the mirrored report helpers in ${coreDir} drifted from the canonical ones: `
+      + `${mismatches.map((m) => m.module).join(', ')}. Run \`make sync-report-helpers\` in this `
+      + 'repo and commit the change in BOTH repos.',
+    );
+  });
+
+  // The report-server image is assembled from BOTH repos: core's server.js + cli/src,
+  // then THIS repo's templates/ copied last. The canonical helper module imports
+  // report-i18n from the published CLI package, which the image does not install — so
+  // the assembly must rewrite that one import to the relative form before building.
+  // When it did not, the container died on startup with
+  // `ERR_MODULE_NOT_FOUND: Cannot find package '@etendosoftware/schema-forge-cli'` and
+  // answered no request at all (unnoticed for weeks because the deploy job's steps are
+  // skipped while its AWS variables are unset — ETP-4910). This runs the real assembly
+  // and pins the two things that make the image bootable.
+  it('the assembled report-server context can resolve the helper module', (t) => {
+    const coreDir = coreCheckoutDir();
+    if (!coreDir) {
+      t.diagnostic('no sibling schema_forge_core checkout: skipping the build-context assembly');
+      return;
+    }
+    const outDir = mkdtempSync(join(tmpdir(), 'sf-report-server-context-'));
+    try {
+      execFileSync('bash', [join(REPO_ROOT, 'scripts', 'assemble-report-server-context.sh'), outDir, '--clean'], {
+        env: { ...process.env, CORE_DIR: coreDir },
+        stdio: 'pipe',
+      });
+
+      const canonical = readFileSync(join(REPO_ROOT, HELPERS_DIR, 'report-html-helpers.js'), 'utf8');
+      const assembled = readFileSync(join(outDir, HELPERS_DIR, 'report-html-helpers.js'), 'utf8');
+      assert.equal(assembled, toMirrorSource(canonical));
+      assert.ok(!assembled.includes(PARITY_MANIFEST.importLine.schema_forge));
+      // ...and the relative specifier has a target inside the context, which is why
+      // the rewritten form is the correct one here.
+      assert.ok(existsSync(join(outDir, 'cli', 'src', 'report-i18n.js')));
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
   });
 });

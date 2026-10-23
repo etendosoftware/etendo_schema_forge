@@ -28,6 +28,9 @@ export function useDistinctValues(entity, field, {
   pageSize = DEFAULT_PAGE_SIZE,
   debounceMs = DEFAULT_DEBOUNCE_MS,
   apiBaseUrl,
+  // Optional URL-params string (e.g. `criteria=...&active=true`) narrowing the distinct set to
+  // the caller's current view. Never overrides the hook's own _distinct/paging/search params.
+  extraParams = '',
 } = {}) {
   const { token } = useAuth();
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -50,13 +53,16 @@ export function useDistinctValues(entity, field, {
   }, [rawSearch, debounceMs]);
 
   const buildUrl = useCallback((startRow, endRow, search) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(extraParams || '');
+    for (const reserved of ['_distinct', '_startRow', '_endRow', '_distinctSearch']) {
+      params.delete(reserved);
+    }
     params.set('_distinct', field);
     params.set('_startRow', String(startRow));
     params.set('_endRow', String(endRow));
     if (search) params.set('_distinctSearch', search);
     return `/${encodeURIComponent(entity)}?${params.toString()}`;
-  }, [entity, field]);
+  }, [entity, field, extraParams]);
 
   const fetchPage = useCallback(async (startRow, search, append) => {
     if (!entity || !field || !apiBaseUrl) return;

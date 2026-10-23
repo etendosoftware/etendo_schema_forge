@@ -15,7 +15,7 @@ vi.mock('@/auth/useApiFetch.js', () => ({
 import AccountLookupPopup from '../AccountLookupPopup.jsx';
 import { useAccountSelectorPages, selectorItemLabel } from '../useAccountSelectorPages.js';
 
-const SELECTOR_URL = '/sws/neo/simple-g-l-journal/lines/selectors/C_ValidCombination_ID';
+const SELECTOR_URL = '/sws/neo/manual-journals/lines/selectors/C_ValidCombination_ID';
 const ITEMS = [
   { id: 'vc-1', _identifier: '64000000 - Sueldos y salarios' },
   { id: 'vc-2', _identifier: '55300000 - Socios por desembolsos no exigidos, capital pendiente de inscripción' },

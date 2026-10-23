@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @covers tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -15,6 +16,16 @@ vi.mock('@/components/ui/label', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
 
+// ETP-5840 — the picker's strings now go through useUI(); resolve them against the Spanish
+// catalog so the assertions below keep reading the text a user actually sees.
+vi.mock('@/i18n', async (importOriginal) => {
+  const actual = await importOriginal();
+  const es = (await import('../../../locales/es_ES.json')).default.genericLabels;
+  const ui = (key, params) => String(es[key] ?? key)
+    .replace(/\{(\w+)\}/g, (m, name) => (params?.[name] ?? m));
+  return { ...actual, useUI: () => ui };
+});
+
 vi.mock('lucide-react', () => ({
   ChevronDown: (props) => <span data-testid={props['data-testid'] || 'icon-chevron'} />,
   Loader2: (props) => <span data-testid={props['data-testid'] || 'icon-loader'} />,
@@ -23,7 +34,7 @@ vi.mock('lucide-react', () => ({
   X: (props) => <span data-testid={props['data-testid'] || 'icon-x'} />,
 }));
 
-import { CurrencyRatePicker } from '../CurrencyRatePicker.jsx';
+import { CurrencyRatePicker, resolveRateDateField } from '../CurrencyRatePicker.jsx';
 
 const FIELD = { key: 'cCurrencyId', column: 'C_Currency_ID', id: 'fld-1', required: false };
 const BASE_URL = 'http://localhost/sws/neo/sales-order';
@@ -31,7 +42,7 @@ const TOKEN = 'test-token';
 
 const CURRENCIES = [
   { id: 'usd-id', isoCode: 'USD', rate: 1.2345 },
-  { id: 'eur-id', isoCode: 'EUR', rate: 1 },
+  { id: 'eur-id', isoCode: 'EUR', rate: 1, isOrgCurrency: true },
 ];
 
 function mkFetch(currencies = CURRENCIES, sessionPrecision) {
@@ -66,6 +77,19 @@ function renderPicker(props = {}) {
   );
   return { ...view, onChange };
 }
+
+describe('resolveRateDateField', () => {
+  const ACCT = { key: 'accountingDate', column: 'DateAcct' };
+  const INVOICE_DATE = { key: 'invoiceDate', column: 'DateInvoiced' };
+  it.each([
+    ['the DateAcct-bound field wins over the document date', [INVOICE_DATE, ACCT], 'invoiceDate', 'accountingDate'],
+    ['the document date when no field is bound to DateAcct', [INVOICE_DATE], 'orderDate', 'orderDate'],
+    ['null when there is no DateAcct field and no document date', [INVOICE_DATE], undefined, null],
+    ['the document date when the fields are not an array', null, 'orderDate', 'orderDate'],
+  ])('returns %s', (_label, fields, documentDateField, expected) => {
+    expect(resolveRateDateField(fields, documentDateField)).toBe(expected);
+  });
+});
 
 describe('CurrencyRatePicker', () => {
   beforeEach(() => {
@@ -233,25 +257,29 @@ describe('CurrencyRatePicker', () => {
     expect(screen.queryByText('Buscar moneda...')).not.toBeInTheDocument();
   });
 
-  it('does not stage a rate when the selected option has no rate', async () => {
+  // Rewritten: a currency with no conversion range on the reference date used to stage nothing,
+  // so the previous currency's (or a manual) rate survived the change. It is now a legal choice
+  // that clears the rate and shows «—» until the user types one.
+  it('lists a currency without a rate on the date as «—» and selecting it clears the staged rate', async () => {
     globalThis.fetch = mkFetch([{ id: 'no-rate-id', isoCode: 'XYZ', rate: null }]);
     const onChange = vi.fn();
-    render(
-      <CurrencyRatePicker
-        field={FIELD}
-        value=""
-        formData={{ id: 'new' }}
-        resolvedLabel="Currency"
-        token={TOKEN}
-        apiBaseUrl={BASE_URL}
-        onChange={onChange}
-      />,
+    const props = {
+      field: FIELD, resolvedLabel: 'Currency', token: TOKEN, apiBaseUrl: BASE_URL, onChange,
+    };
+    const { rerender } = render(
+      <CurrencyRatePicker {...props} value="" formData={{ id: 'new', eTGOCurrencyRate: 2.5 }} />,
     );
     fireEvent.click(screen.getByTestId('currency-rate-trigger'));
     await waitFor(() => expect(screen.getByText('XYZ')).toBeInTheDocument());
+    expect(screen.getByTestId('currency-rate-option-missing')).toHaveTextContent('—');
     fireEvent.click(screen.getByText('XYZ'));
 
-    expect(onChange).not.toHaveBeenCalledWith('eTGOCurrencyRate', expect.anything(), expect.anything());
+    expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', null, 'EM_ETGO_Currency_Rate');
+
+    // The staged null renders as «—» on the trigger — never as some other date's rate.
+    rerender(<CurrencyRatePicker {...props} value="no-rate-id" formData={{ id: 'new', eTGOCurrencyRate: null }} />);
+    expect(await screen.findByTestId('currency-rate-missing')).toBeInTheDocument();
+    expect(screen.getByTestId('currency-rate-trigger')).not.toHaveTextContent(/\d/);
   });
 
   it('shows the pencil icon once a currency is selected on a saved record', () => {
@@ -270,16 +298,15 @@ describe('CurrencyRatePicker', () => {
     expect(screen.getByTestId('currency-rate-pencil')).toBeInTheDocument();
   });
 
-  it('hides the pencil when the selected currency is the org currency (rate 1)', async () => {
-    // ETP-4029: CURRENCIES fixture's EUR entry has rate: 1, mirroring how
-    // CurrencyOptionsHandler always returns the org's own currency with a
-    // hardcoded rate of 1.0 — there is nothing to override in that case.
+  it('hides the pencil when the selected currency is the org currency (isOrgCurrency)', async () => {
+    // ETP-5840: the org currency is identified by the option's `isOrgCurrency` flag returned by
+    // CurrencyOptionsHandler, not by the old rate === 1 sentinel — there is nothing to override.
     renderPicker({ value: 'eur-id', displayValue: 'EUR', formData: { id: 'rec-1', eTGOCurrencyRate: '1' } });
 
     await waitFor(() => {
-      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
+      expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
     });
-    expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
+    expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
   });
 
   it('shows the pencil again after switching from the org currency to a foreign one', async () => {
@@ -296,9 +323,8 @@ describe('CurrencyRatePicker', () => {
       />,
     );
     await waitFor(() => {
-      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
+      expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
     });
-    expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
 
     rerender(
       <CurrencyRatePicker
@@ -315,6 +341,37 @@ describe('CurrencyRatePicker', () => {
     await waitFor(() => {
       expect(screen.getByTestId('currency-rate-pencil')).toBeInTheDocument();
     });
+  });
+
+  // The pencil used to require a saved record; a new document can carry a manual rate too.
+  it.each([
+    ['shows', 'a foreign currency', 'usd-id', true],
+    ['hides', 'the org currency', 'eur-id', false],
+  ])('%s the pencil on a new document for %s', async (_verb, _what, value, visible) => {
+    renderPicker({ value, displayValue: '', formData: { id: 'new' } });
+    await waitFor(() => expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent(/USD|EUR/));
+    await waitFor(() => {
+      expect(screen.queryByTestId('currency-rate-pencil') !== null).toBe(visible);
+    });
+  });
+
+  it('scopes the options by the form reference date and organization, refetching when either changes', async () => {
+    const props = {
+      field: FIELD, value: 'usd-id', displayValue: 'USD', resolvedLabel: 'Currency',
+      token: TOKEN, apiBaseUrl: BASE_URL, onChange: () => {}, rateDateField: 'orderDate',
+    };
+    const optionUrls = () => globalThis.fetch.mock.calls
+      .map(([u]) => String(u)).filter((u) => u.includes('/action/currencyOptions'));
+    const { rerender } = render(
+      <CurrencyRatePicker {...props} formData={{ id: 'rec-1', orderDate: '2026-01-15', organization: { id: 'org-1' } }} />,
+    );
+    await waitFor(() => expect(optionUrls()).toContain(
+      `${BASE_URL}/header/rec-1/action/currencyOptions?date=2026-01-15&organization=org-1`));
+
+    // Unsaved edits of the date and the org (here a plain id string) drive a new fetch.
+    rerender(<CurrencyRatePicker {...props} formData={{ id: 'rec-1', orderDate: '2026-02-01', organization: 'org-2' }} />);
+    await waitFor(() => expect(optionUrls()).toContain(
+      `${BASE_URL}/header/rec-1/action/currencyOptions?date=2026-02-01&organization=org-2`));
   });
 
   it('supports the full manual rate override flow: pre-fill, confirm, invalid input, escape, and cancel', async () => {

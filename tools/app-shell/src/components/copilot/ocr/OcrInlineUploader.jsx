@@ -7,7 +7,7 @@ import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { uploadAndMarkMainAttachment } from './listAttachments';
-import { buildOcrSchema } from './buildOcrSchema';
+import { useOcrConfig } from './useOcrConfig';
 import {
   useOcrExtraction,
   OCR_NO_DATA_ERROR,
@@ -106,18 +106,21 @@ export default function OcrInlineUploader({
       navigate(`${docType.routePrefix}${newId}`, { replace: true });
     })();
   }, [result?.committed, result?.recordId, docType, navigate, token, apiBaseUrl]);
+  // What the extraction asks the model lives on the server, once, shared with the MCP's
+  // document-reading tools (ETP-5715): the application keeps no copy of it.
+  const ocrConfig = useOcrConfig(docType ? docTypeId : null, isNew);
   const { extract, status, error, reset } = useOcrExtraction({
     token,
-    toolName: docType?.toolName,
-    question: docType?.question,
-    structuredOutput: docType?.structuredOutput,
-    structuredOutputSchema: docType ? buildOcrSchema(docType) : null,
+    toolName: ocrConfig.config?.toolName,
+    question: ocrConfig.config?.question,
+    structuredOutputSchema: ocrConfig.config?.schema ?? null,
     // An all-null payload (blank/corrupt PDF) must not open the review modal.
     hasData: (payload) => hasExtractedData(docType, payload),
   });
 
   if (!isNew || !docType) return null;
 
+  const configReady = ocrConfig.status === 'ready';
   const isBusy = applying || status === 'uploading' || status === 'extracting';
 
   const loadFile = (picked) => {
@@ -219,7 +222,7 @@ export default function OcrInlineUploader({
           <button
             type="button"
             onClick={handleExtract}
-            disabled={isBusy}
+            disabled={isBusy || !configReady}
             className="w-full shrink-0 rounded-md border border-foreground px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             {buttonLabel}
@@ -290,6 +293,20 @@ export default function OcrInlineUploader({
         <div className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{pickError}</span>
+        </div>
+      )}
+      {ocrConfig.status === 'error' && (
+        <div className="flex items-start gap-2 text-xs text-destructive" data-testid="ocr-config-error">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <span>{ui('ocrConfigUnavailable')}</span>
+          <button
+            type="button"
+            onClick={ocrConfig.retry}
+            className="shrink-0 font-medium underline hover:no-underline"
+            data-testid="ocr-config-retry"
+          >
+            {ui('retry')}
+          </button>
         </div>
       )}
       {/* ETP-5289 — only a created invoice is "done"; a cancelled or failed flow also leaves a

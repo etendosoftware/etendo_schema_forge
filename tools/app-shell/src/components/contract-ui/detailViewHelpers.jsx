@@ -29,6 +29,8 @@ import {evalTabReadOnly} from './evalTabReadOnly.js';
 // like DataTable.jsx's inline-toggle error handling — that only need this one
 // pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
 export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
+// ETP-5736 — leaf module so custom windows can share the record-toolbar classes.
+export {getLinesToolbarClassName, getSaveBtnCls} from './toolbarClasses.js';
 
 /**
  * Header fields that are COMPUTED BY THE BACKEND FROM CHILD ROWS, and that therefore go stale the
@@ -426,6 +428,50 @@ export function bumpFieldGeneration(key, fieldGenerationRef) {
 }
 
 /**
+ * ETP-4744 — decide whether the new-record initial-callout chain must be armed, and which
+ * selector fields it should fire for.
+ *
+ * On a creation route the backend `GET /{entity}/defaults` response is merged into the form
+ * asynchronously, and the values it brings (typically `businessPartner`) are what the chain
+ * fires callouts for, so the derived fields (`priceList`, `paymentTerms`, address…) populate
+ * the way classic Etendo does when a blank document is opened.
+ *
+ * The chain is one-shot: `DetailView` latches it so a chain cannot loop as callouts write
+ * values back. That latch must be armed by the ARRIVAL OF THE DEFAULTS SESSION, not by
+ * `editing` merely becoming non-empty: a user typing into a plain, non-selector field while
+ * `/defaults` is in flight used to consume the latch with an empty trigger list, and since the
+ * latch only resets on `!isNew`, the chain never ran once the defaults merged
+ * (`docs/feedback.md`, [2026-07-31] ETP-4741).
+ *
+ * @param {object} params
+ * @param {boolean} params.isNew whether the route is the creation route
+ * @param {object|null} params.editing current form state
+ * @param {object|null} params.api window api descriptor (`selectors`)
+ * @param {string} params.entity header entity key the selectors belong to
+ * @param {boolean} [params.defaultsPending] true while `GET /{entity}/defaults` is still in
+ *   flight (useEntity's request window; ETP-5002). Optional — an absent value is treated as
+ *   "no defaults session", preserving the behavior of consumers whose hook does not expose it.
+ * @returns {{ reset: boolean, ready: boolean, triggers: Array }} `reset` clears the latch
+ *   (the route left the creation state); `ready` means the latch may be consumed now; `triggers`
+ *   is the (possibly empty) list of selector fields to fire a callout for.
+ */
+export function resolveInitialCalloutTriggers({ isNew, editing, api, entity, defaultsPending = false }) {
+  if (!isNew) return { reset: true, ready: false, triggers: [] };
+  // Wait for the defaults session to settle so the trigger list is computed from the MERGED
+  // state, never from a half-filled form whose defaults are still in the air.
+  if (defaultsPending) return { reset: false, ready: false, triggers: [] };
+  if (!editing || !api?.selectors) return { reset: false, ready: false, triggers: [] };
+  // An empty form has nothing to fire and must not consume the one-shot latch: only arm once
+  // `editing` actually holds a value (the previous `hasValues` guard, kept so the initial
+  // `/new` render and `defaultsPending`-less consumers stay on their prior behavior).
+  const hasValues = Object.values(editing).some(v => v != null && v !== '');
+  if (!hasValues) return { reset: false, ready: false, triggers: [] };
+  const triggers = api.selectors
+    .filter(s => s.entity === entity && s.inputMode !== 'dependent' && editing[s.field]);
+  return { reset: false, ready: true, triggers };
+}
+
+/**
  * True when `key` is the declared destination of a one-way cascade from the window's own
  * document date, and that document date is what just triggered the callout.
  *
@@ -450,6 +496,29 @@ export function isDocumentDateCascadeTarget(key, triggerField, documentDateField
   return key === 'accountingDate' && !!documentDateField && triggerField === documentDateField;
 }
 
+/**
+ * True when `key` is the document's exchange rate (`eTGOCurrencyRate`, AD column
+ * `EM_ETGO_Currency_Rate`) and the callout that returned it was triggered by a change of
+ * the rate's inputs: the currency, the window's declared document date, or the accounting
+ * date (`DateAcct`, the rate reference date of documents that carry one).
+ *
+ * ETP-5840. The backend recalculates the rate from the conversion ranges valid on the
+ * reference date every time one of those inputs changes, and that recalculation must win
+ * over a manual rate (a manual rate is only kept until the date or the currency changes)
+ * and must also be able to CLEAR the rate when no range covers the new date. Without this
+ * exemption the user-touched guard keeps a manual rate forever and the empty-value guard
+ * keeps a stale rate whenever the new date has no range.
+ *
+ * Driven by field names that are the same in every document window (no spec identity), so
+ * it covers quotations, orders and invoices alike.
+ */
+export function isCurrencyRateRecalcTarget(key, triggerField, documentDateField) {
+  if (key !== 'eTGOCurrencyRate' || !triggerField) return false;
+  return triggerField === 'currency'
+    || triggerField === 'accountingDate'
+    || (!!documentDateField && triggerField === documentDateField);
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
   const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
@@ -464,7 +533,8 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
     const userHasValue = currentVal !== '' && currentVal != null;
-    if ((entry.value === '' || entry.value == null) && userHasValue) {
+    const isRateRecalc = isCurrencyRateRecalcTarget(key, triggerField, documentDateField);
+    if ((entry.value === '' || entry.value == null) && userHasValue && !isRateRecalc) {
       continue;
     }
     // Protect user-touched fields from being overwritten by collateral updates
@@ -477,7 +547,8 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // field's callout, it is the whole purpose of the document date's own callout,
     // and classic re-applies it on every change.
     if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue
-        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)) {
+        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)
+        && !isRateRecalc) {
       continue;
     }
     appliedFields.set(key, entry.value);
@@ -756,6 +827,7 @@ export function SecondaryPanelTab(props) {
         token={props.token}
         apiBaseUrl={props.apiBaseUrl}
         onCount={props.onCount}
+        readOnly={props.readOnly === true}
     />
   </div>;
 }
@@ -872,14 +944,6 @@ export function getCustomLinesTabClassName(embedded) {
 
 export function getSidebarSlideClassName(isClosingLine) {
   return isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in';
-}
-
-// ETP-5601 — the record (form view) toolbar follows Figma on every window: 8px padding on all
-// sides around 40px controls (56px), with a 1px #E8EAEF bottom rule. The rule is an inset shadow,
-// not a border, so it is painted inside those 56px instead of adding a 57th pixel. It used to
-// vary per window (`toolbarPaddingX`, `toolbarBorderBottom`, `linesLayout`); it no longer does.
-export function getLinesToolbarClassName() {
-  return 'flex items-center justify-between p-2 shadow-[inset_0_-1px_0_var(--status-neutral-border)]';
 }
 
 export function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
@@ -1034,12 +1098,6 @@ export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLin
 // `toolbarButtonSize` switch ('sm' = 36px, 'default' = 40px) is gone.
 export function getSqBtnSize() {
   return 'h-10 w-10';
-}
-
-// Save, process and extra-action buttons: 40px, Figma's text-sm/leading-6 line, 20px icons
-// (`[&_svg]:size-5` beats the core Button's `[&_svg]:size-4`).
-export function getSaveBtnCls() {
-  return 'h-10 gap-2 leading-6 [&_svg]:size-5';
 }
 
 export function getDocumentReadOnly(lockWhenProcessed, _headerData) {
@@ -1561,7 +1619,7 @@ export function buildBalanceFooterGridTotals(balanceFooter, balanceState, curren
 export function renderTotalsBlock({ balanceFooter, linesLayout, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
   if (balanceFooter) {
     // ETP-5210 — for the inlineEditable lines grid (the only current
-    // balanceFooter consumer, e.g. simple-g-l-journal), the debit/credit
+    // balanceFooter consumer, e.g. manual-journals), the debit/credit
     // totals are rendered as a column-aligned row INSIDE InlineLinesPanel
     // itself (see `balanceFooter` threaded into <DetailTable> in
     // DetailView.jsx via `buildBalanceFooterGridTotals`) — no separate block
@@ -1956,13 +2014,32 @@ export function shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnoth
 }
 
 /** Reactive wrapper: calls `handleNew()` exactly when {@link shouldResetEditingForNewRoute} says to. */
-export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew }) {
+export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew, accessReadOnly: roleReadOnly = false, embedded = false, onReadOnlyNew }) {
+  const accessReadOnly = roleReadOnly && !embedded; // an embedded form is never redirected
   const prevRecordIdRef = useRef(recordId);
   useEffect(() => {
     const arrivedFromAnotherRecord = prevRecordIdRef.current !== recordId;
     prevRecordIdRef.current = recordId;
+    if (accessReadOnly) return; // redirected below, no defaults fetch for a form never shown
     if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
-  }, [isNew, recordId, editing, handleNew]);
+  }, [isNew, recordId, editing, handleNew, accessReadOnly]);
+  // ETP-5830 — a read-only role reaching the creation route by URL (the list already hides
+  // "Nuevo") is sent back to the list instead of a form whose save the backend rejects.
+  // The callback is read from a ref: callers pass an inline arrow, which must not re-fire it.
+  const onReadOnlyNewRef = useRef(onReadOnlyNew);
+  onReadOnlyNewRef.current = onReadOnlyNew;
+  useEffect(() => {
+    if (isNew && accessReadOnly) onReadOnlyNewRef.current?.();
+  }, [isNew, accessReadOnly]);
+}
+
+/**
+ * ETP-5830 — the `editing` record a custom Panel / CustomLines receives: `false` when the role
+ * only reads the window, so the panel locks its writes; the record itself otherwise. Lives here
+ * to keep DetailView's own cognitive complexity flat.
+ */
+export function panelEditing(windowReadOnly, editing) {
+  return windowReadOnly ? false : editing;
 }
 
 /**
@@ -2091,8 +2168,8 @@ export function getTabStripBleedClassName({
  *  3. Inline-editable tabs → no row click handler. Editing happens in place via
  *     the pencil action; opening a side panel would defeat that UX.
  */
-function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout }) {
-  if (st.customAddModal) return openCustomModal;
+function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine, linesLayout, readOnly }) {
+  if (st.customAddModal) return readOnly ? undefined : openCustomModal; // ETP-5830: the popup has no read-only mode
   if (st.Form && linesLayout !== 'inlineEditable') return openSecondaryLine;
   return undefined;
 }
@@ -2276,7 +2353,7 @@ export function SecondaryFormTab(props) {
   return <div className="flex-1 min-w-0">
     <props.st.Form
         data={props.data ?? {}}
-        readOnly={!props.hook.editing}
+        readOnly={!props.hook.editing || props.windowReadOnly === true}
         onChange={props.onChange}
         entity={props.st.key}
         catalogs={props.catalogs}
@@ -2307,7 +2384,7 @@ function secondaryDetailSidebar(props) {
       </div>
       <props.st.Form
           data={props.secondaryLineEdits ?? props.selectedSecondaryLine}
-          readOnly={!props.hook.editing}
+          readOnly={!props.hook.editing || props.windowReadOnly === true}
           onChange={props.onChange}
           entity={props.st.key}
           catalogs={props.catalogs}
@@ -2317,7 +2394,7 @@ function secondaryDetailSidebar(props) {
           excludeFields={props.st.key === "contact" ? ["active"] : []}
           labelOverrides={props.labelOverrides}
       />
-      {props.hook.editing && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
+      {props.hook.editing && props.windowReadOnly !== true && (props.secondaryLineEdits || props.selectedSecondaryLine?.id) && (
           <div className="flex gap-2 mt-4">
             {props.secondaryLineEdits && (
                 <>
@@ -2422,11 +2499,10 @@ function secondaryAddLineBar(props) {
 }
 
 export function SecondaryTableTab(props) {
-  // Evaluates the tab's own readOnlyLogic (if declared) against the current
-  // header record — independent of the document-wide isDocumentReadOnly, which
-  // only governs the primary lines table. Most tabs declare no readOnlyLogic
-  // and this stays false, preserving today's behavior everywhere else.
-  const tabReadOnly = evalTabReadOnly(props.st, props.hook.selected);
+  // Read-only when the role only has read access to the window (ETP-5830) or the tab's own
+  // readOnlyLogic matches the header record. Deliberately NOT the document-wide
+  // isDocumentReadOnly, which only governs the primary lines table.
+  const tabReadOnly = props.windowReadOnly === true || evalTabReadOnly(props.st, props.hook.selected);
   const secondaryChildren = props.secondaryHooks[props.stIdx]?.children ?? [];
   const isAddingThis = props.addingSecondaryLine?.[props.st.key] ?? false;
   const hasAddFields = (props.st.addLineFields?.entry?.length ?? 0) > 0;
@@ -2473,11 +2549,11 @@ export function SecondaryTableTab(props) {
               onRowClick={resolveSecondaryRowClickHandler(props.st, {
                 openCustomModal: props.openCustomModal,
                 openSecondaryLine: props.openSecondaryLine,
-                linesLayout: props.linesLayout,
+                linesLayout: props.linesLayout, readOnly: tabReadOnly,
               })}
               // Pencil action for customAddModal tabs (Dirección) opens
               // the popup editor — rows are not editable in place.
-              onEditRow={getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
+              onEditRow={tabReadOnly ? undefined : getSecondaryEditRowHandler(props.st, props.setCustomModalState)}
               selectedRowId={props.selectedSecondaryLine?._tabKey === props.st.key ? props.selectedSecondaryLine?.id : undefined}
               onSelectionChange={getSecondarySelectionChangeHandler(props.linesLayout, props.setSecondarySelectedRows, props.st, props.enableSecondaryRowDelete)}
               onDeleteRow={(props.enableSecondaryRowDelete || (props.linesLayout === 'inlineEditable' && !props.st.customAddModal)) && !tabReadOnly && (props.crud?.[props.st.key]?.delete ?? true) ? props.onDeleteRow : undefined}
@@ -2662,13 +2738,13 @@ export function shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isD
 // casings are included so the macro is recognized (cacheable, filterable) regardless of
 // which one a given generated entity actually uses.
 //
-// 'product' is deliberately NOT included here, despite simple-g-l-journal's dimensionsPanel
+// 'product' is deliberately NOT included here, despite manual-journals's dimensionsPanel
 // listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
 // candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
 // with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
 // the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
 // this allowlist exists to filter out. Trusting 'product' unconditionally here would fix
-// the gap for simple-g-l-journal but silently reintroduce that already-fixed regression
+// the gap for manual-journals but silently reintroduce that already-fixed regression
 // for every OTHER window that shares this component and has a real, per-record 'product'
 // field. This constant stays GLOBAL and unconditional on purpose.
 //
@@ -2680,10 +2756,10 @@ export function shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isD
 // `dimensionsPanelFieldKeys` prop + `trustedDimensionKeys` memo below). `lineHiddenColumns`
 // and the expanded-row DetailForm's `displayLogic` both trust `DIMENSION_MACRO_KEYS UNION
 // dimensionsPanelFieldKeys`, scoped to the current DetailView instance — so
-// simple-g-l-journal can trust 'product' as a dimension macro without this global constant
+// manual-journals can trust 'product' as a dimension macro without this global constant
 // ever needing to include it, and sales-invoice/purchase-invoice (which never pass
 // 'product' in that prop) are unaffected. See DetailView.lineHiddenColumns.vitest.jsx for
-// both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped
+// both the fix proof (manual-journals) and the non-regression proof (sales-invoice-shaped
 // instances).
 const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 
