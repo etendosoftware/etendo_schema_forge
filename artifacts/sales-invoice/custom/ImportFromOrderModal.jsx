@@ -1,6 +1,7 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
+import useOrderGlobalDiscountImport from '@/windows/custom/shared/useOrderGlobalDiscountImport.jsx';
 
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const [ordersRes, invLinesRes, headerRes] = await Promise.all([
@@ -10,14 +11,20 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   ]);
 
   const alreadyImportedOrderLines = new Set();
+  // ETP-5828: the GET already hides the ETGO_DTO global-discount line (InvoiceLineHandler).
+  let invoiceHasLines = false;
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
+    invoiceHasLines = invLines.length > 0;
     invLines.forEach(il => { if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine); });
   }
 
   let invoiceCurrency = null;
+  let invoiceGlobalDiscount = null;
   if (headerRes.ok) {
-    invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
+    const invoiceHeader = (await headerRes.json())?.response?.data?.[0];
+    invoiceCurrency = invoiceHeader?.currency || null;
+    invoiceGlobalDiscount = Number(invoiceHeader?.etgoTotalDiscount) || null;
   }
 
   let documents = [];
@@ -36,7 +43,11 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
       if (o.etgoTotalDiscount) orderDiscountMap[o.id] = Number(o.etgoTotalDiscount);
     });
   }
-  return { documents, sharedContext: { alreadyImportedOrderLines, orderDiscountMap }, excludedByCurrency };
+  return {
+    documents,
+    sharedContext: { alreadyImportedOrderLines, orderDiscountMap, invoiceGlobalDiscount, invoiceHasLines },
+    excludedByCurrency,
+  };
 };
 
 const fetchLines = async ({ base, docId, sharedContext }) => {
@@ -65,19 +76,6 @@ const getDocDisplay = (doc) => ({
   docNo: doc.documentNo || doc.id,
   date: doc.orderDate,
 });
-
-const afterImport = async ({ importedDocIds, sharedContext, base, invoiceId }) => {
-  const { orderDiscountMap } = sharedContext;
-  const discounts = [...importedDocIds].map(id => orderDiscountMap[id]).filter(v => v > 0);
-  if (discounts.length === 0) return;
-  const uniqueDiscounts = [...new Set(discounts)];
-  if (uniqueDiscounts.length !== 1) return;
-  await moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
-    method: 'PATCH',
-    
-    body: JSON.stringify({ etgoTotalDiscount: uniqueDiscounts[0] }),
-  });
-};
 
 const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
   const unitPrice = Number(line.unitPrice) || 0;
@@ -118,6 +116,8 @@ export default function ImportFromOrderModal(props) {
   // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
   // matches - so a configured base doubles it and 404s.
   const apiFetch = useApiFetch('');
+  // ETP-5828: global-discount carry-over (tag, warning/toggle panel, header PATCH, toast).
+  const globalDiscountProps = useOrderGlobalDiscountImport({ headerEndpoint: 'sales-invoice/header' });
   return (
     <ImportLinesModal
       {...props}
@@ -132,7 +132,7 @@ export default function ImportFromOrderModal(props) {
       fetchLines={fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
-      afterImport={afterImport}
+      {...globalDiscountProps}
     />
   );
 }
