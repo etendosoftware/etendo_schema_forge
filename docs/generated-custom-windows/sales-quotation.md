@@ -224,17 +224,15 @@ replaces the standard `SelectorInput` and:
 - Renders each option as `{isoCode} — {rate}` (e.g. `USD — 1.1523`), where
   `rate` is the conversion from the org currency to that currency for the
   quotation's `dateOrdered`.
-- Fetches options lazily from
-  `GET {apiBaseUrl}/quotation/{id}/action/currencyOptions`
-  when the user opens the dropdown. The entity path `'quotation'` is passed via
+- Fetches options from
+  `GET {apiBaseUrl}/quotation/{id|new}/action/currencyOptions?date=<orderDate in the form>`
+  on load, whenever the quotation date changes and when the dropdown opens (ETP-5840). The entity path `'quotation'` is passed via
   the `entityPath` prop, so the URL differs from the sales-order equivalent
   (`header/{id}/action/currencyOptions`).
-- Also fires an eager fetch when `hasRecord` becomes `true` (i.e., after the
-  quotation is first saved and a real `id` is available), so the rate is
-  immediately visible in the trigger without requiring the user to open the
-  dropdown.
-- Shows a pencil icon (`data-testid="currency-rate-pencil"`) when `value &&
-  hasRecord`. Clicking it enters inline-edit mode with a numeric input
+- Lists every selectable currency; one without a conversion range on the date
+  shows «—» and selecting it leaves the rate empty for the user to type.
+- Shows a pencil icon (`data-testid="currency-rate-pencil"`) on new and saved
+  quotations unless the selected option is the org currency (`isOrgCurrency`). Clicking it enters inline-edit mode with a numeric input
   (`data-testid="currency-rate-input"`). Enter confirms and calls
   `onChange('eTGOCurrencyRate', rate, 'EM_ETGO_Currency_Rate')` to stage the
   overridden rate. Escape cancels without change.
@@ -257,8 +255,9 @@ replaces the standard `SelectorInput` and:
 
 The `currencyOptions` endpoint is the same one used by sales-order —
 implemented in `CurrencyOptionsHandler.java` (`com.etendoerp.go`). It filters
-by client and org, returns only currencies that have an active exchange rate for
-the document date, and always includes the org currency with `rate: 1.0`.
+by client and org and, since ETP-5840, returns every selectable currency for the
+`date` it receives (`rate: null` when no range covers it) with an `isOrgCurrency`
+flag. Full reference: `docs/ui-customization.md` §22.
 
 ### Convertquotation — preserved prices
 
@@ -324,20 +323,23 @@ The behavior is identical to Sales Order — see
 (ETP-4027 functional model)". Briefly:
 
 - The `currency` field is always editable on quotations in `DR` or `UE` status.
-- When the user picks a new currency in the dropdown, `DetailView.jsx` validates
-  exchange-rate availability via `validate-exchange-rate` before applying the
-  change. If no rate exists, the dropdown reverts to the previous value and
-  shows a toast.
+- ETP-5840: picking a currency is never reverted anymore (the «Cambio de moneda
+  cancelado» flow was removed). The rate is recalculated by the header callout on
+  every `orderDate`/`currency` change (empty when there is no range, overriding a
+  manual rate), and the confirm modal only blocks a foreign-currency quotation
+  whose own `eTGOCurrencyRate` is empty, with the same sentence as the backend
+  completion refusal (`backendError.exchangeRateMissingOnComplete`). Convertquotation /
+  createDraftInvoice refusals are translated from their identity (`translateBackendErrorBody`).
 - A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef`
   synchronized with the saved currency/date so that newly added lines have their
   prices converted automatically from the pricelist currency to the order
   currency.
-- The header callout raises a separate `noExchangeRateAvailable` warning on the
-  same event. Since ETP-4838 both checks resolve availability through
-  `NeoExchangeRateService.hasRate(...)` — client-or-system scoped, with the
-  inverse-direction fallback — so they can no longer disagree. See
-  `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of
-  truth".
+- The header callout no longer raises a `noExchangeRateAvailable` warning
+  (ETP-5840): on a change of `currency` or `orderDate` it returns the
+  recalculated rate as `updates.eTGOCurrencyRate` (`null` when no conversion
+  range covers the quotation date). See `sales-order.md` §
+  "`NeoExchangeRateService.hasRate` — the single source of truth" for the
+  history.
 
 ### Automated evidence
 

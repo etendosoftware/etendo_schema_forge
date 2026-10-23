@@ -351,7 +351,7 @@ async function loadAllMockData() {
     import('@generated/payment-in/custom/mockData.js'),
     import('@generated/payment-out/generated/web/payment-out/mockData.js'),
     import('@generated/chart-of-accounts/generated/web/chart-of-accounts/mockData.js'),
-    import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/mockData.js'),
+    import('@generated/manual-journals/generated/web/manual-journals/mockData.js'),
     import('@generated/assets/generated/web/assets/mockData.js'),
     import('@generated/amortization/generated/web/amortization/mockData.js'),
     import('@generated/deal/generated/web/deal/mockData.js'),
