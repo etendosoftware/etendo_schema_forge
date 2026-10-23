@@ -31,7 +31,7 @@ The canonical sources are:
 | How to record debt, and the protocols around it | `docs/technical-debt-playbook.md` |
 | The backend: server-side flags, paywall, plan marker | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` |
 | Moving an environment to the subscription model (`ETGO_SubscriptionModel` + R37) | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` §3, "The subscription-model switch"; short procedure in §3.8 below |
-| After the purchase: subscription lifecycle, grace, blocking, the 402 and its kill switch | `com.etendoerp.go` → `docs/open-and-notable-topics.md` §3.7–§3.11; operator page: "Operating environment-access enforcement" in `docs/feature-flags-and-tenant-upgrade.md` |
+| After the purchase: subscription lifecycle, grace, blocking, the 402 and its kill switch | `com.etendoerp.go` → `docs/open-and-notable-topics.md` §3.7 (the subscription row lifecycle), §3.10 and §3.11; the environment-access check, its 402 and kill switch: `docs/feature-flags-and-tenant-upgrade.md` §1, including the operator page "Operating environment-access enforcement" |
 
 ---
 
