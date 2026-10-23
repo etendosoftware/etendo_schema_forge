@@ -22,7 +22,10 @@ import {
   UPGRADE_ERROR_CODES,
 } from '@/lib/upgrade/api.js';
 import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { isProductiveEnvironment, isPurchaseSourceDemo } from '@/lib/environmentPresentation.js';
+import {
+  environmentTrialDaysKey, isProductiveEnvironment, isPurchaseSourceDemo,
+} from '@/lib/environmentPresentation.js';
+import { useLogout } from '@/auth/useLogout.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /** Billing interval as the catalog spells it, mapped to the i18n key that phrases the price. */
@@ -512,7 +515,7 @@ function ProgressPanel({ steps, ui }) {
  * and no second quote source (the legacy `GET /sws/go/billing/offers` preview is gone, ETP-5049): a
  * guess here would be a purchase nobody reviewed, or a price the checkout does not charge.
  */
-function PlanCatalogStatus({ state, plans, onRetry, ui }) {
+function PlanCatalogStatus({ state, plans, onRetry, onSignInAgain, ui }) {
   if (state === 'ready' && plans.length > 0) return null;
 
   if (state === 'loading') {
@@ -554,6 +557,13 @@ function PlanCatalogStatus({ state, plans, onRetry, ui }) {
             {ui('upgradePlansRetry')}
           </Button>
         )}
+        {/* The message says "sign in again", so the state offers it — the same exit as
+            AccountSettings' expired session (ETP-5049). */}
+        {state === 'no-session' && (
+          <Button type="button" variant="outline" size="sm" onClick={onSignInAgain} data-testid="upgrade-plans-sign-in-again">
+            {ui('accountSignInAgain')}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -564,13 +574,14 @@ function PlanCatalogStatus({ state, plans, onRetry, ui }) {
  * selects its key and moves on to the add-ons; a single plan is preselected by the catalog lookup
  * (the v1 catalog is one flat monthly subscription), so its card is already highlighted.
  */
-function PlanCatalog({ state, plans, selectedPlanKey, onSelect, onRetry, ui }) {
+function PlanCatalog({ state, plans, selectedPlanKey, onSelect, onRetry, onSignInAgain, ui }) {
   if (state !== 'ready' || plans.length === 0) {
     return (
       <PlanCatalogStatus
         state={state}
         plans={plans}
         onRetry={onRetry}
+        onSignInAgain={onSignInAgain}
         ui={ui}
         data-testid="PlanCatalogStatus__58bad7" />
     );
@@ -600,20 +611,29 @@ function PlanCatalog({ state, plans, selectedPlanKey, onSelect, onRetry, ui }) {
 /**
  * Step 3 — what is being bought, read-only. The choice is made on the Plan step; offering a second
  * chooser here would let the two disagree. The submit sends this plan's KEY, never a price.
- * Renders nothing when no plan is selected: the submit answers `upgradePlanRequired`.
+ * With no plan selected (a catalog re-read dropped the chosen key) it offers the way back to the
+ * Plan step instead, and the submit answers `upgradePlanRequired`.
  */
-function PlanSummary({ state, plans, plan, onRetry, ui }) {
+function PlanSummary({ state, plans, plan, onRetry, onSignInAgain, onChoosePlan, ui }) {
   if (state !== 'ready' || plans.length === 0) {
     return (
       <PlanCatalogStatus
         state={state}
         plans={plans}
         onRetry={onRetry}
+        onSignInAgain={onSignInAgain}
         ui={ui}
         data-testid="PlanCatalogStatus__58bad7" />
     );
   }
-  if (!plan) return null;
+  if (!plan) {
+    return (
+      <Button type="button" variant="outline" size="sm" className="self-start" onClick={onChoosePlan}
+        data-testid="upgrade-plan-summary-choose">
+        {ui('upgradePlanChoiceLabel')}
+      </Button>
+    );
+  }
   return (
     <div className="rounded-md border p-3 text-sm" data-testid="upgrade-plan-summary">
       <span className="block text-xs font-medium text-muted-foreground">{ui('upgradeCheckoutStepPlan')}</span>
@@ -733,6 +753,7 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
 export default function UpgradePage() {
   const ui = useUI();
   const navigate = useNavigate();
+  const logout = useLogout();
   const apiFetch = useApiFetch(getUpgradeBaseUrl());
 
   const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
@@ -1222,6 +1243,11 @@ export default function UpgradePage() {
   const canCheckout = plansState === 'ready' && plans.length > 0;
   // Resolved against the CURRENT catalog, so a key the catalog no longer lists selects nothing.
   const selectedPlan = plans.find(plan => plan.planKey === selectedPlanKey) || null;
+  // Same exit as AccountSettings' expired session: land on the login view, not the account picker.
+  const handleSignInAgain = () => {
+    localStorage.setItem('sf_onboarding_initial_view', 'login');
+    logout();
+  };
   const goToCheckoutStep = step => {
     const stepIndex = { plan: 0, addons: 1, payment: 2 }[step];
     if (phase !== 'form' || stepIndex === undefined || stepIndex > highestReachedCheckoutStep) return;
@@ -1343,7 +1369,7 @@ export default function UpgradePage() {
           </div>
           {Number.isInteger(demoDays) && (
             <div className="rounded-full border border-status-warning-border bg-status-warning px-4 py-2 text-sm font-semibold text-status-warning-foreground" data-testid="upgrade-trial-pill">
-              {ui('environmentTrialDaysRemaining', { days: demoDays })}
+              {ui(environmentTrialDaysKey(demoDays), { days: demoDays })}
             </div>
           )}
         </div>
@@ -1364,6 +1390,7 @@ export default function UpgradePage() {
           advanceCheckoutStep('addons');
         }}
         onRetry={() => setLookupAttempt(attempt => attempt + 1)}
+        onSignInAgain={handleSignInAgain}
         ui={ui}
         data-testid="PlanCatalog__58bad7" />
       {canCheckout && (
@@ -1634,6 +1661,8 @@ export default function UpgradePage() {
                 plans={plans}
                 plan={selectedPlan}
                 onRetry={() => setLookupAttempt(attempt => attempt + 1)}
+                onSignInAgain={handleSignInAgain}
+                onChoosePlan={() => goToCheckoutStep('plan')}
                 ui={ui}
                 data-testid="PlanSummary__58bad7" />
 

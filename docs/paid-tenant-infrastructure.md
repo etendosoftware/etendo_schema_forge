@@ -90,7 +90,9 @@ Two consequences follow, and neither is hypothetical:
    description and price, so a plan added to `ETGO_PLAN` appears with no frontend change
    (ETP-5049). A single plan is preselected; with several, the user picks one, and nothing is
    preselected for them. While the catalog loads, fails (with a retry), is empty, or answers
-   401, the step says so and offers no way forward — there is no plan key to send. Choosing a
+   401, the step says so and offers no way forward — there is no plan key to send; on a 401 it
+   offers **Sign in again** (`upgrade-plans-sign-in-again`), which signs out to the login view as
+   the account page does for an expired session. Choosing a
    card opens the Add-ons step, which remains in the flow for every origin. When the current authenticated environment is a demo, this step offers
    product and contact transfer choices. When the current environment is already productive, it
    explains that the new environment starts without demo data and offers no transfer controls.
@@ -98,7 +100,9 @@ Two consequences follow, and neither is hypothetical:
    to Add-ons, preserving the current form and transfer selections.
 8. **The user enters the new environment name on the payment step.** The payment step shows the
    plan chosen on the Plan step as a read-only summary (`upgrade-plan-summary`: name and price) —
-   it has no second chooser — and the checkout sends that plan's `planKey`, never a price. A productive-origin
+   it has no second chooser — and the checkout sends that plan's `planKey`, never a price. If a
+   catalog re-read drops the chosen plan, the summary gives way to **Choose a plan**
+   (`upgrade-plan-summary-choose`), which returns to the Plan step. A productive-origin
    purchase starts with a blank name so the current environment is not mistaken for the target.
    A demo-origin purchase can select an exact source environment; the request carries its
    `demoClientId`, not a name-based lookup. The backend validates that this ID is a demo owned by

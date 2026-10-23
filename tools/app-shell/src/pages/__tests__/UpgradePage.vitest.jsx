@@ -42,6 +42,10 @@ vi.mock('@/lib/observability.js', () => ({
   track: vi.fn(),
 }));
 
+// ETP-5049 — the expired-session state signs the user out to the login view, like AccountSettings.
+const logoutMock = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/useLogout.js', () => ({ useLogout: () => logoutMock }));
+
 import {
   TEST_BEARER_TOKEN,
   TEST_CSRF_TOKEN,
@@ -759,6 +763,23 @@ describe('UpgradePage — plan catalog', () => {
     expect(screen.queryByTestId('upgrade-submit')).not.toBeInTheDocument();
   });
 
+  it('offers to sign in again when the catalog answers 401, landing on the login view', async () => {
+    const user = userEvent.setup();
+    logoutMock.mockClear();
+    localStorage.removeItem('sf_onboarding_initial_view');
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ error: { message: 'Invalid or expired token' } }, { ok: false, status: 401 }),
+    });
+    await renderUpgradePage();
+
+    const signIn = screen.getByTestId('upgrade-plans-sign-in-again');
+    expect(signIn).toHaveTextContent('accountSignInAgain');
+    await user.click(signIn);
+    expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+  });
+
   describe('a catalog re-read on the Payment step', () => {
     /** Environments fail once, so the Payment step offers a retry that re-reads both lookups. */
     function environmentsFailingOnce() {
@@ -849,6 +870,13 @@ describe('UpgradePage — plan catalog', () => {
       await user.click(screen.getByTestId('upgrade-submit'));
       expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradePlanRequired');
       expect(requests).toHaveLength(0);
+
+      // A way back to the chooser, rather than a dead end with no plan to pick.
+      const choose = screen.getByTestId('upgrade-plan-summary-choose');
+      expect(choose).toHaveTextContent('upgradePlanChoiceLabel');
+      await user.click(choose);
+      expect(await screen.findByTestId('upgrade-plan-catalog')).toBeInTheDocument();
+      expect(screen.queryByTestId('upgrade-submit')).not.toBeInTheDocument();
     });
   });
 });
@@ -1562,6 +1590,16 @@ describe('UpgradePage — current-environment prefill and taken-name guard (ETP-
 });
 
 describe('UpgradePage — provisioning environment synchronization (ETP-5443)', () => {
+  it('reads the trial pill in the singular with one day left (ETP-5049)', async () => {
+    UPGRADE_SESSION.clientId = 'CURRENT-DEMO';
+    installFetch({ environments: [
+      { clientName: 'Current Demo', clientId: 'CURRENT-DEMO', plan: 'demo', trialDaysRemaining: 1 },
+    ] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(await screen.findByTestId('upgrade-trial-pill')).toHaveTextContent('environmentTrialDaysRemainingOne');
+  });
+
   it('requires the user to choose a demo source when starting from a demo with multiple demos', async () => {
     const user = userEvent.setup();
     UPGRADE_SESSION.clientId = 'CURRENT-DEMO';

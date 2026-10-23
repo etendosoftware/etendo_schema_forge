@@ -198,7 +198,7 @@ Nota importante: `docs/feature-flags.md` (sección "tenant upgrade flow") y `doc
 
 - **Actor:** Cuenta autenticada, Rama C (ya posee ≥1 tenant, quiere uno adicional pago o convertir el demo).
 - **Superficie:** Formulario `upgrade-checkout` en `UpgradePage.jsx`.
-- **Plan selection (ETP-5049):** the checkout is three steps — Plan → Add-ons → Payment. The plan is chosen on the **Plan** step, one card per plan of `GET /sws/go/plans` (`upgrade-plan-card-<planKey>`; a single plan is preselected, several require a choice). The Payment step only summarizes it read-only (`upgrade-plan-summary`) and the submit sends its `planKey`. There is no price fallback: `GET /sws/go/billing/offers` is no longer read by the page.
+- **Plan selection (ETP-5049):** the checkout is three steps — Plan → Add-ons → Payment. The plan is chosen on the **Plan** step, one card per plan of `GET /sws/go/plans` (`upgrade-plan-card-<planKey>`; a single plan is preselected, several require a choice). The Payment step only summarizes it read-only (`upgrade-plan-summary`) and the submit sends its `planKey`; if a catalog re-read drops the chosen plan it offers **Choose a plan** (`upgrade-plan-summary-choose`) back to the Plan step. A catalog answering 401 offers **Sign in again** (`upgrade-plans-sign-in-again`). There is no price fallback: `GET /sws/go/billing/offers` is no longer read by the page.
 - **Objetivo:** Obtener una URL de redirect hosteada por Stripe sin que el navegador vea precio/moneda/producto.
 - **Precondiciones:** Token válido; `clientName` no vacío y no ya-propio.
 - **Trigger:** Submit del formulario de checkout.
