@@ -20746,6 +20746,7 @@
     "backendError.completedInvoiceFieldsLocked": "This invoice is completed, so some of your changes can no longer be saved. Refresh the invoice to see which fields are still editable.",
     "backendError.invoiceStatusDimensionsLocked": "The project and cost center cannot be changed on a voided or closed invoice. Refresh the invoice to see its current status.",
     "backendError.invoiceSiiSentReferenceLocked": "This purchase invoice has already been sent to the SII, so the supplier's invoice number can no longer be changed.",
+    "listConjunctionAnd": "and",
     "backendError.invoiceReactivateFiscalRectified": "This invoice cannot be reactivated: it has already been accepted by {fiscalSystem} and is rectified by: {rectificativas}.",
     "backendError.invoiceRectificationExceedsOriginal": "This rectification cannot be completed: the amount already rectified against the original invoice would exceed its own total.",
     "backendError.documentAlreadyPosted": "This document is already posted. Refresh it to see its current status.",

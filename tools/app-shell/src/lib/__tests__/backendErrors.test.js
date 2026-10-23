@@ -3426,6 +3426,50 @@ describe('translateBackendError — invoice reactivate fiscal-rectified refusal 
       messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
     }), prose);
   });
+
+  // ── fiscalSystem as a real array (ETP-5745 correction) — the live-verified production shape.
+  // `messageParams.fiscalSystem` used to be pre-joined into a comma string on the backend
+  // (InvoiceReactivationGuard#reject); it is now a real JSONArray, exactly like `rectificativas`
+  // already was — but unlike `rectificativas`, it must render with a LOCALE-AWARE CONJUNCTION
+  // ("SII y TicketBAI" / "SII and TicketBAI"), not the generic comma join every other
+  // array-valued messageParam gets. Reads the REAL locale files, pinning the exact wording a
+  // real MCP `etendo_action` 422 produces for a 2-fiscal-system case (confirmed live, 2026-10).
+  it('joins a 2-element fiscalSystem array with the real es_ES/en_US conjunction, not a comma', () => {
+    const params = { fiscalSystem: ['SII', 'TicketBAI'], rectificativas: ['REC-1000022'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+
+    assert.equal(esText,
+      'No se puede reactivar esta factura: ya ha sido aceptada por SII y TicketBAI y está '
+      + 'rectificada por: REC-1000022.');
+    assert.equal(enText,
+      'This invoice cannot be reactivated: it has already been accepted by SII and TicketBAI '
+      + 'and is rectified by: REC-1000022.');
+    assert.doesNotMatch(esText, /SII, TicketBAI/);
+  });
+
+  it('joins a 3-element fiscalSystem array with no Oxford comma before the conjunction', () => {
+    const params = { fiscalSystem: ['SII', 'Verifactu', 'TicketBAI'], rectificativas: ['REC-1', 'REC-2'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+
+    assert.match(esText, /SII, Verifactu y TicketBAI/);
+    assert.match(enText, /SII, Verifactu and TicketBAI/);
+    assert.doesNotMatch(esText, /Verifactu, y TicketBAI/);
+    assert.doesNotMatch(enText, /Verifactu, and TicketBAI/);
+    // rectificativas keeps the plain comma join, untouched by the conjunction fix.
+    assert.match(esText, /REC-1, REC-2/);
+  });
+
+  it('a single-element fiscalSystem array renders the same as the legacy bare string', () => {
+    const arrayText = translateBackendError('ignored', es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: ['SII'], rectificativas: ['REC-1'] },
+    });
+    const bareText = translateBackendError('ignored', es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'SII', rectificativas: ['REC-1'] },
+    });
+    assert.equal(arrayText, bareText);
+  });
 });
 
 // ── translateByMessageKey messageParams forwarding — no regression on param-less keys ──
