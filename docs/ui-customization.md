@@ -525,7 +525,7 @@ Parity is locked by `tools/app-shell/src/components/related-documents/__tests__/
 
 ### 7.b `window.attachments` — file attachments tab
 
-Adds a transversal **Attachments** tab to the detail view for uploading, listing, downloading, and deleting files attached to the current record. The tab is **auto-enabled on every window** with `layoutType: "default"` — no opt-in needed. Set `attachments: false` to disable it, or pass an object to tune client-side limits.
+Adds a transversal **Attachments** tab to the detail view for uploading, listing, downloading, and deleting files attached to the current record. The tab is **auto-enabled on every window** with `layoutType: "default"` — no opt-in needed. Set `attachments: false` to disable it, or pass an object to tune client-side limits. **A window that sets `attachments: false` must also set `MCP_CONFIG.attachments.enabled: false` on its root entity in `com.etendoerp.go` sourcedata (`ETGO_SF_ENTITY.xml`), or the MCP will still offer attachments there (ETP-5715).**
 
 **Use when:** the window represents a document/master record where users need to attach supporting files (PDFs, images, spreadsheets). For most transactional windows, no configuration is required — the tab is already there.
 
@@ -2707,6 +2707,100 @@ it; the manual button keeps working and prefilling while the tab has no rows. Wi
 **Person vs company captions.** A company carries `name`; a PERSON is stored as
 `etgoFirstname`/`etgoLastname` and may have an empty `name`, so callers resolve the selector caption
 through the exported `resolveContactName(record)` rather than reading `name` directly.
+
+---
+
+### 19c. Inline create from a selector — `allowCreate` + inline-create variants (ETP-5826)
+
+Not the same thing as §19. §19 opens the TARGET window's own form from a lookup drawer; this one is a
+one-input modal for small catalogs whose record can be created from a single value (a name, a number of
+days). Field-level, declared in decisions.json:
+
+```json
+"transactionType": { "allowCreate": true, "createSpec": "transaction-type", "createEntity": "transactionType",
+                     "createLabelKey": "matchRuleTypeCreate", "createTitleKey": "matchRuleTypeCreateTitle",
+                     "createNamePlaceholderKey": "matchRuleTypeNamePlaceholder" }
+```
+
+`EntityForm.renderSearchSelectField` renders `InlineCreateSelector` instead of the plain
+`CreatableSearchSelect` when `allowCreate && createSpec && createEntity` (and the form has an
+`apiBaseUrl`). The "+ create" row is always the first row of the dropdown; it opens `InlineCreateModal`
+pre-filled with the typed text, POSTs to `/sws/neo/{createSpec}/{createEntity}` (`buildCreateUrl` swaps
+the host window's spec segment) through `useApiFetch`, and auto-selects the created record.
+
+**Variants.** How the record is created is a property of the TARGET spec, so it is declared once in
+`tools/app-shell/src/lib/inlineCreateVariants.js` (a plain module next to `paymentTermDays.js`; the generic
+components only read from it), keyed by `createSpec`, and every field pointing at that spec picks it up:
+
+| Variant key | Effect |
+|---|---|
+| `inputLabelKey` / `inputSuffixKey` | Modal input label (default "Name") and a unit after the input. |
+| `inputMode` | The input's `inputMode` (e.g. `numeric`). The input stays `type="text"` so a wrong value gets a message instead of being silently blocked by the browser. |
+| `validate(value)` | `null` or `{ key, params }`; shown under the input, nothing is sent. With a validator the empty input can be submitted so the "required" message shows. |
+| `inputPattern` / `inputMaxLength` | Restrict what the input can hold, as it is typed or pasted. A change that does not match (or is longer) is refused on the spot: the previous value stays and the message `validate` gives for the refused value is shown (else `inputRejectedKey`). A selector pre-fill that does not match opens the modal empty. Use a RegExp without the `g` flag. |
+| `inputRejectedKey` | Message for a refused change that `validate` has no message for (e.g. a trailing space). |
+| `buildBody(value)` | POST body (default `{ name }`). |
+| `sortOptions` | Comparator passed to `CreatableSearchSelect`'s generic `sortOptions` prop. |
+| `errorMessagesByKey` | `{ [backendMessageKey]: (messageParams) => ({ key, params }) \| null }` — a failed create whose `error.messageKeys` holds that key shows the translated message; the builder receives `error.messageParams`. |
+| `fallbackErrorKeysByStatus` | `{ 409: 'i18nKey' }` — only for a failed create that carries **no** backend message key. |
+
+Anything matched by neither goes through the shared `translateBackendError` (`lib/backendErrors.js`: backend
+message keys first, then known backend texts). That is where a backend message key belongs whenever another
+screen can show it too — the variant only maps what is specific to the modal. When nothing translates it, a 4xx
+keeps the backend text (a refusal written for the user), but a 5xx or a status-less failure shows the generic
+translated error, never the raw text (it can carry SQL); a network failure keeps its own translated message.
+`resolveCreateErrorMessage(variant, error)` holds the variant rules, `describeCreateError` in
+`InlineCreateSelector.jsx` the rest. A refused create never selects anything: the modal stays open with the message
+(rendered with `role="alert"`, so screen readers announce it).
+
+Registered: `payment-term` — digits only, at most 3 (`inputPattern: /^\d*$/`, `inputMaxLength: 3`): `5.541`,
+`5,45`, `123abc`, `-5` or `50%` can never be typed or pasted, and the refusal shows "Introduce un número entero de
+días…" (a 4th digit shows the 1–365 range message); `validate` (`lib/paymentTermDays.js`) remains the submit-time
+check for empty, `0` and `> 365`. Body `{ overduePaymentDaysRule: N }`,
+options ordered "Inmediato" first then by days. Errors: `PaymentTermHandler`'s refusals are translated by the
+shared translator, so the Payment Term window's save shows the same text — `ETGO_PaymentTermDaysDuplicate`
+(409) → "Ya existe la condición de pago «{name}» con esos días", `ETGO_PaymentTermNameDuplicate` (409) → "Ya
+existe una condición de pago llamada «{name}» en esta organización", each with "… pero está desactivada.
+Reactívala en Condiciones de pago" when `messageParams.paymentTermActive` is false;
+`ETGO_PaymentTermDaysInvalid` / `ETGO_PaymentTermDaysOutOfRange` (400, `{min}`/`{max}`/`{value}`). The variant
+itself keeps only `fallbackErrorKeysByStatus: { 409: 'paymentTermNameDuplicate' }` for a 409 without a key (the
+C_PaymentTerm `(client, org, name)` unique constraint caught by the generic CRUD path) → "Ya existe una
+condición de pago con ese nombre en esta organización". The existing term is never auto-selected.
+No entry = name-only (match-rule is unchanged).
+
+**Only for roles that can write the target.** The "+ create" row is hidden unless the current role may
+write the window behind `createSpec` — the same rule NEO applies to the POST: an active
+`AD_Window_Access` on that window with `IsReadWrite = 'Y'` (tier `"full"` in `SFWindowAccessMap`), or the
+admin / client-admin bypass (`capabilities.isAdminOrClientAdmin`). `useCanCreateInSpec(createSpec)`
+(`hooks/useCanCreateInSpec.js`, pure rule in `lib/specWriteAccess.js`) resolves the spec to its window
+through `menu.json` (`name` = spec → `windowId`) and reads the role's `windowAccess` map. Applies to every
+`allowCreate` field.
+
+| Situation | "+ create" row |
+|---|---|
+| Admin / client-admin | shown |
+| Role tier `full` on the target window | shown |
+| Tier `read-only`, no grant, or access map not loaded yet / failed | hidden (fail closed) — e.g. the Sales and Purchasing templates have Payment Term (141) read-only |
+| `createSpec` has no `windowId` in `menu.json` (today: `transaction-type`, used by match-rule) | shown, as before: the SPA cannot tell which window authorizes it, and the backend still answers 403 to a role it refuses. Add a `menu.json` entry with the `windowId` to gate it |
+
+Fail closed does not flicker: `windowAccess` is loaded at role selection, before any window renders, and
+the row only exists inside the closed dropdown. With the row hidden the field is an ordinary searchable
+selector.
+
+**Hand-built forms** spread the exported props instead of copying keys:
+`{ key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', ...PAYMENT_TERM_CREATE_FIELD_PROPS }`
+(contacts `BillingPreferencesForm`, both customer and vendor sides).
+
+**Other forms see the new record.** Selector option pages are cached under `entity: 'selector'` for
+the catalog window, keyed by the host document's selector URL, which does not name the target table. A
+POST to the `payment-term` spec is therefore listed in `WRITE_INVALIDATES_ENTITIES`
+(`lib/crossSpecCacheInvalidation.js`), applied centrally by `useApiFetch`: every cached selector page goes
+stale and refetches on its next open — a term created from a contact appears in a purchase invoice's
+dropdown without a reload. A new variant whose records feed other selectors needs the same entry.
+
+**Limitation.** `sortOptions` sorts what has been loaded. In `serverSearch` mode that is the pages fetched
+so far (50 per page), which is fine for short catalogs such as payment terms; it is not a substitute for
+server-side ordering on a large catalog.
 
 ---
 

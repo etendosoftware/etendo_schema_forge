@@ -42,6 +42,7 @@ The guard also changes what "Reactivar" does mechanically when it already knows 
 - **SIF error banner removed from the header (ETP-5057):** the invoice header no longer renders a red `SifErrorBanner` card for SII submission errors — the `headerExtra.customForm: "SifErrorBanner"` wiring was removed from `decisions.json` and the (now-orphaned) `SifErrorBanner.jsx` component (both the shared implementation and the per-window re-export) was deleted. SII incident detail — rejection reasons, error codes, structured AEAT responses — now lives exclusively in the Fiscal Monitor (`/fiscal-monitor`; see `docs/generated-custom-windows/fiscal-monitor.md`, section "SII section (`SiiMonitorSection`)"). VeriFactu does not apply to purchase invoices (see "Verifactu does not apply to purchase invoices" below), so this window's banner only ever showed the SII half. The invoice itself still shows its existing minimal sending-status indicator unchanged by this removal: the SII `FiscalStatusBadge` status pill column in `PurchaseInvoiceHeaderTable` (list) and the status badge in the SIF tab panel (detail) — no new indicator was added.
 
 - **Header progress badge (ETP-5549):** `PurchaseInvoiceReceiptBadge` shows the read-only `eTGODeliveryStatus` percentage as "Recibido N%" (`poAllReceived`). Shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/`) rendered in the detail topbar via `decisions.json → window.customComponents.topbarExtra`, shown only when the document is completed (CO), including 0% (neutral tone); the badge shows a 16px `ProgressRing` left of the text (track only at 0%, partial arc at 1-99%, green at 100%) and the tone is neutral for 0-99% and success at 100%; hidden in any other status or when the field is missing.
+- **Create a payment term from the header selector (ETP-5826):** the `paymentTerms` selector (**Condiciones de pago**) shows a pinned `+ Crear condición de pago` row as the first entry of its dropdown, declared on the `header` field in `artifacts/purchase-invoice/decisions.json` (`allowCreate` + `createSpec: "payment-term"`). It opens a small modal that asks only for the number of days until due — a whole number from 1 to 365, validated client-side (`lib/paymentTermDays.js`) — and POSTs `{ overduePaymentDaysRule: N }` to `/sws/neo/payment-term/header`; the backend derives the name ("N Días" / "1 Día"), the search key and the rest of the term. The new term is auto-selected on the field. If a term with the same number of days or the same name already exists, the server answers 409 (`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate`) and the modal names that term, or asks to reactivate it in Condiciones de pago when it is inactive (translated by the shared `lib/backendErrors.js`, like the Payment Term window); nothing is created and the existing term is not selected. A server failure never shows raw backend text. The selector's options are sorted by days, with terms whose name has no leading number (e.g. "Inmediato") first. A successful create marks every cached selector page stale, so the new term also appears in the other payment-term selectors on their next open. The row is shown only to roles that may write the Payment Term window (141) — tier `full` or admin / client-admin; the Sales and Purchasing templates hold 141 read-only, so their roles see a plain selector. Full reference: `docs/decisions-reference.md` (`allowCreate`, *Inline-create variants*) and `docs/ui-customization.md` §19c. The action is only reachable while the field is editable: on a processed invoice `paymentTerms` stays read-only (`readOnlyLogic: @Processed@='Y'`).
 
 ## Reactive behavior and dependencies
 
@@ -1722,7 +1723,7 @@ Flow encoded in the prompt: `DR -> CO` completes (computes taxes/totals, creates
 plan), `DR -> VO` voids, `CO -> RE` reactivates and **unposts first** when the invoice was
 already posted (the Reactivate menu action carries `preUnpost: true`; since ETP-5302 the same
 two-step sequence runs from the list's bulk bar too, via `preUnpostActions={['RE']}`, and both
-paths share `tools/app-shell/src/lib/preUnpost.js`), `CO -> CL` closes.
+paths share `tools/app-shell/src/lib/preUnpost.js`), `CO -> CL` closes. The same holds through MCP since ETP-5715: `etendo_action` with `docAction RE` and `etendo_action_batch` un-post a posted invoice first (a `steps` list in the answer shows it; if the reactivation then fails the un-post stays, `partial` says so).
 Posting is **not** a `documentAction` value — the prompt explicitly tells the agent never to send
 `PO` here. Since ETP-5692 the header declares two MCP action contracts for the ledger, and the
 prompt names both (the raw AD `posted` button is hidden from agents):
@@ -1954,7 +1955,7 @@ Four links, each of which has to carry the data:
 
 | Step | File | Role |
 |---|---|---|
-| 1 | `ocrDocTypes.js` → `extraHeaderFields` | asks the vision model for the address/contact block |
+| 1 | module `ocr-config.json` (`com.etendoerp.go`, `src/com/etendoerp/go/schemaforge/ocr/`) | the extraction schema and question asked of the vision model, incl. the address/contact block; served by `GET /sws/neo/ocrconfig` and read by `useOcrConfig.js` (ETP-5715) |
 | 2 | `ocrDocTypes.js` → `createPrefilledFrom` | maps extracted payload keys → **contact-form field ids** |
 | 3 | `kinds/EntityField.jsx` | builds the `prefilled` map (generic — reads the config, no per-window code) |
 | 4 | `CreateContactModalAdapter.jsx` → `buildOcrContactSeed` | narrows the map to the `businessPartner` **header** fields and hands it to `RecordCreateModal` as `initialData` |
@@ -1964,7 +1965,7 @@ Four links, each of which has to carry the data:
 `buildOcrContactSeed` only forwards `name` (via `buildContactSeed`, which also sets `customer`/
 `vendor` from the invoice's purchase direction), `taxID`, `etgoEmail` and `etgoPhone`. Adding a
 new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
-`buildOcrContactSeed`; a genuinely new extraction field is one `extraHeaderFields` entry.
+`buildOcrContactSeed`; a genuinely new extraction field is one property in the module's `ocr-config.json` (schema, `required` list and description), not an entry in the SPA — the MCP's document-reading tools read the same file.
 
 ### Contact category follows the document (ETP-5654)
 
@@ -2090,8 +2091,8 @@ modal, vendor lookup or batch; it is wired per document type through
 **Extracted.** Two nested objects are requested next to the existing `vendor_name` / `tax_id`
 (unchanged): `issuer` and `receiver`, each `{ name, tax_id_raw, tax_id_label, tax_id_type }`, all
 nullable. `tax_id_type` (`vat | national_tax_id | company_registration | personal_id | unknown`) is
-**informational only** — the comparison runs whatever it says. `buildOcrSchema.js` supports the
-nested shape through a `kind: 'object'` field with `properties`.
+**informational only** — the comparison runs whatever it says. The nested shape is a plain nested object schema in the module's
+`ocr-config.json` (the SPA no longer builds the schema: `buildOcrSchema.js` was removed in ETP-5715).
 
 **Organization id.** `GET /sws/neo/session` → `organization.taxId` (`AD_OrgInfo.TaxID`), read
 lazily through `apiFetch` only when a receiver id was extracted. A blank or `?` value reads as "no tax id".
@@ -2130,7 +2131,7 @@ stops being true: a new extraction starts, the file is removed, or another file 
 (`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient toasts with default options.
 
 Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
-`useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
+`useOcrFlow.flow.vitest.jsx`; the schema's shape is guarded by the module's `OcrConfigTest` and `useOcrConfig.vitest.jsx` covers the load.
 
 ## OCR reader — line tax preselection — ETP-5585
 
