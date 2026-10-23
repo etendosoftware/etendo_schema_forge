@@ -335,4 +335,92 @@ describe('useDistinctValues', () => {
       expect([...paramsOf(a).keys()].sort()).toEqual(['_distinct', '_endRow', '_startRow']);
     });
   });
+
+  describe('failures and superseded requests', () => {
+    const okBody = (data, hasMore = false) => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data, hasMore } }),
+    });
+    const distinctCalls = (spy) =>
+      spy.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('_distinct='));
+    const paramsOf = (url) => new URLSearchParams(url.split('?')[1] ?? '');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    async function expectNoRetryLoop(spy) {
+      const settled = distinctCalls(spy).length;
+      await act(async () => { await sleep(400); });
+      expect(distinctCalls(spy).length).toBe(settled);
+    }
+
+    it('an HTTP 500 leaves an empty, idle, errored state and does not retry', async () => {
+      const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      });
+      const { result } = renderHook(() =>
+        useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.values).toEqual([]);
+      expect(result.current.hasMore).toBe(false);
+      await expectNoRetryLoop(spy);
+      expect(result.current.error).toBeTruthy();
+    });
+
+    it('a network rejection leaves an empty, idle, errored state and does not retry', async () => {
+      const spy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+      const { result } = renderHook(() =>
+        useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.values).toEqual([]);
+      expect(result.current.hasMore).toBe(false);
+      await expectNoRetryLoop(spy);
+    });
+
+    it('recovers after an error: a later successful refetch clears the error and shows the values', async () => {
+      let healthy = false;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+        healthy
+          ? okBody([{ id: 'CO', _identifier: 'Completed' }])
+          : { ok: false, status: 500, json: () => Promise.resolve({}) },
+      ));
+      const { result, rerender } = renderHook(
+        ({ extra }) => useDistinctValues('entity', 'status', { apiBaseUrl: '/api', extraParams: extra }),
+        { wrapper, initialProps: { extra: 'active=true' } },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+
+      healthy = true;
+      rerender({ extra: 'active=false' });
+      await waitFor(() => expect(result.current.values).toHaveLength(1));
+      expect(result.current.error).toBeNull();
+      expect(result.current.values[0].id).toBe('CO');
+    });
+
+    it('recovers after an error through refresh()', async () => {
+      let healthy = false;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+        healthy
+          ? okBody([{ id: 'DR', _identifier: 'Draft' }])
+          : { ok: false, status: 500, json: () => Promise.resolve({}) },
+      ));
+      const { result } = renderHook(() =>
+        useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      healthy = true;
+      await act(async () => { result.current.refresh(); });
+      await waitFor(() => expect(result.current.values).toHaveLength(1));
+      expect(result.current.error).toBeNull();
+    });
+  });
 });
