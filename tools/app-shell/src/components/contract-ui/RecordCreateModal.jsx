@@ -699,6 +699,10 @@ export function unwrapCreated(body) {
 async function readErrorBody(res, ui) {
   try {
     const body = await res.json();
+    // QUOTA_EXCEEDED / QUOTA_CHECK_FAILED land here only on the fallback path: the standalone
+    // form (the target's window failed to load) and its phase-2 PATCH. Every current target
+    // declares `windowName`, so in windowMode the embedded window saves through `useEntity`,
+    // which shows the translated quota message itself; `record-create-error` is not rendered.
     return translateBackendErrorBody(body, ui, null) || null;
   } catch {
     return null;
