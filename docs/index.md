@@ -137,6 +137,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | File | Description |
 |------|-------------|
 | [ops/cloudfront-alb-routing.md](ops/cloudfront-alb-routing.md) | CloudFront + ALB routing for the SPA, same-origin `/etendo/*` forwarding, and deployment runbook |
+| [ops/public-api-gateway-deploy.md](ops/public-api-gateway-deploy.md) | Public API gateway manual build and deploy runbook: pinned SHAs, image tag convention, ECR/ECS steps, smoke check, rollback and deployment record |
 | [ops/transactional-email-security.md](ops/transactional-email-security.md) | Transactional email security runbook: secrets, throttle, suppression, kill switches, incident response, and metrics |
 | [ops/copilot-pr-review.md](ops/copilot-pr-review.md) | Copilot-aligned PR review gate: review instructions, deterministic findings, PR comments, and request-changes behavior |
 | [ops/window-doc-freshness.md](ops/window-doc-freshness.md) | Window-specific doc freshness warning: diff-based CI review for `docs/generated-custom-windows/<window>.md` |
