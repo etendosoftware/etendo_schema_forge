@@ -1102,8 +1102,7 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/startup/UsageAggregationScheduleStartupTest.java",
-            "expected": true,
-            "note": "Does not exist yet. UsageAggregationScheduleStartup has no test of its own, so 'flag off ⇒ no request is planted' and the idempotent replant are unguarded, and therefore a regression would silently schedule (or never schedule) the job on restart. BillingReconciliationScheduleStartupTest is the template."
+            "note": "The startup hook, with the flag stubbed: flag off plants nothing; flag on plants the fixed System request at the configured cadence (two hours by default, floored); an active scheduled request is not planted twice and an unscheduled one is never reinserted; a missing process definition is skipped; scheduleEnabled() follows usage-aggregation-schedule; a scheduler failure while registering does not break the startup."
           }
         ],
         "e2e": []
