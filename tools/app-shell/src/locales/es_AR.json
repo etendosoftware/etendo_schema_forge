@@ -17085,6 +17085,7 @@
     "backendError.quotaExceeded": "{resource}: alcanzaste el límite de tu plan ({usage}). No se pueden crear más registros de este tipo.",
     "backendError.quotaExceededNoUsage": "{resource}: alcanzaste el límite de tu plan. No se pueden crear más registros de este tipo.",
     "backendError.quotaExceededGeneric": "Alcanzaste el límite de tu plan para este tipo de registro. No se pueden crear más registros de este tipo.",
+    "backendError.quotaCheckFailed": "No pudimos verificar los límites de tu plan, así que no se guardó nada. Intentá de nuevo.",
     "backendError.invoiceLinesWithoutAmount": "No se puede completar la factura: las líneas de {products} tienen cantidad y precio pero importe neto 0. Volvé a guardar esas líneas para que se recalcule el importe y después completala.",
     "backendError.invalidLineDiscount": "El descuento de la línea debe estar entre 0 y 100 (porcentaje).",
     "backendError.returnQuantityExceeds": "No se pueden devolver {requested} de {product}: solo quedan {available} por devolver de esta línea ({total} en el documento de origen).",

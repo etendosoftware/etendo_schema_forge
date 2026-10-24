@@ -305,9 +305,18 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   <unit>)` when a caller forwards only the message. It is never shown as the generic
   "no access" refusal, and it cannot open the blocked-environment screen (that one is the 402 in
   core's `apiFetch`).
+- **Failed quota check:** when the check itself fails (e.g. a database error), the write answers
+  **500** with `error.code === 'QUOTA_CHECK_FAILED'` and nothing is saved. It reads as
+  `backendError.quotaCheckFailed` — *"We could not check your plan limits, so nothing was saved.
+  Try again."* — never as the generic 500 text or the English prose. Same paths as
+  `QUOTA_EXCEEDED`: the code (`isQuotaCheckFailed` in `lib/planQuotas.js`) through
+  `translateBackendErrorBody`, `parseBackendError`/`translateBackendErrorResponse` and the
+  `useEntity` save path, or the backend's fixed sentence for callers that forward only the
+  message; `RecordCreateModal` and the OCR batch toast included.
 - **Batch writes:** in a `/sws/neo/batch` failure envelope the refusal sits one level down, at
-  `error.detail.error` (`extractQuotaExceeded` in `lib/planQuotas.js` reads both places). The
-  OCR purchase-invoice ingest (`useOcrFlow`) shows the translated sentence in its failure toast.
+  `error.detail.error`, for both codes (`extractQuotaExceeded` / `isQuotaCheckFailed` read both
+  places). The OCR purchase-invoice ingest (`useOcrFlow`) shows the translated sentence in its
+  failure toast.
   The generic CSV/XLSX import (`ImportDialog` in `@etendosoftware/app-shell-core`) still
   classifies it as its generic row error: its row message is decided inside core's
   `importEngine.classifyImportError`, which has no quota case yet.

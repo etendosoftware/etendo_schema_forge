@@ -21055,6 +21055,7 @@
     "backendError.quotaExceeded": "{resource}: has alcanzado el límite de tu plan ({usage}). No se pueden crear más registros de este tipo.",
     "backendError.quotaExceededNoUsage": "{resource}: has alcanzado el límite de tu plan. No se pueden crear más registros de este tipo.",
     "backendError.quotaExceededGeneric": "Has alcanzado el límite de tu plan para este tipo de registro. No se pueden crear más registros de este tipo.",
+    "backendError.quotaCheckFailed": "No hemos podido comprobar los límites de tu plan, así que no se ha guardado nada. Inténtalo de nuevo.",
     "backendError.fieldTooLong": "Este valor es demasiado largo. No puede superar los {maxLength} caracteres.",
     "backendError.cannotChangeBpWithLines": "No se puede modificar el Contacto cuando hay líneas.",
     "backendError.cannotChangeBpOrPriceListWithLines": "No se puede cambiar el Contacto ni la tarifa cuando hay líneas.",

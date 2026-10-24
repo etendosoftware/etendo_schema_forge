@@ -1,6 +1,8 @@
 // ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
 import { formatCalendarDate } from './dateOnly.js';
-import { extractQuotaExceeded, quotaResourceLabel, quotaUsageText } from './planQuotas.js';
+import {
+  extractQuotaExceeded, isQuotaCheckFailed, quotaResourceLabel, quotaUsageText,
+} from './planQuotas.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -710,6 +712,7 @@ export function translateBackendErrorBody(body, t, fallback) {
     messageKeys: extractBackendMessageKeys(body),
     messageParams: extractBackendMessageParams(body),
     quota: extractQuotaExceeded(body),
+    quotaCheckFailed: isQuotaCheckFailed(body),
   });
 }
 
@@ -748,6 +751,17 @@ function matchQuotaExceededMessage(msg) {
     // (`QuotaItemJson.refusalMessage`), but a literal "null" is still read as no unit.
     unitLabel: unit && unit !== 'null' ? unit : null,
   };
+}
+
+// ETP-5051 — the quota check ITSELF failed (HTTP 500, `code: 'QUOTA_CHECK_FAILED'`): nothing was
+// saved and a retry is safe. Its own sentence, never the generic 500 text nor the English prose.
+// Recognised by the code (structured) or by the backend's fixed sentence (callers that forward
+// only the message).
+const QUOTA_CHECK_FAILED_MESSAGE = 'The quota check failed; nothing was saved. Try again.';
+
+function translateQuotaCheckFailed(failed, msg, t) {
+  if (!failed && !(typeof msg === 'string' && msg.trim() === QUOTA_CHECK_FAILED_MESSAGE)) return null;
+  return resolveLocaleKey(t, 'backendError.quotaCheckFailed');
 }
 
 function translateQuotaExceeded(quota, t) {
@@ -1582,8 +1596,9 @@ function pickBackendErrorText(data) {
  * for a non-JSON body.
  *
  * @param {Response} res the failed response (its body is consumed)
- * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object, quota?: object}>}
- *   `quota` — ETP-5051, the exhausted plan quota of a 403 QUOTA_EXCEEDED refusal.
+ * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object, quota?: object, quotaCheckFailed?: boolean}>}
+ *   `quota` — ETP-5051, the exhausted plan quota of a 403 QUOTA_EXCEEDED refusal;
+ *   `quotaCheckFailed` — a 500 QUOTA_CHECK_FAILED (the check itself failed, nothing saved).
  */
 export async function parseBackendError(res) {
   let data;
@@ -1593,12 +1608,14 @@ export async function parseBackendError(res) {
     return {};
   }
   const quota = extractQuotaExceeded(data);
+  const quotaCheckFailed = isQuotaCheckFailed(data);
   return {
     message: pickBackendErrorText(data),
     messageKeys: extractBackendMessageKeys(data),
     messageParams: extractBackendMessageParams(data),
     // Only on a quota refusal, so every other body keeps its three-field shape.
     ...(quota ? { quota } : {}),
+    ...(quotaCheckFailed ? { quotaCheckFailed } : {}),
   };
 }
 
@@ -1617,8 +1634,9 @@ export async function parseBackendErrorMessage(res) {
  * @returns {Promise<string>} the translated message
  */
 export async function translateBackendErrorResponse(res, t) {
-  const { message, messageKeys, messageParams, quota } = await parseBackendError(res);
-  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams, quota });
+  const { message, messageKeys, messageParams, quota, quotaCheckFailed } = await parseBackendError(res);
+  return translateBackendError(message ?? `Error ${res.status}`, t,
+    { messageKeys, messageParams, quota, quotaCheckFailed });
 }
 
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';
@@ -1657,7 +1675,7 @@ function translateSingleMessage(trimmed, t) {
  *
  * @param {string} msg the backend message (already-translated prose, as it crossed the wire)
  * @param {function} t the `ui` function from `useUI()`
- * @param {{messageKeys?: string[], messageParams?: object, quota?: object}} [options] ETP-5316 — the AD_MESSAGE
+ * @param {{messageKeys?: string[], messageParams?: object, quota?: object, quotaCheckFailed?: boolean}} [options] ETP-5316 — the AD_MESSAGE
  *   search keys behind `msg`, when the backend sent them (see `extractBackendMessageKeys`). Tried
  *   FIRST, because a key is a stable identity while the prose it produced may embed per-document
  *   values. ETP-5175 — `messageParams` (see `extractBackendMessageParams`) are the values those
@@ -1666,6 +1684,8 @@ function translateSingleMessage(trimmed, t) {
  *   supported.
  *   ETP-5051 — `quota` (see `extractQuotaExceeded` in `planQuotas.js`) is the exhausted plan
  *   quota of a 403 QUOTA_EXCEEDED write refusal; it wins over every other route.
+ *   `quotaCheckFailed` (see `isQuotaCheckFailed`) marks a 500 QUOTA_CHECK_FAILED: the quota
+ *   check itself failed and nothing was saved; it comes right after.
  * @returns {string} the translated message, or `msg` untouched when nothing matched
  */
 export function translateBackendError(msg, t, options = {}) {
@@ -1675,6 +1695,8 @@ export function translateBackendError(msg, t, options = {}) {
   // prose prefix when the caller forwarded only the message.
   const quotaExceeded = translateQuotaExceeded(options.quota ?? matchQuotaExceededMessage(msg), t);
   if (quotaExceeded !== null) return quotaExceeded;
+  const quotaCheckFailed = translateQuotaCheckFailed(options.quotaCheckFailed, msg, t);
+  if (quotaCheckFailed !== null) return quotaCheckFailed;
 
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);

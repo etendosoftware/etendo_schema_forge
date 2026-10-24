@@ -3970,3 +3970,58 @@ describe('translateBackendError — plan-quota refusal (QUOTA_EXCEEDED)', () => 
     }
   });
 });
+
+// ETP-5051 — the quota check itself failed (e.g. a database error): HTTP 500, nothing was saved.
+// It must read as its own translated sentence, never as the generic 500 text or the English prose.
+describe('translateBackendError — failed quota check (QUOTA_CHECK_FAILED)', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  const prose = 'The quota check failed; nothing was saved. Try again.';
+  const body = { error: { message: prose, status: 500, code: 'QUOTA_CHECK_FAILED' } };
+
+  it('translates the structured refusal in every shipped locale', () => {
+    assert.equal(translateBackendErrorBody(body, es, 'Error 500'), es('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendErrorBody(body, ar, 'Error 500'), ar('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendErrorBody(body, en, 'Error 500'), en('backendError.quotaCheckFailed'));
+    assert.notEqual(translateBackendErrorBody(body, es, 'Error 500'), prose);
+  });
+
+  it('translates it from the code even when the message is not the known sentence', () => {
+    const other = { error: { message: 'Internal error', status: 500, code: 'QUOTA_CHECK_FAILED' } };
+    assert.equal(translateBackendErrorBody(other, es, 'Error 500'), es('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendError('Internal error', es, { quotaCheckFailed: true }),
+      es('backendError.quotaCheckFailed'));
+  });
+
+  it('translates the bare backend sentence for callers that forward only the message', () => {
+    assert.equal(translateBackendError(prose, es), es('backendError.quotaCheckFailed'));
+    assert.equal(translateBackendError(`  ${prose}  `, en), en('backendError.quotaCheckFailed'));
+  });
+
+  it('reads it inside a batch failure envelope (error.detail.error)', () => {
+    const batch = { committed: false, error: { message: "Operation 'inv' rejected by server", detail: body } };
+    assert.equal(translateBackendErrorBody(batch, es, 'Error'), es('backendError.quotaCheckFailed'));
+  });
+
+  it('flags it in parseBackendError and translates it through translateBackendErrorResponse', async () => {
+    const response = () => ({ status: 500, json: async () => body });
+    const parsed = await parseBackendError(response());
+    assert.equal(parsed.quotaCheckFailed, true);
+    assert.equal(Object.hasOwn(parsed, 'quota'), false);
+    assert.equal(await translateBackendErrorResponse(response(), es), es('backendError.quotaCheckFailed'));
+  });
+
+  it('leaves an unrelated 500 alone', () => {
+    const other = { error: { message: 'Something else broke', status: 500 } };
+    assert.equal(translateBackendErrorBody(other, es, 'Error 500'), 'Something else broke');
+  });
+
+  it('ships the key in all three locales, with no placeholders', () => {
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const labels = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+      assert.ok(labels['backendError.quotaCheckFailed']?.trim(), locale);
+      assert.doesNotMatch(labels['backendError.quotaCheckFailed'], /\{/, locale);
+    }
+  });
+});

@@ -29,6 +29,12 @@ export const QUOTA_VERDICT_DENY = 'DENY';
 /** The 403 `error.code` of a NEO write refused because a plan quota is exhausted. */
 export const QUOTA_EXCEEDED_CODE = 'QUOTA_EXCEEDED';
 
+/**
+ * The 500 `error.code` of a NEO write that was not saved because the quota check itself failed
+ * (e.g. a database error while measuring consumption). Nothing was written; retrying is safe.
+ */
+export const QUOTA_CHECK_FAILED_CODE = 'QUOTA_CHECK_FAILED';
+
 const PERIOD_KEYS = { month: 'quotaPeriodMonth', year: 'quotaPeriodYear' };
 
 // Quotas are counts in practice, but INCLUDED_QTY is a DECIMAL column: keep up to two decimals
@@ -135,6 +141,18 @@ function quotaOf(error) {
 export function extractQuotaExceeded(payload) {
   const error = payload?.error && typeof payload.error === 'object' ? payload.error : payload;
   return quotaOf(error) ?? quotaOf(error?.detail?.error) ?? null;
+}
+
+/**
+ * True when the body is a QUOTA_CHECK_FAILED refusal: the check that guards a counted create
+ * failed, so nothing was saved. Read from the same two places as {@link extractQuotaExceeded}:
+ * the NEO envelope (or the unwrapped body) and, in a `/sws/neo/batch` failure envelope,
+ * `error.detail.error`.
+ */
+export function isQuotaCheckFailed(payload) {
+  const error = payload?.error && typeof payload.error === 'object' ? payload.error : payload;
+  return error?.code === QUOTA_CHECK_FAILED_CODE
+    || error?.detail?.error?.code === QUOTA_CHECK_FAILED_CODE;
 }
 
 /**

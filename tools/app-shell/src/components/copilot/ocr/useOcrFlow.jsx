@@ -5,7 +5,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 import { translateBackendErrorBody } from '@/lib/backendErrors.js';
-import { extractQuotaExceeded } from '@/lib/planQuotas.js';
+import { extractQuotaExceeded, isQuotaCheckFailed } from '@/lib/planQuotas.js';
 import { checkReceiverTaxId, cleanTaxId } from './receiverTaxIdCheck';
 import { getOcrDocType } from './ocrDocTypes';
 import { useBatch } from './ingest/useBatch';
@@ -242,7 +242,9 @@ function reportBatchResponse(response, unmatched, { showResult, setResult, onRef
     // ETP-5051 — a plan-quota refusal (`error.detail.error.code === 'QUOTA_EXCEEDED'`, contract
     // §4d) is the one batch failure the user can act on, so the toast says it in their language
     // instead of the generic "action failed". `message` is what the single-failure toast reads.
-    const quotaText = extractQuotaExceeded(response) && typeof ui === 'function'
+    // A failed quota check (QUOTA_CHECK_FAILED, nothing saved) is surfaced the same way.
+    const quotaText = (extractQuotaExceeded(response) || isQuotaCheckFailed(response))
+      && typeof ui === 'function'
       ? translateBackendErrorBody(response, ui, message)
       : null;
     showResult({ ok: 0, failed: [{ reason: message, ...(quotaText ? { message: quotaText } : {}) }] });
