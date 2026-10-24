@@ -32,6 +32,10 @@ const LIMITS = {
   clientNameInput: 60,
   fiscalId: 20,
   address: 60,
+  // ETP-5806 — the free-text address field was replaced by structured Street/Number/Building
+  // Name/City cells; streetName is the closest conceptual replacement for this length-limit
+  // check (`ETGO_CORE` ships maxLength === the AD column limit, same as the old address field).
+  streetName: 70,
 };
 
 // ── Mock installer ───────────────────────────────────────────────────────────
@@ -229,17 +233,24 @@ test.describe('ETP-4665 — Step 3 length limits', () => {
     const start = page.getByRole('button', { name: /empezar|start/i });
 
     await clientName.fill('E'.repeat(100));
-    await page.locator('#address').fill('D'.repeat(200));
+    await page.locator('#streetName').fill('D'.repeat(200));
 
     // Over the AD limit but inside the input cap: kept, flagged inline, and not submittable.
     await expect(clientName).toHaveValue('E'.repeat(LIMITS.clientNameInput));
     await expect(clientName).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByText(new RegExp(`${LIMITS.clientName} (caracteres|characters)`))).toBeVisible();
     await expect(start).toBeDisabled();
-    await expect(page.locator('#address')).toHaveValue('D'.repeat(LIMITS.address));
+    // streetName's maxLength is set to the AD column limit itself (no separate looser input
+    // cap), so the overflow is truncated by the browser's native maxlength enforcement.
+    await expect(page.locator('#streetName')).toHaveValue('D'.repeat(LIMITS.streetName));
 
     await clientName.fill('E'.repeat(LIMITS.clientName));
     await expect(clientName).not.toHaveAttribute('aria-invalid', 'true');
+    // ETP-5806 — filling streetName starts the address block, which makes buildingNumber and
+    // city mandatory together with it (isAddressBlockStarted/isCompanyStepValid); fill them too
+    // so Start enables on the same submittable state the old single-field address test reached.
+    await page.locator('#buildingNumber').fill('123');
+    await page.locator('#city').fill('Buenos Aires');
     await expect(start).toBeEnabled();
 
     const onboardingPromise = page.waitForRequest(
@@ -250,7 +261,7 @@ test.describe('ETP-4665 — Step 3 length limits', () => {
 
     const body = (await onboardingPromise).postDataJSON();
     expect(body.clientName.length).toBeLessThanOrEqual(LIMITS.clientName);
-    expect(body.address.length).toBeLessThanOrEqual(LIMITS.address);
+    expect(body.streetName.length).toBeLessThanOrEqual(LIMITS.streetName);
   });
 });
 

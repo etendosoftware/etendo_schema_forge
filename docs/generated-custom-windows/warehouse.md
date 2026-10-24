@@ -60,6 +60,8 @@ Visual separators: the toolbar's bottom rule is part of the standard record tool
 
 Discarded fields (not shown anywhere): `warehouseRule`, `storageBinSeparator`, `shipmentVehicle`, `shipperCode`, `fromDocumentNo`, `toDocumentNo`, `mReturnlocatorID`, `allocated`. The `discardPatterns: ["EM_*"]` rule additionally suppresses all Etendo module extension fields from the header form.
 
+**Structured address fields (ETP-5806).** The "Location / Address" field opens the shared `LocationEditorModal` (`saveMode="location"`, served by `WarehouseLocationHandler`'s plain `C_Location` CRUD). It now asks for **Calle** (Street, mandatory), **Número** (Number, mandatory), **Nombre de edificio** (Building Name, optional) and City/Country/Region, instead of free-text Address Line 1/2; the two lines are computed and shown read-only (`StructuredAddressComposer`, same 60-char/truncation algorithm as Contacts). Save is blocked until Street, Number, City and Country are filled. `WarehouseLocationHandler` is consequently no longer a purely generic, rule-free pass-through: it validates and persists these fields the same way `ContactsLocationAddressHandler` does. A warehouse address created before this change (free-text only) shows the same legacy-address warning banner with a Copy button described in `contacts.md`'s "Structured address fields (ETP-5806)" note — see that file for the full field-by-field behavior, which applies here unchanged since both windows share `LocationEditorModal`. No optimistic-locking protection exists on this save path either (same accepted limitation as Contacts).
+
 ### After-create behavior
 
 On successful warehouse creation, the wrapper calls `createDefaultStorageBin`, which POSTs to `/sws/neo/warehouse/storageBin` with:
