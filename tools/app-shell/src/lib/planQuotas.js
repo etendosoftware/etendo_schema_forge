@@ -7,8 +7,11 @@ import { formatGroupedNumber } from './formatCurrency.js';
  * derives from it. One shape everywhere:
  *
  * - `GET /sws/go/billing/subscription` → `planQuotas[]`, every active quota of the plan (/account);
- * - `POST /sws/go/session/environment` → `quotas[]`, only the WARN/DENY items (the login banner);
- * - a NEO write refused with 403 `error.code === 'QUOTA_EXCEEDED'` → `error.quota`.
+ * - `GET /sws/go/environments` → each environment's `quotas[]`, only its WARN/DENY items (the
+ *   in-environment banner; contract §4b). `POST /sws/go/session/environment` sends the same list,
+ *   but core's `loginEnvironment()` discards that answer, so the SPA reads the environment list;
+ * - a NEO write refused with 403 `error.code === 'QUOTA_EXCEEDED'` → `error.quota`, or, inside a
+ *   `/sws/neo/batch` failure envelope, `error.detail.error.quota` (contract §4d).
  *
  * Keys read: `resourceName` (catalog display name), `unitLabel` (may be null), `includedQty`,
  * `consumed` (null = not measured yet), `verdict` (`ALLOW` | `WARN` | `DENY` | null),
@@ -109,61 +112,21 @@ export function quotaAlertItems(quotas) {
   ];
 }
 
-/**
- * The quota of a 403 QUOTA_EXCEEDED write refusal, or `null` for any other body. Reads the NEO
- * envelope `{ error: { code, quota } }` and tolerates the body arriving already unwrapped
- * (`{ code, quota }`).
- */
-export function extractQuotaExceeded(payload) {
-  const error = payload?.error && typeof payload.error === 'object' ? payload.error : payload;
+function quotaOf(error) {
   if (error?.code !== QUOTA_EXCEEDED_CODE) return null;
   return error.quota && typeof error.quota === 'object' ? error.quota : {};
 }
 
-// ── The login-time quota stash ───────────────────────────────────────────────────────────────
-//
-// `POST /sws/go/session/environment` answers `quotas`, and every caller follows it with a full
-// page load (the session rotated, so every per-tenant cache must go). The answer therefore has to
-// cross that navigation: it is kept in sessionStorage, per client, and read by `QuotaStatusBanner`.
-// sessionStorage, not localStorage: the verdicts are evaluated at entry and go stale with the
-// session; a tab that never entered shows nothing, which is the report-only contract's safe side.
-
-const QUOTA_STASH_PREFIX = 'etendo:environment-quotas:';
-
-export function environmentQuotasStorageKey(clientId) {
-  return `${QUOTA_STASH_PREFIX}${clientId || ''}`;
-}
-
 /**
- * Records the `quotas` of an environment-entry answer. An answer without the field (a backend that
- * predates ETP-5051) clears the entry, so an earlier entry's verdicts are never shown as current.
- * Never throws: storage can be missing or blocked, and the banner is a convenience.
+ * The quota of a 403 QUOTA_EXCEEDED write refusal, or `null` for any other body. Reads:
+ * - the NEO envelope `{ error: { code, quota } }`, and the body already unwrapped (`{ code, quota }`);
+ * - the `/sws/neo/batch` failure envelope `{ committed: false, error: { message, detail } }`, where
+ *   `detail` is the refused operation's own NEO response, so the refusal sits at
+ *   `error.detail.error` (contract §4d).
  */
-export function rememberEnvironmentQuotas(clientId, quotas) {
-  if (!clientId) return;
-  try {
-    const storage = globalThis.sessionStorage;
-    if (!storage) return;
-    const alerts = quotaAlertItems(quotas);
-    if (alerts.length === 0) {
-      storage.removeItem(environmentQuotasStorageKey(clientId));
-    } else {
-      storage.setItem(environmentQuotasStorageKey(clientId), JSON.stringify(alerts));
-    }
-  } catch {
-    // Nothing to do: the banner simply does not show.
-  }
-}
-
-/** The stashed WARN/DENY items for this client, `[]` when there are none or storage fails. */
-export function readEnvironmentQuotas(clientId) {
-  if (!clientId) return [];
-  try {
-    const raw = globalThis.sessionStorage?.getItem(environmentQuotasStorageKey(clientId));
-    return raw ? quotaAlertItems(JSON.parse(raw)) : [];
-  } catch {
-    return [];
-  }
+export function extractQuotaExceeded(payload) {
+  const error = payload?.error && typeof payload.error === 'object' ? payload.error : payload;
+  return quotaOf(error) ?? quotaOf(error?.detail?.error) ?? null;
 }
 
 /**

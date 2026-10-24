@@ -9,9 +9,9 @@ import { ownsEnvironmentSubscription } from '@/lib/environmentPresentation.js';
 import {
   QUOTA_VERDICT_DENY,
   isQuotaOverLimit,
+  quotaAlertItems,
   quotaBannerDismissKey,
   quotaUsageWithPeriod,
-  readEnvironmentQuotas,
 } from '@/lib/planQuotas.js';
 
 // Same exclusions as the payment banner: `/account` already lists every quota with its state, and
@@ -44,13 +44,12 @@ function alertMessageKey(item) {
 }
 
 /**
- * ETP-5051 — reports, after entering an environment, the plan quotas that are close to or at their
- * limit. Report-only: entering is never refused for a quota, but once a `block` quota is reached
- * (DENY) new records of that kind are refused on write, and this is where the user hears it first.
+ * ETP-5051 — reports, inside an environment, the plan quotas that are close to or at their limit.
+ * Report-only: entering is never refused for a quota, but once a `block` quota is reached (DENY)
+ * new records of that kind are refused on write, and this is where the user hears it first.
  *
- * The data is the `quotas` array of `POST /sws/go/session/environment` (WARN/DENY items only),
- * stashed per client in sessionStorage by the entry call because a full page load follows it
- * (`planQuotas.js` → `rememberEnvironmentQuotas`). The owner gets "View plan usage" (→ `/account`,
+ * The data is the current environment's `quotas` in `GET /sws/go/environments` (WARN/DENY items
+ * only, contract §4b), read exactly like the payment banner reads `graceEndsAt`. The owner gets "View plan usage" (→ `/account`,
  * whose Subscription section lists every quota); anyone else is told to contact their
  * administrator, the same split as `BillingStatusBanner`. Dismissible for the browser session; a
  * new verdict (another resource, or a WARN turning into a DENY) shows it again.
@@ -61,7 +60,8 @@ export function QuotaStatusBanner() {
   const { pathname } = useLocation();
   const { environments, currentClientId } = useEnvironmentSwitch();
   const environment = environments.find((env) => env.clientId === currentClientId);
-  const items = useMemo(() => readEnvironmentQuotas(currentClientId), [currentClientId]);
+  const quotas = environment?.quotas;
+  const items = useMemo(() => quotaAlertItems(quotas), [quotas]);
   const dismissKey = quotaBannerDismissKey(currentClientId, items);
   const [dismissedKey, setDismissedKey] = useState(null);
 
