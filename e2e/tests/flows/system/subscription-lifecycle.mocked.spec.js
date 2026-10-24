@@ -1,5 +1,9 @@
 // @covers tools/app-shell/src/components/account/SubscriptionSection.jsx
 // @covers tools/app-shell/src/components/billing/BillingStatusBanner.jsx
+// @covers tools/app-shell/src/components/billing/QuotaStatusBanner.jsx
+// @covers tools/app-shell/src/lib/planQuotas.js
+// @covers tools/app-shell/src/lib/backendErrors.js
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { test, expect } from '@playwright/test';
 import { login, declareCookieSession } from '../../helpers/auth.js';
 
@@ -129,6 +133,25 @@ async function installPortalMock(page) {
   return () => requestCount;
 }
 
+/**
+ * Mocks `GET /sws/go/environments` with a single environment — the list both in-environment
+ * banners (`BillingStatusBanner`, `QuotaStatusBanner`) read the current environment from, matched
+ * by the session's `clientId` (`e2e-mock-client` in `login()`'s mock). Two routes, not a brace
+ * pattern — see the route-glob gotcha in docs/e2e-testing-guide.md.
+ */
+async function installEnvironmentsMock(page, environment) {
+  const handler = async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ environments: [environment] }),
+    });
+  };
+  await page.route('**/sws/go/environments/**', handler);
+  await page.route('**/sws/go/environments**', handler);
+}
+
 async function gotoAccount(page) {
   await page.goto('/account');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
@@ -230,20 +253,6 @@ test.describe('Subscription lifecycle — /account, cookie session scheme', () =
 test.describe('Subscription lifecycle — failed-payment banner', () => {
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  /** Two routes, not a brace pattern — see the route-glob gotcha in docs/e2e-testing-guide.md. */
-  async function installEnvironmentsMock(page, environment) {
-    const handler = async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ environments: [environment] }),
-      });
-    };
-    await page.route('**/sws/go/environments/**', handler);
-    await page.route('**/sws/go/environments**', handler);
-  }
-
   function pastDueEnvironment({ daysLeft, ownedByAccount }) {
     return {
       clientId: 'e2e-mock-client',
@@ -299,5 +308,264 @@ test.describe('Subscription lifecycle — failed-payment banner', () => {
     await expect(banner).toHaveAttribute('role', 'alert');
     await expect(banner).toHaveAttribute('data-variant', 'destructive');
     await expect(banner.getByTestId('billing-status-banner-dismiss')).toHaveCount(0);
+  });
+});
+
+/**
+ * Plan quotas (ETP-5051). One `QuotaItem` shape everywhere: `planQuotas[]` on
+ * `GET /sws/go/billing/subscription` (/account), the WARN/DENY items in each environment's
+ * `quotas[]` on `GET /sws/go/environments` (the in-environment banner), and `error.quota` on a NEO
+ * write refused with 403 `QUOTA_EXCEEDED`. `periodStart` / `periodEnd` are date-only `yyyy-MM-dd`
+ * strings; `periodEnd` is the exclusive end day and is shown as is.
+ */
+function quotaItem(overrides = {}) {
+  return {
+    resourceKey: 'POSTED_SALES_INVOICES',
+    resourceName: 'Posted sales invoices',
+    unitLabel: 'Inv',
+    includedQty: 100,
+    enforcementMode: 'block',
+    warningThreshold: 80,
+    period: 'month',
+    consumptionSource: 'aggregate',
+    consumed: 87,
+    verdict: 'WARN',
+    periodStart: '2026-10-07',
+    periodEnd: '2026-11-07',
+    ...overrides,
+  };
+}
+
+const DENY_QUOTA = quotaItem({ consumed: 100, verdict: 'DENY' });
+
+function quotaEnvironment({ quotas, ownedByAccount }) {
+  return {
+    clientId: 'e2e-mock-client',
+    clientName: 'Acme Productive',
+    plan: 'productive',
+    environmentType: 'PRODUCTIVE',
+    subscriptionStatus: 'ACTIVE',
+    graceEndsAt: null,
+    accessEnforced: true,
+    ownedByAccount,
+    quotas,
+  };
+}
+
+async function gotoHome(page) {
+  await page.goto('/');
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+}
+
+test.describe('Plan quotas — in-environment banner', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installAccountMock(page);
+    await installSubscriptionMock(page, ACTIVE_SUBSCRIPTION);
+  });
+
+  test('a DENY quota shows the red alert with the resource and usage, and the owner CTA leads to /account', async ({ page }) => {
+    await installEnvironmentsMock(page, quotaEnvironment({ quotas: [DENY_QUOTA], ownedByAccount: true }));
+    await gotoHome(page);
+
+    const banner = page.getByTestId('quota-status-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toHaveAttribute('role', 'alert');
+    await expect(banner).toHaveAttribute('data-variant', 'destructive');
+
+    const item = banner.getByTestId('quota-status-banner-item');
+    await expect(item).toHaveCount(1);
+    await expect(item).toHaveAttribute('data-verdict', 'DENY');
+    // quotaBannerDeny with quotaUsageInPeriod — es_ES (mocked default) / en_US.
+    await expect(item).toContainText('Posted sales invoices');
+    await expect(item).toContainText(/100 (de|of) 100 Inv (al mes|per month)/);
+    await expect(item).toContainText(/has alcanzado el límite|limit has been reached/i);
+    await expect(banner.getByTestId('quota-status-banner-member-hint')).toHaveCount(0);
+
+    await banner.getByTestId('quota-status-banner-cta').click();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByTestId('SubscriptionSection__account')).toBeVisible();
+    // /account lists every quota itself, so the banner is not repeated there.
+    await expect(page.getByTestId('quota-status-banner')).toHaveCount(0);
+  });
+
+  test('a member sees the contact-admin hint instead of the CTA', async ({ page }) => {
+    await installEnvironmentsMock(page, quotaEnvironment({ quotas: [DENY_QUOTA], ownedByAccount: false }));
+    await gotoHome(page);
+
+    const banner = page.getByTestId('quota-status-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toHaveAttribute('role', 'alert');
+    await expect(banner.getByTestId('quota-status-banner-member-hint')).toBeVisible();
+    await expect(banner.getByTestId('quota-status-banner-member-hint'))
+      .toHaveText(/contacta con el administrador|contact your company's administrator/i);
+    await expect(banner.getByTestId('quota-status-banner-cta')).toHaveCount(0);
+  });
+
+  test('a WARN quota shows the amber banner, and a dismissal holds for the rest of the session', async ({ page }) => {
+    await installEnvironmentsMock(page, quotaEnvironment({ quotas: [quotaItem()], ownedByAccount: true }));
+    await gotoHome(page);
+
+    const banner = page.getByTestId('quota-status-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toHaveAttribute('role', 'status');
+    await expect(banner).toHaveAttribute('data-variant', 'warning');
+    const item = banner.getByTestId('quota-status-banner-item');
+    await expect(item).toHaveAttribute('data-verdict', 'WARN');
+    await expect(item).toContainText('Posted sales invoices');
+    await expect(item).toContainText(/87 (de|of) 100 Inv/);
+    await expect(item).toContainText(/cerca del límite|close to your plan limit/i);
+
+    await banner.getByTestId('quota-status-banner-dismiss').click();
+    await expect(page.getByTestId('quota-status-banner')).toHaveCount(0);
+
+    // Same tab, fresh page load: the environment list is fetched again and still carries the
+    // WARN item, yet the banner stays dismissed (sessionStorage).
+    const environmentsLoaded = page.waitForResponse(
+      (res) => res.url().includes('/sws/go/environments') && res.request().method() === 'GET',
+      { timeout: 10_000 },
+    );
+    await page.reload();
+    await environmentsLoaded;
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByTestId('quota-status-banner')).toHaveCount(0);
+  });
+});
+
+test.describe('Plan quotas — /account', () => {
+  // A negative UTC offset is where a date-only string parsed as a UTC instant shows the day before
+  // (CLAUDE.md, Date-Only Parsing): the period must still read 7 Oct – 7 Nov.
+  test.use({ timezoneId: 'America/Argentina/Buenos_Aires' });
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installAccountMock(page);
+  });
+
+  test('shows the plan name, each quota with its monthly usage and period, and the WARN badge', async ({ page }) => {
+    await installSubscriptionMock(page, {
+      ...ACTIVE_SUBSCRIPTION,
+      planName: 'Business',
+      accessEnforced: true,
+      planQuotas: [quotaItem()],
+    });
+    await gotoAccount(page);
+
+    const section = page.getByTestId('SubscriptionSection__account');
+    await expect(section).toBeVisible();
+    await expect(section.getByTestId('SubscriptionSection__plan')).toHaveText('Business');
+
+    const quotas = section.getByTestId('SubscriptionSection__quotas');
+    await expect(quotas).toBeVisible();
+    await expect(quotas.getByTestId('SubscriptionSection__quotaPeriod'))
+      .toHaveText(/7 oct\.? 2026.*7 nov\.? 2026/i);
+
+    const row = quotas.getByTestId('SubscriptionSection__quota');
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveAttribute('data-verdict', 'WARN');
+    await expect(row.getByTestId('SubscriptionSection__quotaName')).toHaveText('Posted sales invoices');
+    await expect(row.getByTestId('SubscriptionSection__quotaUsage'))
+      .toHaveText(/^87 (de|of) 100 Inv (al mes|per month)$/);
+    await expect(row.getByTestId('SubscriptionSection__quotaNotMeasured')).toHaveCount(0);
+    await expect(row.getByTestId('SubscriptionSection__quotaState'))
+      .toHaveText(/^(Cerca del límite|Near the limit)$/);
+  });
+});
+
+/**
+ * The write refusal: a NEO create answered 403 `QUOTA_EXCEEDED` shows the SPA's own translated
+ * sentence, built from `error.quota` — never the 402 blocked-environment screen, and never the
+ * generic no-access message a 403 might suggest. Driven through Cost Center, the simple master
+ * whose create flow `inventory/cost-center-service-project-master-crud.mocked.spec.js` drives.
+ */
+test.describe('Plan quotas — write refusal on save', () => {
+  const SPEC = 'cost-center';
+  const ENTITY = 'costCenter';
+
+  async function installCostCenterMocks(page, { onPost }) {
+    // Bare route first, the sub-path route second, so the latter wins LIFO for /defaults and
+    // /<id> (same ordering as the master-CRUD spec).
+    await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, async (route) => {
+      const req = route.request();
+      if (req.method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+        });
+        return;
+      }
+      // Only the create itself: the form also POSTs to `/<entity>/evaluate-display`, which this
+      // glob matches too and which must keep its generic answer.
+      const isCreate = new RegExp(`/${ENTITY}(\\?|$)`).test(req.url());
+      if (req.method() === 'POST' && isCreate) {
+        await onPost(route);
+        return;
+      }
+      await route.fallback();
+    });
+    await page.route(`**/sws/neo/${SPEC}/${ENTITY}/**`, async (route) => {
+      const req = route.request();
+      if (req.method() !== 'GET') return route.fallback();
+      if (/\/defaults(\?|$)/.test(req.url())) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ defaults: { active: 'Y' } }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [] } }),
+      });
+    });
+  }
+
+  test('a 403 QUOTA_EXCEEDED shows the translated quota message, not the blocked screen or a no-access error', async ({ page }) => {
+    await login(page);
+    let posts = 0;
+    await installCostCenterMocks(page, {
+      onPost: async (route) => {
+        posts += 1;
+        await route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              message: 'Quota exceeded: Posted sales invoices (100/100 Inv)',
+              status: 403,
+              code: 'QUOTA_EXCEEDED',
+              quota: DENY_QUOTA,
+            },
+          }),
+        });
+      },
+    });
+    await page.goto(`/${SPEC}/new`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    await expect(page.getByTestId('field-searchKey')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('field-searchKey').fill('CC-QUOTA-001');
+    await page.getByTestId('field-name').fill('Quota refused');
+    const saveBtn = page.getByTestId('action-save');
+    await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+    await saveBtn.click();
+
+    const errorToast = page.locator('[data-type="error"]').first();
+    await expect(errorToast).toBeVisible({ timeout: 10_000 });
+    // backendError.quotaExceeded — es_ES (mocked default) / en_US.
+    await expect(errorToast).toContainText(
+      /Posted sales invoices: (has alcanzado el límite de tu plan|your plan limit has been reached) \(100 (de|of) 100 Inv\)/,
+    );
+    // Not the backend's English prose, and not the generic no-access sentence (backendError.accessDeniedToSpec).
+    await expect(errorToast).not.toContainText('Quota exceeded:');
+    await expect(errorToast).not.toContainText(/no tienes acceso para realizar|do not have access to perform/i);
+    // Not the 402 environment-blocked screen: the form is still there and the user stays on /new.
+    await expect(page.getByTestId('BlockedAccessScreen__488148')).toHaveCount(0);
+    await expect(page.getByTestId('field-name')).toBeVisible();
+    expect(page.url()).toMatch(new RegExp(`/${SPEC}/new`));
+    expect(posts).toBe(1);
   });
 });
