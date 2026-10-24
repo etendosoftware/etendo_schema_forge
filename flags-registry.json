@@ -1027,6 +1027,87 @@
           "note": "The design shows a plan name and an amount per company. The model has one Stripe subscription per account and only free/productive plans, so the page shows the plan and the stored renewal date without an amount."
         }
       ]
+    },
+    {
+      "id": "billing-reconciliation-schedule",
+      "description": "Opt-in schedule of the billing reconciliation (ETP-5048): the Process Request that reconciles stored subscriptions against Stripe. The flag is a backend-only, environment-level gate, strictly off by default (and off on every failure of GoFeatureFlags): while it is off BillingReconciliationScheduleStartup plants no System process request, and every SCHEDULED run (timing S) does nothing, ends as ERROR in Process Monitor and raises one internal alert per UTC day. A run an operator starts from the Classic menu, or one fired as part of a Process Group, is not gated. Go-live is the flag AND the production Process Request together. The reconciliation itself is permanent and is not owned by this entry. Registered late: the flag shipped with ETP-5048 without a registry entry.",
+      "owner": "mtaal",
+      "jira": "ETP-5048",
+      "created": "2026-10-19",
+      "flag": {
+        "key": "billing-reconciliation-schedule",
+        "defaultValue": false,
+        "ttlNote": "NO TTL SET — awaiting the owner's decision (Martin Taal), not invented here. Retirement means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes. Until a date is agreed the scorer reports 'no TTL declared' and the lifecycle scores 0.",
+        "symbols": [
+          "billing-reconciliation-schedule",
+          "FLAG_BILLING_RECONCILIATION_SCHEDULE",
+          "ETGO_FLAG_BILLING_RECONCILIATION_SCHEDULE",
+          "etendo.go.flags.billing-reconciliation-schedule",
+          "BillingReconciliationScheduleStartup"
+        ],
+        "$symbolsComment": "Backend-only flag: never declare it in flag-keys.js. Property and env-var spellings listed for Openbravo.properties and the ECS task definition. The gate method `scheduleEnabled` is deliberately NOT a symbol: the usage-aggregation-schedule gates use the same name, so it would count their files as touch points here; each gate already names FLAG_BILLING_RECONCILIATION_SCHEDULE. Evaluated with an empty (environment) context."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "No owned code: BillingReconciliationScheduleStartup and BillingReconciliationProcess stay when the flag retires. Toggle points: BillingReconciliationScheduleStartup.runPass()/scheduleEnabled(), and in BillingReconciliationProcess the scheduled-run gate in doExecute() with scheduleEnabled() plus the once-per-UTC-day internal alert for a request firing while the flag is off, which exists only because of the flag and goes with it. GoFeatureFlags is shared framework code. Docs: com.etendoerp.go docs/open-and-notable-topics.md '2.10 Billing reconciliation go-live: the flag and the Process Request go together', docs/feature-flags-and-tenant-upgrade.md 'billing-reconciliation-schedule (ETP-5048) — backend-only, strictly off by default'.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/startup/BillingReconciliationScheduleStartupTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/reconcile/BillingReconciliationProcessTest.java",
+            "note": "The scheduled-run gate: a scheduled run with the flag off does nothing and reports 'billing-reconciliation-schedule flag is off'."
+          }
+        ],
+        "e2e": []
+      }
+    },
+    {
+      "id": "usage-aggregation-schedule",
+      "description": "Opt-in schedule of the usage aggregation job (ETP-5051): the Process Request that recomputes the stored per-period usage every quota with consumption source 'aggregate' is evaluated against. The flag is a backend-only, environment-level gate, strictly off by default (and off on every failure of GoFeatureFlags): while it is off UsageAggregationScheduleStartup plants no System process request, and every SCHEDULED run (timing S) of the process does nothing and ends as ERROR in Process Monitor, whoever created the request. A run started from the Classic menu or once from a Process Request is not gated. Go-live is the flag AND the production Process Request together (production is never restarted, so the request is created by hand). The job, its service and the quota evaluator are permanent and are not owned by this entry.",
+      "owner": "mtaal",
+      "jira": "ETP-5051",
+      "created": "2026-10-24",
+      "flag": {
+        "key": "usage-aggregation-schedule",
+        "defaultValue": false,
+        "ttlNote": "NO TTL SET — awaiting the owner's decision (Martin Taal), not invented here. Retirement means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes. Until a date is agreed the scorer reports 'no TTL declared' and the lifecycle scores 0.",
+        "symbols": [
+          "usage-aggregation-schedule",
+          "FLAG_USAGE_AGGREGATION_SCHEDULE",
+          "ETGO_FLAG_USAGE_AGGREGATION_SCHEDULE",
+          "etendo.go.flags.usage-aggregation-schedule",
+          "UsageAggregationScheduleStartup",
+          "TITLE_SCHEDULE_OFF"
+        ],
+        "$symbolsComment": "Backend-only flag: nothing in the browser evaluates it, so it must never be declared in flag-keys.js. The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. The gate method `scheduleEnabled` is deliberately NOT a symbol: BillingReconciliationScheduleStartup/BillingReconciliationProcess use the same name for their own flag, so it would count the other flag's files as touch points here; each gate already names FLAG_USAGE_AGGREGATION_SCHEDULE. Evaluated with an empty (environment) context."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "No owned code: the startup (UsageAggregationScheduleStartup, which plants the System request) and the process (UsageAggregationProcess) stay when the flag retires, the startup then planting unconditionally. Toggle points: UsageAggregationScheduleStartup.runPass()/scheduleEnabled() and the scheduled-run gate in UsageAggregationProcess.doExecute() with scheduleEnabled() and TITLE_SCHEDULE_OFF. GoFeatureFlags is shared framework code. Docs: com.etendoerp.go docs/plan-quotas.md '5.1 Turning the usage schedule on', docs/feature-flags-and-tenant-upgrade.md 'usage-aggregation-schedule (ETP-5051) — backend-only, strictly off by default', docs/open-and-notable-topics.md 'Billing reconciliation go-live' (the shape this schedule repeats).",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/usage/UsageAggregationProcessTest.java",
+            "note": "The scheduled-run gate: a scheduled run with the flag off does no work and fails with 'usage-aggregation-schedule flag is off'; the flag is evaluated with the key the process declares."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/startup/UsageAggregationScheduleStartupTest.java",
+            "expected": true,
+            "note": "Does not exist yet. UsageAggregationScheduleStartup has no test of its own, so 'flag off ⇒ no request is planted' and the idempotent replant are unguarded, and therefore a regression would silently schedule (or never schedule) the job on restart. BillingReconciliationScheduleStartupTest is the template."
+          }
+        ],
+        "e2e": []
+      }
     }
   ]
 }
