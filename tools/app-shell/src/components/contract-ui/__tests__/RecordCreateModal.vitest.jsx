@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/RecordCreateModal.jsx
 /**
  * ETP-5254 — RecordCreateModal creates a record of ANOTHER spec using that spec's own
  * generated form, laid out to read like that spec's own window.
@@ -762,6 +763,34 @@ describe('RecordCreateModal', () => {
     expect(props.onCreated).not.toHaveBeenCalled();
     // The submit button is re-enabled so the user can retry after fixing the value.
     await waitFor(() => expect(screen.getByTestId('record-create-submit')).toBeEnabled());
+  });
+
+  // ETP-5051 — a create refused by a plan quota (403 QUOTA_EXCEEDED) must read as the SPA's own
+  // translated sentence built from the quota, not as the backend's English prose.
+  it('translates a plan-quota refusal of the POST instead of showing the raw English message', async () => {
+    installApiFetch({
+      post: jsonResponse({
+        error: {
+          message: 'Quota exceeded: Products (50/50 Prod)',
+          status: 403,
+          code: 'QUOTA_EXCEEDED',
+          quota: { resourceName: 'Productos', consumed: 50, includedQty: 50, unitLabel: 'Prod' },
+        },
+      }, false),
+    });
+    const user = userEvent.setup();
+    const props = baseProps({ initialQuery: 'Agua' });
+    await renderModal(props);
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('backendError.quotaExceeded');
+    expect(error).toHaveTextContent('"resource":"Productos"');
+    expect(error).not.toHaveTextContent('Quota exceeded: Products');
+    expect(props.onCreated).not.toHaveBeenCalled();
   });
 
   it('falls back to the target error when the failed POST carries no message', async () => {
