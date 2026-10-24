@@ -4,8 +4,11 @@
 // @covers tools/app-shell/src/lib/planQuotas.js
 // @covers tools/app-shell/src/lib/backendErrors.js
 // @covers tools/app-shell/src/hooks/useEntity.js
+// @covers tools/app-shell/src/pages/MyCompaniesPage.jsx
+// @covers tools/app-shell/src/lib/upgrade/api.js
 import { test, expect } from '@playwright/test';
 import { login, declareCookieSession } from '../../helpers/auth.js';
+import { t } from '../../helpers/i18n.js';
 
 /**
  * Subscription lifecycle — Account settings (mocked). ETP-5443.
@@ -134,18 +137,20 @@ async function installPortalMock(page) {
 }
 
 /**
- * Mocks `GET /sws/go/environments` with a single environment — the list both in-environment
- * banners (`BillingStatusBanner`, `QuotaStatusBanner`) read the current environment from, matched
- * by the session's `clientId` (`e2e-mock-client` in `login()`'s mock). Two routes, not a brace
- * pattern — see the route-glob gotcha in docs/e2e-testing-guide.md.
+ * Mocks `GET /sws/go/environments` with one environment, or with a list — the list both
+ * in-environment banners (`BillingStatusBanner`, `QuotaStatusBanner`) read the current environment
+ * from, matched by the session's `clientId` (`e2e-mock-client` in `login()`'s mock), and the one
+ * "Mis empresas" reads with `?details=true`. Two routes, not a brace pattern — see the route-glob
+ * gotcha in docs/e2e-testing-guide.md.
  */
 async function installEnvironmentsMock(page, environment) {
+  const environments = Array.isArray(environment) ? environment : [environment];
   const handler = async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ environments: [environment] }),
+      body: JSON.stringify({ environments }),
     });
   };
   await page.route('**/sws/go/environments/**', handler);
@@ -239,6 +244,143 @@ test.describe('Subscription lifecycle — /account, cookie session scheme', () =
 
     const legacyAfter = await page.evaluate(() => localStorage.getItem('sf_platform_token'));
     expect(legacyAfter).toBeNull();
+  });
+});
+
+/**
+ * "Mis empresas" per environment (ETP-5051 O-1b). Every owned row describes and manages ITS OWN
+ * environment, whatever environment the session is in: the renewal date is the row's `renewalAt`
+ * from `GET /sws/go/environments`, and Manage POSTs `{ clientId: <row> }` to the portal. The
+ * session is entered in `e2e-mock-client`, so the second row is the case the old account-level
+ * reading got wrong. Cookie scheme, the production one: the body-carrying POST must still carry
+ * the `X-Go-CSRF` proof (the bearer scheme is pinned in `upgrade-api.test.js`).
+ */
+test.describe('Mis empresas — per-environment renewal and portal', () => {
+  const CURRENT = {
+    clientId: 'e2e-mock-client',
+    clientName: 'Acme Productive',
+    plan: 'productive',
+    environmentType: 'PRODUCTIVE',
+    subscriptionStatus: 'ACTIVE',
+    relationship: 'OWNER',
+    ownedByAccount: true,
+    userCount: 3,
+    renewalAt: '2026-11-15T00:00:00Z',
+  };
+  const OTHER = {
+    ...CURRENT,
+    clientId: 'e2e-other-client',
+    clientName: 'Beta Productive',
+    userCount: 1,
+    renewalAt: '2027-01-20T00:00:00Z',
+  };
+
+  /** Records every portal POST (headers + JSON body) and answers it with `answer(body)`. */
+  async function installRowPortalMock(page, answer) {
+    const requests = [];
+    await page.route('**/sws/go/billing/subscription/portal', async (route) => {
+      const request = route.request();
+      if (request.method() !== 'POST') return route.fallback();
+      const body = request.postDataJSON();
+      requests.push({ headers: request.headers(), body });
+      const { status, json } = answer(body, request);
+      await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) });
+    });
+    await page.route('**/__mock-stripe-portal__**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><body>Mock Stripe Customer Portal</body></html>',
+      });
+    });
+    return requests;
+  }
+
+  async function gotoMyCompanies(page) {
+    await page.goto('/companies');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByTestId('my-companies-owned-table')).toBeVisible({ timeout: 10_000 });
+  }
+
+  async function manageRow(page, clientId) {
+    await page.getByTestId(`my-companies-actions-${clientId}`).click();
+    await page.getByTestId(`my-companies-manage-${clientId}`).click();
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await declareCookieSession(page);
+    await installEnvironmentsMock(page, [CURRENT, OTHER]);
+  });
+
+  test('each row shows its own renewal date, and Manage on the other row opens that environment portal', async ({ page }) => {
+    const requests = await installRowPortalMock(page, (_body, request) => ({
+      status: 200,
+      json: { url: new URL('/__mock-stripe-portal__', request.url()).toString() },
+    }));
+    await gotoMyCompanies(page);
+
+    // es_ES short date (mocked default) / en_US. Date-only, so no timezone can shift the day.
+    const currentRow = page.getByTestId('my-companies-owned-e2e-mock-client');
+    const otherRow = page.getByTestId('my-companies-owned-e2e-other-client');
+    await expect(currentRow).toContainText(/15 (nov\.?|Nov) 2026/);
+    await expect(currentRow).not.toContainText(/2027/);
+    await expect(otherRow).toContainText(/20 (ene\.?|Jan) 2027/);
+    await expect(otherRow).not.toContainText(/15 (nov\.?|Nov) 2026/);
+
+    await manageRow(page, 'e2e-other-client');
+    await expect(page).toHaveURL(/__mock-stripe-portal__/, { timeout: 10_000 });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toEqual({ clientId: 'e2e-other-client' });
+    expect(requests[0].headers['x-go-csrf']).toBe('e2e-cookie-csrf-token');
+    expect(requests[0].headers.authorization).toBeUndefined();
+  });
+
+  test('a 404 NO_SUBSCRIPTION says the company has no subscription to manage, and stays on the page', async ({ page }) => {
+    const requests = await installRowPortalMock(page, () => ({
+      status: 404,
+      json: { error: { code: 'NO_SUBSCRIPTION', message: 'No subscription', status: 404 } },
+    }));
+    await gotoMyCompanies(page);
+
+    await manageRow(page, 'e2e-other-client');
+
+    const errorToast = page.locator('[data-type="error"]').first();
+    await expect(errorToast).toBeVisible({ timeout: 10_000 });
+    await expect(errorToast).toContainText(t('upgradePortalNoSubscription'));
+    // Not the transient "try again" message.
+    await expect(errorToast).not.toContainText(t('subscriptionManageError'));
+    expect(page.url()).toMatch(/\/companies$/);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toEqual({ clientId: 'e2e-other-client' });
+    expect(requests[0].headers['x-go-csrf']).toBe('e2e-cookie-csrf-token');
+  });
+});
+
+/**
+ * /account inside an environment (ETP-5051 O-1). There the subscription endpoint answers the
+ * entered environment's own subscription, so `hasSubscription: false` means THIS environment has
+ * none, even when the account pays for another one: the section says so and offers no Manage.
+ * `login()`'s session is entered in `e2e-mock-client`.
+ */
+test.describe('Subscription lifecycle — /account inside an environment without a subscription', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installAccountMock(page);
+  });
+
+  test('says this environment has no subscription and offers no Manage button', async ({ page }) => {
+    await installSubscriptionMock(page, { hasSubscription: false });
+    await gotoAccount(page);
+
+    const section = page.getByTestId('SubscriptionSection__account');
+    await expect(section).toBeVisible();
+    await expect(section.getByTestId('SubscriptionSection__none'))
+      .toHaveText(t('subscriptionNoneInEnvironment'));
+    await expect(section.getByTestId('SubscriptionSection__none'))
+      .not.toHaveText(t('subscriptionNoActive'));
+    await expect(section.getByTestId('SubscriptionSection__manage')).toHaveCount(0);
   });
 });
 

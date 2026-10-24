@@ -5,6 +5,9 @@ import userEvent from '@testing-library/user-event';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
 import MyCompaniesPage from '../MyCompaniesPage.jsx';
+import enUS from '@/locales/en_US.json';
+import esES from '@/locales/es_ES.json';
+import esAR from '@/locales/es_AR.json';
 
 const navigateMock = vi.fn();
 const switchToMock = vi.fn();
@@ -377,5 +380,28 @@ describe('MyCompaniesPage', () => {
     await userEvent.click(screen.getByTestId('my-companies-new'));
 
     expect(navigateMock).toHaveBeenCalledWith('/upgrade');
+  });
+
+  // The identity translator above cannot see a missing entry: useUI() would echo the raw key to
+  // the user. The per-row refusal is new copy, so its key is pinned in every shipped dictionary.
+  describe('copy in every shipped locale', () => {
+    it.each([
+      ['en_US', enUS],
+      ['es_ES', esES],
+      ['es_AR', esAR],
+    ])('%s defines the no-subscription-to-manage message', (_name, dict) => {
+      const value = dict.genericLabels?.[UPGRADE_ERROR_CODES.portalNoSubscription];
+      expect(typeof value).toBe('string');
+      expect(value.trim()).not.toBe('');
+    });
+
+    // Not a transient failure, so it must not read as the retry message it replaced.
+    it.each([
+      ['en_US', enUS],
+      ['es_ES', esES],
+    ])('%s does not reuse the try-again sentence for it', (_name, dict) => {
+      expect(dict.genericLabels[UPGRADE_ERROR_CODES.portalNoSubscription])
+        .not.toBe(dict.genericLabels.subscriptionManageError);
+    });
   });
 });

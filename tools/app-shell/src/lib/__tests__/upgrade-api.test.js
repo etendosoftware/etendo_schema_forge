@@ -932,6 +932,35 @@ describe('the account subscription', () => {
     assert.deepEqual(JSON.parse(calls[0][1].body), { clientId: 'CLIENT-2' });
   });
 
+  // The proof tests above send no body. A body is what changes the request shape (it gains a
+  // Content-Type), so the per-row call is pinned on its own under both schemes: a JSON write that
+  // lost its proof would be refused by the servlet only for "Mis empresas", never for /account.
+  it('carries the write proof and no bearer token on the per-environment portal POST under the cookie scheme', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-2' }));
+
+    await createPortalSession('https://api.test', 'CLIENT-2');
+
+    assert.equal(calls[0][1].method, 'POST');
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+    assert.equal(headersOf().authorization, undefined);
+    assert.match(headersOf()['content-type'], /^application\/json/);
+    assert.equal(calls[0][1].credentials, 'include');
+    assert.deepEqual(JSON.parse(calls[0][1].body), { clientId: 'CLIENT-2' });
+  });
+
+  it('carries the bearer token, and the proof too, on the per-environment portal POST under the bearer scheme', async () => {
+    declareBearerSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-2' }));
+
+    await createPortalSession('https://api.test', 'CLIENT-2');
+
+    assert.equal(headersOf().authorization, `Bearer ${BEARER}`);
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+    assert.match(headersOf()['content-type'], /^application\/json/);
+    assert.deepEqual(JSON.parse(calls[0][1].body), { clientId: 'CLIENT-2' });
+  });
+
   it('sends no body without a client id', async () => {
     declareCookieSession();
     installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-1' }));
