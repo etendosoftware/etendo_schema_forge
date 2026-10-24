@@ -22171,6 +22171,18 @@
     "myCompaniesLoadError": "No pudimos cargar tus empresas. Intentá de nuevo.",
     "myCompaniesEmpty": "Todavía no tenés empresas.",
     "upgradePortalNoSubscription": "Esta empresa no tiene una suscripción para gestionar.",
+    "upgradeCheckoutUnavailable": "El pago no está disponible en este momento. Intentalo de nuevo en unos minutos.",
+    "upgradeCheckoutCreationFailed": "No pudimos iniciar o verificar el pago. Intentalo de nuevo.",
+    "upgradePlansUnavailable": "No pudimos cargar los planes disponibles, así que el pago no está disponible en este momento.",
+    "upgradePlanNotAvailable": "El plan seleccionado ya no está disponible. Recargá la página para ver los planes actuales.",
+    "upgradeSessionExpired": "Tu sesión venció. Volvé a iniciar sesión para continuar.",
+    "upgradeSubscriptionUnavailable": "No pudimos leer tu suscripción. Intentalo de nuevo.",
+    "upgradePortalUnavailable": "No pudimos abrir el portal de facturación. Intentalo de nuevo.",
+    "upgradeTenantNameInUse": "Ya tenés un entorno productivo con ese nombre. Elegí un nombre distinto.",
+    "upgradeGenericError": "No se pudo crear el entorno. Intentalo de nuevo.",
+    "blockedAccessSubscriptionCanceledMemberMessage": "Tu empresa y sus datos siguen acá. Pedile al propietario de la empresa que reactive la suscripción.",
+    "blockedAccessReactivateFailed": "No pudimos iniciar el pago. Intentalo de nuevo en unos minutos.",
+    "subscriptionManageError": "No pudimos abrir el portal de facturación. Intentalo de nuevo.",
     "myCompaniesEnterError": "No pudimos abrir {company}. Puede que todavía no tengas un rol asignado ahí."
   },
   "menus": {

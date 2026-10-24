@@ -23591,6 +23591,8 @@
     "upgradeSessionExpired": "Tu sesión ha caducado. Vuelve a iniciar sesión para continuar.",
     "upgradeSubscriptionUnavailable": "No pudimos leer tu suscripción. Inténtalo de nuevo.",
     "upgradePortalUnavailable": "No pudimos abrir el portal de facturación. Inténtalo de nuevo.",
+    "upgradeCheckoutUnavailable": "El pago no está disponible en este momento. Inténtalo de nuevo en unos minutos.",
+    "upgradeCheckoutCreationFailed": "No pudimos iniciar o comprobar el pago. Inténtalo de nuevo.",
     "upgradePortalNoSubscription": "Esta empresa no tiene una suscripción que gestionar.",
     "upgradeProcessingTitle": "Creando tu entorno productivo",
     "upgradeProcessingSubtitle": "Esto tarda un par de minutos. Mantén esta página abierta.",
