@@ -275,13 +275,11 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   banner is where the user first hears that a limit is close or reached.
 - **Where:** `tools/app-shell/src/components/billing/QuotaStatusBanner.jsx`, mounted by
   `AppLayoutInner` right under `BillingStatusBanner`, normal layout only (not embedded).
-- **Data:** the `quotas` array of `POST /sws/go/session/environment` — only the items whose
-  `verdict` is `WARN` or `DENY`. Every entry is followed by a full page load, so the answer is
-  stashed per client in sessionStorage (`etendo:environment-quotas:<clientId>`) by
-  `rememberEnvironmentQuotas` in `lib/planQuotas.js` and read back by `readEnvironmentQuotas`. Today
-  only the in-app company switcher (`useEnvironmentSwitch.switchTo`) writes it; the entry calls
-  inside `@etendosoftware/etendo-go-core` (login auto-enter, environment picker, setup progress)
-  discard the answer and need the same call in core before the banner shows on first login.
+- **Data:** the current environment's `quotas` in `GET /sws/go/environments` (`useEnvironmentSwitch`)
+  — only its `WARN`/`DENY` items, `[]` when there is nothing to report — read exactly like the
+  payment banner reads `graceEndsAt`. `POST /sws/go/session/environment` carries the same list,
+  but core's `loginEnvironment()` discards that answer before the post-entry page load, so the
+  list is the SPA's source (contract amendment §4b). No client-side stash is involved.
 - **Copy:** one line per item, DENY first, built from the catalog `resourceName`, `consumed`,
   `includedQty`, `unitLabel` and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
   `warn`-mode quota already past its limit / `quotaBannerWarn`). Red with `role="alert"` when any
@@ -306,6 +304,12 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   <unit>)` when a caller forwards only the message. It is never shown as the generic
   "no access" refusal, and it cannot open the blocked-environment screen (that one is the 402 in
   core's `apiFetch`).
+- **Batch writes:** in a `/sws/neo/batch` failure envelope the refusal sits one level down, at
+  `error.detail.error` (`extractQuotaExceeded` in `lib/planQuotas.js` reads both places). The
+  OCR purchase-invoice ingest (`useOcrFlow`) shows the translated sentence in its failure toast.
+  The generic CSV/XLSX import (`ImportDialog` in `@etendosoftware/app-shell-core`) still
+  classifies it as its generic row error: its row message is decided inside core's
+  `importEngine.classifyImportError`, which has no quota case yet.
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
