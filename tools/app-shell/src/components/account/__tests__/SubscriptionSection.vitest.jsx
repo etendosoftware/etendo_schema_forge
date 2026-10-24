@@ -57,6 +57,14 @@ vi.mock('@/lib/upgrade/api.js', () => ({
   createPortalSession: (...args) => createPortalSession(...args),
 }));
 
+// ETP-5051 O-1 — the session's entered environment (`clientId`, null for an account-level session)
+// decides how the no-subscription state reads. Null by default, so every other case below runs as
+// an account-level session, as before.
+let mockSession = { clientId: null };
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuthOptional: () => mockSession,
+}));
+
 import { SubscriptionSection } from '../SubscriptionSection.jsx';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
@@ -90,6 +98,7 @@ describe('SubscriptionSection', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSession = { clientId: null };
     assignMock = vi.fn();
     // Same technique UpgradePage's suite uses for the hosted-checkout redirect: jsdom's real
     // `location.assign` performs actual navigation and cannot be spied on directly.
@@ -116,6 +125,26 @@ describe('SubscriptionSection', () => {
     expect(screen.getByTestId('SubscriptionSection__none')).toBeInTheDocument();
     expect(screen.queryByTestId('SubscriptionSection__manage')).not.toBeInTheDocument();
     expect(screen.queryByTestId('SubscriptionSection__plan')).not.toBeInTheDocument();
+  });
+
+  // ETP-5051 O-1 — inside an environment `GET /sws/go/billing/subscription` answers THAT
+  // environment's subscription, so `hasSubscription: false` there means "this environment has
+  // none" (a demo, an environment you were invited into), not "you pay for nothing": the account
+  // may well pay for another one. Only an account-level session keeps the account-wide wording.
+  it('says the entered environment has no subscription, and keeps the account wording outside one', async () => {
+    getSubscription.mockResolvedValue({ hasSubscription: false });
+    mockSession = { clientId: 'CLIENT-DEMO' };
+    const { unmount } = renderSection();
+
+    expect(await screen.findByTestId('SubscriptionSection__none'))
+      .toHaveTextContent('subscriptionNoneInEnvironment');
+    expect(screen.queryByTestId('SubscriptionSection__manage')).not.toBeInTheDocument();
+    unmount();
+
+    mockSession = { clientId: null };
+    renderSection();
+    expect(await screen.findByTestId('SubscriptionSection__none'))
+      .toHaveTextContent('subscriptionNoActive');
   });
 
   it('shows the unavailable state when the subscription cannot be read', async () => {
@@ -581,14 +610,14 @@ describe('SubscriptionSection', () => {
       'subscriptionPaymentOverdue', 'subscriptionPlanLimits', 'subscriptionPlanUnlimited',
       'quotaNotMeasured', 'quotaCurrentPeriod', 'quotaStateWarn', 'quotaStateOver', 'quotaStateDeny',
       'quotaUsage', 'quotaUsageNoUnit', 'quotaIncluded', 'quotaIncludedNoUnit', 'quotaUsageInPeriod',
-      'quotaPeriodMonth', 'quotaPeriodYear',
+      'quotaPeriodMonth', 'quotaPeriodYear', 'subscriptionNoneInEnvironment',
     ];
 
     it.each([
       ['en_US', enUS],
       ['es_ES', esES],
       ['es_AR', esAR],
-    ])('%s defines every quota and overdue key', (_name, dict) => {
+    ])('%s defines every quota, overdue and no-subscription key', (_name, dict) => {
       for (const key of KEYS) {
         expect(typeof dict.genericLabels?.[key], key).toBe('string');
         expect(dict.genericLabels[key].trim(), key).not.toBe('');

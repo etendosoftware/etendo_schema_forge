@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CreditCard, Loader2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -159,6 +160,12 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
   const [subscription, setSubscription] = useState(null);
   const [managing, setManaging] = useState(false);
   const [manageError, setManageError] = useState(false);
+  // ETP-5051 O-1 — inside an environment the subscription endpoint answers THAT environment's own
+  // subscription, so `hasSubscription: false` there means the environment has none (a demo, an
+  // environment the user was invited into), even when the account pays for another one. Only an
+  // account-level session (no environment entered: `clientId` null) reads the account-wide line.
+  // `useAuthOptional`: the section must still render without an AuthProvider above it.
+  const insideEnvironment = Boolean(useAuthOptional()?.clientId);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -290,7 +297,7 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
 
         {status === 'loaded' && !hasSubscription && (
           <p className="mt-4 text-sm text-muted-foreground" data-testid="SubscriptionSection__none">
-            {ui('subscriptionNoActive')}
+            {ui(insideEnvironment ? 'subscriptionNoneInEnvironment' : 'subscriptionNoActive')}
           </p>
         )}
 

@@ -17893,6 +17893,7 @@
     "subscriptionPaymentOverdue": "Your last payment is overdue. Update your payment method to settle it.",
     "subscriptionPlanLimits": "Plan limits",
     "subscriptionPlanUnlimited": "Your plan has no usage limits.",
+    "subscriptionNoneInEnvironment": "This environment has no subscription.",
     "quotaUsage": "{consumed} of {included} {unit}",
     "quotaUsageNoUnit": "{consumed} of {included}",
     "quotaIncluded": "{included} {unit} included",

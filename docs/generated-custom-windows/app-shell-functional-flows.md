@@ -339,6 +339,14 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Data:** `GET /sws/go/billing/subscription` — `planName` (the catalog plan; the live Stripe
   product name `plan` is the fallback) and `planQuotas[]`, every active quota of the plan with its
   current-period `consumed` and `verdict`.
+- **Which subscription (ETP-5051 O-1):** inside an environment the endpoint answers the entered
+  environment's own subscription; only a session with no environment entered falls back to the
+  account's newest one. An environment with no purchase of its own (a demo, one the user was
+  invited into) answers `hasSubscription: false` even when the account pays for another, so
+  `SubscriptionSection__none` reads "This environment has no subscription."
+  (`subscriptionNoneInEnvironment`) when the session has an entered environment (auth `clientId`),
+  and keeps "You don't have an active subscription." (`subscriptionNoActive`) without one. The
+  Manage (portal) button is not shown in either no-subscription state.
 - **Per quota row:** the catalog `resourceName` (its `resourceKey` when the name is blank);
   "`consumed` of `includedQty` `unitLabel`" followed by the period word, so a quota on a yearly plan
   reads "per year" (`open-and-notable-topics.md` §5.8); "(not measured yet)" when `consumed` is

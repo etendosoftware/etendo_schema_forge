@@ -18125,6 +18125,7 @@
     "subscriptionPaymentOverdue": "Tu último pago está pendiente. Actualiza tu método de pago para saldarlo.",
     "subscriptionPlanLimits": "Límites del plan",
     "subscriptionPlanUnlimited": "Tu plan no tiene límites de uso.",
+    "subscriptionNoneInEnvironment": "Este entorno no tiene suscripción.",
     "quotaUsage": "{consumed} de {included} {unit}",
     "quotaUsageNoUnit": "{consumed} de {included}",
     "quotaIncluded": "{included} {unit} en el plan",
