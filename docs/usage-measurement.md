@@ -2,7 +2,14 @@
 
 Measures real consumption per tenant per day, in **shadow mode**: it charges nothing, enforces
 nothing, and writes to no business table. It exists so that ETP-5046 (resource limits) and
-ETP-5051 (overage) have real numbers to reason about before anyone is billed from them.
+ETP-5051 (plan quotas) have real numbers to reason about before anyone is billed from them.
+
+> **Extended by ETP-5051.** Plan quotas read what this page measures: the stored daily usage (a
+> quota's `aggregate` source) or a live count with the same catalog rule (`live`), combined over
+> the subscription period by `ETGO_BILLING_RESOURCE.AGGREGATION`. Where quotas are enforced and
+> where they are only reported, the extensibility ladder, how an operator caps a resource and the
+> accepted limits: `modules/com.etendoerp.go/docs/plan-quotas.md`. The usage job is now
+> schedulable (§9).
 
 Implementation lives in `modules/com.etendoerp.go/src/com/etendoerp/go/usage/`. The design
 document is `modules/com.etendoerp.go/docs/plans/2026-09-15-etp-5050-usage-measurement-design.md`;
@@ -226,6 +233,34 @@ so that route always runs the settling window. A scheduled request can carry the
 
 Re-running any range is safe and produces identical rows.
 
+### 7.1 Scheduling it (ETP-5051)
+
+The job can now run on a schedule, but nothing schedules it until an operator turns it on:
+
+- **The flag.** `usage-aggregation-schedule` (backend-only, **off by default**) gates every
+  scheduled run. A request with timing *Schedule* that fires while the flag is off does no work
+  and ends as an **ERROR** in Process Monitor. A launch from the menu, or a Process Request run
+  immediately or once later, is never gated.
+- **The Process Request.** Production is never restarted, so there an operator turns the flag on
+  **and** creates the request in the same step: **Billing Resource Usage Aggregation**, client
+  System, timing *Schedule*, every two hours. On environments that restart,
+  `UsageAggregationScheduleStartup` plants that System request at the next restart once the flag
+  is on, and never re-plants one an operator unscheduled.
+- **The cadence.** `etendo.go.usage.schedule.interval.minutes` /
+  `ETGO_USAGE_SCHEDULE_INTERVAL_MINUTES`, default **120** minutes, at least 15 — one cadence for
+  every resource. It is read when the request is planted; changing it later means editing the
+  request too. Each run covers the settling window plus the sealing day (§3).
+- **The lag WARN.** `[USAGE-LAG]`, at most once an hour, when the last successful run in
+  `ETGO_USAGE_RUN_LOG` finished more than **twice the cadence** ago (four hours by default) or
+  never. It is checked when a scheduled run starts and when a quota report reads the stored
+  aggregate, never on a create. A run that counted nothing for any tenant writes no run-log row
+  (§6), so an installation with no usage at all reads as "never ran".
+
+Flag reference: `modules/com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §1
+(`usage-aggregation-schedule`); go-live constraint: `modules/com.etendoerp.go/docs/open-and-notable-topics.md`
+§2.11. Each run
+still commits per resource-day; one transaction per tenant is ETP-5905.
+
 ## 8. Verified behaviour
 
 - **Counts are right.** A full backfill produced 308 counted invoices against exactly 308 posted
@@ -238,11 +273,16 @@ Re-running any range is safe and produces identical rows.
 
 ## 9. Deliberately not done
 
-- **Rollup of any kind** — no SUM or MAX over a period, no would-have-billed figure, no price.
+- **A would-have-billed figure or a price** — nothing here computes money. (The period rollup is
+  no longer missing: since ETP-5051 a plan quota combines the days of a subscription period with
+  the resource's `AGGREGATION`, `sum` / `max` / `last`; see `modules/com.etendoerp.go/docs/plan-quotas.md`
+  §4.1.)
 - **Late changes** after the settling window are not counted.
 - **API/MCP request volume** — needs instrumentation, not a query.
-- **A nightly schedule** — the process exists and runs on demand; nothing schedules it yet.
 - **Seeded catalog rows** — the catalog ships empty.
+- **A schedule** — no longer missing: since ETP-5051 the job runs on a schedule once an operator
+  turns it on (the `usage-aggregation-schedule` flag plus the Process Request, every two hours by
+  default, with a lag WARN). See §7.1.
 
 ## 10. AD defects worth remembering
 

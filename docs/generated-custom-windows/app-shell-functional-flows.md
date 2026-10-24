@@ -319,7 +319,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   failure toast.
   The generic CSV/XLSX import (`ImportDialog` in `@etendosoftware/app-shell-core`) still
   classifies it as its generic row error: its row message is decided inside core's
-  `importEngine.classifyImportError`, which has no quota case yet.
+  `importEngine.classifyImportError`, which has no quota case yet (`com.etendoerp.go`
+  `docs/open-and-notable-topics.md` §4.20). Which writes a quota can refuse at all, and which it
+  only reports: `com.etendoerp.go` `docs/plan-quotas.md` §2.
 
 #### 3.2a-quater The plan and its quotas on `/account` (Subscription section, ETP-5051)
 
