@@ -3795,3 +3795,172 @@ describe('translateBackendError — payment-term refusals', () => {
     }
   });
 });
+
+// ── Plan-quota write refusal (403 QUOTA_EXCEEDED) ────────────────────────────────
+//
+// A NEO write refused because a plan quota is exhausted answers 403 with
+// `{ error: { code: 'QUOTA_EXCEEDED', message: 'Quota exceeded: <name> (<c>/<i> <unit>)', quota } }`.
+// The SPA owns the sentence: from the structured `quota` when the caller has the body, from the
+// English prose when it forwarded only the message. Real locale files, so the wording is pinned.
+describe('translateBackendError — plan-quota refusal (QUOTA_EXCEEDED)', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  const prose = 'Quota exceeded: Posted sales invoices (100/100 Inv)';
+  const quota = {
+    resourceKey: 'POSTED_SALES_INVOICES',
+    resourceName: 'Posted sales invoices',
+    unitLabel: 'Inv',
+    includedQty: 100,
+    enforcementMode: 'block',
+    warningThreshold: 80,
+    period: 'month',
+    consumed: 100,
+    verdict: 'DENY',
+  };
+  const refusalBody = { error: { message: prose, status: 403, code: 'QUOTA_EXCEEDED', quota } };
+
+  describe('from the structured quota', () => {
+    it('builds the sentence in every shipped locale', () => {
+      assert.equal(translateBackendError(prose, es, { quota }),
+        'Posted sales invoices: has alcanzado el límite de tu plan (100 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+      assert.equal(translateBackendError(prose, ar, { quota }),
+        'Posted sales invoices: alcanzaste el límite de tu plan (100 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+      assert.equal(translateBackendError(prose, en, { quota }),
+        'Posted sales invoices: your plan limit has been reached (100 of 100 Inv). '
+        + 'New records of this kind cannot be created.');
+    });
+
+    it('uses the catalog name and numbers of the quota, not of the prose', () => {
+      const other = { ...quota, resourceName: 'Facturas emitidas', consumed: 1500, includedQty: 1500, unitLabel: 'fact.' };
+      assert.equal(translateBackendError('Quota exceeded: something else (1/2 x)', es, { quota: other }),
+        'Facturas emitidas: has alcanzado el límite de tu plan (1.500 de 1.500 fact.). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('drops the unit when the quota has none', () => {
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, unitLabel: null } }),
+        'Posted sales invoices: has alcanzado el límite de tu plan (100 de 100). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('omits the usage when the quota carries no included quantity', () => {
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, includedQty: null } }),
+        'Posted sales invoices: has alcanzado el límite de tu plan. No se pueden crear más registros de este tipo.');
+    });
+
+    it('gives the generic sentence for an empty quota object, or one without a resource name', () => {
+      const generic = 'Has alcanzado el límite de tu plan para este tipo de registro. '
+        + 'No se pueden crear más registros de este tipo.';
+      assert.equal(translateBackendError(prose, es, { quota: {} }), generic);
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, resourceName: '  ' } }), generic);
+      assert.equal(translateBackendErrorBody({ error: { code: 'QUOTA_EXCEEDED', message: 'x' } }, es, 'Error (403)'), generic);
+    });
+
+    it('wins over the message keys of the same body', () => {
+      assert.equal(
+        translateBackendError(prose, es, { quota, messageKeys: ['ETGO_InvoiceFieldsLockedPosted'], messageParams: {} }),
+        translateBackendError(prose, es, { quota }),
+      );
+    });
+  });
+
+  describe('from the message prose alone', () => {
+    it('parses name, consumed, included and unit', () => {
+      assert.equal(translateBackendError('Quota exceeded: Posted sales invoices (87/100 Inv)', es),
+        'Posted sales invoices: has alcanzado el límite de tu plan (87 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('trims surrounding whitespace before matching', () => {
+      assert.equal(translateBackendError(`  ${prose}  `, en),
+        'Posted sales invoices: your plan limit has been reached (100 of 100 Inv). '
+        + 'New records of this kind cannot be created.');
+    });
+
+    it('keeps a resource name that itself contains " ("', () => {
+      assert.equal(translateBackendError('Quota exceeded: Invoices (EU) (5/5 Inv)', en),
+        'Invoices (EU): your plan limit has been reached (5 of 5 Inv). New records of this kind cannot be created.');
+    });
+
+    it('treats the literal "null" unit as no unit', () => {
+      const translated = translateBackendError('Quota exceeded: Users (3/3 null)', en);
+      assert.equal(translated,
+        'Users: your plan limit has been reached (3 of 3). New records of this kind cannot be created.');
+      assert.doesNotMatch(translated, /null/);
+    });
+
+    it('reads a message with no unit at all', () => {
+      assert.equal(translateBackendError('Quota exceeded: Users (3/3)', es),
+        'Users: has alcanzado el límite de tu plan (3 de 3). No se pueden crear más registros de este tipo.');
+    });
+
+    it('leaves a message that only resembles the refusal untouched', () => {
+      for (const msg of [
+        'Quota exceeded: Users',
+        'Quota exceeded: Users (three)',
+        'Quota exceeded: (3/3 Inv)',
+        'Quota exceeded for Users (3/3)',
+      ]) {
+        assert.equal(translateBackendError(msg, es), msg, msg);
+      }
+    });
+
+    it('keeps the prose when the locale has no quota keys (t echoes keys)', () => {
+      assert.equal(translateBackendError(prose, (key) => key), prose);
+    });
+  });
+
+  describe('never the generic no-access message', () => {
+    it('a 403 quota body does not read as "you do not have access"', async () => {
+      const noAccess = es('backendError.accessDeniedToSpec');
+      const viaBody = translateBackendErrorBody(refusalBody, es, 'Error (403)');
+      const viaResponse = await translateBackendErrorResponse({ status: 403, json: async () => refusalBody }, es);
+      const viaProse = translateBackendError(prose, es);
+      for (const text of [viaBody, viaResponse, viaProse]) {
+        assert.notEqual(text, noAccess);
+        assert.match(text, /^Posted sales invoices: has alcanzado el límite de tu plan/);
+      }
+    });
+
+    it('reads the refusal inside a batch failure envelope (error.detail.error)', () => {
+      const batch = { committed: false, error: { message: prose, detail: refusalBody } };
+      assert.equal(translateBackendErrorBody(batch, es, 'Error'), translateBackendError(prose, es, { quota }));
+    });
+  });
+
+  describe('parseBackendError', () => {
+    const jsonResponse = (body, status = 403) => ({ status, json: async () => body });
+
+    it('adds the quota to the parsed refusal', async () => {
+      const parsed = await parseBackendError(jsonResponse(refusalBody));
+      assert.equal(parsed.message, prose);
+      assert.deepEqual(parsed.quota, quota);
+    });
+
+    it('keeps the three-field shape, with no quota key, for any other body', async () => {
+      const body = { error: { status: 403, message: 'Access denied to spec for current role' } };
+      const parsed = await parseBackendError(jsonResponse(body));
+      assert.equal(Object.hasOwn(parsed, 'quota'), false);
+      assert.deepEqual(Object.keys(parsed).sort(), ['message', 'messageKeys', 'messageParams']);
+      assert.equal(parsed.message, 'Access denied to spec for current role');
+      assert.equal(
+        await translateBackendErrorResponse(jsonResponse(body), es),
+        es('backendError.accessDeniedToSpec'),
+      );
+    });
+  });
+
+  it('every quota backendError key exists in all three locales with its placeholders', () => {
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const labels = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8')).genericLabels;
+      assert.match(labels['backendError.quotaExceeded'], /\{resource\}.*\{usage\}/, locale);
+      assert.match(labels['backendError.quotaExceededNoUsage'], /\{resource\}/, locale);
+      assert.doesNotMatch(labels['backendError.quotaExceededNoUsage'], /\{usage\}/, locale);
+      assert.ok(labels['backendError.quotaExceededGeneric']?.trim(), locale);
+      assert.doesNotMatch(labels['backendError.quotaExceededGeneric'], /\{/, locale);
+    }
+  });
+});

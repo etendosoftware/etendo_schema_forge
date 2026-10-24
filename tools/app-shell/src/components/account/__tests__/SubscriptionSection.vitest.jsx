@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+// @covers tools/app-shell/src/components/account/SubscriptionSection.jsx
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
@@ -26,6 +27,14 @@ const TEMPLATES = {
   subscriptionGraceRemainingOne: '{days}:subscriptionGraceRemainingOne',
   subscriptionRenewsOn: '{date}:subscriptionRenewsOn',
   subscriptionCancelsOn: '{date}:subscriptionCancelsOn',
+  // ETP-5051 quota rows: the same `{param}` substitution, so the numbers, unit and period word
+  // that reach the row are observable.
+  quotaUsage: '{consumed} of {included} {unit}',
+  quotaUsageNoUnit: '{consumed} of {included}',
+  quotaIncluded: '{included} {unit} included',
+  quotaIncludedNoUnit: '{included} included',
+  quotaUsageInPeriod: '{usage} {period}',
+  quotaCurrentPeriod: '{start} – {end}',
 };
 
 vi.mock('@/i18n', () => ({
@@ -49,6 +58,9 @@ vi.mock('@/lib/upgrade/api.js', () => ({
 }));
 
 import { SubscriptionSection } from '../SubscriptionSection.jsx';
+import enUS from '@/locales/en_US.json';
+import esES from '@/locales/es_ES.json';
+import esAR from '@/locales/es_AR.json';
 
 function renderSection(props = {}) {
   return render(<SubscriptionSection apiBaseUrl="/api" {...props} />);
@@ -353,6 +365,224 @@ describe('SubscriptionSection', () => {
       expect(await screen.findByTestId('SubscriptionSection__plan')).toBeInTheDocument();
       expect(screen.queryByTestId('SubscriptionSection__graceRemaining')).not.toBeInTheDocument();
       expect(screen.queryByTestId('SubscriptionSection__accessPaused')).not.toBeInTheDocument();
+    });
+  });
+
+  // ETP-5051 — `planName` is the catalog plan; `plan` (the provider product name) is the fallback.
+  describe('the plan name', () => {
+    it('shows the catalog planName when the subscription has a plan row', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Etendo GO Business', planQuotas: [] });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__plan')).toHaveTextContent(/^Etendo GO Business$/);
+    });
+
+    it.each([
+      ['missing', undefined],
+      ['null', null],
+      ['empty', ''],
+    ])('falls back to plan when planName is %s', async (_label, planName) => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__plan')).toHaveTextContent(/^Pro$/);
+    });
+  });
+
+  // ETP-5051 — `planQuotas` of /billing/subscription: what the plan includes and how much of it the
+  // current period has used. Read-only.
+  describe('the plan quotas', () => {
+    const QUOTA = {
+      resourceKey: 'POSTED_SALES_INVOICES',
+      resourceName: 'Posted sales invoices',
+      unitLabel: 'Inv',
+      includedQty: 100,
+      enforcementMode: 'block',
+      warningThreshold: 80,
+      period: 'month',
+      consumptionSource: 'aggregate',
+      consumed: 42,
+      verdict: 'ALLOW',
+      periodStart: '2026-10-07T00:00:00Z',
+      periodEnd: '2026-11-07T00:00:00Z',
+    };
+
+    function withQuotas(planQuotas, extra = {}) {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Business', planQuotas, ...extra });
+    }
+
+    it('shows each quota as consumed of included, with unit and period', async () => {
+      withQuotas([QUOTA, { ...QUOTA, resourceKey: 'USERS', resourceName: 'Users', unitLabel: null, includedQty: 5, consumed: 2 }]);
+      renderSection();
+
+      const rows = await screen.findAllByTestId('SubscriptionSection__quota');
+      expect(rows).toHaveLength(2);
+      expect(within(rows[0]).getByTestId('SubscriptionSection__quotaName')).toHaveTextContent('Posted sales invoices');
+      expect(within(rows[0]).getByTestId('SubscriptionSection__quotaUsage'))
+        .toHaveTextContent(/^42 of 100 Inv quotaPeriodMonth$/);
+      expect(within(rows[1]).getByTestId('SubscriptionSection__quotaUsage'))
+        .toHaveTextContent(/^2 of 5 quotaPeriodMonth$/);
+      expect(screen.queryByTestId('SubscriptionSection__quotasUnlimited')).not.toBeInTheDocument();
+    });
+
+    it('reads a quota on a yearly plan as yearly', async () => {
+      withQuotas([{ ...QUOTA, period: 'year', includedQty: 1200, consumed: 900 }]);
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__quotaUsage'))
+        .toHaveTextContent(/^900 of 1\.200 Inv quotaPeriodYear$/);
+    });
+
+    it('says the plan is unlimited when it has no quotas', async () => {
+      withQuotas([]);
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__quotasUnlimited'))
+        .toHaveTextContent('subscriptionPlanUnlimited');
+      expect(screen.queryByTestId('SubscriptionSection__quotas')).not.toBeInTheDocument();
+    });
+
+    it('claims neither limits nor unlimited without a catalog plan', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planQuotas: [] });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__plan')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__quotasUnlimited')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__quotas')).not.toBeInTheDocument();
+    });
+
+    it('marks a quota with no measured consumption as not measured yet, never as zero', async () => {
+      withQuotas([{ ...QUOTA, consumed: null, verdict: null }]);
+      renderSection();
+
+      const usage = await screen.findByTestId('SubscriptionSection__quotaUsage');
+      expect(usage).toHaveTextContent(/^100 Inv included quotaPeriodMonthquotaNotMeasured$/);
+      expect(within(usage).getByTestId('SubscriptionSection__quotaNotMeasured'))
+        .toHaveTextContent('quotaNotMeasured');
+      expect(usage).not.toHaveTextContent(/\b0 of/);
+    });
+
+    it('has no not-measured suffix for a measured zero', async () => {
+      withQuotas([{ ...QUOTA, consumed: 0 }]);
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__quotaUsage')).toHaveTextContent(/^0 of 100 Inv/);
+      expect(screen.queryByTestId('SubscriptionSection__quotaNotMeasured')).not.toBeInTheDocument();
+    });
+
+    it('shows the current period range once', async () => {
+      withQuotas([QUOTA, { ...QUOTA, resourceKey: 'USERS', resourceName: 'Users' }]);
+      renderSection();
+
+      const periods = await screen.findAllByTestId('SubscriptionSection__quotaPeriod');
+      expect(periods).toHaveLength(1);
+      expect(periods[0]).toHaveTextContent('Oct 7, 2026 – Nov 7, 2026');
+    });
+
+    it('shows no period range when no quota carries one', async () => {
+      withQuotas([{ ...QUOTA, periodStart: null, periodEnd: null }]);
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__quota')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__quotaPeriod')).not.toBeInTheDocument();
+    });
+
+    it('badges WARN, WARN over the limit and DENY, and nothing else', async () => {
+      withQuotas([
+        { ...QUOTA, resourceKey: 'A', verdict: 'WARN', consumed: 85 },
+        { ...QUOTA, resourceKey: 'B', verdict: 'WARN', consumed: 130 },
+        { ...QUOTA, resourceKey: 'C', verdict: 'DENY', consumed: 100 },
+        { ...QUOTA, resourceKey: 'D', verdict: 'ALLOW' },
+        { ...QUOTA, resourceKey: 'E', verdict: null },
+      ]);
+      renderSection();
+
+      const rows = await screen.findAllByTestId('SubscriptionSection__quota');
+      const badge = (row) => within(row).queryByTestId('SubscriptionSection__quotaState');
+      expect(badge(rows[0])).toHaveTextContent('quotaStateWarn');
+      expect(badge(rows[1])).toHaveTextContent('quotaStateOver');
+      expect(badge(rows[2])).toHaveTextContent('quotaStateDeny');
+      expect(badge(rows[3])).not.toBeInTheDocument();
+      expect(badge(rows[4])).not.toBeInTheDocument();
+      expect(rows.map((row) => row.getAttribute('data-verdict'))).toEqual(['WARN', 'WARN', 'DENY', 'ALLOW', '']);
+    });
+  });
+
+  // ETP-5051 — `accessEnforced: false` on /billing/subscription: the environment-access kill
+  // switch is on, so access will not be paused and neither the countdown nor "access is paused" is
+  // true. One neutral line says the payment is overdue.
+  describe('the grace banner when access is not enforced', () => {
+    const PAST_DUE = {
+      ...ACTIVE,
+      status: 'past_due',
+      renewalAt: '2026-10-05T00:00:00Z',
+      graceEndsAt: '2026-10-01T00:00:00Z',
+    };
+
+    it('shows the neutral overdue line instead of the countdown during grace', async () => {
+      getSubscription.mockResolvedValue({ ...PAST_DUE, graceDaysRemaining: 7, accessEnforced: false });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__paymentOverdue'))
+        .toHaveTextContent('subscriptionPaymentOverdue');
+      expect(screen.queryByTestId('SubscriptionSection__graceRemaining')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__accessPaused')).not.toBeInTheDocument();
+    });
+
+    it('keeps the neutral line, and never says access is paused, after grace', async () => {
+      getSubscription.mockResolvedValue({ ...PAST_DUE, graceDaysRemaining: 0, accessEnforced: false });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__paymentOverdue')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__accessPaused')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__graceRemaining')).not.toBeInTheDocument();
+    });
+
+    it('shows nothing overdue for a subscription with no grace window', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, accessEnforced: false });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__plan')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__paymentOverdue')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['missing', undefined],
+      ['true', true],
+    ])('keeps the countdown and access-paused copy when the field is %s', async (_label, accessEnforced) => {
+      getSubscription.mockResolvedValue({ ...PAST_DUE, graceDaysRemaining: 7, accessEnforced });
+      const { unmount } = renderSection();
+      expect(await screen.findByTestId('SubscriptionSection__graceRemaining')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__paymentOverdue')).not.toBeInTheDocument();
+      unmount();
+
+      getSubscription.mockResolvedValue({ ...PAST_DUE, graceDaysRemaining: 0, accessEnforced });
+      renderSection();
+      expect(await screen.findByTestId('SubscriptionSection__accessPaused')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__paymentOverdue')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('copy in every shipped locale', () => {
+    const KEYS = [
+      'subscriptionPaymentOverdue', 'subscriptionPlanLimits', 'subscriptionPlanUnlimited',
+      'quotaNotMeasured', 'quotaCurrentPeriod', 'quotaStateWarn', 'quotaStateOver', 'quotaStateDeny',
+      'quotaUsage', 'quotaUsageNoUnit', 'quotaIncluded', 'quotaIncludedNoUnit', 'quotaUsageInPeriod',
+      'quotaPeriodMonth', 'quotaPeriodYear',
+    ];
+
+    it.each([
+      ['en_US', enUS],
+      ['es_ES', esES],
+      ['es_AR', esAR],
+    ])('%s defines every quota and overdue key', (_name, dict) => {
+      for (const key of KEYS) {
+        expect(typeof dict.genericLabels?.[key], key).toBe('string');
+        expect(dict.genericLabels[key].trim(), key).not.toBe('');
+      }
+      expect(dict.genericLabels.quotaCurrentPeriod).toMatch(/\{start\}.*\{end\}/);
+      // The neutral line promises no pause: it carries no day count or date.
+      expect(dict.genericLabels.subscriptionPaymentOverdue).not.toMatch(/\{(days|date)\}/);
     });
   });
 

@@ -1070,3 +1070,51 @@ describe('resolveSavedRecordAfterSave', () => {
     assert.equal(seen[0][1], undefined);
   });
 });
+
+// The save path of every generated window: a NEO write refused because a plan quota is exhausted
+// (403 `error.code === 'QUOTA_EXCEEDED'`). The sentence is built from the quota the body carries,
+// in the user's language, never the backend's English prose nor a generic permission refusal.
+describe('extractErrorMessage — plan-quota refusal (real es_ES locale)', () => {
+  const esES = JSON.parse(readFileSync(resolve(SRC_DIR, 'locales', 'es_ES.json'), 'utf8')).genericLabels;
+  const es = interpolatingUi(esES);
+  const quota = {
+    resourceKey: 'POSTED_SALES_INVOICES',
+    resourceName: 'Facturas emitidas',
+    unitLabel: 'fact.',
+    includedQty: 100,
+    consumed: 100,
+    verdict: 'DENY',
+    period: 'month',
+  };
+  const refusal = (errorOverrides = {}) => ({
+    status: 403,
+    json: async () => ({
+      error: {
+        status: 403,
+        code: 'QUOTA_EXCEEDED',
+        message: 'Quota exceeded: Posted sales invoices (100/100 Inv)',
+        quota,
+        ...errorOverrides,
+      },
+    }),
+  });
+
+  it('builds the Spanish sentence from the structured quota, not from the English prose', async () => {
+    const msg = await extractErrorMessage(refusal(), es);
+    assert.equal(msg,
+      'Facturas emitidas: has alcanzado el límite de tu plan (100 de 100 fact.). '
+      + 'No se pueden crear más registros de este tipo.');
+    assert.doesNotMatch(msg, /Quota exceeded/);
+    assert.notEqual(msg, esES['backendError.accessDeniedToSpec']);
+  });
+
+  it('gives the generic quota sentence when the refusal carries no quota', async () => {
+    const msg = await extractErrorMessage(refusal({ quota: undefined }), es);
+    assert.equal(msg, esES['backendError.quotaExceededGeneric']);
+  });
+
+  it('leaves a plain 403 without the quota code on its existing path', async () => {
+    const res = { status: 403, json: async () => ({ error: { status: 403, message: 'Access denied to spec for current role' } }) };
+    assert.equal(await extractErrorMessage(res, es), esES['backendError.accessDeniedToSpec']);
+  });
+});
