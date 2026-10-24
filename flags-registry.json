@@ -1037,7 +1037,7 @@
       "flag": {
         "key": "billing-reconciliation-schedule",
         "defaultValue": false,
-        "ttlNote": "NO TTL SET — awaiting the owner's decision (Martin Taal), not invented here. Retirement means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes. Until a date is agreed the scorer reports 'no TTL declared' and the lifecycle scores 0.",
+        "ttlNote": "Permanent operational switch — decided by Martin Taal 2026-10-24; no retirement planned. An operator turns the schedule on per environment (together with that environment's Process Request), so `ttl` is deliberately absent: the scorer reports 'no TTL declared' and scores lifecycle 0. The registry has no dedicated field for a permanent flag; this note is the record. If the decision is ever revisited, retiring means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes.",
         "symbols": [
           "billing-reconciliation-schedule",
           "FLAG_BILLING_RECONCILIATION_SCHEDULE",
@@ -1076,7 +1076,7 @@
       "flag": {
         "key": "usage-aggregation-schedule",
         "defaultValue": false,
-        "ttlNote": "NO TTL SET — awaiting the owner's decision (Martin Taal), not invented here. Retirement means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes. Until a date is agreed the scorer reports 'no TTL declared' and the lifecycle scores 0.",
+        "ttlNote": "Permanent operational switch — decided by Martin Taal 2026-10-24; no retirement planned. An operator turns the schedule on per environment (together with that environment's Process Request), so `ttl` is deliberately absent: the scorer reports 'no TTL declared' and scores lifecycle 0. The registry has no dedicated field for a permanent flag; this note is the record. If the decision is ever revisited, retiring means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes.",
         "symbols": [
           "usage-aggregation-schedule",
           "FLAG_USAGE_AGGREGATION_SCHEDULE",
