@@ -1,6 +1,6 @@
 // ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
 import { formatCalendarDate } from './dateOnly.js';
-import { extractQuotaExceeded, quotaUsageText } from './planQuotas.js';
+import { extractQuotaExceeded, quotaResourceLabel, quotaUsageText } from './planQuotas.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -752,7 +752,8 @@ function matchQuotaExceededMessage(msg) {
 
 function translateQuotaExceeded(quota, t) {
   if (!quota) return null;
-  const resource = typeof quota.resourceName === 'string' ? quota.resourceName.trim() : '';
+  // Same label as the quota banner and the /account row: the catalog name, else the key.
+  const resource = quotaResourceLabel(quota);
   if (!resource) return resolveLocaleKey(t, 'backendError.quotaExceededGeneric');
   const usage = quotaUsageText(quota, t);
   return usage

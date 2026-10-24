@@ -3851,11 +3851,17 @@ describe('translateBackendError — plan-quota refusal (QUOTA_EXCEEDED)', () => 
         'Posted sales invoices: has alcanzado el límite de tu plan. No se pueden crear más registros de este tipo.');
     });
 
-    it('gives the generic sentence for an empty quota object, or one without a resource name', () => {
+    it('names the resource by its key when the catalog name is blank, as the banner and /account do', () => {
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, resourceName: '  ' } }),
+        'POSTED_SALES_INVOICES: has alcanzado el límite de tu plan (100 de 100 Inv). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('gives the generic sentence for an empty quota object, or one with neither a name nor a key', () => {
       const generic = 'Has alcanzado el límite de tu plan para este tipo de registro. '
         + 'No se pueden crear más registros de este tipo.';
       assert.equal(translateBackendError(prose, es, { quota: {} }), generic);
-      assert.equal(translateBackendError(prose, es, { quota: { ...quota, resourceName: '  ' } }), generic);
+      assert.equal(translateBackendError(prose, es, { quota: { ...quota, resourceName: '  ', resourceKey: '' } }), generic);
       assert.equal(translateBackendErrorBody({ error: { code: 'QUOTA_EXCEEDED', message: 'x' } }, es, 'Error (403)'), generic);
     });
 
