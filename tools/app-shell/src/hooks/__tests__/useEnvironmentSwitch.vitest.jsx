@@ -1,5 +1,8 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
+// @covers tools/app-shell/src/hooks/useEnvironmentSwitch.js
+import { render, renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
+import { DataProvider, createQueryCache } from '@etendosoftware/app-shell-core/data';
 
 /**
  * ETP-5202 phase 2 — entering a tenant the user has no role in.
@@ -99,6 +102,42 @@ describe('useEnvironmentSwitch', () => {
     });
     await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.environments).toEqual([newlyProvisioned]));
+  });
+
+  // ETP-5051 O-3 — the hook is mounted by the banners, the side menu, the top bar, the tenant
+  // plan and the layout, so one page load used to send ~6 identical `GET /sws/go/environments`,
+  // each of which runs the live quota counts of every listed tenant on the backend. Under the
+  // app's DataProvider every mounted instance must share one request and one result, and the
+  // refresh event must still reach all of them with ONE new request. The AuthProvider and the
+  // DataProvider are the real ones: they own the cache and its session scope.
+  it('shares one request across mounted instances and one more per refresh event', async () => {
+    const first = [ACME];
+    const refreshed = [ACME, { ...ACME, clientId: 'CLIENT-NEW', clientName: 'New Co' }];
+    fetchEnvironments.mockResolvedValueOnce(first).mockResolvedValueOnce(refreshed);
+    const seen = [];
+    function Consumer({ slot }) {
+      seen[slot] = useEnvironmentSwitch();
+      return null;
+    }
+    const session = { csrfToken: 'csrf-1', clientId: 'CLIENT-HOME' };
+    render(
+      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
+        <DataProvider cache={createQueryCache()}>
+          {[0, 1, 2, 3, 4, 5].map((slot) => <Consumer key={slot} slot={slot} />)}
+        </DataProvider>
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 1)).toBe(true));
+    expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event(ENVIRONMENT_LIST_REFRESH_EVENT));
+    });
+    await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 2)).toBe(true));
+    expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+    expect(seen.map((s) => s.environments.map((env) => env.clientId)))
+      .toEqual(Array(6).fill(['CLIENT-ACME', 'CLIENT-NEW']));
   });
 
   describe('switchTo', () => {

@@ -280,6 +280,15 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   payment banner reads `graceEndsAt`. `POST /sws/go/session/environment` carries the same list,
   but core's `loginEnvironment()` discards that answer before the post-entry page load, so the
   list is the SPA's source (contract amendment §4b). No client-side stash is involved.
+- **One read per page load (ETP-5051 O-3):** both banners, `SideMenu`, `TopBar`, `useTenantPlan`
+  and `AppLayout` mount `useEnvironmentSwitch`, and every listing instance shares one
+  `GET /sws/go/environments` through the app's `DataProvider` query cache (in-flight sharing plus
+  the provider's record stale time, 30 s by default). That matters because each call runs the live
+  quota counts of every listed tenant. The `etendo:refresh-environments` event
+  (`ENVIRONMENT_LIST_REFRESH_EVENT`) forces one new read that every instance receives. A failed read
+  is never cached, and the cache is cleared and re-keyed when the session identity changes (logout,
+  another account); a tenant switch is a hard navigation. Without a `DataProvider` each instance
+  reads the network itself, as before.
 - **Copy:** one line per item, DENY first, built from the catalog `resourceName` (its
   `resourceKey` when the name is blank), `consumed`,
   `includedQty`, `unitLabel` and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
