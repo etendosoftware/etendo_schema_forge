@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
 import { describe, expect, it } from 'vitest';
 import enUS from '../en_US.json';
 import esES from '../es_ES.json';

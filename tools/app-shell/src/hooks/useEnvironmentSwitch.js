@@ -143,16 +143,17 @@ export function useEnvironmentSwitch({
         return readEnvironmentList(dataCacheRef.current);
       }
     };
+    // Never rejects: the whole body is inside the try, and every failure lands in the catch below,
+    // so callers can start it without handling the returned promise.
     const loadEnvironments = async ({ force = false } = {}) => {
-      // A fresh shared list is applied without a loading flip (no flash on a late mount).
-      const fresh = force ? null : peekEnvironmentList(dataCacheRef.current);
-      if (fresh) {
-        setEnvironments(fresh);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
       try {
+        // A fresh shared list is applied without a loading flip (no flash on a late mount).
+        const fresh = force ? null : peekEnvironmentList(dataCacheRef.current);
+        if (fresh) {
+          setEnvironments(fresh);
+          return;
+        }
+        setLoading(true);
         const envs = await readSurvivingIdentityChange({ force });
         if (!cancelled) setEnvironments(envs);
       } catch {
@@ -164,7 +165,7 @@ export function useEnvironmentSwitch({
     // Every mounted instance listens and forces: the first forced read starts the request and the
     // others join it, so one refresh is one request and every instance receives the new list.
     const refreshEnvironments = () => loadEnvironments({ force: true });
-    void loadEnvironments();
+    loadEnvironments();
     window.addEventListener(ENVIRONMENT_LIST_REFRESH_EVENT, refreshEnvironments);
     return () => {
       cancelled = true;
