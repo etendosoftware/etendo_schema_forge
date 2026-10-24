@@ -6,6 +6,8 @@
 // @covers tools/app-shell/src/hooks/useEntity.js
 // @covers tools/app-shell/src/pages/MyCompaniesPage.jsx
 // @covers tools/app-shell/src/lib/upgrade/api.js
+// @covers tools/app-shell/src/hooks/useEnvironmentSwitch.js
+// @covers tools/app-shell/src/layout/AppLayout.jsx
 import { test, expect } from '@playwright/test';
 import { login, declareCookieSession } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
@@ -381,6 +383,98 @@ test.describe('Subscription lifecycle — /account inside an environment without
     await expect(section.getByTestId('SubscriptionSection__none'))
       .not.toHaveText(t('subscriptionNoActive'));
     await expect(section.getByTestId('SubscriptionSection__manage')).toHaveCount(0);
+  });
+});
+
+/**
+ * One shared environment-list read per page load (ETP-5051 O-3). The list is read by the two
+ * billing banners, the side menu, the top bar, the layout and the tenant plan at once; each of
+ * those reads runs the live quota counts of every listed tenant on the backend, so they must
+ * share ONE `GET /sws/go/environments` per page load and ONE more per
+ * `etendo:refresh-environments`. The hook's unit tests prove the sharing with a handful of
+ * instances; this proves it with the real app tree, where a new consumer, a second provider or a
+ * boot-time identity change would each show up as an extra request.
+ *
+ * Cookie scheme, the production one: the session restore sets the CSRF proof while the app mounts,
+ * which is exactly the identity change that could make the shared read run twice. The "Mis
+ * empresas" page's `?details=true` read is a separate, heavier payload by design and is counted
+ * on its own.
+ */
+test.describe('Shared environment list — one read per page load', () => {
+  // Quiet period after the counts settle: long enough for a late duplicate (a retry, a consumer
+  // that mounts after the first read resolved) to be sent, and so counted.
+  const QUIET_MS = 1_500;
+  const CURRENT = {
+    clientId: 'e2e-mock-client',
+    clientName: 'Acme Productive',
+    plan: 'productive',
+    environmentType: 'PRODUCTIVE',
+    subscriptionStatus: 'ACTIVE',
+    relationship: 'OWNER',
+    ownedByAccount: true,
+    renewalAt: '2026-11-15T00:00:00Z',
+    quotas: [],
+  };
+
+  /** Answers the list and counts the shared read and the `details=true` read apart. */
+  async function countEnvironmentReads(page) {
+    const counts = { shared: 0, details: 0 };
+    const handler = async (route) => {
+      const request = route.request();
+      if (request.method() !== 'GET') return route.fallback();
+      const url = new URL(request.url());
+      if (!url.pathname.endsWith('/sws/go/environments')) return route.fallback();
+      if (url.searchParams.get('details') === 'true') counts.details += 1;
+      else counts.shared += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ environments: [CURRENT] }),
+      });
+    };
+    await page.route('**/sws/go/environments/**', handler);
+    await page.route('**/sws/go/environments**', handler);
+    return counts;
+  }
+
+  async function settle(page) {
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.waitForTimeout(QUIET_MS);
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await declareCookieSession(page);
+    await installAccountMock(page);
+    await installSubscriptionMock(page, ACTIVE_SUBSCRIPTION);
+  });
+
+  for (const path of ['/dashboard', '/account']) {
+    test(`${path}: one read on load and exactly one more per refresh event`, async ({ page }) => {
+      const counts = await countEnvironmentReads(page);
+      await page.goto(path);
+      // The layout's consumers are mounted: the side menu and the top bar are on screen.
+      await expect(page.getByTestId('topbar-user-menu')).toBeVisible({ timeout: 10_000 });
+      await expect.poll(() => counts.shared, { timeout: 10_000 }).toBeGreaterThan(0);
+      await settle(page);
+      expect(counts.shared).toBe(1);
+
+      await page.evaluate(() => window.dispatchEvent(new Event('etendo:refresh-environments')));
+      await expect.poll(() => counts.shared, { timeout: 10_000 }).toBeGreaterThan(1);
+      await settle(page);
+      expect(counts.shared).toBe(2);
+      expect(counts.details).toBe(0);
+    });
+  }
+
+  test('/companies adds exactly its own details read to the one shared read', async ({ page }) => {
+    const counts = await countEnvironmentReads(page);
+    await page.goto('/companies');
+    await expect(page.getByTestId('my-companies-owned-table')).toBeVisible({ timeout: 10_000 });
+    await settle(page);
+
+    expect(counts.details).toBe(1);
+    expect(counts.shared).toBe(1);
   });
 });
 
