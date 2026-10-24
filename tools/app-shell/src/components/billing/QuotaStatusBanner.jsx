@@ -11,6 +11,7 @@ import {
   isQuotaOverLimit,
   quotaAlertItems,
   quotaBannerDismissKey,
+  quotaResourceLabel,
   quotaUsageWithPeriod,
 } from '@/lib/planQuotas.js';
 
@@ -99,12 +100,12 @@ export function QuotaStatusBanner() {
       <ul className="space-y-0.5" data-testid="quota-status-banner-items">
         {items.map((item) => (
           <li
-            key={item.resourceKey || item.resourceName}
+            key={item.resourceKey || quotaResourceLabel(item)}
             data-testid="quota-status-banner-item"
             data-verdict={item.verdict}
           >
             {ui(alertMessageKey(item), {
-              resource: item.resourceName,
+              resource: quotaResourceLabel(item),
               usage: quotaUsageWithPeriod(item, ui),
             })}
           </li>

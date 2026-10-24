@@ -11,6 +11,7 @@ import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
 import {
   QUOTA_VERDICT_DENY,
+  quotaResourceLabel,
   quotaStateKey,
   quotaUsageWithPeriod,
 } from '@/lib/planQuotas.js';
@@ -71,7 +72,7 @@ function PlanQuotas({ planName, quotas, ui, locale }) {
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium" data-testid="SubscriptionSection__quotaName">
-                  {item.resourceName}
+                  {quotaResourceLabel(item)}
                 </p>
                 <p className="text-xs text-muted-foreground" data-testid="SubscriptionSection__quotaUsage">
                   {quotaUsageWithPeriod(item, ui)}

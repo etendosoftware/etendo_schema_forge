@@ -9,6 +9,7 @@ import {
   quotaAlertItems,
   quotaBannerDismissKey,
   quotaPeriodKey,
+  quotaResourceLabel,
   quotaStateKey,
   quotaUsageText,
   quotaUsageWithPeriod,
@@ -169,6 +170,22 @@ describe('quotaPeriodKey / quotaUsageWithPeriod', () => {
   });
 });
 
+describe('quotaResourceLabel', () => {
+  it('is the catalog name, trimmed', () => {
+    assert.equal(quotaResourceLabel(quota({ resourceName: '  Facturas  ' })), 'Facturas');
+  });
+
+  it('falls back to the resource key when the name is blank or missing', () => {
+    assert.equal(quotaResourceLabel(quota({ resourceName: '' })), 'POSTED_SALES_INVOICES');
+    assert.equal(quotaResourceLabel(quota({ resourceName: null })), 'POSTED_SALES_INVOICES');
+  });
+
+  it('is null when there is neither a name nor a key', () => {
+    assert.equal(quotaResourceLabel(quota({ resourceName: ' ', resourceKey: '' })), null);
+    assert.equal(quotaResourceLabel(null), null);
+  });
+});
+
 describe('quotaAlertItems', () => {
   it('keeps only WARN and DENY items, DENY first, each group in its original order', () => {
     const items = [
@@ -182,9 +199,19 @@ describe('quotaAlertItems', () => {
     assert.deepEqual(quotaAlertItems(items).map((item) => item.resourceKey), ['C', 'F', 'A', 'E']);
   });
 
-  it('drops null entries and items with no resource name to show', () => {
-    const items = [null, quota({ resourceName: '' }), quota({ resourceName: '  ' }), quota({ resourceKey: 'OK' })];
+  it('drops null entries and items with neither a resource name nor a key to show', () => {
+    const items = [
+      null,
+      quota({ resourceName: '', resourceKey: '' }),
+      quota({ resourceName: '  ', resourceKey: null }),
+      quota({ resourceKey: 'OK' }),
+    ];
     assert.deepEqual(quotaAlertItems(items).map((item) => item.resourceKey), ['OK']);
+  });
+
+  it('keeps an item whose name is blank when it has a resource key to show instead', () => {
+    const items = [quota({ resourceName: '  ', resourceKey: 'KEY_ONLY' })];
+    assert.deepEqual(quotaAlertItems(items).map((item) => item.resourceKey), ['KEY_ONLY']);
   });
 
   it('is an empty list for [] or anything that is not an array', () => {

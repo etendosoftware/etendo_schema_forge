@@ -43,6 +43,14 @@ function nonBlank(value) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
+/**
+ * The name to show for a quota: the catalog `resourceName`, or its `resourceKey` when the name is
+ * blank (a catalog row an operator left unnamed). `null` when neither is usable.
+ */
+export function quotaResourceLabel(item) {
+  return nonBlank(item?.resourceName) ?? nonBlank(item?.resourceKey);
+}
+
 /** The quantity as the UI shows it: grouped with the instance-wide separators. */
 export function formatQuotaQuantity(value) {
   return formatGroupedNumber(value, QUANTITY_FORMAT);
@@ -105,7 +113,7 @@ export function quotaAlertItems(quotas) {
   if (!Array.isArray(quotas)) return [];
   const alerts = quotas.filter((item) => item
     && (item.verdict === QUOTA_VERDICT_WARN || item.verdict === QUOTA_VERDICT_DENY)
-    && nonBlank(item.resourceName));
+    && quotaResourceLabel(item));
   return [
     ...alerts.filter((item) => item.verdict === QUOTA_VERDICT_DENY),
     ...alerts.filter((item) => item.verdict === QUOTA_VERDICT_WARN),
@@ -135,7 +143,7 @@ export function extractQuotaExceeded(payload) {
  */
 export function quotaBannerDismissKey(clientId, items) {
   const signature = (Array.isArray(items) ? items : [])
-    .map((item) => `${item.resourceKey || item.resourceName}=${item.verdict}`)
+    .map((item) => `${item.resourceKey || quotaResourceLabel(item)}=${item.verdict}`)
     .join(',');
   return `etendo:quota-warning-dismissed:${clientId || ''}:${signature}`;
 }
