@@ -563,7 +563,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
       >
         {/* ETP-5049 — failed-payment warning during the grace period, above the whole chrome. */}
         {!embedded && <BillingStatusBanner data-testid="BillingStatusBanner__488148" />}
-        {/* ETP-5051 — plan quotas near or at their limit, as reported on entering the environment. */}
+        {/* ETP-5051 — plan quotas near or at their limit, from the environment list (`quotas`). */}
         {!embedded && <QuotaStatusBanner data-testid="QuotaStatusBanner__488148" />}
         {!embedded && (
           <TopBar

@@ -17,7 +17,8 @@ import { formatGroupedNumber } from './formatCurrency.js';
  * `consumed` (null = not measured yet), `verdict` (`ALLOW` | `WARN` | `DENY` | null),
  * `period` (`month` | `year` | null — the plan's billing interval, which is the quota's consumption
  * window, so a quota on a yearly plan is a yearly quota, `open-and-notable-topics.md` §5.8),
- * `periodStart` / `periodEnd` (the subscription's current period).
+ * `periodStart` / `periodEnd` (the counted window, date-only `yyyy-MM-dd` strings, shown through
+ * `formatCalendarDate`).
  *
  * Every user-visible sentence is a `genericLabels` key interpolated with the catalog name and unit:
  * never a per-resource key, because the resources are catalog rows an operator can add.

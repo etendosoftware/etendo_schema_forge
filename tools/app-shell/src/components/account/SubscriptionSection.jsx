@@ -30,7 +30,8 @@ const QUOTA_WARNING_BADGE = 'border-status-warning-border bg-status-warning text
  * - WARN / DENY get a state badge; ALLOW and not-evaluated (`verdict: null`, mode `off`) get none.
  *
  * `periodStart` / `periodEnd` are the subscription's current period, the same on every item, so
- * the range is shown once. They are day-level boundaries, formatted through `formatCalendarDate`.
+ * the range is shown once. They are date-only `yyyy-MM-dd` strings, formatted through
+ * `formatCalendarDate`.
  */
 function PlanQuotas({ planName, quotas, ui, locale }) {
   if (!planName) return null;
