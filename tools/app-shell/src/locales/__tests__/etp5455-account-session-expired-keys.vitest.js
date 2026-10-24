@@ -12,7 +12,10 @@ import esES from '../es_ES.json';
  *    down; the session is, and Retry can never succeed.
  *  - `accountSignInAgain` labels the only action that helps.
  *
- * Only en_US and es_ES: the rest of the /account copy is not in es_AR either, which falls back.
+ * Only en_US and es_ES: the rest of the /account copy is not in es_AR either. That is a gap, not a
+ * fallback: there is no locale-to-locale fallback (`LocaleProvider` hands `useUI` only
+ * `dictionaries[locale]`, and `core.es_AR.json` is built from es_AR.json alone), so under es_AR
+ * these keys render as the raw key.
  */
 const ETP_5455_KEYS = ['accountSessionExpired', 'accountSignInAgain'];
 const DICTIONARIES = { en_US: enUS, es_ES: esES };
