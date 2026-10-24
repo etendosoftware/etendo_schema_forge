@@ -576,11 +576,13 @@ what changes is what the **server and the MCP agents** see:
 - **Richer answer.** `{id, documentNo, documentStatus}` plus `documentType`, `isSalesTransaction` (`false` here),
   `grandTotalAmount`, `totalLines` (negative amounts, read after the completion), `linkedReturnId`,
   `returnDocumentNo`, `rectifiedInvoices` and `previousReturnInvoices`. The invoice stays COMPLETED.
-- **Never at zero.** If any product line with a quantity would end at a price of 0 (no price on the receipt/order
-  line, none on the source invoice line, none in the price list) the call answers **422**
-  `returnInvoiceWithoutAmount` naming the products and creates nothing. The SPA shows it translated
-  (`backendError.returnInvoiceWithoutAmount`, "No se puede crear la factura rectificativa: no se ha encontrado precio
-  para …").
+- **Never at zero by accident.** A product line is refused when it has NO price source: not on the invoice being
+  rectified, nor on its order line, nor in the price list. The call then answers **422**
+  `returnInvoiceWithoutAmount` naming the products and creates nothing. A product deliberately invoiced at 0 is
+  NOT refused: the 0 on the completed invoice line being rectified is a real price, and it is refunded at 0 (a
+  0 that only the order line or the price list gives is still refused). With `originInvoices` the price is read from
+  those invoices' lines. The SPA shows the refusal translated (`backendError.returnInvoiceWithoutAmount`, "No se puede
+  crear la factura rectificativa: no se ha encontrado ninguna fuente de precio para …").
 - **No invoice to rectify** (the receipt was never invoiced): still **400**, now worded *"This return has no invoice to
   rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. …"*
   (`backendError.rectifiedInvoiceRequired`, the SPA's translation follows).
@@ -591,7 +593,7 @@ The amount of the created invoice reaches the SPA as `invoice.amount` (`ConfirmI
 component renders it. Full reference: `neo-headless.md` §4.12.33.
 
 **Manual verification (MCP).** Confirm a return, then create its factura rectificativa; call `createReturnInvoice` a
-second time and check `previousReturnInvoices`; try a return whose product has no price (422, nothing created);
+second time and check `previousReturnInvoices`; try a return whose product has no price anywhere (422, nothing created) and one whose product was invoiced at 0 (created at 0);
 try a return of a never-invoiced receipt (400 with the new wording).
 
 ## Period not open (ETP-5577)

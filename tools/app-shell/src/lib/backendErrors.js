@@ -975,12 +975,13 @@ function matchReturnReasonTooLong(msg) {
 }
 
 // ReturnShipmentUtils.refuseIfUnpriced (com.etendoerp.go — ETP-5712), `error.code = returnInvoiceWithoutAmount`:
-// "The corrective invoice (factura rectificativa) cannot be created: no price could be found for
-// {products}, so it would be confirmed with a zero amount. Set a price for ... and try again."
+// "The corrective invoice (factura rectificativa) cannot be created: no price source was found for
+// {products} (not on the invoice being rectified, nor on its order line, nor in the price list), so
+// it would be confirmed with a zero amount. Give those products a price ..."
 // The products are free text joined with ", " — one opaque {products} param (same shape as
 // matchInvoiceLinesWithoutAmount), located by the fixed prefix and suffix, never by a regex.
-const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
-const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price source was found for ';
+const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ' (not on the invoice being rectified, nor on its order line, nor in the price list), so it would be confirmed with a zero amount. Give those products a price in the price list, or rectify an invoice that has them.';
 
 function matchReturnInvoiceWithoutAmount(msg) {
   if (!msg.startsWith(RETURN_INVOICE_NO_AMOUNT_PREFIX) || !msg.endsWith(RETURN_INVOICE_NO_AMOUNT_SUFFIX)) {
