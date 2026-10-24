@@ -47,8 +47,8 @@ function quota(overrides = {}) {
     period: 'month',
     consumed: 87,
     verdict: 'WARN',
-    periodStart: '2026-10-07T00:00:00Z',
-    periodEnd: '2026-11-07T00:00:00Z',
+    periodStart: '2026-10-07',
+    periodEnd: '2026-11-07',
     ...overrides,
   };
 }

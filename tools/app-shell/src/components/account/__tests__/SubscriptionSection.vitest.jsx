@@ -403,8 +403,8 @@ describe('SubscriptionSection', () => {
       consumptionSource: 'aggregate',
       consumed: 42,
       verdict: 'ALLOW',
-      periodStart: '2026-10-07T00:00:00Z',
-      periodEnd: '2026-11-07T00:00:00Z',
+      periodStart: '2026-10-07',
+      periodEnd: '2026-11-07',
     };
 
     function withQuotas(planQuotas, extra = {}) {
