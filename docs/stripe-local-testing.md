@@ -429,7 +429,7 @@ account's subscription is read or which portal session is opened.
   name) and a read-only list of the quotas: catalog name, "consumed of included unit" with the
   period word ("per year" on a yearly plan), a state badge for WARN/DENY, "(not measured yet)" for
   a null `consumed`, and "Your plan has no usage limits." for a plan with an empty `planQuotas`
-  (`docs/generated-custom-windows/app-shell-functional-flows.md` §3.2a-bis). It also carries
+  (`docs/generated-custom-windows/app-shell-functional-flows.md` §3.2a-quater). It also carries
   `accessEnforced` for the tenant: when it is `false` (kill switch on), the section replaces the
   grace countdown and "access is paused" with a neutral "payment overdue" line. An account with
   none returns `200 {"hasSubscription": false}`, never a `404` — free and grandfathered accounts

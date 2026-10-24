@@ -280,7 +280,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   payment banner reads `graceEndsAt`. `POST /sws/go/session/environment` carries the same list,
   but core's `loginEnvironment()` discards that answer before the post-entry page load, so the
   list is the SPA's source (contract amendment §4b). No client-side stash is involved.
-- **Copy:** one line per item, DENY first, built from the catalog `resourceName`, `consumed`,
+- **Copy:** one line per item, DENY first, built from the catalog `resourceName` (its
+  `resourceKey` when the name is blank), `consumed`,
   `includedQty`, `unitLabel` and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
   `warn`-mode quota already past its limit / `quotaBannerWarn`). Red with `role="alert"` when any
   item is DENY, amber otherwise. Dismissible for the browser session; the dismissal key names the
@@ -310,6 +311,31 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   The generic CSV/XLSX import (`ImportDialog` in `@etendosoftware/app-shell-core`) still
   classifies it as its generic row error: its row message is decided inside core's
   `importEngine.classifyImportError`, which has no quota case yet.
+
+#### 3.2a-quater The plan and its quotas on `/account` (Subscription section, ETP-5051)
+
+- **Where:** `tools/app-shell/src/components/account/SubscriptionSection.jsx` (`PlanQuotas`), on
+  `/account`. Read-only.
+- **Data:** `GET /sws/go/billing/subscription` — `planName` (the catalog plan; the live Stripe
+  product name `plan` is the fallback) and `planQuotas[]`, every active quota of the plan with its
+  current-period `consumed` and `verdict`.
+- **Per quota row:** the catalog `resourceName` (its `resourceKey` when the name is blank);
+  "`consumed` of `includedQty` `unitLabel`" followed by the period word, so a quota on a yearly plan
+  reads "per year" (`open-and-notable-topics.md` §5.8); "(not measured yet)" when `consumed` is
+  null; a badge for WARN ("Near the limit", or "Over the limit" once a `warn`-mode quota has passed
+  it) and DENY ("Limit reached"), none for ALLOW or a quota in mode `off`. The subscription's
+  current period (`periodStart`–`periodEnd`, day-level, `formatCalendarDate`) is shown once above
+  the list.
+- **Unlimited:** a plan with an empty `planQuotas` reads "Your plan has no usage limits." (§5.1).
+  No plan (`planName` null) shows no quota block at all.
+- **Grace with enforcement off:** with `accessEnforced: false` on the same response (contract
+  §4c), the grace countdown and "access is paused" give way to one neutral line,
+  `subscriptionPaymentOverdue` (test id `SubscriptionSection__paymentOverdue`).
+- **Test ids:** `SubscriptionSection__plan`, `SubscriptionSection__quotas`,
+  `SubscriptionSection__quotasUnlimited`, `SubscriptionSection__quotaPeriod`,
+  `SubscriptionSection__quota` (with `data-verdict`), `SubscriptionSection__quotaName`,
+  `SubscriptionSection__quotaUsage`, `SubscriptionSection__quotaNotMeasured`,
+  `SubscriptionSection__quotaState`.
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
