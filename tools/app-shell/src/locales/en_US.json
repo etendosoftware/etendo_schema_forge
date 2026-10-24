@@ -17883,6 +17883,7 @@
     "billingUpdatePaymentCta": "Update payment",
     "billingPaymentFailedContactAdmin": "Contact your company's administrator.",
     "billingPaymentOverdueBanner": "Your last payment failed and is still overdue.",
+    "subscriptionPaymentOverdue": "Your last payment is overdue. Update your payment method to settle it.",
     "subscriptionPlanLimits": "Plan limits",
     "subscriptionPlanUnlimited": "Your plan has no usage limits.",
     "quotaUsage": "{consumed} of {included} {unit}",

@@ -17742,6 +17742,7 @@
     "billingUpdatePaymentCta": "Actualizar pago",
     "billingPaymentFailedContactAdmin": "Contactá al administrador de tu empresa.",
     "billingPaymentOverdueBanner": "Tu último pago falló y sigue vencido.",
+    "subscriptionPaymentOverdue": "Tu último pago está vencido. Actualizá tu método de pago para regularizarlo.",
     "subscriptionPlanLimits": "Límites del plan",
     "subscriptionPlanUnlimited": "Tu plan no tiene límites de uso.",
     "quotaUsage": "{consumed} de {included} {unit}",

@@ -18115,6 +18115,7 @@
     "billingUpdatePaymentCta": "Actualizar pago",
     "billingPaymentFailedContactAdmin": "Contacta con el administrador de tu empresa.",
     "billingPaymentOverdueBanner": "Tu último pago ha fallado y sigue pendiente.",
+    "subscriptionPaymentOverdue": "Tu último pago está pendiente. Actualiza tu método de pago para saldarlo.",
     "subscriptionPlanLimits": "Límites del plan",
     "subscriptionPlanUnlimited": "Tu plan no tiene límites de uso.",
     "quotaUsage": "{consumed} de {included} {unit}",

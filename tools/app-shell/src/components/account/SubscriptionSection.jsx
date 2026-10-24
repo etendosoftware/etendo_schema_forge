@@ -232,8 +232,15 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
   // drive neither: Stripe's own status vocabulary (active/past_due/trialing/canceled/...) can
   // disagree in timing with the stored grace window.
   const graceDaysRemaining = subscription?.graceDaysRemaining ?? 0;
-  const showsGraceRemaining = graceDaysRemaining > 0;
-  const showsAccessPaused = !showsGraceRemaining && subscription?.graceEndsAt != null;
+  const inGraceWindow = graceDaysRemaining > 0 || subscription?.graceEndsAt != null;
+  // ETP-5051 (contract §4c, `open-and-notable-topics.md` §4.17) — `accessEnforced: false` means the
+  // environment-access kill switch is on for this tenant: access will not be paused, so neither the
+  // countdown nor "access is paused" is true. One neutral line says only that the payment is
+  // overdue. A missing field (older backend) keeps today's copy.
+  const enforcementOff = subscription?.accessEnforced === false;
+  const showsPaymentOverdue = enforcementOff && inGraceWindow;
+  const showsGraceRemaining = !enforcementOff && graceDaysRemaining > 0;
+  const showsAccessPaused = !enforcementOff && !showsGraceRemaining && subscription?.graceEndsAt != null;
   // Only English/Spanish need a singular form today (no language here inflects further at N=2+),
   // matching the manual `_one`/`_many` key-selection convention already used for this kind of
   // count-driven copy — see `fm.m349.vies.result.processed_one`/`_many` in FmModel349Page.jsx.
@@ -330,6 +337,15 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
                 data-testid="SubscriptionSection__graceRemaining"
               >
                 {ui(graceRemainingKey, { days: graceDaysRemaining })}
+              </p>
+            )}
+
+            {showsPaymentOverdue && (
+              <p
+                className="text-sm text-destructive"
+                data-testid="SubscriptionSection__paymentOverdue"
+              >
+                {ui('subscriptionPaymentOverdue')}
               </p>
             )}
 
