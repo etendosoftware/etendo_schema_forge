@@ -364,7 +364,8 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
               planName={subscription.planName}
               quotas={subscription.planQuotas}
               ui={ui}
-              locale={locale} />
+              locale={locale}
+              data-testid="PlanQuotas__769a8e" />
 
             <div>
               <Button
