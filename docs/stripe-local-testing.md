@@ -412,15 +412,36 @@ the line (or set `false`) to enforce again. On ConfigCat it can be targeted per 
 
 ### The two account endpoints (ETP-5443)
 
-Both hang off `runWithPlatformAccount`, so the JWT — not a request body field — decides which
-account's subscription is read or which portal session is opened.
+Both run through `runWithPlatformContext` (the account resolver under
+`PLATFORM_CREDENTIAL_ONLY`, so an environment JWT is refused), and both resolve the one purchase
+they act on with the same servlet helper, `findShownSubscription` — so the portal always opens
+for the subscription the page shows. The credential decides the account; nothing in a request
+can widen it. Since ETP-5051 (O-1) an account that owns several environments has one Stripe
+subscription and customer per environment, and the helper picks one of them:
 
-- **`GET /sws/go/billing/subscription`** — resolves the account's `CheckoutRequest` with a
-  `stripeSubscription`, fetches the live detail from Stripe (`plan`, `amountMinor`, `currency`,
-  `status`, `renewalAt`, `cancelAtPeriodEnd`), and merges in the stored `graceEndsAt` /
-  `graceDaysRemaining` plus `clientId`, the environment the subscription pays for (`null` while
-  the purchase has no environment yet). "Mis empresas" no longer reads this endpoint: since
-  ETP-5051 O-1b each row takes its own `renewalAt` from `GET /sws/go/environments`. Since ETP-5049 it also carries the plan catalog view of the subscription —
+| Caller | Purchase resolved | Nothing found |
+|---|---|---|
+| Cookie session that has entered an environment (`POST /sws/go/session/environment`) | That environment's own purchase — `CheckoutRequestStore.findSubscriptionForAccountClient` (account id + email + entered client in the query) | `GET` → `200 {"hasSubscription": false}`; portal → `404 NO_SUBSCRIPTION`. **No fallback** to another environment's subscription |
+| Cookie session with no environment entered, or the legacy platform bearer (carries no environment) | The account's newest billable purchase — `CheckoutRequestStore.findSubscriptionForAccount` | Same answers as above |
+
+Ownership is the query's: both lookups filter on the account id and email, so a client id that
+is not one of the account's own purchases resolves to nothing, whoever owns that client. To test
+the "no fallback" rule locally, enter a demo environment (or one you were only invited into) on
+an account that pays for another one: `/account` reads "This environment has no subscription."
+and shows no Manage button. Authoritative reference:
+`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, *Which subscription the page shows*
+and *The portal for a named environment*.
+
+- **`GET /sws/go/billing/subscription`** — resolves the purchase as above, fetches the live
+  detail from Stripe (`plan`, `amountMinor`, `currency`, `status`, `renewalAt`,
+  `cancelAtPeriodEnd`), and merges in the stored `graceEndsAt` / `graceDaysRemaining` plus
+  `clientId`, the environment the subscription pays for (`null` while the purchase has no
+  environment yet). "Mis empresas" does not read this endpoint, which answers only the entered
+  environment: since ETP-5051 O-1b each row takes its own `renewalAt` from
+  `GET /sws/go/environments`, read from local state (`ETGO_SUBSCRIPTION.CURRENT_PERIOD_END`, no
+  Stripe call per row) and non-null only while that subscription is active (Stripe `active` or
+  `trialing`) and `CANCEL_AT_PERIOD_END` is `N` (field reference: the same go doc, *Exposure in `/environments`*).
+  Since ETP-5049 it also carries the plan catalog view of the subscription —
   `planKey`, `planName` and the plan's included `planQuotas` (field reference:
   `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, *The subscription page*). Since
   ETP-5051 each `planQuotas` item also carries `consumptionSource`, `consumed` (null = not measured
@@ -431,9 +452,9 @@ account's subscription is read or which portal session is opened.
   a null `consumed`, and "Your plan has no usage limits." for a plan with an empty `planQuotas`
   (`docs/generated-custom-windows/app-shell-functional-flows.md` §3.2a-quater). It also carries
   `accessEnforced` for the tenant: when it is `false` (kill switch on), the section replaces the
-  grace countdown and "access is paused" with a neutral "payment overdue" line. An account with
-  none returns `200 {"hasSubscription": false}`, never a `404` — free and grandfathered accounts
-  must still render the page.
+  grace countdown and "access is paused" with a neutral "payment overdue" line. No purchase
+  resolved returns `200 {"hasSubscription": false}`, never a `404` — free and grandfathered
+  accounts, and environments without a purchase of their own, must still render the page.
   **`renewalAt` is the renewal date; the environment's stored `renewalDueAt` is not.** The latter
   is the payment-grace anchor: empty while the subscription is current, the end of the last paid
   period once it is past due.
@@ -441,12 +462,36 @@ account's subscription is read or which portal session is opened.
   `"active"`, `"past_due"`, `"canceled"`) — not the internal `CURRENT` / `PAST_DUE` / `EXPIRED`
   enum this guide uses above. Use `graceDaysRemaining` / `graceEndsAt` to detect the grace state,
   not a `status` string comparison.
-- **`POST /sws/go/billing/subscription/portal`** — resolves the account's stored Stripe customer
-  (`CheckoutRequestStore.findBillableForAccount`) and calls `StripeCustomerPortalService.
-  createSession(...)`. No subscription for the account → `404 NO_SUBSCRIPTION`. The portal's
-  `return_url` is `PublicUrlResolver.resolveConfiguredAppBaseUrl()` (`etendo.go.app.baseUrl` /
-  `ETGO_APP_BASE_URL`, legacy `etgo.app.url` / `ETGO_APP_URL`) plus `/account` — never the
-  browser's `Origin`, the same rule hosted checkout already follows.
+- **`POST /sws/go/billing/subscription/portal`** — resolves the Stripe customer of one purchase
+  and calls `StripeCustomerPortalService.createSession(...)`; the response is `{"url": "…"}`.
+  It takes an optional JSON body naming the environment, which "Mis empresas" sends per row so
+  the portal opens for that row's environment whatever environment the session is in:
+
+  ```json
+  { "clientId": "<AD_CLIENT_ID of the row>" }
+  ```
+
+  - **`clientId` present** (non-blank, not `"0"`): that environment's own purchase,
+    `findSubscriptionForAccountClient(account id, email, clientId)` — the same
+    ownership-carrying query, so a client the account did not buy answers `404 NO_SUBSCRIPTION`.
+  - **No body, an empty body, a missing key, a JSON `null`, a blank string or `"0"`**: counts as
+    absent, and the rule in the table above (`findShownSubscription`) applies. The `/account`
+    Subscription section sends no body.
+  - **A body that is not a JSON object**: `400 "Invalid JSON body"`, with nothing looked up.
+  - The body is read only after the account is resolved, so a cookie-session POST is still
+    refused on its `Origin` / `X-Go-CSRF` proof before the body is ever parsed.
+
+  No purchase, or one without a Stripe customer → `404 NO_SUBSCRIPTION`. A quick check:
+
+  ```bash
+  curl -i -X POST "$ETENDO_BASE_URL/sws/go/billing/subscription/portal" \
+    -H "Authorization: Bearer $ETENDO_SESSION_TOKEN" -H 'Content-Type: application/json' \
+    -d '{"clientId":"<a client this account did not buy>"}'   # → 404 NO_SUBSCRIPTION
+  ```
+
+  The portal's `return_url` is `PublicUrlResolver.resolveConfiguredAppBaseUrl()`
+  (`etendo.go.app.baseUrl` / `ETGO_APP_BASE_URL`, legacy `etgo.app.url` / `ETGO_APP_URL`) plus
+  `/account` — never the browser's `Origin`, the same rule hosted checkout already follows.
 
 **Note:** `currency` in the `GET .../subscription` response is always upper-cased server-side
 (Stripe itself returns it lower-case). Every Stripe HTTP call `StripeCustomerPortalService` makes
