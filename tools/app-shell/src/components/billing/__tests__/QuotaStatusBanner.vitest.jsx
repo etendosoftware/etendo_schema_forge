@@ -129,6 +129,50 @@ describe('QuotaStatusBanner — data source', () => {
   });
 });
 
+// A catalog row an operator left unnamed still has its resource key: the banner names the quota
+// by that key (`quotaResourceLabel`) rather than dropping it, and drops only an item with neither.
+describe('QuotaStatusBanner — an unnamed quota', () => {
+  it.each([
+    ['a blank name', '  '],
+    ['an empty name', ''],
+    ['a missing name', null],
+  ])('names an item with %s by its resource key', (_label, resourceName) => {
+    withEnvironment({ quotas: [quota({ resourceKey: 'KEY_ONLY', resourceName })] });
+    render(<QuotaStatusBanner />);
+
+    expect(items()).toHaveLength(1);
+    expect(items()[0]).toHaveTextContent('quotaBannerWarn|');
+    expect(items()[0]).toHaveTextContent('"resource":"KEY_ONLY"');
+  });
+
+  it('does not show an item with neither a name nor a key', () => {
+    withEnvironment({ quotas: [quota({ resourceKey: '', resourceName: ' ' }), DENY_USERS] });
+    render(<QuotaStatusBanner />);
+
+    expect(items()).toHaveLength(1);
+    expect(items()[0]).toHaveTextContent('"resource":"Users"');
+  });
+
+  it('renders nothing when the only alert has neither a name nor a key', () => {
+    withEnvironment({ quotas: [quota({ resourceKey: null, resourceName: '' })] });
+    render(<QuotaStatusBanner />);
+    expect(queryBanner()).not.toBeInTheDocument();
+  });
+
+  it('keys the dismissal on the resource key, so renaming the quota does not bring it back', async () => {
+    const user = userEvent.setup();
+    withEnvironment({ quotas: [quota({ resourceKey: 'KEY_ONLY', resourceName: '' })] });
+    const { rerender } = render(<QuotaStatusBanner />);
+
+    await user.click(screen.getByTestId('quota-status-banner-dismiss'));
+    expect(sessionStorage.getItem('etendo:quota-warning-dismissed:CLIENT-1:KEY_ONLY=WARN')).toBe('1');
+
+    withEnvironment({ quotas: [quota({ resourceKey: 'KEY_ONLY', resourceName: 'Now named' })] });
+    rerender(<QuotaStatusBanner />);
+    expect(queryBanner()).not.toBeInTheDocument();
+  });
+});
+
 describe('QuotaStatusBanner — owner and member', () => {
   it('gives the owner a CTA to /account and no contact-admin hint', async () => {
     const user = userEvent.setup();

@@ -1069,6 +1069,57 @@ describe('RecordCreateModal — post-create phase', () => {
     expect(props.onCreated).toHaveBeenCalledWith(CREATED);
   });
 
+  // ETP-5051 — the field PATCH goes through the same `readErrorBody` as the POST, so a plan-quota
+  // refusal there reads as the translated quota sentence too.
+  it('translates a plan-quota refusal of a field PATCH instead of showing the raw English message', async () => {
+    installApiFetch({
+      post: jsonResponse({ response: { data: [CREATED] } }),
+      patch: jsonResponse({
+        error: {
+          message: 'Quota exceeded: Products (50/50 Prod)',
+          status: 403,
+          code: 'QUOTA_EXCEEDED',
+          quota: { resourceName: 'Productos', consumed: 50, includedQty: 50, unitLabel: 'Prod' },
+        },
+      }, false),
+    });
+    const user = userEvent.setup();
+    const props = await createRecord(user);
+    await screen.findByTestId('record-create-post-tabs');
+
+    await user.click(screen.getByTestId('fill-name'));
+    await user.click(screen.getByTestId('blur-name'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('backendError.quotaExceeded');
+    expect(error).toHaveTextContent('"resource":"Productos"');
+    expect(error).not.toHaveTextContent('Quota exceeded: Products');
+    expect(error).not.toHaveTextContent('createProductError');
+    await waitFor(() => expect(formProps.principal.savingField).toBeNull());
+
+    // The refused field save does not half-apply: finishing hands back the CREATE's record.
+    await user.click(screen.getByTestId('record-create-finish'));
+    expect(props.onCreated).toHaveBeenCalledWith(CREATED);
+  });
+
+  it('shows an unknown NEO error message of a field PATCH as is', async () => {
+    installApiFetch({
+      post: jsonResponse({ response: { data: [CREATED] } }),
+      patch: jsonResponse({
+        error: { message: 'Field locked by workflow step 7', status: 403, code: 'FORBIDDEN' },
+      }, false),
+    });
+    const user = userEvent.setup();
+    await createRecord(user);
+    await screen.findByTestId('record-create-post-tabs');
+
+    await user.click(screen.getByTestId('fill-name'));
+    await user.click(screen.getByTestId('blur-name'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent(/^Field locked by workflow step 7$/);
+  });
+
   it('falls back to the target error when the PATCH throws', async () => {
     installApiFetch({
       post: jsonResponse({ response: { data: [CREATED] } }),

@@ -425,6 +425,19 @@ describe('SubscriptionSection', () => {
       expect(screen.queryByTestId('SubscriptionSection__quotasUnlimited')).not.toBeInTheDocument();
     });
 
+    it.each([
+      ['a blank', '  '],
+      ['an empty', ''],
+      ['a missing', null],
+    ])('names a quota with %s resource name by its resource key', async (_label, resourceName) => {
+      withQuotas([{ ...QUOTA, resourceKey: 'USERS', resourceName, unitLabel: null, includedQty: 5, consumed: 2 }]);
+      renderSection();
+
+      const row = await screen.findByTestId('SubscriptionSection__quota');
+      expect(within(row).getByTestId('SubscriptionSection__quotaName')).toHaveTextContent(/^USERS$/);
+      expect(within(row).getByTestId('SubscriptionSection__quotaUsage')).toHaveTextContent(/^2 of 5 quotaPeriodMonth$/);
+    });
+
     it('reads a quota on a yearly plan as yearly', async () => {
       withQuotas([{ ...QUOTA, period: 'year', includedQty: 1200, consumed: 900 }]);
       renderSection();
