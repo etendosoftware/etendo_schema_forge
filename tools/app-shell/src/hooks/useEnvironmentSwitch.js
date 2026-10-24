@@ -128,6 +128,21 @@ export function useEnvironmentSwitch({
     // environment list would come back empty for every authenticated user.
     // `isAuthenticated` above is the gate; `sortEnvironments` is kept.
     let cancelled = false;
+    // Review MINOR-1 — when the session identity changes while the shared read is in flight (a
+    // role or org switch, an `authRevision` bump), the DataProvider clears the cache and core's
+    // `fetchQuery` rejects that read with an `AbortError` (a DOMException) once it settles. That is
+    // not a failure of the list: re-read ONCE through the provider's current cache and key. Every
+    // instance that shared the aborted read retries at the same moment, so they share the retry too
+    // (or are handed a list a refresh already stored under the new key). Only once: a second abort
+    // falls through to the catch below, so a run of identity changes cannot loop.
+    const readSurvivingIdentityChange = async ({ force }) => {
+      try {
+        return await readEnvironmentList(dataCacheRef.current, { force });
+      } catch (err) {
+        if (cancelled || err?.name !== 'AbortError' || !dataCacheRef.current?.cache) throw err;
+        return readEnvironmentList(dataCacheRef.current);
+      }
+    };
     const loadEnvironments = async ({ force = false } = {}) => {
       // A fresh shared list is applied without a loading flip (no flash on a late mount).
       const fresh = force ? null : peekEnvironmentList(dataCacheRef.current);
@@ -138,7 +153,7 @@ export function useEnvironmentSwitch({
       }
       setLoading(true);
       try {
-        const envs = await readEnvironmentList(dataCacheRef.current, { force });
+        const envs = await readSurvivingIdentityChange({ force });
         if (!cancelled) setEnvironments(envs);
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.

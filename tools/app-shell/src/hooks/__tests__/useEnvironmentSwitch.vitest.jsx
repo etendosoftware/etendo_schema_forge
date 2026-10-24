@@ -312,6 +312,26 @@ describe('useEnvironmentSwitch', () => {
       expect(history[0].some((h) => ids(h.environments).includes('CLIENT-ACME'))).toBe(false);
     });
 
+    // Review MINOR-1 — an identity change (role/org switch, an `authRevision` bump) WHILE the shared
+    // read is in flight: the DataProvider clears the cache, core's `fetchQuery` rejects the pending
+    // read with an AbortError when it settles, and without a re-read every instance stayed at `[]`
+    // with nothing to trigger another read. Every instance must re-read once under the new key
+    // (sharing that one request) and end with the new session's list.
+    it('re-reads once under the new identity when it changes while the read is in flight', async () => {
+      const oldRead = deferred();
+      fetchEnvironments.mockReturnValueOnce(oldRead.promise).mockResolvedValueOnce([BETA]);
+      const { seen, history, auth } = renderInstances({ slots: [0, 1, 2] });
+      await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(1));
+
+      act(() => auth.current.setCsrfToken('csrf-2'));
+      await act(async () => { oldRead.resolve([ACME]); });
+
+      await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 1)).toBe(true));
+      expect(seen.map((s) => ids(s.environments))).toEqual(Array(3).fill(['CLIENT-BETA']));
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+      expect(history.flat().some((h) => ids(h.environments).includes('CLIENT-ACME'))).toBe(false);
+    });
+
     // The hook reads `isAuthenticated` from the mocked `@/auth/AuthContext.jsx`, so the test
     // signs out on BOTH sides: the core provider (which clears the cache) and the mocked session.
     it('empties the list on logout, and neither a mount nor a refresh reads while signed out', async () => {
