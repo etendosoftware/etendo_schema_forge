@@ -744,7 +744,8 @@ function matchQuotaExceededMessage(msg) {
     resourceName: body.slice(0, open),
     consumed: inner.slice(0, slash).trim(),
     includedQty: (space < 0 ? rest : rest.slice(0, space)).trim(),
-    // The backend concatenates a null unit as the literal "null".
+    // Defensive: the backend leaves a blank unit out of the sentence altogether
+    // (`QuotaItemJson.refusalMessage`), but a literal "null" is still read as no unit.
     unitLabel: unit && unit !== 'null' ? unit : null,
   };
 }
@@ -1590,12 +1591,13 @@ export async function parseBackendError(res) {
   } catch {
     return {};
   }
+  const quota = extractQuotaExceeded(data);
   return {
     message: pickBackendErrorText(data),
     messageKeys: extractBackendMessageKeys(data),
     messageParams: extractBackendMessageParams(data),
     // Only on a quota refusal, so every other body keeps its three-field shape.
-    ...(extractQuotaExceeded(data) ? { quota: extractQuotaExceeded(data) } : {}),
+    ...(quota ? { quota } : {}),
   };
 }
 
