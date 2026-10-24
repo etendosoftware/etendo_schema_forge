@@ -218,6 +218,8 @@ This must appear verbatim in the delivered documentation, so nobody promises mor
 
 Only the last tier is development, and it is additive rather than a modification. That is the actual test of extensibility, and the honest boundary: *changing a limit is configuration; adding an enforcement point is development.*
 
+> **Delivered in ETP-5051.** The ladder, with what each tier means for the four points actually wired (three report points and the NEO write path), is in `modules/com.etendoerp.go/docs/plan-quotas.md` §2–§3. One nuance the table does not show: a tier-3 strategy resource is measured and reported, but the NEO write path refuses only declarative resources, so making it refusable somewhere is tier 4.
+
 ---
 
 ## 8. Plan change
@@ -309,6 +311,8 @@ A single choke point at environment login, in a dedicated testable class.
 - Quota denial is evaluated by the generic evaluator, which returns allow, warn or deny plus the numbers behind the decision. Messages are built from catalog metadata — display name and unit — never from a per-resource string, otherwise a newly added resource ships with no message.
 - Enforcement ships **disabled**, enabled per deployment through the layered configuration pattern, so it can be turned off without a deploy.
 - If a second enforcement point is ever added it must obtain its verdict from the same evaluator. A second place deciding what over-quota means is how the two drift apart.
+
+> **Extended by ETP-5051.** Login is never refused for a quota (decided 2026-10-24): environment entry, the environment list and `/account` only report, and the one refusing point is the NEO write path, on create of the counted entity in mode `block`. See `modules/com.etendoerp.go/docs/plan-quotas.md` §2.
 
 Already-issued NEO JWTs continue to work until they expire. The accepted window must be stated in the delivered documentation.
 

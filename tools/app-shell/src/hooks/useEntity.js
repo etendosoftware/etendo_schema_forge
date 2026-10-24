@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
 import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/backendErrors.js';
+import { extractQuotaExceeded, isQuotaCheckFailed } from '@/lib/planQuotas.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
@@ -251,9 +252,14 @@ export async function extractErrorMessage(res, ui) {
             const raw = decoded.replace(/\s+/g, ' ').trim();
             // ETP-5692 — the body's identity rides along: the invoice write fence answers in
             // English plus `messageKeys`, and only the key can be translated.
+            // ETP-5051 — and so does a plan-quota refusal (403 QUOTA_EXCEEDED): its sentence is
+            // built from the quota the body carries, not from the English prose. A failed quota
+            // check (500 QUOTA_CHECK_FAILED) gets its own "nothing was saved" sentence.
             return translateBackendError(raw, ui, {
                 messageKeys: extractBackendMessageKeys(data),
                 messageParams: extractBackendMessageParams(data),
+                quota: extractQuotaExceeded(data),
+                quotaCheckFailed: isQuotaCheckFailed(data),
             }) || raw;
         };
 

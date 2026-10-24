@@ -77,12 +77,31 @@ export const BILLING_WARNING_ESCALATION_DAYS = 3;
  * `graceEndsAt` is a genuine instant, not a calendar date, so it is parsed as one; the caller
  * formats its LOCAL calendar day, which is the day the block actually happens for the viewer.
  *
- * @returns {null | { graceEndsAt: Date, escalated: boolean, canPay: boolean }}
+ * ETP-5051 (`open-and-notable-topics.md` §4.17) — `accessEnforced: false` means the per-tenant
+ * environment-access kill switch is on: no block will happen on `graceEndsAt`, so the warning must
+ * not promise one. It becomes `neutral` — "payment overdue", no date, never escalated — and it
+ * stays up for as long as the subscription is PAST_DUE, including past `graceEndsAt`: with
+ * enforcement off no blocked screen takes over, and hiding the warning there would leave the
+ * tenant with no sign the payment is still owed. Only an explicit `false` counts; a backend that
+ * predates the field is treated as enforcing, which is today's behaviour.
+ *
+ * @returns {null | { graceEndsAt: Date|null, escalated: boolean, canPay: boolean, neutral: boolean }}
  *   `escalated` — inside the last {@link BILLING_WARNING_ESCALATION_DAYS} days: more prominent and
  *   not dismissible. `canPay` — the account owns the environment and can fix the payment method.
+ *   `neutral` — enforcement is off: no block date to announce.
  */
 export function paymentGraceWarning(environment, now = new Date()) {
-  if (environment?.subscriptionStatus !== 'PAST_DUE' || !environment.graceEndsAt) return null;
+  if (environment?.subscriptionStatus !== 'PAST_DUE') return null;
+  if (environment.accessEnforced === false) {
+    const endsAt = environment.graceEndsAt ? new Date(environment.graceEndsAt) : null;
+    return {
+      graceEndsAt: endsAt && !Number.isNaN(endsAt.getTime()) ? endsAt : null,
+      escalated: false,
+      canPay: ownsEnvironmentSubscription(environment),
+      neutral: true,
+    };
+  }
+  if (!environment.graceEndsAt) return null;
   const endsAt = new Date(environment.graceEndsAt);
   const remainingMs = endsAt.getTime() - now.getTime();
   if (Number.isNaN(remainingMs) || remainingMs <= 0) return null;
@@ -90,6 +109,7 @@ export function paymentGraceWarning(environment, now = new Date()) {
     graceEndsAt: endsAt,
     escalated: remainingMs <= BILLING_WARNING_ESCALATION_DAYS * DAY_MS,
     canPay: ownsEnvironmentSubscription(environment),
+    neutral: false,
   };
 }
 

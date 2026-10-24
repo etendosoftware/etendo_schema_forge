@@ -50,6 +50,9 @@ function writeDismissed(key) {
  * the payment portal); anyone else is told to contact their administrator, with no CTA. In the
  * last days before the block it turns destructive and cannot be dismissed; before that it can be
  * dismissed for the browser session, per client and grace window.
+ *
+ * When the environment's `accessEnforced` is false (the kill switch, `open-and-notable-topics.md`
+ * §4.17) the warning is `neutral`: "payment overdue" with no block date, never escalated.
  */
 export function BillingStatusBanner() {
   const ui = useUI();
@@ -66,7 +69,13 @@ export function BillingStatusBanner() {
   const dismissible = !warning.escalated;
   if (dismissible && (dismissedKey === dismissKey || readDismissed(dismissKey))) return null;
 
-  const date = formatCalendarDate(warning.graceEndsAt, locale, BANNER_DATE);
+  // ETP-5051 / §4.17 — with enforcement switched off for this tenant there is no block date to
+  // announce: the neutral sentence says only that the payment is overdue.
+  const message = warning.neutral
+    ? ui('billingPaymentOverdueBanner')
+    : ui('billingPaymentFailedBanner', {
+      date: formatCalendarDate(warning.graceEndsAt, locale, BANNER_DATE),
+    });
   const dismiss = () => {
     writeDismissed(dismissKey);
     setDismissedKey(dismissKey);
@@ -95,7 +104,7 @@ export function BillingStatusBanner() {
       ) : null}
     >
       <span data-testid="billing-status-banner-message">
-        {ui('billingPaymentFailedBanner', { date })}
+        {message}
       </span>
       {!warning.canPay && (
         <span className="ml-1" data-testid="billing-status-banner-member-hint">
