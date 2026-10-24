@@ -419,8 +419,8 @@ account's subscription is read or which portal session is opened.
   `stripeSubscription`, fetches the live detail from Stripe (`plan`, `amountMinor`, `currency`,
   `status`, `renewalAt`, `cancelAtPeriodEnd`), and merges in the stored `graceEndsAt` /
   `graceDaysRemaining` plus `clientId`, the environment the subscription pays for (`null` while
-  the purchase has no environment yet; "Mis empresas" uses it to put `renewalAt` on the right row,
-  ETP-5734). Since ETP-5049 it also carries the plan catalog view of the subscription —
+  the purchase has no environment yet). "Mis empresas" no longer reads this endpoint: since
+  ETP-5051 O-1b each row takes its own `renewalAt` from `GET /sws/go/environments`. Since ETP-5049 it also carries the plan catalog view of the subscription —
   `planKey`, `planName` and the plan's included `planQuotas` (field reference:
   `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, *The subscription page*). Since
   ETP-5051 each `planQuotas` item also carries `consumptionSource`, `consumed` (null = not measured

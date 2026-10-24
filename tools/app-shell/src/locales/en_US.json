@@ -23353,6 +23353,7 @@
     "upgradeSessionExpired": "Your session expired. Sign in again to continue.",
     "upgradeSubscriptionUnavailable": "We couldn't load your plan details. Please try again.",
     "upgradePortalUnavailable": "We couldn't open the billing page. Please try again.",
+    "upgradePortalNoSubscription": "This company has no subscription to manage.",
     "upgradeProcessingTitle": "Preparing your work environment",
     "upgradeProcessingSubtitle": "This takes a couple of minutes. Keep this page open.",
     "upgradeStepSetup": "Preparing the setup",

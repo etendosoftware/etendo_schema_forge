@@ -365,6 +365,26 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `SubscriptionSection__quotaUsage`, `SubscriptionSection__quotaNotMeasured`,
   `SubscriptionSection__quotaState`.
 
+#### 3.2a-quinquies Owned companies on "Mis empresas": one row, one environment (ETP-5051 O-1b)
+
+- **Where:** `tools/app-shell/src/pages/MyCompaniesPage.jsx` (`/companies`), the owned-companies
+  table.
+- **Rule:** every row describes and manages its OWN environment, whatever environment the session
+  is in. The page does not read `GET /sws/go/billing/subscription`, which answers only the entered
+  environment.
+- **Renewal column:** a productive row shows its own `renewalAt` from `GET /sws/go/environments`
+  (`formatCalendarDate`, short date). The backend sends it only while that environment's
+  subscription is renewing (active or trialing, not past due, not scheduled to cancel) and `null`
+  otherwise, which reads "—". Never `renewalDueAt` (the payment-grace anchor). A demo row shows the
+  trial countdown instead.
+- **Manage subscription** (row menu, productive rows only, test id
+  `my-companies-manage-<clientId>`): `createPortalSession(apiBase, env.clientId)` posts
+  `{ "clientId": … }`, so the Stripe portal that opens is that row's environment's, even from
+  another environment. A 404 `NO_SUBSCRIPTION` (the environment has no purchase of its own) toasts
+  "This company has no subscription to manage." (`upgradePortalNoSubscription`); any other failure
+  keeps `subscriptionManageError`. `/account` still posts no body and gets the entered
+  environment's portal.
+
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
 - **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx` (layout) and

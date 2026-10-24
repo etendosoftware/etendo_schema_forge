@@ -921,6 +921,49 @@ describe('the account subscription', () => {
     );
   });
 
+  // ETP-5051 O-1b — a "Mis empresas" row opens ITS environment's portal by sending the client id;
+  // /account sends no body and gets the entered environment's.
+  it('sends the client id as the JSON body when one is given', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-2' }));
+
+    await createPortalSession('https://api.test', 'CLIENT-2');
+
+    assert.deepEqual(JSON.parse(calls[0][1].body), { clientId: 'CLIENT-2' });
+  });
+
+  it('sends no body without a client id', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-1' }));
+
+    await createPortalSession('https://api.test');
+
+    assert.equal(calls[0][1].body, undefined);
+  });
+
+  it('maps a portal 404 NO_SUBSCRIPTION onto portalNoSubscription', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'NO_SUBSCRIPTION', message: 'No subscription' } },
+      { ok: false, status: 404 },
+    ));
+
+    await assert.rejects(
+      () => createPortalSession('', 'CLIENT-DEMO'),
+      (error) => error.code === UPGRADE_ERROR_CODES.portalNoSubscription && error.status === 404,
+    );
+  });
+
+  it('keeps any other portal 404 as portalUnavailable', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { code: 'NOT_FOUND' } }, { ok: false, status: 404 }));
+
+    await assert.rejects(
+      () => createPortalSession('', 'CLIENT-2'),
+      (error) => error.code === UPGRADE_ERROR_CODES.portalUnavailable && error.status === 404,
+    );
+  });
+
   // ETP-5443 REVIEW N3: a failed portal-session creation is its own error code too, distinct
   // from both `subscriptionUnavailable` and `checkoutCreationFailed`.
   it('raises a stable error when the portal session cannot be created', async () => {
