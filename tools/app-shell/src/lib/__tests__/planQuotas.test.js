@@ -1,8 +1,11 @@
 // @covers tools/app-shell/src/lib/planQuotas.js
-import { describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   QUOTA_EXCEEDED_CODE,
+  QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS,
+  QUOTA_REFUSED_EVENT,
+  announceQuotaRefusal,
   extractQuotaExceeded,
   formatQuotaQuantity,
   isQuotaOverLimit,
@@ -14,6 +17,7 @@ import {
   quotaUsageText,
   quotaUsageWithPeriod,
 } from '../planQuotas.js';
+import { translateBackendError } from '../backendErrors.js';
 
 /**
  * The plan quota item (`QuotaItem`) the backend sends on /account, in the environment list and in
@@ -295,5 +299,105 @@ describe('quotaBannerDismissKey', () => {
     const named = { resourceName: 'Invoices', verdict: 'WARN' };
     assert.match(quotaBannerDismissKey('C1', [named]), /Invoices=WARN/);
     assert.doesNotMatch(quotaBannerDismissKey(undefined, null), /undefined|null/);
+  });
+});
+
+// ETP-5051 — a 403 QUOTA_EXCEEDED is announced on the window so the app re-reads the environment
+// list (and the quota banner turns red) right away. `translateQuotaExceeded` runs again whenever an
+// already-shown error re-renders, so one refusal must not turn into a stream of reads.
+//
+// Plain `node --test` has no window: `globalThis.dispatchEvent` does not exist here, which is the
+// "outside a browser" case. The browser cases install one from a real EventTarget and remove it.
+// The module remembers announced refusals for the life of the process, so every case uses its
+// own resource key and its own clock (`now`).
+describe('announceQuotaRefusal', () => {
+  let target;
+  let heard;
+  const count = () => { heard += 1; };
+
+  beforeEach(() => {
+    heard = 0;
+    target = new EventTarget();
+    target.addEventListener(QUOTA_REFUSED_EVENT, count);
+    globalThis.dispatchEvent = target.dispatchEvent.bind(target);
+  });
+
+  afterEach(() => {
+    delete globalThis.dispatchEvent;
+  });
+
+  it('names the window event etendo:quota-refused and dedupes for 30 s', () => {
+    assert.equal(QUOTA_REFUSED_EVENT, 'etendo:quota-refused');
+    assert.equal(QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS, 30_000);
+  });
+
+  it('announces a refusal once, and the same refusal again only after the window', () => {
+    const refusal = quota({ resourceKey: 'DEDUPE', consumed: 100, includedQty: 100, verdict: 'DENY' });
+    const t0 = 1_000_000;
+
+    announceQuotaRefusal(refusal, t0);
+    assert.equal(heard, 1);
+
+    announceQuotaRefusal({ ...refusal }, t0 + 1);
+    announceQuotaRefusal(refusal, t0 + QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS - 1);
+    assert.equal(heard, 1);
+
+    announceQuotaRefusal(refusal, t0 + QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS);
+    assert.equal(heard, 2);
+  });
+
+  it('announces a different resource, or the same resource with other counts, at once', () => {
+    const t0 = 2_000_000;
+    const first = quota({ resourceKey: 'DIFF_A', consumed: 100, includedQty: 100 });
+
+    announceQuotaRefusal(first, t0);
+    // Its own name: a refusal is identified by name and counts (the prose form carries no key),
+    // so two resources are told apart by their catalog names.
+    announceQuotaRefusal(quota({
+      resourceKey: 'DIFF_B', resourceName: 'Diff B', consumed: 100, includedQty: 100,
+    }), t0);
+    announceQuotaRefusal({ ...first, consumed: 101 }, t0);
+    announceQuotaRefusal({ ...first, includedQty: 200 }, t0);
+    assert.equal(heard, 4);
+  });
+
+  it('keys a refusal with no resource key on its name', () => {
+    const t0 = 3_000_000;
+    announceQuotaRefusal({ resourceName: 'Named only', consumed: 3, includedQty: 3 }, t0);
+    announceQuotaRefusal({ resourceName: 'Named only', consumed: 3, includedQty: 3 }, t0 + 1);
+    announceQuotaRefusal({ resourceName: 'Other name', consumed: 3, includedQty: 3 }, t0 + 1);
+    assert.equal(heard, 2);
+  });
+
+  // One refusal reaches the translator in two forms: the structured `quota` of the body (with its
+  // `resourceKey`) and the prose message `Quota exceeded: <name> (<consumed>/<included> <unit>)`,
+  // whose parser recovers only the name and the counts, as strings. Both are the same refusal and
+  // must be announced once. Driven through the real translator so the prose side is what the real
+  // parser extracts.
+  it('announces a refusal once when it is translated from both the body and the prose', () => {
+    const refusal = quota({
+      resourceKey: 'BOTH_FORMS', resourceName: 'Both forms', consumed: 100, includedQty: 100, verdict: 'DENY',
+    });
+
+    translateBackendError('Quota exceeded: Both forms (100/100 Inv)', ui, { quota: refusal });
+    translateBackendError('Quota exceeded: Both forms (100/100 Inv)', ui);
+    assert.equal(heard, 1);
+  });
+
+  it('announces nothing without a quota', () => {
+    announceQuotaRefusal(null, 4_000_000);
+    announceQuotaRefusal(undefined, 4_000_000);
+    assert.equal(heard, 0);
+  });
+
+  it('is a no-op outside a browser, and does not use up the window there', () => {
+    const refusal = quota({ resourceKey: 'NO_WINDOW', consumed: 1, includedQty: 1 });
+    delete globalThis.dispatchEvent;
+    assert.doesNotThrow(() => announceQuotaRefusal(refusal, 5_000_000));
+
+    // Back in a browser, the same refusal is still announced: nothing was remembered meanwhile.
+    globalThis.dispatchEvent = target.dispatchEvent.bind(target);
+    announceQuotaRefusal(refusal, 5_000_001);
+    assert.equal(heard, 1);
   });
 });

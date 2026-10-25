@@ -51,8 +51,23 @@ export const QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS = 30_000;
 
 const announcedRefusals = new Map();
 
+function signatureCount(value) {
+  if (value === null || value === undefined) return '';
+  return hasNumber(value) ? String(Number(value)) : String(value).trim();
+}
+
+/**
+ * The identity of one refusal, the same whichever form it was read from. The structured body
+ * carries `resourceKey`, `resourceName` and numeric counts; the prose parser
+ * (`matchQuotaExceededMessage` in `backendErrors.js`) recovers only the name and the counts, as
+ * strings. The backend writes that name as `resourceName`, else `resourceKey`
+ * (`QuotaItemJson.refusalMessage`), which is exactly `quotaResourceLabel`; the counts are compared
+ * as numbers, so `100`, `"100"` and a decimal column's `"100.00"` agree. Two different resources
+ * with the same catalog name share a signature: one re-read covers both, since it re-reads the
+ * whole list.
+ */
 function refusalSignature(quota) {
-  return [quota?.resourceKey || quota?.resourceName || '', quota?.consumed ?? '', quota?.includedQty ?? '']
+  return [quotaResourceLabel(quota) ?? '', signatureCount(quota?.consumed), signatureCount(quota?.includedQty)]
     .join('|');
 }
 
