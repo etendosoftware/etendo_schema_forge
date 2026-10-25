@@ -7,8 +7,12 @@
 // (jsdom render + @testing-library/react against the real component tree).
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
+// Keys echo back, except the plan-quota sentence (ETP-5051): an echoed key reads as "not
+// translated", so the translator would fall back and the quota path could not be observed.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params = {}) => (key === 'backendError.quotaExceeded'
+    ? `Límite del plan alcanzado: ${params.resource}`
+    : key),
 }));
 
 const mockNavigate = vi.fn();
@@ -558,6 +562,40 @@ describe('ConfirmWithCreditButtonBase — CreateInvoiceConfirmModal stays open d
     expect(screen.getByTestId('create-invoice-confirm')).not.toBeDisabled();
     expect(toast.error).toHaveBeenCalledWith('Network error');
     expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+  });
+
+  // ETP-5051 — creating the rectificative invoice can be refused by the plan quota (403
+  // QUOTA_EXCEEDED). The toast reads as the translated quota sentence, not "Error (403)"; any other
+  // refusal reads exactly as before.
+  async function refuseWith(status, body) {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, status, json: () => Promise.resolve(body) }));
+    openCoModal();
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+  }
+
+  it('on a 403 QUOTA_EXCEEDED: toasts the translated quota sentence, and shows no result modal', async () => {
+    toast.error.mockClear();
+    await refuseWith(403, {
+      error: {
+        code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Sales invoices (100/100)',
+        quota: { resourceKey: 'CREDIT_RETURN_INVOICES', resourceName: 'Sales invoices', includedQty: 100, consumed: 100, verdict: 'DENY' },
+      },
+    });
+    expect(toast.error).toHaveBeenCalledWith('Límite del plan alcanzado: Sales invoices');
+    expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+  });
+
+  it('on any other refusal: toasts the backend message, or "Error (<status>)", exactly as before', async () => {
+    toast.error.mockClear();
+    await refuseWith(409, { response: { status: -1, message: 'Business partner on hold' } });
+    expect(toast.error).toHaveBeenCalledWith('Business partner on hold');
+  });
+
+  it('on a refusal with no message: toasts "Error (<status>)"', async () => {
+    toast.error.mockClear();
+    await refuseWith(403, { error: { status: 403 } });
+    expect(toast.error).toHaveBeenCalledWith('Error (403)');
   });
 
   it('rapid double-click on the confirm button while a request is in flight results in exactly one POST call', async () => {

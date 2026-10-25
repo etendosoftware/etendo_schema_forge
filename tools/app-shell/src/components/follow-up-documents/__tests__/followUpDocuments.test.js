@@ -155,6 +155,42 @@ describe('followUpErrorMessage', () => {
     assert.equal(followUpErrorMessage({ error: { code: 'FOLLOW_UP_MISSING_SETUP' } }), 'followUpErrorMissingSetup');
   });
 
+  // ETP-5051 — a follow-up that would create a document past the plan quota is refused with 403
+  // QUOTA_EXCEEDED (or 500 QUOTA_CHECK_FAILED). It reads as the shipped quota sentence, not as the
+  // generic follow-up error. Real es_ES labels with `{param}` interpolation.
+  describe('a plan-quota refusal', () => {
+    const es = (key, params = {}) => Object.entries(params)
+      .reduce((text, [k, v]) => text.replaceAll(`{${k}}`, String(v)), esES.genericLabels[key] ?? key);
+    const quota = {
+      resourceKey: 'FOLLOW_UP_INVOICES', resourceName: 'Facturas de venta', unitLabel: 'fact.',
+      includedQty: 100, consumed: 100, verdict: 'DENY',
+    };
+
+    it('reads a 403 QUOTA_EXCEEDED as the quota sentence', () => {
+      const body = { error: { code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Facturas de venta (100/100 fact.)', quota } };
+      assert.equal(followUpErrorMessage(body, es),
+        'Facturas de venta: has alcanzado el límite de tu plan (100 de 100 fact.). '
+        + 'No se pueden crear más registros de este tipo.');
+    });
+
+    it('reads a 500 QUOTA_CHECK_FAILED as the check-failed sentence', () => {
+      const body = { error: { code: 'QUOTA_CHECK_FAILED', status: 500, message: 'The quota check failed; nothing was saved. Try again.' } };
+      assert.equal(followUpErrorMessage(body, es), esES.genericLabels['backendError.quotaCheckFailed']);
+    });
+
+    it('keeps mapping follow-up codes and the generic fallback exactly as before', () => {
+      assert.equal(followUpErrorMessage({ error: { code: 'FOLLOW_UP_NOTHING_PENDING' } }, es),
+        esES.genericLabels.followUpErrorNothingPending);
+      assert.equal(followUpErrorMessage({ error: { message: 'raw backend text' } }, es),
+        esES.genericLabels.followUpErrorGeneric);
+    });
+
+    it('returns the key itself for a quota body when no translator is available', () => {
+      const body = { error: { code: 'QUOTA_EXCEEDED', quota } };
+      assert.equal(followUpErrorMessage(body), 'followUpErrorGeneric');
+    });
+  });
+
   // Every key the mapping can produce must resolve in the three catalogs, or the user sees
   // the raw key (the translator echoes it back silently).
   for (const [locale, dictionary] of Object.entries({ en_US: enUS, es_ES: esES, es_AR: esAR })) {

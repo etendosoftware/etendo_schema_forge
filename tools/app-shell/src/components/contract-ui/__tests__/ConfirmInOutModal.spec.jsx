@@ -12,6 +12,7 @@ const CONFIRM_UI_DICT = {
   'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
   'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
   'backendError.quotaExceeded': 'Has alcanzado el límite de tu plan.',
+  'backendError.quotaCheckFailed': 'No se pudo comprobar la cuota del plan; no se ha guardado nada.',
 };
 vi.mock('@/i18n', async (importOriginal) => {
   const actual = await importOriginal();
@@ -550,6 +551,77 @@ describe('ConfirmInOutModal', () => {
         await waitFor(() => expect(screen.getByText('Has alcanzado el límite de tu plan.')).toBeInTheDocument());
         expect(screen.queryByText('Error (403)')).toBeNull();
         expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+
+    /** documentAction answers `docBody`/`docStatus`; the invoice action answers `invBody`/`invStatus`. */
+    function routeLegs({ docStatus = 200, docBody = { response: { data: {} } }, invStatus = 200, invBody = { response: { data: { id: 'INV-1' } } } }) {
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        const u = String(url);
+        if (u.includes('/action/documentAction')) {
+          return Promise.resolve({ ok: docStatus < 400, status: docStatus, json: async () => docBody });
+        }
+        if (u.includes('/createInvoice')) {
+          return Promise.resolve({ ok: invStatus < 400, status: invStatus, json: async () => invBody });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+    }
+    const calledAction = (name) => globalThis.fetch.mock.calls.some(([url]) => String(url).includes(`/action/${name}`));
+
+    it('shows the check-failed sentence for a 500 QUOTA_CHECK_FAILED on the invoice leg', async () => {
+      routeLegs({
+        invStatus: 500,
+        invBody: { error: { code: 'QUOTA_CHECK_FAILED', status: 500, message: 'The quota check failed; nothing was saved. Try again.' } },
+      });
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(screen.getByText('No se pudo comprobar la cuota del plan; no se ha guardado nada.')).toBeInTheDocument());
+      expect(screen.queryByText('Error (500)')).toBeNull();
+    });
+
+    // Completing the document itself can be what the plan refuses: the invoice leg never runs.
+    it('shows the quota sentence when documentAction is refused, and creates no invoice', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      routeLegs({
+        docStatus: 403,
+        docBody: {
+          error: {
+            code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Goods shipments (50/50)',
+            quota: { resourceKey: 'CONFIRM_INOUT_SHIPMENTS', resourceName: 'Goods shipments', includedQty: 50, consumed: 50, verdict: 'DENY' },
+          },
+        },
+      });
+      const onConfirmed = vi.fn();
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} onConfirmed={onConfirmed} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Has alcanzado el límite de tu plan.')).toBeInTheDocument());
+        expect(screen.queryByText('Error (403)')).toBeNull();
+        expect(calledAction('createInvoice')).toBe(false);
+        expect(onConfirmed).not.toHaveBeenCalled();
+        expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+
+    // Any other 403 reads exactly as before this change, and is not announced as a quota refusal.
+    it('keeps "Error (403)" for a 403 that is not a quota refusal', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      routeLegs({ invStatus: 403, invBody: { error: { status: 403, message: 'Access denied' } } });
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Error (403)')).toBeInTheDocument());
+        expect(announced).not.toHaveBeenCalled();
       } finally {
         window.removeEventListener('etendo:quota-refused', announced);
       }

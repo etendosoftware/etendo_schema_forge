@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useBulkActionToast.js
 import { renderHook, act } from '@testing-library/react';
 import { toast } from 'sonner';
 import { useBulkActionToast, persistBulkActionResult, showBulkActionToast } from '../useBulkActionToast';
@@ -529,5 +530,61 @@ describe('showBulkActionToast — invoice lines without amount (ETP-5710)', () =
       result.current.showResult({ ok: 0, failed: [{ message }, { message }] });
     });
     expect(toast.error).toHaveBeenCalledWith('0 processed, 2 failed');
+  });
+});
+
+// ETP-5051 — the one exception to "a multi-row summary carries no per-row error": a plan-quota
+// refusal. It is the account-wide reason the rest of the run failed and the user can act on it, so
+// the bulk callers flag the row `quotaRefusal` (its message is already the translated sentence) and
+// the summary shows it once as the description. Every other multi-row summary is unchanged.
+describe('showBulkActionToast — plan-quota refusal (ETP-5051)', () => {
+  const ui = (key) => ({
+    processExecuted: '{ok} ok, {failed} failed',
+    processExecutedWithOmitted: '{ok} ok, {omitted} omitted, {failed} failed',
+    actionFailed: 'Action failed',
+  }[key] ?? key);
+  const QUOTA_TEXT = 'Facturas de venta: has alcanzado el límite de tu plan (100 de 100 fact.).';
+  const quotaRow = (documentNo) => ({ documentNo, message: QUOTA_TEXT, quotaRefusal: true });
+  const plainRow = (documentNo) => ({ documentNo, message: 'No pending lines to invoice' });
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('adds the quota sentence as the description of an all-failed summary', () => {
+    showBulkActionToast(ui, { ok: 0, failed: [plainRow('SO-1'), quotaRow('SO-2'), quotaRow('SO-3')] });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('0 ok, 3 failed', { description: QUOTA_TEXT });
+  });
+
+  it('adds it to a partial-failure warning', () => {
+    showBulkActionToast(ui, { ok: 2, failed: [quotaRow('SO-3')] });
+    expect(toast.warning).toHaveBeenCalledTimes(1);
+    expect(toast.warning).toHaveBeenCalledWith('2 ok, 1 failed', { description: QUOTA_TEXT });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('adds it to a summary with omitted rows', () => {
+    showBulkActionToast(ui, { ok: 0, omitted: ['SO-9'], failed: [quotaRow('SO-3')] });
+    expect(toast.warning).toHaveBeenCalledWith('0 ok, 1 omitted, 1 failed', { description: QUOTA_TEXT });
+  });
+
+  it('shows the quota sentence itself when the one selected row was refused', () => {
+    showBulkActionToast(ui, { ok: 0, failed: [quotaRow('SO-1')] });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith(QUOTA_TEXT);
+  });
+
+  it('adds no description when no row is flagged, or the flagged row has no message', () => {
+    showBulkActionToast(ui, { ok: 0, failed: [plainRow('SO-1'), plainRow('SO-2')] });
+    showBulkActionToast(ui, { ok: 1, failed: [plainRow('SO-1'), { documentNo: 'SO-2', quotaRefusal: true }] });
+    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed');
+    expect(toast.error.mock.calls[0]).toHaveLength(1);
+    expect(toast.warning).toHaveBeenCalledWith('1 ok, 2 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
+  });
+
+  it('never decorates a clean success', () => {
+    showBulkActionToast(ui, { ok: 3, failed: [] });
+    expect(toast.success).toHaveBeenCalledWith('3 ok, 0 failed');
+    expect(toast.success.mock.calls[0]).toHaveLength(1);
   });
 });
