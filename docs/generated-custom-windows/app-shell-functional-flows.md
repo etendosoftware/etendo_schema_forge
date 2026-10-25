@@ -342,6 +342,22 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `error.detail.error`, for both codes (`extractQuotaExceeded` / `isQuotaCheckFailed` read both
   places). The OCR purchase-invoice ingest (`useOcrFlow`) shows the translated sentence in its
   failure toast.
+- **Document-creating actions:** the NEO actions that create documents refuse with the same 403
+  `QUOTA_EXCEEDED` / 500 `QUOTA_CHECK_FAILED`. Every SPA button that runs one shows the translated
+  sentence, never "Error (403)" or the raw prose, and so announces the refusal to the quota banner
+  (§3.2a-bis). The paths that read only `response.message` / `message` go through
+  `translateQuotaRefusalBody(body, ui)` (`lib/backendErrors.js`), which hands a quota body to
+  `translateBackendErrorBody` and answers `null` for any other body, so every other error reads
+  exactly as before; a helper with no `ui` at the throw site puts `quotaRefusalFields(body)` on
+  its Error and the caller translates later. Covered: `ConfirmInOutModal` (`buildBackendError`:
+  shipment, receipt and return confirm with invoice, `buildReturnRowConfirmModal`,
+  `ConfirmWithCreditButtonBase`), `useConfirmWithCredit`, the sales-order create-documents modal
+  (`createDraftInvoice`), the sales- and purchase-order bulk menus, Create Invoice on goods
+  shipment / goods receipt and their bulk versions, `CloneOrderModal` and the goods-receipt clone,
+  the return-lines import (`importReturnLinesHelpers` → `ImportLinesModal`) and the follow-up
+  documents (`followUpErrorMessage`). A multi-row bulk summary still shows only counts, except
+  that a quota refusal among the failures is named once as the toast description
+  (`useBulkActionToast`, rows flagged `quotaRefusal`).
   The generic CSV/XLSX import (`ImportDialog` in `@etendosoftware/app-shell-core`) still
   classifies it as its generic row error: its row message is decided inside core's
   `importEngine.classifyImportError`, which has no quota case yet; the fix is owed to ETP-5911

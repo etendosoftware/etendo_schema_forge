@@ -11,6 +11,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const CONFIRM_UI_DICT = {
   'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
   'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
+  'backendError.quotaExceeded': 'Has alcanzado el límite de tu plan.',
 };
 vi.mock('@/i18n', async (importOriginal) => {
   const actual = await importOriginal();
@@ -508,6 +509,50 @@ describe('ConfirmInOutModal', () => {
       fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
 
       await waitFor(() => expect(screen.getByText('Hay líneas sin cantidad.')).toBeInTheDocument());
+    });
+  });
+
+  // ETP-5051 — the NEO actions that create documents refuse with 403
+  // `{ error: { code: 'QUOTA_EXCEEDED', message, quota } }`. buildBackendError read only
+  // `response.message` / `message`, so the user read "Error (403)" and the quota banner was never
+  // told. The refusal must render as the translated quota sentence and be announced.
+  describe('plan-quota refusal of a document-creating action (ETP-5051)', () => {
+    it('shows the translated quota message and announces the refusal', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        const u = String(url);
+        if (u.includes('/action/documentAction')) {
+          return Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+        }
+        if (u.includes('/createInvoice')) {
+          return Promise.resolve({
+            ok: false,
+            status: 403,
+            json: async () => ({
+              error: {
+                code: 'QUOTA_EXCEEDED',
+                message: 'Quota exceeded: Posted sales invoices (100/100 Inv)',
+                quota: {
+                  resourceKey: 'CONFIRM_INOUT_INVOICES', resourceName: 'Posted sales invoices',
+                  unitLabel: 'Inv', includedQty: 100, consumed: 100, verdict: 'DENY',
+                },
+              },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Has alcanzado el límite de tu plan.')).toBeInTheDocument());
+        expect(screen.queryByText('Error (403)')).toBeNull();
+        expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
     });
   });
 

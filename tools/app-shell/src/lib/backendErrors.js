@@ -716,6 +716,43 @@ export function translateBackendErrorBody(body, t, fallback) {
   });
 }
 
+/**
+ * ETP-5051 — the translated sentence of a plan-quota refusal in a failed action's body, or `null`
+ * for any other body. "Plan-quota refusal" is a 403 QUOTA_EXCEEDED (`{ error: { code, message,
+ * quota } }`, also inside a `/sws/neo/batch` envelope) or a 500 QUOTA_CHECK_FAILED.
+ *
+ * For the action paths that read only `response.message` / `message` and so showed "Error (403)":
+ * `translateQuotaRefusalBody(body, ui) || <what the caller showed before>` routes the quota refusal
+ * through the one translator (`translateBackendErrorBody`, which also announces it to the quota
+ * banner via `announceQuotaRefusal`) and leaves every other error exactly as the caller had it.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @returns {string|null}
+ */
+export function translateQuotaRefusalBody(body, t) {
+  if (typeof t !== 'function') return null;
+  if (!extractQuotaExceeded(body) && !isQuotaCheckFailed(body)) return null;
+  return translateBackendErrorBody(body, t, null) || null;
+}
+
+/**
+ * ETP-5051 — the plan-quota identity of a failed action's body, as fields to put on the Error a
+ * caller throws, for a caller that has no `ui` at the throw site and translates later with
+ * `translateBackendError(err.message, ui, { ...options, ...quotaRefusalFields(err) })`. Empty for
+ * any other body, so spreading it changes nothing there.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @returns {{quota?: object, quotaCheckFailed?: boolean}}
+ */
+export function quotaRefusalFields(body) {
+  const quota = extractQuotaExceeded(body);
+  return {
+    ...(quota ? { quota } : {}),
+    ...(isQuotaCheckFailed(body) ? { quotaCheckFailed: true } : {}),
+  };
+}
+
 // ETP-5051 — a NEO write refused because a plan quota is exhausted: HTTP 403 with
 // `{ error: { code: 'QUOTA_EXCEEDED', message, quota: QuotaItem } }`, on REST single, batch and
 // MCP alike. The SPA owns the sentence, built from the catalog name and unit the quota carries, so

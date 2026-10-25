@@ -81,12 +81,21 @@ export function showBulkActionToast(ui, result) {
   // locatable in the document from a toast anyway. Only the exact single-record
   // fast path above may show a real backend error; every multi/mixed case below
   // stays the plain generic count summary, no description.
+  //
+  // ETP-5051 — the one exception: a plan-quota refusal. It is not a per-row detail but the account-
+  // wide reason the rest of the run failed, and the user can act on it (the plan), so its already
+  // translated sentence (the caller flags the row `quotaRefusal`) is shown once as the description.
+  const quotaFailure = failed.find((entry) => entry?.quotaRefusal && entry?.message);
+  const options = quotaFailure ? { description: quotaFailure.message } : undefined;
   if (failed.length === 0 && omitted.length === 0) {
     toast.success(msg);
   } else if (failed.length > 0 && ok === 0 && omitted.length === 0) {
     // Nothing was skipped and nothing succeeded — every attempted row genuinely
     // errored. Same "hard failure" case the original 2-number logic covered.
-    toast.error(msg);
+    if (options) toast.error(msg, options);
+    else toast.error(msg);
+  } else if (options) {
+    toast.warning(msg, options);
   } else {
     // Everything else is a mix: some ok/omitted/failed combination that is neither
     // a clean full success nor a hard full failure — including the "0 ok, some

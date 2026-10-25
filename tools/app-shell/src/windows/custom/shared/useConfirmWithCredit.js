@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 
 import { buildHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 export function useConfirmWithCredit({
   data,
   recordId,
@@ -54,7 +55,9 @@ export function useConfirmWithCredit({
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Error (${res.status})`);
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+        throw new Error(translateQuotaRefusalBody(err, ui)
+          || err?.response?.message || err?.message || `Error (${res.status})`);
       }
       const invData = (await res.json())?.response?.data;
       setShowModal(false);

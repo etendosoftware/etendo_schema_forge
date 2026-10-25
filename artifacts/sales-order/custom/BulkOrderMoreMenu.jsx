@@ -38,6 +38,7 @@ import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
+import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
@@ -105,6 +106,10 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence, and is flagged so
+        // a multi-row summary can still name it (useBulkActionToast).
+        const quotaText = translateQuotaRefusalBody(err, ui);
+        if (quotaText) throw Object.assign(new Error(quotaText), { quotaRefusal: true });
         throw new Error(err?.response?.message || `Error (${res.status})`);
       }
       trackDocumentCreated(isInvoice ? 'sales-invoice' : 'goods-shipment');
@@ -118,6 +123,7 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
     .map(({ o, row }) => ({
       documentNo: row.documentNo || row.id,
       message: o.reason?.message || 'Unknown error',
+      ...(o.reason?.quotaRefusal ? { quotaRefusal: true } : {}),
     }));
   const ok = outcomes.length - failed.length;
 
