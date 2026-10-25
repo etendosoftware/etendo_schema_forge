@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/locales/en_US.json
 // @covers tools/app-shell/src/locales/es_ES.json
 // @covers tools/app-shell/src/locales/es_AR.json
-import { describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
@@ -15,6 +15,7 @@ import {
   translateBackendErrorResponse,
   translateBackendErrorBody,
 } from '../backendErrors.js';
+import { QUOTA_REFUSED_EVENT } from '../planQuotas.js';
 
 /**
  * Unit tests for translateBackendError.
@@ -3956,6 +3957,59 @@ describe('translateBackendError — plan-quota refusal (QUOTA_EXCEEDED)', () => 
         await translateBackendErrorResponse(jsonResponse(body), es),
         es('backendError.accessDeniedToSpec'),
       );
+    });
+  });
+
+  // ETP-5051 — translating a refusal is where the app hears about it: `translateQuotaExceeded`
+  // announces it (QUOTA_REFUSED_EVENT) so the environment list is re-read and the banner turns red.
+  // Both ways in must announce. `node --test` has no window, so one is installed from a real
+  // EventTarget for these cases only. `announceQuotaRefusal` dedupes per resource and counts for
+  // 30 s across the whole process, so every case refuses a resource of its own.
+  describe('announces the refusal to the app', () => {
+    let heard;
+    const count = () => { heard += 1; };
+    let target;
+
+    beforeEach(() => {
+      heard = 0;
+      target = new EventTarget();
+      target.addEventListener(QUOTA_REFUSED_EVENT, count);
+      globalThis.dispatchEvent = target.dispatchEvent.bind(target);
+    });
+
+    afterEach(() => {
+      delete globalThis.dispatchEvent;
+    });
+
+    it('announces a structured QUOTA_EXCEEDED body', () => {
+      const own = { ...quota, resourceKey: 'ANNOUNCE_STRUCTURED', resourceName: 'Structured' };
+      const text = translateBackendErrorBody(
+        { error: { message: prose, status: 403, code: 'QUOTA_EXCEEDED', quota: own } }, es, 'Error (403)',
+      );
+      assert.match(text, /^Structured: has alcanzado el límite de tu plan/);
+      assert.equal(heard, 1);
+    });
+
+    it('announces a refusal known only from its message prose', () => {
+      const text = translateBackendError('Quota exceeded: Prose only resource (7/7 Inv)', es);
+      assert.match(text, /^Prose only resource: has alcanzado el límite de tu plan/);
+      assert.equal(heard, 1);
+    });
+
+    // An already-shown error re-renders and is translated again: still one announcement.
+    it('announces the same refusal once when it is translated again', () => {
+      const own = { ...quota, resourceKey: 'ANNOUNCE_RERENDER', resourceName: 'Rerendered' };
+      translateBackendError(prose, es, { quota: own });
+      translateBackendError(prose, es, { quota: own });
+      translateBackendError(prose, en, { quota: { ...own } });
+      assert.equal(heard, 1);
+    });
+
+    it('announces nothing for a message that only resembles the refusal, or for another error', () => {
+      translateBackendError('Quota exceeded: Users', es);
+      translateBackendError('Access denied to spec for current role', es);
+      translateBackendErrorBody({ error: { message: 'boom', status: 500, code: 'QUOTA_CHECK_FAILED' } }, es, 'Error');
+      assert.equal(heard, 0);
     });
   });
 

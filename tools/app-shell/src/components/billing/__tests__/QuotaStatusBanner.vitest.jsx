@@ -243,6 +243,42 @@ describe('QuotaStatusBanner — dismissal', () => {
     withEnvironment({ quotas: [quota({ consumed: 100, verdict: 'DENY' })] });
     rerender(<QuotaStatusBanner />);
     expect(banner()).toHaveAttribute('data-variant', 'destructive');
+    // The red banner that replaces a dismissed WARN cannot itself be closed.
+    expect(screen.queryByTestId('quota-status-banner-dismiss')).not.toBeInTheDocument();
+  });
+
+  it('offers the close button on a banner with only WARN items', () => {
+    withEnvironment({ quotas: [WARN_INVOICES, quota({ resourceKey: 'ORDERS', resourceName: 'Orders' })] });
+    render(<QuotaStatusBanner />);
+
+    expect(banner()).toHaveAttribute('data-variant', 'warning');
+    expect(screen.getByTestId('quota-status-banner-dismiss')).toBeInTheDocument();
+  });
+
+  it('ignores a stored dismissal for a DENY-only banner too', () => {
+    withEnvironment({ quotas: [DENY_USERS] });
+    sessionStorage.setItem(quotaBannerDismissKey('CLIENT-1', [DENY_USERS]), '1');
+
+    render(<QuotaStatusBanner />);
+
+    expect(banner()).toHaveAttribute('data-variant', 'destructive');
+    expect(screen.queryByTestId('quota-status-banner-dismiss')).not.toBeInTheDocument();
+  });
+
+  // Once the DENY is gone (the quota was raised, a period rolled over) the remaining WARN is
+  // dismissible again, and the dismissal the user gave that WARN still holds.
+  it('honours the WARN dismissal again once the DENY is no longer reported', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<QuotaStatusBanner />);
+    await user.click(screen.getByTestId('quota-status-banner-dismiss'));
+
+    withEnvironment({ quotas: [quota({ consumed: 100, verdict: 'DENY' })] });
+    rerender(<QuotaStatusBanner />);
+    expect(banner()).toHaveAttribute('data-variant', 'destructive');
+
+    withEnvironment({ quotas: [WARN_INVOICES] });
+    rerender(<QuotaStatusBanner />);
+    expect(queryBanner()).not.toBeInTheDocument();
   });
 
   it('comes back when another resource starts being reported', async () => {

@@ -8,6 +8,7 @@
 // @covers tools/app-shell/src/lib/upgrade/api.js
 // @covers tools/app-shell/src/hooks/useEnvironmentSwitch.js
 // @covers tools/app-shell/src/layout/AppLayout.jsx
+// @covers tools/app-shell/src/hooks/useEnvironmentListFreshness.js
 import { test, expect } from '@playwright/test';
 import { login, declareCookieSession } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
@@ -157,6 +158,41 @@ async function installEnvironmentsMock(page, environment) {
   };
   await page.route('**/sws/go/environments/**', handler);
   await page.route('**/sws/go/environments**', handler);
+}
+
+/**
+ * Answers `GET /sws/go/environments` with `environmentsFor()` (read at request time, so a test can
+ * change the list mid-flow) and counts the shared read and the "Mis empresas" `details=true` read
+ * apart (ETP-5051 O-3).
+ */
+async function countEnvironmentReads(page, environmentsFor) {
+  const counts = { shared: 0, details: 0 };
+  const handler = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'GET') return route.fallback();
+    const url = new URL(request.url());
+    if (!url.pathname.endsWith('/sws/go/environments')) return route.fallback();
+    if (url.searchParams.get('details') === 'true') counts.details += 1;
+    else counts.shared += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ environments: environmentsFor() }),
+    });
+  };
+  await page.route('**/sws/go/environments/**', handler);
+  await page.route('**/sws/go/environments**', handler);
+  return counts;
+}
+
+// Quiet period after the request counts settle: long enough for a late duplicate (a retry, a
+// consumer that mounts after the first read resolved) to be sent, and so counted. There is nothing
+// to wait ON for an absence, hence a fixed window.
+const QUIET_MS = 1_500;
+
+async function settle(page) {
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await page.waitForTimeout(QUIET_MS);
 }
 
 async function gotoAccount(page) {
@@ -401,9 +437,6 @@ test.describe('Subscription lifecycle — /account inside an environment without
  * on its own.
  */
 test.describe('Shared environment list — one read per page load', () => {
-  // Quiet period after the counts settle: long enough for a late duplicate (a retry, a consumer
-  // that mounts after the first read resolved) to be sent, and so counted.
-  const QUIET_MS = 1_500;
   const CURRENT = {
     clientId: 'e2e-mock-client',
     clientName: 'Acme Productive',
@@ -416,32 +449,6 @@ test.describe('Shared environment list — one read per page load', () => {
     quotas: [],
   };
 
-  /** Answers the list and counts the shared read and the `details=true` read apart. */
-  async function countEnvironmentReads(page) {
-    const counts = { shared: 0, details: 0 };
-    const handler = async (route) => {
-      const request = route.request();
-      if (request.method() !== 'GET') return route.fallback();
-      const url = new URL(request.url());
-      if (!url.pathname.endsWith('/sws/go/environments')) return route.fallback();
-      if (url.searchParams.get('details') === 'true') counts.details += 1;
-      else counts.shared += 1;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ environments: [CURRENT] }),
-      });
-    };
-    await page.route('**/sws/go/environments/**', handler);
-    await page.route('**/sws/go/environments**', handler);
-    return counts;
-  }
-
-  async function settle(page) {
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await page.waitForTimeout(QUIET_MS);
-  }
-
   test.beforeEach(async ({ page }) => {
     await login(page);
     await declareCookieSession(page);
@@ -451,7 +458,7 @@ test.describe('Shared environment list — one read per page load', () => {
 
   for (const path of ['/dashboard', '/account']) {
     test(`${path}: one read on load and exactly one more per refresh event`, async ({ page }) => {
-      const counts = await countEnvironmentReads(page);
+      const counts = await countEnvironmentReads(page, () => [CURRENT]);
       await page.goto(path);
       // The layout's consumers are mounted: the side menu and the top bar are on screen.
       await expect(page.getByTestId('topbar-user-menu')).toBeVisible({ timeout: 10_000 });
@@ -467,8 +474,33 @@ test.describe('Shared environment list — one read per page load', () => {
     });
   }
 
+  // ETP-5051 — refocusing the tab re-reads the list, at most once per 30 s. The page clock is
+  // installed before the page loads so `Date.now()` (the hook's spacing clock) can be moved on
+  // without waiting; `focus` is dispatched on the window, which is what a tab switch delivers.
+  test('a focus 30 s after the load reads once more, and a second focus right after does not', async ({ page }) => {
+    await page.clock.install();
+    const counts = await countEnvironmentReads(page, () => [CURRENT]);
+    await page.goto('/dashboard');
+    await expect(page.getByTestId('topbar-user-menu')).toBeVisible({ timeout: 10_000 });
+    await expect.poll(() => counts.shared, { timeout: 10_000 }).toBeGreaterThan(0);
+    await settle(page);
+    expect(counts.shared).toBe(1);
+
+    // A focus right after the load is the load itself: no read.
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await settle(page);
+    expect(counts.shared).toBe(1);
+
+    await page.clock.fastForward(31_000);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => counts.shared, { timeout: 10_000 }).toBe(2);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await settle(page);
+    expect(counts.shared).toBe(2);
+  });
+
   test('/companies adds exactly its own details read to the one shared read', async ({ page }) => {
-    const counts = await countEnvironmentReads(page);
+    const counts = await countEnvironmentReads(page, () => [CURRENT]);
     await page.goto('/companies');
     await expect(page.getByTestId('my-companies-owned-table')).toBeVisible({ timeout: 10_000 });
     await settle(page);
@@ -617,6 +649,8 @@ test.describe('Plan quotas — in-environment banner', () => {
     await expect(item).toContainText(/100 (de|of) 100 Inv (al mes|per month)/);
     await expect(item).toContainText(/has alcanzado el límite|limit has been reached/i);
     await expect(banner.getByTestId('quota-status-banner-member-hint')).toHaveCount(0);
+    // A DENY refuses every new record of that kind: the banner cannot be closed.
+    await expect(banner.getByTestId('quota-status-banner-dismiss')).toHaveCount(0);
 
     await banner.getByTestId('quota-status-banner-cta').click();
     await expect(page).toHaveURL(/\/account$/);
@@ -762,9 +796,15 @@ test.describe('Plan quotas — write refusal on save', () => {
   test('a 403 QUOTA_EXCEEDED shows the translated quota message, not the blocked screen or a no-access error', async ({ page }) => {
     await login(page);
     let posts = 0;
+    // ETP-5051 — the refusal makes the app re-read the environment list once (QUOTA_REFUSED_EVENT
+    // → useEnvironmentListFreshness), so the banner turns red right after it. The backend reports
+    // the DENY only once the quota is exhausted, i.e. from the refusal on.
+    let quotas = [];
+    const environmentReads = await countEnvironmentReads(page, () => [quotaEnvironment({ quotas, ownedByAccount: true })]);
     await installCostCenterMocks(page, {
       onPost: async (route) => {
         posts += 1;
+        quotas = [DENY_QUOTA];
         await route.fulfill({
           status: 403,
           contentType: 'application/json',
@@ -783,6 +823,10 @@ test.describe('Plan quotas — write refusal on save', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     await expect(page.getByTestId('field-searchKey')).toBeVisible({ timeout: 10_000 });
+    await settle(page);
+    const readsBeforeSave = environmentReads.shared;
+    expect(readsBeforeSave).toBe(1);
+    await expect(page.getByTestId('quota-status-banner')).toHaveCount(0);
     await page.getByTestId('field-searchKey').fill('CC-QUOTA-001');
     await page.getByTestId('field-name').fill('Quota refused');
     const saveBtn = page.getByTestId('action-save');
@@ -803,5 +847,14 @@ test.describe('Plan quotas — write refusal on save', () => {
     await expect(page.getByTestId('field-name')).toBeVisible();
     expect(page.url()).toMatch(new RegExp(`/${SPEC}/new`));
     expect(posts).toBe(1);
+
+    // Exactly one extra shared read, and the banner it feeds is now the red, undismissable one.
+    const banner = page.getByTestId('quota-status-banner');
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toHaveAttribute('data-variant', 'destructive');
+    await expect(banner.getByTestId('quota-status-banner-dismiss')).toHaveCount(0);
+    await settle(page);
+    expect(environmentReads.shared).toBe(readsBeforeSave + 1);
+    expect(environmentReads.details).toBe(0);
   });
 });
