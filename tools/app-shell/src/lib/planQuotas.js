@@ -38,6 +38,43 @@ export const QUOTA_CHECK_FAILED_CODE = 'QUOTA_CHECK_FAILED';
 
 const PERIOD_KEYS = { month: 'quotaPeriodMonth', year: 'quotaPeriodYear' };
 
+/**
+ * Window event announcing that a write was refused with 403 QUOTA_EXCEEDED. The app-level
+ * `useEnvironmentListFreshness` (mounted once, in `AppLayoutInner`) answers it with ONE shared
+ * re-read of `GET /sws/go/environments`, so the quota banner turns red right after the refusal
+ * instead of at the next login. Listeners never receive the quota itself; the list is the source.
+ */
+export const QUOTA_REFUSED_EVENT = 'etendo:quota-refused';
+
+/** How long one refusal (same resource and counts) is announced only once. */
+export const QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS = 30_000;
+
+const announcedRefusals = new Map();
+
+function refusalSignature(quota) {
+  return [quota?.resourceKey || quota?.resourceName || '', quota?.consumed ?? '', quota?.includedQty ?? '']
+    .join('|');
+}
+
+/**
+ * Announces a QUOTA_EXCEEDED refusal ({@link QUOTA_REFUSED_EVENT}). Called from the one place
+ * every path that classifies the refusal goes through — `translateQuotaExceeded` in
+ * `backendErrors.js` (useEntity saves, RecordCreateModal, the OCR batch, and every caller that
+ * only forwards the message prose). That function also runs when an already-shown error renders
+ * again, so the same refusal (same resource and counts) is announced at most once per
+ * {@link QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS}: a re-render can never turn into a stream of reads.
+ * A refusal with the same counts after the window means nothing changed meanwhile, so a later
+ * re-read is harmless. A no-op outside a browser (plain `node --test`).
+ */
+export function announceQuotaRefusal(quota, now = Date.now()) {
+  if (!quota || typeof globalThis.dispatchEvent !== 'function' || typeof Event !== 'function') return;
+  const signature = refusalSignature(quota);
+  const last = announcedRefusals.get(signature);
+  if (last !== undefined && now - last < QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS) return;
+  announcedRefusals.set(signature, now);
+  globalThis.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+}
+
 // Quotas are counts in practice, but INCLUDED_QTY is a DECIMAL column: keep up to two decimals
 // rather than rounding a fractional quantity away.
 const QUANTITY_FORMAT = { maximumFractionDigits: 2 };

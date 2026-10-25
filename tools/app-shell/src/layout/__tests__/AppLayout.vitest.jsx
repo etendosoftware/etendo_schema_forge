@@ -68,6 +68,8 @@ const useEnvironmentSwitchMock = vi.fn(() => ({
   currentClientId: 'CLIENT-CURRENT',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  // The layout's freshness triggers (`useEnvironmentListFreshness`) fire this event name.
+  ENVIRONMENT_LIST_REFRESH_EVENT: 'etendo:refresh-environments',
   useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
 }));
 

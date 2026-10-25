@@ -18,6 +18,7 @@ import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaConte
 import TopBar from '@/components/layout/TopBar';
 import { BillingStatusBanner } from '@/components/billing/BillingStatusBanner.jsx';
 import { QuotaStatusBanner } from '@/components/billing/QuotaStatusBanner.jsx';
+import { useEnvironmentListFreshness } from '@/hooks/useEnvironmentListFreshness.js';
 import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchContext.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
@@ -544,6 +545,9 @@ function AppLayoutInner({ menuGroups, embedded }) {
   const meta = usePageMeta();
   const marginLeft = expanded ? EXPANDED_W : COLLAPSED_W;
   const { state: supportState, actions: supportActions } = useSupportChat();
+  // ETP-5051 — the ONE app-level owner of the environment-list freshness triggers (focus, interval,
+  // quota refusal). Off in an embedded window: it shows no banner and is a page of its own.
+  useEnvironmentListFreshness({ enabled: !embedded });
 
   return (
     <>

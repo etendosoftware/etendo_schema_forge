@@ -289,18 +289,34 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   is never cached, and the cache is cleared and re-keyed when the session identity changes (logout,
   another account); a tenant switch is a hard navigation. Without a `DataProvider` each instance
   reads the network itself, as before.
+- **Freshness (ETP-5051):** the shared read is repeated, still as ONE forced read every instance
+  joins, by `useEnvironmentListFreshness`, mounted once in `AppLayoutInner` (not in embedded
+  windows). It fires `ENVIRONMENT_LIST_REFRESH_EVENT` when the tab regains focus
+  (`focus` / `visibilitychange`), every 5 minutes while the tab is visible (both at least 30 s
+  apart, counted from the page-load read), and right after a write is refused with 403
+  `QUOTA_EXCEEDED`. The refusal is announced by `announceQuotaRefusal` (`lib/planQuotas.js`,
+  window event `etendo:quota-refused`), called from `translateQuotaExceeded` in
+  `lib/backendErrors.js`, which every path that classifies the refusal goes through; the same
+  refusal (resource and counts) is announced at most once per 30 s, so re-rendering an error
+  cannot turn into a stream of reads. The core query cache has no refetch-on-focus or interval
+  option, hence the single app-level owner.
 - **Copy:** one line per item, DENY first, built from the catalog `resourceName` (its
   `resourceKey` when the name is blank), `consumed`,
   `includedQty`, `unitLabel` and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
   `warn`-mode quota already past its limit / `quotaBannerWarn`). Red with `role="alert"` when any
-  item is DENY, amber otherwise. Dismissible for the browser session; the dismissal key names the
-  reported verdicts, so a new alert shows again.
+  item is DENY, amber otherwise.
+- **Dismissal:** a banner with only WARN items is dismissible for the browser session; the
+  dismissal key names the reported verdicts, so a new alert (another resource, or a WARN turning
+  into a DENY) shows again. A banner with any DENY item has **no close button**, and a dismissal
+  stored for the same verdicts does not hide it: it stays until the quota is no longer reached.
+  Martin's decision during ETP-5051 manual testing, after a dismissed WARN hid the later DENY until
+  the next login.
 - **CTA:** the owner (`ownsEnvironmentSubscription`) gets **View plan usage** → `/account`; anyone
   else reads *"Contact your company's administrator."*. Hidden on `/account` and `/upgrade`, for the
   same reasons as the payment banner.
 - **Test ids:** `quota-status-banner` (with `data-variant`), `quota-status-banner-items`,
   `quota-status-banner-item` (with `data-verdict`), `quota-status-banner-cta`,
-  `quota-status-banner-member-hint`, `quota-status-banner-dismiss`.
+  `quota-status-banner-member-hint`, `quota-status-banner-dismiss` (WARN-only banners).
 
 #### 3.2a-ter Write refused by a plan quota (ETP-5051)
 

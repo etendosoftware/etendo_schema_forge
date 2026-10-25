@@ -255,6 +255,21 @@ describe('QuotaStatusBanner — dismissal', () => {
     expect(items()).toHaveLength(2);
   });
 
+  // ETP-5051 (Martin, manual testing) — a DENY is a refusal the user keeps hitting on every save
+  // of that kind: it cannot be closed, and a dismissal stored for exactly these verdicts (an older
+  // build, another tab) does not hide it either. A banner with only WARN items keeps its
+  // per-session dismissal.
+  it('offers no close button on a DENY, and a stored dismissal does not hide it', () => {
+    withEnvironment({ quotas: [WARN_INVOICES, DENY_USERS] });
+    sessionStorage.setItem(quotaBannerDismissKey('CLIENT-1', [DENY_USERS, WARN_INVOICES]), '1');
+
+    render(<QuotaStatusBanner />);
+
+    expect(banner()).toHaveAttribute('data-variant', 'destructive');
+    expect(screen.queryByTestId('quota-status-banner-dismiss')).not.toBeInTheDocument();
+    expect(items()).toHaveLength(2);
+  });
+
   it('still renders, and still dismisses, when sessionStorage throws', async () => {
     const user = userEvent.setup();
     const blocked = () => { throw new Error('SecurityError'); };

@@ -52,8 +52,14 @@ function alertMessageKey(item) {
  * The data is the current environment's `quotas` in `GET /sws/go/environments` (WARN/DENY items
  * only, contract §4b), read exactly like the payment banner reads `graceEndsAt`. The owner gets "View plan usage" (→ `/account`,
  * whose Subscription section lists every quota); anyone else is told to contact their
- * administrator, the same split as `BillingStatusBanner`. Dismissible for the browser session; a
- * new verdict (another resource, or a WARN turning into a DENY) shows it again.
+ * administrator, the same split as `BillingStatusBanner`.
+ *
+ * Dismissal: a banner with only WARN items is dismissible for the browser session, keyed on the
+ * reported verdicts, so a new verdict (another resource, or a WARN turning into a DENY) shows it
+ * again. A banner with any DENY item has no close button and ignores a stored dismissal: a DENY
+ * refuses every new record of that kind, so it stays on screen until the quota is no longer
+ * reached (Martin, ETP-5051 manual testing). The list behind it is kept fresh by
+ * `useEnvironmentListFreshness` (focus, a 5-minute interval, and a QUOTA_EXCEEDED refusal).
  */
 export function QuotaStatusBanner() {
   const ui = useUI();
@@ -67,9 +73,9 @@ export function QuotaStatusBanner() {
   const [dismissedKey, setDismissedKey] = useState(null);
 
   if (items.length === 0 || isHiddenOnPath(pathname)) return null;
-  if (dismissedKey === dismissKey || readDismissed(dismissKey)) return null;
-
   const denied = items.some((item) => item.verdict === QUOTA_VERDICT_DENY);
+  if (!denied && (dismissedKey === dismissKey || readDismissed(dismissKey))) return null;
+
   const canManage = ownsEnvironmentSubscription(environment);
   const dismiss = () => {
     writeDismissed(dismissKey);
@@ -80,6 +86,7 @@ export function QuotaStatusBanner() {
     <InfoBanner
       tone={denied ? 'danger' : 'warning'}
       icon={Gauge}
+      dismissible={!denied}
       onDismiss={dismiss}
       dismissTestId="quota-status-banner-dismiss"
       role={denied ? 'alert' : 'status'}
