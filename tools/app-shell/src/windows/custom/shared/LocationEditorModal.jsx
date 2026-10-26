@@ -14,6 +14,7 @@ import {
 import { matchOptionByLabel } from '@/lib/matchOptionLabel.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
@@ -269,8 +270,14 @@ async function resolveCountryOption({apiFetch, selectorBase, buildParams, prefer
  * Module-level so the modal body stays flat — a chain of `||` inside the component
  * counts against its cognitive complexity, which is already at its budget.
  */
-function isSaveBlocked({saving, initialLoading, streetName, buildingNumber, city, country}) {
+function isSaveBlocked({saving, initialLoading, structuredAddressEnabled, address, streetName, buildingNumber, city, country}) {
     if (saving || initialLoading) return true;
+    // ETP-5806 — `structured-address-for-sepa` (backend-only flag, TTL 2026-11-15) off: legacy mandatory
+    // fields are just the free-text address line and country, matching pre-ETP-5806 behavior.
+    if (!structuredAddressEnabled) {
+        if (address.trim() === '') return true;
+        return country === '';
+    }
     if (streetName.trim() === '') return true;
     if (buildingNumber.trim() === '') return true;
     if (city.trim() === '') return true;
@@ -487,6 +494,12 @@ export default function LocationEditorModal({
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const apiFetch = useApiFetch(contactsApiBase);
+    // ETP-5806 — backend-only `structured-address-for-sepa` flag (TTL 2026-11-15), surfaced via the
+    // `capabilities` map already populated on AuthContext at role-selection time
+    // (SFWindowAccessMap). When off, this modal renders the pre-ETP-5806 single-line address
+    // editor instead of Street/Number/Building Name.
+    const capabilities = useCapabilitiesSafe();
+    const structuredAddressEnabled = capabilities?.structuredAddressForSepa === true;
     const [form, setForm] = useState(EMPTY_FORM);
     // ETP-5022: this modal holds its own form state, so DetailView's isDirty does not see it.
     // Without registering here, a language change (which reloads) or an F5 threw the typed
@@ -595,6 +608,8 @@ export default function LocationEditorModal({
     const saveDisabled = isSaveBlocked({
         saving,
         initialLoading,
+        structuredAddressEnabled,
+        address: form.address,
         streetName: form.streetName,
         buildingNumber: form.buildingNumber,
         city: form.city,
@@ -621,8 +636,10 @@ export default function LocationEditorModal({
         const seedPatch = applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
         // ETP-5654 round 2 — a CREATE seeded with OCR free text (address) but no structured
         // breakdown shows the same banner an EDIT of a legacy record does (see
-        // `isLegacyAddressRecord`'s updated doc comment above).
-        if (seedPatch) {
+        // `isLegacyAddressRecord`'s updated doc comment above). Only meaningful while
+        // `structured-address-for-sepa` is on — with it off, the address line is directly editable again
+        // and there is no "legacy vs structured" distinction to warn about.
+        if (seedPatch && structuredAddressEnabled) {
             setIsLegacyAddress(isLegacyAddressRecord(seedPatch));
         }
         setRegions([]);
@@ -749,7 +766,9 @@ export default function LocationEditorModal({
                         };
                         setForm(loaded);
                         baselineRef.current = loaded;
-                        setIsLegacyAddress(isLegacyAddressRecord(loaded));
+                        if (structuredAddressEnabled) {
+                            setIsLegacyAddress(isLegacyAddressRecord(loaded));
+                        }
                     }
                 })
                 .catch(() => {
@@ -1065,7 +1084,13 @@ export default function LocationEditorModal({
         }
         setSaving(true);
         try {
-            const name = [form.city, composedAddress.address1].filter(Boolean).join(', ')
+            // ETP-5806 — while `structured-address-for-sepa` is off, Address Line 1/2 are the directly
+            // editable `form.address`/`form.address2` (pre-ETP-5806 behavior); the composed
+            // preview and the 3 structured fields are not rendered, so they stay empty and are
+            // sent as null, which the backend's legacy branch already handles.
+            const addressLine1 = structuredAddressEnabled ? composedAddress.address1 : (form.address || '');
+            const addressLine2 = structuredAddressEnabled ? composedAddress.address2 : (form.address2 || '');
+            const name = [form.city, addressLine1].filter(Boolean).join(', ')
                 || [form.regionLabel || form.region, form.countryLabel || form.country].filter(Boolean).join(', ')
                 || 'Location';
             const payload = {
@@ -1075,11 +1100,11 @@ export default function LocationEditorModal({
                 // sent anyway so a caller reading the create/update response sees them immediately
                 // without waiting on a round trip, and as a harmless fallback for the handler's
                 // own legacy branch (streetName blank, which `saveDisabled` never lets through here).
-                addressLine1: composedAddress.address1 || null,
-                addressLine2: composedAddress.address2 || null,
-                streetName: form.streetName || null,
-                buildingNumber: form.buildingNumber || null,
-                buildingName: form.buildingName || null,
+                addressLine1: addressLine1 || null,
+                addressLine2: addressLine2 || null,
+                streetName: structuredAddressEnabled ? (form.streetName || null) : null,
+                buildingNumber: structuredAddressEnabled ? (form.buildingNumber || null) : null,
+                buildingName: structuredAddressEnabled ? (form.buildingName || null) : null,
                 postalCode: form.postalCode || null,
                 cityName: form.city || null,
                 country: form.country || null,
@@ -1229,7 +1254,7 @@ export default function LocationEditorModal({
                                 Address1/Address2 but no structured breakdown. The old text is kept
                                 read-only as reference (never editable again) with a Copy button;
                                 Save stays disabled until Street and Number are filled in below. */}
-                            {isLegacyAddress && (
+                            {structuredAddressEnabled && isLegacyAddress && (
                                 <div
                                     data-testid="location-legacy-address-banner"
                                     style={{
@@ -1259,6 +1284,11 @@ export default function LocationEditorModal({
                                 </div>
                             )}
 
+                            {/* ETP-5806 — gated behind `capabilities.structuredAddressForSepa` (backend-only
+                                flag, TTL 2026-11-15). While off, the pre-ETP-5806 single-line
+                                Address Line 1/2 editor below renders instead. */}
+                            {structuredAddressEnabled ? (
+                            <>
                             {/* Calle */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('streetNameLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
@@ -1305,6 +1335,23 @@ export default function LocationEditorModal({
                                     </div>
                                 </div>
                             </div>
+                            </>
+                            ) : (
+                            <>
+                            {/* Pre-ETP-5806 legacy editor: Address Line 1/2 directly editable. */}
+                            <div>
+                                <div style={FIELD_LABEL}>{ui('addressLine1')}<RequiredMark data-testid="RequiredMark__927831" /></div>
+                                <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} data-testid="location-field-address" style={INPUT} />
+                                {attemptedSave && form.address.trim() === '' && (
+                                    <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
+                                )}
+                            </div>
+                            <div>
+                                <div style={FIELD_LABEL}>{ui('addressLine2')}</div>
+                                <input type="text" value={form.address2} onChange={e => setField('address2', e.target.value)} data-testid="location-field-address2" style={INPUT} />
+                            </div>
+                            </>
+                            )}
 
                             {/* CP + Ciudad en grid */}
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
