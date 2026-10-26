@@ -17,6 +17,7 @@ export default function WindowLoader({ windowMap, apiBaseUrl }) {
   const { locale, setLocale } = useLocaleSwitch();
   const [Component, setComponent] = useState(null);
   const [slice, setSlice] = useState(null);
+  const [standardListViewSurface, setStandardListViewSurface] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -25,6 +26,7 @@ export default function WindowLoader({ windowMap, apiBaseUrl }) {
     setError(null);
     setComponent(null);
     setSlice(null);
+    setStandardListViewSurface(false);
 
     const windowConfig = windowMap[windowName];
     if (!windowConfig) {
@@ -39,11 +41,21 @@ export default function WindowLoader({ windowMap, apiBaseUrl }) {
     const loadSlice = import(
       `@generated/${windowName}/generated/web/${windowName}/labels.js`
     ).then(mod => mod.default).catch(() => null);
+    const loadContract = import(`@generated/${windowName}/contract.json`)
+      .then(mod => mod.default?.frontendContract ?? mod.default)
+      .catch(() => null);
 
-    Promise.all([windowConfig.loader(), loadSlice])
-      .then(([mod, sliceData]) => {
+    Promise.all([windowConfig.loader(), loadSlice, loadContract])
+      .then(([mod, sliceData, contract]) => {
         setComponent(() => mod.default);
         setSlice(sliceData);
+        const windowContract = contract?.window;
+        setStandardListViewSurface(Boolean(
+          windowConfig.standardListViewSource
+          && windowContract
+          && !windowContract.customComponents?.headerTable
+          && (!windowContract.layoutType || windowContract.layoutType === 'default'),
+        ));
         setLoading(false);
       })
       .catch(err => {
@@ -96,6 +108,7 @@ export default function WindowLoader({ windowMap, apiBaseUrl }) {
         window={windowMap[windowName]}
         windowName={windowName}
         recordId={recordId}
+        gridColumnViewsSurface={standardListViewSurface}
         data-testid="Component__f59d7c" />
     </LocaleProvider>
   );

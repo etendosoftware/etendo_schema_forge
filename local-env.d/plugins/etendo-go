@@ -34,6 +34,21 @@ LOGF="$STATE/spa.log"
 SPA_PORT="${SPA_PORT:-3100}"
 BFF_PORT="${BFF_PORT:-3400}"
 
+configured_feature_flags() {
+  local line kind assignment key value json=""
+  [[ -f "$ETENDO_ROOT/worktree.conf" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    read -r kind assignment _ <<< "$line" || true
+    [[ "$kind" == feature-flag && "$assignment" == *=* ]] || continue
+    key="${assignment%%=*}" value="${assignment#*=}"
+    [[ "$key" =~ ^[a-z][a-z0-9-]*$ ]] || continue
+    [[ "$value" =~ ^(true|false|-?(0|[1-9][0-9]*)(\.[0-9]+)?)$ ]] || continue
+    json+="${json:+,}\"$key\":$value"
+  done < "$ETENDO_ROOT/worktree.conf"
+  [[ -n "$json" ]] && printf '{%s}\n' "$json"
+}
+
 port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 spa_pid() { local p; p="$(cat "$PIDF" 2>/dev/null || true)"; [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null && echo "$p"; }
 
@@ -224,28 +239,39 @@ case "$hook" in
       fi
       echo "WARNING: this branch's schema_forge/Makefile does not take SPA_PORT: the SPA will listen on :3100, not the reserved :$SPA_PORT (local-env status shows the real port; its Tomcat only allows the reserved origin)" >&2
     fi
+    # Translate per-worktree feature flags into Vite's local override map.
+    feature_flags="$(configured_feature_flags)"
+    feature_flags_set=0
+    if [[ -n "$feature_flags" ]]; then
+      export VITE_FEATURE_FLAGS="$feature_flags"
+      feature_flags_set=1
+      echo ">> Etendo GO SPA feature flags loaded from $ETENDO_ROOT/worktree.conf"
+    fi
     # own session (= own process group): Ctrl-C on Tomcat or closing the terminal does
     # not kill it, and stop_spa can signal the whole make/npm/node tree at once
-    : > "$LOGF"
     # SCHEMA_FORGE_CORE: vite would otherwise resolve ../schema_forge_core from its own
     # physical path, which for an adopted worktree is not this environment's core
     SF="$SF" STAMP="$STATE/install.stamp" INSTALL=$install ETENDO_URL="$LOCALENV_URL" \
       SCHEMA_FORGE_CORE="$CORE" CORE_STAMP="$STATE/core-install.stamp" CORE_INSTALL=$core_install \
-      SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" \
+      SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" FEATURE_FLAGS_SET="$feature_flags_set" \
       perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' bash -c '
         # npm install, not `make install`: that target also sets core.hooksPath, git config
         # the core repo shares with every worktree of it
         if [[ $CORE_INSTALL == 1 ]]; then (cd "$SCHEMA_FORGE_CORE" && npm install) && touch "$CORE_STAMP" || exit 1; fi
         cd "$SF"
         if [[ $INSTALL == 1 ]]; then make install && touch "$STAMP" || exit 1; fi
-        # command-line variables: they beat the same names in schema_forge/.env, which the
-        # Makefile includes (and exports) and would otherwise prefer over the environment.
+        # Make command-line variables beat the same names in schema_forge/.env.
         # The AI BFF does not read ETENDO_URL: without ETENDO_MCP_URL it calls :8080, the
         # main checkout, with this user credentials; the usage URL derives from it unless
-        # ETENDO_USAGE_URL is set, so both are pinned to this environment Tomcat
+        # ETENDO_USAGE_URL is set, so both are pinned to this environment Tomcat.
+        feature_flag_args=()
+        if [[ $FEATURE_FLAGS_SET == 1 ]]; then
+          feature_flag_args=("VITE_FEATURE_FLAGS=$VITE_FEATURE_FLAGS")
+        fi
         exec make dev-local-core ETENDO_URL="$ETENDO_URL" SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" \
           SCHEMA_FORGE_CORE="$SCHEMA_FORGE_CORE" \
-          ETENDO_MCP_URL="$ETENDO_URL/sws/mcp" ETENDO_USAGE_URL="$ETENDO_URL/sws/neo/usage"' \
+          ETENDO_MCP_URL="$ETENDO_URL/sws/mcp" ETENDO_USAGE_URL="$ETENDO_URL/sws/neo/usage" \
+          "${feature_flag_args[@]}"' \
       >> "$LOGF" 2>&1 < /dev/null &
     echo $! > "$PIDF"
     echo ">> Etendo GO SPA starting: http://localhost:$SPA_PORT -> $LOCALENV_URL$([[ $core_install == 1 ]] && echo ', after npm install in schema_forge_core')$([[ $install == 1 ]] && echo ', after make install') (log: $LOGF)"

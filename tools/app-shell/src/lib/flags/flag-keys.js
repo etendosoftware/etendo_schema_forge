@@ -57,6 +57,9 @@ export const IMPORT_BATCH_SIZE = 'import-batch-size';
  */
 export const MY_COMPANIES_PAGE = 'my-companies-page';
 
+/** Enables personal column views on the standard ListView grid (ETP-5835). */
+export const GRID_COLUMN_VIEWS = 'grid-column-views';
+
 /**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
  * safe default is `false` (today's shipped behaviour: providers run as configured). They are
@@ -87,6 +90,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [UNIFIED_CALENDAR_POC]: false,
   [IMPORT_BATCH_SIZE]: 0,
   [MY_COMPANIES_PAGE]: false,
+  [GRID_COLUMN_VIEWS]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });

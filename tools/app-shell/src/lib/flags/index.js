@@ -7,6 +7,7 @@ export {
   UNIFIED_CALENDAR_POC,
   IMPORT_BATCH_SIZE,
   MY_COMPANIES_PAGE,
+  GRID_COLUMN_VIEWS,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from './flag-keys.js';

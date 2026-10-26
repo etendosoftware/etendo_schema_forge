@@ -329,6 +329,11 @@ const customLoaders = {
   'amortization': () => import('./custom/amortization/index.jsx'),
 };
 
+// These custom entry points intentionally host the standard generated ListView
+// table rather than replacing it with a custom table. Keep this allowlist small
+// and explicit; all other customLoader surfaces fail closed.
+const standardListViewCustomEntryPoints = new Set(['amortization']);
+
 /**
  * Build window map with loaders for all windows in menu.json plus every
  * SDK-app menu entry from the catalog (so installing an app from the
@@ -343,6 +348,9 @@ export function buildWindowMap() {
       name: item.name,
       label: item.label,
       contract: null,
+      // Only source-generated entry points are candidates for the standard ListView
+      // rollout. WindowLoader still excludes contract-declared headerTable overrides.
+      standardListViewSource: !customLoaders[item.name] || standardListViewCustomEntryPoints.has(item.name),
       loader: customLoaders[item.name]
         || windowLoaders[item.name]
         || (() => import('./PlaceholderWindow.jsx')),

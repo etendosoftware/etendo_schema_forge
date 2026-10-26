@@ -83,4 +83,13 @@ describe('buildWindowMap', () => {
     const map = buildWindowMap();
     for (const name of ['project', 'time-tracking', 'document']) assert.ok(map[name], `${name} is linked from /projects`);
   });
+
+  it('marks only standard-generated windows and the explicit amortization entry point as grid-view candidates', () => {
+    const map = buildWindowMap();
+
+    assert.equal(map['goods-shipment'].standardListViewSource, true);
+    assert.equal(map.amortization.standardListViewSource, true);
+    assert.equal(map['financial-account'].standardListViewSource, false);
+    assert.equal(map['sales-order'].standardListViewSource, false);
+  });
 });
