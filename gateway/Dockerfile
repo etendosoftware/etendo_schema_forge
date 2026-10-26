@@ -11,7 +11,8 @@ RUN npm install --include=dev --prefix /tmp/api-gateway-core \
   && cd /tmp/api-gateway-core \
   && npm pack --pack-destination /tmp
 RUN npm install --omit=dev /tmp/etendosoftware-api-gateway-core-*.tgz
-RUN npm install --no-save @nestjs/cli typescript
+# main.ts uses NestExpressApplication, whose declarations import express types.
+RUN npm install --no-save @nestjs/cli typescript @types/express@^4.17.21
 RUN npm run build
 
 FROM node:22-bookworm-slim
