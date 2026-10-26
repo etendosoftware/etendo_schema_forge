@@ -57,6 +57,8 @@ curl https://app.etendo.ai/api/v1/product \\
 
 Use the operation list below to discover the available resources. Every response is filtered to the fields documented for that resource.
 
+Not every Etendo window is published in this version. Windows of the finance, accounting, configuration and setup categories are left out until their public contract is curated; projects (the Service Project window, a finance window) are among them and are not available yet.
+
 ### 4. Understand a resource
 
 Each resource corresponds to a business window in Etendo. The resource page explains what the window is used for, which operations are available, and which fields are public. The URL may use an internal entity name, but the documentation uses the functional name that users know.
