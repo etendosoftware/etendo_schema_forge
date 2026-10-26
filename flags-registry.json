@@ -1027,6 +1027,71 @@
           "note": "The design shows a plan name and an amount per company. The model has one Stripe subscription per account and only free/productive plans, so the page shows the plan and the stored renewal date without an amount."
         }
       ]
+    },
+    {
+      "id": "structured-address-for-sepa",
+      "description": "Relaunch flag for ETP-5806 (structured Street/Number/Building Name address fields, replacing the single-line free-text address) across Etendo GO's 4 address popups (Contacts, Warehouse, Business Partner location, Organization via the optional locationAddress pointer), the onboarding Company step, MCP schema/selectors, and the onboarding mandatory-address check. The feature was built, reviewed and QA'd once already in schema_forge/schema_forge_core/com.etendoerp.go, then reverted in schema_forge_core at product's request before shipping (schema_forge_core commit d9ed186f9, PR #332) while the schema_forge and com.etendoerp.go PRs (#1966, #1424) were left open and unreverted. This relaunch reintroduces the schema_forge_core UI and gates all three repos' implementations behind this flag rather than shipping unconditionally again. Renamed from the original `structured-address` during this relaunch to reference the regulatory driver (see $ttlComment) -- the key carries no ticket number, matching `bp-portal-link`/`onboarding-tenant-pool`.",
+      "owner": "ruben.danielle",
+      "jira": "ETP-5806",
+      "created": "2026-10-26",
+      "flag": {
+        "key": "structured-address-for-sepa",
+        "defaultValue": false,
+        "ttl": "2026-11-15",
+        "ttlNote": "Hard PM deadline, not a placeholder: SEPA 2025 rulebooks ban unstructured addresses in SEPA remittance files from this date (etendosoftware/etendo-ai#24, which also gave the flag its name). By 2026-11-15 the feature must be live in production, so the flag either retires (always-on) or is reclassified as a permanent per-tenant/plan toggle -- revisit on that date, don't let it slide.",
+        "symbols": [
+          "structured-address-for-sepa",
+          "FLAG_STRUCTURED_ADDRESS_FOR_SEPA",
+          "ETGO_FLAG_STRUCTURED_ADDRESS_FOR_SEPA",
+          "etendo.go.flags.structured-address-for-sepa",
+          "structuredAddressForSepa",
+          "capabilities.structuredAddressForSepa",
+          "StructuredAddressComposer.isEnabled",
+          "streetName",
+          "buildingNumber",
+          "buildingName",
+          "EM_OBSEPA_StrtNm",
+          "EM_OBSEPA_BldgNb",
+          "EM_OBSEPA_BldgNm"
+        ],
+        "$symbolsComment": "Backend-only flag (positive polarity, both ends evaluate the SIGNAL not the flag -- see $gatingComment): no key in flag-keys.js and no frontend evaluator of the flag itself. The frontend grep trail is the capability field name, not a flag key, because the only thing the frontend ever reads is capabilities.structuredAddressForSepa off SFWindowAccessMap (role-scoped pages) and the onboarding session-bootstrap response GET /sws/go/session (pre-tenant pages, where SFWindowAccessMap has no role to resolve against). The 3 AD column DB names are included because they are the structural keys several call sites branch on by name (AddressVirtualSelectorPolicy.STRUCTURED_ADDRESS_COLUMNS, McpSchemaFieldBuilder.STRUCTURED_ADDRESS_COLUMNS) and the 3 published field names are the ones every handler and the frontend agree on in JSON.",
+        "capability": {
+          "field": "structuredAddressForSepa",
+          "sources": [
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.structuredAddressForSepa) -- role-scoped pages, environment-level value (same for every role/branch)",
+            "com.etendoerp.go EtendoGoJwtServlet GET /sws/go/session response (capabilities.structuredAddressForSepa) -- the onboarding bootstrap, used before any tenant/role exists"
+          ]
+        }
+      },
+      "$gatingComment": "ONE evaluator, the backend; the frontend reads its ANSWER (capabilities.structuredAddressForSepa), never the flag -- deliberately against the usual ETP-4966 'one flag, one evaluator, read the flag itself' pattern, because this flag must also hide DATA (3 columns), not just a UI entry point, and the backend's answer is therefore the single source of truth for both the UI decision and the wire contract. Environment-level boolean for now (no per-account targeting), matching the TTL being a hard global deadline rather than a staged rollout -- revisit if that changes before 2026-11-15. Must be created as a boolean setting in the ConfigCat dashboard before it can be toggled in any environment with an SDK key configured; until then every such environment resolves it to the code default (false) regardless of local properties. Local dev (no SDK key) uses etendo.go.flags.structured-address-for-sepa / ETGO_FLAG_STRUCTURED_ADDRESS_FOR_SEPA, which needs a Tomcat restart to pick up a change. Write-path contract when OFF: a write that still carries the 3 fields (e.g. a stale cached frontend bundle, or a stale MCP client schema) is IGNORED, never rejected -- see ContactsLocationAddressHandler/WarehouseLocationHandler/BpLocationHandler, which read/validate/persist the 3 fields only when the flag is on and otherwise treat them as though absent from the body.",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/shared/LocationEditorModal.jsx"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/ContactsLocationAddressHandler.java",
+          "src/com/etendoerp/go/schemaforge/WarehouseLocationHandler.java",
+          "src/com/etendoerp/go/schemaforge/BpLocationHandler.java",
+          "src/com/etendoerp/go/schemaforge/util/StructuredAddressComposer.java",
+          "src/com/etendoerp/go/schemaforge/selector/policy/AddressVirtualSelectorPolicy.java",
+          "src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java",
+          "src/com/etendoerp/go/schemaforge/webhooks/SFWindowAccessMap.java",
+          "src/com/etendoerp/go/rest/EtendoGoJwtServlet.java"
+        ]
+      },
+      "$pathsComment": "GoFeatureFlags.java is excluded: it is frameworkPaths (com/etendoerp/go/featureflags/), shared infrastructure for every flag, never owned code for one. NOT covered by this registry's `roots` (frontend=schema_forge root, backend=etendo_core/modules/com.etendoerp.go): the gated UI in the SIBLING `schema_forge_core` repo, consumed here as the published/linked @etendosoftware/etendo-go-core and @etendosoftware/app-shell-core packages -- packages/etendo-go-core/src/onboarding/steps/CompanyStep.jsx, packages/etendo-go-core/src/onboarding/OnboardingFlow.jsx (threads `capabilities` from the session response into every onboarding step), packages/etendo-go-core/src/onboarding/components/AddressCell.jsx, packages/app-shell-core/src/lib/locationAddress.js. Bump the consumed package version here once schema_forge_core publishes, per docs/repo-topology.md.",
+      "testSpecs": {
+        "$testSpecsComment": "Tests are a later pipeline phase (Tester), not DEV's -- these are placeholders per the day-one flag-debt registration requirement, not a claim that any of them exist yet.",
+        "unit": [
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/ContactsLocationAddressHandlerTest.java", "pending": true },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/WarehouseLocationHandlerTest.java", "pending": true },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/BpLocationHandlerTest.java", "pending": true },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/util/StructuredAddressComposerTest.java", "pending": true },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/webhooks/SFWindowAccessMapTest.java", "pending": true },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletTest.java", "pending": true, "note": "Shared spec; covers validateStructuredAddressBlock/Length gating." },
+          { "root": "frontend", "path": "tools/app-shell/test/windows/custom/shared/LocationEditorModal.structured-address-for-sepa.test.js", "pending": true }
+        ]
+      }
     }
   ]
 }
