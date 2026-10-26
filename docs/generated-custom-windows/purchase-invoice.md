@@ -1800,6 +1800,12 @@ with a GO-authored sentence in the SPA's own current locale:
   applies to the request from its `Accept-Language` header, which every `apiFetch` call sends with
   the SPA's current locale. This is independent of (and more reliable than) `AD_User.AD_Language`:
   the SPA's language switcher is a pure client-side toggle that never writes back to the backend.
+  **Must be captured BEFORE `executeObuiappClass`, not after** — a live-verified regression found
+  the classic `MultiEnvioFactura`/`MultiInvoiceSIIModification` bridge call itself overwrites
+  `OBContext`'s language back to the user's stored Spanish before this handler ever reads it, if
+  read afterwards (exact clobbering line not pinpointed; see `com.etendoerp.go`'s
+  `docs/neo-headless.md` §5th fix for the full investigation). `executeAction` now reads the
+  language first and threads it down explicitly.
 - **Text source:** the `NeoHints` catalog (`messages/neo_hints_es.properties` /
   `neo_hints_en.properties`, `com.etendoerp.go`) — the same hand-authored-bilingual-text mechanism
   already used for other backend-only messages (e.g. `FinancialAccountBankConnectionSupport`'s
