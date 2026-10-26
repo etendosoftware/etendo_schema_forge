@@ -571,24 +571,14 @@ what changes is what the **server and the MCP agents** see:
   The return headers' `documentAction` description (`ReturnCompletionContract`), the text of every return action
   and the spec prompt (`agent-prompts/return-to-vendor-shipment/spec.md`) now say so. The goods receipt / shipment
   `documentAction` text is unchanged.
-- **One per return, unless `allowDuplicate:true`.** The screen allows one rectificativa per return (the button is hidden
-  once a non-voided one exists), and the action now does the same on every channel: a second call without
-  `allowDuplicate:true` is refused **409** `returnInvoiceAlreadyExists` ("A rectificative invoice already exists for
-  this return document."; the SPA already localizes that sentence), creating nothing and listing the existing ones in
-  `previousReturnInvoices`. ETP-5381 had removed the server guard and left it to the client, which an agent has no
-  button to honour. Only the JSON boolean `true` lifts it (a string or number is 422); with it a second one is
-  created and the answer lists the ones the return had before. `allowDuplicate` is an MCP-only capability the screen
-  does not offer (declared in `neo-headless.md` §4.12.9).
-- **Richer answer.** `{id, documentNo, documentStatus}` plus `documentType`, `isSalesTransaction` (`false` here),
-  `grandTotalAmount`, `totalLines` (negative amounts, read after the completion), `linkedReturnId`,
-  `returnDocumentNo`, `rectifiedInvoices` and `previousReturnInvoices`. The invoice stays COMPLETED.
-- **Never at zero by accident.** A product line is refused when it has NO price source: not on the invoice being
-  rectified, nor on its order line, nor in the price list. The call then answers **422**
-  `returnInvoiceWithoutAmount` naming the products and creates nothing. A product deliberately invoiced at 0 is
-  NOT refused: the 0 on the completed invoice line being rectified is a real price, and it is refunded at 0 (a
-  0 that only the order line or the price list gives is still refused). With `originInvoices` the price is read from
-  those invoices' lines. The SPA shows the refusal translated (`backendError.returnInvoiceWithoutAmount`, "No se puede
-  crear la factura rectificativa: no se ha encontrado ninguna fuente de precio para …").
+- **One per return, unless `allowDuplicate:true`.** Same rule as the return material receipt: a second
+  `createReturnInvoice` without the JSON boolean `true` is refused **409** `returnInvoiceAlreadyExists` and creates
+  nothing. Details in [return-material-receipt.md](return-material-receipt.md).
+- **Richer answer.** The shape is the one described in [return-material-receipt.md](return-material-receipt.md); here
+  `isSalesTransaction` is `false`. The invoice stays COMPLETED.
+- **Never at zero by accident.** Same rule as the return material receipt: a line with no price source is refused
+  **422** `returnInvoiceWithoutAmount`, while a product deliberately invoiced at 0 is refunded at 0. Details in
+  [return-material-receipt.md](return-material-receipt.md).
 - **No invoice to rectify** (the receipt was never invoiced): still **400**, now worded *"This return has no invoice to
   rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. …"*
   (`backendError.rectifiedInvoiceRequired`, the SPA's translation follows).
