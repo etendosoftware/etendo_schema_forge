@@ -173,7 +173,9 @@ contacto" — `SectionRow` with `titleKey="fiscal.cert.section.legend"` /
 `descKey="fiscal.cert.section.hint"`, wrapping `CertSection` (imported directly from
 `../fiscal-config/CertSection.jsx`, **not forked**). It lets a user upload, view, or replace the
 organization's digital certificate straight from this window, instead of only through one of the
-SII/Verifactu/TicketBAI tabs on the Fiscal Config window.
+SII/Verifactu/TicketBAI tabs on the Fiscal Config window. Since ETP-5831 it only renders when SII,
+TicketBAI or VERI\*FACTU is active, or a telematic model (303/390) is active — see "Fiscal section
+visibility" above.
 
 **This is the SAME certificate as SII/Verifactu/TicketBAI, not a separate one per fiscal system.**
 `CertSection` fetches `GET {neoBase}/certificate?orgId=` and the backend
@@ -221,7 +223,7 @@ The contract/NEO CRUD layer (`GET/POST/PUT/PATCH/DELETE /sws/neo/organization/ac
 
 ### UI (ETP-4975 — no longer pending)
 
-`OrganizationPage.jsx` is still a hand-built, tabless flat form (see "Interaction model" above) with no tab strip and no generic `DetailView`/`secondaryTabs` rendering — it does **not** import the pipeline-generated scaffold at `artifacts/organization/generated/web/organization/` (that scaffold's `ActividadesDelIaeTable.jsx`/`ActividadesDelIaeForm.jsx` exist only as reference material for field/selector shapes, per the "Generated Files Policy"). Instead, a 4th `SectionRow` — "Actividades del IAE", at the same visual level as Identidad / Datos fiscales / Datos de contacto — renders a dedicated, hand-authored component:
+`OrganizationPage.jsx` is still a hand-built, tabless flat form (see "Interaction model" above) with no tab strip and no generic `DetailView`/`secondaryTabs` rendering — it does **not** import the pipeline-generated scaffold at `artifacts/organization/generated/web/organization/` (that scaffold's `ActividadesDelIaeTable.jsx`/`ActividadesDelIaeForm.jsx` exist only as reference material for field/selector shapes, per the "Generated Files Policy"). Instead, a 4th `SectionRow` — "Actividades del IAE", at the same visual level as Identidad / Datos fiscales / Datos de contacto — renders a dedicated, hand-authored component (since ETP-5831 the section only renders while model 303 or 390 is active — see "Fiscal section visibility"):
 
 - **`tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx`** — the editable grid: Epígrafe IAE / Clave / Código (all `CreatableSearchSelect` with `serverSearch: true` — not the plain `SelectorInput` other lines tables like `AmortizationLinesTable.jsx` use, because `SelectorInput`'s search box sends a `search` query param the real NEO Headless backend does not read, so it never actually filtered; `CreatableSearchSelect`'s `serverSearch` mode sends the `q` param the backend expects, debounced 300ms — `selectorUrl` built from `apiBaseUrl` + `/actividadesDelIae/selectors/<column>`, column names, not the camelCase field key, per NEO Headless's `GET /sws/neo/{spec}/{entity}/selectors/{columnName}`) and a `default` checkbox, plus add/delete row affordances (`AddLineButton`, inline add-row with explicit save/cancel icons rather than InlineLinesPanel's click-outside auto-submit — an intentional simplification, open for REVIEW). A `TriangleAlert` inline hint appears next to `epiaeCode` on any row that is `default = true` with no code set, and an `Info` tooltip on the "Código" column header explains why the field matters. Every field change (selector pick, default toggle, delete, new row) persists immediately via its own API call — this section is **not** part of `form`/the page's unsaved-changes banner, matching the row-level-save convention lines tables already use elsewhere (e.g. `AmortizationLinesTable.jsx`).
 - **`tools/app-shell/src/windows/custom/organization/useActividadesIae.js`** — fetch/create/update/delete hook, sibling to `useOrganizationData.js` (same spec base pattern: `${neoBase(apiBaseUrl)}/organization`). List reads use `?parentId=<orgId>`; creates send `parentId` in the body so `NeoCrudHandler#injectParentIdAsProperty` resolves the FK server-side without the client needing to know the column name.
@@ -244,7 +246,10 @@ activity / activity code checks for the 390 are still pending (390 incidents pha
 AEAT's IAE heading search (`https://sede.agenciatributaria.gob.es/Sede/buscador-iae.html`,
 `AEAT_IAE_SEARCH_URL`), opened in a new tab (`target="_blank" rel="noopener noreferrer"`). It is a
 plain anchor, so it is reachable with the keyboard; text `orgIaeEpigraphSearchLink`, accessible label
-`orgIaeEpigraphSearchLinkAria` (en_US, es_ES, es_AR).
+`orgIaeEpigraphSearchLinkAria` (en_US, es_ES, es_AR), also used as its `title`. The label starts with
+the visible text ("Buscar epígrafe del IAE en la sede de la Agencia Tributaria" / "Find heading: IAE
+heading search on the Spanish Tax Agency website"), so a voice-control user can say what they see,
+and it carries no "opens in a new tab" suffix; the `ExternalLink` icon is `aria-hidden`.
 
 ### Modelo 303 pre-flight guard — all four trigger points (`AeatSubmitFlow.jsx` + `FmModel303Page.jsx`)
 
@@ -323,7 +328,8 @@ Same contract as `actividadesDelIae` (spec segment `organization`, not `organiza
 ### UI
 
 A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 390"**
-(`orgSection390`), placed last, right after "Actividades del IAE". Its body is
+(`orgSection390`), placed last, right after "Actividades del IAE". It only renders while model 390
+is active (ETP-5831, see "Fiscal section visibility"). Its body is
 `Modelo390IdentitySection.jsx`:
 
 - **"Persona física" switch** (`information.aeat390Isperson`). It is a page-form field: flipping it
@@ -541,8 +547,9 @@ case list, deliberately).
 - `tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx` / `InlineSearchCombo.jsx` — QA-found pagination fixes (scroll-triggered "load more" was cutting results short) plus the `searchGenerationRef` fix (ETP-4975 BUG-2): a new search fired while a scroll-page fetch was still in flight could otherwise let the stale page's results land after the new search's, since both fixes share the same "tag every fetch with its search generation, discard a resolved fetch whose generation is no longer current" pattern.
 - `tools/app-shell/src/lib/imageUpload.js` — `sanitizeImageName()`, shared by this window's `OrgLogoField.jsx` and the generic `ImageField.jsx` (contract-ui): truncates upload filenames to AD_Image's 60-char `Name` limit.
 - `tools/app-shell/src/windows/custom/organization/__tests__/useOrganizationData.vitest.js` — load/save behavior (including the direct AD_OrgInfo contact columns), error handling.
-- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.; plus (ETP-5716) the Modelo 390 identity fields: seeding from `information`, Save payload with the six `aeat390*` fields, and the representative-NIF block.
-- `tools/app-shell/src/windows/custom/organization/__tests__/ActividadesIaeSection.vitest.jsx` — grid rendering, selector picks, default toggle, add/delete rows, missing-code hint (ETP-4975).
+- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.; plus (ETP-5716) the Modelo 390 identity fields: seeding from `information`, Save payload with the six `aeat390*` fields, and the representative-NIF block; plus (ETP-5831) fiscal section visibility: hidden sections not rendered, the missing divider following the last visible section, Save not blocked by a hidden 390 section (its `aeat390*` fields sent as loaded), and deep links that wait for visibility and do nothing on a hidden section.
+- `tools/app-shell/src/windows/custom/organization/__tests__/ActividadesIaeSection.vitest.jsx` — grid rendering, selector picks, default toggle, add/delete rows, missing-code hint (ETP-4975); plus (ETP-5831) the AEAT IAE search link: URL, new tab without opener/referrer, translated text and accessible name, placed in the Epígrafe header even while loading.
+- `tools/app-shell/src/windows/custom/organization/__tests__/useFiscalSectionVisibility.vitest.jsx` — the visibility rule per catalog model (303, 390, 349, `{}`, non-`true` flags, telematic models from the registry), SII/TBAI/VERI\*FACTU, fail closed per source, loading until both sources settle (ETP-5831).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useActividadesIae.vitest.jsx` — load/create/update/delete, `enforceSingleDefault` sweep behavior including the per-row-swallowed-failure case (ETP-4975).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useRepresentantesLegales.vitest.jsx` — line ordering (server param + client sort), create omits `lineNo` and carries `parentId`, `yyyy-MM-dd` power date, update/delete, and the `representanteLegal.js` validation helpers (ETP-5716).
 - `tools/app-shell/src/windows/custom/organization/__tests__/Modelo390IdentitySection.vitest.jsx` — "Persona física" switches person fields vs grid, "390" marker on the first 3 rows, required/NIF inline validation, create/edit/delete, save-error toast (ETP-5716).
@@ -580,7 +587,7 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 7. Edit the email, phone, and website fields and confirm they are always enabled (no gray/disabled state, no explanatory note, regardless of whether the organization has a linked Business Partner), and that saving persists the values to `AD_OrgInfo.EM_Etgo_Email/Phone/Web`.
 8. Onboard a brand-new tenant through the wizard, filling in a Tax ID in the "Details to start invoicing" step. **It must now be a real one** — `B1234567D` or `12345678Z`; ETP-5190 refuses a malformed value with a `400` before provisioning starts, so the old `1234` example no longer gets past the wizard. Once onboarding finishes, open `/organization` for that tenant and confirm the NIF field shows the real value entered — not the literal `"?"` placeholder. Repeat with the Tax ID left blank and confirm it still shows `"?"` (unchanged legacy behavior for the optional-and-not-provided case), and once more with `1234` to confirm the wizard now rejects it.
 9. Onboard a brand-new tenant as a Company, entering a Company Name (e.g. `Acme Corp`). Once onboarding finishes, open `/organization` for that tenant and confirm "Nombre comercial" shows `Acme Corp` (not blank). Repeat onboarding as a Freelancer (no Company Name field shown) with a Full Name (e.g. `Jane Freelancer`) in the profile step, and confirm "Nombre comercial" shows `Jane Freelancer` instead.
-10. Open `/organization` and confirm a 4th section, "Actividades del IAE", renders below Datos de contacto with an empty-state message when the organization has no rows yet.
+10. With model 303 or 390 active in Modelos fiscales → "Catálogo de modelos" (otherwise the section is hidden, ETP-5831), open `/organization` and confirm a 4th section, "Actividades del IAE", renders below Datos de contacto with an empty-state message when the organization has no rows yet.
 11. Click "Añadir actividad del IAE", pick an Epígrafe/Clave/Código from each selector, leave "Principal" unchecked, and confirm the row saves (check icon → row appears in the list) without needing the page's own Save button.
 12. Check "Principal" on that row; confirm it persists (reload the page and the checkbox is still checked). Add a second row and check its "Principal" box too; confirm the FIRST row's checkbox now shows unchecked after a reload — i.e. only one row stays `default = true` at a time.
 13. Mark a row as "Principal" without picking a Código and confirm a warning icon appears next to that row's Código selector (tooltip: "Falta el código…"); confirm hovering the info icon next to the "Código" column header explains why it matters for Modelo 303. Confirm save is NOT blocked either way (visual hint only).
@@ -600,3 +607,11 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 18. **IAE cap (ETP-5716).** With 1 main + 5 other activities, "Añadir actividad del IAE" is disabled
     with the "Máximo alcanzado" hint. On an organization that already has more than 5 non-main
     activities, every row is still listed and an amber warning asks to remove the extra ones.
+19. **Fiscal section visibility (ETP-5831).** With an empty catalog and no SII / TicketBAI /
+    VERI\*FACTU active, `/organization` shows none of Certificado digital, Actividades del IAE and
+    Representante legal / Modelo 390. Activate 349 alone: still none. Activate 303: IAE and the
+    certificate appear. Activate 390: the 390 section appears too. Deactivate 303/390 and activate
+    SII: only the certificate. `/organization#org-section-iae` with IAE hidden opens the page at the
+    top, with no error. With 390 hidden and incomplete 390 identity data, "Guardar cambios" still
+    saves, and reactivating 390 shows the data unchanged. In the IAE grid, "Buscar epígrafe" opens the
+    AEAT search in a new tab. The full manual test plan is in the ETP-5831 Jira comment.
