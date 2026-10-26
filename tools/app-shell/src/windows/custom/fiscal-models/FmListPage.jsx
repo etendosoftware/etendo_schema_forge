@@ -29,6 +29,7 @@ import { getIncidentSeverity, getIncidentIndicator } from './incidentSeverity.js
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 import { listModels, isKnownModel, getModel, getModelOrDefault, modelTitleKey } from './modelRegistry.js';
 import { getListBehavior } from './modelRegistryList.js';
+import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch } from '@/auth/api.js';
@@ -811,18 +812,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [declIdsKey, token, apiBaseUrl]);
 
-  const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
-
-  useEffect(() => {
-    if (!apiBaseUrl) return;
-    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    apiFetch(`${base}/fiscal-models-catalog`, { baseUrl: '' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setActiveModels(data ?? {}))
-      .catch(() => {})
-      .finally(() => setCatalogLoaded(true));
-  }, [token, apiBaseUrl, apiFetch]);
+  // Shared catalog reader (ETP-5831): same endpoint, same `{}` = no model active rule as the
+  // Organization window's fiscal sections. `setActiveModels` stays local for the drawer's save.
+  const {
+    activeModels, setActiveModels, loaded: catalogLoaded,
+  } = useFiscalModelsCatalog(apiBaseUrl, token);
 
   // "Resultado" auto-compute, one bucket set per registered model — see
   // `useDeclarationsAutoCompute` above for the draft / other / submitted split.

@@ -4883,6 +4883,16 @@ The full precedence in the table region is: `!catalogLoaded` (the "Cargando…" 
 
 Practical effect: deactivating a model in the catalog immediately hides all of its existing declarations from the list and KPI cards, and removes it from the model filter — nothing is deleted, and reactivating the model in the catalog makes its declarations reappear.
 
+### Shared catalog reader (ETP-5831)
+
+`FmListPage` reads the catalog through `useFiscalModelsCatalog(apiBaseUrl, token)`
+(`fiscal-models/useFiscalModelsCatalog.js`) — `{ activeModels, setActiveModels, loaded, error }`,
+same request as before (`GET <neo base>/fiscal-models-catalog`). The Organization window's fiscal
+section visibility uses the same hook (see `organization.md`, "Fiscal section visibility"). One
+rule for every reader: a never-saved catalog (`{}`) means **no model active**; `defaultActive` is
+not applied. `ReversedInvoicesPanel.jsx` (below) still reads the catalog inline — same shape and
+rule, not migrated in ETP-5831.
+
 ### Downstream consumer outside this window: the sales/purchase-invoice "Correctiva del 349" gate (ETP-4755)
 
 `GET /fiscal-models-catalog` (see "Persistence" above) is a generic, per-client endpoint — not

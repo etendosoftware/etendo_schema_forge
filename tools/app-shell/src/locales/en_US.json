@@ -20421,6 +20421,8 @@
     "orgIaeCodeLabel": "Code",
     "orgIaeDefaultLabel": "Default",
     "orgIaeCodeHint": "Required on the default row before filing the last period (4th quarter or December) of the AEAT Modelo 303.",
+    "orgIaeEpigraphSearchLink": "Find heading",
+    "orgIaeEpigraphSearchLinkAria": "Find the IAE heading on the Spanish Tax Agency website (opens in a new tab)",
     "orgIaeMissingCodeWarning": "Missing code — required for the last period of Modelo 303",
     "orgIaeAddRow": "Add IAE activity",
     "orgIaeEmpty": "No IAE activities yet",

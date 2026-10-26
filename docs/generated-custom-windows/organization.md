@@ -13,6 +13,7 @@ This is **not** the full Etendo Classic "Organization" window. It flattens a cur
 - View (read-only) the organization's country and currency, both derived from existing AD_Org/AD_OrgInfo data — not editable from this screen.
 - Edit public contact details (email, phone, website) — always editable, optional, and unrelated to any linked Business Partner.
 - Upload, view, or replace the organization's digital certificate (ETP-5391) — see "Digital certificate section" below; the same certificate SII/Verifactu/TicketBAI use.
+- See the fiscal sections (Certificado digital, Actividades del IAE, Representante legal / Modelo 390) only when a fiscal configuration that uses them is active (ETP-5831) — see "Fiscal section visibility" below.
 - See a sticky "unsaved changes" banner (yellow dot, bold title, secondary hint) whenever any field differs from the last-loaded state, with Discard / Guardar cambios actions.
 
 ## AD window mapping
@@ -123,6 +124,45 @@ A later ETP-4749 review round removed the original "Nombre comercial" field (`C_
 
 A later round removed the Business-Partner-sourced contact fields (email/phone/website via `AD_OrgInfo.businessPartner` → `contacts` spec) and replaced them with three new, dedicated `AD_OrgInfo` columns (`EM_Etgo_Email`, `EM_Etgo_Phone`, `EM_Etgo_Web`), added in `com.etendoerp.go`. This removed the entire "is a Business Partner linked, and did it load" state machine: the "no BP linked" notice, the "BP linked but failed to load" notice + retry affordance, and the `disabled`/gray styling on those three inputs are all gone. The fields are now always editable, plain optional strings on the `information` entity, handled exactly like `taxID` or `locationAddress` in `useOrganizationData.js`'s `load`/`save`.
 
+## Fiscal section visibility (ETP-5831)
+
+The three fiscal sections only render when a fiscal configuration that uses them is active. The
+rule is the same wherever the user arrives from — the menu, a direct link, Primeros pasos ("Datos
+de la empresa" just navigates to `/organization`, there is no entry-context logic) or a
+fiscal-incident deep link. A hidden section is not rendered at all (no collapsed toggle).
+
+| Section | Visible when |
+|---|---|
+| Certificado digital (`OrganizationPage__section-certificate`) | SII, TicketBAI or VERI\*FACTU is active for the organization, **or** an active catalog model files telematically (registry `telematicFiling`: 303 and 390 today — 349 alone does not show it) |
+| Actividades del IAE (`OrganizationPage__section-iae`) | model 303 **or** model 390 is active |
+| Representante legal / Modelo 390 (`OrganizationPage__section-390`) | model 390 is active |
+
+**Data sources** — `useFiscalSectionVisibility(orgId, apiBaseUrl)`
+(`organization/useFiscalSectionVisibility.js`, pure rule `resolveFiscalSectionVisibility`):
+
+- **Active models:** `GET <neo base>/fiscal-models-catalog` (client-level preference
+  `ETGO_FiscalModelsCatalog`, `NeoFiscalModelsCatalogService.java`), shaped `{"303": true, ...}`, read
+  through the shared `fiscal-models/useFiscalModelsCatalog.js` hook — the same reader the
+  declarations list (`FmListPage.jsx`) uses. **Empty-catalog rule:** a catalog that was never saved
+  answers `{}`, which means **no model is active**; the registry's `defaultActive` is NOT applied
+  (it only seeds the catalog drawer's toggles). Toggled in Modelos fiscales → "Catálogo de modelos".
+- **SII / TicketBAI / VERI\*FACTU:** the active `siiRecord` / `tbaiRecord` / `verifactuRecord` of
+  `fiscal-config/useFiscalConfig.js`, reused as is. Toggled in Configuración fiscal.
+
+**Loading and errors:** every flag starts `false` and only turns `true` once its source settles, so a
+section never appears and then disappears. A source that fails to load contributes nothing (fail
+closed: its sections stay hidden) and never blocks the rest of the page. Known consequence: because
+`useFiscalConfig` loads the three fiscal-config specs in one `Promise.all`, a failure on any one of
+them hides the certificate unless a telematic model is active.
+
+**Saving:** hiding never writes or clears data. The six `information.aeat390*` fields stay in the
+form and are sent with every save exactly as loaded, so they survive a deactivate / reactivate of
+model 390. The Modelo 390 identity checks (`getAeat390IdentityErrors`) only run while that section
+is shown, so a hidden section can never block "Guardar cambios".
+
+**Dividers:** the last *visible* section draws no bottom border (`visibleSections` /
+`hasDivider` in `OrganizationPage.jsx`).
+
 ## Digital certificate section (ETP-5391)
 
 A "Certificado digital" section now sits on this page between "Datos fiscales" and "Datos de
@@ -196,6 +236,12 @@ activity / activity code checks for the 390 are still pending (390 incidents pha
 **Single-default rule (design decision, no AD callout ported):** the Classic callout `org.openbravo.erpCommon.ad_callouts.SL_IsDefault` on the `default` field could not be classified (`rules-raw.json`: `complexity: "unknown"`, `confidence: "low"`, `warning: "Source not found"`) and stays un-curated, same as this window's other 68 extracted rules. Its net effect — at most one default row per organization — is replicated by hand in `useActividadesIae.js`'s `enforceSingleDefault(keepId)`: whenever a row is turned **on** (`default: true`), every *other* row belonging to the organization is explicitly `PATCH`ed to `default: false` — a real API call per sibling row, not just a local state flip — before the list is refetched. This runs both when toggling an existing row's checkbox and when submitting a new row with `default` already checked. A failed sweep on one sibling is swallowed per-row so one bad row can't block the others from being corrected.
 
 **Concurrent-toggle fix (QA, ETP-4975):** `enforceSingleDefault` used to read its "who else is default" snapshot straight from `state.rows`, closed over at call time — that snapshot only advances once a `refetch()`'s `setState` actually lands, never optimistically at the moment a toggle fires. Two "Principal" checkboxes flipped back-to-back, before either PATCH round-trip settled, each read the OTHER row as still `default:false` in their own stale closure, so neither swept the other — both persisted `default:true` server-side with no corrective PATCH ever issued. The fix is a `rowsRef` (a ref mirroring `state.rows`) that `enforceSingleDefault` also writes its own optimistic mark into, synchronously, before doing anything async — a fresh, always-current source of truth instead of the stale closured snapshot. Because a JS async function runs its synchronous prefix to completion before yielding, "mark self default:true, then look for other rows already marked default:true" is effectively atomic across overlapping calls, so whichever call resumes second still sees and sweeps the first call's mark, even though neither call ever awaited a fresh reload.
+
+**AEAT heading search link (ETP-5831).** The "Epígrafe IAE" column header carries a link to the
+AEAT's IAE heading search (`https://sede.agenciatributaria.gob.es/Sede/buscador-iae.html`,
+`AEAT_IAE_SEARCH_URL`), opened in a new tab (`target="_blank" rel="noopener noreferrer"`). It is a
+plain anchor, so it is reachable with the keyboard; text `orgIaeEpigraphSearchLink`, accessible label
+`orgIaeEpigraphSearchLinkAria` (en_US, es_ES, es_AR).
 
 ### Modelo 303 pre-flight guard — all four trigger points (`AeatSubmitFlow.jsx` + `FmModel303Page.jsx`)
 
@@ -341,7 +387,9 @@ A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 
 
 Three sections carry a DOM id another window can link to — `/organization#<id>` — and the page
 scrolls to it once loaded (`sectionAnchorFromHash`, `ORG_SECTION_ANCHOR` in `OrganizationPage.jsx`;
-an unknown hash is ignored):
+an unknown hash is ignored). The scroll waits until the fiscal section visibility has resolved
+(ETP-5831), since the target may be one of those sections; a hidden target is not in the DOM, so
+the link just opens the page at the top, without an error:
 
 | Id | Section |
 |---|---|
@@ -472,6 +520,8 @@ case list, deliberately).
 - `tools/app-shell/src/windows/registry.js` — `organization` in `customLoaders`.
 - `tools/app-shell/src/windows/custom/organization/index.jsx` — pipeline-generated scaffold, imports `OrganizationPage`.
 - `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx` — the hand-built page: sections Identidad, Datos fiscales, Certificado digital, Datos de contacto, Actividades del IAE and Representante legal / Modelo 390 (ETP-5716), unsaved-changes banner, field mapping (including the six `information.aeat390*` fields and the representative-NIF check).
+- `tools/app-shell/src/windows/custom/organization/useFiscalSectionVisibility.js` — which fiscal sections render (ETP-5831): catalog models + SII/TBAI/VERI*FACTU config.
+- `tools/app-shell/src/windows/custom/fiscal-models/useFiscalModelsCatalog.js` — shared fiscal models catalog reader (ETP-5831), also used by `FmListPage.jsx`.
 - `tools/app-shell/src/windows/custom/organization/useOrganizationData.js` — fetch/save hook (`organization` + `information`; `etgoEmail`/`etgoPhone`/`etgoWeb` are plain `information` fields, no Business Partner fetch).
 - `tools/app-shell/src/windows/custom/organization/OrgLogoField.jsx` — logo upload with initials fallback; PNG/JPG/SVG, 2 MB cap.
 - `tools/app-shell/src/windows/custom/organization/BusinessTypeCards.jsx` — Empresa/Autónomo selection cards.

@@ -49,6 +49,15 @@ vi.mock('@/windows/custom/fiscal-config/CertSection.jsx', () => ({
   ),
 }));
 
+// ETP-5831 — the fiscal sections (certificate, IAE, Modelo 390) render only while a fiscal
+// configuration that uses them is active (useFiscalSectionVisibility: fiscal models catalog +
+// SII/TBAI/VERI*FACTU config). This suite exercises the sections themselves, so it pins every
+// one visible; the visibility rule has its own coverage. Mutable so a test can hide a section.
+let fiscalSectionVisibility = { showIae: true, show390: true, showCert: true, loading: false };
+vi.mock('../useFiscalSectionVisibility.js', () => ({
+  useFiscalSectionVisibility: () => fiscalSectionVisibility,
+}));
+
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 vi.mock('sonner', () => ({
@@ -79,6 +88,7 @@ describe('OrganizationPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentWindowAccessTier = 'full';
+    fiscalSectionVisibility = { showIae: true, show390: true, showCert: true, loading: false };
   });
 
   // ETP-5395 Fix 3 — before this fix, a 'none' tier still fired the fetch, got a real
