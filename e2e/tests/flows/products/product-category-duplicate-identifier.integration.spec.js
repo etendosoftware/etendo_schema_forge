@@ -81,10 +81,10 @@ function expectSaveResponse(page) {
 
 /**
  * Like expectSaveResponse but does NOT filter by status. The duplicate-key
- * save in this spec is expected to be REJECTED: NeoCrudHandler#handleDefault
- * (com.etendoerp.go) wraps the AD unique-constraint OBException in a generic
- * SC_INTERNAL_SERVER_ERROR (500), so a `status < 500` filter would never
- * match it and would silently time out instead of confirming the round trip.
+ * save in this spec is expected to be REJECTED: NEO classifies the AD
+ * unique-constraint failure as a 409 `duplicate_key` (ETP-5782; it used to be a
+ * generic 500), so a success filter (`status < 400`) would never match it and
+ * would silently time out instead of confirming the round trip.
  */
 function expectWriteAttemptResponse(page) {
   return page.waitForResponse(

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
-import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/backendErrors.js';
+import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
@@ -1079,7 +1079,8 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
         // Keyed off the machine-readable discriminator, never the status alone — a duplicate-key
         // rejection is also a 409 and its remedy is the opposite (change your data, not your
         // baseline).
-        staleConflict = body?.error === 'stale_record';
+        // Both shapes: flat IMP-5 `{error:"stale_record"}` and nested `{error:{code}}` (ETP-5782).
+        staleConflict = extractBackendErrorCode(body) === 'stale_record';
         // ETP-5577 — read here: the body is consumed below, so a later clone() would fail.
         messageKeys = extractBackendMessageKeys(body);
     } catch {
