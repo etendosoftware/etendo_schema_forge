@@ -1081,15 +1081,17 @@
       },
       "$pathsComment": "GoFeatureFlags.java is excluded: it is frameworkPaths (com/etendoerp/go/featureflags/), shared infrastructure for every flag, never owned code for one. NOT covered by this registry's `roots` (frontend=schema_forge root, backend=etendo_core/modules/com.etendoerp.go): the gated UI in the SIBLING `schema_forge_core` repo, consumed here as the published/linked @etendosoftware/etendo-go-core and @etendosoftware/app-shell-core packages -- packages/etendo-go-core/src/onboarding/steps/CompanyStep.jsx, packages/etendo-go-core/src/onboarding/OnboardingFlow.jsx (threads `capabilities` from the session response into every onboarding step), packages/etendo-go-core/src/onboarding/components/AddressCell.jsx, packages/app-shell-core/src/lib/locationAddress.js. Bump the consumed package version here once schema_forge_core publishes, per docs/repo-topology.md.",
       "testSpecs": {
-        "$testSpecsComment": "Tests are a later pipeline phase (Tester), not DEV's -- these are placeholders per the day-one flag-debt registration requirement, not a claim that any of them exist yet.",
+        "$testSpecsComment": "Backend specs are tester-go's (not yet written). The frontend spec below was written 2026-10-26 by tester-functional, extending the existing LocationEditorModal suite rather than the placeholder path originally registered here -- see its own 'structured-address-for-sepa flag OFF' describe block. The CompanyStep.jsx/OnboardingFlow.jsx coverage added in the same pass lives in the sibling schema_forge_core repo, which this registry's `paths.frontend`/`backend` roots do not cover (see the entry's own $pathsComment) and is therefore not listed as a testSpec here.",
         "unit": [
-          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/ContactsLocationAddressHandlerTest.java", "pending": true },
-          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/WarehouseLocationHandlerTest.java", "pending": true },
-          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/BpLocationHandlerTest.java", "pending": true },
-          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/util/StructuredAddressComposerTest.java", "pending": true },
-          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/webhooks/SFWindowAccessMapTest.java", "pending": true },
-          { "root": "backend", "path": "src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletTest.java", "pending": true, "note": "Shared spec; covers validateStructuredAddressBlock/Length gating." },
-          { "root": "frontend", "path": "tools/app-shell/test/windows/custom/shared/LocationEditorModal.structured-address-for-sepa.test.js", "pending": true }
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/ContactsLocationAddressHandlerTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/WarehouseLocationHandlerTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/BpLocationHandlerTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/util/StructuredAddressComposerTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/webhooks/SFWindowAccessMapTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletCoverageTest.java", "note": "Shared spec; covers validateStructuredAddressBlock/Length gating. Not EtendoGoJwtServletTest.java -- that file is unrelated to this flag." },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/mcp/McpSchemaFieldBuilderTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/selector/policy/AddressVirtualSelectorPolicyTest.java" },
+          { "root": "frontend", "path": "tools/app-shell/src/windows/custom/shared/__tests__/LocationEditorModal.vitest.jsx", "note": "Extended with a 'structured-address-for-sepa flag OFF' describe block (legacy address lines, legacy save-gating, save payload) plus a flag-ON default via the useAuth() mock for every pre-existing case." }
         ]
       }
     }

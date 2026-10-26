@@ -36,15 +36,39 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
+// ETP-5806 — `useCapabilitiesSafe()` reads `capabilities` off `useAuth()`. This whole suite
+// predates the `structured-address-for-sepa` flag and exercises the structured Street/Number/
+// Building Name fields unconditionally, so the default here keeps the flag ON — matching every
+// existing test below. The flag-OFF behavior (legacy address lines, legacy save-gating) is
+// covered by its own describe block further down, which overrides this mock locally.
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token', logout: () => {} }),
+  useAuth: vi.fn(() => ({
+    token: 'test-token',
+    logout: () => {},
+    capabilities: { structuredAddressForSepa: true },
+  })),
 }));
 
 // --- Import under test ----------------------------------------------------
 
 import LocationEditorModal from '../LocationEditorModal.jsx';
 import { toast } from 'sonner';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
+
+/** Restores the default (flag ON) `useAuth()` mock used by every pre-existing test. */
+function useCapabilitiesOn() {
+  useAuth.mockReturnValue({
+    token: 'test-token',
+    logout: () => {},
+    capabilities: { structuredAddressForSepa: true },
+  });
+}
+
+/** Switches `useAuth()` to report the `structured-address-for-sepa` flag as off/absent. */
+function useCapabilitiesOff(capabilities = {}) {
+  useAuth.mockReturnValue({ token: 'test-token', logout: () => {}, capabilities });
+}
 
 // --- Helpers --------------------------------------------------------------
 
@@ -149,6 +173,12 @@ function fetchedUrls() {
 }
 
 // --- Tests ----------------------------------------------------------------
+
+// ETP-5806 — a global safety net: whichever describe block last overrode `useAuth()` (the
+// flag-OFF block below), every other test in this file must still see the flag ON.
+afterEach(() => {
+  useCapabilitiesOn();
+});
 
 describe('LocationEditorModal', () => {
   beforeEach(() => {
@@ -1322,5 +1352,115 @@ describe('LocationEditorModal — initialValues seed (ETP-5654 x ETP-5806)', () 
     expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
     expect(screen.getByTestId('location-field-streetName')).toHaveValue('');
     expect(hasUnsavedChanges()).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// structured-address-for-sepa flag OFF (ETP-5806 backend-only flag, default/pre-launch state)
+// ---------------------------------------------------------------------------
+
+describe('LocationEditorModal — structured-address-for-sepa flag OFF', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], hasMore: false }) }),
+    );
+    useCapabilitiesOff();
+  });
+
+  afterEach(() => {
+    useCapabilitiesOn();
+  });
+
+  it('renders the legacy Address Line 1/2 inputs, not the structured Street/Number/Building Name fields', () => {
+    renderModal();
+
+    expect(screen.getByTestId('location-field-address')).toBeInTheDocument();
+    expect(screen.getByTestId('location-field-address2')).toBeInTheDocument();
+    expect(screen.queryByTestId('location-field-streetName')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('location-field-buildingNumber')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('location-field-buildingName')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('location-resulting-address-preview')).not.toBeInTheDocument();
+  });
+
+  it('never shows the legacy-address banner, even for a record with only free-text address', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          response: { data: [{ id: 'loc-legacy', address: 'Old Street 12, 3B', country: 'ES', 'country$_identifier': 'Spain' }] },
+          items: [],
+          hasMore: false,
+        }),
+      }),
+    );
+
+    renderModal({ rowId: 'loc-legacy' });
+
+    await screen.findByText('locationSelectorTitle');
+    await vi.waitFor(() => expect(screen.getByTestId('location-field-address')).toHaveValue('Old Street 12, 3B'));
+    // ETP-5806 — the banner, and `isLegacyAddressRecord`, are only evaluated when the flag is on.
+    expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+  });
+
+  it('keeps the pre-ETP-5806 save-gating rule: address text + country, nothing else', () => {
+    renderModal();
+    expectSaveBlocked();
+
+    fireEvent.change(screen.getByTestId('location-field-address'), { target: { value: 'Calle Mayor 1' } });
+    // Street/Number/City don't exist in this mode, so address + country alone must unblock Save.
+    expectSaveBlocked();
+  });
+
+  it('allows saving once legacy address and country are filled, with Street/Number/City never required', async () => {
+    global.fetch = vi.fn((url) => {
+      if (String(url).includes('/locationAddress') && !String(url).includes('selectors')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { status: 0, data: [{ id: 'new-loc-legacy', name: 'Legacy Location' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+    });
+
+    renderModal();
+    fireEvent.change(screen.getByTestId('location-field-address'), { target: { value: 'Calle Mayor 1' } });
+    await selectSpain();
+
+    expectSaveAllowed();
+    fireEvent.click(saveButton());
+
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/locationAddress'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  it('sends the raw legacy address lines, and null structured fields, in the save payload', async () => {
+    let capturedBody;
+    global.fetch = vi.fn((url, opts) => {
+      if (String(url).includes('/locationAddress') && !String(url).includes('selectors') && opts?.method === 'POST') {
+        capturedBody = JSON.parse(opts.body);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { status: 0, data: [{ id: 'new-loc-legacy', name: 'Legacy Location' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+    });
+
+    renderModal();
+    fireEvent.change(screen.getByTestId('location-field-address'), { target: { value: 'Calle Mayor 1' } });
+    fireEvent.change(screen.getByTestId('location-field-address2'), { target: { value: 'Piso 2' } });
+    await selectSpain();
+    fireEvent.click(saveButton());
+
+    await vi.waitFor(() => expect(capturedBody).toBeDefined());
+    expect(capturedBody.addressLine1).toBe('Calle Mayor 1');
+    expect(capturedBody.addressLine2).toBe('Piso 2');
+    expect(capturedBody.streetName).toBeNull();
+    expect(capturedBody.buildingNumber).toBeNull();
+    expect(capturedBody.buildingName).toBeNull();
   });
 });
