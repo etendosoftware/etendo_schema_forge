@@ -6,7 +6,7 @@ ETP-5862. Deployment of the public API gateway (`gateway/`, the ETP-5345 NestJS 
 
 Use this runbook to build the gateway image from pinned sources, push it to ECR, roll the ECS service and verify it. For the routing around the service (CloudFront, ALB, target group) see [cloudfront-alb-routing.md](cloudfront-alb-routing.md), section "Public API gateway (production)".
 
-> **Warning: do not build the gateway from `develop` until etendosoftware/etendo_schema_forge#1877 is merged.** `gateway/Dockerfile` on `develop` still expects the `etendosoftware-api-gateway-core-0.1.0.tgz` tarball, while `schema_forge_core` `develop` already ships `api-gateway-core` 0.2.0, so the build breaks (see [Dockerfile inconsistencies](#dockerfile-notes)). #1877 aligns them. The public API work is also under a merge block: build only SHAs that were agreed for the deploy.
+> **Build only from a `main` SHA that was agreed for the deploy.** Since the public API merge block (ETP-5873, including #1877) the Dockerfile installs whatever `api-gateway-core` version `.schema_forge_core` packs (`etendosoftware-api-gateway-core-*.tgz`), and `gateway/package.json` asks for `^0.2.0`; a core checkout older than 0.2.0 must not be used.
 
 ## 2. Prerequisites
 
@@ -152,7 +152,6 @@ Repeat the [smoke check](#6-smoke-check). The previous image tag must still exis
 
 Observations from reading `gateway/Dockerfile` (not changed here):
 
-- The tarball name `etendosoftware-api-gateway-core-0.1.0.tgz` is hardcoded, but `npm pack` names the file after the package version. With `schema_forge_core` `develop` at 0.2.0 the pack produces `...-0.2.0.tgz` and `RUN npm install --omit=dev /tmp/...0.1.0.tgz` fails. #1877 is the fix.
-- `gateway/package.json` declares `@etendosoftware/api-gateway-core` as `^0.1.0`, which does not match 0.2.0 (a caret on a 0.x version only allows 0.1.x). It works only because the Dockerfile installs the tarball by path.
+- Before ETP-5873 the tarball name `...-0.1.0.tgz` was hardcoded and `gateway/package.json` asked for `^0.1.0`, so a 0.2.0 core broke the build. Both now follow the packed version (`*.tgz`, `^0.2.0`).
 - No core branch or commit is pinned or checked by the Dockerfile; the result depends only on the contents of `.schema_forge_core` at build time. This runbook compensates with section 3 and the deployment record.
 - There is no `.dockerignore`, so the full repo root, including any `node_modules` and `.git`, is sent as build context.
