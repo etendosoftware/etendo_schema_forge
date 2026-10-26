@@ -14,7 +14,11 @@
 //
 // Fail closed: a source that fails to load contributes nothing, so its sections stay hidden and
 // the rest of the page keeps working. Every flag starts `false` and can only turn `true` once its
-// source has settled, so a section never flashes in and back out while loading.
+// source has settled, so a section never flashes in and back out while loading. On an
+// organization switch the previous organization's fiscal config is ignored until the new one has
+// loaded (`useFiscalConfigIsForOrg`). The catalog is client-level, so an org switch does not
+// make it stale.
+import { useState } from 'react';
 import { useFiscalModelsCatalog, isModelActive } from '../fiscal-models/useFiscalModelsCatalog.js';
 import { listModels } from '../fiscal-models/modelRegistry.js';
 import { useFiscalConfig } from '../fiscal-config/useFiscalConfig.js';
@@ -25,6 +29,39 @@ export const IAE_MODEL_IDS = Object.freeze(['303', '390']);
 export const MODELO_390_MODEL_IDS = Object.freeze(['390']);
 /** Catalog models filed telematically to the AEAT, which need the organization's certificate. */
 export const TELEMATIC_MODEL_IDS = Object.freeze(listModels().filter(m => m.telematicFiling).map(m => m.id));
+
+// The fields of a useFiscalConfig result that change when it (re)loads.
+const FISCAL_STATE_FIELDS = ['siiRecord', 'tbaiRecord', 'verifactuRecord', 'profile', 'error'];
+
+function snapshotFiscal(fiscal) {
+  return FISCAL_STATE_FIELDS.map(f => fiscal[f]);
+}
+
+function fiscalChangedSince(snapshot, fiscal) {
+  return FISCAL_STATE_FIELDS.some((f, i) => fiscal[f] !== snapshot[i]);
+}
+
+/**
+ * True once the useFiscalConfig result belongs to `orgId`.
+ *
+ * useFiscalConfig (shared with the fiscal-config window, left untouched) keeps its last settled
+ * state when `orgId` changes and only flips `loading` inside its effect, so the first render for
+ * a new organization still carries the PREVIOUS organization's records with `loading: false`.
+ * When `orgId` changes (not on mount), the current result is snapshotted; it counts as the new organization's
+ * once a load is seen (`loading: true`) or any of its fields moves away from that snapshot.
+ * State adjusted during render (React's "storing information from previous renders" pattern), so
+ * the stale render itself is already fail-closed — no effect lag.
+ */
+function useFiscalConfigIsForOrg(orgId, fiscal) {
+  // On mount there is no previous organization: the reader's first state is its own pristine
+  // one (`profile: null`, not settled) or already this organization's, so it is trusted.
+  const [track, setTrack] = useState(() => ({ orgId, snapshot: null, fresh: true }));
+  let next = track;
+  if (next.orgId !== orgId) next = { orgId, snapshot: snapshotFiscal(fiscal), fresh: false };
+  if (!next.fresh && (fiscal.loading || fiscalChangedSince(next.snapshot, fiscal))) next = { ...next, fresh: true };
+  if (next !== track) setTrack(next);
+  return next.fresh;
+}
 
 function anyActive(activeModels, ids) {
   return ids.some(id => isModelActive(activeModels, id));
@@ -58,9 +95,11 @@ export function resolveFiscalSectionVisibility({
 export function useFiscalSectionVisibility(orgId, apiBaseUrl) {
   const catalog = useFiscalModelsCatalog(apiBaseUrl);
   const fiscal = useFiscalConfig(orgId, apiBaseUrl);
+  const fiscalIsForOrg = useFiscalConfigIsForOrg(orgId, fiscal);
   // useFiscalConfig starts at `loading: false, profile: null` before its first load runs, so
-  // "settled" is a resolved profile or an error, not just `!loading`.
-  const fiscalSettled = !fiscal.loading && (fiscal.profile !== null || fiscal.error != null);
+  // "settled" is a resolved profile or an error, not just `!loading` — and it must be THIS
+  // organization's result (ETP-5831: on an org switch the previous one's records linger a render).
+  const fiscalSettled = fiscalIsForOrg && !fiscal.loading && (fiscal.profile !== null || fiscal.error != null);
   const visibility = resolveFiscalSectionVisibility({
     activeModels: catalog.activeModels,
     catalogOk: catalog.loaded && !catalog.error,

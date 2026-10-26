@@ -150,7 +150,11 @@ fiscal-incident deep link. A hidden section is not rendered at all (no collapsed
   `fiscal-config/useFiscalConfig.js`, reused as is. Toggled in Configuración fiscal.
 
 **Loading and errors:** every flag starts `false` and only turns `true` once its source settles, so a
-section never appears and then disappears. A source that fails to load contributes nothing (fail
+section never appears and then disappears. On an organization switch, the previous
+organization's SII / TicketBAI / VERI\*FACTU records are ignored (sections hidden, `loading: true`)
+until the new organization's config has loaded — `useFiscalConfig` keeps its last state for one
+render after `orgId` changes, so the hook tracks which organization the result belongs to
+(`useFiscalConfigIsForOrg`). The catalog is client-level, so a switch does not affect it. A source that fails to load contributes nothing (fail
 closed: its sections stay hidden) and never blocks the rest of the page. Known consequence: because
 `useFiscalConfig` loads the three fiscal-config specs in one `Promise.all`, a failure on any one of
 them hides the certificate unless a telematic model is active.

@@ -201,9 +201,13 @@ describe('useFiscalSectionVisibility — switching organization', () => {
   }
 
   function renderTracked() {
-    return renderHook(({ orgId }) => useFiscalSectionVisibility(orgId, API), {
-      initialProps: { orgId: 'ORG_1' },
-    });
+    const renders = [];
+    const view = renderHook(({ orgId }) => {
+      const value = useFiscalSectionVisibility(orgId, API);
+      renders.push({ orgId, ...value });
+      return value;
+    }, { initialProps: { orgId: 'ORG_1' } });
+    return { ...view, renders };
   }
 
   beforeEach(() => {
@@ -228,16 +232,20 @@ describe('useFiscalSectionVisibility — switching organization', () => {
     await waitFor(() => expect(mockApiFetch.mock.calls.some(([url]) => url.includes('organization=ORG_2'))).toBe(true));
   });
 
-  it('hides the previous organization\'s certificate while the new one loads', async () => {
+  it('never shows the previous organization\'s certificate while the new one loads', async () => {
     let releaseOrg2;
     const org2Pending = new Promise((r) => { releaseOrg2 = r; });
     respondFor(() => org2Pending.then(() => ok([])));
-    const { result, rerender } = renderTracked();
+    const { result, rerender, renders } = renderTracked();
     await waitFor(() => expect(result.current.showCert).toBe(true));
 
+    const switchedAt = renders.length;
     rerender({ orgId: 'ORG_2' });
 
-    expect(result.current).toEqual({ ...NOTHING, loading: true });
+    const whileLoading = renders.slice(switchedAt);
+    expect(whileLoading.length).toBeGreaterThan(0);
+    expect(whileLoading.every((r) => r.orgId === 'ORG_2' && r.showCert === false)).toBe(true);
+    expect(result.current.loading).toBe(true);
 
     await act(async () => { releaseOrg2(); await org2Pending; });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -246,12 +254,14 @@ describe('useFiscalSectionVisibility — switching organization', () => {
 
   it('keeps ignoring the previous organization\'s records when the new one fails to load', async () => {
     respondFor(() => failed());
-    const { result, rerender } = renderTracked();
+    const { result, rerender, renders } = renderTracked();
     await waitFor(() => expect(result.current.showCert).toBe(true));
 
+    const switchedAt = renders.length;
     rerender({ orgId: 'ORG_2' });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current).toEqual({ ...NOTHING, loading: false });
+    expect(renders.slice(switchedAt).every((r) => r.showCert === false)).toBe(true);
   });
 });
