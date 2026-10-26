@@ -2433,8 +2433,8 @@ describe('translateBackendError — return factura rectificativa (ETP-5712)', ()
     'backendError.returnInvoiceWithoutAmount': 'No se puede crear la factura rectificativa: no se ha encontrado precio para {products}, y quedaría confirmada con importe cero.',
     'backendError.rectifiedInvoiceRequired': 'Esta devolución no tiene factura que rectificar.',
   });
-  const PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
-  const SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+  const PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price source was found for ';
+  const SUFFIX = ' (not on the invoice being rectified, nor on its order line, nor in the price list), so it would be confirmed with a zero amount. Give those products a price in the price list, or rectify an invoice that has them.';
 
   it('translates the zero-amount refusal keeping the product names', () => {
     assert.equal(
@@ -2448,6 +2448,11 @@ describe('translateBackendError — return factura rectificativa (ETP-5712)', ()
       translateBackendError(`${PREFIX}Tornillo 4, 5 mm${SUFFIX}`, es),
       'No se puede crear la factura rectificativa: no se ha encontrado precio para Tornillo 4, 5 mm, y quedaría confirmada con importe cero.',
     );
+  });
+
+  it('no longer matches the pre-ETP-5712-point-7 sentence', () => {
+    const old = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for Agua, so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+    assert.equal(translateBackendError(old, es), old);
   });
 
   it('leaves a message with the prefix but no products untouched', () => {
