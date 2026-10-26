@@ -245,10 +245,11 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
-  // ETP-5381: this duplicate guard was REMOVED on purpose (a return can legitimately have more
-  // than one rectificative invoice) and the backend no longer sends this sentence; ETP-5712 reports
-  // the existing ones in `previousReturnInvoices` instead. The entry stays only so a response from
-  // an older backend still reads in the user's language.
+  // ETP-5712: the backend answers 409 `returnInvoiceAlreadyExists` with exactly this sentence when
+  // the return already has a non-voided rectificative invoice and the request does not carry
+  // `allowDuplicate:true` (one per return, like the screen, which hides its button). ETP-5381 had
+  // removed the guard; ReturnShipmentUtils.MSG_RETURN_INVOICE_ALREADY_EXISTS is the source, keep
+  // both in step. Older backends sent it too, so the entry serves both.
   'A rectificative invoice already exists for this return document.':
     'backendError.returnInvoiceAlreadyExists',
   // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
