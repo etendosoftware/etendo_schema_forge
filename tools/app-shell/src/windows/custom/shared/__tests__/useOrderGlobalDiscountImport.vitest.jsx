@@ -211,24 +211,57 @@ describe('useOrderGlobalDiscountImport — afterImport header PATCH', () => {
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
+  const HEADER_URL = `${BASE}/${HEADER_ENDPOINT}/inv-1`;
+  const headerRead = (row) => ({ ok: true, json: async () => ({ response: { data: row ? [row] : [] } }) });
+  const runCarry = () => hookProps().afterImport(afterImportArgs({ selected: ['SO-A'], imported: ['SO-A'] }));
+
   it('PATCHes the header with the % when the toggle is on and the invoice has none', async () => {
-    mockApiFetch.mockResolvedValue({ ok: true });
-    const result = await hookProps().afterImport(afterImportArgs({ selected: ['SO-A'], imported: ['SO-A'] }));
+    mockApiFetch
+      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }))
+      .mockResolvedValueOnce({ ok: true });
+    const result = await runCarry();
     expect(result).toEqual({ carried: true, pct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(1);
-    expect(mockApiFetch).toHaveBeenCalledWith(`${BASE}/${HEADER_ENDPOINT}/inv-1`, {
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
+    expect(mockApiFetch.mock.calls[1]).toEqual([HEADER_URL, {
       method: 'PATCH',
-      body: JSON.stringify({ etgoTotalDiscount: 10 }),
-    });
+      body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }),
+    }]);
   });
 
   it.each([
-    ['answers not ok', () => mockApiFetch.mockResolvedValue({ ok: false })],
-    ['rejects', () => mockApiFetch.mockRejectedValue(new Error('network'))],
-  ])('reports failedPct when the PATCH %s', async (_name, arrange) => {
+    ['0', 0],
+    ['null', null],
+  ])('re-read with etgoTotalDiscount %s → PATCH carries the fresh updated', async (_name, current) => {
+    mockApiFetch
+      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: current, updated: '2025-01-15T10:00:00Z' }))
+      .mockResolvedValueOnce({ ok: true });
+    expect(await runCarry()).toEqual({ carried: true, pct: 10 });
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(mockApiFetch.mock.calls[1][1].body)).toEqual({ etgoTotalDiscount: 10, updated: '2025-01-15T10:00:00Z' });
+  });
+
+  it.each([
+    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
+    ['throws', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
+    ['returns no row', () => mockApiFetch.mockResolvedValueOnce(headerRead(null))],
+    ['shows a % set meanwhile (5)', () => mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: 5, updated: 'X' }))],
+  ])('reports failedPct without PATCH when the header re-read %s', async (_name, arrange) => {
     arrange();
-    const result = await hookProps().afterImport(afterImportArgs({ selected: ['SO-A'], imported: ['SO-A'] }));
-    expect(result).toEqual({ carried: false, failedPct: 10 });
+    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
+    expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
+  });
+
+  it.each([
+    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
+    ['rejects', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
+  ])('reports failedPct when the PATCH %s', async (_name, arrange) => {
+    mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }));
+    arrange();
+    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(mockApiFetch.mock.calls[1][1].method).toBe('PATCH');
   });
 });
 
@@ -255,6 +288,10 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
 
   function renderModal({ orders, failingLines = [], patchOk = true }) {
     mockApiFetch.mockImplementation(async (_url, opts) => {
+      // Option-less call = the header re-read before the PATCH.
+      if (opts === undefined) {
+        return { ok: true, json: async () => ({ response: { data: [{ etgoTotalDiscount: null, updated: 'X' }] } }) };
+      }
       if (opts.method === 'POST') return { ok: !failingLines.includes(JSON.parse(opts.body).line) };
       return { ok: patchOk };
     });
@@ -303,7 +340,7 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
     screen.getAllByTestId('checkbox').forEach(cb => fireEvent.click(cb));
   }
 
-  const patchCalls = () => mockApiFetch.mock.calls.filter(([, opts]) => opts.method === 'PATCH');
+  const patchCalls = () => mockApiFetch.mock.calls.filter(([, opts]) => opts?.method === 'PATCH');
 
   it('carries a single order %: tag, discounted total, hint, header PATCH and the carried toast', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }];
@@ -317,7 +354,7 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
     fireEvent.click(screen.getByText(/importSelected/).closest('button'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
 
-    expect(patchCalls()).toEqual([[`${BASE}/${HEADER_ENDPOINT}/inv-1`, { method: 'PATCH', body: JSON.stringify({ etgoTotalDiscount: 10 }) }]]);
+    expect(patchCalls()).toEqual([[`${BASE}/${HEADER_ENDPOINT}/inv-1`, { method: 'PATCH', body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }) }]]);
     expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountImportedOne:{"count":1,"pct":"10"}');
     expect(toast.warning).not.toHaveBeenCalled();
   });
@@ -335,7 +372,7 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
     fireEvent.click(screen.getByText(/importSelected/).closest('button'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
 
-    const postCalls = mockApiFetch.mock.calls.filter(([, opts]) => opts.method === 'POST');
+    const postCalls = mockApiFetch.mock.calls.filter(([, opts]) => opts?.method === 'POST');
     expect(postCalls.map(([, opts]) => JSON.parse(opts.body))).toEqual([{ line: 'SO-A-l1' }]);
     expect(patchCalls()).toEqual([]);
     expect(toast.success).toHaveBeenCalledWith('linesImportedFromSalesOrder:{"count":1}');
@@ -369,6 +406,7 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
 
     expect(patchCalls()).toHaveLength(1);
+    expect(JSON.parse(patchCalls()[0][1].body)).toEqual({ etgoTotalDiscount: 10, updated: 'X' });
     expect(toast.warning.mock.calls).toEqual([
       ['importedLinesWithErrors:{"count":1,"errors":1}'],
       ['importGlobalDiscountPatchFailed:{"pct":"10"}'],
