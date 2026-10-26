@@ -111,6 +111,19 @@ describe('PURCHASE_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['purchase-invoice:i1'],
     },
     {
+      // Chain case: this invoice both rectifies another invoice (originInvoices) AND is
+      // itself rectified by a different one (rectifyingInvoices), simultaneously.
+      name: 'purchase-invoice: rectifies one invoice (originInvoices) AND is rectified by another (rectifyingInvoices)',
+      spec: 'purchase-invoice',
+      record: {
+        id: 'i0',
+        originInvoices: [{ id: 'i-origin' }],
+        rectifyingInvoices: [{ id: 'i-rectifying', documentNo: 'FCR9' }],
+      },
+      backend: { byId: { 'purchase-invoice/header/i-origin': { id: 'i-origin' } } },
+      expected: ['purchase-invoice:i-origin', 'purchase-invoice:i-rectifying'],
+    },
+    {
       name: 'purchase-invoice: order, receipts and origin invoices together, in that order',
       spec: 'purchase-invoice',
       record: {
@@ -189,6 +202,7 @@ describe('PURCHASE_RELATED_DOCS — depsKey covers every record field a fetch so
     [{ salesOrder: 'o1' }, { salesOrder: 'o2' }],
     [{ originInvoices: [{ id: 'a' }] }, { originInvoices: [{ id: 'a' }, { id: 'b' }] }],
     [{ originInvoice: 'a' }, { originInvoice: 'b' }],
+    [{ rectifyingInvoices: [{ id: 'a' }] }, { rectifyingInvoices: [{ id: 'a' }, { id: 'b' }] }],
   ])('purchase-invoice: %j → %j changes the key', (before, after) => {
     const { depsKey } = PURCHASE_RELATED_DOCS['purchase-invoice'];
     expect(depsKey({ id: 'x', ...before })).not.toBe(depsKey({ id: 'x', ...after }));
