@@ -146,6 +146,29 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
    the team chat which tasks the cut carries (the inventory of step 3); Clerk opens the PRs
    `mergeblock/ETP-YYYY → main` on request; Jenkins runs the full pipeline there, and the cut merges
    only when every required check is green.
+7. **Team announcement report (always, after the PRs are merged or when the human asks for it).** The
+   human posts it in the team chat, so produce it every cut, in this bullet format, without being asked:
+   - Range per repo: from the first parent of the PREVIOUS cut's merge on main (the old `origin/main`
+     before this cut) to this cut's merge commit. The PR number of this cut's own merge is excluded.
+   - Inventory with `git -C <repo> log --merges --format='%s' <old-main>..<new-main>`, keep only
+     `Merge pull request #N from …` (skip `mergeblock/*`), then read each PR's title and author with
+     `gh pr view N --repo <slug> --json title,author`.
+   - Group by Jira key (ETP-XXXX), NOT by repo: one bullet per task with the repo PRs that carry it,
+     what each does in one line, and the author. A key that spans repos is a single bullet. A key with
+     several PRs in the same repo lists them all.
+   - Layout, in this order:
+     - Header: `Mergeblock ETP-YYYY (DD/MM): N tasks`, the two PR numbers (funcional and .go) and the base
+       it started from (previous cut's key).
+     - **In funcional and .go** — one bullet per task: `**ETP-XXXX** (author): funcional #N <what>.
+       .go #M <what>.` Same author on both sides is written once.
+     - **Only in funcional** — same bullet shape.
+     - **Only in .go** — same bullet shape.
+     - **Notes** — fixes that came from main and entered with the `origin/main` merge (name the commit and
+       what it does), whether `schema_forge_core` was in the cut (it is out when its tree diff vs main is
+       empty), tasks from earlier cuts that are not repeated, and the limitation that only merged PRs
+       were scanned (a direct commit to develop with no PR is not listed).
+   - Bullets only, no tables, in the human's language (Spanish). Titles of tasks and PRs stay as written in
+     the PR (English).
 </job_b_the_cut>
 
 <job_c_failure_ladder>
