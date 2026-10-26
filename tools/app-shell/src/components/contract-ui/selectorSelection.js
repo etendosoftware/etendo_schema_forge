@@ -8,6 +8,11 @@
 // a catalog of thousands (business partners, products) must not cost dozens of requests per open.
 export const LOCATE_SELECTION_MAX_PAGES = 6;
 
+/** Whether `value` holds a committed id (not null, undefined or ''). */
+export function hasCommittedValue(value) {
+  return value != null && value !== '';
+}
+
 /**
  * Index of the row that holds the committed `value`, or -1 when it is not among `rows`.
  *
@@ -23,7 +28,7 @@ export const LOCATE_SELECTION_MAX_PAGES = 6;
  * @returns {number} index of the current option, or -1
  */
 export function resolveSelectedIndex(rows, value) {
-  if (value == null || value === '') return -1;
+  if (!hasCommittedValue(value)) return -1;
   return rows.findIndex(o => String(o.id) === String(value));
 }
 
@@ -52,6 +57,14 @@ export function prependCurrentSelection(rows, pinned, value) {
 export function nextActiveIndex(current, selected, delta, length) {
   const from = current >= 0 ? current : selected;
   return Math.max(0, Math.min(from + delta, length - 1));
+}
+
+/**
+ * Where the arrow keys start (ETP-5903): from the committed row while no search is typed (AC2);
+ * with a query the list is that search's results, navigated from the top (AC4).
+ */
+export function arrowStartIndexFor(query, selected) {
+  return query.trim() === '' ? selected : -1;
 }
 
 /**

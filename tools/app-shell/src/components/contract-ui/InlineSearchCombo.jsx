@@ -6,7 +6,8 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, shouldKeepLocating, centerOptionInPanel,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, shouldKeepLocating,
+  centerOptionInPanel,
 } from './selectorSelection.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -528,7 +529,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
 
   // ETP-5903 — arrows start from the committed option while no search is typed; with a query the
   // list is that search's results, from the top (AC4).
-  const arrowStartIndex = query.trim() === '' ? selectedIndex : -1;
+  const arrowStartIndex = arrowStartIndexFor(query, selectedIndex);
 
   useEffect(() => {
     if (!open) {

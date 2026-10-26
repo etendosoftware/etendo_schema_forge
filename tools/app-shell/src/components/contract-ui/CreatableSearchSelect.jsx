@@ -6,7 +6,8 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, shouldKeepLocating, centerOptionInPanel,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, shouldKeepLocating,
+  centerOptionInPanel, hasCommittedValue,
 } from './selectorSelection.js';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
@@ -791,8 +792,8 @@ export function CreatableSearchSelect({
   const selectedIndex = resolveSelectedIndex(filteredOptions, value);
   // ETP-5903 — arrows start from the committed option while no search is typed (AC2); with a query
   // the list is that search's results, navigated from the top (AC4).
-  const arrowStartIndex = query.trim() === '' ? selectedIndex : -1;
-  const hasValue = value != null && value !== '';
+  const arrowStartIndex = arrowStartIndexFor(query, selectedIndex);
+  const hasValue = hasCommittedValue(value);
 
   // ETP-5903 — resolves the committed row when the walk could not bring it into view: asks the
   // SAME selector, with the SAME context, for the value's label and keeps only the id-equal row (an

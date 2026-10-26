@@ -7,11 +7,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  LOCATE_SELECTION_MAX_PAGES, resolveSelectedIndex, prependCurrentSelection, nextActiveIndex,
+  LOCATE_SELECTION_MAX_PAGES, resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
+  hasCommittedValue,
   shouldKeepLocating, centerOptionInPanel,
 } from '../selectorSelection.js';
 
 const ROWS = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+
+test('hasCommittedValue treats null, undefined and empty as no value, 0 as a value', () => {
+  assert.equal(hasCommittedValue(null), false);
+  assert.equal(hasCommittedValue(undefined), false);
+  assert.equal(hasCommittedValue(''), false);
+  assert.equal(hasCommittedValue(0), true);
+  assert.equal(hasCommittedValue('A1'), true);
+});
 
 test('resolveSelectedIndex matches ids as strings and returns -1 without a value', () => {
   assert.equal(resolveSelectedIndex([{ id: 1 }, { id: 2 }], '2'), 1);
@@ -41,6 +50,12 @@ test('nextActiveIndex moves from the highlight once there is one, clamped to the
   assert.equal(nextActiveIndex(3, 0, 1, 4), 3);
   assert.equal(nextActiveIndex(0, 3, -1, 4), 0);
   assert.equal(nextActiveIndex(-1, 3, 1, 4), 3);
+});
+
+test('arrowStartIndexFor starts from the committed row only while no search is typed', () => {
+  assert.equal(arrowStartIndexFor('', 3), 3);
+  assert.equal(arrowStartIndexFor('  ', 3), 3);
+  assert.equal(arrowStartIndexFor('iva', 3), -1);
 });
 
 test('shouldKeepLocating stops when found, at the end of the list, on user interaction or at the cap', () => {
