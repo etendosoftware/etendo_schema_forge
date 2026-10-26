@@ -326,7 +326,6 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
                     style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, overflowWrap: 'anywhere' } : column.key === 'default' ? { width: 96 } : column.key === 'taxID' || column.key === 'powerDate' ? { width: 112 } : undefined}
                     {...gridHeaderProps(column, gridView)}>
                     {label}
-                    
                     {gridReorderHandle(column, gridView, label, ui)}
                     {gridResizeHandle(column, gridView, label, ui)}
                   </th>

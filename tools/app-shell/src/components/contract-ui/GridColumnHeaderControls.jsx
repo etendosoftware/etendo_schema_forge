@@ -75,4 +75,3 @@ export function gridResizeHandle(col, gridView, label, ui) {
     </div>
   );
 }
-
