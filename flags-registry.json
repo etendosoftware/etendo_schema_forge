@@ -1076,7 +1076,9 @@
           "src/com/etendoerp/go/schemaforge/selector/policy/AddressVirtualSelectorPolicy.java",
           "src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java",
           "src/com/etendoerp/go/schemaforge/webhooks/SFWindowAccessMap.java",
-          "src/com/etendoerp/go/rest/EtendoGoJwtServlet.java"
+          "src/com/etendoerp/go/rest/EtendoGoJwtServlet.java",
+          "src/com/etendoerp/go/onboarding/OnboardingOrgInfoService.java",
+          "src/com/etendoerp/go/rest/OnboardingProvisioningChain.java"
         ]
       },
       "$pathsComment": "GoFeatureFlags.java is excluded: it is frameworkPaths (com/etendoerp/go/featureflags/), shared infrastructure for every flag, never owned code for one. NOT covered by this registry's `roots` (frontend=schema_forge root, backend=etendo_core/modules/com.etendoerp.go): the gated UI in the SIBLING `schema_forge_core` repo, consumed here as the published/linked @etendosoftware/etendo-go-core and @etendosoftware/app-shell-core packages -- packages/etendo-go-core/src/onboarding/steps/CompanyStep.jsx, packages/etendo-go-core/src/onboarding/OnboardingFlow.jsx (threads `capabilities` from the session response into every onboarding step), packages/etendo-go-core/src/onboarding/components/AddressCell.jsx, packages/app-shell-core/src/lib/locationAddress.js. Bump the consumed package version here once schema_forge_core publishes, per docs/repo-topology.md.",
