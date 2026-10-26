@@ -187,9 +187,16 @@ same mechanism the User window uses for its create toast. A category without con
 plain "Registro guardado". A role that cannot read Contacts gets no notice.
 
 **Labels.** `fields.EM_Etgo_Iscustomer` / `fields.EM_Etgo_Isvendor` are in the locales (the module
-has no es_ES translation pack). The vendor account labels were renamed in Spanish everywhere they
-come from the AD label (this window and Contacts' vendor accounting): "Pasivo del
-proveedor/acreedor" and "Pagos por adelantado del proveedor/acreedor".
+has no es_ES translation pack). The two vendor accounts are renamed **in this tab only**: their
+entries in `ACCOUNT_SECTIONS` (`custom/bpCategoryContactTypes.js`) carry a `labelKey`, which the
+panel resolves with `useUI()` instead of the AD column label — `bpCategoryVendorLiability`
+("Pasivo del proveedor/acreedor" / "Vendor/Creditor Liability") and `bpCategoryVendorPrepayment`
+("Pagos por adelantado del proveedor/acreedor" / "Vendor/Creditor Prepayment"). Every other
+account keeps `t(column)`. The global `fields.V_Liability_Acct` / `fields.V_Prepayment_Acct` labels
+and the posting-error names `backendError.account.vendorLiability` / `vendorPrepayment` are
+unchanged ("Pasivo del proveedor" / "Pagos por adelantado del proveedor"), so Contactos (Vendor
+Accounting), Configuración contable and the posting error messages keep the AD wording (PO
+decision).
 
 **MCP schema hints.** `etendo_schema view:"create"` lists `etgoIscustomer` / `etgoIsvendor` as
 optional with `serverDefaulted: true` (the AD default `N` is resolved), which on its own suggests

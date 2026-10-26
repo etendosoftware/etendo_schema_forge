@@ -148,7 +148,7 @@ export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, 
                 account={account}
                 row={row}
                 apiBaseUrl={apiBaseUrl}
-                label={t(account.column) ?? account.key}
+                label={account.labelKey ? ui(account.labelKey) : (t(account.column) ?? account.key)}
                 onPick={handlePick}
               />
             ))}

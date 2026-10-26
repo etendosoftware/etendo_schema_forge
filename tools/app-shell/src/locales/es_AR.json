@@ -2721,11 +2721,11 @@
       "description": "Columna que se va a mostrar"
     },
     "V_Liability_Acct": {
-      "label": "Pasivo del proveedor/acreedor",
+      "label": "Pasivo del proveedor",
       "description": "Número de cuenta del Libro Mayor utilizado para anotar las transacciones con este tercero."
     },
     "V_Prepayment_Acct": {
-      "label": "Pagos por adelantado del proveedor/acreedor",
+      "label": "Pagos por adelantado del proveedor",
       "description": "Número de cuenta del Libro Mayor utilizado para anotar las transacciones con este tercero."
     },
     "ValueMax": {
@@ -17110,9 +17110,9 @@
     "backendError.rateReferenceDate.quotation": "Fecha de presupuesto",
     "backendError.account.nonInvoicedReceipts": "Recibos no facturados",
     "backendError.account.customerReceivablesNo": "Recibos de clientes",
-    "backendError.account.vendorLiability": "Pasivo del proveedor/acreedor",
+    "backendError.account.vendorLiability": "Pasivo del proveedor",
     "backendError.account.customerPrepayment": "Prepago del cliente",
-    "backendError.account.vendorPrepayment": "Pagos por adelantado del proveedor/acreedor",
+    "backendError.account.vendorPrepayment": "Pagos por adelantado del proveedor",
     "backendError.account.productExpense": "Gastos del producto",
     "backendError.account.invoicePriceVariance": "Desviación Pr. Factura",
     "backendError.amortizationAnnualDepreciationRequired": "El campo Amortización Anual no puede estar vacío, ser cero o negativo.",

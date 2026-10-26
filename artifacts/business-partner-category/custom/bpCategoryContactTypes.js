@@ -11,7 +11,9 @@ export const VENDOR_FIELD = 'etgoIsvendor';
 
 /**
  * The two account sections of the Accounting tab, in display order. Fields are the
- * `C_BP_Group_Acct` API names; labels come from the AD column (`useLabel`). `required` mirrors the
+ * `C_BP_Group_Acct` API names; labels come from the AD column (`useLabel`) unless the account sets a
+ * `labelKey` (a `useUI` key), which renames it in this tab only — the AD column label stays as is in
+ * the other windows that show the same column (Contactos, Configuración contable). `required` mirrors the
  * AD (validator F19); it draws the asterisk and hides the clear button (`AccountSelect`) — every
  * account is PATCHed on its own, so it never blocks a save.
  */
@@ -33,8 +35,8 @@ export const ACCOUNT_SECTIONS = [
     titleKey: 'bpCategoryVendorsSection',
     subtitleKey: 'bpCategoryVendorsSectionSubtitle',
     accounts: [
-      { key: 'vendorLiability', column: 'V_Liability_Acct', required: true },
-      { key: 'vendorPrepayment', column: 'V_Prepayment_Acct' },
+      { key: 'vendorLiability', column: 'V_Liability_Acct', labelKey: 'bpCategoryVendorLiability', required: true },
+      { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', labelKey: 'bpCategoryVendorPrepayment' },
     ],
   },
 ];

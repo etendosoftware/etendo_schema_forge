@@ -20765,6 +20765,8 @@
     "bpCategoryVendorsSection": "Vendor/Creditor",
     "bpCategoryCustomersSectionSubtitle": "Accounts used to post the invoices and receipts of this category's customers.",
     "bpCategoryVendorsSectionSubtitle": "Accounts used to post the invoices and payments of this category's vendors and creditors.",
+    "bpCategoryVendorLiability": "Vendor/Creditor Liability",
+    "bpCategoryVendorPrepayment": "Vendor/Creditor Prepayment",
     "bpCategoryNoTypeAccounts": "Check Customer or Vendor/Creditor to set up its accounts.",
     "bpCategoryAccountsSaveFirst": "Save the category to set up its accounts.",
     "bpCategoryNoAccountingRow": "This category has no accounting configuration.",
