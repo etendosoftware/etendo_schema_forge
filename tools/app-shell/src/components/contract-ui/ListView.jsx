@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
+import { useFlagGatedImportConfig } from '@/lib/importFlagGates.js';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
@@ -560,8 +561,11 @@ export function ListView({
   onExternalPreviewClose = null,
   hiddenColumns = [],
   listSortBy = null,
-  import: importConfig = null,
+  import: rawImportConfig = null,
 }) {
+  // `window.import.fields[].hiddenWhenFlag` — columns a feature flag retires, dropped here once so
+  // the dialog, the template, the export and the empty state all see the same field list.
+  const importConfig = useFlagGatedImportConfig(rawImportConfig);
   // ETP-4994 — the grid state saved the last time this window's list was left, restored on
   // every return path (breadcrumb, Cancel, browser back) because all three remount ListView.
   // Read ONCE per mount: a later read would fight the live state it is meant to seed.

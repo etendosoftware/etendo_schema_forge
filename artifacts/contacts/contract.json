@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-20T12:00:39.163Z",
-  "checksum": "22d4d821175d2a03",
+  "updatedAt": "2026-10-26T18:25:24.961Z",
+  "checksum": "bfb2756d92e45aa9",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -197,6 +197,38 @@
             "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
+            "type": "boolean"
+          },
+          {
+            "target": "customer",
+            "aliases": [
+              "cliente",
+              "es cliente",
+              "customer"
+            ],
+            "label": "Customer",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleContactCustomer",
+            "labelKey": "importHeaderCustomer",
+            "hiddenWhenFlag": "contact-category-type",
+            "column": "IsCustomer",
+            "type": "boolean"
+          },
+          {
+            "target": "vendor",
+            "aliases": [
+              "proveedor",
+              "es proveedor",
+              "vendor",
+              "supplier"
+            ],
+            "label": "Vendor",
+            "required": false,
+            "example": "No",
+            "labelKey": "importHeaderVendor",
+            "hiddenWhenFlag": "contact-category-type",
+            "column": "IsVendor",
             "type": "boolean"
           },
           {
@@ -5509,6 +5541,38 @@
             "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
+            "type": "boolean"
+          },
+          {
+            "target": "customer",
+            "aliases": [
+              "cliente",
+              "es cliente",
+              "customer"
+            ],
+            "label": "Customer",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleContactCustomer",
+            "labelKey": "importHeaderCustomer",
+            "hiddenWhenFlag": "contact-category-type",
+            "column": "IsCustomer",
+            "type": "boolean"
+          },
+          {
+            "target": "vendor",
+            "aliases": [
+              "proveedor",
+              "es proveedor",
+              "vendor",
+              "supplier"
+            ],
+            "label": "Vendor",
+            "required": false,
+            "example": "No",
+            "labelKey": "importHeaderVendor",
+            "hiddenWhenFlag": "contact-category-type",
+            "column": "IsVendor",
             "type": "boolean"
           },
           {

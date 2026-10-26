@@ -5,6 +5,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useFeatureFlag, CONTACT_CATEGORY_TYPE } from '@/lib/flags';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { extractApiErrorMessage } from '@/lib/apiError';
 import { PAYMENT_TERM_CREATE_FIELD_PROPS } from '@/lib/inlineCreateVariants.js';
@@ -135,6 +136,7 @@ async function createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRe
 
 export default function BillingPreferencesForm(props) {
   const ui = useUI();
+  const categoryTypeEnabled = useFeatureFlag(CONTACT_CATEGORY_TYPE);
   const { invalidateBusinessPartner, invalidateFinanceKpis } = useContactsCacheInvalidation();
   const { data, api, token, onChange, apiBaseUrl } = props;
   const bpId = data?.id;
@@ -396,9 +398,10 @@ export default function BillingPreferencesForm(props) {
           {/* ── Proveedor ─────────────────────────────────────────────────── */}
           <div className="bg-[hsl(var(--muted))] rounded-lg p-3 flex flex-col gap-3">
             {/* ETP-5791: "Proveedor/Acreedor" — a creditor is a vendor-type contact too. Own key:
-                the generic `vendor` label is used elsewhere and must stay "Proveedor". */}
+                the generic `vendor` label is used elsewhere and must stay "Proveedor".
+                Toggle point of the `contact-category-type` flag: OFF keeps "Proveedor". */}
             <SquareCheckbox
-              label={ui('contactVendorCreditor')}
+              label={ui(categoryTypeEnabled ? 'contactVendorCreditor' : 'vendor')}
               checked={!!data?.vendor}
               onChange={(val) => onChange?.('vendor', val)}
               disabled={readOnly}

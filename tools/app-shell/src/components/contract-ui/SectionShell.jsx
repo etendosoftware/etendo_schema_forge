@@ -4,7 +4,7 @@
  * figma-spec.md "Section pattern"). Sections are separated by a hairline rule.
  *
  * Generic and window-agnostic: promoted from `windows/custom/general-ledger-configuration/`
- * (ETP-5791) so the contact category Accounting tab (`BpCategoryAccountingPanel`) renders its
+ * (ETP-5791) so the contact category Accounting tab renders its
  * account sections with the same card.
  *
  * @param {object} props

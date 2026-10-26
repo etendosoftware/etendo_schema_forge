@@ -1,13 +1,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import RecordCreateModal from './RecordCreateModal.jsx';
 import { useContactCategorySeed } from './useContactCategorySeed.js';
-import {
-  ContactTypeRequirementContext, buildContactTypeCreateCheck, contactTypeRequirementFor,
-} from './contactTypeRequirement.js';
-import { contactCategoryApiBaseUrl } from './contactCategoryFlags.js';
-import { useApiFetch } from '@/auth/useApiFetch.js';
-import { useUI } from '@/i18n';
-import { LOOKUP_CREATE_TARGETS, buildContactSeed, resolveContactName } from './lookupCreateTargets.js';
+import { ContactTypeRequirementContext } from './contactTypeRequirement.js';
+import { useContactCreateTypeGate } from './useContactCreateTypeGate.js';
+import { buildContactSeed, resolveContactName } from './lookupCreateTargets.js';
 
 import { buildHeaders } from '@/auth/api.js';
 
@@ -40,22 +36,12 @@ export function useCreateContactModal({ apiBaseUrl, token, documentType = 'sale'
     onOpen: (query, onSelect) => setCreateContactState({ query, onSelect }),
   }), []);
 
-  // Memoised because RecordCreateModal's reset effect has `target` in its dependency array:
-  // a fresh object per render would re-run it — reloading the window module and refetching
-  // /defaults — on every keystroke in the document behind the dialog.
-  const ui = useUI();
-  const contactTypeRequirement = useMemo(() => contactTypeRequirementFor(documentType), [documentType]);
-  const categoryApiFetch = useApiFetch(contactCategoryApiBaseUrl(bpApiBaseUrl));
-  // ETP-5791: the type-vs-category check for RecordCreateModal's fallback form (the embedded
-  // window runs its own, see useContactCategoryTypeSync).
-  const validateBeforeCreate = useMemo(
-    () => buildContactTypeCreateCheck({ requirement: contactTypeRequirement, apiFetch: categoryApiFetch, ui }),
-    [contactTypeRequirement, categoryApiFetch, ui],
-  );
-  const target = useMemo(
-    () => ({ ...LOOKUP_CREATE_TARGETS.contact, apiBaseUrl: bpApiBaseUrl, validateBeforeCreate }),
-    [bpApiBaseUrl, validateBeforeCreate],
-  );
+  // ETP-5791 (flag `contact-category-type`): the memoised create target, the type requirement
+  // the document imposes on the category, and whether the seed still carries customer/vendor.
+  // See useContactCreateTypeGate for what ON and OFF do.
+  const {
+    requirement: contactTypeRequirement, target, seedDocumentType,
+  } = useContactCreateTypeGate({ documentType, bpApiBaseUrl });
 
   const query = createContactState?.query ?? '';
   // The category id is per client, so it is looked up before the popup mounts (the embedded
@@ -64,12 +50,13 @@ export function useCreateContactModal({ apiBaseUrl, token, documentType = 'sale'
   const { ready: categoryReady, categorySeed } = useContactCategorySeed({
     contactsApiBaseUrl: bpApiBaseUrl, documentType, active: !!createContactState,
   });
-  // ETP-5791: no `customer` / `vendor` in the seed — the new contact's type comes from the
-  // seeded category (see `buildContactSeed`), and the popup refuses a category that does not
-  // grant the type this document needs (`contactTypeRequirement`).
+  // Flag ON (ETP-5791): no `customer` / `vendor` in the seed (`seedDocumentType` is null) — the
+  // new contact's type comes from the seeded category, and the popup refuses a category that
+  // does not grant the type this document needs (`contactTypeRequirement`).
+  // Flag OFF: the seed flags the contact from the document's nature, as before ETP-5791.
   const initialData = useMemo(
-    () => ({ ...buildContactSeed(query), ...categorySeed }),
-    [query, categorySeed],
+    () => ({ ...buildContactSeed(query, { documentType: seedDocumentType }), ...categorySeed }),
+    [query, seedDocumentType, categorySeed],
   );
 
   const handleCreated = useCallback((record) => {

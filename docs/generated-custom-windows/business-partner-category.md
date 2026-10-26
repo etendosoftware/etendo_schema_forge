@@ -8,19 +8,27 @@ Business Partner Category lets users maintain the category master record used to
 
 Users should be able to:
 
-- browse contact categories by Name, Customer, Vendor/Creditor and Default (Yes/No badges)
-- open a category and maintain its header fields: Search Key, Name, Default, and the **contact type** (Customer and/or Vendor/Creditor — at least one is required)
-- view and edit the category's accounts from the Accounting tab, grouped by contact type: Customers (receivables, prepayment, write-off) and Vendor/Creditor (liability, prepayment) — see *Contact type — ETP-5791* below
+- browse contact categories (columns depend on the `contact-category-type` flag, see below)
+- open a category and maintain its header fields: Search Key, Name, Description, Default, and — with the flag on — the **contact type** (Customer and/or Vendor/Creditor — at least one is required)
+- view and edit the category's accounts from the Accounting tab — with the flag on grouped by contact type: Customers (receivables, prepayment, write-off) and Vendor/Creditor (liability, prepayment) — see *Contact type — ETP-5791* below
+
+> **Feature flag `contact-category-type` (ETP-5791, default OFF).** Everything under *Contact type —
+> ETP-5791* is shown only while the flag is on. With the flag **off** the window looks and behaves
+> as before ETP-5791: list columns Search Key and Name; form Search Key, Name, Description and
+> Default (no "Tipo de contacto" group, no required type check); the generated inline-editable
+> Accounting table; no "saved with associated contacts" notice. The flag is visual gating only —
+> `com.etendoerp.go` evaluates the same key and enforces the contact-type rules on its own.
+> Registry entry: `flags-registry.json` → `contact-category-type`.
 
 ## Interaction model
 
 - **Route:** `/business-partner-category`, `/business-partner-category/:recordId`
 - **Visibility:** visible in the **Settings** menu as **Business Partner Category** (EN) / **Categoría de Contacto** (ES) (AD window ID `192`)
-- **Implementation type:** generated window — `registry.js` points directly to the generated entry point (`@generated/business-partner-category/generated/web/business-partner-category/index.jsx`); no custom wrapper. Since ETP-5791 the header type group and the Accounting tab are custom components in `artifacts/business-partner-category/custom/`, declared in `decisions.json`
-- **Window shape:** master + detail; `businessPartnerCategory` is the header entity (table `C_BP_Group`) and `accounting` is the detail entity (table `C_BP_Group_Acct`), rendered since ETP-5791 by the custom `BpCategoryAccountingPanel` (`window.customLinesComponent`) instead of the inline grid
-- **List behavior:** the category list shows Name, Customer, Vendor/Creditor and Default (Yes/No badges, real AD columns, so all four filter and sort). Search Key is no longer a list column (ETP-5791) but stays in the form
-- **Record behavior:** opening a category record renders a detail view with the category header form plus the **Accounting** tab (the custom panel)
-- **Accounting tab behavior (before ETP-5791 — superseded, see below):** shows one row per accounting schema. Each row exposes 20 ValidCombination FK selectors (`Customer Receivables No.`, `Customer Prepayment`, `Vendor Liability`, `Vendor Prepayment`, `Write-off`, `Write-off Revenue`, plus 15 secondary GL accounts covering non-invoiced receipts/receivables/revenue, payment discount expense/revenue, realized/unrealized gain/loss, unearned revenue, vendor service liability, and doubtful/bad-debt accounts). `Customer Receivables No.`, `Write-off`, and `Vendor Liability` are mandatory (`ismandatory=Y` in the AD). The five primary columns (`customerReceivablesNo`, `customerPrepayment`, `vendorLiability`, `vendorPrepayment`, `writeoff`) share the available width via `grow: true`; the remaining GL accounts are added as ordinary editable columns without `grow`.
+- **Implementation type:** generated window behind a thin wrapper — `registry.js` points to `tools/app-shell/src/windows/custom/business-partner-category/index.jsx` (ETP-5791), which renders the generated entry point and is the toggle point of the `contact-category-type` flag for the record view: it passes a `Form` that excludes `etgoIscustomer` (and its required-gate entry) while the flag is off, and, while it is on, `DetailTable={null}` + `CustomLines={BpCategoryAccountingPanel}`. The list's columns are gated by the `customComponents.headerTable` component `BpCategoryTable`. Custom components live in `artifacts/business-partner-category/custom/`
+- **Window shape:** master + detail; `businessPartnerCategory` is the header entity (table `C_BP_Group`) and `accounting` is the detail entity (table `C_BP_Group_Acct`), rendered by the generated inline grid (flag off) or by the custom `BpCategoryAccountingPanel` (flag on)
+- **List behavior:** `decisions.json` declares every column (Search Key, Name, Customer, Vendor/Creditor, Default; `gridOrder` 1–5) and `BpCategoryTable` hides them through `hiddenColumns`: flag **off** → Search Key, Name (as before ETP-5791); flag **on** → Name, Customer, Vendor/Creditor, Default (Yes/No badges, real AD columns, so all four filter and sort)
+- **Record behavior:** opening a category record renders a detail view with the category header form plus the **Accounting** tab (generated grid with the flag off, the custom panel with the flag on)
+- **Accounting tab behavior (flag off — the generated grid):** shows one row per accounting schema. Each row exposes 20 ValidCombination FK selectors (`Customer Receivables No.`, `Customer Prepayment`, `Vendor Liability`, `Vendor Prepayment`, `Write-off`, `Write-off Revenue`, plus 15 secondary GL accounts covering non-invoiced receipts/receivables/revenue, payment discount expense/revenue, realized/unrealized gain/loss, unearned revenue, vendor service liability, and doubtful/bad-debt accounts). `Customer Receivables No.`, `Write-off`, and `Vendor Liability` are mandatory (`ismandatory=Y` in the AD). The five primary columns (`customerReceivablesNo`, `customerPrepayment`, `vendorLiability`, `vendorPrepayment`, `writeoff`) share the available width via `grow: true`; the remaining GL accounts are added as ordinary editable columns without `grow`.
 - An **Attachments** tab is available in the detail tab strip (standard `AttachmentsTab` wiring, same as other generated master/detail windows).
 
 ## Layout configuration
@@ -54,12 +62,18 @@ The window uses these layout overrides (all set in `decisions.json → window`, 
 - **Java handler implemented.** `decisions.json → entities.accounting.javaQualifier` is set to `"businessPartnerCategoryAccountingHandler"`, matching the pattern used by `ProductCategoryAccountingHandler.java` in `com.etendoerp.go`. `BusinessPartnerCategoryAccountingHandler.java` exists on that repo's `feature/ETP-4402` branch (commit `7d86a652`, `@Named("businessPartnerCategoryAccountingHandler")`), with a matching `BusinessPartnerCategoryAccountingHandlerTest.java`. `C_AcctSchema_ID` has no native AD default value, so the handler's `handle()` auto-fills `accountingSchema` from the client's default active `AcctSchema` on POST when the field is absent, mirroring the `ProductCategoryAccountingHandler` pattern exactly.
 - Accounting rows are pre-created by Etendo (one per accounting schema); the window allows editing existing rows, but adding/deleting accounting-schema rows is not a typical use case and is not explicitly gated.
 - No totals, financial reactions, or callout chains are visible in the accounting entity contract.
-- No custom wrapper/header form exists yet — the window currently uses the fully generated form and table components. If a custom layout is needed later, follow the Product Category pattern (`tools/app-shell/src/windows/custom/product-category/`).
+- Since ETP-5791 a custom wrapper exists (`tools/app-shell/src/windows/custom/business-partner-category/index.jsx`, Product Category pattern) only to gate the contact-type UI behind its flag. When the flag is retired (shipped), move the panel back to `window.customLinesComponent` in `decisions.json` and drop the wrapper.
 
 ## Manual verification
 
+Flag `contact-category-type` **off** (default):
+
+- The list shows Identificador and Nombre only; the form shows Identificador, Nombre, Descripción and Valor por defecto, with no "Tipo de contacto" group, and saves without any type; the Accounting tab is the generated one-row inline grid; saving a category with contacts shows only "Registro guardado".
+
+Flag **on** (`VITE_FEATURE_FLAGS={"contact-category-type":true}` locally, or the remote control plane):
+
 1. Open `/business-partner-category` from the Settings menu: the list shows Nombre, Cliente, Proveedor/Acreedor and Valor por defecto (Sí/No badges), no Identificador column, and each column filters and sorts.
-2. Open an existing category: the form shows Search Key, Name, Default and the "Tipo de contacto * (lo heredan solo los contactos nuevos)" group, all visible at once — no "Mostrar más datos" toggle at desktop widths. Description is not in the form.
+2. Open an existing category: the form shows Search Key, Name, Default and the "Tipo de contacto * (lo heredan solo los contactos nuevos)" group in the first two rows, and Description behind "Mostrar más datos".
 3. Create a category: both type checkboxes start unchecked; saving with neither shows "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor".
 4. On the Accounting tab, check/uncheck Cliente and Proveedor/Acreedor (before saving): the matching section appears/disappears; with neither, the "Marca Cliente o Proveedor/Acreedor…" message shows. Re-checking a type shows its previous account values.
 5. Change an account in a visible section: it saves on selection; the hidden section's mandatory accounts do not block it.
@@ -70,10 +84,10 @@ The window uses these layout overrides (all set in `decisions.json → window`, 
 ## Automated evidence
 
 - `tools/app-shell/src/menu.json` places **Business Partner Category** under the Settings group (`windowId: "192"`), immediately after Tax Category.
-- `tools/app-shell/src/windows/registry.js` registers the `business-partner-category` slug pointing directly at the generated entry point (no custom wrapper).
+- `tools/app-shell/src/windows/registry.js` registers the `business-partner-category` slug pointing at the flag wrapper `windows/custom/business-partner-category/index.jsx` (ETP-5791), which renders the generated entry point.
 - `artifacts/business-partner-category/decisions.json` defines `businessPartnerCategory` as the header entity and `accounting` as the detail entity with `linesLayout: "inlineEditable"` and `javaQualifier: "businessPartnerCategoryAccountingHandler"`.
 - `artifacts/business-partner-category/contract.json` carries the `javaQualifier` through to both the frontend and backend entity sections, and lists `accountingSchema` in the `hidden`/`addLineFromSibling` slot of `addLineFields`.
-- `artifacts/business-partner-category/generated/web/business-partner-category/BusinessPartnerCategoryPage.jsx` renders `ListView` for the list route and `DetailView` with `linesLayout="inlineEditable"` and the generated `AccountingTable`/`AccountingForm` for record routes.
+- `artifacts/business-partner-category/generated/web/business-partner-category/BusinessPartnerCategoryPage.jsx` renders `ListView` (with `BpCategoryTable`) for the list route and `DetailView` with `linesLayout="inlineEditable"` and the generated `AccountingTable`/`AccountingForm` for record routes; the wrapper overrides those with the custom panel while the flag is on.
 - `node cli/src/validate-pipeline.js --scope=business-partner-category` reports 0 violations.
 - No dedicated Business Partner Category browser test exists yet. Shared route/loading behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
 
@@ -107,6 +121,10 @@ by code or name and lists **posting accounts only** (`PostingAccountCombinationS
 
 ## Contact type — ETP-5791
 
+**Behind the `contact-category-type` feature flag (default off).** This whole section describes the
+flag-on behaviour; with the flag off the window is the pre-ETP-5791 one (see the note at the top).
+The DB columns, the agent prompts (MCP) and the `C_BP_Group` data-fixes R50/R51 are not gated.
+
 A category now defines whether its contacts are **Customer**, **Vendor/Creditor** or both. Backend
 (`com.etendoerp.go`): columns `EM_Etgo_Iscustomer` / `EM_Etgo_Isvendor` on `C_BP_Group` (API
 `etgoIscustomer` / `etgoIsvendor`, YesNo, default `N`) and `BusinessPartnerCategoryHandler`, which
@@ -126,18 +144,19 @@ toast reads "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acr
 (`lib/backendErrors.js` maps `ETGO_BPGroupContactTypeRequired`, and the contact-side
 `ETGO_BPartnerContactTypeRequired`), and the toggle rolls back.
 
-**Header layout.** The form holds four fields: Search Key, Name and Default on row 1, and the
-full-width (`span: 4`) "Tipo de contacto" group on row 2. The shared header form shows only its
-first 2 rows before the "Mostrar más datos" toggle (`initialRows={2}`, ETP-5513), so this layout
-keeps the mandatory contact-type group always visible and no toggle appears with the 3- or
-4-column grid (container >= 480 px, i.e. every desktop width). **Description** (`Description`)
-was removed from the form (`form: false`, `grid: false` in `decisions.json`) because it is not
-in the design prototype — the PO confirmed the design wins over the ticket. The column and its
-values stay in the DB and in the API; only the UI no longer shows it. Adding another field to the
-header can push the group to row 3 (always on the 3-column grid), behind the toggle.
+**Header layout.** The form holds Search Key, Name, Description (`textarea`, `span: 2`) and
+Default, then the full-width (`span: 4`) "Tipo de contacto" group. **Description** was briefly
+removed from the form during ETP-5791 (it is not in the design prototype); the PM decided it
+stays, unconditionally (not behind the flag), exactly as before ETP-5791. The shared header form
+shows only its first 2 rows before the "Mostrar más datos" toggle (`initialRows={2}`, ETP-5513),
+and on overflow it moves the required fields first (`partitionInitialRows`): with the flag on,
+Search Key, Name and Default fill row 1, the "Tipo de contacto" group row 2, and Description goes
+behind the toggle. With the flag off the four fields fit in two rows and no toggle appears.
 
-**Accounting tab — `BpCategoryAccountingPanel`.** Declared as `window.customLinesComponent`
-(label `customLinesLabel: "Accounting"`). It loads the category's single `C_BP_Group_Acct` row
+**Accounting tab — `BpCategoryAccountingPanel`.** Passed by the window wrapper as `CustomLines`
+(label `customLinesLabel: "Accounting"`, with `DetailTable={null}` so it replaces the generated
+grid) while the flag is on — not declared in `decisions.json`, so the generated grid stays
+available with the flag off. It loads the category's single `C_BP_Group_Acct` row
 (`accounting?parentId=<id>`) and shows two sections. **They look and behave like the account
 tabs of the Esquema contable window** (PO decision, "Valores por defecto" / "Cuentas generales"),
 built from the same shared components, not a look-alike: each section is a `SectionShell` card

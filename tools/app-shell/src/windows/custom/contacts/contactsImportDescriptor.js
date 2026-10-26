@@ -7,6 +7,7 @@ import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeo
 import {
   getCachedCategories,
   categoryLookupFailedMessage,
+  categoryCreateFailedError,
 } from '@/lib/importCategoryResolution.js';
 import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
 import {
@@ -16,6 +17,24 @@ import {
 import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 import { stripUrlScheme } from './contactsWebUrl.js';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
+import { readFeatureFlag } from '@/lib/flags/useFeatureFlag.js';
+import { CONTACT_CATEGORY_TYPE } from '@/lib/flags/flag-keys.js';
+
+/**
+ * Feature flag `contact-category-type` (ETP-5791) — the toggle point of this descriptor. Read per
+ * row, never at module load, so a flag that resolves after the module is imported still applies.
+ *
+ *  - ON  → the contact CATEGORY decides the type: no Customer / Vendor keys in the body, and the
+ *          category cell must name an EXISTING category (`resolveExistingCategoryId`).
+ *  - OFF → the pre-ETP-5791 import: Cliente / Proveedor columns (`resolveCustomerVendor`, ETP-5544)
+ *          and an unknown category is auto-created (`resolveOrCreateCategoryId`).
+ *
+ * The decisions.json columns follow the same flag through `hiddenWhenFlag` (lib/importFlagGates.js).
+ */
+function contactCategoryTypeEnabled() {
+  return readFeatureFlag(CONTACT_CATEGORY_TYPE) === true;
+}
 
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
 // could ever populate it — the mirror image of the "column with no consumer" problem.
@@ -146,13 +165,68 @@ const IS_PERSON_VALUES = {
 
 const DEFAULT_IS_PERSON = 'N';
 
-// ETP-5791 — the import carries NO Customer / Vendor columns (they were added by ETP-5544 and
-// removed here). The contact category (C_BP_Group) now owns the contact's type: on create, the
+// ── Flag ON (`contact-category-type`, ETP-5791) ─────────────────────────────────────────────
+// The import carries NO Customer / Vendor columns (decisions.json hides them with
+// `hiddenWhenFlag`). The contact category (C_BP_Group) owns the contact's type: on create, the
 // backend copies IsCustomer / IsVendor from the category's `etgoIscustomer` / `etgoIsvendor`
 // flags unless the request body carries `customer` / `vendor` — and key PRESENCE is what counts
 // as explicit. So the descriptor must never put either key in the businessPartner body, not even
-// as a default; a template downloaded before ETP-5791 that still has those columns maps them to
-// no target and they are ignored.
+// as a default; a template downloaded with those columns maps them to no target and they are
+// ignored.
+//
+// ── Flag OFF (pre-ETP-5791) ───────────────────────────────────────────────────────────────────
+// C_BPartner.IsCustomer / IsVendor are AD Yes/No columns (AD_Reference 20) as well. Their
+// stored values are 'Y'/'N' — the same representation `etgoIsperson` already travels in, and
+// the one `BillingPreferencesForm` sends for `vendor`; NEO coerces it to the DAL boolean
+// (`NeoTypeCoercionHelper` -> `NeoBooleanFormat.toLenientBoolean`). 'Sí' leads the Y list on
+// purpose: `codeLabels` exports the FIRST synonym, so an exported file reads "Sí"/"No" and
+// re-imports by construction.
+const YES_NO_VALUES = {
+  Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
+  N: ['No', 'False', '0'],
+};
+
+const CUSTOMER_CELL = { target: 'customer', fieldLabelKey: 'importHeaderCustomer', fieldLabelFallback: 'Customer' };
+const VENDOR_CELL = { target: 'vendor', fieldLabelKey: 'importHeaderVendor', fieldLabelFallback: 'Vendor' };
+
+function isBlankCell(raw) {
+  return String(raw ?? '').trim() === '';
+}
+
+/**
+ * ETP-5544 — the Customer / Vendor roles of an imported contact. Flag OFF only: with
+ * `contact-category-type` ON the category decides and this is never called.
+ *
+ * Before ETP-5544 the template had no column for either, so every imported row silently landed on
+ * the DB defaults (IsCustomer='Y', IsVendor='N'): a supplier list imported via CSV became a
+ * list of customers. The defaulting rule is deliberate and reads the two cells TOGETHER:
+ *
+ *  - Both blank or absent (incl. a template downloaded before these columns existed) ->
+ *    customer 'Y', vendor 'N'. The row says nothing about its role, so it keeps exactly what
+ *    the import produced before.
+ *  - At least one filled -> a blank one means 'N'. A row with only "Proveedor = Sí" is a
+ *    vendor-only contact; defaulting the blank customer cell to 'Y' would make it both.
+ *  - Both explicitly 'N' -> allowed. A business partner can be neither (e.g. only an employee
+ *    or a plain contact), and the form allows the same.
+ *
+ * An unrecognized cell fails its row naming the accepted values, like every other coded cell.
+ *
+ * @returns {{customer: 'Y'|'N', vendor: 'Y'|'N'}}
+ * @throws {Error} when either cell holds a value outside {@link YES_NO_VALUES}.
+ */
+function resolveCustomerVendor(row, translate) {
+  const roleStated = !isBlankCell(row.customer) || !isBlankCell(row.vendor);
+  const resolve = (raw, cell, defaultCode) => resolveCodedCellOrThrow(raw, YES_NO_VALUES, {
+    defaultCode,
+    fieldLabelKey: cell.fieldLabelKey,
+    fieldLabelFallback: cell.fieldLabelFallback,
+    translate,
+  });
+  return {
+    customer: resolve(row.customer, CUSTOMER_CELL, roleStated ? 'N' : 'Y'),
+    vendor: resolve(row.vendor, VENDOR_CELL, 'N'),
+  };
+}
 
 const SEARCH_KEY_MAX_LENGTH = 40;
 const SEARCH_KEY_HASH_LENGTH = 7;
@@ -238,8 +312,66 @@ function categoryNotFoundMessage(cell, config) {
   );
 }
 
+/** The row's category id: the toggle point between the two resolution rules below. */
+function resolveCategoryId(row, config) {
+  return contactCategoryTypeEnabled()
+    ? resolveExistingCategoryId(row, config)
+    : resolveOrCreateCategoryId(row, config);
+}
+
 /**
- * ETP-5791 — resolves the row's category among the EXISTING ones only.
+ * Flag OFF (pre-ETP-5791) — resolves the row's category, auto-creating an unknown one.
+ */
+async function resolveOrCreateCategoryId(row, config) {
+  if (!row.category) return null;
+  let categories;
+  try {
+    categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
+  } catch (error) {
+    throw new Error(categoryLookupFailedMessage(row.category, config));
+  }
+  const runCache = getResolutionCache(config.token || 'contacts-import');
+  const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
+    const base = detectEtendoBase();
+    const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory`;
+    // ETP-5424 — part of an import run: a category create cut off by the default timeout
+    // could still commit, and the retry would then create a duplicate.
+    const res = await apiFetch(url, {
+      method: 'POST',
+      baseUrl: '',
+      token: config.token,
+      body: JSON.stringify({ searchKey, name }),
+      timeout: 0,
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      throw categoryCreateFailedError(errJson?.error?.message || errJson?.message || '', row.category, config);
+    }
+    const json = await res.json().catch(() => null);
+    const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
+    const createdId = record?.id ?? record?.cBpGroupId ?? record?.C_BP_Group_ID;
+    if (createdId) categories.push({ id: createdId, searchKey, name });
+    return { id: createdId, searchKey, name };
+  });
+  const categoryResolution = await resolveOrAutoCreateDependentEntity({
+    // ETP-4995: categoryCode/categoryName/category were three separate columns for one
+    // concept. `category` is now the only declared column, so the cell is probed against
+    // the existing codes first and only then treated as a name (see asDependentEntityInput).
+    ...asDependentEntityInput(row.category, categories),
+    existingRecords: categories,
+    allowCreate: true,
+    createFn,
+    cache: runCache,
+    translate: config.translate,
+  });
+  if (categoryResolution.status === 'error' || categoryResolution.status === 'unresolved') {
+    throw categoryResolution.error || new Error('Contact category could not be resolved');
+  }
+  return categoryResolution.id ?? null;
+}
+
+/**
+ * Flag ON (ETP-5791) — resolves the row's category among the EXISTING ones only.
  *
  * It used to auto-create an unknown category. That stopped being harmless once the category
  * decides whether the contact is a customer, a vendor or both: an auto-created category carries
@@ -250,7 +382,7 @@ function categoryNotFoundMessage(cell, config) {
  * Matching is unchanged: code first, then normalised name (see `asDependentEntityInput`). An
  * empty cell resolves to `null`, which leaves the backend's default category in place.
  */
-async function resolveCategoryId(row, config) {
+async function resolveExistingCategoryId(row, config) {
   // Blank after trimming = no category (backend default), never an unknown "" category.
   if (!String(row.category ?? '').trim()) return null;
   let categories;
@@ -404,6 +536,12 @@ registerImportRowValidator('contacts', (row, { translate } = {}) => [
   codedCellError(row.etgoIsperson, IS_PERSON_VALUES, {
     target: 'etgoIsperson', fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate,
   }),
+  // ETP-5544 — a typo in Cliente/Proveedor is flagged while reviewing, not at confirm time.
+  // Flag OFF only: with `contact-category-type` ON the columns are not in the template.
+  ...(contactCategoryTypeEnabled() ? [] : [
+    codedCellError(row.customer, YES_NO_VALUES, { ...CUSTOMER_CELL, translate }),
+    codedCellError(row.vendor, YES_NO_VALUES, { ...VENDOR_CELL, translate }),
+  ]),
   ...contactIdentityErrors(row, translate),
 ].filter(Boolean));
 
@@ -456,6 +594,17 @@ registerExportHints('contacts', {
       false: IS_PERSON_VALUES.N[0], N: IS_PERSON_VALUES.N[0],
     },
     oBTIKTaxIDKey: codeLabels(TAX_ID_KEY_VALUES),
+    // ETP-5544 — IsCustomer / IsVendor are Yes/No columns too: same two spellings as above.
+    // Only used while the columns are exported (flag `contact-category-type` OFF); with the flag ON
+    // decisions.json hides them (`hiddenWhenFlag`) and these maps are never read.
+    customer: {
+      true: YES_NO_VALUES.Y[0], Y: YES_NO_VALUES.Y[0],
+      false: YES_NO_VALUES.N[0], N: YES_NO_VALUES.N[0],
+    },
+    vendor: {
+      true: YES_NO_VALUES.Y[0], Y: YES_NO_VALUES.Y[0],
+      false: YES_NO_VALUES.N[0], N: YES_NO_VALUES.N[0],
+    },
   },
 });
 
@@ -495,8 +644,10 @@ registerImportDescriptor('contacts', async (row, config) => {
       defaultCode: DEFAULT_TAX_ID_KEY, fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate: config.translate,
     }),
     etgoIsperson: identity.isPerson,
-    // No `customer` / `vendor` here, ever: their absence is what makes the backend inherit
-    // them from the category (ETP-5791, see the note above `SEARCH_KEY_MAX_LENGTH`).
+    // Flag ON: no `customer` / `vendor` here, ever — their absence is what makes the backend
+    // inherit them from the category (ETP-5791, see the note above `YES_NO_VALUES`).
+    // Flag OFF: the Cliente / Proveedor cells (ETP-5544).
+    ...(contactCategoryTypeEnabled() ? {} : resolveCustomerVendor(row, config.translate)),
     searchKey: deriveSearchKey(identity.name),
   };
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-07-01T17:11:14.893Z",
-  "updatedAt": "2026-10-21T17:33:26.230Z",
-  "checksum": "b1743651f8aeef89",
+  "updatedAt": "2026-10-26T18:25:24.744Z",
+  "checksum": "782f3dab18e602bd",
   "frontendContract": {
     "window": {
       "id": "192",
@@ -11,6 +11,9 @@
       "category": "contact",
       "hidePrint": true,
       "hideLink": true,
+      "customComponents": {
+        "headerTable": "BpCategoryTable"
+      },
       "detailEntity": "accounting",
       "detailVisibleWhenCapability": "showAccountingFields",
       "noHeaderBorder": true,
@@ -25,8 +28,6 @@
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "autoSaveOnBlur": true,
-      "customLinesComponent": "BpCategoryAccountingPanel",
-      "customLinesLabel": "Accounting",
       "maxDetailLines": 1
     },
     "entities": {
@@ -45,11 +46,12 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "section": "principal",
             "seq": 1,
+            "gridOrder": 1,
             "validation": {
               "required": true,
               "maxLength": 40
@@ -69,7 +71,7 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 2,
-            "gridOrder": 1,
+            "gridOrder": 2,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -80,12 +82,17 @@
             "apiKey": "description",
             "column": "Description",
             "label": "Description",
-            "type": "string",
+            "type": "textarea",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": false,
+            "form": true,
+            "section": "principal",
+            "seq": 3,
+            "span": 2,
+            "rows": 1,
+            "explicitType": true,
             "validation": {
               "maxLength": 255
             }
@@ -119,7 +126,7 @@
               "true": "green",
               "false": "neutral"
             },
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -161,7 +168,7 @@
               "true": "green",
               "false": "neutral"
             },
-            "gridOrder": 2,
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -199,7 +206,7 @@
               "true": "green",
               "false": "neutral"
             },
-            "gridOrder": 3,
+            "gridOrder": 4,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -683,6 +690,9 @@
       "category": "contact",
       "hidePrint": true,
       "hideLink": true,
+      "customComponents": {
+        "headerTable": "BpCategoryTable"
+      },
       "detailEntity": "accounting",
       "detailVisibleWhenCapability": "showAccountingFields",
       "noHeaderBorder": true,
@@ -696,8 +706,6 @@
       "tablePaddingX": "px-2",
       "linesLayout": "inlineEditable",
       "autoSaveOnBlur": true,
-      "customLinesComponent": "BpCategoryAccountingPanel",
-      "customLinesLabel": "Accounting",
       "maxDetailLines": 1
     },
     "entities": {
@@ -742,7 +750,7 @@
             "name": "description",
             "apiKey": "description",
             "column": "Description",
-            "type": "string",
+            "type": "textarea",
             "visibility": "editable",
             "required": false
           },
