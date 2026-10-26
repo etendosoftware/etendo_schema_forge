@@ -119,19 +119,22 @@ describe('BpCategoryAccountingPanel', () => {
     expect(vendor.className).toMatch(/\bborder-t\b/);
   });
 
+  // The two vendor accounts are renamed in this tab only (a `useUI` key); every other account, and
+  // these same columns in any other window, keep the AD column label (`useLabel`).
   it.each([
-    ['customer', 'customerReceivablesNo', 'C_Receivable_Acct', true],
-    ['customer', 'customerPrepayment', 'C_Prepayment_Acct', false],
-    ['customer', 'writeoff', 'WriteOff_Acct', true],
-    ['vendor', 'vendorLiability', 'V_Liability_Acct', true],
-    ['vendor', 'vendorPrepayment', 'V_Prepayment_Acct', false],
-  ])('%s section: %s shows its AD label, its stored account and required=%s', async (section, key, column, required) => {
+    ['customer', 'customerReceivablesNo', 'C_Receivable_Acct', 'label:C_Receivable_Acct', true],
+    ['customer', 'customerPrepayment', 'C_Prepayment_Acct', 'label:C_Prepayment_Acct', false],
+    ['customer', 'writeoff', 'WriteOff_Acct', 'label:WriteOff_Acct', true],
+    ['vendor', 'vendorLiability', 'V_Liability_Acct', 'bpCategoryVendorLiability', true],
+    ['vendor', 'vendorPrepayment', 'V_Prepayment_Acct', 'bpCategoryVendorPrepayment', false],
+  ])('%s section: %s shows its label, its stored account and required', async (section, key, column, label, required) => {
     installApi();
     render(<BpCategoryAccountingPanel {...props(BOTH)} />);
     const field = within(await screen.findByTestId(`bp-category-accounts-${section}`))
       .getByTestId(`bp-category-acct-${key}`);
 
-    expect(within(field).getByText(`label:${column}`)).toBeInTheDocument();
+    expect(within(field).getByText(label)).toBeInTheDocument();
+    if (label !== `label:${column}`) expect(within(field).queryByText(`label:${column}`)).toBeNull();
     expect(trigger(key)).toHaveTextContent(ACCT_ROW[`${key}$_identifier`]);
     // A required account draws the asterisk and offers no way to clear it.
     expect(within(field).queryByText('*') !== null).toBe(required);

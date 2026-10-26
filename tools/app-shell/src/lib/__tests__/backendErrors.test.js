@@ -619,7 +619,7 @@ describe('translateBackendError — Invalid-Account identity (ETP-5175)', () => 
     });
     assert.equal(result, 'No se pudo encontrar la cuenta. (Contacto: Acme, Categoría de contacto: Clientes) '
       + 'Revise las siguientes cuentas contables de la categoría de contacto: Recibos no facturados, '
-      + 'Pagos por adelantado del proveedor/acreedor.');
+      + 'Pagos por adelantado del proveedor.');
   });
 
   it('renders both addenda in composition order', () => {
