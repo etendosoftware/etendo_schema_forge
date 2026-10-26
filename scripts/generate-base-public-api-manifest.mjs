@@ -40,6 +40,12 @@ const excludedWindows = new Set([
   // Legacy artifacts with no NeoServlet spec (no ETGO_SF_SPEC row): every
   // request to them answers "Spec not found", so publishing them would
   // advertise resources that cannot work.
+  // - document: a mock window (DM-DOCUMENT) with no AD window behind it.
+  // - project: the only project window with a spec, service-project, is a
+  //   finance window, and finance stays excluded until it is curated.
+  // - uom: the real window, unit-of-measure, was removed on purpose by
+  //   ETP-4191. Bringing it back as an API-only artifact breaks pipeline rule
+  //   F3 (every window with a contract.json must be in registry.js, the UI).
   'document',
   'project',
   'uom',
