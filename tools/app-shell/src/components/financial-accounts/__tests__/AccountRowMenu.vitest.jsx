@@ -118,6 +118,35 @@ describe('AccountRowMenu', () => {
       expect(screen.getByTestId('account-row-menu-delete-connection-acc-1')).toBeInTheDocument();
     });
 
+    // ETP-5089: still connected, but the connection stopped refreshing. Reconnect is added to the
+    // connected actions rather than replacing them — the account is linked and still syncs/pays.
+    it('offers reconnect next to the connected actions when the connection is stale', () => {
+      openMenu({ ...baseAccount, bankConnected: true, bankConnectionStale: true });
+      expect(screen.getByTestId('account-row-menu-reconnect-stale-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-sync-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-disconnect-acc-1')).toBeInTheDocument();
+      // Not the deactivated account's item, and no from-scratch connect.
+      expect(screen.queryByTestId('account-row-menu-reconnect-acc-1')).toBeNull();
+      expect(screen.queryByTestId('account-row-menu-connect-acc-1')).toBeNull();
+    });
+
+    it('does not offer the stale reconnect on a healthy connected account', () => {
+      openMenu({ ...baseAccount, bankConnected: true, bankConnectionStale: false });
+      expect(screen.queryByTestId('account-row-menu-reconnect-stale-acc-1')).toBeNull();
+    });
+
+    it('ignores a stale flag on an account that is not connected', () => {
+      openMenu({ ...baseAccount, bankConnected: false, bankConnectionStale: true });
+      expect(screen.queryByTestId('account-row-menu-reconnect-stale-acc-1')).toBeNull();
+    });
+
+    it('dispatches reconnect with the account from the stale item', () => {
+      const stale = { ...baseAccount, bankConnected: true, bankConnectionStale: true };
+      const onBankConnectionAction = openMenu(stale);
+      fireEvent.click(screen.getByTestId('account-row-menu-reconnect-stale-acc-1'));
+      expect(onBankConnectionAction).toHaveBeenCalledWith('reconnect', stale);
+    });
+
     it('offers only connect when there is no bank link at all', () => {
       openMenu({ ...baseAccount, bankConnected: false });
       expect(screen.getByTestId('account-row-menu-connect-acc-1')).toBeInTheDocument();
@@ -248,7 +277,7 @@ describe('AccountRowMenu — write item click wiring under full access (ETP-5457
 // is paired with its full-access twin on the same shape.
 describe('AccountRowMenu — read-only access tier (ETP-5457)', () => {
   const WRITE_ITEMS = [
-    'edit', 'new-movement', 'transfer', 'sync', 'disconnect', 'reconnect',
+    'edit', 'new-movement', 'transfer', 'sync', 'disconnect', 'reconnect', 'reconnect-stale',
     'connect', 'delete-connection', 'archive', 'unarchive', 'delete',
   ];
 
@@ -257,6 +286,11 @@ describe('AccountRowMenu — read-only access tier (ETP-5457)', () => {
       label: 'bank-connected',
       account: { ...baseAccount, bankConnected: true },
       fullItems: ['edit', 'new-movement', 'transfer', 'sync', 'disconnect', 'delete-connection', 'archive', 'delete'],
+    },
+    {
+      label: 'bank-connected but stale (ETP-5089)',
+      account: { ...baseAccount, bankConnected: true, bankConnectionStale: true },
+      fullItems: ['edit', 'new-movement', 'transfer', 'sync', 'reconnect-stale', 'disconnect', 'delete-connection', 'archive', 'delete'],
     },
     {
       label: 'soft-disconnected',

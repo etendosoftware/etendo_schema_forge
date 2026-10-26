@@ -1,9 +1,11 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 // @covers artifacts/purchase-invoice/custom/PurchaseInvoiceBottomPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import { t } from '../../helpers/i18n.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
@@ -251,8 +253,7 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       ).toBeVisible({ timeout: 5_000 });
 
       // Wait for eager-loading of PO lines
-      await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 30_000 })
-        .catch(() => {}); // OK if loading indicator never appeared
+      await waitForLoadingIndicatorsGone(page, { timeout: 30_000 }).catch(() => {});
       await slow(page);
     });
 

@@ -57,10 +57,12 @@ This also fails the shipped PRD, which requires the request id to be an idempote
 | Operational tables exposed as Classic windows | 6 AD windows, 5 menu entries: Data-Fix History, Match Rule, Survey Configuration, Schema Forge Configuration, Fiscal Declarations NEO Support, Transaction Type | The Classic surface (§10). `ETGO_DATA_FIX_HISTORY` is the closest analogue: an audit trail deliberately readable without DB access. |
 | CDI handler discovery by `@Named` | `NeoServlet` resolving `NeoHandler` | The counting-strategy SPI (§7). Note the documented trap: `@Named` only, never `@ApplicationScoped`, because a proxied bean loses the non-inherited qualifier and is silently skipped. |
 | Configurable query fragments in AD | `AD_TAB.whereclause`, `AD_REF_TABLE.whereclause`, `AD_VAL_RULE` | The HQL resource restriction (§7.2). |
-| Scheduled job registration | `OnboardingPsd2SyncService` (`AD_Process_Request` + `OBScheduler`) | The aggregation and reconciliation jobs. |
+| Scheduled job registration | `OnboardingPsd2SyncService` (`AD_Process_Request` + `OBScheduler`) — *since removed (ETP-5275); the live precedent for one global request at client 0 is `TenantPoolScheduleStartup` (ETP-5389), which ETP-5048 copies* | The aggregation and reconciliation jobs. |
 | Layered configuration lookup | `PublicUrlResolver.readProperty` | Kill switches and runtime settings. |
 
 One precedent is **absent** and must not be assumed: there is no manually launchable background process in this module. `AD_PROCESS.xml` contains two entries, both `ISBACKGROUND=N`, and zero `AD_MENU` rows point at a process. Giving reconciliation an operator-triggered entry point is design work, not registration (§9).
+
+> **Superseded (2026-10-18, ETP-5048).** ETP-5050 has since shipped the first manually launchable background process (`ETGO_UsageAggregation`, `ISBACKGROUND=Y`, on an `ACTION=P` menu entry) and ETP-5389 a second background process (`ETGO_TenantPoolFill`). ETP-5048's reconciliation copies the ETP-5050 shape; its design of record is `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`.
 
 ---
 
@@ -253,6 +255,44 @@ Only the last tier is development, and it is additive rather than a modification
 
 ## 9. Lifecycle, enforcement and reconciliation
 
+> **As delivered (ETP-5443, ETP-5046, ETP-5047) — read this before the original text below, which
+> is kept as written.** The vocabulary and three decisions changed on the way:
+>
+> - **Access vocabulary: `CURRENT` / `PAST_DUE` / `EXPIRED` plus a grace period**, not "`past_due`
+>   keeps access". The row stores Stripe's words (`active` / `past_due` / `canceled`); the access
+>   policy (`EnvironmentAccessPolicy`) maps them to `CURRENT` / `PAST_DUE` / `EXPIRED`. `PAST_DUE`
+>   keeps access only for `etendo.go.billing.grace.days` (default 15) after the end of the period
+>   the customer already paid for, then answers HTTP 402 `SUBSCRIPTION_REQUIRED`. `EXPIRED` is
+>   402 at once. A demo past its trial is 402 `DEMO_TRIAL_EXPIRED`.
+> - **Enforcement is per request, not only at environment login.** Every tenant request is
+>   checked (ETP-5443 NEO; ETP-5047 MCP, the `JwtAuthUtils` servlets and the legacy
+>   `GET /sws/go/login`), through one class, `EnvironmentAccessGuard`. So the "already-issued NEO
+>   JWTs keep working until they expire" window below does not exist for this module's entry
+>   points: a blocked tenant's next request is refused. The one remaining window is Copilot
+>   (`/sws/copilot/*`, another module), where an Etendo JWT minted before the block keeps working
+>   until it expires — stated, with the proposed fixes, in `com.etendoerp.go`
+>   `docs/open-and-notable-topics.md` §3.10. Entering the environment is deliberately *not* refused (decided
+>   2026-09-25), so the blocked customer reaches the pay path; the billing and portal endpoints
+>   never refuse.
+> - **Enforcement ships enabled, with a kill switch** (ETP-5047, decided by Martin 2026-09-25), not
+>   "ships disabled": the backend-only flag `environment-access-enforcement-off` stops the refusal
+>   only when it resolves to `true` (locally `true`/`Y`/`yes`/`1`), per tenant or globally, and
+>   logs what it would have refused.
+> - The 402 carries `error.code = ENVIRONMENT_ACCESS_DENIED` and `error.decision`; the period is
+>   advanced by `invoice.paid` (not `invoice.payment_succeeded`); `charge.dispute.created` is an
+>   alert only, as specified. A cancellation closes the subscription row and a later purchase opens
+>   a new one (ETP-5047).
+>
+> What is delivered where: ETP-5443 — the four lifecycle webhooks, the grace rule, out-of-order
+> protection, NEO enforcement, the portal and `/upgrade` staying reachable. ETP-5046 — the state
+> on the `ETGO_SUBSCRIPTION` row. ETP-5047 — correlation to the open row, close on cancel and
+> re-subscription, the shared guard at MCP, the `JwtAuthUtils` servlets and `/login`, the
+> structured 402, the kill switch, the dispute alert, the invoice period in the billing-event
+> ledger, and on the row the grace anchor in its own column (`GRACE_ANCHOR`), Stripe's billing
+> period in `CURRENT_PERIOD_START/END` and the event watermark (`LAST_EVENT_AT`)
+> (open-and-notable-topics §3.7, §5.5 in `com.etendoerp.go`). **Not yet delivered:** quota
+> enforcement (ETP-5051), reconciliation (ETP-5048).
+
 ### 9.1 Subscription states
 
 `active`, `past_due`, `canceled`. Stripe Smart Retries own recovery; Etendo records outcomes. No dunning logic of our own.
@@ -276,9 +316,9 @@ Already-issued NEO JWTs continue to work until they expire. The accepted window 
 
 With consumption measured by recomputation rather than instrumentation, reconciliation is not a safety net — it is the primary correctness mechanism of the subsystem.
 
-- Scheduled, plus **operator-triggerable from Etendo Classic**. Note §2.3: there is no precedent for a menu-launched process in this module, so this entry point is design work.
+- Scheduled, plus **operator-triggerable from Etendo Classic**. Note §2.3: there is no precedent for a menu-launched process in this module, so this entry point is design work. *(Resolved in ETP-5048: the background process `ETGO_BillingReconciliation` on the System menu entry **Billing Reconciliation**, with a Dry run parameter; the schedule is planted only while the `billing-reconciliation-schedule` flag is on (strictly off by default). Design of record and the boundary with ETP-5396's work record: `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`.)*
 - **Provider to local:** a paid checkout session with no provisioned tenant is repaired by completing provisioning, and the repair is alerted. A Stripe subscription without our correlation metadata is foreign and never touched.
-- **Local to provider:** for every locally active subscription, read the *real* Stripe status. Anything not `active` or `trialing` — cancelled, paused, `incomplete_expired`, absent — is corrected locally. Reading the actual status, rather than only reacting to a deletion event, is what catches paused collection and dashboard actions that emit no event.
+- **Local to provider:** for every locally active subscription, read the *real* Stripe status. A cancelled or `incomplete_expired` subscription is closed locally; an absent one (404) only behind a circuit breaker that stops a wrong key from closing tenants. `past_due`/`unpaid` stay with the webhook's grace logic. **A `paused` subscription, and paused collection, are alert-only:** neither ever closes the row or changes access, on any path. They are alerted differently. A `paused` subscription raises one review alert per pause episode (a WARN, a billing-event row and an internal alert), from whichever path sees it first: the reconciliation, `customer.subscription.updated` or `customer.subscription.paused`; the episode ends when a path sees the subscription no longer paused, so the next pause alerts again — our checkout sets no trial, so a pause was configured in Stripe by hand and can be resumed. Paused collection (`pause_collection` on an `active` or `trialing` subscription) is raised **only by the reconciliation**, as a WARN and a billing-event row with no internal alert, once per episode; the webhook never raises it and only ends an open episode when it sees `pause_collection` cleared. Reading the actual status, rather than only reacting to a deletion event, is what catches dashboard actions that emit no event. *(Decided by Martin on 2026-10-20; once per pause episode rather than once per subscription decided on 2026-10-21; ETP-5048.)*
 - **Abandoned checkouts:** a stale request row is closed only after re-reading the provider. **A row whose provider session id is missing is never closed automatically** — it is alerted for manual review, because closing it is the one unrecoverable answer.
 - Every repair is visible in the Classic windows, not only in a log line, and alerted with a stable structured prefix so drift is visible rather than silently fixed.
 
@@ -300,6 +340,13 @@ Billing must not be the only operational subsystem in the module without an AD s
 Tables are System-level with rows at client `0`, like `ETGO_ACCOUNT`; window access is restricted accordingly, which is the correct restriction for billing data.
 
 The acceptance bar: **no billing or payment question requires reading a log file or the database to answer.**
+
+*Reconciliation process, as decided on 2026-10-21 (ETP-5048; design of record `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`):*
+
+- **Production schedules it by hand** in the Process Request window (System, timing *Schedule*, hourly), like Demo Trial Notices: production is updated by delta and never restarted, so the startup hook that plants the request only serves environments that restart.
+- **The `billing-reconciliation-schedule` flag gates every scheduled run** — the planted request or one an administrator created. A run from the menu, or a Process Request run immediately or later once, is never gated.
+- **A scheduled run while the flag is off is an ERROR** in Process Monitor (it does no work), plus **one internal alert per UTC day**, so a schedule firing for nothing is seen. Turn the flag on and create the Process Request together at go-live.
+- Toward the acceptance bar above, the run result lists the affected items (request or subscription, company, action, reason), in the popup and in the Process Monitor log, and a dry run says what it *would* do.
 
 ---
 
@@ -395,7 +442,7 @@ Two consequences bind every task in §14:
 | **ETP-5045** | Create a checkout session, pay with the test card, and **restart Tomcat before returning from Stripe**. Today the payment is lost and the flow dead-ends; after this task the flow completes. Then `stripe events resend` the same event and confirm the Billing events window shows one `applied` and one `duplicate`. Needs nothing else from the block, and is the exact regression that costs money. |
 | **ETP-5050** | Run the recompute over a past month and compare the Usage window against a hand-written count query for a few tenants. Then add a catalog row with an HQL restriction from the Classic window, re-run, and confirm the new resource is counted. Writes only to its own table, so it is safe to run in a real environment on day one. |
 | **ETP-5046** | Create and price a plan from the Classic window, add a quota row, assign it to a tenant, and confirm the environment payload reports the plan and status. Verify a currently-productive tenant still reads productive after the backfill, and that re-running it creates nothing. |
-| **ETP-5047** | With the kill switch **off**: cancel the subscription in the Stripe dashboard, confirm the Subscriptions window shows `canceled` and that environment login still works. Then flip the switch **on** and confirm login is denied with the right code. The switch is what makes this testable in a real environment without risking a lockout. |
+| **ETP-5047** | *As delivered, the switch's polarity is inverted:* `environment-access-enforcement-off` is an OFF switch, enforcement is on by default, and "environment login" is not refused (the tenant's requests are). The delivered checks are `docs/stripe-local-testing.md` SF-STRIPE-LOCAL-14, -21…-26. *Original text:* With the kill switch **off**: cancel the subscription in the Stripe dashboard, confirm the Subscriptions window shows `canceled` and that environment login still works. Then flip the switch **on** and confirm login is denied with the right code. The switch is what makes this testable in a real environment without risking a lockout. |
 | **ETP-5048** | Reproduce the orphan on purpose: pay with `stripe listen` stopped, confirm nothing was provisioned, then run reconciliation from the menu and confirm the tenant is created and the repair is visible in the Classic window. |
 | **ETP-5051** | First confirm that with no quota rows nothing changed at all. Then add one quota row in `warn`, exceed it, see the warning; switch the same row to `block` and confirm the denial; switch to `off` and confirm it stops — all without a deploy or a restart. That sequence *is* the configuration-not-development claim, demonstrated live. |
 | **ETP-5053** | Upgrade a tenant mid-period and assert the billing date did not move — that is the one to watch. Then schedule a downgrade, confirm it shows as pending, upgrade over it, and confirm the pending change was cleared. |
@@ -412,7 +459,7 @@ What the document actually pins down is the list below. As long as none of these
 | No card data and no full provider payloads in any table or log | PCI posture; also §12 |
 | The webhook signature verifier stays as it is | Correct today; a rewrite has no upside and real downside |
 | The paywall keeps its decision-versus-plan separation | ETP-4966 shipped charged accounts into demo environments precisely by inferring one from the other |
-| The amount charged has one source of truth; the displayed price is derived from the provider Price, never typed, and no fallback price exists | A fallback price is a price nobody reviewed, chosen exactly when configuration is missing |
+| The amount charged has one source of truth; the displayed price is derived from the provider Price, never typed, and no fallback price exists | A fallback price is a price nobody reviewed, chosen exactly when configuration is missing. *Amended by ETP-5046:* the pre-existing configured price survives as a transitional **legacy price fallback**, active only while no plan carries a provider price, quoted from Stripe and retired automatically by the first priced plan — see `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6 |
 | Tenant and period scoping is applied outside any configurable query fragment, and the fragment is always parenthesized | A fragment able to escape it would mis-bill every customer at once |
 | Configurable fragments are System-authored only, never tenant-editable | Reuses the `AD_TAB.whereclause` trust boundary; widening it is a different feature |
 | Absence of a quota row means unlimited; the limit mechanism ships inert | No default value may silently cap a resource at zero |

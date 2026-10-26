@@ -1,5 +1,7 @@
+// @covers tools/app-shell/src/windows/registry.js
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
+import menuConfig from '../../menu.json' with { type: 'json' };
 import { buildMenuGroups, buildWindowMap, getAllWindowNames } from '../registry.js';
 
 describe('buildMenuGroups', () => {
@@ -37,13 +39,48 @@ describe('getAllWindowNames', () => {
 });
 
 describe('buildWindowMap', () => {
-  it('creates a loader entry for every window in menu.json', () => {
+  const entries = menuConfig.menu.flatMap(group => group.items.map(item => ({ item, group })));
+  const isHidden = ({ item, group }) => Boolean(item.hidden || group.hidden);
+
+  it('creates a loader entry for every visible window in menu.json', () => {
     const map = buildWindowMap();
-    const names = getAllWindowNames();
-    for (const name of names) {
+    for (const entry of entries.filter(e => !isHidden(e))) {
+      const { name } = entry.item;
       assert.ok(map[name], `missing window map entry for ${name}`);
       assert.ok(map[name].loader, `missing loader for ${name}`);
       assert.ok(map[name].label, `missing label for ${name}`);
     }
+  });
+
+  // ETP-5795 — a hidden window is not reachable by URL unless it declares redirect or routeOnly.
+  it('does not register a hidden window that has neither redirect nor routeOnly', () => {
+    const map = buildWindowMap();
+    const blocked = entries.filter(e => isHidden(e) && !e.item.redirect && !e.item.routeOnly);
+    assert.ok(blocked.length > 0);
+    for (const { item } of blocked) assert.equal(map[item.name], undefined, `${item.name} must be blocked`);
+    assert.equal(map['lead']?.name, 'lead');
+    assert.equal(map['hr'], undefined);
+  });
+
+  it('keeps a hidden redirect window registered', () => {
+    const map = buildWindowMap();
+    for (const name of ['business-partner', 'fiscal-calendar', 'open-close-period-control', 'simple-g-l-journal']) {
+      assert.ok(map[name], `${name} must stay registered to redirect`);
+    }
+  });
+
+  it('keeps a routeOnly hidden window registered with its real loader', () => {
+    const map = buildWindowMap();
+    const routeOnly = entries.filter(e => e.item.routeOnly);
+    assert.ok(routeOnly.length > 0);
+    for (const { item } of routeOnly) {
+      assert.ok(item.hidden || entries.find(e => e.item === item).group.hidden, `${item.name} routeOnly is only meaningful on a hidden item`);
+      assert.ok(map[item.name], `${item.name} routeOnly must stay registered`);
+    }
+  });
+
+  it('registers items of a hidden group only when they are routeOnly', () => {
+    const map = buildWindowMap();
+    for (const name of ['project', 'time-tracking', 'document']) assert.ok(map[name], `${name} is linked from /projects`);
   });
 });

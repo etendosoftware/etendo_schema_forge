@@ -33,6 +33,9 @@ import { useUI } from '@/i18n';
  *                   never be closed, e.g. one that IS the whole body of its container)
  *  - onDismiss:     click handler; supplying it switches the banner to controlled mode
  *  - reopenSignal:  changing value that un-dismisses an uncontrolled banner
+ *  - action:        optional node rendered at the right, before the close button (e.g. a
+ *                   "Ver detalle" button). Omitted by every caller that predates it, so their
+ *                   layout is unchanged.
  *  - dismissTestId: data-testid for the close button (default 'info-banner-dismiss')
  *  - className:     extra classes merged onto the container (e.g. margins)
  */
@@ -56,6 +59,7 @@ export function InfoBanner({
   dismissible = true,
   onDismiss,
   reopenSignal,
+  action,
   dismissTestId = 'info-banner-dismiss',
   className = '',
   ...rest
@@ -74,6 +78,7 @@ export function InfoBanner({
     >
       {Icon && <Icon className={`h-5 w-5 shrink-0 ${t.icon}`} data-testid="Icon__f7c55d" />}
       <p className={`flex-1 text-sm font-medium leading-6 ${t.text}`}>{children}</p>
+      {action && <div className="shrink-0">{action}</div>}
       {dismissible && (
         <button
           type="button"

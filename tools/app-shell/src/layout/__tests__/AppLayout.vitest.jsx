@@ -13,6 +13,8 @@ import enUS from '@/locales/en_US.json';
 const LABELS = enUS.genericLabels;
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => LABELS[key] ?? key,
+  // ETP-5049 — BillingStatusBanner formats the grace end date in the UI locale.
+  useLocaleSwitch: () => ({ locale: 'en_US' }),
 }));
 
 // NoAccessScreen now renders a logout escape hatch (ETP-4514) via useLogout(),
@@ -67,6 +69,24 @@ const useEnvironmentSwitchMock = vi.fn(() => ({
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
+}));
+
+// ETP-5742 — the re-subscription widgets have their own suite (SubscriptionReactivation.vitest.jsx);
+// here only the blocked screen's choice between them is under test, so they are inert stand-ins
+// that expose the props the screen hands them.
+vi.mock('@/components/access/SubscriptionReactivation.jsx', () => ({
+  ReactivateSubscriptionButton: ({ onPaid }) => (
+    <button type="button" data-testid="blocked-access-reactivate" onClick={() => onPaid('REQ-PAID')}>
+      reactivate
+    </button>
+  ),
+  ReactivationPendingNotice: ({ requestId }) => (
+    <div data-testid="blocked-access-reactivating">{requestId}</div>
+  ),
+}));
+vi.mock('@/components/copilot/copilotApi.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectBaseUrl: () => 'http://api.test',
 }));
 
 // ETP-4576 — NoAccessScreen's role list now comes from the session (`useAuthOptional()?.roleList`)
@@ -1244,6 +1264,109 @@ describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
 
     expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
   });
+
+  // ETP-5742 — a SUBSCRIPTION_REQUIRED environment whose subscription was CANCELED (not left
+  // unpaid) is re-subscribed by its owner from this screen; "Manage subscription" has nothing to
+  // fix there.
+  describe('a canceled subscription (ETP-5742)', () => {
+    const CANCELED = {
+      ...CURRENT, environmentType: 'PRODUCTIVE', subscriptionStatus: 'EXPIRED', plan: 'free',
+    };
+
+    function blockedBySubscription() {
+      vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+      vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    }
+
+    afterEach(() => {
+      vi.mocked(useSearchParams).mockImplementation(() => [new URLSearchParams(), vi.fn()]);
+    });
+
+    it('offers the owner to reactivate the subscription instead of managing it', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-title'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionCanceledTitle);
+      expect(screen.getByTestId('blocked-access-message'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionCanceledMessage);
+      expect(screen.getByTestId('blocked-access-reactivate')).toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+    });
+
+    it('tells an invited member to ask the owner, with nothing to click', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: false }]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-message'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionCanceledMemberMessage);
+      expect(screen.queryByTestId('blocked-access-reactivate')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+    });
+
+    it('keeps the payment portal for a subscription left unpaid', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, subscriptionStatus: 'PAST_DUE', ownedByAccount: true }]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-title'))
+        .toHaveTextContent(LABELS.blockedAccessSubscriptionRequiredTitle);
+      expect(screen.getByTestId('blocked-access-cta'))
+        .toHaveTextContent(LABELS.blockedAccessManageSubscriptionCta);
+      expect(screen.queryByTestId('blocked-access-reactivate')).not.toBeInTheDocument();
+    });
+
+    it('tells neither story until the environment list has arrived', () => {
+      blockedBySubscription();
+      withEnvironments([], { loading: true });
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-loading')).toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-title')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+    });
+
+    it('waits for the re-subscription the provider sent the browser back with', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+      vi.mocked(useSearchParams).mockImplementation(
+        () => [new URLSearchParams('reactivation=success&requestId=REQ-1'), vi.fn()]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('blocked-access-reactivating')).toHaveTextContent('REQ-1');
+      expect(screen.queryByTestId('blocked-access-reactivate')).not.toBeInTheDocument();
+    });
+
+    it('offers the re-subscription again after a cancelled checkout', () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+      vi.mocked(useSearchParams).mockImplementation(
+        () => [new URLSearchParams('reactivation=cancelled&requestId=REQ-1'), vi.fn()]);
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.queryByTestId('blocked-access-reactivating')).not.toBeInTheDocument();
+      expect(screen.getByTestId('blocked-access-reactivate')).toBeInTheDocument();
+    });
+
+    it('waits for a re-subscription that turns out to be paid already', async () => {
+      blockedBySubscription();
+      withEnvironments([{ ...CANCELED, ownedByAccount: true }]);
+      const user = userEvent.setup();
+
+      render(<AppLayout {...defaultProps} />);
+      await user.click(screen.getByTestId('blocked-access-reactivate'));
+
+      expect(screen.getByTestId('blocked-access-reactivating')).toHaveTextContent('REQ-PAID');
+    });
+  });
 });
 
 // ETP-5675 — the session cookie belongs to the browser profile and production is one domain for
@@ -1262,6 +1385,11 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     requests = [];
     locationStub = { reload: vi.fn(), assign: vi.fn(), pathname: '/contacts', search: '' };
     Object.defineProperty(window, 'location', { configurable: true, value: locationStub });
+    // Pinned, not inherited: the environment-gate block above leaves its last decision and
+    // pathname behind (clearAllMocks keeps return values), which would put every test here on
+    // top of an accidental SUBSCRIPTION_REQUIRED block. A test that wants one opts in.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/sales-order/123' });
     useAuthOptionalMock.mockReturnValue({
       sessionConflict: { reason: 'request', accountId: null },
       account: { id: 'acc-B', email: 'b@example.test' },
@@ -1281,6 +1409,7 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     vi.unstubAllGlobals();
     useAuthOptionalMock.mockReturnValue(null);
     vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
   });
 
   it('replaces the page before any other gate, naming both accounts', async () => {
@@ -1293,6 +1422,27 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
     expect(screen.getByText(/still open as b@example\.test/)).toBeInTheDocument();
   });
+
+  // A tab whose session another account took over may also hold a commercial-access block
+  // (ETP-5047) recorded for the PREVIOUS account's environment. The conflict wins: the block is
+  // about a tenant this tab no longer speaks for, and its CTA would act on the wrong account.
+  // The access map is resolved (an empty Set, as the 402 leaves it) so the loading gate cannot
+  // be what hides the blocked screen.
+  it.each(['SUBSCRIPTION_REQUIRED', 'DEMO_TRIAL_EXPIRED'])(
+    'shows the conflict, not the blocked-access screen, when %s is also recorded',
+    async (decision) => {
+      vi.mocked(useEnvironmentAccessGate).mockReturnValue(decision);
+      vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('SessionConflictScreen__488148')).toBeInTheDocument();
+      expect(screen.queryByTestId('BlockedAccessScreen__488148')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+      expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
+    },
+  );
 
   it('continues as the other account by reloading, and revokes nothing', async () => {
     const user = userEvent.setup();
@@ -1367,5 +1517,65 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
 
     await vi.waitFor(() => { expect(locationStub.assign).toHaveBeenCalledWith('/login'); });
     expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+  });
+});
+
+/**
+ * ETP-5049 — the failed-payment banner (BillingStatusBanner) is mounted above the top bar, as part
+ * of the chrome. The banner's own behaviour has its suite
+ * (src/components/billing/__tests__/BillingStatusBanner.vitest.jsx); here only the mount is under
+ * test: it shows in the normal shell and is stripped, like the rest of the chrome, when embedded.
+ * The real banner renders, driven by the same useEnvironmentSwitch mock as the rest of this file.
+ */
+describe('AppLayout — failed-payment banner mount (ETP-5049)', () => {
+  const defaultProps = { menuGroups: [{ label: 'Sales', items: [] }] };
+  const DEFAULT_SWITCH = {
+    environments: [],
+    switchTo: switchToMock,
+    switching: null,
+    currentClientId: 'CLIENT-CURRENT',
+  };
+  const graceEndsAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.sessionStorage.clear();
+    // Pinned, not inherited from earlier blocks (clearAllMocks keeps return values).
+    useAuthOptionalMock.mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useAccessLoadError).mockReturnValue(false);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/sales-order/123' });
+    useEnvironmentSwitchMock.mockReturnValue({
+      ...DEFAULT_SWITCH,
+      environments: [{
+        clientId: 'CLIENT-CURRENT',
+        clientName: 'Current Corp',
+        subscriptionStatus: 'PAST_DUE',
+        graceEndsAt,
+        ownedByAccount: true,
+      }],
+    });
+  });
+
+  afterEach(() => {
+    useEnvironmentSwitchMock.mockReturnValue(DEFAULT_SWITCH);
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
+  });
+
+  it('shows the banner, with its CTA, in the normal shell', () => {
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.getByTestId('billing-status-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('billing-status-banner-cta')).toBeInTheDocument();
+    expect(screen.getByTestId('top-bar')).toBeInTheDocument();
+  });
+
+  it.each(['1', 'interactive'])('does not render the banner when embedded=%s', (embedded) => {
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(`embedded=${embedded}`), vi.fn()]);
+    render(<AppLayout {...defaultProps} />);
+    // The page itself still renders: only the chrome is stripped.
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+    expect(screen.queryByTestId('billing-status-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
   });
 });

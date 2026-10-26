@@ -31,6 +31,13 @@ The route is compiled only when `import.meta.env.DEV` is true. The backend endpo
 - An owned environment can receive a test subscription status and renewal due timestamp.
 - The tool lists only environments owned by the authenticated account. Invited environments cannot
   be modified through this surface.
+- **A tenant with an `ETGO_SUBSCRIPTION` row** (every paid tenant since ETP-5046) takes a
+  `CURRENT` / `PAST_DUE` / `EXPIRED` status on its **open** row. `NONE` and `LEGACY_ENTITLEMENT`
+  have no row status and are ignored once a row exists, and a tenant whose only row is closed — a
+  subscription canceled since ETP-5047 — cannot be changed by the tool at all
+  (`com.etendoerp.go` `docs/open-and-notable-topics.md` §3.7).
+- With the backend kill switch `environment-access-enforcement-off` on, a blocked tenant is let in
+  and `accessState` reads `ALLOWED`; keep it off (the default) when checking a block.
 
 The saved lifecycle timestamps use UTC ISO-8601 values. The account and environment APIs remain the
 source of truth for the resulting `trialExpiresAt`, `trialDaysRemaining`, and `accessState`.
@@ -42,7 +49,8 @@ source of truth for the resulting `trialExpiresAt`, `trialDaysRemaining`, and `a
 2. Set the same demo start to a timestamp in the past. Confirm the owner and every tenant role are
    blocked while account billing remains available.
 3. Select a productive environment, set `PAST_DUE`, set a due timestamp, and use a short grace
-   period. Confirm access during grace and suspension after the deadline.
+   period. Confirm access during grace, with the failed-payment banner (`billing-status-banner`,
+   ETP-5049) above the top bar, and suspension after the deadline.
 4. Restart the backend and confirm the temporary day overrides are gone while persisted timestamps
    remain.
 5. Remove either local property and confirm `/sws/go/dev/lifecycle` returns 404. Build the frontend

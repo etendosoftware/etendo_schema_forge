@@ -6,7 +6,7 @@ import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 import { extractErrorMessage } from '@/hooks/useEntity';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
@@ -24,7 +24,7 @@ import SelectionToolbar from '@/components/contract-ui/SelectionToolbar';
 // longer used here: the entry point moved into the row hover-action strip (the
 // Layers/"Edit dimensions" button below), mirroring the mechanism InlineLinesPanel
 // already uses for the other 5 generated windows (sales-invoice, purchase-invoice,
-// goods-shipment, goods-receipt, simple-g-l-journal). See docs/feedback.md and
+// goods-shipment, goods-receipt, manual-journals). See docs/feedback.md and
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
@@ -110,7 +110,6 @@ export default function AmortizationLinesTable({
   const [addingLine, setAddingLine] = useState(false);
   const [newLine, setNewLine] = useState({});
   const [selectedRows, setSelectedRows] = useState(() => new Set());
-  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectionBarVisible, setSelectionBarVisible] = useState(false);
   const [selectionBarClosing, setSelectionBarClosing] = useState(false);
   const addRowRef = useRef(null);
@@ -307,31 +306,40 @@ export default function AmortizationLinesTable({
   // cleared the whole selection and refetched even when every request failed
   // (or was network-rejected via `.catch(() => null)`), so failed rows
   // vanished from the selection with no way to retry and no explanation.
-  // Reuses the shared ETP-4656 triage/toast helpers (runBatchDelete +
-  // toastBatchDeleteOutcome) and follows the same onSuccess contract as
-  // useBulkRowDelete: all succeeded -> clear selection; partial -> keep only
-  // the failed ids selected; all failed -> leave selection untouched (and
-  // skip the refetch, since nothing changed server-side).
-  async function bulkDelete() {
-    const ids = [...selectedRows];
-    if (ids.length === 0) return;
-    setBulkDeleting(true);
-    try {
-      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        apiFetch(`/lines/${id}`, {
-          method: 'DELETE',
-        }).then(async (res) => {
-          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
-          return id;
-        }),
-      );
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+  // Follows the same onSuccess contract as useBulkRowDelete: all succeeded ->
+  // clear selection; partial -> keep only the failed ids selected; all failed
+  // -> leave selection untouched (and skip the refetch, since nothing changed
+  // server-side).
+  //
+  // ETP-5758 — goes through the generic `useBatchDeleteDialog`: the trash button
+  // now asks for confirmation (it deleted straight away before), and the dialog
+  // stays open and locked until the batch settles. The refused DELETE carries
+  // its 4xx status so a one-line refusal toasts the backend's own reason.
+  const {
+    requestBatchDelete,
+    batchDeleteDialog,
+    deleting: bulkDeleting,
+  } = useBatchDeleteDialog({
+    deleteOneFn: (id) =>
+      apiFetch(`/lines/${id}`, {
+        method: 'DELETE',
+      }).then(async (res) => {
+        if (!res.ok) {
+          throw Object.assign(new Error(await extractErrorMessage(res, ui)), { status: res.status });
+        }
+        return id;
+      }),
+    onOutcome: (succeeded, failed) => {
       if (succeeded.length > 0) {
         setSelectedRows(new Set(failed));
         fetchLines();
         onRefresh?.();
       }
-    } finally { setBulkDeleting(false); }
+    },
+  });
+
+  function bulkDelete() {
+    requestBatchDelete([...selectedRows]);
   }
 
   // Inline draft-row submit (Sales Order InlineAddRow pattern).
@@ -703,6 +711,7 @@ export default function AmortizationLinesTable({
           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fecdcf" />
         </button>
       </SelectionToolbar>
+      {batchDeleteDialog}
     </div>
   );
 }

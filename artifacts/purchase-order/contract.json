@@ -1,14 +1,15 @@
 {
-  "version": "0.54.0",
+  "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-10-15T18:34:49.855Z",
-  "checksum": "dbc729d0ce1ed363",
+  "updatedAt": "2026-10-23T12:03:26.422Z",
+  "checksum": "34ba009dac839e09",
   "frontendContract": {
     "window": {
       "id": "181",
       "name": "Purchase Order",
       "primaryEntity": "header",
       "category": "purchases",
+      "agentPrompt": "Purchase orders: orders to vendors. Entity `header` is the order, `lines` its lines. Complete (book) one with etendo_action documentAction and parameters {\"docAction\":\"CO\"}; the documentAction field prompt lists the other values. Document tools. Several orders at once (up to 50, one result each, not atomic): etendo_action_batch (e.g. complete them all, or void drafts). Attachments: etendo_request_attachment_upload, etendo_list_attachments, etendo_delete_attachment; do not pass main:true here, the main file is the document's own PDF. PDF: etendo_get_document_pdf returns the stored PDF; a draft has none, and on no_pdf or pdf_stale the user opens the document's preview in the application. Email: etendo_send_document_email (preview:true first).",
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -48,7 +49,8 @@
           "InvoiceStatus": "Estado de facturación",
           "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
           "EM_ETGO_Invoice_Status": "Estado de facturación",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -56,7 +58,8 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status",
           "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-          "EM_ETGO_Invoice_Status": "Invoicing Status"
+          "EM_ETGO_Invoice_Status": "Invoicing Status",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -356,6 +359,12 @@
             "sourceRequired": true,
             "reference": "PaymentTerm",
             "inputMode": "selector",
+            "allowCreate": true,
+            "createLabelKey": "paymentTermCreate",
+            "createTitleKey": "paymentTermCreateTitle",
+            "createNamePlaceholderKey": "paymentTermDaysPlaceholder",
+            "createSpec": "payment-term",
+            "createEntity": "header",
             "section": "principal",
             "seq": 80,
             "validation": {
@@ -1476,7 +1485,7 @@
             "sourceRequired": true,
             "columnType": "amount",
             "section": "principal",
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -1507,7 +1516,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 5,
+            "gridOrder": 6,
             "min": 0,
             "max": 100,
             "validation": {
@@ -1544,7 +1553,7 @@
               "lineNetAmount"
             ],
             "section": "principal",
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -1586,7 +1595,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 7,
+            "gridOrder": 8,
             "validation": {
               "maxLength": 2
             },
@@ -1660,10 +1669,13 @@
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true,
             "reference": "UOM",
+            "display": "tag",
+            "gridOrder": 4,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -2764,6 +2776,7 @@
       "name": "Purchase Order",
       "primaryEntity": "header",
       "category": "purchases",
+      "agentPrompt": "Purchase orders: orders to vendors. Entity `header` is the order, `lines` its lines. Complete (book) one with etendo_action documentAction and parameters {\"docAction\":\"CO\"}; the documentAction field prompt lists the other values. Document tools. Several orders at once (up to 50, one result each, not atomic): etendo_action_batch (e.g. complete them all, or void drafts). Attachments: etendo_request_attachment_upload, etendo_list_attachments, etendo_delete_attachment; do not pass main:true here, the main file is the document's own PDF. PDF: etendo_get_document_pdf returns the stored PDF; a draft has none, and on no_pdf or pdf_stale the user opens the document's preview in the application. Email: etendo_send_document_email (preview:true first).",
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -2803,7 +2816,8 @@
           "InvoiceStatus": "Estado de facturación",
           "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
           "EM_ETGO_Invoice_Status": "Estado de facturación",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -2811,7 +2825,8 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status",
           "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-          "EM_ETGO_Invoice_Status": "Invoicing Status"
+          "EM_ETGO_Invoice_Status": "Invoicing Status",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -5703,7 +5718,8 @@
         "InvoiceStatus": "Estado de facturación",
         "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
         "EM_ETGO_Invoice_Status": "Estado de facturación",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -5711,7 +5727,8 @@
         "DeliveryStatusPurchase": "Reception Status",
         "InvoiceStatus": "Invoicing Status",
         "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-        "EM_ETGO_Invoice_Status": "Invoicing Status"
+        "EM_ETGO_Invoice_Status": "Invoicing Status",
+        "C_UOM_ID": "Unit"
       }
     }
   },

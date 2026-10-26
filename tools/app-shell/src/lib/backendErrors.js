@@ -1,3 +1,5 @@
+// ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
+import { formatCalendarDate } from './dateOnly.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -264,6 +266,11 @@ const BACKEND_ERROR_MAP = {
     'backendError.returnNothingLeft',
   'The document must be completed before goods can be returned from it.':
     'backendError.returnSourceNotCompleted',
+  // InvoiceLineAmountSupport.invalidDiscount() (com.etendoerp.go — ETP-5710), `error.code =
+  // invalidLineDiscount` — HTTP 422 for a line discount outside 0..100. The sentence is fixed (no
+  // parameters), so it is an exact-message entry like the ones above.
+  'The line discount must be between 0 and 100 (percent).':
+    'backendError.invalidLineDiscount',
   // ReturnableQuantity.refuseDirectCreate (com.etendoerp.go — ETP-5711): a return line is never
   // created by a plain POST of the line, only by the import / create-from-document actions. Two
   // exact strings (one per direction, they differ only in the action names), one translation.
@@ -424,6 +431,11 @@ const BACKEND_ERROR_KEY_MAP = {
   // Consumption pre-check (ETP-5445). Mapped to
   // the same generic retry-later copy as the other two costing messages in BACKEND_ERROR_MAP.
   NotCalculatedCost: 'backendError.costNotCalculated',
+  // ETP-5714 — com.etendoerp DocumentPostingService/CostingStall: a post refused because costing is
+  // stalled (an uncalculated transaction has waited for minutes, so the 30 s retry of
+  // NotCalculatedCost would never succeed). AD_MESSAGE ETGO_CostCalculationStalled, English-only in
+  // the module; the answer is 422 with error "costCalculationStalled" and retryable false.
+  ETGO_CostCalculationStalled: 'backendError.costCalculationStalled',
   // ETP-5529 — core `OtherPostingProcessActive` ("This record is being posted by another
   // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
   // when another posting process holds the record (or AcctServer cannot take its lock).
@@ -459,6 +471,25 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
+  // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
+  // same case maps to "period not open", which sends the user to open a period they do not need.
+  // `messageParams` { period, accountingDate }.
+  ETGO_GLJournalPeriodMismatch: 'backendError.glJournalPeriodMismatch',
+  // ETP-5693 — com.etendoerp.go PostingAccountGuard: a write to an accounting field with a summary
+  // or inactive account, an account of another ledger, or a changed ledger on an existing row.
+  // The selectors already hide those accounts, so the SPA only meets these in a race: a generic
+  // sentence per key, no messageParams (the backend text carries field + account for REST/MCP).
+  ETGO_AccountIsSummary: 'backendError.accountIsSummary',
+  ETGO_AccountIsInactive: 'backendError.accountIsInactive',
+  ETGO_AccountWrongLedger: 'backendError.accountWrongLedger',
+  ETGO_LedgerNotUpdatable: 'backendError.ledgerNotUpdatable',
+  // ETP-5826 — com.etendoerp.go PaymentTermHandler: the number of days of a payment term is missing,
+  // not a whole number, or outside the range. `messageParams` { field, min, max, value }. The
+  // duplicate refusals of the same handler need the active/inactive split, see
+  // translatePaymentTermConflict.
+  ETGO_PaymentTermDaysInvalid: 'backendError.paymentTermDaysInvalid',
+  ETGO_PaymentTermDaysOutOfRange: 'backendError.paymentTermDaysOutOfRange',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -561,6 +592,42 @@ function renderInvalidAccountEntity(t, messageKeys, params) {
   return null;
 }
 
+// ETP-5826 — com.etendoerp.go PaymentTermHandler refuses a payment term that duplicates another one
+// of the client, by number of days (ETGO_PaymentTermDaysDuplicate) or by name in the organization
+// (ETGO_PaymentTermNameDuplicate). `messageParams` names the existing term (`paymentTermName`) and
+// says whether it is active (`paymentTermActive`); an inactive one gets a reactivation hint, since
+// creating another term is exactly what the user must not do. Shared by the Payment Term window's
+// save and the "+ Crear condición de pago" modal. Without a name the sentence cannot be built, so the
+// caller falls back to the next route.
+const PAYMENT_TERM_CONFLICT_KEYS = Object.freeze({
+  ETGO_PaymentTermDaysDuplicate: Object.freeze({
+    active: 'backendError.paymentTermDaysDuplicate',
+    inactive: 'backendError.paymentTermDaysDuplicateInactive',
+  }),
+  ETGO_PaymentTermNameDuplicate: Object.freeze({
+    active: 'backendError.paymentTermNameDuplicate',
+    inactive: 'backendError.paymentTermNameDuplicateInactive',
+  }),
+});
+
+function isInactiveFlag(value) {
+  return value === false || value === 'false' || value === 'N';
+}
+
+function translatePaymentTermConflict(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys)) return null;
+  const name = nonEmptyString(messageParams?.paymentTermName);
+  if (!name) return null;
+  for (const raw of messageKeys) {
+    const keys = Object.hasOwn(PAYMENT_TERM_CONFLICT_KEYS, raw) ? PAYMENT_TERM_CONFLICT_KEYS[raw] : null;
+    if (!keys) continue;
+    const key = isInactiveFlag(messageParams.paymentTermActive) ? keys.inactive : keys.active;
+    const translated = resolveLocaleKey(t, key, { name });
+    if (translated) return translated;
+  }
+  return null;
+}
+
 function translateInvalidAccount(messageKeys, messageParams, t) {
   if (!Array.isArray(messageKeys) || !messageKeys.includes(INVALID_ACCOUNT_KEY)) return null;
   if (!messageParams || typeof messageParams !== 'object') return null;
@@ -572,6 +639,76 @@ function translateInvalidAccount(messageKeys, messageParams, t) {
     messageParams.missingProductAccounts);
   if (!base || !entity || groupAccounts === null || productAccounts === null) return null;
   return [base, entity, groupAccounts, productAccounts].filter(Boolean).join(' ');
+}
+
+// ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
+// A foreign-currency quotation/order/invoice with an empty `eTGOCurrencyRate` is refused with
+// HTTP 422 on every channel:
+//   - on save: messageKeys ["ETGO_ExchangeRateMissingOnSave", "ETGO_RateRefDate<Accounting|Order|
+//     Quotation>"], messageParams { orgCurrency, documentCurrency, date (yyyy-MM-dd), dateField,
+//     referenceDate (the same ETGO_RateRefDate* key) };
+//   - on complete: messageKeys ["ETGO_ExchangeRateMissingOnComplete"], messageParams
+//     { orgCurrency, documentCurrency }.
+// Same rules as translateInvalidAccount: runs only with params, fails as a whole (null → the
+// backend's own, already-translated prose), and none of these keys is in BACKEND_ERROR_KEY_MAP.
+const EXCHANGE_RATE_MISSING_ON_SAVE_KEY = 'ETGO_ExchangeRateMissingOnSave';
+const EXCHANGE_RATE_MISSING_ON_COMPLETE_KEY = 'ETGO_ExchangeRateMissingOnComplete';
+// The reference-date identity → the locale key naming that date field for the user.
+const RATE_REFERENCE_DATE_LABEL_KEYS = {
+  ETGO_RateRefDateAccounting: 'backendError.rateReferenceDate.accounting',
+  ETGO_RateRefDateOrder: 'backendError.rateReferenceDate.order',
+  ETGO_RateRefDateQuotation: 'backendError.rateReferenceDate.quotation',
+};
+
+function resolveRateReferenceDateLabel(t, messageKeys, params) {
+  const fromParams = nonEmptyString(params.referenceDate);
+  const refKey = fromParams && RATE_REFERENCE_DATE_LABEL_KEYS[fromParams]
+    ? fromParams
+    : messageKeys.find((k) => RATE_REFERENCE_DATE_LABEL_KEYS[k]);
+  return refKey ? resolveLocaleKey(t, RATE_REFERENCE_DATE_LABEL_KEYS[refKey]) : null;
+}
+
+function translateExchangeRateMissing(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageParams || typeof messageParams !== 'object') return null;
+  const orgCurrency = nonEmptyString(messageParams.orgCurrency);
+  const documentCurrency = nonEmptyString(messageParams.documentCurrency);
+  if (!orgCurrency || !documentCurrency) return null;
+  if (messageKeys.includes(EXCHANGE_RATE_MISSING_ON_SAVE_KEY)) {
+    // Date-only value: formatCalendarDate never shifts the day by the host's timezone; it
+    // answers '—' for an unparseable value, which must not reach the sentence.
+    const rawDate = nonEmptyString(messageParams.date);
+    const date = rawDate ? formatCalendarDate(rawDate) : null;
+    const field = resolveRateReferenceDateLabel(t, messageKeys, messageParams);
+    if (!date || date === '—' || !field) return null;
+    return resolveLocaleKey(t, 'backendError.exchangeRateMissingOnSave',
+      { orgCurrency, documentCurrency, date, field });
+  }
+  if (messageKeys.includes(EXCHANGE_RATE_MISSING_ON_COMPLETE_KEY)) {
+    return resolveLocaleKey(t, 'backendError.exchangeRateMissingOnComplete',
+      { orgCurrency, documentCurrency });
+  }
+  return null;
+}
+
+/**
+ * Translates a failed response body that the caller already parsed — message and identity
+ * (`messageKeys` / `messageParams`) together, for a call site that has to read the JSON itself
+ * (e.g. to inspect a legacy `@Token@` before translating). Looks for the message in the same
+ * envelopes the document-action modals always read (`error.message`, `response.message`,
+ * `response.error`, `message`), so swapping a hand-rolled `e?.error?.message || …` chain for this
+ * only ADDS the identity.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @param {string} fallback text used when the body carries no message
+ * @returns {string} the translated message
+ */
+export function translateBackendErrorBody(body, t, fallback) {
+  const message = body?.error?.message || body?.response?.message || pickBackendErrorText(body) || fallback;
+  return translateBackendError(message, t, {
+    messageKeys: extractBackendMessageKeys(body),
+    messageParams: extractBackendMessageParams(body),
+  });
 }
 
 // `t(key, params)` interpolates `{var}` tokens (single-brace — this codebase's real
@@ -1136,6 +1273,53 @@ function matchConsentExpired(msg) {
   return account ? { account } : null;
 }
 
+// ETP-5089: `PSD2_ConnectionStaleReconnect`, raised on the same fetchAccountTransactions path when
+// Salt Edge still reports the connection active but its last failed fetch is newer than its last
+// success. Two slots: the account name (%0) and the bank's own failure text (%1). The reason is
+// free text written by the bank — it may carry periods, colons or nothing at all (the backend
+// sends "" when Salt Edge gave no message) — so it is captured as whatever sits between the fixed
+// mid and suffix, and an empty reason still counts as a match. It shares its prefix with
+// CONNECTION_WENT_INACTIVE_PREFIX, which is safe: the two differ in the text right after the name.
+const CONNECTION_STALE_PREFIX = 'The connection for account ';
+const CONNECTION_STALE_MID = ' has not refreshed successfully since it last failed: ';
+const CONNECTION_STALE_SUFFIX = '. Please reconnect the account.';
+
+/**
+ * Trims a free-text reason and drops the periods it ends with.
+ *
+ * The bank's failure text usually ends in its own period, and the sentence it is dropped into
+ * supplies the closing one, so without this the result reads "…del banco.. Por favor". A plain
+ * backwards scan rather than a `/\.+$/` regex: the text is written by the bank, and that pattern
+ * backtracks super-linearly on a long run of periods (Sonar S5852), while this is linear whatever
+ * it is given.
+ *
+ * @param {unknown} value the reason text; null and undefined count as empty
+ * @returns {string} the trimmed text without trailing periods, or '' when nothing is left
+ */
+export function stripTrailingPeriods(value) {
+  const text = String(value ?? '').trim();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '.') {
+    end -= 1;
+  }
+  return text.slice(0, end).trim();
+}
+
+function matchConnectionStale(msg) {
+  if (!msg.startsWith(CONNECTION_STALE_PREFIX) || !msg.endsWith(CONNECTION_STALE_SUFFIX)) {
+    return null;
+  }
+  const body = msg.slice(CONNECTION_STALE_PREFIX.length, -CONNECTION_STALE_SUFFIX.length);
+  const mid = body.indexOf(CONNECTION_STALE_MID);
+  if (mid <= 0) {
+    return null;
+  }
+  return {
+    account: body.slice(0, mid),
+    reason: stripTrailingPeriods(body.slice(mid + CONNECTION_STALE_MID.length)),
+  };
+}
+
 // The AD_MESSAGE template repeats `%0`, so the same day count appears twice in the rendered string.
 // Both occurrences are captured and required to agree — a message whose two numbers differ is not
 // this message and must not be translated as if it were.
@@ -1287,6 +1471,15 @@ function resolveParameterizedMatch(msg) {
     return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
   }
 
+  // Hand-written for the same reason (ETP-5089): when the bank gave no failure text the sentence
+  // must drop the "último fallo: <reason>" clause, not render it with an empty slot.
+  const staleMatch = matchConnectionStale(msg);
+  if (staleMatch) {
+    return staleMatch.reason
+      ? { key: 'backendError.psd2ConnectionStale', params: { ...staleMatch } }
+      : { key: 'backendError.psd2ConnectionStaleNoReason', params: { account: staleMatch.account } };
+  }
+
   for (const [matcher, key] of PARAMETERIZED_MATCHERS) {
     const match = matcher(msg);
     if (match) {
@@ -1425,6 +1618,13 @@ export function translateBackendError(msg, t, options = {}) {
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);
   if (invalidAccount !== null) return invalidAccount;
+  // ETP-5840: same position and rules as the Invalid-Account composer.
+  const rateMissing = translateExchangeRateMissing(options.messageKeys, options.messageParams, t);
+  if (rateMissing !== null) return rateMissing;
+
+  // ETP-5826: same reason — the duplicate refusals pick their sentence from a param.
+  const paymentTermConflict = translatePaymentTermConflict(options.messageKeys, options.messageParams, t);
+  if (paymentTermConflict !== null) return paymentTermConflict;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

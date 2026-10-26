@@ -1,14 +1,15 @@
 {
-  "version": "0.37.0",
+  "version": "0.39.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-10-15T18:34:50.555Z",
-  "checksum": "41dbb7703ed3accd",
+  "updatedAt": "2026-10-23T12:03:26.879Z",
+  "checksum": "6469d8f3e3d844bd",
   "frontendContract": {
     "window": {
       "id": "143",
       "name": "Sales Order",
       "primaryEntity": "header",
       "category": "sales",
+      "agentPrompt": "Sales orders: orders from customers. Entity `header` is the order, `lines` its lines. Complete (book) one with etendo_action documentAction and parameters {\"docAction\":\"CO\"}; the documentAction field prompt lists the other values. Document tools. Several orders at once (up to 50, one result each, not atomic): etendo_action_batch (e.g. complete them all, or void drafts). Attachments: etendo_request_attachment_upload, etendo_list_attachments, etendo_delete_attachment; do not pass main:true here, the main file is the document's own PDF. PDF: etendo_get_document_pdf returns the stored PDF; a draft has none, and on no_pdf or pdf_stale the user opens the document's preview in the application. Email: etendo_send_document_email (preview:true first).",
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -44,14 +45,16 @@
           "InvoiceStatus": "Estado de facturación",
           "EM_ETGO_Delivery_Status": "Estado de entrega",
           "EM_ETGO_Invoice_Status": "Estado de facturación",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
           "DeliveryStatus": "Delivery Status",
           "InvoiceStatus": "Invoicing Status",
           "EM_ETGO_Delivery_Status": "Delivery Status",
-          "EM_ETGO_Invoice_Status": "Invoicing Status"
+          "EM_ETGO_Invoice_Status": "Invoicing Status",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -286,6 +289,12 @@
             "sourceRequired": true,
             "reference": "PaymentTerm",
             "inputMode": "selector",
+            "allowCreate": true,
+            "createLabelKey": "paymentTermCreate",
+            "createTitleKey": "paymentTermCreateTitle",
+            "createNamePlaceholderKey": "paymentTermDaysPlaceholder",
+            "createSpec": "payment-term",
+            "createEntity": "header",
             "section": "principal",
             "validation": {
               "required": true,
@@ -831,7 +840,7 @@
             "sourceRequired": true,
             "columnType": "amount",
             "section": "principal",
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -866,7 +875,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 5,
+            "gridOrder": 6,
             "min": 0,
             "max": 100,
             "validation": {
@@ -903,7 +912,7 @@
               "lineNetAmount"
             ],
             "section": "principal",
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -945,13 +954,40 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 7,
+            "gridOrder": 8,
             "validation": {
               "maxLength": 2
             },
             "displayLogic": {
               "raw": "@GROSSPRICE@='Y'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "label": "UOM",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "UOM",
+            "inputMode": "selector",
+            "display": "tag",
+            "gridOrder": 4,
+            "gridReadOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
+            "readOnlyLogic": {
+              "raw": "@UomManagement@='Y'",
+              "evaluable": true,
+              "js": "record['uomManagement'] === 'Y'"
             }
           },
           {
@@ -1086,6 +1122,7 @@
       "name": "Sales Order",
       "primaryEntity": "header",
       "category": "sales",
+      "agentPrompt": "Sales orders: orders from customers. Entity `header` is the order, `lines` its lines. Complete (book) one with etendo_action documentAction and parameters {\"docAction\":\"CO\"}; the documentAction field prompt lists the other values. Document tools. Several orders at once (up to 50, one result each, not atomic): etendo_action_batch (e.g. complete them all, or void drafts). Attachments: etendo_request_attachment_upload, etendo_list_attachments, etendo_delete_attachment; do not pass main:true here, the main file is the document's own PDF. PDF: etendo_get_document_pdf returns the stored PDF; a draft has none, and on no_pdf or pdf_stale the user opens the document's preview in the application. Email: etendo_send_document_email (preview:true first).",
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -1121,14 +1158,16 @@
           "InvoiceStatus": "Estado de facturación",
           "EM_ETGO_Delivery_Status": "Estado de entrega",
           "EM_ETGO_Invoice_Status": "Estado de facturación",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
           "DeliveryStatus": "Delivery Status",
           "InvoiceStatus": "Invoicing Status",
           "EM_ETGO_Delivery_Status": "Delivery Status",
-          "EM_ETGO_Invoice_Status": "Invoicing Status"
+          "EM_ETGO_Invoice_Status": "Invoicing Status",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -2113,7 +2152,7 @@
             "apiKey": "uOM",
             "column": "C_UOM_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2835,6 +2874,14 @@
       },
       {
         "entity": "lines",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-order/lines/selectors/uOM"
+      },
+      {
+        "entity": "lines",
         "field": "currency",
         "column": "C_Currency_ID",
         "reference": "Currency",
@@ -3049,14 +3096,16 @@
         "InvoiceStatus": "Estado de facturación",
         "EM_ETGO_Delivery_Status": "Estado de entrega",
         "EM_ETGO_Invoice_Status": "Estado de facturación",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "DeliveryStatus": "Delivery Status",
         "InvoiceStatus": "Invoicing Status",
         "EM_ETGO_Delivery_Status": "Delivery Status",
-        "EM_ETGO_Invoice_Status": "Invoicing Status"
+        "EM_ETGO_Invoice_Status": "Invoicing Status",
+        "C_UOM_ID": "Unit"
       }
     }
   },
@@ -3621,6 +3670,14 @@
         "description": "Field 'unitPrice' should be present in lines"
       },
       {
+        "id": "t-field-presence-lines-uOM",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should be present in lines"
+      },
+      {
         "id": "t-field-type-header-businessPartner",
         "category": "field-type",
         "entity": "header",
@@ -3861,6 +3918,14 @@
         "description": "Field 'unitPrice' should have type 'number' in lines"
       },
       {
+        "id": "t-field-type-lines-uOM",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should have type 'string' in lines"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -3989,6 +4054,14 @@
         "description": "Read-only logic for 'unitPrice' in lines should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-lines-uOM",
+        "category": "readonlylogic-evaluable",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in lines should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-valid-header-businessPartner",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -4115,6 +4188,14 @@
         "field": "unitPrice",
         "runner": "node",
         "description": "Read-only logic for 'unitPrice' in lines should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-lines-uOM",
+        "category": "readonlylogic-valid",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in lines should be valid JS"
       },
       {
         "id": "t-rule-declared-AD-Client-Security-AD-Client-ID-header",
@@ -6015,6 +6096,14 @@
         "description": "Selector endpoint for 'tax' in lines should exist"
       },
       {
+        "id": "t-selector-endpoint-lines-uOM",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'uOM' in lines should exist"
+      },
+      {
         "id": "t-system-field-header-accountingDate",
         "category": "system-field",
         "entity": "header",
@@ -7183,14 +7272,6 @@
         "description": "System field 'taxableAmount' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-uOM",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "uOM",
-        "runner": "node",
-        "description": "System field 'uOM' should exist in backend but not frontend for lines"
-      },
-      {
         "id": "t-system-field-lines-updated",
         "category": "system-field",
         "entity": "lines",
@@ -7238,25 +7319,25 @@
       }
     ],
     "summary": {
-      "total": 554,
+      "total": 558,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
         "default-value-type": 9,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 30,
-        "field-type": 30,
-        "readonlylogic-evaluable": 16,
-        "readonlylogic-valid": 16,
+        "field-presence": 31,
+        "field-type": 31,
+        "readonlylogic-evaluable": 17,
+        "readonlylogic-valid": 17,
         "rule-declared": 254,
         "searchable-filters": 5,
-        "selector-endpoint": 10,
-        "system-field": 151,
+        "selector-endpoint": 11,
+        "system-field": 150,
         "visibility": 2
       },
       "byRunner": {
-        "node": 554,
+        "node": 558,
         "junit": 0
       }
     }

@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Order",
+    "agentPrompt": "#REF#agent-prompts/purchase-order/spec.md",
     "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "notesField": "description",
@@ -43,7 +44,8 @@
         "InvoiceStatus": "Estado de facturación",
         "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
         "EM_ETGO_Invoice_Status": "Estado de facturación",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -51,7 +53,8 @@
         "DeliveryStatusPurchase": "Reception Status",
         "InvoiceStatus": "Invoicing Status",
         "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-        "EM_ETGO_Invoice_Status": "Invoicing Status"
+        "EM_ETGO_Invoice_Status": "Invoicing Status",
+        "C_UOM_ID": "Unit"
       }
     },
     "secondaryTabs": {},
@@ -164,7 +167,13 @@
         "paymentTerms": {
           "form": true,
           "section": "principal",
-          "seq": 80
+          "seq": 80,
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "priceList": {
           "grid": false,
@@ -409,10 +418,14 @@
           "min": false
         },
         "uOM": {
-          "grid": false,
+          "grid": true,
           "form": false,
           "inputMode": null,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "visibility": "readOnly",
+          "gridOrder": 4,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "unitPrice": {
           "grid": false,
@@ -434,14 +447,14 @@
           "form": true,
           "section": "principal",
           "order": 7,
-          "gridOrder": 7
+          "gridOrder": 8
         },
         "tax": {
           "grid": true,
           "form": true,
           "section": "principal",
           "order": 6,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "inputMode": "selector",
           "readOnlyLogic": null,
           "forceCalloutFields": [
@@ -455,7 +468,7 @@
           "form": true,
           "section": "principal",
           "order": 4,
-          "gridOrder": 4,
+          "gridOrder": 5,
           "readOnlyLogic": null,
           "min": false,
           "displayLogic": null,
@@ -470,7 +483,7 @@
           "form": true,
           "section": "principal",
           "order": 5,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "readOnlyLogic": null,
           "min": 0,
           "max": 100

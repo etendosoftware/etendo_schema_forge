@@ -267,6 +267,59 @@ describe('TopBar demo banner — fiscal notice and colour (ETP-5364)', () => {
     expect(screen.queryByTestId('topbar-demo-fiscal-notice')).not.toBeInTheDocument();
   });
 
+  it('is drawn with the destructive family once expired, not the undefined status-danger', () => {
+    // `status-danger` is not a token of the core Tailwind preset (only success / warning / info /
+    // neutral are), so its classes generated no CSS and the expired bar had no colour of its own.
+    environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: 0 };
+    render(<TopBar title="Inicio" />);
+    const html = banner().outerHTML;
+    expect(html).not.toMatch(/status-danger/);
+    expect(banner().className).toMatch(/bg-destructive/);
+    expect(banner().className).toMatch(/border-destructive/);
+    expect(banner().dataset.variant).toBe('destructive');
+  });
+
+  it.each([3, 1])('escalates to the destructive variant with %i day(s) left (ETP-5049)', (days) => {
+    environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: days };
+    render(<TopBar title="Inicio" />);
+    expect(banner().dataset.variant).toBe('destructive');
+    expect(banner().className).toMatch(/bg-destructive/);
+    expect(banner().className).not.toMatch(/bg-status-warning/);
+    // Still an active trial: the countdown, not the expired label, and the CTA for everyone.
+    expect(banner()).not.toHaveTextContent('environmentDemoExpired');
+    expect(screen.getByTestId('topbar-go-to-payment')).toBeInTheDocument();
+  });
+
+  it('stays amber with more than 3 days left (ETP-5049)', () => {
+    environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: 4 };
+    render(<TopBar title="Inicio" />);
+    expect(banner().dataset.variant).toBe('warning');
+    expect(banner().className).toMatch(/bg-status-warning/);
+  });
+
+  // The full boundary in one table: amber above 3 days, red from 3 down and once expired,
+  // including a negative count (the backend does not clamp it), and the plural everywhere
+  // except exactly one day.
+  it.each([
+    [4, 'warning', 'environmentTrialDaysRemaining'],
+    [3, 'destructive', 'environmentTrialDaysRemaining'],
+    [2, 'destructive', 'environmentTrialDaysRemaining'],
+    [1, 'destructive', 'environmentTrialDaysRemainingOne'],
+    [0, 'destructive', 'environmentDemoExpired'],
+    [-2, 'destructive', 'environmentDemoExpired'],
+  ])('with %i day(s) left draws data-variant=%s and labels it %s (ETP-5049)', (days, variant, label) => {
+    environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: days };
+    render(<TopBar title="Inicio" />);
+    expect(banner()).toHaveAttribute('data-variant', variant);
+    expect(banner()).toHaveAttribute('aria-label', label);
+  });
+
+  it('uses the singular label with one day left (ETP-5049)', () => {
+    environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: 1 };
+    render(<TopBar title="Inicio" />);
+    expect(banner()).toHaveTextContent('environmentTrialDaysRemainingOne');
+  });
+
   it('keeps the caveat on an expired trial, when it matters most', () => {
     environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: 0 };
     render(<TopBar title="Inicio" />);

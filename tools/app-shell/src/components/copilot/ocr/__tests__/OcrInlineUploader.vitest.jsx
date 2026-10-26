@@ -36,12 +36,9 @@ vi.mock('../ocrDocTypes', () => ({
   getOcrDocType: (id) => id === 'purchase-invoice' ? {
     id: 'purchase-invoice',
     routePrefix: '/purchase-invoice/',
-    toolName: 'SimpleOcrTool',
     eventName: 'copilot:ocr-prefill:purchase-invoice',
-    question: 'Extract invoice fields',
     tabId: '290',
     tableName: 'C_Invoice',
-    structuredOutput: true,
   } : null,
 }));
 
@@ -54,16 +51,27 @@ vi.mock('../listAttachments', () => ({
   uploadAndMarkMainAttachment: vi.fn().mockResolvedValue({ id: 'att-1' }),
 }));
 
-vi.mock('../buildOcrSchema', () => ({
-  buildOcrSchema: () => ({ type: 'object', properties: {} }),
+// ETP-5715 — what the extraction asks the model is served by the server, once, and shared with
+// the MCP's document-reading tools; the uploader keeps no copy.
+let mockConfigReturn;
+const mockConfigCalls = [];
+vi.mock('../useOcrConfig', () => ({
+  useOcrConfig: (...args) => {
+    mockConfigCalls.push(args);
+    return mockConfigReturn;
+  },
 }));
 
+let lastExtractionArgs;
 vi.mock('../useOcrExtraction', () => ({
   OCR_NO_DATA_ERROR: 'ocr-no-data',
   OCR_TIMEOUT_ERROR: 'ocr-timeout',
   OCR_NETWORK_ERROR: 'ocr-network',
   OCR_SESSION_CHANGED_ERROR: 'ocr-session-changed',
-  useOcrExtraction: () => mockExtractionReturn,
+  useOcrExtraction: (args) => {
+    lastExtractionArgs = args;
+    return mockExtractionReturn;
+  },
 }));
 
 vi.mock('../useOcrFlow', () => ({
@@ -97,6 +105,18 @@ describe('OcrInlineUploader', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockConfigCalls.length = 0;
+    lastExtractionArgs = undefined;
+    mockConfigReturn = {
+      status: 'ready',
+      config: {
+        docType: 'purchase-invoice',
+        toolName: 'ServerTool',
+        question: 'Server question',
+        schema: { type: 'object', properties: { vendor_name: {} } },
+      },
+      retry: vi.fn(),
+    };
     mockExtractionReturn = {
       extract: vi.fn(),
       status: 'idle',
@@ -116,6 +136,69 @@ describe('OcrInlineUploader', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('the server-side OCR configuration (ETP-5715)', () => {
+    it('hands the extraction the tool, the question and the schema the server serves', () => {
+      render(<OcrInlineUploader {...defaultProps} />);
+
+      expect(lastExtractionArgs.toolName).toBe('ServerTool');
+      expect(lastExtractionArgs.question).toBe('Server question');
+      expect(lastExtractionArgs.structuredOutputSchema).toEqual(mockConfigReturn.config.schema);
+    });
+
+    it('asks for the configuration of its doc type, and only for a new record', () => {
+      render(<OcrInlineUploader {...defaultProps} />);
+      expect(mockConfigCalls.at(-1)).toEqual(['purchase-invoice', true]);
+
+      mockConfigCalls.length = 0;
+      render(<OcrInlineUploader {...defaultProps} isNew={false} />);
+      expect(mockConfigCalls.at(-1)).toEqual(['purchase-invoice', false]);
+    });
+
+    it('does not ask anything for a doc type that has no OCR', () => {
+      render(<OcrInlineUploader {...defaultProps} docTypeId="nope" />);
+      expect(mockConfigCalls.at(-1)[0]).toBeNull();
+    });
+
+    it('keeps the extract button disabled while the configuration loads, without blocking the file', () => {
+      mockConfigReturn = { status: 'loading', config: null, retry: vi.fn() };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [createPdfFile()] },
+      });
+
+      expect(screen.getByText('ocrExtractFill').closest('button')).toBeDisabled();
+      expect(screen.getByLabelText('cancel')).not.toBeDisabled();
+      expect(lastExtractionArgs.question).toBeUndefined();
+    });
+
+    it('never calls extract while the configuration is not ready', () => {
+      mockConfigReturn = { status: 'loading', config: null, retry: vi.fn() };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [createPdfFile()] },
+      });
+
+      fireEvent.click(screen.getByText('ocrExtractFill'));
+
+      expect(mockExtractionReturn.extract).not.toHaveBeenCalled();
+    });
+
+    it('says the configuration could not be loaded and retries on request', () => {
+      mockConfigReturn = { status: 'error', config: null, retry: vi.fn() };
+      render(<OcrInlineUploader {...defaultProps} />);
+
+      expect(screen.getByTestId('ocr-config-error')).toHaveTextContent('ocrConfigUnavailable');
+      fireEvent.click(screen.getByTestId('ocr-config-retry'));
+
+      expect(mockConfigReturn.retry).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows no configuration error when it loaded', () => {
+      render(<OcrInlineUploader {...defaultProps} />);
+      expect(screen.queryByTestId('ocr-config-error')).not.toBeInTheDocument();
+    });
   });
 
   it('renders without crashing', () => {

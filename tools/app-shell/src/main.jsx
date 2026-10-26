@@ -1,6 +1,12 @@
 import { createRoot } from 'react-dom/client';
+import { installNeoRequestDedupe } from './lib/neoRequestDedupe.js';
 import { initBrowserObservability } from './lib/observability/browser.js';
 import { initFeatureFlags } from './lib/flags/index.js';
+
+// ETP-4952 — before anything can issue a request: one network read per resource per page load
+// (the NEO session, a record's header, its marked attachment). See lib/neoRequestDedupe.js for
+// the allowlist; every other request goes out untouched.
+installNeoRequestDedupe();
 
 // Fire-and-forget: never rejects, and flags resolve to their declared defaults
 // until (or unless) the provider becomes ready.

@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
+import { throwHttpError } from '@/hooks/financialAccountHttp.js';
 import {
   GLC_SEED_PAYLOAD,
   mapDimensionRows,
@@ -204,9 +205,8 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    // The backend message and body travel on the error, so the page can translate it by key.
+    if (!res.ok) await throwHttpError(res);
     const json = await res.json();
     if (!json?.response?.data?.[0]) throw new Error('save: server acknowledged but returned no payload');
     const saved = mapPayload(json.response.data[0]);

@@ -136,7 +136,7 @@ in the shared `DetailMoreActionsMenu.jsx`: `destructive` items rendered
 `hover:bg-destructive` (solid red) with `text-destructive` (red text) — red-on-red,
 illegible on hover — affecting every window using `destructive: true`
 (`goods-receipt`, `goods-movements`, `goods-shipment`, `sales-quotation`,
-`simple-g-l-journal`). Fixed once, for all of them: the hover background is now
+`manual-journals`). Fixed once, for all of them: the hover background is now
 `hover:bg-destructive/10` (a tint), matching the dominant convention already used
 elsewhere in `DetailView.jsx` for destructive-styled buttons.
 

@@ -3,9 +3,9 @@ import { Tag } from '@/components/ui/tag';
 import { useYearCloseStatus } from './useYearCloseStatus.js';
 
 /**
- * `topbarRight` slot for the Calendar window's year detail (see DetailView.jsx's
- * `topbarRight` prop contract: `{ data, recordId, token, apiBaseUrl, api, onProcess,
- * onRefresh }`). Classic's End Year Close window shows an explicit "Status: Year Not Closed" /
+ * `topbarExtra` slot for the Calendar window's year detail — the left group, next to Cancel,
+ * where every document shows its status (ETP-5592). Props: `{ data, recordId, token,
+ * apiBaseUrl, api, onProcess, onRefresh }`. Classic's End Year Close window shows an explicit "Status: Year Not Closed" /
  * "Status: Year Closed" header field; C_Year has no such boolean column, so this reuses
  * `useYearCloseStatus` — the single, canonical "is this year closed" derivation shared with
  * YearTableWithCloseStatus (list column) and index.jsx's menuActions override (Cerrar

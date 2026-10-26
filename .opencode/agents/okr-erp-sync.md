@@ -1,7 +1,7 @@
 ---
 description: "specialist -- NEXUS — OKR ERP Sync. You are NEXUS, the ERP Sync specialist for Etendo GO OKRs."
 mode: subagent
-color: "#808080"
+color: "#6b7280"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/okr-erp-sync.md - Regenerate: make sync-agents

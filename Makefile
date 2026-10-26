@@ -139,6 +139,16 @@ find-tests: ## Find existing tests for a file or Java class before writing one (
 validate-pipeline: ## Validate pipeline completeness across all artifacts
 	$(SF) sf-validate-pipeline --format=text
 
+# The report helper modules exist as one copy per repo (templates/ is not published).
+# This mirrors this repo's canonical copies into schema_forge_core and refreshes the
+# parity contract (parity.json, identical bytes in both repos). Commit the result in
+# BOTH repos. `sync-report-helpers-check` only reports (exit 1 when out of parity).
+.PHONY: sync-report-helpers sync-report-helpers-check
+sync-report-helpers: ## Mirror templates/reports/helpers/*.js into schema_forge_core + refresh parity.json (CORE_DIR=)
+	CORE_DIR=$(CORE_DIR) node scripts/sync-report-helpers.mjs
+sync-report-helpers-check: ## Report (without writing) whether the two report-helper copies are in parity (CORE_DIR=)
+	CORE_DIR=$(CORE_DIR) node scripts/sync-report-helpers.mjs --check
+
 .PHONY: method-budget
 method-budget: ## Ratchet guard: fail only if a tracked class grew past its method baseline
 	$(SF) sf-method-budget
@@ -605,6 +615,8 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "  DRY_RUN=1          Report what WOULD run (executes @check, commits nothing)"
 	@echo "  CLIENT=<clientId>  Restrict to a single tenant (ad_client_id)"
 	@echo "  FIX=<fix_id>       Force exactly ONE fix (ignores chain order + baseline cutoff; does not advance)"
+	@echo "                     The only way to run an OPT-IN fix (@optIn: true), and only for tenants whose"
+	@echo "                     chain is current up to its date (others: BLOCKED_CHAIN_BEHIND, no ledger row)"
 	@echo "  MARK_FIXED=1       Mark a fix as manually resolved (counts as success; runs nothing)"
 	@echo "  REASON=\"...\"       Mandatory note for MARK_FIXED — what was done by hand"
 	@echo ""
@@ -621,6 +633,8 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "  - fix_id = the .sql filename without .sql (e.g. 20260611T143000Z__R3-periodcontrol)."
 	@echo "  - Authoring rules + skeleton: cli/src/data-fixes/sql/README.md."
 	@echo "  - Exit code is non-zero if any tenant's chain halted on a FAILED fix."
+	@echo "  - Opt-in fixes (@optIn: true, e.g. R37-tenant-subscription-backfill) are never run by a full"
+	@echo "    run; LIST_CLIENTS=1 shows them in the OPT-IN column, never as PENDING."
 
 # --- Remote DB tunnel (SSH → RDS in a private VPC) ---
 #
@@ -822,6 +836,10 @@ sync-agents-check: ## Fail if the AGENTS.md mirrors are stale (CI guard)
 merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + copy-paste merge cmds (TASK="ETP-XXXX [ETP-YYYY ...]")
 	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
 	@./scripts/merge-block-check.sh $(TASK)
+
+.PHONY: check-modules
+check-modules: ## Check every Etendo repo/module is on its expected branch (FETCH=0, ONLY=a,b, ROOT=<env path>[,<path>], ALL_ENVS=1)
+	@node scripts/check-modules.js $(if $(filter 0,$(FETCH)),--no-fetch,) $(if $(ONLY),--only=$(ONLY),) $(if $(ROOT),--root=$(ROOT),) $(if $(ALL_ENVS),--all-envs,)
 
 # --- CI parity -------------------------------------------------------------
 # These variable names are shared with unrelated targets earlier in this file

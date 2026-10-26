@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Order",
+    "agentPrompt": "#REF#agent-prompts/sales-order/spec.md",
     "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,
@@ -40,14 +41,16 @@
         "InvoiceStatus": "Estado de facturación",
         "EM_ETGO_Delivery_Status": "Estado de entrega",
         "EM_ETGO_Invoice_Status": "Estado de facturación",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "DeliveryStatus": "Delivery Status",
         "InvoiceStatus": "Invoicing Status",
         "EM_ETGO_Delivery_Status": "Delivery Status",
-        "EM_ETGO_Invoice_Status": "Invoicing Status"
+        "EM_ETGO_Invoice_Status": "Invoicing Status",
+        "C_UOM_ID": "Unit"
       }
     },
     "noHeaderBorder": true,
@@ -156,7 +159,13 @@
           "section": "principal"
         },
         "paymentTerms": {
-          "section": "principal"
+          "section": "principal",
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "warehouse": {
           "inputMode": "search"
@@ -396,7 +405,7 @@
           "form": true,
           "section": "principal",
           "order": 6,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "inputMode": "selector",
           "forceCalloutFields": [
             "lineGrossAmount",
@@ -409,7 +418,7 @@
           "form": true,
           "section": "principal",
           "order": 4,
-          "gridOrder": 4,
+          "gridOrder": 5,
           "columnType": "amount",
           "min": false
         },
@@ -417,7 +426,7 @@
           "grid": true,
           "section": "principal",
           "order": 5,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "min": 0,
           "max": 100
         },
@@ -472,13 +481,17 @@
           "form": true,
           "section": "principal",
           "order": 7,
-          "gridOrder": 7
+          "gridOrder": 8
         },
         "grossListPrice": {
           "visibility": "system"
         },
         "uOM": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 4,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "deliveredQuantity": {
           "visibility": "system"

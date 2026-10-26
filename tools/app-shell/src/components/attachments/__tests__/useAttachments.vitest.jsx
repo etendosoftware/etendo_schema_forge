@@ -3,8 +3,10 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock i18n hooks before importing the hook under test.
+// One key resolves to a real text so the backend-error translation (ETP-5830) is observable;
+// every other key comes back as itself.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key) => (key === 'backendError.accessDeniedToSpec' ? 'translated-access-denied' : key),
 }));
 
 // Mock sonner toasts to capture calls without rendering anything.
@@ -731,5 +733,26 @@ describe('useAttachments — cross-view sync', () => {
     // Settle any listener-triggered reload that should not exist.
     await act(async () => { await Promise.resolve(); });
     expect(globalThis.fetch.mock.calls.length).toBe(callsAfterUpload);
+  });
+});
+
+describe('useAttachments — backend errors are translated (ETP-5830)', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+    vi.clearAllMocks();
+  });
+
+  it('shows the translated message, not the raw English, when the role may not write', async () => {
+    globalThis.fetch
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: 'x' }] }))
+      .mockResolvedValueOnce(jsonResponse(
+        { error: { message: 'Access denied to spec for current role', status: 403 } },
+        { ok: false, status: 403 }));
+
+    const { result } = renderHook(() => useAttachments(baseOpts));
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    await act(async () => { await result.current.remove('x'); });
+
+    expect(toast.error).toHaveBeenCalledWith('translated-access-denied');
   });
 });

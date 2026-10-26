@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DistinctValuesList.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { openAccountRowMenu } from '../../helpers/financial-account-helpers.js';
@@ -228,7 +229,7 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     await page.getByRole('button', { name: 'Cualquier tipo' }).click();
 
     // Pick the BPD option (label is "Cobro").
-    await page.getByRole('button', { name: 'Cobro' }).click();
+    await page.getByRole('option', { name: 'Cobro' }).click();
 
     // After filtering, only BPD rows remain: tx-1, tx-3, tx-5
     await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();

@@ -1,11 +1,13 @@
 // @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { test, expect } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { apiAuthHeaders, login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { uniqueValidCif } from '../../helpers/tax-id.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 
 function loadCredentials() {
   try {
@@ -22,10 +24,7 @@ const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0'
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
-  const spinner = page.getByText(/cargando|loading/i);
-  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
-    await expect(spinner).toBeHidden({ timeout: 10_000 });
-  }
+  await waitForLoadingIndicatorsGone(page, { timeout: 10_000 });
 }
 
 test.describe('ETP-4905 — Contacts import category resolution (Tomcat integration)', () => {
