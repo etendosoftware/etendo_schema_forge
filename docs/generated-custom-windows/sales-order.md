@@ -35,6 +35,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 - New-record behavior evidenced by Playwright coverage: opening `New Order` should immediately show the header form, the order-line tab, and `Save` / `Save draft` / `Cancel` controls without forcing a first intermediate save.
 - First lines on a new order (ETP-5771): the document totals are not header form fields (rendered by `DocumentTotalsPanel` in the bottom section), so they do not gate "+ Añadir líneas". The button appears as soon as the required header fields are filled, and clicking it saves the header itself — no manual Guardar first.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
+- **Create a payment term from the header selector (ETP-5826):** the `paymentTerms` selector (**Condiciones de pago**) shows a pinned `+ Crear condición de pago` row as the first entry of its dropdown, declared on the `header` field in `artifacts/sales-order/decisions.json` (`allowCreate` + `createSpec: "payment-term"`). It opens a small modal that asks only for the number of days until due — a whole number from 1 to 365, validated client-side (`lib/paymentTermDays.js`) — and POSTs `{ overduePaymentDaysRule: N }` to `/sws/neo/payment-term/header`; the backend derives the name ("N Días" / "1 Día"), the search key and the rest of the term. The new term is auto-selected on the field. If a term with the same number of days or the same name already exists, the server answers 409 (`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate`) and the modal names that term, or asks to reactivate it in Condiciones de pago when it is inactive (translated by the shared `lib/backendErrors.js`, like the Payment Term window); nothing is created and the existing term is not selected. A server failure never shows raw backend text. The selector's options are sorted by days, with terms whose name has no leading number (e.g. "Inmediato") first. A successful create marks every cached selector page stale, so the new term also appears in the other payment-term selectors on their next open. The row is shown only to roles that may write the Payment Term window (141) — tier `full` or admin / client-admin; the Sales and Purchasing templates hold 141 read-only, so their roles see a plain selector. Full reference: `docs/decisions-reference.md` (`allowCreate`, *Inline-create variants*) and `docs/ui-customization.md` §19c. The action is only reachable while the field is editable: on a processed order `paymentTerms` stays read-only (`readOnlyLogic: @Processed@='Y'`).
 
 ## Reactive behavior and dependencies
 
@@ -95,7 +96,7 @@ The MCP publishes `createShipment`, `createDraftInvoice` and `cloneRecord` for t
 ## Gap assessment
 
 - Warehouse is treated as required by the backend contract and E2E detail selectors, but the generated header form currently hides it (`form: false`). That leaves an open question about how a user supplies or changes warehouse during order entry in the current UI.
-- Payment terms, scheduled delivery date, invoice terms, and invoice address exist in backend/detail evidence but are discarded or hidden from the generated form. If the business process expects users to manage those sales-order semantics here, the current window does not clearly expose them.
+- Scheduled delivery date and invoice terms are discarded, and invoice address is a `system` field (derived server-side from the business partner), so none of them is shown on the generated form. If the business process expects users to manage those sales-order semantics here, the current window does not clearly expose them. (Payment terms is no longer in this list: it is a visible, editable principal-section selector with the `+ Crear condición de pago` action — see *Interaction model*.)
 - Tax auto-fill after product selection works for business partners with a Spanish billing address, because `c_gettax` in Etendo core requires a valid tax zone derived from the address country. For business partners without a Spanish address, tax remains empty and must be entered manually. This is a core AD constraint, not a UI gap.
 - `lineGrossAmount` recalculates instantly client-side on every `orderedQuantity`, `listPrice`, or `discount` change — no callout needed. The `DocumentTotalsPanel` in the detail footer also recomputes subtotal/discount/tax/total from all saved lines plus the in-progress add-row in real time, so the user sees an accurate running total without saving. Server-side header fields (`summedLineAmount`, `grandTotalAmount`) still only update after a save, but the panel does not read from them.
 - Completed-order management uses delivered quantities from order lines and invoice totals from related invoices, but there is no explicit browser proof for partial shipments, partial invoicing, or mixed draft/completed downstream document scenarios.
@@ -246,32 +247,37 @@ Two *different* server paths answer "is there a rate?" for the same currency cha
 
 | Path | Trigger | Effect |
 |---|---|---|
-| `GET /sws/neo/validate-exchange-rate` | the frontend, before applying the dropdown change | reverts the dropdown + `noConversionRateError` toast |
-| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | appends a `WARNING` message `noExchangeRateAvailable` |
+| `GET /sws/neo/validate-exchange-rate` | the frontend, before applying the dropdown change — **removed by ETP-5840** | (formerly) reverted the dropdown + `noConversionRateError` toast |
+| `POST {spec}/header/callout` | the AD callout, when `field == "currency"` | (ETP-4838–ETP-5840) appended a `WARNING` message `noExchangeRateAvailable`; **since ETP-5840** it returns the recalculated rate instead, as `updates.eTGOCurrencyRate = {"value": rate\|null}` (`DocumentCurrencyRate.applyToCallout`) |
 
-Both now resolve availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error. They can no longer disagree.
+Until ETP-5840 both resolved availability through the same package-private helper, `NeoExchangeRateService.hasRate(from, to, date)` — same client-or-system scoping, same inverse-direction fallback, same fail-open on a DB error — so they could not disagree. Today neither surface asks "is there a rate?": the callout computes the rate itself and a missing one is refused at save/complete (`ETGO_ExchangeRateMissingOnSave` / `…OnComplete`, see `docs/ui-customization.md` §22).
 
 Before ETP-4838 the callout path ran its own private copy of the query in `AbstractOrderHeaderHandler` and `AbstractInvoiceHeaderHandler`, filtered by `ad_client_id = ?` only. Once ETP-4474 moved the currencyLayer rates to the System client, those copies stopped finding them: the frontend accepted the change (`hasRate: true`) while the callout warned "no rate available" for the very same pair and date. The warning was cosmetic — the document completed and posted with the correct rate — but it fired on **every** manual currency change across purchase orders, sales orders, sales quotations, and both invoice windows.
 
 The warning only ever fires when the user edits the `currency` field by hand. The common flow, where the price list sets the currency, never sets `currency` as the callout trigger field — which is why the regression went unnoticed for three weeks.
 
-**Open follow-up:** the callout returns the i18n *key* (`noExchangeRateAvailable`), not a sentence, and `useCallout.js` toasts it verbatim — so on the (now rare) occasions the warning is legitimate, the user sees the raw camelCase key. Tracked separately; ETP-4838 covers only the false positive.
+**Resolved by ETP-5840:** the callout used to return the i18n *key* (`noExchangeRateAvailable`) as a warning, which `useCallout.js` toasted verbatim. The warning is gone — the callout now answers with `updates.eTGOCurrencyRate` (the rate valid on the order date, or `null`) — and the `noExchangeRateAvailable` / `noConversionRateError` locale keys were removed.
 
 ### Currency change handling (ETP-4027 functional model)
 
-The `currency` field on the header form is **always editable on draft orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). The frontend enforces a rate-availability validation at the dropdown change moment, and the per-line conversion runs only on lines added AFTER a save.
+The `currency` field on the header form is **always editable on draft orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). Since ETP-5840 the frontend no longer blocks the change: the rate is recalculated for the order date (empty when no range) and the backend refuses to save a foreign currency with an empty rate. The per-line conversion runs only on lines added AFTER a save.
 
-#### Real-time rate validation in the dropdown
+#### Exchange rate on the order date (ETP-5840 — replaces the dropdown revert)
 
-When the user picks a new currency in the dropdown, `handleChangeWithCallout` (`DetailView.jsx`) runs an async validation:
+The former real-time validation (`validate-exchange-rate` on currency change, revert of the
+dropdown plus the «Cambio de moneda cancelado» toast `noConversionRateError`) is **gone**. Now:
 
-1. Fetch the org base currency ID from `/sws/neo/sales-order/header/session` (field `currencyId`).
-2. If the new currency equals the org currency → skip validation (no rate needed to return to base).
-3. Otherwise fetch `validate-exchange-rate?fromCurrency=<orgId>&toCurrency=<newId>&date=<orderDate>` (uses `hook.selected?.orderDate ?? hook.editing?.orderDate`).
-4. If the response has no rate → call `hook.handleChange('currency', previousCurrency)` to revert the dropdown to the previous value and show a toast `noConversionRateError`.
-5. If the response has a rate → the change stays. The user can save when ready.
+- The currency dropdown lists every selectable currency with its rate on the `orderDate`
+  currently in the form (`currencyOptions?date=`); a currency with no conversion range shows
+  «—» and can be selected — the rate is left empty for the user to type with the pencil.
+- Any change of `orderDate` or `currency` recalculates `eTGOCurrencyRate` through the header
+  callout (overriding a manual rate; empty when there is no range).
+- The pencil is available on new and saved orders unless the currency is the org's own
+  (`isOrgCurrency`).
+- Saving or confirming a foreign-currency order with an empty rate is refused by the backend
+  with a translated message; the list-row Confirm no longer pre-checks the rate.
 
-The validation is best-effort: network or server failures revert the dropdown to be safe, preventing silent currency mismatches.
+Full component reference: `docs/ui-customization.md` §22.
 
 #### Line conversion based on saved state
 

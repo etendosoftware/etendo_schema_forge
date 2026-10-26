@@ -14,6 +14,7 @@ import {
   parseBackendErrorMessage,
   parseBackendError,
   translateBackendErrorResponse,
+  translateBackendErrorBody,
 } from '../backendErrors.js';
 
 /**
@@ -685,6 +686,84 @@ describe('translateBackendError — Invalid-Account identity (ETP-5175)', () => 
   it('keeps the backend prose when the locale has no entries (t echoes keys)', () => {
     assert.equal(translateBackendError(prose, (key) => key, bpGroupAndProduct), prose);
   });
+});
+
+describe('translateBackendError — exchange-rate refusals rendered from their identity', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  // Whatever the backend wrote in the user's AD language; shown only when the identity cannot be rendered.
+  const prose = 'Missing exchange rate (backend prose)';
+  const currencies = { orgCurrency: 'EUR', documentCurrency: 'USD' };
+  const onSave = (refKey, extra = {}) => ({
+    messageKeys: ['ETGO_ExchangeRateMissingOnSave', refKey],
+    messageParams: { ...currencies, date: '2026-01-15', dateField: 'x', referenceDate: refKey, ...extra },
+  });
+  const onComplete = { messageKeys: ['ETGO_ExchangeRateMissingOnComplete'], messageParams: currencies };
+
+  const rendered = [
+    ['save / order date / es_ES', es, onSave('ETGO_RateRefDateOrder'),
+      'No hay tipo de cambio de EUR a USD para el 15/01/2026 (Fecha de pedido). Indique la Tasa de cambio en el documento o agregue el rango de conversión en Finanzas → Rangos de conversión.'],
+    ['save / accounting date / en_US', en, onSave('ETGO_RateRefDateAccounting'),
+      'There is no exchange rate from EUR to USD for 15/01/2026 (Accounting date). Enter the Exchange rate on the document or add the conversion rate range in Finance → Conversion Rates.'],
+    ['save / unknown referenceDate param falls back to the key list (quotation date)', es,
+      onSave('ETGO_RateRefDateQuotation', { referenceDate: 'ETGO_RateRefDateFuture' }),
+      'No hay tipo de cambio de EUR a USD para el 15/01/2026 (Fecha de presupuesto). Indique la Tasa de cambio en el documento o agregue el rango de conversión en Finanzas → Rangos de conversión.'],
+    ['complete / es_ES', es, onComplete,
+      'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.'],
+    ['complete / en_US', en, onComplete,
+      'The document cannot be confirmed: the Exchange rate from EUR to USD is missing.'],
+  ];
+  for (const [label, t, options, expected] of rendered) {
+    it(`renders ${label}`, () => {
+      assert.equal(translateBackendError(prose, t, options), expected);
+    });
+  }
+
+  it('renders es_AR exactly like es_ES', () => {
+    assert.equal(translateBackendError(prose, ar, onSave('ETGO_RateRefDateOrder')),
+      translateBackendError(prose, es, onSave('ETGO_RateRefDateOrder')));
+  });
+
+  const keepsProse = [
+    ['keys without params (older backend)', { messageKeys: onComplete.messageKeys }],
+    ['the org currency missing', { ...onComplete, messageParams: { documentCurrency: 'USD' } }],
+    ['the document currency missing', { ...onComplete, messageParams: { orgCurrency: 'EUR' } }],
+    ['a save refusal without date', onSave('ETGO_RateRefDateOrder', { date: undefined })],
+    ['a save refusal with an unparseable date', onSave('ETGO_RateRefDateOrder', { date: 'not-a-date' })],
+    ['a save refusal whose reference date is unknown everywhere',
+      { messageKeys: ['ETGO_ExchangeRateMissingOnSave'], messageParams: { ...currencies, date: '2026-01-15', referenceDate: 'ETGO_RateRefDateFuture' } }],
+    ['params but no exchange-rate key', { messageKeys: ['SomethingElse'], messageParams: currencies }],
+  ];
+  for (const [label, options] of keepsProse) {
+    it(`keeps the backend prose for ${label}`, () => {
+      assert.equal(translateBackendError(prose, es, options), prose);
+    });
+  }
+
+  it('keeps the backend prose when the locale has no entries (t echoes keys)', () => {
+    assert.equal(translateBackendError(prose, (key) => key, onComplete), prose);
+  });
+});
+
+describe('translateBackendErrorBody', () => {
+  const es = localeTranslator('es_ES');
+  const completeSentence = 'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.';
+  const identity = { messageKeys: ['ETGO_ExchangeRateMissingOnComplete'], messageParams: { orgCurrency: 'EUR', documentCurrency: 'USD' } };
+  const cases = [
+    ['translates an identity carried in the error envelope', { error: { message: 'prose', ...identity } }, completeSentence],
+    ['translates an identity carried in the response envelope', { response: { message: 'prose', ...identity } }, completeSentence],
+    ['prefers error.message over response.message for an unkeyed body', { error: { message: 'A' }, response: { message: 'B' } }, 'A'],
+    ['reads response.message next', { response: { message: 'B' }, message: 'C' }, 'B'],
+    ['reads a flat message last', { status: 'error', message: 'C' }, 'C'],
+    ['falls back when the body carries no message', {}, 'Error (500)'],
+    ['falls back for a null body', null, 'Error (500)'],
+  ];
+  for (const [label, body, expected] of cases) {
+    it(label, () => {
+      assert.equal(translateBackendErrorBody(body, es, 'Error (500)'), expected);
+    });
+  }
 });
 
 describe('translateBackendError — legacy "Account could not be found" text, new EN wording (ETP-5175)', () => {
@@ -2229,6 +2308,41 @@ describe('translateBackendError — invoice lines without amount (ETP-5710)', ()
   });
 });
 
+// InvoiceLineAmountSupport.invalidDiscount() (com.etendoerp.go — ETP-5710): HTTP 422,
+// `error.code = invalidLineDiscount`, fixed English sentence. It reaches the user through
+// translateBackendError, so it must read in their language.
+describe('translateBackendError — invalid line discount (ETP-5710)', () => {
+  const KEY = 'backendError.invalidLineDiscount';
+  const RAW = 'The line discount must be between 0 and 100 (percent).';
+  const locale = (loc) => JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8'));
+
+  it('maps the exact server sentence to its key', () => {
+    assert.equal(translateBackendError(RAW, (k) => (k === KEY ? 'traducido' : k)), 'traducido');
+  });
+
+  it('does not match a near-miss sentence', () => {
+    const t = (k) => (k === KEY ? 'traducido' : k);
+    for (const other of [
+      'The line discount must be between 0 and 50 (percent).',
+      'The line discount must be between 0 and 100.',
+      'The header discount must be between 0 and 100 (percent).',
+    ]) {
+      assert.equal(translateBackendError(other, t), other);
+    }
+  });
+
+  it('round-trips through the real en_US, es_ES and es_AR locales', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const dict = locale(loc).genericLabels;
+      const t = (k) => dict[k] ?? k;
+      const out = translateBackendError(RAW, t);
+      assert.equal(out, dict[KEY], `${loc} did not translate the discount refusal`);
+      assert.ok(out && out !== KEY, `${loc} is missing ${KEY}`);
+    }
+    assert.notEqual(locale('es_ES').genericLabels[KEY], RAW);
+  });
+});
+
 // ReturnableQuantity.java / ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711). The
 // over-return refusal names the product and both quantities; the product is free text, so it is
 // located by the fixed delimiters.
@@ -3631,4 +3745,101 @@ describe('translateBackendError — posting-account refusals (ETP-5693)', () => 
       assert.notEqual(esText, enText);
     });
   }
+});
+
+// com.etendoerp.go PaymentTermHandler refuses a payment term by key + params: the days are missing,
+// not a whole number or out of range, or the term duplicates another one of the client by days or
+// by name (naming it, and saying whether it is active). Shared by the Payment Term window's save
+// and the "+ Crear condición de pago" modal. Real locale files, so the wording is pinned.
+describe('translateBackendError — payment-term refusals', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  const prose = 'Ya existe una condición de pago simple con 30 días';
+  const conflict = (key, params) => ({ messageKeys: [key], messageParams: params });
+
+  it('days duplicate of an active term names it', () => {
+    assert.equal(
+      translateBackendError(prose, es, conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días', paymentTermActive: true })),
+      'Ya existe la condición de pago «30 Días» con esos días',
+    );
+  });
+
+  it('days duplicate with no active flag is treated as active', () => {
+    assert.equal(
+      translateBackendError(prose, es, conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días' })),
+      'Ya existe la condición de pago «30 Días» con esos días',
+    );
+  });
+
+  for (const flag of [false, 'false', 'N']) {
+    it(`days duplicate of an inactive term (paymentTermActive ${JSON.stringify(flag)}) adds the reactivation hint`, () => {
+      assert.equal(
+        translateBackendError(prose, es, conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '7 Días', paymentTermActive: flag })),
+        'Ya existe la condición de pago «7 Días» con esos días, pero está desactivada. Reactívala en Condiciones de pago',
+      );
+    });
+  }
+
+  it('name duplicate of an active term names it', () => {
+    assert.equal(
+      translateBackendError('duplicate', es, conflict('ETGO_PaymentTermNameDuplicate', { paymentTermName: '45 Días', paymentTermActive: 'Y' })),
+      'Ya existe una condición de pago llamada «45 Días» en esta organización',
+    );
+  });
+
+  it('name duplicate of an inactive term adds the reactivation hint', () => {
+    assert.equal(
+      translateBackendError('duplicate', es, conflict('ETGO_PaymentTermNameDuplicate', { paymentTermName: '45 Días', paymentTermActive: false })),
+      'Ya existe una condición de pago llamada «45 Días» en esta organización, pero está desactivada. '
+        + 'Reactívala en Condiciones de pago',
+    );
+  });
+
+  it('renders the same sentences in es_AR, and in English for en_US', () => {
+    const params = conflict('ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días', paymentTermActive: true });
+    assert.equal(translateBackendError(prose, ar, params), translateBackendError(prose, es, params));
+    assert.equal(translateBackendError(prose, en, params), 'The payment term “30 Días” already exists with that number of days');
+  });
+
+  it('a duplicate key without paymentTermName falls through to the backend prose', () => {
+    for (const key of ['ETGO_PaymentTermDaysDuplicate', 'ETGO_PaymentTermNameDuplicate']) {
+      assert.equal(translateBackendError(prose, es, conflict(key, { paymentTermActive: true })), prose, key);
+      assert.equal(translateBackendError(prose, es, { messageKeys: [key] }), prose, key);
+      assert.equal(translateBackendError(prose, es, conflict(key, { paymentTermName: '' })), prose, key);
+    }
+  });
+
+  it('days out of range interpolates min, max and the entered value', () => {
+    assert.equal(
+      translateBackendError('out of range', es, conflict('ETGO_PaymentTermDaysOutOfRange', { field: 'overduePaymentDaysRule', min: 0, max: 365, value: 400 })),
+      'El número de días debe estar entre 0 y 365 (indicado: 400).',
+    );
+    assert.equal(
+      translateBackendError('out of range', en, conflict('ETGO_PaymentTermDaysOutOfRange', { min: 0, max: 365, value: 400 })),
+      'The number of days must be between 0 and 365 (entered: 400).',
+    );
+  });
+
+  it('days invalid (missing / not a whole number) interpolates the range', () => {
+    assert.equal(
+      translateBackendError('invalid', es, conflict('ETGO_PaymentTermDaysInvalid', { field: 'overduePaymentDaysRule', min: 1, max: 365 })),
+      'El número de días es obligatorio y debe ser un número entero entre 1 y 365.',
+    );
+  });
+
+  it('every payment-term backendError key exists in all three locales; the duplicates name the term exactly once', () => {
+    const keys = ['DaysInvalid', 'DaysOutOfRange', 'DaysDuplicate', 'DaysDuplicateInactive', 'NameDuplicate', 'NameDuplicateInactive']
+      .map((suffix) => `backendError.paymentTerm${suffix}`);
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const json = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      for (const key of keys) {
+        assert.equal(typeof json.genericLabels[key], 'string', `${locale}: ${key}`);
+        if (/Duplicate/.test(key)) {
+          assert.equal(json.genericLabels[key].match(/\{name\}/g)?.length, 1, `${locale}: ${key}`);
+        }
+      }
+      assert.match(json.genericLabels['backendError.paymentTermDaysOutOfRange'], /\{min\}.*\{max\}.*\{value\}/, locale);
+    }
+  });
 });

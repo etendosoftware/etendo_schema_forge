@@ -1475,6 +1475,27 @@ export function useEntity(entity, childEntity, {
         return queryParams;
     }, [sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter]);
 
+    /**
+     * The filter layers of the list query as a plain URL-params string, WITHOUT sort or paging
+     * and without the column filters named in `excludeKeys` (ETP-5561). Feeds the options of a
+     * column's filter dropdown so they reflect the current view (subset tab, date range,
+     * advanced filter, other column filters) while leaving out the dropdown's own filter —
+     * otherwise picking one option would collapse the list to that option.
+     *
+     * Returns a string so callers can use it as a dependency: its content only changes when
+     * the filters do.
+     */
+    const buildDistinctQuery = useCallback((excludeKeys = []) => {
+        const skip = new Set(excludeKeys || []);
+        const filters = {};
+        for (const [key, parsed] of Object.entries(columnFilters || {})) {
+            if (!skip.has(key)) filters[key] = parsed;
+        }
+        const queryParams = new URLSearchParams();
+        applyFilterParams(queryParams, baseFilter, filters, columnDefs, trailingFilter);
+        return queryParams.toString();
+    }, [baseFilter, columnFilters, columnDefs, trailingFilter]);
+
     // Shared list loader. `force=false` (mount) reuses a fresh cached page;
     // `force=true` (explicit refresh) always reaches the backend.
     const loadList = useCallback((force) => {
@@ -2755,6 +2776,7 @@ export function useEntity(entity, childEntity, {
         // cache that the collection they just changed is no longer what it holds.
         invalidateChildrenCache,
         buildListQuery,
+        buildDistinctQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
 }

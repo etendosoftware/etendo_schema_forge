@@ -80,14 +80,12 @@ targets a branch other than `develop` or `main` (which are analysed on every
 push) and that branch has no coverage, the step still passes but emits a
 `::warning::` annotation saying the coverage drop was **not** checked.
 
-Bypass a block with `git push --no-verify` (WIP only, and by a human in their own
-terminal — the committed `PreToolUse` hook `.claude/hooks/block-push-no-verify.sh`
-denies that flag when an agent tries it through Claude Code's Bash tool. The
-companion `.claude/hooks/block-coverage-threshold-overrides.sh` also denies
-agent-run assignments or exports of `COVERAGE_MINIMUM` and
-`COVERAGE_TOLERANCE`; adjust their reviewed defaults in
-`scripts/compare-sonar-coverage.js` instead.
-See **Agent Guardrails** in `CLAUDE.md`).
+A block is fixed, not skipped. The committed `PreToolUse` hook
+`.claude/hooks/block-push-no-verify.sh` denies `git push --no-verify` when an agent
+tries it through Claude Code's Bash tool, and the companion
+`.claude/hooks/block-coverage-threshold-overrides.sh` denies agent-run assignments or
+exports of `COVERAGE_MINIMUM` and `COVERAGE_TOLERANCE`; adjust their reviewed defaults
+in `scripts/compare-sonar-coverage.js` instead. See **Agent Guardrails** in `CLAUDE.md`.
 
 ## Where it runs
 
