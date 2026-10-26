@@ -719,19 +719,12 @@ No DB access required; it works entirely on git-tracked files.
 `make install` activates the hook via `git config core.hooksPath .githooks`. The hook runs **only on staged
 artifact / generator / registry files** — it's fast and won't fire on unrelated commits.
 
-Bypass when you need it:
-
-```bash
-git commit --no-verify -m "WIP: partial extract"
-```
-
-**Agents never bypass** — this escape hatch is for a human at their own terminal. An
-unverified commit is left unstamped by `.githooks/commit-msg` and is then rejected by
-the push gate and the CI hooks check, so for an agent the bypass only relocates the
-failure. See **Bypass** in `CLAUDE.md`.
-
-**OK to bypass:** WIP commits, partial extracts, draft branches.
-**Not OK to bypass:** final commits on a feature branch, PRs targeting the epic branch.
+There is no useful bypass. A commit made with `git commit --no-verify` is left without
+its `Hooks-Verified` trailer by `.githooks/commit-msg`, and the push gate and CI's
+`verify` check refuse it, so skipping the hook only moves the failure to the push. Fix
+what the hook reports and commit again. When an amend or a rebase leaves a commit whose
+trailer no longer matches it, `.githooks/post-rewrite` says so right away and prints the
+command that re-seals it. See **Bypass** in `CLAUDE.md`.
 
 ### CI behavior
 

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ReportDrawer.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { navigateTo } from '../../helpers/auth.js';
@@ -27,7 +28,7 @@ import { loginAndAssertJsreport, PDF_MAGIC } from '../../helpers/printable-helpe
  *
  * Scoped to the DOCUMENT windows by team decision. The export also works on
  * master-data and configuration windows (chart-of-accounts, conversion-rates,
- * fiscal-calendar and simple-g-l-journal were all verified green), but they are
+ * fiscal-calendar and manual-journals were all verified green), but they are
  * left out to keep this suite about the documents the business flows produce.
  *
  * Windows with an EMPTY list are still asserted, not skipped: `dataReady`

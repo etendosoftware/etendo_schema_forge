@@ -57,7 +57,7 @@ GLJ document type. Full description: `docs/etendo-ad/onboarding-gaps.md`, gap A1
   document types across its tenants).
   See `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.3.6.
 - **Per window:** override the default with a client-scoped `defaultExpr` in `decisions.json` when
-  the order matters (`simple-g-l-journal` → `header.fields.documentType`).
+  the order matters (`manual-journals` → `header.fields.documentType`).
 
 When writing a new `@SQL=` default for a client-scoped table, always add
 `AND <table>.AD_Client_ID = @#AD_Client_ID@`.

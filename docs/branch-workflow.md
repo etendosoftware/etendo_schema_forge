@@ -46,7 +46,7 @@ main     (protected — production; PRs must be up to date)
 develop  (protected — staging and integration point; PRs need NOT be up to date)
   ▲ feature/ETP-AAAA  →  PR, mini pipeline
   ▲ feature/ETP-BBBB  →  PR, mini pipeline
-  ▲ main → develop    →  PR right after anything enters main, and before every cut
+  ▲ main → develop    →  PR opened by an Action when main moves; merged before every cut
 ```
 
 ### Hierarchy and merge rules
@@ -54,7 +54,7 @@ develop  (protected — staging and integration point; PRs need NOT be up to dat
 | Merge | Gate | Who merges |
 |-------|------|------------|
 | `feature → develop` | PR checks: mini pipeline (schema_forge: `Mocked E2E`; com.etendoerp.go: `goTest`, the Java tests without and with a database), `Tests`, `Sonar Build`, `verify`, review, code-owner gate | **Human**, in GitHub, merge commit |
-| `main → develop` | PR checks | **Human**, right after anything enters main, and before every cut |
+| `main → develop` | PR checks; `back-merge-main.yml` opens it when main moves | **Human**, right after anything enters main, and before every cut |
 | `mergeblock → main` (the cut) | Full Jenkins pipeline, integration included; every required check green; branch up to date with main | **Human only** |
 | `hotfix → main` | Full pipeline | **Human only**; comes back at once through `main → develop` |
 
@@ -83,7 +83,8 @@ version (§ schema_forge_core versions).
 3. mergeblock → main     PR, full pipeline; green → human merges → production
 ```
 
-1. **Bring main into develop, every time.** A `main → develop` PR, merged before cutting. Hotfixes
+1. **Bring main into develop, every time.** The `main → develop` PR, merged before cutting.
+   `back-merge-main.yml` opened it when main last moved, so it is normally already waiting. Hotfixes
    and the fixes made on a cut already come back right after they enter main (§ Back to develop);
    this step brings whatever is left, at least the previous cut's merge commit. Before step 2,
    `git log --oneline origin/develop..origin/main` (merge commits included) must print nothing. Doing it every time gives two things:
@@ -108,7 +109,7 @@ version (§ schema_forge_core versions).
 | | Create the PR | Approve | Merge |
 |---|---|---|---|
 | `feature → develop` | Clerk or the author | Team reviewers | **Human** |
-| `main → develop` | **Clerk** (on request) | Team reviewers | **Human only** |
+| `main → develop` | **`back-merge-main.yml`**, when main moves | Team reviewers | **Human only** |
 | `mergeblock → main` (the cut) | **Clerk** (on request) | Team reviewers | **Human only** |
 
 The cut and `main → develop` are the **only** PRs an agent may open towards `main` or out of it.
@@ -174,8 +175,22 @@ the next one. Walk the rungs in order, cheapest first.
 
 Whatever enters `main` comes back to `develop` at once, through a `main → develop` PR: a hotfix, or a
 test fix or revert made on the cut. Developers and new branches get the fix within minutes instead of
-at the next cut, and their PRs stop failing on it. A clean cut, with no commits of its own, needs
-nothing until the next step 1.
+at the next cut, and their PRs stop failing on it. A clean cut, with no commits of its own, only
+brings its merge commit: merge that PR any time before the next cut, it is step 1.
+
+Nobody opens that PR by hand. `.github/workflows/back-merge-main.yml`, in both repos, runs
+`scripts/back-merge-main.sh` on every push to `main`:
+
+- When `develop` lacks any of main's commits and no `main → develop` PR is open, it opens one titled
+  "Merge main into develop". An open one follows `main` by itself, so there is never a second.
+- The body lists main's own commits (hotfixes, fixes made on the cut), or says it only carries merge
+  commits, and lists the conflicting files when there are any.
+- It asks the author of the PR that moved `main` to review.
+- It uses `ETENDOBOT_TOKEN`: a PR opened with `GITHUB_TOKEN` triggers no workflow, so its required
+  checks would never report.
+
+If the PR did not appear, run the workflow by hand: Actions → *Back-merge main into develop* → *Run
+workflow*.
 
 If that PR has conflicts, resolve them on a branch created from `develop` with `origin/main` merged
 in, and open that branch's PR to `develop`: `main` is protected and cannot take the resolution.

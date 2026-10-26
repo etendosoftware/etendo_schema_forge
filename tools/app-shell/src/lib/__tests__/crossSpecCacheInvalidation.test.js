@@ -6,6 +6,7 @@
  *
  * ETP-5571 adds the entity map: a write to `contacts` marks every cached selector page stale.
  * ETP-5681 maps the accounting dimensions too: `cost-center`, `project`, `service-project`.
+ * ETP-5826 maps `payment-term` (terms created inline from a selector).
  *
  * Contracts, each table-driven:
  *   1. `specsInvalidatedByWrite(url)` — which parent specs a URL writes into, matched by WHOLE
@@ -77,7 +78,10 @@ describe('entitiesInvalidatedByWrite', () => {
     ['cost-center write → selector (ETP-5681)', '/sws/neo/cost-center/costCenter/ABC', ['selector']],
     ['project write → selector (ETP-5681)', '/sws/neo/project/project/ABC', ['selector']],
     ['service-project write → selector (ETP-5681)', '/sws/neo/service-project/project/ABC', ['selector']],
-    ['cost-center only in the query string → nothing', '/sws/neo/simple-g-l-journal/gLJournal?x=cost-center', []],
+    ['cost-center only in the query string → nothing', '/sws/neo/manual-journals/gLJournal?x=cost-center', []],
+    // ETP-5826: a payment term created from a selector must reach the same column in other forms.
+    ['payment-term create → selector', '/sws/neo/payment-term/header', ['selector']],
+    ['payment-term only in the query string → nothing', '/sws/neo/contacts-x/header?spec=payment-term', []],
     ['a spec mapped to no entity → nothing', '/sws/neo/sales-order/header', []],
     ['empty string → nothing', '', []],
     ['null → nothing', null, []],
@@ -118,6 +122,12 @@ describe('invalidateAfterWrite', () => {
       assert.deepEqual(cache.calls, [{ spec: 'sales-order' }, { spec: 'sales-invoice' }]);
     });
   }
+
+  it('POST creating a payment term invalidates the selector entity only', () => {
+    const cache = fakeCache();
+    invalidateAfterWrite(cache, { url: '/sws/neo/payment-term/header', method: 'POST' });
+    assert.deepEqual(cache.calls, [{ entity: 'selector' }]);
+  });
 
   // ETP-5571: the exact `calls` array proves the entity map emits `{ entity }` only — no `{ spec }`.
   for (const method of ['PATCH', 'DELETE']) {

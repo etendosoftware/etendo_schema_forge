@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -60,14 +61,6 @@ async function installFailureBoundary(page, failure = RETRYABLE_FAILURE) {
 
   await page.route('**/sws/go/environments{/**,}**', route => (
     json(route, { environments: EXISTING_ENVIRONMENTS })
-  ));
-
-  await page.route('**/sws/go/billing/offers{/**,}**', route => (
-    json(route, {
-      amountMinor: 1000,
-      currency: 'EUR',
-      interval: 'month',
-    })
   ));
 
   // The purchase is durable and account-scoped. The browser must use this same

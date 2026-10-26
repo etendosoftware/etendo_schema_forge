@@ -1,4 +1,4 @@
-// @covers artifacts/simple-g-l-journal/custom/SimpleGLJournalBottomPanel.jsx
+// @covers artifacts/manual-journals/custom/ManualJournalsBottomPanel.jsx
 //
 // ETP-5611 — the manual-journal lines empty state. The component lives under `artifacts/**`,
 // which vitest's `src/**` include never discovers, so the test lives here and reaches it through
@@ -12,15 +12,15 @@ vi.mock('@/i18n', () => ({
 }));
 
 import { render, screen } from '@testing-library/react';
-import SimpleGLJournalBottomPanel from '@generated/simple-g-l-journal/custom/SimpleGLJournalBottomPanel.jsx';
+import ManualJournalsBottomPanel from '@generated/manual-journals/custom/ManualJournalsBottomPanel.jsx';
 
-const EmptyState = SimpleGLJournalBottomPanel.linesEmptyState;
+const EmptyState = ManualJournalsBottomPanel.linesEmptyState;
 
-describe('SimpleGLJournalBottomPanel', () => {
+describe('ManualJournalsBottomPanel', () => {
   it('renders nothing itself — the balance row lives inside the lines grid', () => {
-    const { container } = render(<SimpleGLJournalBottomPanel data={{ id: 'H1' }} />);
+    const { container } = render(<ManualJournalsBottomPanel data={{ id: 'H1' }} />);
     expect(container).toBeEmptyDOMElement();
-    expect(SimpleGLJournalBottomPanel.showLineTotals).toBe(false);
+    expect(ManualJournalsBottomPanel.showLineTotals).toBe(false);
   });
 
   it('unsaved header: shows the message without the add button, even when lines could be added', () => {
