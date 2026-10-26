@@ -1382,8 +1382,9 @@ rectificative type and the legacy `APC` credit memo.
   for a different purpose (349 corrective-box reporting). The two are independent.
   - **New (ETP-4755): the tab's "Correctiva del 349" checkbox is now gated by the tenant's
     Fiscal Models catalog.** `ReversedInvoicesPanel.jsx` — shared, unchanged, by both
-    `sales-invoice` and `purchase-invoice` — fetches the cross-spec, generic
-    `GET /sws/neo/fiscal-models-catalog` endpoint (the same per-`AD_PREFERENCE` catalog the
+    `sales-invoice` and `purchase-invoice` — reads the cross-spec, generic
+    `GET /sws/neo/fiscal-models-catalog` endpoint through the shared
+    `fiscal-models/useFiscalModelsCatalog.js` hook (ETP-5831) (the same per-`AD_PREFERENCE` catalog the
     `fiscal-models` window itself uses to enable/disable tax forms; see
     `fiscal-models.md`'s "Downstream consumer" note for the full write-up) and only renders
     the checkbox (plus its dependent AEAT year/period/base-amount fields) when the catalog
