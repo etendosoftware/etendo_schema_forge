@@ -5,6 +5,8 @@
  * pattern only covers src/** — it lived in artifacts/chart-of-accounts/custom/__tests__/
  * until ETP-5399 and never ran. It imports the runtime component through `@generated`
  * (resolves to artifacts/), like the sibling AccountTreeView / NewAccountModal suites.
+ *
+ * @covers artifacts/chart-of-accounts/custom/AccountCodeField.jsx
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -243,6 +245,54 @@ describe('AccountCodeField — blur validation', () => {
     expect(screen.getByTestId('account-code-error')).toHaveTextContent(
       'The account code must be exactly 8 digits'
     );
+  });
+
+  it('shows the host form error prop without a blur', () => {
+    render(
+      <AccountCodeField
+        value="7010"
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '7010' }}
+        error="save-time error"
+      />
+    );
+    expect(screen.getByTestId('account-code-error')).toHaveTextContent('save-time error');
+  });
+
+  it('shows a single message when the error prop and the blur error are both set', async () => {
+    render(
+      <AccountCodeField
+        value=""
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '7010' }}
+        error="save-time error"
+      />
+    );
+    await userEvent.type(screen.getByTestId('account-code-suffix-input'), '1');
+    await userEvent.tab();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByTestId('account-code-error')).toHaveTextContent('save-time error');
+  });
+
+  it('clears the blur error when the value changes from outside', async () => {
+    const { rerender } = render(
+      <AccountCodeField
+        value="701012"
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '7010' }}
+      />
+    );
+    fireEvent.blur(screen.getByTestId('account-code-suffix-input'));
+    expect(screen.getByTestId('account-code-error')).toBeInTheDocument();
+
+    rerender(
+      <AccountCodeField
+        value="5000"
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '5000' }}
+      />
+    );
+    expect(screen.queryByTestId('account-code-error')).not.toBeInTheDocument();
   });
 });
 

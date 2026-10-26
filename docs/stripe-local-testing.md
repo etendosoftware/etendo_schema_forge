@@ -417,8 +417,13 @@ account's subscription is read or which portal session is opened.
   `status`, `renewalAt`, `cancelAtPeriodEnd`), and merges in the stored `graceEndsAt` /
   `graceDaysRemaining` plus `clientId`, the environment the subscription pays for (`null` while
   the purchase has no environment yet; "Mis empresas" uses it to put `renewalAt` on the right row,
-  ETP-5734). An account with none returns `200 {"hasSubscription": false}`, never a
-  `404` — free and grandfathered accounts must still render the page.
+  ETP-5734). Since ETP-5049 it also carries the plan catalog view of the subscription —
+  `planKey`, `planName` and the plan's included `planQuotas` (field reference:
+  `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, *The subscription page*). No UI
+  reads them yet: the `/account` Subscription section still shows `plan`, the live Stripe product
+  name; showing the catalog plan name and the quotas there arrives with ETP-5051. An account with
+  none returns `200 {"hasSubscription": false}`, never a `404` — free and grandfathered accounts
+  must still render the page.
   **`renewalAt` is the renewal date; the environment's stored `renewalDueAt` is not.** The latter
   is the payment-grace anchor: empty while the subscription is current, the end of the last paid
   period once it is past due.
@@ -488,7 +493,9 @@ Configuration resolves in this order (`ConfigPropertyReader`):
 price, checkout sells `legacy-productive` at `etendo.go.checkout.price.id` — enough for every
 recipe in this guide. To test the plan catalog instead, create a plan in the Classic **Plans**
 window with a Test Mode **Provider Price ID** (active, recurring, `interval_count = 1`); its display
-price is derived from Stripe on save, and from the next request on the fallback is retired. Full
+price is derived from Stripe on save, and from the next request on the fallback is retired. Every
+listed plan appears as its own card on the **Plan** step of `/upgrade`
+(`upgrade-plan-card-<planKey>`, ETP-5049), with the catalog's name, description and price. Full
 procedure: `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6.2.
 
 ### Use `Openbravo.properties`, not environment variables
@@ -948,14 +955,13 @@ exists that answers `400 PLAN_NOT_AVAILABLE`.
 {
   "requestId": "<server-generated-id>",
   "checkoutUrl": "https://checkout.stripe.com/c/pay/...",
-  "mode": "subscription",
-  "priceId": "price_..."
+  "mode": "subscription"
 }
 ```
 
-Open `checkoutUrl` in the browser. The request carries no card number, CVC, amount, currency or
-Price ID; the `priceId` in the answer is the one the server chose (a known leftover,
-`com.etendoerp.go/docs/open-and-notable-topics.md` §4.8). A missing secret key or webhook secret
+Open `checkoutUrl` in the browser. Neither the request nor the answer carries a card number, CVC,
+amount, currency or Price ID: the server picks the price from the plan and keeps it to itself
+(`com.etendoerp.go/docs/open-and-notable-topics.md` §4.8). A missing secret key or webhook secret
 fails closed with `503 CHECKOUT_NOT_CONFIGURED`, and so does an active plan with no provider price;
 the client must not fall back to a mock card form.
 
@@ -1435,8 +1441,22 @@ STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_requ
   created, for a real renewal it is the end of the paid period (§1, "The grace anchor is the end
   of the paid period").
 - Expect the tenant to stay **allowed**: it is inside its grace window (§1 lifecycle matrix).
-- There is no in-app warning during grace today; only `/account` shows the grace state
-  (`graceDaysRemaining`). Tracked in ETP-5049.
+- Expect the in-app warning (ETP-5049), without a restart once the environment list is read
+  again (reload the SPA): a banner above the top bar of the environment, `billing-status-banner`,
+  reading "Your last payment failed. This environment will be blocked on <date>." The date is the
+  local calendar day of `graceEndsAt` on `GET /sws/go/environments` (the grace anchor plus
+  `etendo.go.billing.grace.days`, the same instant the `402` gate decides on).
+  - Signed in as the **owner** (`ownedByAccount: true`): an **Update payment** button that opens
+    `/account`, where the Subscription section shows `graceDaysRemaining` and **Manage
+    subscription** opens the Customer Portal. As an invited member: "Contact your company's
+    administrator." and no button.
+  - More than 3 days before `graceEndsAt` the banner is amber and has a close button; closing it
+    hides it for the browser session (sessionStorage, per company and grace window). In the last 3
+    days it turns red (`data-variant="destructive"`) and cannot be closed. To see that state, move
+    the anchor so fewer than 3 days of grace remain (`grace_anchor - interval '13 days'` with the
+    default 15) and reload.
+  - It is not shown on `/account` itself (the CTA's own destination already shows the grace
+    state) nor on `/upgrade` (a full-screen overlay), and not once `graceEndsAt` has passed: then the blocked screen of Step 6 takes over.
 
 **Step 6 — Grace runs out.** Move the anchor past the grace window (`etendo.go.billing.grace.days`,
 default 15):

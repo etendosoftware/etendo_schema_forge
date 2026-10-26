@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
@@ -106,7 +107,7 @@ import {
 // actually runs for combos; applyCalloutComboUpdates unconditionally skips
 // the trigger field before ever reaching it, so the trigger-field staleness
 // path can only be exercised by calling applyOneComboEntry directly.
-import { applyOneComboEntry } from '../detailViewHelpers.jsx';
+import { applyOneComboEntry, isCurrencyRateRecalcTarget } from '../detailViewHelpers.jsx';
 
 describe('normalizePatchFieldValues', () => {
   it('skips keys ending in $_identifier', () => {
@@ -307,6 +308,50 @@ describe('applyCalloutFieldUpdates', () => {
       expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
       expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
     });
+  });
+});
+
+// The exchange rate follows its inputs: a callout fired by the currency, the declared document
+// date or the accounting date recalculates eTGOCurrencyRate and must win over a manual rate,
+// including clearing it when no range covers the new date. Any other trigger keeps the manual rate.
+describe('exchange-rate recalculation on callout', () => {
+  it.each([
+    ['eTGOCurrencyRate', 'currency', 'orderDate', true],
+    ['eTGOCurrencyRate', 'orderDate', 'orderDate', true],
+    ['eTGOCurrencyRate', 'accountingDate', 'invoiceDate', true],
+    ['eTGOCurrencyRate', 'businessPartner', 'orderDate', false],
+    ['eTGOCurrencyRate', 'orderDate', undefined, false],
+    ['eTGOCurrencyRate', undefined, 'orderDate', false],
+    ['warehouse', 'currency', 'orderDate', false],
+  ])('isCurrencyRateRecalcTarget(%s, trigger=%s, documentDateField=%s) is %s', (key, trigger, docDate, expected) => {
+    expect(isCurrencyRateRecalcTarget(key, trigger, docDate)).toBe(expected);
+  });
+
+  it.each([
+    ['currency', 1.1, true],
+    ['orderDate', null, true],
+    ['accountingDate', 0.9, true],
+    ['businessPartner', 1.1, false],
+    ['businessPartner', null, false],
+  ])('a %s-triggered rate of %s over a manual rate is applied: %s', (triggerField, value, applied) => {
+    const hook = { handleChange: vi.fn() };
+    const appliedFields = new Map();
+    applyCalloutFieldUpdates({ eTGOCurrencyRate: { value } }, {
+      data: { eTGOCurrencyRate: 2.5 },
+      triggerField,
+      documentDateField: 'orderDate',
+      userTouchedRef: { current: new Set(['eTGOCurrencyRate']) },
+      appliedFields,
+      hook,
+      api: {},
+      catalogs: {},
+    });
+    expect(appliedFields.has('eTGOCurrencyRate')).toBe(applied);
+    if (applied) {
+      expect(hook.handleChange).toHaveBeenCalledWith('eTGOCurrencyRate', value, { origin: 'callout' });
+    } else {
+      expect(hook.handleChange).not.toHaveBeenCalled();
+    }
   });
 });
 

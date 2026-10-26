@@ -91,10 +91,10 @@ function PeriodsExpandablePanelForCalendar(props) {
   );
 }
 
-// `topbarRight` (DetailView.jsx's slot for "right side of detail topbar (replaces status
-// badge)") passes { data, recordId, token, apiBaseUrl, api, onProcess, onRefresh } — `apiBaseUrl`
-// here is DetailView's own base (`.../fiscal-calendar`), so it needs the same rewrite as the
-// secondary-tab panels above to reach the `end-year-close` spec's accounting endpoint.
+// `topbarExtra` (DetailView.jsx's left-group slot, right after Cancel and the status pills — where
+// every document shows its status, ETP-5592) passes { data, recordId, token, apiBaseUrl, api, ... }
+// — `apiBaseUrl` here is DetailView's own base (`.../fiscal-calendar`), so it needs the same
+// rewrite as the secondary-tab panels above to reach the `end-year-close` spec's accounting endpoint.
 function YearCloseStatusBadgeForCalendar(props) {
   return (
     <YearCloseStatusBadge
@@ -167,7 +167,7 @@ export default function CalendarWindow(props) {
         {...props}
         apiBaseUrl={yearApiBaseUrl}
         secondaryTabs={secondaryTabs}
-        topbarRight={YearCloseStatusBadgeForCalendar}
+        topbarExtra={YearCloseStatusBadgeForCalendar}
         Table={YearTableWithCloseStatus}
         menuActions={menuActionsForCalendar}
         processes={processesForCalendar}
