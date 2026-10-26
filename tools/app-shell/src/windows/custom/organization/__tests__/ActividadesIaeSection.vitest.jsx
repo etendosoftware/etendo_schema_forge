@@ -542,3 +542,39 @@ describe('ActividadesIaeSection personal columns', () => {
     expect(screen.getByTestId('ActividadesIaeSection__empty')).toHaveAttribute('colspan', '5');
   });
 });
+
+// ---------------------------------------------------------------------------
+// AEAT IAE heading search link (Epígrafe column header)
+// ---------------------------------------------------------------------------
+
+describe('ActividadesIaeSection — AEAT IAE heading search link', () => {
+  it('links to the AEAT IAE search in a new tab, without opener or referrer', async () => {
+    global.fetch = makeFetchMock({ rows: [] });
+    render(<ActividadesIaeSection {...baseProps} />);
+
+    const link = await screen.findByTestId('ActividadesIaeSection__epigraphSearchLink');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', 'https://sede.agenciatributaria.gob.es/Sede/buscador-iae.html');
+    expect(link).toHaveAttribute('target', '_blank');
+    const rel = link.getAttribute('rel').split(/\s+/);
+    expect(rel).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
+  });
+
+  it('shows a translated text and a translated accessible name', async () => {
+    global.fetch = makeFetchMock({ rows: [] });
+    render(<ActividadesIaeSection {...baseProps} />);
+
+    const link = await screen.findByTestId('ActividadesIaeSection__epigraphSearchLink');
+    expect(link).toHaveTextContent('orgIaeEpigraphSearchLink');
+    expect(link).toHaveAttribute('aria-label', 'orgIaeEpigraphSearchLinkAria');
+    expect(screen.getByRole('link', { name: 'orgIaeEpigraphSearchLinkAria' })).toBe(link);
+  });
+
+  it('sits in the Epígrafe column header, also while the grid is still loading', () => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
+    render(<ActividadesIaeSection {...baseProps} />);
+
+    const link = screen.getByTestId('ActividadesIaeSection__epigraphSearchLink');
+    expect(link.closest('th')).toHaveTextContent('orgIaeEpigraphLabel');
+  });
+});

@@ -571,6 +571,7 @@
       "exclude": true
     },
     "costing": {
+      "publicApi": { "readOnly": true },
       "javaQualifier": "productCostingHandler",
       "fields": {
         "costType": {

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import SharedInvoicePickerModal from '@/components/contract-ui/InvoicePickerModal.jsx';
+import { useFiscalModelsCatalog, isModelActive } from '@/windows/custom/fiscal-models/useFiscalModelsCatalog.js';
 /* eslint-disable react/prop-types */
 
 // ETP-5059 — the 349 period of a corrective is NOT free: AEAT349_CINVREV_TRG0 (module
@@ -772,30 +773,13 @@ export default function ReversedInvoicesPanel({
   // Track whether data has been fetched at least once
   const fetchedRef = useRef(false);
 
-  // "Correctiva del 349" gating: the checkbox (and its dependent AEAT-349
-  // fields) is Modelo-349-specific and must stay hidden entirely unless 349 is
-  // active in the Fiscal Models catalog. The catalog is a generic, per-client
-  // AD_PREFERENCE (ETGO_FiscalModelsCatalog) exposed at the built-in
-  // /sws/neo/fiscal-models-catalog endpoint — not scoped to the fiscal-models
-  // spec — so it's reachable cross-spec exactly like YearPickerSelect's
-  // /fiscal-calendar lookup above. Mirrors FmListPage's own fetch/shape
-  // (activeModels + catalogLoaded) so "unconfigured catalog" behaves the same
-  // "all models inactive" way everywhere: fail-closed (hidden) until the
-  // fetch confirms 349 === true, never a flash of visible-then-hidden.
-  const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
-
-  useEffect(() => {
-    if (!apiBaseUrl) return;
-    const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    apiFetch(`${neoBase}/fiscal-models-catalog`, { baseUrl: '' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(json => setActiveModels(json ?? {}))
-      .catch(() => {})
-      .finally(() => setCatalogLoaded(true));
-  }, [apiBaseUrl, token, apiFetch]);
-
-  const model349Active = catalogLoaded && activeModels?.['349'] === true;
+  // "Correctiva del 349" gating: the checkbox (and its dependent AEAT-349 fields) is
+  // Modelo-349-specific and stays hidden unless 349 is active in the Fiscal Models catalog.
+  // Read through the shared `useFiscalModelsCatalog` (ETP-5831): `{}` or a failed read means no
+  // model active, so the panel is fail-closed (hidden) until the catalog confirms 349 === true,
+  // never visible-then-hidden. Re-read on `token` change, as before.
+  const { activeModels, loaded: catalogLoaded } = useFiscalModelsCatalog(apiBaseUrl, token);
+  const model349Active = catalogLoaded && isModelActive(activeModels, '349');
 
   // On unsaved records the route passes recordId='new' — treat it as no record
   // so add/fetch stay disabled until the invoice is saved (a rectification row
