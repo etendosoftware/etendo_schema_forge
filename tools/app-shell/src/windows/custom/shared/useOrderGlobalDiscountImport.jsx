@@ -177,10 +177,21 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
       const imported = decide({ selectedDocuments: docs.filter(d => importedDocIds?.has(d.id)), sharedContext });
       if (imported.kind !== 'carry' || imported.pct !== decision.pct) return { carried: false };
       if (!shouldPatchInvoiceGlobalDiscount(decision, carryOn)) return { carried: true, pct: decision.pct };
+      const headerUrl = `${base}/${headerEndpoint}/${invoiceId}`;
       try {
-        const res = await apiFetch(`${base}/${headerEndpoint}/${invoiceId}`, {
+        // The line POSTs recalculate the header server-side, so the `updated` remembered when the
+        // modal opened is stale (409 stale_record, ETP-5073): re-read it and send the fresh one.
+        const readRes = await apiFetch(headerUrl);
+        if (!readRes.ok) return { carried: false, failedPct: decision.pct };
+        const header = (await readRes.json())?.response?.data?.[0];
+        if (!header) return { carried: false, failedPct: decision.pct };
+        // Someone set a % meanwhile: never overwrite it.
+        if (normalizeGlobalDiscountPct(header.etgoTotalDiscount) !== decision.invoicePct) {
+          return { carried: false, failedPct: decision.pct };
+        }
+        const res = await apiFetch(headerUrl, {
           method: 'PATCH',
-          body: JSON.stringify({ etgoTotalDiscount: decision.pct }),
+          body: JSON.stringify({ etgoTotalDiscount: decision.pct, updated: header.updated }),
         });
         return res.ok ? { carried: true, pct: decision.pct } : { carried: false, failedPct: decision.pct };
       } catch {
