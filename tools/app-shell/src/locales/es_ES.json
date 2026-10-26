@@ -20658,7 +20658,7 @@
     "orgIaeDefaultLabel": "Principal",
     "orgIaeCodeHint": "Obligatorio en la fila principal antes de presentar el último periodo (4T o diciembre) del modelo 303 de la AEAT.",
     "orgIaeEpigraphSearchLink": "Buscar epígrafe",
-    "orgIaeEpigraphSearchLinkAria": "Buscar el epígrafe del IAE en la sede de la Agencia Tributaria (se abre en una pestaña nueva)",
+    "orgIaeEpigraphSearchLinkAria": "Buscar epígrafe del IAE en la sede de la Agencia Tributaria (se abre en una pestaña nueva)",
     "orgIaeMissingCodeWarning": "Falta el código — obligatorio para el último periodo del modelo 303",
     "orgIaeAddRow": "Añadir actividad del IAE",
     "orgIaeEmpty": "Todavía no hay actividades del IAE",

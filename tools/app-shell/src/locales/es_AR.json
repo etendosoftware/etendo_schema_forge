@@ -21812,7 +21812,7 @@
     "orgIaeCapHint": "Máximo alcanzado: 1 actividad principal y {max} adicionales (límite del Modelo 390).",
     "orgIaeOverCapWarning": "Hay más de {max} actividades no principales. El Modelo 390 solo admite la principal y {max} más: elimine las sobrantes antes de generar el fichero.",
     "orgIaeEpigraphSearchLink": "Buscar epígrafe",
-    "orgIaeEpigraphSearchLinkAria": "Buscar el epígrafe del IAE en la sede de la Agencia Tributaria (se abre en una pestaña nueva)",
+    "orgIaeEpigraphSearchLinkAria": "Buscar epígrafe del IAE en la sede de la Agencia Tributaria (se abre en una pestaña nueva)",
     "orgSection390": "Representante legal / Modelo 390",
     "orgSection390Desc": "Identidad del declarante y de sus representantes legales que se incluye en el modelo 390 (resumen anual de IVA) de la AEAT.",
     "org390IsPersonLabel": "Persona física",
