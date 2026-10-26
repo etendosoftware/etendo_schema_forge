@@ -1,7 +1,10 @@
 import { createContext, forwardRef, useContext, useMemo } from 'react';
 import { DataTable } from '@/components/contract-ui';
 import { Tag } from '@/components/ui/tag';
-import { useUI } from '@/i18n';
+import { useUI, useLabel } from '@/i18n';
+import { useGridView } from '@/hooks/useGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { useYearCloseStatus } from './useYearCloseStatus.js';
 
 // `col.render` (checked first, before any type-based cell renderer — see
@@ -97,15 +100,34 @@ function withCurrentYearMarker(currentYear, rows) {
 
 const YearTableWithCloseStatus = forwardRef(function YearTableWithCloseStatus(props, ref) {
   const currentYear = useContext(CurrentFiscalYearContext);
+  const ui = useUI();
+  const t = useLabel(props.labelOverrides);
+  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const tableColumns = useMemo(
     () => withCurrentYearMarker(currentYear, props.data), [currentYear, props.data]);
+  // Calendar composes the fiscal-calendar entity outside WindowLoader's standard list
+  // rollout. An eligible ListView host retains ownership of its controller and toolbar.
+  const inheritedGridView = props.gridView?.availableKeys?.length > 0;
+  const gridColumns = props.columns ?? tableColumns;
+  const gridView = useGridView({
+    spec: 'fiscal-calendar',
+    entity: 'year',
+    columns: gridColumns,
+    data: props.data ?? [],
+    enabled: gridColumnViews && !inheritedGridView,
+    apiBaseUrl: props.apiBaseUrl,
+  });
   return (
-    <DataTable
-      ref={ref}
-      columns={tableColumns}
-      filters={filters}
-      {...props}
-      data-testid="DataTable__413aee" />
+    <>
+      {gridView.enabled && <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={t} />}
+      <DataTable
+        ref={ref}
+        columns={tableColumns}
+        filters={filters}
+        {...props}
+        gridView={inheritedGridView ? props.gridView : gridView}
+        data-testid="DataTable__413aee" />
+    </>
   );
 });
 

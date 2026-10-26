@@ -232,3 +232,14 @@ with one.
   source of truth for active accounting dimensions, shared with `FinancialAccountTransactionsHandler`.
 - `tools/app-shell/src/lib/accountingDimensions.js` + `tools/app-shell/src/hooks/useActiveAccountingDimensions.js`
   — the generic column→dimension mapping and the fail-open fetch used by `ListModalWindow`.
+
+## Personal list-column views
+
+When rendered through ListModalWindow with a stable API spec/entity identity, the
+list offers Columns and Save view under the shared `grid-column-views` flag,
+enabled by default. Visibility, order and widths are personal and saved only on
+request. Selection, row actions, inline toggles and create/edit modal behavior
+remain unchanged; saved views do not alter business records or filter/sort state.
+See [the shared grid-view policy](../feature-flags.md#personal-business-grid-views)
+for identity checks and load/save failures. Automated execution and QA for this
+integration remain pending.

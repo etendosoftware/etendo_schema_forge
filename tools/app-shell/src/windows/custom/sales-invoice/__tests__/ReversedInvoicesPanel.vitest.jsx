@@ -1,3 +1,27 @@
+const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/hooks/useGridView.js', () => ({
+  useGridView: (options) => {
+    gridBoundary.last = options;
+    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
+      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
+      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
+    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
+      reorderable: () => false, isResizable: () => false };
+  },
+}));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
+  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
+}));
+
+beforeEach(() => {
+  gridBoundary.enabled = false;
+  gridBoundary.active = false;
+  gridBoundary.keys = null;
+  gridBoundary.widths = {};
+  gridBoundary.save.mockClear();
+});
+
 // @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
 //
 // ETP-4404 / ETP-5381 — ReversedInvoicesPanel unit suite (Jira TC map in each test title).
@@ -1433,5 +1457,48 @@ describe('ETP-5027 — the rejected draft is not re-saved on every outside click
     clickAnotherTab();
     await waitFor(() => expect(postCalls()).toHaveLength(2));
     expect(postCalls()[1].body).toEqual({ invoice: RECORD_ID, reversedInvoice: 'inv-orig-8' });
+  });
+});
+
+describe('ReversedInvoicesPanel personal columns', () => {
+  it('keeps all columns and original actions with the flag off', async () => {
+    const { container } = renderPanel({ lines: [LINE()] });
+    await screen.findAllByText('10000067');
+    expect(container.querySelector('thead tr').children).toHaveLength(7);
+    expect(screen.getByTestId('btn__deleteLine')).toBeInTheDocument();
+    expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+    expect(gridBoundary.last.enabled).toBe(false);
+  });
+
+  it.each(['sales-invoice', 'purchase-invoice'])('preserves expansion and inline group edits after restoring the %s view', async (spec) => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['grandTotalAmount', 'reversedInvoice'];
+    gridBoundary.widths = { grandTotalAmount: 210 };
+    const { container } = renderPanel({ apiBaseUrl: `/sws/neo/${spec}`, lines: [LINE()], years: [{ id: 'y2026', fiscalYear: '2026' }] });
+    await screen.findAllByText('10000067');
+    const row = container.querySelector('tbody tr');
+    expect([...row.querySelectorAll('[data-grid-column]')].map(cell => cell.dataset.gridColumn)).toEqual([
+      'grandTotalAmount', 'reversedInvoice',
+    ]);
+    expect(row.children).toHaveLength(4);
+    expect(row.querySelector('[data-grid-column="grandTotalAmount"]')).toHaveStyle({ width: '210px' });
+    expect(screen.getByTestId('btn__deleteLine').closest('td')).toBe(row.lastElementChild);
+    await expandFirstRow();
+    expect(row.nextElementSibling.querySelector('td')).toHaveAttribute('colspan', '4');
+    fireEvent.click(screen.getByTestId('checkbox__isCorrective'));
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    expect(patchCalls()[0].url).toBe(`/sws/neo/${spec}/reversedInvoices/line-1`);
+    expect(patchCalls()[0].body).toEqual({ aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
+    expect(gridBoundary.last).toMatchObject({ spec, entity: 'reversedInvoices', enabled: true });
+  });
+
+  it('does not enable a preference scope for an unrecognized API base', async () => {
+    gridBoundary.enabled = true;
+    renderPanel({ apiBaseUrl: '/custom-invoice-api', lines: [LINE()] });
+    await screen.findAllByText('10000067');
+    expect(gridBoundary.last).toMatchObject({ spec: null, enabled: false });
+    expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+    expect(screen.getByText('rectColDate')).toBeInTheDocument();
   });
 });

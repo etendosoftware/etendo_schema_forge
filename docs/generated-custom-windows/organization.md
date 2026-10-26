@@ -547,3 +547,9 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 18. **IAE cap (ETP-5716).** With 1 main + 5 other activities, "Añadir actividad del IAE" is disabled
     with the "Máximo alcanzado" hint. On an organization that already has more than 5 non-main
     activities, every row is still listed and an amber warning asks to remove the extra ones.
+
+## Bespoke grid personal views
+
+The bespoke IAE and legal-representative grids use the existing personal-view contract for `organization` / `actividadesDelIae` and `organization` / `representanteLegal`. IAE selectors and the new inline row follow data-column preferences; the required main-activity column and fixed action cells remain available. Representative line/390 markers and edit/delete cells stay fixed; record order and the separate edit form are unchanged.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

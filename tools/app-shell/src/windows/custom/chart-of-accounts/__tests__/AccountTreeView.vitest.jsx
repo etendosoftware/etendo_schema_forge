@@ -1,4 +1,28 @@
 // @vitest-environment jsdom
+const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/hooks/useGridView.js', () => ({
+  useGridView: (options) => {
+    gridBoundary.last = options;
+    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
+      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
+      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
+    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
+      reorderable: () => false, isResizable: () => false };
+  },
+}));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
+  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
+}));
+
+beforeEach(() => {
+  gridBoundary.enabled = false;
+  gridBoundary.active = false;
+  gridBoundary.keys = null;
+  gridBoundary.widths = {};
+  gridBoundary.save.mockClear();
+});
+
 // @covers artifacts/chart-of-accounts/custom/AccountTreeView.jsx
 // @covers artifacts/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx
 // @covers artifacts/chart-of-accounts/custom/NewSubAccountCreateModal.jsx
@@ -1565,6 +1589,56 @@ describe('AccountTreeView', () => {
       renderTree(<AccountTreeView {...defaultProps} />);
       expect(within(screen.getByTestId('account-tree-row-group-4000')).getByText('4000'))
         .toHaveClass('font-code');
+    });
+  });
+
+  describe('personal column views', () => {
+    it('keeps the full original tree grid without preferences when disabled', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      expect(screen.getAllByRole('columnheader')).toHaveLength(5);
+      expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+      expect(gridBoundary.last.enabled).toBe(false);
+      expect(screen.getByTestId('account-tree-toggle-group-4000')).toBeInTheDocument();
+    });
+
+    it('keeps code/expansion structural and preserves selection and opening after column reorder', () => {
+      gridBoundary.enabled = true;
+      gridBoundary.active = true;
+      gridBoundary.keys = ['active', 'name'];
+      gridBoundary.widths = { name: 275 };
+      const onNavigate = vi.fn();
+      const { container } = renderTree(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
+      const folder = screen.getByTestId('account-tree-row-group-4000');
+      expect(folder.children).toHaveLength(3);
+      expect(within(folder.children[0]).getByTestId('account-tree-toggle-group-4000')).toBeInTheDocument();
+      expect([...folder.querySelectorAll('[data-grid-column]')].map(cell => cell.dataset.gridColumn)).toEqual(['active', 'name']);
+      expect(folder.children[2]).toHaveStyle({ width: '275px' });
+      expect(container.querySelector('colgroup').children).toHaveLength(3);
+      expect(container.querySelector('colgroup').children[2]).toHaveStyle({ width: '275px' });
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      const row = screen.getByTestId('account-tree-row-acc-40000000');
+      expect(row.children).toHaveLength(3);
+      fireEvent.click(row);
+      expect(row).toHaveAttribute('aria-selected', 'true');
+      fireEvent.click(screen.getByTestId('account-tree-open-acc-40000000'));
+      expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-40000000' }));
+      expect(gridBoundary.last).toMatchObject({ spec: 'chart-of-accounts', entity: 'elementValue', enabled: true });
+      expect(gridBoundary.last.columns.map(column => column.key)).not.toContain('searchKey');
+    });
+
+    it('still opens a leaf by keyboard when the name column is hidden', () => {
+      gridBoundary.enabled = true;
+      gridBoundary.active = true;
+      gridBoundary.keys = ['active'];
+      const onNavigate = vi.fn();
+      renderTree(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      const row = screen.getByTestId('account-tree-row-acc-40000000');
+      expect(row.children).toHaveLength(2);
+      expect(screen.queryByTestId('account-tree-open-acc-40000000')).not.toBeInTheDocument();
+      fireEvent.keyDown(row, { key: 'Enter' });
+      expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-40000000' }));
+      expect(screen.getByTestId('account-tree-active-toggle-acc-40000000')).toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { isStandardListViewSurface } from './standardListViewSurface.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { LocaleProvider, useLocale, useLocaleSwitch } from '@/i18n';
 
@@ -49,12 +50,9 @@ export default function WindowLoader({ windowMap, apiBaseUrl }) {
       .then(([mod, sliceData, contract]) => {
         setComponent(() => mod.default);
         setSlice(sliceData);
-        const windowContract = contract?.window;
-        setStandardListViewSurface(Boolean(
-          windowConfig.standardListViewSource
-          && windowContract
-          && !windowContract.customComponents?.headerTable
-          && (!windowContract.layoutType || windowContract.layoutType === 'default'),
+        setStandardListViewSurface(isStandardListViewSurface(
+          windowConfig.standardListViewSource, contract, windowConfig.standardListViewHeaderTable,
+          windowConfig.standardListViewLayout,
         ));
         setLoading(false);
       })

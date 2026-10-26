@@ -5,8 +5,27 @@
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
+import userEvent from '@testing-library/user-event';
 
 import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
+
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+});
+
+let apiFetchMock = vi.fn();
+let gridColumnViewsEnabled = false;
+vi.mock('@/auth/useApiFetch.js', async () => {
+  const { useMemo } = await import('react');
+  return { useApiFetch: (baseUrl = '') => useMemo(() => (path, options = {}) =>
+    apiFetchMock(`${options.baseUrl ?? baseUrl}${path}`, options), [baseUrl]) };
+});
+vi.mock('@/lib/flags', () => ({
+  GRID_COLUMN_VIEWS: 'grid-column-views',
+  useFeatureFlag: () => gridColumnViewsEnabled,
+}));
 
 // Identity translator; `{count}`-style params are echoed so a test can see which count was asked.
 // Hoisted and STABLE: the page memoizes on `ui`, so a new function per render would refetch forever.
@@ -75,7 +94,7 @@ function mkFetch(rows = ROWS, overrides = {}) {
 
 /** The row-list GETs (not the filter options), as URLSearchParams. */
 function rowRequests() {
-  return globalThis.fetch.mock.calls
+  return apiFetchMock.mock.calls
     .map(([url]) => String(url))
     .filter((u) => u.includes('/header?') && !u.includes('_mode=filter-options'))
     .map((u) => new URLSearchParams(u.split('?')[1]));
@@ -109,12 +128,51 @@ const rowOf = (id) => screen.getByTestId(`row-${id}`);
 const selectRow = (id) => fireEvent.click(within(rowOf(id)).getByRole('checkbox'));
 
 beforeEach(() => {
+  gridColumnViewsEnabled = false;
   vi.clearAllMocks();
   uiState.impl = uiState.identity;
-  globalThis.fetch = mkFetch();
+  apiFetchMock = mkFetch();
 });
 
 describe('NotPostedDocumentsPage — toolbar', () => {
+  it('omits personal grid controls and preference requests while the flag is off', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    expect(apiFetchMock.mock.calls.some(([url]) => url.includes('/grid-views/'))).toBe(false);
+  });
+
+  it('persists only an explicit grid save while retaining filtered row selection and posting actions', async () => {
+    gridColumnViewsEnabled = true;
+    const rowsFetch = mkFetch();
+    apiFetchMock = vi.fn((url, options) => String(url).includes('/grid-views/')
+      ? Promise.resolve({ ok: true, status: 204 })
+      : rowsFetch(url, options));
+    const user = userEvent.setup();
+    renderPage('/not-posted-documents?status=E');
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    await waitFor(() => rowOf('doc-1'));
+    expect(apiFetchMock).toHaveBeenCalledWith('/sws/neo/grid-views/not-posted-documents/header', { baseUrl: '' });
+    expect(rowRequests()[0].get('accountingStatus')).toBe('E,C');
+    await user.click(screen.getByTestId('grid-view-columns-trigger'));
+    await user.click(screen.getByTestId('grid-view-column-organization'));
+    expect(screen.queryByTestId('column-header-organization')).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getAllByTestId('column-header-documentTypeLabel')[0]).getAllByRole('button')[0]);
+    expect(screen.getAllByTestId(/^row-doc-/).map((row) => row.getAttribute('data-testid')))
+      .toEqual(['row-doc-2', 'row-doc-1', 'row-doc-5', 'row-doc-4', 'row-doc-3']);
+    selectRow('doc-1');
+    expect(within(rowOf('doc-1')).getByRole('checkbox')).toBeChecked();
+    expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
+    expect(screen.getByTestId('npd-row-actions-doc-1')).toBeInTheDocument();
+    expect(apiFetchMock.mock.calls.some(([, options]) => options.method === 'PUT')).toBe(false);
+    await user.click(screen.getByTestId('grid-view-save'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([, options]) => options.method === 'PUT')).toBe(true));
+    const [url, options] = apiFetchMock.mock.calls.find(([, request]) => request.method === 'PUT');
+    expect(url).toBe('/sws/neo/grid-views/not-posted-documents/header');
+    expect(JSON.parse(options.body).columns).toContainEqual(expect.objectContaining({ id: 'list:field:organization', visible: false }));
+    expect(rowRequests()).toHaveLength(1);
+  });
+
   it('renders the quick filters and the right-side actions, with no "Buscar" and no reset by default', async () => {
     renderPage();
     await waitFor(() => rowOf('doc-1'));
@@ -277,19 +335,19 @@ describe('NotPostedDocumentsPage — rows', () => {
     expect(screen.getByTestId('npd-status-doc-1').querySelector('.status-tag--destructive')).not.toBeNull();
   });
 
-  it('sends the bearer token and the UI locale', async () => {
+  it('passes the token through the shared authenticated request boundary', async () => {
     renderPage();
     await waitFor(() => rowOf('doc-1'));
-    expect(globalThis.fetch).toHaveBeenCalledWith(
+    expect(apiFetchMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' }),
+        token: TOKEN,
       }),
     );
   });
 
   it('shows the "nothing to post" empty state, with no reset action, when the defaults return nothing', async () => {
-    globalThis.fetch = mkFetch([]);
+    apiFetchMock = mkFetch([]);
     renderPage();
     const empty = await screen.findByTestId('npd-empty-none');
     expect(empty).toHaveTextContent('notPostedEmptyNoneTitle');
@@ -297,7 +355,7 @@ describe('NotPostedDocumentsPage — rows', () => {
   });
 
   it('shows the "no matches" empty state with a reset action when filters return nothing', async () => {
-    globalThis.fetch = mkFetch([]);
+    apiFetchMock = mkFetch([]);
     renderPage('/not-posted-documents?status=i');
     const empty = await screen.findByTestId('npd-empty-filtered');
     expect(empty).toHaveTextContent('notPostedEmptyFilteredTitle');
@@ -308,7 +366,7 @@ describe('NotPostedDocumentsPage — rows', () => {
 
   // ETP-5485 (BUG-2) — a load failure never renders raw backend text.
   it('shows the translated load error, never the raw backend or HTTP text', async () => {
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       'dateFrom=': () => Promise.resolve({
         ok: false, status: 500, statusText: 'Internal Server Error', json: async () => ({ message: 'Something went wrong' }),
       }),
@@ -320,7 +378,7 @@ describe('NotPostedDocumentsPage — rows', () => {
   });
 
   it('shows the translated load error when the request throws', async () => {
-    globalThis.fetch = mkFetch(ROWS, { 'dateFrom=': () => Promise.reject(new Error('Failed to fetch')) });
+    apiFetchMock = mkFetch(ROWS, { 'dateFrom=': () => Promise.reject(new Error('Failed to fetch')) });
     renderPage();
     expect(await screen.findByTestId('npd-load-error')).toHaveTextContent('documentsLoadError');
     expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
@@ -328,7 +386,7 @@ describe('NotPostedDocumentsPage — rows', () => {
 
   // ETP-5485 (BUG-2) — the backend answers 403 for a role without the process grant.
   it('renders the access-denied screen when the load answers 403', async () => {
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       'dateFrom=': () => Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ message: 'Access denied' }) }),
     });
     renderPage();
@@ -340,7 +398,7 @@ describe('NotPostedDocumentsPage — rows', () => {
   it('aborts the in-flight rows request when the page unmounts', async () => {
     let rowsSignal;
     const base = mkFetch(ROWS, { 'dateFrom=': () => new Promise(() => {}) });
-    globalThis.fetch = vi.fn((url, init) => {
+    apiFetchMock = vi.fn((url, init) => {
       if (String(url).includes('dateFrom=')) rowsSignal = init?.signal;
       return base(url, init);
     });
@@ -388,7 +446,7 @@ describe('NotPostedDocumentsPage — row actions', () => {
     await waitFor(() => rowOf('doc-1'));
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-1')); });
 
-    const post = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/action/post'));
+    const post = apiFetchMock.mock.calls.find(([u]) => String(u).includes('/action/post'));
     expect(String(post[0])).toBe(`${BASE_URL}/header/doc-1/action/post`);
     expect(JSON.parse(post[1].body)).toEqual({ tableId: '318', recordId: 'doc-1' });
     expect(toast.success).toHaveBeenCalledWith('INV-001 — documentPosted');
@@ -397,7 +455,7 @@ describe('NotPostedDocumentsPage — row actions', () => {
 
   it('disables the row post link while its post is in flight', async () => {
     let resolvePost;
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/post': () => new Promise((resolve) => { resolvePost = resolve; }),
     });
     renderPage();
@@ -414,11 +472,11 @@ describe('NotPostedDocumentsPage — row actions', () => {
     await waitFor(() => rowOf('doc-4'));
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-4')); });
     expect(toast.error).toHaveBeenCalledWith('postingFailed');
-    expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/action/post'))).toBe(false);
+    expect(apiFetchMock.mock.calls.some(([u]) => String(u).includes('/action/post'))).toBe(false);
   });
 
   it('a 403 on post shows the translated failure, never the status text', async () => {
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/post': () => Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ message: 'Access denied' }) }),
     });
     renderPage();
@@ -433,7 +491,7 @@ describe('NotPostedDocumentsPage — row actions', () => {
     const dictionary = { 'backendError.invalidAccount.base': 'BASE.', 'backendError.invalidAccount.bpOnly': '(C: {bp})' };
     uiState.impl = (key, params = {}) => Object.keys(params)
       .reduce((text, p) => text.replace(`{${p}}`, params[p]), dictionary[key] ?? key);
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/post': () => Promise.resolve({
         ok: false, status: 422, json: async () => ({
           success: false, message: 'backend prose',
@@ -448,7 +506,7 @@ describe('NotPostedDocumentsPage — row actions', () => {
   });
 
   it('a 200 with an unparseable body is not treated as success', async () => {
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/post': () => Promise.resolve({ ok: true, json: async () => { throw new Error('html'); } }),
     });
     renderPage();
@@ -470,7 +528,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
   });
 
   it('bulk-posts the selected rows and shows the shared outcome toast', async () => {
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/bulk-post': () => json({
         ok: 1, total: 2, success: false,
         results: [
@@ -485,7 +543,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     selectRow('doc-2');
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
 
-    const call = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/action/bulk-post'));
+    const call = apiFetchMock.mock.calls.find(([u]) => String(u).includes('/action/bulk-post'));
     expect(JSON.parse(call[1].body).rows).toEqual([
       { tableId: '318', recordId: 'doc-1', label: 'INV-001' },
       { tableId: '472', recordId: 'doc-2', label: 'MI-002' },
@@ -496,7 +554,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
   });
 
   it('a single failed bulk row surfaces its real backend error', async () => {
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/bulk-post': () => json({
         ok: 0, total: 1, success: false,
         results: [{ recordId: 'doc-1', tableId: '318', success: false, message: 'Period closed for this date' }],
@@ -510,7 +568,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
   });
 
   it('counts a selected row without tableId as omitted instead of dropping it', async () => {
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/bulk-post': () => json({ ok: 1, total: 1, success: true, results: [{ recordId: 'doc-1', success: true }] }),
     });
     renderPage();
@@ -518,7 +576,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     selectRow('doc-1');
     selectRow('doc-4');
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
-    const call = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/action/bulk-post'));
+    const call = apiFetchMock.mock.calls.find(([u]) => String(u).includes('/action/bulk-post'));
     expect(JSON.parse(call[1].body).rows.map((r) => r.recordId)).toEqual(['doc-1']);
     // 1 ok + 1 omitted (the row that could not be sent) → mixed-outcome summary with omitted.
     expect(toast.warning).toHaveBeenCalledWith('processExecutedWithOmitted');
@@ -530,11 +588,11 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     selectRow('doc-4');
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
     expect(toast.error).toHaveBeenCalledWith('postingFailed');
-    expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/action/bulk-post'))).toBe(false);
+    expect(apiFetchMock.mock.calls.some(([u]) => String(u).includes('/action/bulk-post'))).toBe(false);
   });
 
   it('a network error on bulk post shows the failure toast', async () => {
-    globalThis.fetch = mkFetch(ROWS, { '/action/bulk-post': () => Promise.reject(new Error('Failed to fetch')) });
+    apiFetchMock = mkFetch(ROWS, { '/action/bulk-post': () => Promise.reject(new Error('Failed to fetch')) });
     renderPage();
     await waitFor(() => rowOf('doc-1'));
     selectRow('doc-1');
@@ -567,7 +625,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
 describe('NotPostedDocumentsPage — reload after an in-flight post', () => {
   it('a single post resolving after a filter change reloads with the new filters', async () => {
     let resolvePost;
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/post': () => new Promise((r) => { resolvePost = () => r({ ok: true, status: 200, json: async () => ({ success: true }) }); }),
     });
     renderPage();
@@ -586,7 +644,7 @@ describe('NotPostedDocumentsPage — reload after an in-flight post', () => {
 
   it('a bulk post resolving after a filter change reloads with the new filters', async () => {
     let resolvePost;
-    globalThis.fetch = mkFetch(ROWS, {
+    apiFetchMock = mkFetch(ROWS, {
       '/action/bulk-post': () => new Promise((r) => { resolvePost = () => r({ ok: true, status: 200, json: async () => ({ ok: 1, total: 1, results: [{ success: true }] }) }); }),
     });
     renderPage();

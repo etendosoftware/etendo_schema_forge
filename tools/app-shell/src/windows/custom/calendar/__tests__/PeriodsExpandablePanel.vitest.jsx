@@ -1,18 +1,32 @@
 // @covers tools/app-shell/src/windows/custom/calendar/PeriodsExpandablePanel.jsx
 // @covers tools/app-shell/src/windows/custom/calendar/PeriodsBulkDialogs.jsx
 // @covers tools/app-shell/src/windows/custom/calendar/periodsBulkOpenClose.js
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LocaleProvider } from '@/i18n';
-import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+import userEvent from '@testing-library/user-event';
 import enUS from '../../../../locales/en_US.json';
 import esES from '../../../../locales/es_ES.json';
 
-vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: createStableUseApiFetchMock(),
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+});
+
+let apiFetchMock = vi.fn();
+let gridColumnViewsEnabled = false;
+vi.mock('@/auth/useApiFetch.js', async () => {
+  const { useMemo } = await import('react');
+  return { useApiFetch: (baseUrl = '') => useMemo(() => (path, options = {}) =>
+    apiFetchMock(`${options.baseUrl ?? baseUrl}${path}`, options), [baseUrl]) };
+});
+vi.mock('@/lib/flags', () => ({
+  GRID_COLUMN_VIEWS: 'grid-column-views',
+  useFeatureFlag: () => gridColumnViewsEnabled,
 }));
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,8 +77,9 @@ import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
 const PERIOD = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'O', 'status$_identifier': 'All Opened', periodNo: 1 };
 
 beforeEach(() => {
+  gridColumnViewsEnabled = false;
   toast.error.mockClear();
-  global.fetch = vi.fn((url) => {
+  apiFetchMock = vi.fn((url) => {
     if (url.includes('/periodControl')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
     }
@@ -73,9 +88,52 @@ beforeEach(() => {
 });
 
 describe('PeriodsExpandablePanel', () => {
+  it('does not request preferences or expose grid controls when the flag is off', async () => {
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
+    await screen.findByTestId('period-name-p1');
+    expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    expect(apiFetchMock.mock.calls.some(([url]) => url.includes('/grid-views/'))).toBe(false);
+  });
+
+  it('keeps selection and row confirmation after hiding the status column, and saves only on request', async () => {
+    gridColumnViewsEnabled = true;
+    apiFetchMock = vi.fn((url) => url.includes('/grid-views/')
+      ? Promise.resolve({ ok: true, status: 204 })
+      : Promise.resolve({ ok: true, json: async () => ({ response: { data: [PERIOD] } }) }));
+    const user = userEvent.setup();
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(apiFetchMock).toHaveBeenCalledWith('/sws/neo/grid-views/open-close-period-control/periodControl', { baseUrl: '' });
+    await user.click(screen.getByTestId('grid-view-columns-trigger'));
+    await user.click(screen.getByTestId('grid-view-column-status'));
+    expect(screen.queryByTestId('column-header-status')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('row-p1').querySelector('input[type="checkbox"]'));
+    expect(screen.getByTestId('period-bulk-close')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('period-close-p1'));
+    expect(screen.getByTestId('periods-bulk-confirm-names')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('periods-bulk-confirm-cancel'));
+    expect(apiFetchMock.mock.calls.some(([, options]) => options.method === 'PUT')).toBe(false);
+    await user.click(screen.getByTestId('grid-view-save'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([, options]) => options.method === 'PUT')).toBe(true));
+    const [url, options] = apiFetchMock.mock.calls.find(([, request]) => request.method === 'PUT');
+    expect(url).toBe('/sws/neo/grid-views/open-close-period-control/periodControl');
+    expect(JSON.parse(options.body).columns).toContainEqual(expect.objectContaining({ id: 'list:field:status', visible: false }));
+  });
+
+  it('keeps a read-only role without selection or row actions when grid controls are enabled', async () => {
+    gridColumnViewsEnabled = true;
+    apiFetchMock = vi.fn((url) => url.includes('/grid-views/')
+      ? Promise.resolve({ ok: true, status: 204 })
+      : Promise.resolve({ ok: true, json: async () => ({ response: { data: [PERIOD] } }) }));
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" readOnly />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(screen.queryByTestId('period-row-actions-p1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-p1').querySelector('input[type="checkbox"]')).toBeNull();
+  });
+
   it('renders the full localized month from startingDate instead of the persisted short period name', async () => {
     const julyToJunePeriod = { id: 'june', name: 'Jan-27', startingDate: '2028-06-01', status: 'O' };
-    global.fetch = vi.fn(() => Promise.resolve({
+    apiFetchMock = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ response: { data: [julyToJunePeriod] } }),
     }));
@@ -97,7 +155,7 @@ describe('PeriodsExpandablePanel', () => {
   it('renders a distinguishing badge for the July-June 13th adjustment period, not the regular June period', async () => {
     const regularJune = { id: 'p12', name: 'Jun-28', startingDate: '2028-06-01', status: 'O', periodNo: 12, periodType: 'S' };
     const adjustment = { id: 'p13', name: '13th Period - 28', startingDate: '2028-06-30', status: 'O', periodNo: 13, periodType: 'A' };
-    global.fetch = vi.fn(() => Promise.resolve({
+    apiFetchMock = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ response: { data: [regularJune, adjustment] } }),
     }));
@@ -131,7 +189,7 @@ describe('PeriodsExpandablePanel', () => {
     ['C', 'red', 'Closed'],
     ['P', 'red', 'Permanently closed'],
   ])('renders status %s as a %s tag labelled "%s"', async (status, variant, label) => {
-    global.fetch = vi.fn(() => Promise.resolve({
+    apiFetchMock = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ response: { data: [{ ...PERIOD, status }] } }),
     }));
@@ -151,11 +209,11 @@ describe('PeriodsExpandablePanel', () => {
     await waitFor(() => screen.getByText('January 27'));
 
     const expectedCriteria = encodeURIComponent(JSON.stringify([{ fieldName: 'year', operator: 'equals', value: 'year1' }]));
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(apiFetchMock).toHaveBeenCalledWith(
       `https://api.test/periodControl?criteria=${expectedCriteria}&_sortBy=startingDate asc`,
       expect.anything()
     );
-    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/periodControl?year='), expect.anything());
+    expect(apiFetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/periodControl?year='), expect.anything());
   });
 
   it('declares the Create Periods fiscal-year range before the adjustment choice', () => {
@@ -182,20 +240,20 @@ describe('PeriodsExpandablePanel', () => {
   });
 
   it('shows a loading indicator while periodControl is still pending', () => {
-    global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
+    apiFetchMock = vi.fn(() => new Promise(() => {})); // never resolves
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p5" />);
     expect(screen.getByTestId('periods-expandable-panel-loading')).toBeInTheDocument();
   });
 
   it('shows an error state (not stuck loading, not the panel) when periodControl fails', async () => {
-    global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    apiFetchMock = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p6" />);
     await waitFor(() => expect(screen.getByTestId('periods-expandable-panel-error')).toBeInTheDocument());
     expect(screen.queryByTestId('periods-expandable-panel')).not.toBeInTheDocument();
   });
 
   it('shows an empty state that points to "Create Periods" when the year has no periods (ETP-5592)', async () => {
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) }));
+    apiFetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) }));
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
 
     const empty = await screen.findByTestId('periods-empty');
@@ -205,7 +263,7 @@ describe('PeriodsExpandablePanel', () => {
 
   it('reports the number of periods as the tab count (ETP-5592)', async () => {
     const onCount = vi.fn();
-    global.fetch = vi.fn(() => Promise.resolve({
+    apiFetchMock = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ response: { data: [PERIOD, { ...PERIOD, id: 'p2', startingDate: '2027-02-01' }] } }),
     }));
@@ -230,7 +288,7 @@ describe('PeriodsExpandablePanel — row actions (ETP-5592)', () => {
     rows = [PERIOD];
     failPost = false;
     holdPost = null;
-    global.fetch = vi.fn((url, options = {}) => {
+    apiFetchMock = vi.fn((url, options = {}) => {
       if (options.method === 'POST') {
         posts.push({ url, body: JSON.parse(options.body), headers: options.headers });
         if (holdPost) return holdPost;
@@ -394,7 +452,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
   // AmortizationLinesTable.jsx (filters on recordId only, not entity).
   it('re-fetches the periods list when a matching neo:processSuccess event is dispatched', async () => {
     let periodControlCallCount = 0;
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (url.includes('/periodControl')) {
         periodControlCallCount += 1;
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
@@ -416,7 +474,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
 
   it('does not re-fetch when the event\'s recordId does not match this panel\'s parentId', async () => {
     let periodControlCallCount = 0;
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (url.includes('/periodControl')) {
         periodControlCallCount += 1;
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
@@ -438,7 +496,7 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
   });
 
   it('removes the neo:processSuccess listener on unmount', async () => {
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
       return Promise.reject(new Error('unexpected url ' + url));
     });
@@ -508,7 +566,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
   it('no longer builds an Accept-Language header itself on the periodControl fetch (delegated to useApiFetch)', async () => {
     localStorage.setItem('schema-forge-locale', 'es_ES');
     const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) }));
-    global.fetch = fetchSpy;
+    apiFetchMock = fetchSpy;
 
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('Enero 27'));
@@ -521,7 +579,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
 
   it('does not need a stored locale to fetch (locale resolution is useApiFetch\'s concern, not this component\'s)', async () => {
     const fetchSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) }));
-    global.fetch = fetchSpy;
+    apiFetchMock = fetchSpy;
 
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
@@ -533,7 +591,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
   });
 
   it('renders real Spanish labels for period status when the locale is es_ES — even with no $_identifier field at all', async () => {
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
       return Promise.reject(new Error('unexpected url ' + url));
     });
@@ -548,7 +606,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
 
   it('renders a July-to-June period from startingDate in Spanish rather than its persisted short name', async () => {
     const julyToJunePeriod = { id: 'june', name: 'Jan-27', startingDate: '2028-06-01', status: 'O' };
-    global.fetch = vi.fn(() => Promise.resolve({
+    apiFetchMock = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ response: { data: [julyToJunePeriod] } }),
     }));
@@ -561,7 +619,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
 
   it('renders the equivalent English label under en_US, from the same code-keyed dictionary', async () => {
     currentTestLocale = 'en_US';
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
       return Promise.reject(new Error('unexpected url ' + url));
     });
@@ -574,7 +632,7 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
   });
 
   it('falls back to the raw code if it is somehow not in the dictionary (e.g. a future/unknown code)', async () => {
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'ZZZ' }] } }) });
       return Promise.reject(new Error('unexpected url ' + url));
     });
@@ -604,7 +662,7 @@ describe('PeriodsExpandablePanel — bulk open/close (ETP-5682)', () => {
     posts = [];
     listCalls = 0;
     failingIds = new Set();
-    global.fetch = vi.fn((url, options = {}) => {
+    apiFetchMock = vi.fn((url, options = {}) => {
       if (options.method === 'POST') {
         const id = url.match(/periodControl\/([^/]+)\/action\/openClose/)[1];
         posts.push({ id, body: JSON.parse(options.body) });

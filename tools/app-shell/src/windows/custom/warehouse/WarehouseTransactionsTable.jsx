@@ -1,3 +1,8 @@
+import { Children, cloneElement } from 'react';
+import { useGridView } from '@/hooks/useGridView.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useMemo, useEffect } from 'react';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
@@ -83,6 +88,49 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
   const ui = useUI();
   const { loading, error, transactions } = useWarehouseStock(parentId, token, apiBaseUrl);
 
+  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridColumns = useMemo(() => [
+    { key: 'movementDate', column: 'MovementDate', label: ui('warehouseDate'), sourceIndex: 0 },
+    { key: 'movementType', column: 'MovementType', label: ui('warehouseType'), sourceIndex: 1 },
+    { key: 'etgoDocLabel', label: ui('warehouseDocument'), sourceIndex: 2 },
+    { key: 'product', column: 'M_Product_ID', label: ui('warehouseProduct'), sourceIndex: 3 },
+    { key: 'movementQuantity', column: 'MovementQty', label: ui('warehouseQty'), sourceIndex: 4 },
+  ], [ui]);
+  const gridSpec = 'warehouse';
+  const gridView = useGridView({
+    spec: gridSpec, entity: 'productTransactions', columns: gridColumns, data: transactions ?? [],
+    enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
+  });
+  // Structural cells stay outside the personal view; existing editors and actions
+  // retain their handlers and React keys when data cells move.
+  const renderGridCells = (fragment) => {
+    if (!gridColumnViews || !gridSpec) return fragment;
+    const cells = Children.toArray(fragment.props.children);
+    const visibleColumns = gridView.active ? gridView.columns : gridColumns;
+    const count = visibleColumns.length + 0;
+    if (cells.length === 1 && cells[0].props.colSpan) {
+      return cloneElement(cells[0], { colSpan: count });
+    }
+    const dataCells = visibleColumns.map((column) => {
+      const cell = cells[column.sourceIndex];
+      if (!gridView.active) return cloneElement(cell, { key: column.key });
+      const header = cell.type === 'th';
+      const width = column.gridUserWidthPx;
+      return cloneElement(cell, {
+        key: column.key,
+        'data-grid-column': column.key,
+        style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
+        ...(header ? gridHeaderProps(column, gridView) : {}),
+      }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
+    });
+    return [...cells.slice(0, 0), ...dataCells];
+  };
+  const gridControls = gridColumnViews && gridSpec ? (
+    <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui}
+      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key} />
+  ) : null;
+
+
   useEffect(() => {
     if (!loading && !error && transactions) {
       onCount?.(transactions.length);
@@ -142,9 +190,12 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
   }
 
   return (
-    <table className="w-full text-sm">
+    <>
+      {gridControls}
+      <table className="w-full text-sm" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup>{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}</colgroup>}
       <thead>
-        <tr className="border-b border-border/50">
+        <tr className="border-b border-border/50">{renderGridCells(<>
           <th className="text-left py-2 pr-3 font-medium text-muted-foreground w-[180px]">
             <SortableHeaderLabel
               label={ui('warehouseDate')}
@@ -191,7 +242,7 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
               align="right"
               data-testid="SortableHeaderLabel__qty" />
           </th>
-        </tr>
+        </>)}</tr>
       </thead>
       <tbody>
         {sorted.map((tx, i) => {
@@ -201,7 +252,7 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
           const docLabel = documentLabel(tx);
           const canNavigate = Boolean(tx.etgoDocWindow && tx.etgoDocHeaderId);
           return (
-            <tr key={tx.id ?? i} className="border-b border-border/30 hover:bg-muted/30 transition-colors h-10">
+            <tr key={tx.id ?? i} className="border-b border-border/30 hover:bg-muted/30 transition-colors h-10">{renderGridCells(<>
               <td className="py-2.5 pr-3 font-semibold text-[hsl(var(--foreground))] tabular-nums whitespace-nowrap">{fmtDate(tx.movementDate)}</td>
               <td className="py-2.5 pr-3 text-muted-foreground">{typeLabel}</td>
               <td className="py-2.5 pr-3 text-[hsl(var(--foreground))]">
@@ -222,10 +273,11 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
               <td className={`py-2.5 text-right tabular-nums font-semibold ${qty < 0 ? 'text-destructive' : 'text-status-success-foreground'}`}>
                 {qty >= 0 ? '+' : ''}{fmtQty(qty)}
               </td>
-            </tr>
+            </>)}</tr>
           );
         })}
       </tbody>
     </table>
+    </>
   );
 }

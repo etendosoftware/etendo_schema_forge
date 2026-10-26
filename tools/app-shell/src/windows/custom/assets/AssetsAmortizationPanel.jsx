@@ -1,3 +1,8 @@
+import { Children, cloneElement } from 'react';
+import { useGridView } from '@/hooks/useGridView.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight, Trash2 } from 'lucide-react';
@@ -40,6 +45,48 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const navigate = useNavigate();
   const orgCurrency = useCurrency() ?? 'USD';
   const [lines, setLines] = useState([]);
+
+  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridColumns = useMemo(() => [
+    { key: 'amortization', column: 'A_Amortization_ID', label: ui('assetsPeriod'), sourceIndex: 1, required: true },
+    { key: 'amortizationPercentage', column: 'Amortization_Percentage', label: ui('assetsPercentage'), sourceIndex: 2 },
+    { key: 'amortizationAmount', column: 'Amortizationamt', label: ui('amount'), sourceIndex: 3 },
+    { key: 'processed', label: ui('assetsStatus'), sourceIndex: 4 },
+  ], [ui]);
+  const gridSpec = 'assets';
+  const gridView = useGridView({
+    spec: gridSpec, entity: 'amortizationLine', columns: gridColumns, data: lines,
+    enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
+  });
+  // Structural cells stay outside the personal view; existing editors and actions
+  // retain their handlers and React keys when data cells move.
+  const renderGridCells = (fragment) => {
+    if (!gridColumnViews || !gridSpec) return fragment;
+    const cells = Children.toArray(fragment.props.children);
+    const visibleColumns = gridView.active ? gridView.columns : gridColumns;
+    const count = visibleColumns.length + 1;
+    if (cells.length === 1 && cells[0].props.colSpan) {
+      return cloneElement(cells[0], { colSpan: count });
+    }
+    const dataCells = visibleColumns.map((column) => {
+      const cell = cells[column.sourceIndex];
+      if (!gridView.active) return cloneElement(cell, { key: column.key });
+      const header = cell.type === 'th';
+      const width = column.gridUserWidthPx;
+      return cloneElement(cell, {
+        key: column.key,
+        'data-grid-column': column.key,
+        style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
+        ...(header ? gridHeaderProps(column, gridView) : {}),
+      }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
+    });
+    return [...cells.slice(0, 1), ...dataCells];
+  };
+  const gridControls = gridColumnViews && gridSpec ? (
+    <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui}
+      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key} />
+  ) : null;
+
   const [processedMap, setProcessedMap] = useState(new Map());
   const [loading, setLoading] = useState(false);
   const recordId = recordIdProp ?? data?.id;
@@ -198,9 +245,11 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
 
     return (
       <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          {gridControls}
+          <table className="w-full text-sm" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}</colgroup>}
             <thead>
-              <tr className="border-b border-border/50">
+              <tr className="border-b border-border/50">{renderGridCells(<>
                 <th className="py-2.5 pr-2" style={{ width: 40, flexShrink: 0 }}>
                   <Checkbox
                     aria-label={ui('selectAll')}
@@ -213,7 +262,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                 <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">{ui('assetsPercentage')}</th>
                 <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">{ui('amount')}</th>
                 <th className="text-left text-sm font-semibold text-foreground py-2.5">{ui('assetsStatus')}</th>
-              </tr>
+              </>)}</tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {lines.map((line) => {
@@ -231,7 +280,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                     className={isSelected
                       ? 'bg-primary/5 hover:bg-primary/5'
                       : 'hover:bg-muted/30'}
-                  >
+                  >{renderGridCells(<>
                     <td className="py-3 pr-2" style={{ width: 40 }}>
                       <Checkbox
                         aria-label={ui('selectRow') ?? 'Select row'}
@@ -261,12 +310,12 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                         ui={ui}
                         data-testid="StatusBadge__34159c" />
                     </td>
-                  </tr>
+                  </>)}</tr>
                 );
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t border-border/50 font-semibold">
+              <tr className="border-t border-border/50 font-semibold">{renderGridCells(<>
                 <td className="py-3 pr-2" style={{ width: 40 }} />
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4" />
@@ -278,7 +327,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                   {formatCurrency(orgCurrency, totalAmortizationAmount)}
                 </td>
                 <td className="py-3" />
-              </tr>
+              </>)}</tr>
             </tfoot>
           </table>
         </div>

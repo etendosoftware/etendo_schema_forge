@@ -398,3 +398,9 @@ by code or name and lists **posting accounts only** (`PostingAccountCombinationS
 ## ETP-5693 — Posting accounts only, on write
 
 Saving an account field of the warehouse accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via the new `@NeoExtension` `WarehouseAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## Bespoke grid personal views
+
+The bespoke `WarehouseTransactionsTable` uses the existing personal-view contract for `warehouse` / `productTransactions`, preserving sorting and document navigation. `WarehouseProductsTab` remains blocked: its product/valuation rows aggregate `binContents` and have no single configured entity scope. The DataTable-based warehouse header is outside this migration.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

@@ -1,3 +1,4 @@
+import { FinancialGridView, FinancialGridRow } from '../FinancialGridView.jsx';
 import { Fragment, useMemo, useState } from 'react';
 import { Scale } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -200,10 +201,14 @@ export function ReconciliationListTable({
   return (
     // Full-bleed like the Imported Statements grid: no card border/radius, the rows' own bottom
     // borders carry the structure.
+    <FinancialGridView spec="financial-account" entity="reconciliations" columns={[
+      { key: 'expand', gridConfigurable: false, gridTrack: '28px' },
+      ...layout.columns.map((col) => ({ ...col, key: col.name, labelKey: CELL_RENDERERS[col.name]?.labelKey, gridTrack: CELL_RENDERERS[col.name]?.width })),
+    ]} data={reconciliations}>
     <div role="table" className={cn('w-full', dimWhileRefreshing)} data-testid="reconciliation-list-table">
       {/* Header styled like the Movements table: sentence case, semibold, foreground colour —
           not the uppercase muted small-caps used elsewhere. */}
-      <div
+      <FinancialGridRow header
         role="row"
         style={layout.gridStyle}
         className={cn(
@@ -225,9 +230,10 @@ export function ReconciliationListTable({
               data-testid="SortableHeaderLabel__d80a75" />
           </span>
         ))}
-      </div>
+      </FinancialGridRow>
       {renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle, layout })}
     </div>
+    </FinancialGridView>
   );
 }
 
@@ -235,14 +241,14 @@ export function ReconciliationListTable({
 function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle, layout }) {
   if (loading && reconciliations.length === 0) {
     return SKELETON_ROWS.map((n) => (
-      <div
+      <FinancialGridRow
         key={n}
         role="row"
         style={layout.gridStyle}
         className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-3')}
       >
         {layout.skeletonCellKeys.map((k) => <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__d80a75" />)}
-      </div>
+      </FinancialGridRow>
     ));
   }
   if (reconciliations.length === 0) {
@@ -279,7 +285,7 @@ function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, t
 function ReconciliationRow({ row, currency, cellCtx, layout, ui, open, onToggle }) {
   return (
     <>
-      <div
+      <FinancialGridRow
         role="row"
         style={layout.gridStyle}
         className={cn(
@@ -309,7 +315,7 @@ function ReconciliationRow({ row, currency, cellCtx, layout, ui, open, onToggle 
             </Fragment>
           );
         })}
-      </div>
+      </FinancialGridRow>
       {open ? (
         // Symmetric py-3: the inner grid already ends on its own border, so the 32px bottom pad
         // this started with (copied from StatementsTable) just read as a dead band under the last

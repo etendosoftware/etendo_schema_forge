@@ -2579,3 +2579,9 @@ full value on hover, no horizontal scroll.
 ## Read-only role tier: SIF tab and rectified invoices — ETP-5830
 
 With a `read-only` tier the SIF tab locks its fields (`useSifFieldPatcher` `locked`, same path as a processed invoice) and `ReversedInvoicesPanel` is read-only. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Bespoke grid personal views
+
+The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

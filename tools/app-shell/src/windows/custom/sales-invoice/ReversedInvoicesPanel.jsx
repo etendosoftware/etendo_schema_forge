@@ -1,3 +1,8 @@
+import { Children, cloneElement } from 'react';
+import { useGridView } from '@/hooks/useGridView.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
@@ -703,6 +708,49 @@ export default function ReversedInvoicesPanel({
   const saveErrorMessage = err => (isNetworkError(err) ? err.message : ui('rectSaveError'));
 
   const [lines, setLines] = useState([]);
+
+  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridColumns = useMemo(() => [
+    { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', label: ui('rectColOriginalInvoice'), sourceIndex: 1, required: true },
+    { key: 'invoiceDate', label: ui('rectColDate'), sourceIndex: 2 },
+    { key: 'documentNo', label: ui('rectColDocument'), sourceIndex: 3 },
+    { key: 'aEAT349IsCorrective', column: 'EM_AEAT349_IsCorrective', label: ui('rectColModel349'), sourceIndex: 4 },
+    { key: 'grandTotalAmount', label: ui('rectColTotal'), sourceIndex: 5 },
+  ], [ui]);
+  const gridSpec = apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
+  const gridView = useGridView({
+    spec: gridSpec, entity: 'reversedInvoices', columns: gridColumns, data: lines,
+    enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
+  });
+  // Structural cells stay outside the personal view; existing editors and actions
+  // retain their handlers and React keys when data cells move.
+  const renderGridCells = (fragment) => {
+    if (!gridColumnViews || !gridSpec) return fragment;
+    const cells = Children.toArray(fragment.props.children);
+    const visibleColumns = gridView.active ? gridView.columns : gridColumns;
+    const count = visibleColumns.length + 2;
+    if (cells.length === 1 && cells[0].props.colSpan) {
+      return cloneElement(cells[0], { colSpan: count });
+    }
+    const dataCells = visibleColumns.map((column) => {
+      const cell = cells[column.sourceIndex];
+      if (!gridView.active) return cloneElement(cell, { key: column.key });
+      const header = cell.type === 'th';
+      const width = column.gridUserWidthPx;
+      return cloneElement(cell, {
+        key: column.key,
+        'data-grid-column': column.key,
+        style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
+        ...(header ? gridHeaderProps(column, gridView) : {}),
+      }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
+    });
+    return [...cells.slice(0, 1), ...dataCells, ...cells.slice(-1)];
+  };
+  const gridControls = gridColumnViews && gridSpec ? (
+    <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui}
+      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key} />
+  ) : null;
+
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [pendingEdits, setPendingEdits] = useState({});
@@ -1052,11 +1100,13 @@ export default function ReversedInvoicesPanel({
 
   return (
     <div className="flex-1 min-w-0" data-testid="reversed-invoices-panel">
+      {gridControls}
       {/* ── table ── */}
       {(lines.length > 0 || loading || addingLine) && (
-        <table className="w-full">
+        <table className="w-full" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}<col style={{ width: 40 }} /></colgroup>}
           <thead className="sticky top-0 z-20 bg-card">
-            <tr className="border-b border-border/40">
+            <tr className="border-b border-border/40">{renderGridCells(<>
               {/* expand toggle placeholder */}
               <th className="h-10 w-10 px-3" />
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColOriginalInvoice')}</th>
@@ -1065,19 +1115,19 @@ export default function ReversedInvoicesPanel({
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColModel349')}</th>
               <th className="h-10 px-3 text-right text-xs font-semibold text-foreground">{ui('rectColTotal')}</th>
               <th className="h-10 w-10 px-2" />
-            </tr>
+            </>)}</tr>
           </thead>
 
           <tbody>
             {loading && (
-              <tr>
+              <tr>{renderGridCells(<>
                 <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   <Loader2
                     className="h-4 w-4 animate-spin inline mr-1.5"
                     data-testid="Loader2__4395d6" />
                   {ui('loading')}
                 </td>
-              </tr>
+              </>)}</tr>
             )}
 
             {!loading && lines.map(line => {
@@ -1099,7 +1149,7 @@ export default function ReversedInvoicesPanel({
                     className={`relative border-b border-border/30 group/row transition-colors cursor-pointer hover:bg-muted/30 ${isExpanded ? 'bg-muted/20' : ''}`}
                     onClick={() => setExpandedId(isExpanded ? null : line.id)}
                     style={{ height: 48 }}
-                  >
+                  >{renderGridCells(<>
                     {/* expand chevron */}
                     <td className="px-3 align-middle" onClick={e => e.stopPropagation()}>
                       <button
@@ -1149,10 +1199,10 @@ export default function ReversedInvoicesPanel({
                         </button>
                       )}
                     </td>
-                  </tr>
+                  </>)}</tr>
                   {/* expanded form */}
                   {isExpanded && (
-                    <tr>
+                    <tr>{renderGridCells(<>
                       <td colSpan={7} className="p-0">
                         <ExpandedForm
                           lineData={lineData}
@@ -1170,7 +1220,7 @@ export default function ReversedInvoicesPanel({
                           aeatSaving={aeatSavingId === line.id}
                           data-testid="ExpandedForm__4395d6" />
                       </td>
-                    </tr>
+                    </>)}</tr>
                   )}
                 </React.Fragment>
               );
@@ -1178,7 +1228,7 @@ export default function ReversedInvoicesPanel({
 
             {/* draft new-line row — auto-expanded */}
             {addingLine && (
-              <tr>
+              <tr>{renderGridCells(<>
                 <td colSpan={7} className="p-0">
                   <div ref={addRowRef}>
                     <ExpandedForm
@@ -1203,7 +1253,7 @@ export default function ReversedInvoicesPanel({
                       data-testid="ExpandedForm__4395d6" />
                   </div>
                 </td>
-              </tr>
+              </>)}</tr>
             )}
           </tbody>
         </table>

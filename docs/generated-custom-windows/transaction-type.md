@@ -41,3 +41,14 @@ Predates the `cli/config/regen-windows.json` convention — see [match-rule](mat
 - `artifacts/transaction-type/decisions.json` (W spec config: `Name` editable, `Value` readOnly/auto, `javaQualifier`)
 - `tools/app-shell/src/components/contract-ui/InlineCreateSelector.jsx` + `InlineCreateModal.jsx` (the inline-create selector + modal)
 - match-rule `decisions.json` → `transactionType` field (`allowCreate`, `createSpec`, `createEntity`, `createTitleKey`, `createNamePlaceholderKey`)
+
+## Personal list-column views
+
+When rendered through ListModalWindow with a stable API spec/entity identity, the
+list offers Columns and Save view under the shared `grid-column-views` flag,
+enabled by default. Visibility, order and widths are personal and saved only on
+request. Selection, row actions, inline toggles and create/edit modal behavior
+remain unchanged; saved views do not alter business records or filter/sort state.
+See [the shared grid-view policy](../feature-flags.md#personal-business-grid-views)
+for identity checks and load/save failures. Automated execution and QA for this
+integration remain pending.

@@ -1,3 +1,4 @@
+import { FinancialGridView, FinancialGridRow } from './FinancialGridView.jsx';
 import { Fragment, useState } from 'react';
 import { ArrowUpRight, Layers } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -223,6 +224,13 @@ function formatMoney(amount, currency) {
  * Reconciliation actions ("Conciliar todas", per-line approve) are placeholders
  * until T6/T7 — the buttons render disabled with a coming-soon tooltip.
  */
+const PERSONAL_COLUMNS = [
+  ...LEAD_COLUMNS.map((col) => ({ ...col, key: col.name, labelKey: LINE_CELL_RENDERERS[col.name]?.labelKey, gridTrack: LINE_CELL_RENDERERS[col.name]?.width })),
+  { key: 'matched', labelKey: 'financeAccountStatementLinesColMatched', gridConfigurable: false, gridTrack: '136px' },
+  { key: 'txns', labelKey: 'financeAccountStatementLinesColTransaction', gridConfigurable: false, gridTrack: '120px' },
+  ...AMOUNT_COLUMNS.map((col) => ({ ...col, key: col.name, labelKey: LINE_CELL_RENDERERS[col.name]?.labelKey, gridTrack: LINE_CELL_RENDERERS[col.name]?.width })),
+];
+
 export function StatementLinesInline({ statementId, currency = 'EUR', refreshToken = 0 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -235,9 +243,10 @@ export function StatementLinesInline({ statementId, currency = 'EUR', refreshTok
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
+      <FinancialGridView spec="financial-account" entity="bankStatementLines" columns={PERSONAL_COLUMNS} data={lines}>
+      <div className="overflow-x-auto rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]">
         {/* Column header — same style as the parent Statements table headers. */}
-        <div
+        <FinancialGridRow header
           style={MINI_GRID_STYLE}
           className={cn(
             // Same recipe as the parent Statements table header (h-10 items-center) — centered.
@@ -261,10 +270,11 @@ export function StatementLinesInline({ statementId, currency = 'EUR', refreshTok
               {LINE_CELL_RENDERERS[col.name] ? ui(LINE_CELL_RENDERERS[col.name].labelKey) : col.label}
             </span>
           ))}
-        </div>
+        </FinancialGridRow>
         {/* Body */}
         {renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns: setTxnLine })}
       </div>
+      </FinancialGridView>
       {txnLine ? (
         <ReconciledTxnsModal
           line={txnLine}
@@ -283,11 +293,11 @@ export function StatementLinesInline({ statementId, currency = 'EUR', refreshTok
 function renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns }) {
   if (loading) {
     return [1, 2, 3].map((n) => (
-      <div key={n} style={MINI_GRID_STYLE} className={cn(MINI_GRID_CLASS, 'items-center border-b border-[hsl(var(--border-subtle))] px-3 py-2.5')}>
+      <FinancialGridRow key={n} style={MINI_GRID_STYLE} className={cn(MINI_GRID_CLASS, 'items-center border-b border-[hsl(var(--border-subtle))] px-3 py-2.5')}>
         {SKELETON_CELL_KEYS.map((k) => (
           <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__10cf4a" />
         ))}
-      </div>
+      </FinancialGridRow>
     ));
   }
   if (lines.length === 0) {
@@ -320,7 +330,7 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
     })
     : null;
   return (
-    <div
+    <FinancialGridRow
       data-testid={`statement-line-row-${line.id}`}
       style={MINI_GRID_STYLE}
       className={cn(
@@ -363,7 +373,7 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
           </Fragment>
         );
       })}
-    </div>
+    </FinancialGridRow>
   );
 }
 

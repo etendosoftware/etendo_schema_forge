@@ -2937,3 +2937,9 @@ described once in [`sales-invoice.md` — A favor topbar chip, ETP-5729](sales-i
 ## Read-only role tier: no OCR uploader on /new — ETP-5830
 
 `OcrSidePanel` mounts the OCR uploader only when `isNew && !readOnly`. A read-only role reaching `/purchase-invoice/new` by URL is redirected to the list anyway; this guard keeps the uploader out of the embedded `?embedded=1` path too. On a saved invoice the side panel already used `ReadOnlyOcrSidePanel` (ETP-5205). The SIF tab and `ReversedInvoicesPanel` are locked for a read-only role exactly as in sales-invoice. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Bespoke grid personal views
+
+The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `purchase-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. `PaymentDetailsPanelCustom` remains a read-only noninteractive display and is excluded from this migration.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

@@ -329,10 +329,32 @@ const customLoaders = {
   'amortization': () => import('./custom/amortization/index.jsx'),
 };
 
-// These custom entry points intentionally host the standard generated ListView
-// table rather than replacing it with a custom table. Keep this allowlist small
-// and explicit; all other customLoader surfaces fail closed.
-const standardListViewCustomEntryPoints = new Set(['amortization']);
+// Audited custom entry points forward ListView grid props to the standard DataTable.
+// Custom column renderers are supported; unknown entry points fail closed.
+const standardListViewCustomEntryPoints = new Set([
+  'amortization', 'assets', 'goods-movements', 'goods-receipt',
+  'internal-consumption', 'physical-inventory', 'price-list', 'purchase-order',
+  'return-to-vendor-shipment', 'sales-order', 'sales-quotation',
+  'sales-invoice', 'purchase-invoice', 'payment-in', 'payment-out', 'user', 'warehouse',
+  'contacts', 'product', 'product-category', 'goods-shipment', 'return-material-receipt',
+  'financial-account',
+]);
+
+// The original loader map also contains custom paths; distinguish them explicitly.
+const customWindowLoaderEntryPoints = new Set([
+  'contacts', 'product', 'product-category', 'goods-shipment', 'return-material-receipt', 'user',
+]);
+
+// Exact audited contract slots: a replacement name must be inspected before admission.
+const standardListViewHeaderTables = {
+  contacts: 'ContactsTable',
+  'financial-account': 'AccountsHeaderTable',
+  'sales-invoice': 'InvoiceHeaderTable',
+  'purchase-invoice': 'InvoiceHeaderTable',
+  'payment-in': 'PaymentHeaderTable',
+  'payment-out': 'PaymentHeaderTable',
+  user: 'UserHeaderTable',
+};
 
 /**
  * Build window map with loaders for all windows in menu.json plus every
@@ -348,9 +370,13 @@ export function buildWindowMap() {
       name: item.name,
       label: item.label,
       contract: null,
-      // Only source-generated entry points are candidates for the standard ListView
-      // rollout. WindowLoader still excludes contract-declared headerTable overrides.
-      standardListViewSource: !customLoaders[item.name] || standardListViewCustomEntryPoints.has(item.name),
+      // Generated pages and audited custom wrappers are candidates. WindowLoader
+      // additionally requires the exact expected layout and header-table contract.
+      standardListViewSource: customLoaders[item.name] || customWindowLoaderEntryPoints.has(item.name)
+        ? standardListViewCustomEntryPoints.has(item.name)
+        : Boolean(windowLoaders[item.name]),
+      standardListViewLayout: item.name === 'product' ? 'gallery' : 'default',
+      standardListViewHeaderTable: standardListViewHeaderTables[item.name] ?? null,
       loader: customLoaders[item.name]
         || windowLoaders[item.name]
         || (() => import('./PlaceholderWindow.jsx')),

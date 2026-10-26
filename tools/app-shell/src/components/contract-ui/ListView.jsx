@@ -643,11 +643,7 @@ export function ListView({
     && Boolean(windowName && entity)
     // Explicit caller opt-in is the invariant: never infer rollout scope from
     // React function names, which minifiers may rewrite and custom tables may mimic.
-    && gridColumnViewsSurface
-    && !hideListBar
-    && !listViewOptions?.hideListBar
-    && !tableOwnsScroll
-    && !listViewOptions?.tableOwnsScroll;
+    && gridColumnViewsSurface;
   const tableColumns = useMemo(
     () => reportedColumns.filter(c => isCapabilityVisible(capabilities, c.visibleWhenCapability)),
     [reportedColumns, capabilities],
@@ -1579,7 +1575,7 @@ export function ListView({
                     deletePreset={deletePreset}
                     labelOverrides={labelOverrides}
                     data-testid="ListFilterBarSection__620cbc" />
-                  {gridView.enabled && (
+                  {gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
                     <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={t} />
                   )}
                   <ViewToggle
@@ -1724,6 +1720,14 @@ export function ListView({
               financial-account detail tabs) can show the same affordance. */}
           {hook.loading && hook.items.length > 0 && (
             <ListProgressBar data-testid="ListProgressBar__620cbc" />
+          )}
+
+          {/* A custom toolbar may hide the native list bar while still forwarding gridView
+              to DataTable. Keep personal-view controls reachable above either scroll host. */}
+          {listBarHidden && gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
+            <div className="flex shrink-0 items-center px-2 py-2" data-testid="grid-view-fallback-controls">
+              <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={t} />
+            </div>
           )}
 
           {/* Table region (ScrollPane, or a bounded flex box when the table owns its

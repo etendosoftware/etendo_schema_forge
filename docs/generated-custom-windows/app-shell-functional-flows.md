@@ -1000,3 +1000,26 @@ nothing if X has nothing to render there.
   the Financiero panel is all disabled, the attachments tab shows files but no dropzone. Open
   `/contacts/new` directly and confirm it lands on the list. Repeat the attachments check on
   Payment terms, Product category and Business partner category.
+
+## Personal grid-column views
+
+Supported standard ListView lists and ListModalWindow grids offer Columns and Save
+view under the single `grid-column-views` flag (enabled by default). Users can hide
+optional data columns, reorder them and adjust their widths, then explicitly save
+for their own user/spec/entity. Selection checkboxes and action columns remain
+available outside the saved data-column list. Required/locked columns keep the
+existing useGridView restrictions. Filters, sort order, selection and business
+records are unaffected by saving a view.
+
+Generated/custom entry points use explicit source classification plus loaded
+contract checks; unknown/custom layouts and unaudited custom header tables do not acquire
+controls automatically. See [feature-flags.md](../feature-flags.md#personal-business-grid-views)
+for the audited wrappers and modal identity requirements. A view-load failure
+keeps the default grid visible and offers Retry; a save failure preserves current
+changes. Test execution and QA are pending for this integration.
+
+Toolbar visibility and scroll ownership do not disable an audited ListView table's
+personal views. If the resolved `hideListBar` hides the normal toolbar, the same
+Columns/Save view controls appear once above the grid, outside either scroll host.
+Direct props and `listViewOptions` use the existing option precedence; switching
+to an actual gallery hides the controls in either placement.

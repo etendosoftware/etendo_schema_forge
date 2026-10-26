@@ -216,3 +216,70 @@ its behaviour is documented in its topic doc and in `com.etendoerp.go`
 | `bp-portal-link` | `bp-self-service-portal` | [BP self-service portal](plans/2026-09-10-bp-self-service-portal.md); backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `demo-data-transfer` | `demo-data-transfer` | Retired in `com.etendoerp.go` by ETP-5480 (`docs/feature-flags-and-tenant-upgrade.md`, "`demo-data-transfer` — retired"); the registry entry still awaits its retirement |
 | `environment-access-enforcement-off` | `environment-access-enforcement-kill-switch` | [Paid tenant infrastructure](paid-tenant-infrastructure.md) §3.7; local testing: [`stripe-local-testing.md`](stripe-local-testing.md) "The 402 body and the kill switch"; operating it: "Operating environment-access enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
+
+## Personal business-grid views
+
+`GRID_COLUMN_VIEWS` (`grid-column-views`) is the single switch for personal column
+visibility, order and widths. Its shipped default is **true**, including when no
+provider answers; an explicit remote provider value of false (or a deterministic
+local override) disables it. No per-window
+flags are introduced. Saving is explicit and scoped by authenticated user, spec and entity;
+filters, sorting, selected rows and business actions are not saved. An entity scope must match
+an entity registered in that spec; Unicode letters, digits, `.`, `_`, `-` and parentheses are
+supported in entity names. The preference key hashes the spec/entity pair.
+
+ListView entry points qualify only when the registry identifies a generated page
+or an audited forwarding wrapper, and the loaded contract declares the standard
+(default or absent) layout (or the explicitly audited product gallery/list layout) with either no custom
+header table or the exact audited header-table slot. Missing/malformed
+contracts and placeholder/custom layouts fail closed. The audited custom entry
+points are amortization, assets, goods-movements, goods-receipt,
+internal-consumption, physical-inventory, price-list, purchase-order,
+return-to-vendor-shipment, sales-order, sales-quotation, sales-invoice, purchase-invoice,
+payment-in, payment-out, user, warehouse, contacts, product, product-category,
+goods-shipment, return-material-receipt and financial-account. Their table wrappers
+forward props through the generated table to DataTable. InvoiceHeaderTable (invoice specs), PaymentHeaderTable (payment specs) and
+UserHeaderTable (user) and ContactsTable (contacts) are admitted only on their matching audited entry point; a
+changed header name fails closed. Financial accounts admit only AccountsHeaderTable.
+Toolbar visibility and scroll ownership do not affect eligibility. When the resolved
+`hideListBar` option hides the normal toolbar, personal-view controls appear once
+above the table region; this works with either ListView or table-owned scrolling.
+Existing headClass/cellClass column protections remain in force, including the
+financial-account column chrome that locks customization under useGridView. Product personal
+views apply to its standard list table; switching to gallery hides the personal-view
+controls and keeps the cards in their existing layout.
+
+ListModalWindow shares the existing useGridView/GridViewControls persistence and
+column-header controls. It requires a kebab-case `api.specName` or `windowName`, a
+nonempty entity, matching spec names when both are supplied, and an API contract
+base URL equal to `/sws/neo/<spec>` when present. It never derives identity from a
+display name or guesses a spec from a URL. Without that stable identity, the modal
+retains its original grid without personal-view requests or controls. Selection,
+row actions, inline toggles, sorting, filtering and create/edit dialogs retain
+their existing semantics. Loading or failed saved views retain the default grid;
+controls expose loading, retry and save failure through the shared component.
+
+Effective coverage also includes `InlineLinesPanel` with the stable spec/entity
+passed by `DetailView`, the eight financial-account custom grids and both
+`ReconciliationSplitPanel` tables for verified scopes, the migrated bespoke
+business grids, and the independent Calendar and Not Posted Documents DataTable
+surfaces. Existing audited DataTable adapters retain their parent's controller;
+rendering DataTable alone does not establish a personal-view scope. The active
+inline add-row form temporarily uses the default layout and disables personal-view
+controls to preserve alignment; its saved/unsaved personal layout resumes afterward.
+
+Actual limits remain: unaudited/custom list layouts fail closed; mixed or
+unverifiable reconciliation candidates have no personal-view request; projections
+without a configured entity, permission/assignment matrices, demonstrations and
+output/form surfaces are not automatically admitted. `AttachmentsTable` is still
+blocked: `/attachments/{tableName}/{recordId}` is a cross-cutting resource without
+a configured attachment entity or a collision-free attachment-surface persistence
+contract. The owning document's header scope would collide with its list view.
+See [bespoke grid inventory](bespoke-grid-views.md),
+[standalone DataTable inventory](standalone-datatable-grid-views.md), and
+[financial-account inventory](../tools/app-shell/src/windows/custom/financial-account/README.md)
+for effective coverage and exact prerequisites. Full verification: `npm run test:all` passed
+(1,175 Vitest files; 24,617 tests passed, 2 skipped), and `npm run build` passed. A mock-browser
+smoke on `/sales-order` confirmed the default-on column controls and hiding a column. The smoke
+stubbed session/access and returned 204 for grid-view requests; authenticated persistence was
+not verified. Lint/formatters and human QA remain pending.

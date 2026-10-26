@@ -1,3 +1,27 @@
+const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/hooks/useGridView.js', () => ({
+  useGridView: (options) => {
+    gridBoundary.last = options;
+    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
+      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
+      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
+    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
+      reorderable: () => false, isResizable: () => false };
+  },
+}));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
+  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
+}));
+
+beforeEach(() => {
+  gridBoundary.enabled = false;
+  gridBoundary.active = false;
+  gridBoundary.keys = null;
+  gridBoundary.widths = {};
+  gridBoundary.save.mockClear();
+});
+
 // @covers tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/representanteLegal.js
@@ -341,5 +365,44 @@ describe('representanteLegal — Modelo 390 identity rules (classic AD_OrgInfo c
     expect(buildRepresentativePayload({ taxID: 'x-1234567-l' }).taxID).toBe('X1234567L');
     expect(activeRepresentatives([{ id: 1 }, { id: 2, active: false }, { id: 3, active: 'N' }, { id: 4, active: 'Y' }])
       .map(r => r.id)).toEqual([1, 4]);
+  });
+});
+
+describe('RepresentantesLegalesSection personal columns', () => {
+  it('keeps line/390 markers and edit/delete actions fixed when data columns move or hide', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['notaryName', 'firstName'];
+    gridBoundary.widths = { firstName: 260 };
+    mockFetch([{ id: 'r10', lineNo: 10, taxID: '12345678Z', firstName: 'Ana', lastname1: 'Garcia', powerDate: '2026-01-15', notaryName: 'Notary 1' }]);
+    render(<Harness />);
+    const row = await screen.findByTestId('RepresentantesLegalesSection__row-r10');
+    expect(row.children).toHaveLength(4);
+    expect(within(row.children[0]).getByTestId('RepresentantesLegalesSection__included')).toBeInTheDocument();
+    expect(row.children[1]).toHaveTextContent('Notary 1');
+    expect(row.children[2]).toHaveTextContent('Ana Garcia');
+    expect(within(row.children[3]).getByTestId('RepresentantesLegalesSection__edit')).toBeInTheDocument();
+    expect(within(row.children[3]).getByTestId('RepresentantesLegalesSection__delete')).toBeInTheDocument();
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers).toHaveLength(4);
+    expect(headers[2]).toHaveStyle({ width: '260px' });
+    fireEvent.click(within(row).getByTestId('RepresentantesLegalesSection__edit'));
+    expect(screen.getByTestId('RepresentantesLegalesSection__input-taxID')).toHaveValue('12345678Z');
+    expect(screen.getByTestId('RepresentantesLegalesSection__input-firstName')).toHaveValue('Ana');
+    fireEvent.change(screen.getByTestId('RepresentantesLegalesSection__input-firstName'), { target: { value: 'Eva' } });
+    fireEvent.click(screen.getByTestId('RepresentantesLegalesSection__save'));
+    await waitFor(() => expect(global.fetch.mock.calls.some(([, options]) => options.method === 'PATCH'
+      && JSON.parse(options.body).firstName === 'Eva')).toBe(true));
+    expect(gridBoundary.last).toMatchObject({ spec: 'organization', entity: 'representanteLegal', enabled: true });
+  });
+
+  it('uses the original complete grid while personal preferences have not loaded', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.keys = ['firstName'];
+    mockFetch([]);
+    render(<Harness />);
+    const empty = await screen.findByTestId('RepresentantesLegalesSection__empty');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(6);
+    expect(empty).toHaveAttribute('colspan', '6');
   });
 });

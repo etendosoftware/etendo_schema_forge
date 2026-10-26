@@ -43,6 +43,7 @@ import {
   PROOF_OF_CONCEPT_MENU,
   WEBMCP_AGENT_CHAT,
   IMPORT_BATCH_SIZE,
+  GRID_COLUMN_VIEWS,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from '../flag-keys.js';
@@ -392,3 +393,31 @@ describe('numeric flags', () => {
   });
 });
 
+
+
+describe('personal grid views — default and kill switch', () => {
+  it('enables the shared flag when no provider is configured', () => {
+    const { result } = renderHook(() => useFeatureFlag(GRID_COLUMN_VIEWS));
+    expect(result.current).toBe(true);
+    expect(defaultForFlag(GRID_COLUMN_VIEWS)).toBe(true);
+    expect(buildInMemoryConfiguration()[GRID_COLUMN_VIEWS].defaultVariant).toBe('on');
+  });
+
+  it('honors an explicit false override for every grid surface', async () => {
+    await act(async () => {
+      await initFeatureFlags({
+        env: { VITE_FEATURE_FLAGS: JSON.stringify({ [GRID_COLUMN_VIEWS]: false }) },
+        logger: silentLogger,
+      });
+    });
+    const { result } = renderHook(() => useFeatureFlag(GRID_COLUMN_VIEWS));
+    expect(result.current).toBe(false);
+  });
+
+  it('keeps grid views enabled when provider startup fails', async () => {
+    vi.spyOn(OpenFeature, 'setProviderAndWait').mockRejectedValue(new Error('offline'));
+    await initFeatureFlags({ env: {}, logger: silentLogger });
+    const { result } = renderHook(() => useFeatureFlag(GRID_COLUMN_VIEWS));
+    expect(result.current).toBe(true);
+  });
+});

@@ -1,5 +1,16 @@
 # Not Posted Documents
 
+## Personal grid view
+
+With `GRID_COLUMN_VIEWS` enabled, the grid exposes the existing column
+visibility/order/width controls and explicit personal-view save action for
+`not-posted-documents/header`. This is the configured projection entity, regardless of the
+source document type of an individual row. URL-backed filters, client-side sorting, row
+navigation/posting, bulk selection/posting, and loading/error/empty behavior remain owned
+by this page. Saving the view does not save filters or selected documents. See the
+[standalone DataTable inventory](../standalone-datatable-grid-views.md) for the complete
+surface inventory and pending validation status.
+
 ## Intent
 
 Use this window to find and mass-post all accounting documents that are still pending posting across the organization. It aggregates unposted documents of every **supported** type into a single cross-document list, lets the user filter by type, accounting status and date range (auto-applied, last 12 months by default), shows each row's accounting status as a badge, and exposes **Abrir documento** / **Contabilizar** per row (hover) plus a bulk **Contabilizar** in the floating selection toolbar.

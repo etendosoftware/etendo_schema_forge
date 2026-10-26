@@ -1,3 +1,4 @@
+import { FinancialGridView, FinancialTableRow as TableRow } from './FinancialGridView.jsx';
 import { Fragment, useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowLeftRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -12,7 +13,6 @@ import {
   Table,
   TableHeader,
   TableBody,
-  TableRow,
   TableHead,
   TableCell,
 } from '@/components/ui/table';
@@ -656,6 +656,16 @@ function computeMovementRowClassName({ selected, highlighted, expanded, rowCanEx
   ].filter(Boolean).join(' ');
 }
 
+
+const PERSONAL_COLUMNS = [
+  { key: 'expand', gridConfigurable: false },
+  { key: 'select', gridConfigurable: false },
+  ...CONTRACT_COLUMNS.map((col) => ({ ...col, key: col.name, labelKey: MOVEMENT_CELL_RENDERERS[col.name]?.labelKey })),
+  { key: 'amount', labelKey: 'financeAccountMovementsColAmount' },
+  { key: 'balance', labelKey: 'financeAccountMovementsColBalance' },
+  { key: 'actions', gridConfigurable: false },
+];
+
 export function MovementsTable({
   movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
   highlightTxnId = null, onReload, onEdit, accountCurrencyId = null,
@@ -816,13 +826,14 @@ export function MovementsTable({
     : 'transition-opacity duration-200';
 
   return (
+    <FinancialGridView spec="financial-account" entity="transaction" columns={PERSONAL_COLUMNS} data={movements}>
     <TooltipProvider data-testid="TooltipProvider__ae5a16">
       {/* TruncatedText needs a bounded table layout so its span can measure actual clipping.
           The minimum keeps structural/status/amount columns usable; narrower viewports scroll
           horizontally instead of squeezing them until their controls disappear. */}
       <Table className={`table-fixed min-w-[1280px] ${dimWhileRefreshing}`} data-testid="Table__ae5a16">
         <TableHeader data-testid="TableHeader__ae5a16">
-          <TableRow
+          <TableRow header
             className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"
             data-testid="TableRow__ae5a16">
             <TableHead className="w-10" data-testid="TableHead__ae5a16" />
@@ -881,5 +892,6 @@ export function MovementsTable({
         </TableBody>
       </Table>
     </TooltipProvider>
+    </FinancialGridView>
   );
 }

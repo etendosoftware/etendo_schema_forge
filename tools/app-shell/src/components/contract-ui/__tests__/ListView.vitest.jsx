@@ -228,6 +228,21 @@ describe('ListView', () => {
       expect(capturedTableProps.gridView.active).toBe(false);
     });
 
+    it('shows personal grid controls only in the table mode when switching a gallery window', () => {
+      gridViewTestState.flagEnabled = true;
+      render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns}
+        gridColumnViewsSurface galleryRenderer={() => <div data-testid="personal-grid-gallery" />} />);
+      const buttons = screen.getByTestId('view-toggle').querySelectorAll('button');
+      fireEvent.click(buttons[0]);
+      expect(screen.getByTestId('grid-view-controls')).toBeInTheDocument();
+      fireEvent.click(buttons[1]);
+      expect(screen.getByTestId('personal-grid-gallery')).toBeInTheDocument();
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+      fireEvent.click(buttons[0]);
+      expect(screen.getByTestId('grid-view-controls')).toBeInTheDocument();
+      expect(screen.queryByTestId('personal-grid-gallery')).not.toBeInTheDocument();
+    });
+
     it('activates only the explicitly enabled standard surface and exposes hide controls for configurable columns', async () => {
       gridViewTestState.flagEnabled = true;
       const { rerender } = render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns} gridColumnViewsSurface />);
@@ -250,16 +265,55 @@ describe('ListView', () => {
       expect(gridViewTestState.setVisibility).toHaveBeenLastCalledWith('list:ad:DocumentNo:field:documentNo', true);
     });
 
-    it('fails closed for custom list surfaces, table-owned scroll and hidden list bars', () => {
+    it('fails closed for unaudited custom list surfaces even with a hidden list bar', () => {
       gridViewTestState.flagEnabled = true;
-      const { rerender } = render(<ListView {...defaultProps} initialColumns={gridColumns} />);
+      render(<ListView {...defaultProps} initialColumns={gridColumns} hideListBar tableOwnsScroll />);
       expect(gridViewTestState.options.enabled).toBe(false);
       expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    });
 
-      rerender(<ListView {...defaultProps} initialColumns={gridColumns} gridColumnViewsSurface tableOwnsScroll />);
+    it.each([
+      ['direct scroll', { tableOwnsScroll: true }],
+      ['options scroll', { listViewOptions: { tableOwnsScroll: true } }],
+      ['direct hidden bar', { hideListBar: true }],
+      ['options hidden bar', { listViewOptions: { hideListBar: true } }],
+      ['both hidden and scrolling', { hideListBar: true, tableOwnsScroll: true }],
+      ['options false overrides direct hidden bar', { hideListBar: true, listViewOptions: { hideListBar: false } }],
+    ])('keeps exactly one usable grid control group with %s', async (_label, surfaceProps) => {
+      gridViewTestState.flagEnabled = true;
+      gridViewTestState.overrides = { dirty: true };
+      render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns}
+        gridColumnViewsSurface {...surfaceProps} />);
+      expect(gridViewTestState.options.enabled).toBe(true);
+      expect(capturedTableProps.gridView.active).toBe(true);
+      expect(screen.getAllByTestId('grid-view-controls')).toHaveLength(1);
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('grid-view-columns-trigger'));
+      expect(await screen.findByTestId('grid-view-column-documentNo')).toBeEnabled();
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByTestId('grid-view-save'));
+      expect(gridViewTestState.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides fallback controls for a gallery renderer and restores them when only the table renders', () => {
+      gridViewTestState.flagEnabled = true;
+      localStorage.setItem(`viewMode:${defaultProps.entity}`, 'gallery');
+      const { rerender } = render(<ListView {...defaultProps} Table={CapturingMockTable}
+        initialColumns={gridColumns} gridColumnViewsSurface hideListBar
+        galleryRenderer={() => <div data-testid="hidden-bar-gallery" />} />);
+      expect(screen.getByTestId('hidden-bar-gallery')).toBeInTheDocument();
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+      rerender(<ListView {...defaultProps} Table={CapturingMockTable}
+        initialColumns={gridColumns} gridColumnViewsSurface hideListBar />);
+      expect(screen.getByTestId('mock-table')).toBeInTheDocument();
+      expect(screen.getAllByTestId('grid-view-controls')).toHaveLength(1);
+      localStorage.removeItem(`viewMode:${defaultProps.entity}`);
+    });
+
+    it('keeps fallback controls absent when the shared feature flag is off', () => {
+      render(<ListView {...defaultProps} initialColumns={gridColumns} gridColumnViewsSurface hideListBar tableOwnsScroll />);
       expect(gridViewTestState.options.enabled).toBe(false);
-      rerender(<ListView {...defaultProps} initialColumns={gridColumns} gridColumnViewsSurface hideListBar />);
-      expect(gridViewTestState.options.enabled).toBe(false);
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
     });
 
     it('surfaces pending, load-error, retry and save-error states accessibly', () => {

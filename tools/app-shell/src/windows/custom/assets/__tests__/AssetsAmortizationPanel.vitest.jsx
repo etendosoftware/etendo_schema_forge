@@ -1,3 +1,27 @@
+const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/hooks/useGridView.js', () => ({
+  useGridView: (options) => {
+    gridBoundary.last = options;
+    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
+      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
+      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
+    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
+      reorderable: () => false, isResizable: () => false };
+  },
+}));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
+  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
+}));
+
+beforeEach(() => {
+  gridBoundary.enabled = false;
+  gridBoundary.active = false;
+  gridBoundary.keys = null;
+  gridBoundary.widths = {};
+  gridBoundary.save.mockClear();
+});
+
 // @covers tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
@@ -70,6 +94,39 @@ describe('AssetsAmortizationPanel — "Porcentaje" column formatting (ETP-5414)'
 
     expect(screen.getByText('1,67%')).toBeInTheDocument();
     expect(screen.queryByText('1.67%')).not.toBeInTheDocument();
+  });
+  it('restores the same column order and widths across header, rows and totals while selection stays fixed', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['amortizationAmount', 'amortization'];
+    gridBoundary.widths = { amortizationAmount: 205 };
+    const { container } = renderInRouter(<AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1', depreciationAmt: 100 }} />);
+    await screen.findByText('Period 1');
+    for (const section of ['thead', 'tbody', 'tfoot']) {
+      const row = container.querySelector(`${section} tr`);
+      expect(row.children).toHaveLength(3);
+      expect([...row.querySelectorAll('[data-grid-column]')].map(cell => cell.dataset.gridColumn)).toEqual([
+        'amortizationAmount', 'amortization',
+      ]);
+      expect(row.children[1]).toHaveStyle({ width: '205px' });
+    }
+    expect(container.querySelector('tfoot [data-grid-column="amortizationAmount"]').textContent)
+      .toBe(container.querySelector('tbody [data-grid-column="amortizationAmount"]').textContent);
+    const checkbox = container.querySelector('tbody tr button[role="checkbox"]');
+    fireEvent.click(checkbox);
+    expect(checkbox).toHaveAttribute('aria-checked', 'true');
+    expect(gridBoundary.last).toMatchObject({ spec: 'assets', entity: 'amortizationLine', enabled: true });
+    expect(gridBoundary.last.columns.find(column => column.key === 'amortization').required).toBe(true);
+  });
+
+  it('retains the complete default layout while the saved view is unavailable', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.keys = ['amortization'];
+    const { container } = renderInRouter(<AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1' }} />);
+    await screen.findByText('Period 1');
+    expect(container.querySelector('thead tr').children).toHaveLength(5);
+    expect(container.querySelector('tbody tr').children).toHaveLength(5);
+    expect(screen.getByText('1,67%')).toBeInTheDocument();
   });
 });
 

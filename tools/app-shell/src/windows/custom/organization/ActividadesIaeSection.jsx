@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useGridView } from '@/hooks/useGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
+import { Fragment, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, Info, Loader2, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useUI } from '@/i18n';
@@ -16,6 +20,13 @@ import { useActividadesIae, iaeCapState, IAE_MAX_SECONDARY_ACTIVITIES } from './
 const EPGRAFE_FIELD = { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', type: 'selector', reference: 'EPIAE_Epigraph', inputMode: 'selector' };
 const TYPE_FIELD = { key: 'epiaeType', column: 'Epiae_Type_ID', type: 'selector', reference: 'epiae_type', inputMode: 'selector' };
 const CODE_FIELD = { key: 'epiaeCode', column: 'Epiae_Code_ID', type: 'selector', reference: 'EPIAE_Code', inputMode: 'selector' };
+
+const GRID_COLUMNS = [
+  { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', label: 'orgIaeEpigraphLabel' },
+  { key: 'epiaeType', column: 'Epiae_Type_ID', label: 'orgIaeTypeLabel' },
+  { key: 'epiaeCode', column: 'Epiae_Code_ID', label: 'orgIaeCodeLabel' },
+  { key: 'default', column: 'Isdefault', label: 'orgIaeDefaultLabel', required: true },
+];
 
 function isDefaultTrue(value) {
   return value === true || value === 'Y';
@@ -59,6 +70,11 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
   const ui = useUI();
   const { rows, loading, error, refetch, createRow, updateRow, deleteRow, enforceSingleDefault } =
     useActividadesIae(orgId, apiBaseUrl);
+
+  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridView = useGridView({ spec: 'organization', entity: 'actividadesDelIae', columns: GRID_COLUMNS, data: rows, enabled: gridColumnViews, apiBaseUrl });
+  const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
+  const gridLabel = (key) => ui(GRID_COLUMNS.find(column => column.column === key)?.label ?? key);
 
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -152,7 +168,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     if (loading) {
       return (
         <tr>
-          <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+          <td colSpan={columns.length + 1} className="py-8 text-center text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__iaeLoading" />
           </td>
         </tr>
@@ -161,7 +177,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     if (rows.length === 0 && !addingRow) {
       return (
         <tr>
-          <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground" data-testid="ActividadesIaeSection__empty">
+          <td colSpan={columns.length + 1} className="py-6 text-center text-sm text-muted-foreground" data-testid="ActividadesIaeSection__empty">
             {ui('orgIaeEmpty')}
           </td>
         </tr>
@@ -171,9 +187,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
       const rowDefault = isDefaultTrue(row.default);
       const missingCode = rowDefault && !row.epiaeCode;
       const rowSaving = savingId === row.id;
-      return (
-        <tr key={row.id} className="border-b border-border/50 last:border-b-0" data-testid={`ActividadesIaeSection__row-${row.id}`}>
-          <td className="py-1.5 px-2 align-middle">
+      const cells = {
+        epgrafeIAE: (<td className="py-1.5 px-2 align-middle">
             <CreatableSearchSelect
               field={EPGRAFE_FIELD}
               value={row.epgrafeIAE ?? ''}
@@ -184,8 +199,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
               token={token}
               serverSearch
               data-testid="CreatableSearchSelect__iaeEpgrafe" />
-          </td>
-          <td className="py-1.5 px-2 align-middle">
+          </td>),
+        epiaeType: (<td className="py-1.5 px-2 align-middle">
             <CreatableSearchSelect
               field={TYPE_FIELD}
               value={row.epiaeType ?? ''}
@@ -196,8 +211,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
               token={token}
               serverSearch
               data-testid="CreatableSearchSelect__iaeType" />
-          </td>
-          <td className="py-1.5 px-2 align-middle">
+          </td>),
+        epiaeCode: (<td className="py-1.5 px-2 align-middle">
             <div className="flex items-center gap-1.5">
               <div className="flex-1 min-w-0">
                 <CreatableSearchSelect
@@ -226,15 +241,19 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                 </TooltipProvider>
               )}
             </div>
-          </td>
-          <td className="py-1.5 px-2 align-middle">
+          </td>),
+        default: (<td className="py-1.5 px-2 align-middle">
             <Checkbox
               checked={rowDefault}
               disabled={rowSaving}
               onChange={() => handleDefaultToggle(row, !rowDefault)}
               aria-label={ui('orgIaeDefaultLabel')}
               data-testid="Checkbox__iaeDefault" />
-          </td>
+          </td>),
+      };
+      return (
+        <tr key={row.id} className="border-b border-border/50 last:border-b-0" data-testid={`ActividadesIaeSection__row-${row.id}`}>
+          {columns.map(column => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
           <td className="py-1.5 px-2 align-middle text-right">
             {rowSaving || deletingId === row.id ? (
               <Loader2 className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__iaeRowBusy" />
@@ -257,6 +276,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
 
   return (
     <div className="flex flex-col gap-3" data-testid="ActividadesIaeSection__root">
+      {gridColumnViews && <GridViewControls gridView={gridView} gridColumns={GRID_COLUMNS} ui={ui} t={gridLabel} />}
       <div className="overflow-x-auto rounded-lg border border-border">
         {/* table-fixed: keeps the 3 selector columns (Epígrafe/Clave/Código) evenly split
             and the 2 fixed columns (Principal/actions) at their w-24/w-10 from the first
@@ -268,21 +288,27 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeEpigraphLabel')}</th>
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeTypeLabel')}</th>
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">
-                {ui('orgIaeCodeLabel')}
-                <CodeHint data-testid="CodeHint__iae" />
-              </th>
-              <th className="h-9 w-24 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeDefaultLabel')}</th>
+              {columns.map(column => {
+                const label = ui(column.label);
+                return (
+                  <th key={column.key} className="relative h-9 px-3 text-left align-middle text-xs font-semibold text-foreground"
+                    style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, overflowWrap: 'anywhere' } : column.key === 'default' ? { width: 96 } : column.key === 'taxID' || column.key === 'powerDate' ? { width: 112 } : undefined}
+                    {...gridHeaderProps(column, gridView)}>
+                    {label}
+                    {column.key === 'epiaeCode' && <CodeHint data-testid="CodeHint__iaeCode" />}
+                    {gridReorderHandle(column, gridView, label, ui)}
+                    {gridResizeHandle(column, gridView, label, ui)}
+                  </th>
+                );
+              })}
               <th className="h-9 w-10 px-2" />
             </tr>
           </thead>
           <tbody>
             {renderRowsBody()}
-            {addingRow && (
-              <tr className="bg-status-info/40 border-t-2 border-primary/20" data-testid="ActividadesIaeSection__addRow">
-                <td className="py-1.5 px-2 align-middle">
+            {addingRow && (() => {
+              const cells = {
+                epgrafeIAE: (<td className="py-1.5 px-2 align-middle">
                   <CreatableSearchSelect
                     field={EPGRAFE_FIELD}
                     value={newRow.epgrafeIAE ?? ''}
@@ -293,8 +319,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                     token={token}
                     serverSearch
                     data-testid="CreatableSearchSelect__iaeNewEpgrafe" />
-                </td>
-                <td className="py-1.5 px-2 align-middle">
+                </td>),
+                epiaeType: (<td className="py-1.5 px-2 align-middle">
                   <CreatableSearchSelect
                     field={TYPE_FIELD}
                     value={newRow.epiaeType ?? ''}
@@ -305,8 +331,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                     token={token}
                     serverSearch
                     data-testid="CreatableSearchSelect__iaeNewType" />
-                </td>
-                <td className="py-1.5 px-2 align-middle">
+                </td>),
+                epiaeCode: (<td className="py-1.5 px-2 align-middle">
                   <CreatableSearchSelect
                     field={CODE_FIELD}
                     value={newRow.epiaeCode ?? ''}
@@ -317,14 +343,18 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                     token={token}
                     serverSearch
                     data-testid="CreatableSearchSelect__iaeNewCode" />
-                </td>
-                <td className="py-1.5 px-2 align-middle">
+                </td>),
+                default: (<td className="py-1.5 px-2 align-middle">
                   <Checkbox
                     checked={!!newRow.default}
                     onChange={() => setNewRow(p => ({ ...p, default: !p.default }))}
                     aria-label={ui('orgIaeDefaultLabel')}
                     data-testid="Checkbox__iaeNewDefault" />
-                </td>
+                </td>),
+              };
+              return (
+              <tr className="bg-status-info/40 border-t-2 border-primary/20" data-testid="ActividadesIaeSection__addRow">
+                {columns.map(column => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
                 <td className="py-1.5 px-2 align-middle">
                   <div className="flex items-center gap-1 justify-end">
                     {savingNew ? (
@@ -354,7 +384,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                   </div>
                 </td>
               </tr>
-            )}
+            ); })() }
           </tbody>
         </table>
       </div>

@@ -2528,6 +2528,7 @@ export function DetailView({
                                   ref={inlineLinesRef}
                                   data={enrichedChildren}
                                   entity={detailEntity}
+                                  specName={windowName}
                                   token={token}
                                   apiBaseUrl={apiBaseUrl}
                                   linesLayout={linesLayout}

@@ -1,3 +1,4 @@
+import { FinancialGridView, FinancialGridRow } from '../FinancialGridView.jsx';
 import { Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
@@ -195,12 +196,16 @@ export function ClearedItemsInline({ reconciliationId, currency = 'EUR' }) {
   };
 
   return (
+    <FinancialGridView spec="financial-account" entity="clearedItems" columns={[
+      ...COLUMNS.map((col) => ({ ...col, key: col.name, labelKey: CELL_RENDERERS[col.name]?.labelKey, gridTrack: CELL_RENDERERS[col.name]?.width, ...(col.name === 'financialAccountTransaction' ? { gridConfigurable: false } : {}) })),
+      { key: 'amount', labelKey: 'financeAccountClearedItemsColAmount', gridTrack: TAIL_TRACKS },
+    ]} data={items}>
     <div
       className="rounded-lg border border-[hsl(var(--border-subtle))] bg-card shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)]"
       data-testid="cleared-items-inline"
     >
       {/* Same header treatment as the parent table and the Movements grid. */}
-      <div
+      <FinancialGridRow header
         role="row"
         style={GRID_STYLE}
         className={cn(
@@ -215,9 +220,10 @@ export function ClearedItemsInline({ reconciliationId, currency = 'EUR' }) {
           </span>
         ))}
         <span className="text-right">{ui('financeAccountClearedItemsColAmount')}</span>
-      </div>
+      </FinancialGridRow>
       {renderBody({ loading, items, ui, currency, cellCtx })}
     </div>
+    </FinancialGridView>
   );
 }
 
@@ -225,14 +231,14 @@ export function ClearedItemsInline({ reconciliationId, currency = 'EUR' }) {
 function renderBody({ loading, items, ui, currency, cellCtx }) {
   if (loading) {
     return SKELETON_ROWS.map((n) => (
-      <div
+      <FinancialGridRow
         key={n}
         role="row"
         style={GRID_STYLE}
         className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-2.5 last:border-b-0')}
       >
         {SKELETON_CELL_KEYS.map((k) => <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__9d6ccb" />)}
-      </div>
+      </FinancialGridRow>
     ));
   }
   if (items.length === 0) {
@@ -243,7 +249,7 @@ function renderBody({ loading, items, ui, currency, cellCtx }) {
     );
   }
   return items.map((row) => (
-    <div
+    <FinancialGridRow
       key={row.id}
       role="row"
       style={GRID_STYLE}
@@ -264,6 +270,6 @@ function renderBody({ loading, items, ui, currency, cellCtx }) {
         );
       })}
       <AmountCell row={row} currency={currency} data-testid="AmountCell__9d6ccb" />
-    </div>
+    </FinancialGridRow>
   ));
 }

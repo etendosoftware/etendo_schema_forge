@@ -1,3 +1,20 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx
+const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/hooks/useGridView.js', () => ({
+  useGridView: (options) => {
+    gridBoundary.last = options;
+    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
+      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
+      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
+    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
+      reorderable: () => false, isResizable: () => false };
+  },
+}));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
+  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
+}));
+
 // Vitest render tests for SiiMonitorSection
 
 const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: [], totalRows: 0 } }) }));
@@ -15,11 +32,11 @@ vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));
 vi.mock('../FmPrimitives.jsx', () => ({
-  StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
-  NumFactura: ({ n }) => <span>{n}</span>,
+  StatusPill: ({ estado, onClick }) => <button data-testid="status-pill" onClick={onClick}>{estado}</button>,
+  NumFactura: ({ n, onOpen }) => <button onClick={onOpen}>{n}</button>,
   ScrollSentinel: () => null,
-  isErrorStatus: () => false,
-  isPendingStatus: () => false,
+  isErrorStatus: estado => estado === 'Error',
+  isPendingStatus: estado => estado === 'Pendiente',
   fmtDate: (d) => d ?? '',
   PAGE_SIZE: 20,
   ExportIcon: () => <span>export</span>,
@@ -41,7 +58,7 @@ vi.mock('../useFiscalMonitor.js', () => ({
   SII_DATE_FIELD,
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { buildCutoverCriteria, SII_DATE_FIELD } from './testHelpers/siiCutoverStub.js';
 import SiiMonitorSection from '../SiiMonitorSection.jsx';
 
@@ -53,7 +70,13 @@ const baseProps = {
 };
 
 describe('SiiMonitorSection', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    gridBoundary.enabled = false;
+    gridBoundary.active = false;
+    gridBoundary.keys = null;
+    gridBoundary.widths = {};
+  });
 
   it('renders with mockRows and shows export button', () => {
     render(<SiiMonitorSection {...baseProps} mockRows={[]} />);
@@ -120,5 +143,66 @@ describe('SiiMonitorSection', () => {
     await waitFor(() => {
       expect(stableApiFetch).toHaveBeenCalled();
     });
+  });
+});
+
+
+describe('SiiMonitorSection personal columns', () => {
+  const row = { id: 'invoice-1', documentNo: 'INV-1', invoiceDate: '2026-01-15',
+    businessPartner: 'bp-1', aeatsiiEstado: 'Error', grandTotalAmount: 10 };
+  beforeEach(() => {
+    gridBoundary.enabled = false;
+    gridBoundary.active = false;
+    gridBoundary.keys = null;
+    gridBoundary.widths = {};
+    stableApiFetch.mockReset().mockResolvedValue({ ok: true, json: async () => ({ response: { data: [row], totalRows: 1 } }) });
+    stableToggleRow.mockClear();
+  });
+
+  it('keeps all original columns and no personal controls when disabled', async () => {
+    render(<SiiMonitorSection {...baseProps} />);
+    await screen.findByText('INV-1');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(9);
+    expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+    expect(gridBoundary.last.enabled).toBe(false);
+  });
+
+  it('keeps fixed selection and status/invoice actions after hiding and moving data columns', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['aeatsiiEstado', 'documentNo'];
+    gridBoundary.widths = { documentNo: 240 };
+    const onInvoiceOpen = vi.fn();
+    const onBpClick = vi.fn();
+    render(<SiiMonitorSection {...baseProps} onInvoiceOpen={onInvoiceOpen} onBpClick={onBpClick} />);
+    await screen.findByText('INV-1');
+    const table = screen.getByRole('table');
+    expect(within(table).getAllByRole('columnheader').map(cell => cell.textContent)).toEqual([
+      '', 'fiscalMonitor.col.status', 'fiscalMonitor.col.invoiceNumber',
+    ]);
+    expect(within(table).getAllByRole('columnheader')[2]).toHaveStyle({ width: '240px' });
+    const cells = table.querySelectorAll('tbody tr:first-child td');
+    expect(cells).toHaveLength(3);
+    fireEvent.click(within(cells[0]).getByRole('checkbox'));
+    expect(stableToggleRow).toHaveBeenCalledWith('invoice-1');
+    fireEvent.click(screen.getByTestId('status-pill'));
+    expect(onBpClick).toHaveBeenCalledWith('bp-1', 'invoice-1', 'sales-invoice');
+    fireEvent.click(screen.getByText('INV-1'));
+    expect(onInvoiceOpen).toHaveBeenCalledWith('invoice-1', 'sales-invoice');
+    expect(gridBoundary.last).toMatchObject({ spec: 'sii-monitor', entity: 'issuedInvoices', enabled: true });
+    fireEvent.click(screen.getByText('fiscalMonitor.sii.tab.received'));
+    await waitFor(() => expect(gridBoundary.last.entity).toBe('receivedInvoices'));
+    fireEvent.click(await screen.findByText('INV-1'));
+    expect(onInvoiceOpen).toHaveBeenLastCalledWith('invoice-1', 'purchase-invoice');
+  });
+
+  it('retains all default columns when personal view loading has not succeeded', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = false;
+    gridBoundary.keys = ['documentNo'];
+    render(<SiiMonitorSection {...baseProps} />);
+    await screen.findByText('INV-1');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(9);
+    expect(screen.getByText('fiscalMonitor.col.csv')).toBeInTheDocument();
   });
 });

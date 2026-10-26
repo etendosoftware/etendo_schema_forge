@@ -1,7 +1,10 @@
+import { useGridView } from '@/hooks/useGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { DoorOpen, Lock } from 'lucide-react';
-import { useUI, useLocaleSwitch } from '@/i18n';
+import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { formatCalendarMonthYear, parseCalendarDate } from '@/lib/dateOnly.js';
 import { Tag } from '@/components/ui/tag';
@@ -120,6 +123,8 @@ export function PeriodRowActions({ period, disabled, onAction }) {
 
 export default function PeriodsExpandablePanel({ parentId, apiBaseUrl, readOnly = false, onCount }) {
   const ui = useUI();
+  const t = useLabel();
+  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const { locale } = useLocaleSwitch();
   const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array (same convention as AccountingPanel):
@@ -266,6 +271,16 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl, readOnly 
     },
   ], [ui, locale]);
 
+  // Use the backing NEO entity, independently of the surrounding route or parent record.
+  const gridView = useGridView({
+    spec: 'open-close-period-control',
+    entity: 'periodControl',
+    columns,
+    data: periods ?? [],
+    enabled: gridColumnViews,
+    apiBaseUrl,
+  });
+
   if (periods === null) {
     return <div data-testid="periods-expandable-panel-error" className="p-4 text-sm text-destructive">{ui('periodsLoadError')}</div>;
   }
@@ -273,7 +288,9 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl, readOnly 
 
   return (
     <div data-testid={loading ? 'periods-expandable-panel-loading' : 'periods-expandable-panel'}>
+      {gridView.enabled && <GridViewControls gridView={gridView} gridColumns={columns} ui={ui} t={t} />}
       <DataTable
+        gridView={gridView}
         columns={columns}
         data={periods ?? []}
         loading={loading}

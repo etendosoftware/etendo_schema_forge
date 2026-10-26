@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Children, Fragment, cloneElement, createContext, useContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { gridViewColumnId, useGridView } from '@/hooks/useGridView.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { GridViewControls } from './GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, Unlink, SearchX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -28,7 +32,7 @@ import {
   Table,
   TableHeader,
   TableBody,
-  TableRow,
+  TableRow as BaseTableRow,
   TableHead,
   TableCell,
 } from '@/components/ui/table';
@@ -78,6 +82,112 @@ const STATUS_LABEL_KEY = {
   difference: 'financeReconcileFilterStatusDifference',
   reconciled: 'financeReconcileFilterStatusReconciled',
 };
+
+const ReconciliationGridContext = createContext(null);
+const LINE_GRID_COLUMNS = [
+  { key: 'selection', labelKey: 'financeReconcileColSelect', gridConfigurable: false },
+  { key: 'transactionDate', column: 'Datetrx', labelKey: 'financeReconcileColDate', gridDefaultWidthPx: 108 },
+  { key: 'description', column: 'Description', labelKey: 'financeReconcileColDescription' },
+  { key: 'reconciliationProgress', labelKey: 'financeReconcileColProgress', gridDefaultWidthPx: 90 },
+  { key: 'amount', labelKey: 'financeReconcileColAmount', gridDefaultWidthPx: 139 },
+];
+
+/** The action API returns movements or invoice installments, never invoice headers. */
+export function resolveReconciliationCandidateScope(candidates, source, reconciledMode = false) {
+  if (!candidates.length) {
+    if (reconciledMode || source === 'receipts' || source === 'payments') return { spec: 'financial-account', entity: 'transaction' };
+    if (source === 'salesInvoices' || source === 'purchaseInvoices') return { spec: source === 'salesInvoices' ? 'sales-invoice' : 'purchase-invoice', entity: 'paymentPlan' };
+    return null;
+  }
+  let scope = null;
+  for (const row of candidates) {
+    if (typeof row.id !== 'string' || !row.id) return null;
+    let current;
+    if (row.kind === 'invoice') {
+      // ReconciliationHandler.buildInvoiceCandidates emits schedule identity and direction.
+      if (row.scheduleId !== row.id || typeof row.isReceipt !== 'boolean') return null;
+      current = { spec: row.isReceipt ? 'sales-invoice' : 'purchase-invoice', entity: 'paymentPlan' };
+    } else if (row.kind == null && row.scheduleId == null && row.invoiceId == null) {
+      // buildCandidates and CandidatesSupport.buildLinkedTransactions both emit movement IDs.
+      current = { spec: 'financial-account', entity: 'transaction' };
+    } else return null;
+    if (scope && (scope.spec !== current.spec || scope.entity !== current.entity)) return null;
+    scope = current;
+  }
+  return scope;
+}
+
+function candidateGridColumns(scope, reconciledMode) {
+  const transaction = scope?.spec === 'financial-account';
+  return [
+    { key: 'selection', labelKey: 'financeReconcileColSelect', gridConfigurable: false },
+    { key: transaction ? 'transactionDate' : 'reconciliationDocumentDate', ...(transaction ? { column: 'Statementdate' } : {}), labelKey: 'financeReconcileColDate', gridDefaultWidthPx: 104 },
+    { key: 'reconciliationDocumentInfo', labelKey: 'financeReconcileColInfo' },
+    { key: 'pendingBalance', labelKey: 'financeReconcileColPendingBalance', gridDefaultWidthPx: 121 },
+    { key: 'amount', labelKey: 'financeReconcileColAmount', gridDefaultWidthPx: 121, ...(reconciledMode ? { gridConfigurable: false } : {}) },
+  ];
+}
+
+/** Local projection: common hooks stay unchanged and action/selection anchors stay fixed. */
+function PersonalReconciliationGrid({ scope, columns, items, children }) {
+  const ui = useUI();
+  const flag = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridColumns = useMemo(() => columns.map((column) => ({
+    ...column, label: ui(column.labelKey), gridDefaultWidthPx: column.gridDefaultWidthPx ?? 120,
+    ...(column.gridConfigurable === false ? { gridReorderable: false } : {}),
+  })), [columns, ui]);
+  const gridView = useGridView({ spec: scope?.spec, entity: scope?.entity, columns: gridColumns, data: items, enabled: Boolean(flag && scope) });
+  const visible = [];
+  const rank = new Map(gridView.columns.map((column, index) => [column.key, index]));
+  let segment = [];
+  const flush = () => {
+    visible.push(...segment.filter((column) => gridView.columnVisibility[gridViewColumnId(column)] !== false)
+      .sort((a, b) => rank.get(a.key) - rank.get(b.key)));
+    segment = [];
+  };
+  for (const column of gridColumns) {
+    if (column.gridConfigurable === false) { flush(); visible.push(column); }
+    else segment.push(column);
+  }
+  flush();
+  return (
+    <ReconciliationGridContext.Provider value={{ scope, columns: gridColumns, visible, gridView, ui }}>
+      {children}
+    </ReconciliationGridContext.Provider>
+  );
+}
+
+function ReconciliationGridControls() {
+  const { scope, columns, gridView, ui } = useContext(ReconciliationGridContext);
+  if (!gridView.enabled) return null;
+  return <div data-testid={`recon-grid-view-${scope.spec}-${scope.entity}`}>
+    <GridViewControls gridView={gridView} gridColumns={columns} ui={ui} t={(key) => columns.find((column) => (column.column ?? column.label) === key)?.label ?? key} />
+  </div>;
+}
+
+function flattenGridCells(children) {
+  return Children.toArray(children).flatMap((child) => child.type === Fragment ? flattenGridCells(child.props.children) : [child]);
+}
+
+function TableRow({ header = false, children, ...props }) {
+  const context = useContext(ReconciliationGridContext);
+  if (!context?.gridView.active) return <BaseTableRow {...props}>{children}</BaseTableRow>;
+  const { columns, visible, gridView, ui } = context;
+  const cells = flattenGridCells(children);
+  if (cells.length === 1 && cells[0].props.colSpan) return <BaseTableRow {...props}>{cloneElement(cells[0], { colSpan: visible.length })}</BaseTableRow>;
+  if (cells.length !== columns.length) return <BaseTableRow {...props}>{children}</BaseTableRow>;
+  return <BaseTableRow {...props}>{visible.map((column) => {
+    const cell = cells[columns.findIndex((source) => source.key === column.key)];
+    const id = gridViewColumnId(column);
+    const width = column.gridConfigurable === false ? null : gridView.columnSizing[id];
+    const style = { ...cell.props.style, ...(width != null ? { width, maxWidth: width } : {}) };
+    if (!header) return cloneElement(cell, { key: column.key, ...(cell.type === DateCell || cell.type === MoneyCell || cell.type === ProgressCell ? { gridWidth: width } : { style }) });
+    const chrome = { ...column, gridViewId: id };
+    return cloneElement(cell, { key: column.key, ...gridHeaderProps(chrome, gridView), style: { ...style, position: 'relative' },
+      children: <>{cell.props.children}{gridReorderHandle(chrome, gridView, column.label, ui)}{gridResizeHandle(chrome, gridView, column.label, ui)}</>,
+    });
+  })}</BaseTableRow>;
+}
 
 /* StatusBadge moved to ./reconciliationBadges.jsx (ETP-4965 QA round) so the automatch modal renders
    the very same pill: same palette, same labels, one place to change them. */
@@ -228,7 +338,7 @@ function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
         className={cn('table-fixed transition-opacity duration-200', dimWhileRefreshing)}
         data-testid="Table__d0f4d5">
         <TableHeader data-testid="TableHeader__d0f4d5">
-          <TableRow
+          <TableRow header
             className="h-11 border-b border-[hsl(var(--border-subtle))] [&_th]:text-xs [&_th]:font-semibold [&_th]:text-[hsl(var(--foreground))]"
             data-testid="TableRow__d0f4d5">
             {headCells}
@@ -260,9 +370,10 @@ function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
 const APPROX_PREFIX = '\u2248\u00A0';
 
 /** Date cell shared by both panels (per-panel width/background via cellClassName). */
-function DateCell({ date, bcpLocale, cellClassName }) {
+function DateCell({ date, bcpLocale, cellClassName, gridWidth }) {
   return (
     <TableCell
+      style={gridWidth != null ? { width: gridWidth, maxWidth: gridWidth } : undefined}
       className={cn('h-[62px] px-3 text-sm font-normal text-[hsl(var(--foreground))]', cellClassName)}
       data-testid="TableCell__d0f4d5">
       {formatDate(date, bcpLocale)}
@@ -352,9 +463,10 @@ function AccountCurrencyAmountLine({ value, currency, className, approximate, te
  * candidate's account-currency equivalent), it renders as a smaller line underneath — the
  * "show the EUR total alongside the other currency" requirement.
  */
-function MoneyCell({ cellClassName, ...amountProps }) {
+function MoneyCell({ cellClassName, gridWidth, ...amountProps }) {
   return (
     <TableCell
+      style={gridWidth != null ? { width: gridWidth, maxWidth: gridWidth } : undefined}
       className={cn('h-[62px] px-3 text-right align-middle', cellClassName)}
       data-testid="TableCell__d0f4d5">
       <DualAmount {...amountProps} data-testid="DualAmount__d0f4d5" />
@@ -367,10 +479,12 @@ function MoneyCell({ cellClassName, ...amountProps }) {
  * scrollable table and an optional footer. Keeps the two panels from repeating
  * the same structural scaffold.
  */
-function PanelShell({ className, toolbar, headCells, loading, items, renderRow, footer, colSpan = 5 }) {
+function PanelShell({ className, toolbar, headCells, loading, items, renderRow, footer, colSpan = 5, gridScope = null, gridColumns = [] }) {
   return (
+    <PersonalReconciliationGrid scope={gridScope} columns={gridColumns} items={items}>
     <div className={cn('flex min-w-[30%] flex-1 flex-col overflow-hidden', className)}>
       {toolbar}
+      <ReconciliationGridControls />
       <PanelTable
         headCells={headCells}
         loading={loading}
@@ -380,6 +494,7 @@ function PanelShell({ className, toolbar, headCells, loading, items, renderRow, 
         data-testid="PanelTable__d0f4d5" />
       {footer}
     </div>
+    </PersonalReconciliationGrid>
   );
 }
 
@@ -393,11 +508,11 @@ function PanelShell({ className, toolbar, headCells, loading, items, renderRow, 
  * when the line has something reconciled (`reconciledAmount != 0`); otherwise the cell is empty.
  * No green, no "% chip" on the row — the bar carries the signal (ETP-4502 iteration 5).
  */
-function ProgressCell({ line, currency, cellClassName }) {
+function ProgressCell({ line, currency, cellClassName, gridWidth }) {
   const ui = useUI();
   const reconciled = Number(line.reconciledAmount) || 0;
   if (reconciled === 0) {
-    return <TableCell className={cn('h-[62px] w-[90px] px-3', cellClassName)} data-testid="TableCell__d0f4d5" />;
+    return <TableCell style={gridWidth != null ? { width: gridWidth, maxWidth: gridWidth } : undefined} className={cn('h-[62px] w-[90px] px-3', cellClassName)} data-testid="TableCell__d0f4d5" />;
   }
   const pct = Math.min(100, Math.max(0, Number(line.reconciledPct) || 0));
   const pending = Math.abs(Number(line.pendingAmount) || 0);
@@ -407,7 +522,7 @@ function ProgressCell({ line, currency, cellClassName }) {
     // `overflow-hidden` (packages/app-shell-core ui/table.jsx): the tooltip below
     // is `absolute bottom-full`, deliberately floating above this cell's own box,
     // and would otherwise get silently clipped.
-    <TableCell className={cn('h-[62px] w-[90px] px-3 overflow-visible', cellClassName)} data-testid="TableCell__d0f4d5">
+    <TableCell style={gridWidth != null ? { width: gridWidth, maxWidth: gridWidth } : undefined} className={cn('h-[62px] w-[90px] px-3 overflow-visible', cellClassName)} data-testid="TableCell__d0f4d5">
       <div className="group relative flex items-center" data-testid={`recon-progress-${line.id}`}>
         <div className="h-1 w-full overflow-hidden rounded-[2px] bg-[hsl(var(--border))]">
           <span className="block h-full bg-[hsl(var(--foreground))]" style={{ width: `${pct}%` }} />
@@ -531,6 +646,8 @@ function StatementLinesPanel({
   return (
     <PanelShell
       className="border-r border-[hsl(var(--border-subtle))]"
+      gridScope={{ spec: 'financial-account', entity: 'bankStatementLines' }}
+      gridColumns={LINE_GRID_COLUMNS}
       toolbar={toolbar}
       loading={loading}
       items={lines}
@@ -915,6 +1032,8 @@ function CandidateOperationsPanel({
   return (
     <PanelShell
       toolbar={toolbar}
+      gridScope={resolveReconciliationCandidateScope(candidates, source, reconciledMode)}
+      gridColumns={candidateGridColumns(resolveReconciliationCandidateScope(candidates, source, reconciledMode), reconciledMode)}
       loading={loading}
       items={candidates}
       renderRow={renderRow}
