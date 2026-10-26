@@ -3,7 +3,7 @@
 // Representante legal / Modelo 390) are shown, from the fiscal models catalog and the
 // organization's SII / TicketBAI / VERI*FACTU configuration.
 
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 
 // The hook composes two readers; both are replaced by mutable stubs so each test sets the exact
 // state of each source. `isModelActive` is kept real — it is part of the rule under test.
@@ -13,8 +13,20 @@ vi.mock('../../fiscal-models/useFiscalModelsCatalog.js', async (importOriginal) 
   const actual = await importOriginal();
   return { ...actual, useFiscalModelsCatalog: vi.fn(() => catalogState) };
 });
-vi.mock('../../fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => fiscalState),
+// `useRealFiscalConfig` switches the stub to the real reader (driven through a mocked
+// useApiFetch) for the organization-switch tests, which depend on how that reader moves from
+// one organization's records to the next.
+let useRealFiscalConfig = false;
+vi.mock('../../fiscal-config/useFiscalConfig.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useFiscalConfig: vi.fn((...args) => (useRealFiscalConfig ? actual.useFiscalConfig(...args) : fiscalState)),
+  };
+});
+const mockApiFetch = vi.fn();
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => mockApiFetch,
 }));
 
 import {
@@ -169,6 +181,76 @@ describe('useFiscalSectionVisibility', () => {
     catalogState = settledCatalog({});
     fiscalState = settledFiscal({ profile: null, error: 'boom', siiRecord: SII_RECORD });
     const { result } = renderHook(() => useFiscalSectionVisibility('ORG_1', API));
+
+    expect(result.current).toEqual({ ...NOTHING, loading: false });
+  });
+});
+
+describe('useFiscalSectionVisibility — switching organization', () => {
+  const API = '/sws/neo/organization';
+  const ok = (rows) => Promise.resolve({ ok: true, status: 200, json: async () => ({ response: { data: rows } }) });
+  const failed = () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+
+  // ORG_1 has an active SII configuration; nothing else for either organization.
+  function respondFor(org2) {
+    mockApiFetch.mockImplementation((url) => {
+      if (url.includes('organization=ORG_2')) return org2(url);
+      if (url.startsWith('/sii-config/')) return ok([{ id: 'SII_1', active: true }]);
+      return ok([]);
+    });
+  }
+
+  function renderTracked() {
+    return renderHook(({ orgId }) => useFiscalSectionVisibility(orgId, API), {
+      initialProps: { orgId: 'ORG_1' },
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockApiFetch.mockReset();
+    useRealFiscalConfig = true;
+    catalogState = { activeModels: {}, loaded: true, error: null };
+  });
+
+  afterEach(() => {
+    useRealFiscalConfig = false;
+  });
+
+  it('reads the fiscal config of the new organization', async () => {
+    respondFor(() => ok([]));
+    const { result, rerender } = renderTracked();
+    await waitFor(() => expect(result.current.showCert).toBe(true));
+
+    rerender({ orgId: 'ORG_2' });
+
+    expect(useFiscalConfig).toHaveBeenLastCalledWith('ORG_2', API);
+    await waitFor(() => expect(mockApiFetch.mock.calls.some(([url]) => url.includes('organization=ORG_2'))).toBe(true));
+  });
+
+  it('hides the previous organization\'s certificate while the new one loads', async () => {
+    let releaseOrg2;
+    const org2Pending = new Promise((r) => { releaseOrg2 = r; });
+    respondFor(() => org2Pending.then(() => ok([])));
+    const { result, rerender } = renderTracked();
+    await waitFor(() => expect(result.current.showCert).toBe(true));
+
+    rerender({ orgId: 'ORG_2' });
+
+    expect(result.current).toEqual({ ...NOTHING, loading: true });
+
+    await act(async () => { releaseOrg2(); await org2Pending; });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.showCert).toBe(false);
+  });
+
+  it('keeps ignoring the previous organization\'s records when the new one fails to load', async () => {
+    respondFor(() => failed());
+    const { result, rerender } = renderTracked();
+    await waitFor(() => expect(result.current.showCert).toBe(true));
+
+    rerender({ orgId: 'ORG_2' });
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current).toEqual({ ...NOTHING, loading: false });
   });

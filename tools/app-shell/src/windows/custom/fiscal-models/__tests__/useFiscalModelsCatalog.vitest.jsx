@@ -98,6 +98,18 @@ describe('useFiscalModelsCatalog', () => {
     expect(result.current.activeModels).toEqual({});
   });
 
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+  ])('on a request rejected with %s: error is still truthy, so callers fail closed', async (_name, reason) => {
+    mockApiFetch.mockReturnValue(Promise.reject(reason));
+    const { result } = renderHook(() => useFiscalModelsCatalog(API));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.activeModels).toEqual({});
+  });
+
   it('fetches nothing and reports loaded when there is no apiBaseUrl', () => {
     const { result } = renderHook(() => useFiscalModelsCatalog(''));
 
