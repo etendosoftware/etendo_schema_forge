@@ -4888,21 +4888,21 @@ Practical effect: deactivating a model in the catalog immediately hides all of i
 `FmListPage` reads the catalog through `useFiscalModelsCatalog(apiBaseUrl, token)`
 (`fiscal-models/useFiscalModelsCatalog.js`) — `{ activeModels, setActiveModels, loaded, error }`,
 same request as before (`GET <neo base>/fiscal-models-catalog`). The Organization window's fiscal
-section visibility uses the same hook (see `organization.md`, "Fiscal section visibility"). One
-rule for every reader: a never-saved catalog (`{}`) means **no model active**; `defaultActive` is
-not applied. `ReversedInvoicesPanel.jsx` (below) still reads the catalog inline — same shape and
-rule, not migrated in ETP-5831.
+section visibility uses the same hook (see `organization.md`, "Fiscal section visibility"), and so
+does `ReversedInvoicesPanel.jsx`'s "Correctiva del 349" gate (below). One rule for every reader: a
+never-saved catalog (`{}`) or a failed read means **no model active**; `defaultActive` is not
+applied. Readers test a model with `isModelActive(activeModels, id)` (`=== true`).
 
 ### Downstream consumer outside this window: the sales/purchase-invoice "Correctiva del 349" gate (ETP-4755)
 
 `GET /fiscal-models-catalog` (see "Persistence" above) is a generic, per-client endpoint — not
 scoped to the `fiscal-models` spec — so it is reachable cross-spec.
 `tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx` — the shared component
-behind both `sales-invoice`'s and `purchase-invoice`'s "Rectificaciones" tab — now calls this same
-endpoint (mirroring how its own `YearPickerSelect` already calls the cross-spec
-`/fiscal-calendar/year`) and only shows its "Correctiva del 349" checkbox panel (plus the dependent
-AEAT year/period/base-amount fields) when a local `model349Active` flag — derived from the fetch,
-mirroring `FmListPage`'s own `activeModels`/`catalogLoaded` shape — confirms `349: true`.
+behind both `sales-invoice`'s and `purchase-invoice`'s "Rectificaciones" tab — reads this same
+endpoint through the shared `useFiscalModelsCatalog(apiBaseUrl, token)` hook (ETP-5831, see
+"Shared catalog reader" above; it re-reads on `token` change) and only shows its "Correctiva del
+349" checkbox panel (plus the dependent AEAT year/period/base-amount fields) when
+`model349Active = loaded && isModelActive(activeModels, '349')` holds.
 
 **Fail-closed in every failure mode**, mirroring `NewDeclModal`'s own convention: hidden while the
 fetch is loading, on a non-200 response, on a network error, and on a malformed/missing-key JSON
