@@ -81,11 +81,16 @@ export function shouldKeepLocating({ found, hasMore, loadedRows, pageSize, inter
  * Scrolls `panel` so `option` sits in its vertical centre (ETP-5903). Done on the panel itself
  * rather than with `scrollIntoView`, which would also scroll every scrollable ancestor — the
  * selectors' panels are portalled, so that would move the page behind them.
+ *
+ * @returns {boolean} false when the panel could not scroll far enough (the option is among the
+ *   last loaded rows), so the caller can centre again once the next page has landed.
  */
 export function centerOptionInPanel(panel, option) {
-  if (!panel || !option) return;
+  if (!panel || !option) return false;
   const panelRect = panel.getBoundingClientRect();
   const optionRect = option.getBoundingClientRect();
   const offsetInPanel = optionRect.top - panelRect.top + panel.scrollTop;
-  panel.scrollTop = Math.max(0, offsetInPanel - (panel.clientHeight - optionRect.height) / 2);
+  const target = offsetInPanel - (panel.clientHeight - optionRect.height) / 2;
+  panel.scrollTop = Math.max(0, target);
+  return !(target > panel.scrollHeight - panel.clientHeight);
 }

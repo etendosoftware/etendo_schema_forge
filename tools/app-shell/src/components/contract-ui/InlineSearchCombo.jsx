@@ -516,6 +516,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // around it in view: done ONCE per open, when the committed option first appears (on page 0 or
   // after the walk), and never after the user typed or pressed a key, so a page landing later can
   // never yank the list away from where they are. Focus and keyboard highlight are left alone.
+  // An option among the last loaded rows cannot be centred yet: retried when the next page lands.
   const selectedIndex = resolveSelectedIndex(filtered, value);
   useEffect(() => {
     if (!open || selectedIndex < 0 || centeredRef.current || interactedRef.current) return;
@@ -523,9 +524,8 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const panel = dropdownRef.current;
     const el = panel?.querySelector(`[data-option-index="${selectedIndex}"]`);
     if (!el) return;
-    centerOptionInPanel(panel, el);
-    centeredRef.current = true;
-  }, [open, selectedIndex, query, dropdownStyle]);
+    centeredRef.current = centerOptionInPanel(panel, el) || !hasMore;
+  }, [open, selectedIndex, query, dropdownStyle, filtered.length, hasMore]);
 
   // ETP-5903 — arrows start from the committed option while no search is typed; with a query the
   // list is that search's results, from the top (AC4).

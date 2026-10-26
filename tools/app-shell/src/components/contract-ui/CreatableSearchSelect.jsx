@@ -890,15 +890,15 @@ export function CreatableSearchSelect({
 
   // ETP-5903 — centre the committed option ONCE per open, when it first appears (page 0, after the
   // walk, or in a fetch-once/lookup list), never under a user who already typed or pressed a key.
+  // An option among the last loaded rows cannot be centred yet: retried when the next page lands.
   useEffect(() => {
     if (!open || selectedIndex < 0 || centeredRef.current || interactedRef.current) return;
     if (query.trim() !== '' || panelLoading) return;
     const panel = dropdownRef.current;
     const el = panel?.querySelector(`[data-option-index="${selectedIndex}"]`);
     if (!el) return;
-    centerOptionInPanel(panel, el);
-    centeredRef.current = true;
-  }, [open, selectedIndex, query, panelLoading, dropdownStyle]);
+    centeredRef.current = centerOptionInPanel(panel, el) || !hasMore;
+  }, [open, selectedIndex, query, panelLoading, dropdownStyle, filteredOptions.length, hasMore]);
 
   // Derived visibility/state flags for the trigger and dropdown — computed together
   // since they all depend on the same selection/parent/query inputs.

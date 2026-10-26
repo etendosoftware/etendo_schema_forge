@@ -90,6 +90,15 @@ test('centerOptionInPanel accounts for the current scroll and never goes negativ
   assert.equal(top.scrollTop, 0);
 });
 
+test('centerOptionInPanel reports whether the option could be centred', () => {
+  // 1000px of content: an option 600px down fits, one 950px down is clamped at the bottom.
+  const panel = () => fakeBox(100, 200, { scrollTop: 0, clientHeight: 200, scrollHeight: 1000 });
+  assert.equal(centerOptionInPanel(panel(), fakeBox(700, 30)), true);
+  const clamped = panel();
+  assert.equal(centerOptionInPanel(clamped, fakeBox(1050, 30)), false);
+  assert.equal(clamped.scrollTop, 950 - 85);
+});
+
 test('centerOptionInPanel is a no-op without a panel or an option', () => {
   assert.doesNotThrow(() => centerOptionInPanel(null, fakeBox(0, 10)));
   assert.doesNotThrow(() => centerOptionInPanel(fakeBox(0, 10), null));
