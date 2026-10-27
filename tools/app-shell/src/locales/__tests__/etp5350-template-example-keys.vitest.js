@@ -108,6 +108,10 @@ describe('ETP-5350 — the template example keys', () => {
     expect(unkeyed.contacts).toEqual([
       'city', 'email', 'etgoEmail', 'etgoFirstname', 'etgoLastname', 'etgoPhone', 'etgoWeb',
       'firstName', 'lastName', 'oBTIKTaxIDKey', 'phone', 'postal', 'region', 'taxID',
+      // ETP-5544: "No" is the same word in English and Spanish (and a valid YES_NO_VALUES
+      // synonym in both), so the vendor example needs no key. `customer` ("Yes"/"Sí") has one.
+      // The column is in the contract while `contact-category-type` is OFF (`hiddenWhenFlag`).
+      'vendor',
     ]);
   });
 });

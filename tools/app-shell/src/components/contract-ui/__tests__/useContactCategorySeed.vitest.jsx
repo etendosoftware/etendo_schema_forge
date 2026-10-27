@@ -6,6 +6,10 @@
  * default "Cliente", in BOTH entry points (the document's Contacto selector and the OCR
  * "Crear nuevo contacto" popup). The category id is per client, so it is looked up before the
  * popup mounts; the embedded Contacts window reads its seed once, on mount.
+ *
+ * The popup cases run with the `contact-category-type` flag ON (the category decides the type:
+ * no `customer` / `vendor` seeded, a create check). The flag-OFF popup is covered at its toggle
+ * point, useContactCreateTypeGate.vitest.jsx.
  */
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +20,10 @@ vi.mock('@/auth/api.js', () => ({ buildHeaders: () => ({}) }));
 // Stable identity: the hooks memoise their create check on `ui`.
 const ui = (key, params) => `${key}|${params?.category ?? ''}`;
 vi.mock('@/i18n', () => ({ useUI: () => ui }));
+vi.mock('@/lib/flags', async (importOriginal) => {
+  const original = await importOriginal();
+  return { ...original, useFeatureFlag: (key) => key === original.CONTACT_CATEGORY_TYPE };
+});
 
 const modalProps = vi.fn();
 vi.mock('../RecordCreateModal.jsx', () => ({
@@ -83,7 +91,7 @@ describe('useContactCategorySeed', () => {
   });
 });
 
-describe('useCreateContactModal (manual document flow)', () => {
+describe('useCreateContactModal (manual document flow, contact-category-type ON)', () => {
   function Host({ documentType }) {
     const { contactPortal, createContactCtxValue } = useCreateContactModal({
       apiBaseUrl: '/sws/neo/purchase-invoice', token: 't', documentType,
@@ -157,7 +165,7 @@ describe('useCreateContactModal (manual document flow)', () => {
   });
 });
 
-describe('CreateContactModalAdapter (OCR flow)', () => {
+describe('CreateContactModalAdapter (OCR flow, contact-category-type ON)', () => {
   const item = { payload: { documentType: 'purchase', prefilled: { name: 'ACME', taxID: 'B123' } } };
 
   it('seeds Proveedor together with the OCR prefill', async () => {
