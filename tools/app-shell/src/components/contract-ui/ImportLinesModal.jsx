@@ -20,6 +20,13 @@ function classifyQtyDraft(raw, maxQty) {
   return { valid: false, tooHigh: isNumeric && magnitude > maxQty };
 }
 
+// Shows a caller-provided toast ({ message, variant }) and reports whether it did.
+function showCustomToast(custom) {
+  if (!custom?.message) return false;
+  (custom.variant === 'warning' ? toast.warning : toast.success)(custom.message);
+  return true;
+}
+
 export default function ImportLinesModal({
   invoiceId,
   bpId,
@@ -233,47 +240,44 @@ export default function ImportLinesModal({
   };
 
   const showSuccessToast = ({ count, importedDocIds, afterImportResult }) => {
-    const custom = getSuccessToast?.({ ...selection, count, importedDocIds, afterImportResult });
-    if (custom?.message) {
-      (custom.variant === 'warning' ? toast.warning : toast.success)(custom.message);
-      return;
-    }
+    if (showCustomToast(getSuccessToast?.({ ...selection, count, importedDocIds, afterImportResult }))) return;
     toast.success(ui(successMessageKey, { count }));
   };
 
-  // Default: one POST per selected line against `linesEndpoint`.
-  const importViaPerLinePost = async () => {
+  // One POST per selected line, in document order; line numbers step by 10.
+  const postSelectedLines = async () => {
     let lineNo = 10;
     let errors = 0;
     let importedCount = 0;
     const importedDocIds = new Set();
-    for (const doc of documents) {
-      const lines = (docLines[doc.id] || []).filter(l => selected.has(l.id));
-      if (lines.length === 0) continue;
-
-      for (const line of lines) {
-        const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
-        const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
-        // ETP-5424 — a line create in an import loop: a cut-off write that still commits
-        // would be re-imported on retry, so it opts out of the default timeout.
-        const res = await apiFetch(`/${linesEndpoint}`, {
-          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
-        });
-        if (!res.ok) errors++;
-        else { importedDocIds.add(doc.id); importedCount++; }
-        lineNo += 10;
-      }
+    for (const { line, qty, docId } of collectSelectedLines()) {
+      const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
+      // ETP-5424 — a line create in an import loop: a cut-off write that still commits
+      // would be re-imported on retry, so it opts out of the default timeout.
+      const res = await apiFetch(`/${linesEndpoint}`, {
+        method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
+      });
+      if (!res.ok) errors++;
+      else { importedDocIds.add(docId); importedCount++; }
+      lineNo += 10;
     }
-    const afterImportResult = afterImport
-      ? await afterImport({
-        importedDocIds, sharedContext, base, headers, invoiceId,
-        documents, extraState, selectedDocIds: selection.selectedDocIds,
-      })
-      : undefined;
+    return { errors, importedCount, importedDocIds };
+  };
+
+  const runAfterImport = (importedDocIds) => (afterImport
+    ? afterImport({
+      importedDocIds, sharedContext, base, headers, invoiceId,
+      documents, extraState, selectedDocIds: selection.selectedDocIds,
+    })
+    : undefined);
+
+  // Default: one POST per selected line against `linesEndpoint`.
+  const importViaPerLinePost = async () => {
+    const { errors, importedCount, importedDocIds } = await postSelectedLines();
+    const afterImportResult = await runAfterImport(importedDocIds);
     if (errors > 0) {
       toast.warning(ui('importedLinesWithErrors', { count: importedCount, errors }));
-      const extra = getSuccessToast?.({ ...selection, count: importedCount, importedDocIds, afterImportResult, partial: true });
-      if (extra?.message) (extra.variant === 'warning' ? toast.warning : toast.success)(extra.message);
+      showCustomToast(getSuccessToast?.({ ...selection, count: importedCount, importedDocIds, afterImportResult, partial: true }));
     } else {
       showSuccessToast({ count: importedCount, importedDocIds, afterImportResult });
     }
