@@ -178,13 +178,16 @@ function flattenGridCells(children) {
 
 function TableRow({ header = false, children, ...props }) {
   const context = useContext(ReconciliationGridContext);
-  if (!context?.gridView.active) return <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{children}</BaseTableRow>;
+  // The generated id is a fallback: a caller that passes its own data-testid (the row
+  // identity the tests and the DOM rely on) must win. The default therefore sits BEFORE
+  // the spread, and the caller's props are spread after it.
+  if (!context?.gridView.active) return <BaseTableRow data-testid="BaseTableRow__d0f4d5" {...props}>{children}</BaseTableRow>;
   const { columns, visible, gridView, ui } = context;
   const cells = flattenGridCells(children);
-  if (cells.length === 1 && cells[0].props.colSpan) return <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{cloneElement(cells[0], { colSpan: visible.length })}</BaseTableRow>;
-  if (cells.length !== columns.length) return <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{children}</BaseTableRow>;
+  if (cells.length === 1 && cells[0].props.colSpan) return <BaseTableRow data-testid="BaseTableRow__d0f4d5" {...props}>{cloneElement(cells[0], { colSpan: visible.length })}</BaseTableRow>;
+  if (cells.length !== columns.length) return <BaseTableRow data-testid="BaseTableRow__d0f4d5" {...props}>{children}</BaseTableRow>;
   return (
-    <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{visible.map((column) => {
+    <BaseTableRow data-testid="BaseTableRow__d0f4d5" {...props}>{visible.map((column) => {
       const cell = cells[columns.findIndex((source) => source.key === column.key)];
       const id = gridViewColumnId(column);
       const width = column.gridConfigurable === false ? null : gridView.columnSizing[id];
