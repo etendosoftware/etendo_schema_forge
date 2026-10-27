@@ -216,6 +216,7 @@ its behaviour is documented in its topic doc and in `com.etendoerp.go`
 | `bp-portal-link` | `bp-self-service-portal` | [BP self-service portal](plans/2026-09-10-bp-self-service-portal.md); backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 | `demo-data-transfer` | `demo-data-transfer` | Retired in `com.etendoerp.go` by ETP-5480 (`docs/feature-flags-and-tenant-upgrade.md`, "`demo-data-transfer` — retired"); the registry entry still awaits its retirement |
 | `environment-access-enforcement-off` | `environment-access-enforcement-kill-switch` | [Paid tenant infrastructure](paid-tenant-infrastructure.md) §3.7; local testing: [`stripe-local-testing.md`](stripe-local-testing.md) "The 402 body and the kill switch"; operating it: "Operating environment-access enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
+| `structured-address-for-sepa` | `structured-address-for-sepa` | ETP-5806 relaunch (TTL 2026-11-15, driven by [etendosoftware/etendo-ai#24](https://github.com/etendosoftware/etendo-ai/issues/24) — SEPA 2025 rulebooks ban unstructured addresses in remittance files from that date); backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
 
 ## Personal business-grid views
 
