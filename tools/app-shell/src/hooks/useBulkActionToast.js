@@ -47,34 +47,11 @@ export function showBulkActionToast(ui, result) {
   // `omitted.length > 0` means more than one row was actually selected, so those
   // stay on the generic/mixed path below.
   if (failed.length === 1 && ok === 0 && omitted.length === 0) {
-    // `messageKeys` (ETP-5316) lets a core document-action failure be resolved by AD_MESSAGE key
-    // rather than by its text — the text carries AD line numbers (10, 20, 30…) that match no
-    // literal and point at nothing the user can find in the document. Absent against a backend
-    // that does not send them, in which case this is the pre-existing text-only translation.
-    const text = translateBackendError(failed[0].message, ui, {
-      messageKeys: failed[0].messageKeys,
-      messageParams: failed[0].messageParams,
-    })
-      || ui('actionFailed');
-    // ETP-5577: a "period not open" refusal also offers the way to open it.
-    const recovery = periodNotAvailableToastOptions(failed[0].messageKeys, ui);
-    if (Object.keys(recovery).length > 0) toast.error(text, recovery);
-    else toast.error(text);
+    showSingleRecordFailureToast(ui, failed[0]);
     return;
   }
 
-  // Backward compatible: when nothing was omitted (every consumer that doesn't pass
-  // a `rowFilter`, plus a clean run of one that does), the message stays the plain
-  // 2-number "processExecuted" wording — no redundant "0 omitted" clause cluttering
-  // the common case.
-  const msg = omitted.length === 0
-    ? ui('processExecuted')
-      .replace('{ok}', String(ok))
-      .replace('{failed}', String(failed.length))
-    : ui('processExecutedWithOmitted')
-      .replace('{ok}', String(ok))
-      .replace('{omitted}', String(omitted.length))
-      .replace('{failed}', String(failed.length));
+  const msg = bulkSummaryMessage(ui, { ok, omitted, failed });
   // ETP-5316 QA rejection — a mass/multi-record action must NEVER surface a
   // per-row backend error as toast `description`: it doesn't scale past a
   // handful of rows and the raw messages (e.g. line-number references) aren't
@@ -102,6 +79,44 @@ export function showBulkActionToast(ui, result) {
     // omitted, 0 failed" case (nothing eligible, but nothing genuinely errored).
     toast.warning(msg);
   }
+}
+
+/**
+ * The one-record failure toast: the record's own backend error, translated, plus the way out of a
+ * "period not open" refusal when that is the cause.
+ */
+function showSingleRecordFailureToast(ui, failure) {
+  // `messageKeys` (ETP-5316) lets a core document-action failure be resolved by AD_MESSAGE key
+  // rather than by its text — the text carries AD line numbers (10, 20, 30…) that match no
+  // literal and point at nothing the user can find in the document. Absent against a backend
+  // that does not send them, in which case this is the pre-existing text-only translation.
+  const text = translateBackendError(failure.message, ui, {
+    messageKeys: failure.messageKeys,
+    messageParams: failure.messageParams,
+  })
+    || ui('actionFailed');
+  // ETP-5577: a "period not open" refusal also offers the way to open it.
+  const recovery = periodNotAvailableToastOptions(failure.messageKeys, ui);
+  if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+  else toast.error(text);
+}
+
+/**
+ * The count summary of a multi-record run. Backward compatible: when nothing was omitted (every
+ * consumer that doesn't pass a `rowFilter`, plus a clean run of one that does), the message stays
+ * the plain 2-number "processExecuted" wording — no redundant "0 omitted" clause cluttering the
+ * common case.
+ */
+function bulkSummaryMessage(ui, { ok, omitted, failed }) {
+  if (omitted.length === 0) {
+    return ui('processExecuted')
+      .replace('{ok}', String(ok))
+      .replace('{failed}', String(failed.length));
+  }
+  return ui('processExecutedWithOmitted')
+    .replace('{ok}', String(ok))
+    .replace('{omitted}', String(omitted.length))
+    .replace('{failed}', String(failed.length));
 }
 
 export function persistBulkActionResult(result) {
