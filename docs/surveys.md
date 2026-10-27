@@ -483,13 +483,25 @@ Survey tuning is layered, in this precedence order (highest wins):
 1. **Backoffice window** — "Survey Configuration" in com.etendoerp.go, three tabs:
    - **Config** (`ETGO_Survey_Config`) — the truly-global settings, single row (`AD_Client_ID = '0'`).
    - **Surveys** (`ETGO_Survey_Type`) — **one row per survey** (`survey_key`: `nps`, `csat_invoicing`,
-     `csat_order`, ...) holding that survey's own eligibility tunables. Adding a new survey with the
-     same kind of eligibility rule (time-based or document-based) is a new row, not a new `AD_COLUMN`
-     — this is the extensibility fix from the original single-row `ETGO_Survey_Config` design. The
-     row's standard **Active** field (`isactive`) is a real enable/disable switch for that survey
-     type — see [Disabling a Survey](#disabling-a-survey).
+     `csat_order`, `csat_onboarding`) holding that survey's own eligibility tunables. Adding a new
+     survey with the same kind of eligibility rule (time-based or document-based) is a new row, not
+     a new `AD_COLUMN` — this is the extensibility fix from the original single-row
+     `ETGO_Survey_Config` design. The row's standard **Active** field (`isactive`) is a real
+     enable/disable switch for that survey type — see [Disabling a Survey](#disabling-a-survey).
    - **Canned Responses** (`ETGO_Survey_Canned_Resp`) — a **child tab** of Surveys (FK
      `Etgo_Survey_Type_ID`), so responses are scoped to whichever survey row is selected.
+
+   **All of the above exists from day one (ETP-5870, gap Q1) — the window is never empty.** Every
+   install is seeded with the Config singleton, all 4 `ETGO_Survey_Type` rows (including
+   `csat_onboarding`), and the canned responses for the 3 surveys that have a fallback list
+   (`nps`: 7 chips, `csat_invoicing`/`csat_order`: 6 chips each, each × `en_US`/`es_ES`) — the exact
+   current hardcoded defaults from `survey-config.js`/`surveys.js`, now directly visible and
+   editable. A new tenant gets this from `OnboardingSurveyConfigService` (wired into
+   `OnboardingProvisioningChain#ensureOnboardingDataset`); an already-provisioned install is
+   repaired by the corrective data-fix `R51-etgo-survey-config-seed.sql` (run once per install via
+   `--fix R51-etgo-survey-config-seed --client 0` — these rows are a System pseudo-tenant
+   singleton, not per-`AD_Client` data, same shape as the `AEATSII_CAUSE_EXEMPTION` catalog). See
+   `docs/etendo-ad/onboarding-gaps.md` gap Q1 for the full derivation.
 
    Served read-only via `GET /sws/survey-config/` (JWT-protected, same auth as `/sws/neo/*`).
    Fetched once via `loadRemoteSurveyConfig()` — called from `useSurveyEngine` as soon as the user
@@ -554,12 +566,19 @@ Guard) only apply to login-triggered surveys like NPS and `csat_onboarding`; doc
 `csat_invoicing` and `csat_order` each have their own row, so their Min Documents/Document Gap/
 Response Cooldown can now differ independently (previously one shared value for both).
 
-**`csat_onboarding` needs a new `ETGO_Survey_Type` row to become configurable** — its `csat_onboarding`
-value on the `ETGO Survey Key` reference list (`AD_REFERENCE_ID = CAEF9503906A40ECA458EADB4C3BF87B`)
-was added in ETP-4353 Phase 2 (it previously only had `csat_invoicing`/`csat_order`/`nps`). Until an
-admin creates that row, `getSurveyTypeConfig('csat_onboarding')` falls straight through to the
-`VITE_SURVEY_ONBOARDING_DELAY_DAYS` env var / `DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS` (1 day),
-preserving the original hardcoded 24h behavior.
+**`csat_onboarding` has its own `ETGO_Survey_Type` row from day one (ETP-5870, gap Q1).** Its
+`csat_onboarding` value on the `ETGO Survey Key` reference list
+(`AD_REFERENCE_ID = CAEF9503906A40ECA458EADB4C3BF87B`) was added in ETP-4353 Phase 2 (it previously
+only had `csat_invoicing`/`csat_order`/`nps`), but until ETP-5870 no row was ever seeded for it —
+an admin had to create one from scratch to tune it at all. The row now ships pre-filled with
+`Min Account Age (days) = 1` (its own special-cased default, matching
+`DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS` — **not** the `nps` default of 60, since this column means
+"days since onboarding completed" for `csat_onboarding`, not "days since account creation"), every
+other tuning field left empty (not applicable), and no canned responses (it has no hardcoded
+fallback list to replicate). Before this row existed, `getSurveyTypeConfig('csat_onboarding')` fell
+straight through to the `VITE_SURVEY_ONBOARDING_DELAY_DAYS` env var /
+`DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS` (1 day) — the window row now resolves first, same value,
+but editable.
 
 All day-based values are converted to milliseconds internally; `minDocuments`/`documentGap` are
 plain counts. Invalid values (non-numeric, zero, negative — from either the window or the env var)

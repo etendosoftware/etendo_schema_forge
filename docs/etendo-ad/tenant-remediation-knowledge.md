@@ -3700,6 +3700,65 @@ CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-lin
   row the old version already repaired cannot undo it. `--dry-run` never executes `@apply`/`@report`
   (only `@check`): validate an edited `@apply` in a `BEGIN … ROLLBACK` session instead.
 
+## ETP-5870 — Q1/R51: "System pseudo-tenant" fixes need a LITERAL client guard, not just `ad_client_id = :client_id` scoping, when the target's read path has no DAL/selector visibility filter (2026-10-21)
+
+**Misinterpretation corrected.** Modeling R51 (`20261021T120000Z__R51-etgo-survey-config-seed.sql`)
+directly on O1 (`R40-aeatsii-cause-exemption-catalog`) and U1 (`R50-tax-category-old-iva-normal-deactivate`)
+— i.e. scoping every `@check`/`@apply` statement to `ad_client_id = :client_id` and relying on
+"the runner's tenant universe excludes `ad_client_id='0'`" to keep it from misfiring — is **not
+enough on its own** for every System-pseudo-tenant fix. That exclusion only stops `'0'` from being
+*iterated as a subject tenant*; it does nothing to stop a normal full sweep (`make data-fixes`, no
+`--fix`/`--client`) from evaluating the fix once per REAL tenant's own `:client_id`. A real tenant
+genuinely has no row of its own yet, so a `:client_id`-scoped-only `@check` still legitimately
+reports "needed" for it, and `@apply` reseeds the whole singleton under THAT tenant's own
+`ad_client_id` on the very first sweep after merge.
+
+**Why O1/U1 get away with it (so far) and R51 does not.** `AEATSII_CAUSE_EXEMPTION` and
+`FinancialMgmtTaxCategory` are both read through Etendo's standard DAL/selector mechanism, which
+applies the framework's client-visibility filter automatically — a stray row created under a real
+tenant's own `ad_client_id` is at most an extra, harmless option visible only to that one tenant
+(arguably even correct-looking, since tenant-owned rows are MORE directly visible than System
+ones). `SurveyConfigServlet`'s three read queries (`GLOBAL_QUERY`/`SURVEY_TYPES_QUERY`/
+`CANNED_QUERY`), by contrast, are hand-rolled native SQL with **no `ad_client_id` filter at all** —
+so a stray duplicate there is served **globally** to every tenant sharing the install (confirmed
+live by Sentinel in a rolled-back transaction: NPS chips doubled 7→14 per language, CSAT chips
+6→12, duplicate config/survey-type rows). The failure mode is silent and install-wide, not
+contained to one tenant.
+
+**The fix:** a LITERAL client guard wrapping the entire `@check` body —
+`SELECT 1 WHERE :client_id = '0' AND (<existing OR'd existence logic>) LIMIT 1;` — makes the fix
+structurally a no-op (0 rows, `SKIPPED_NOT_NEEDED`) for any client other than the System
+pseudo-tenant, regardless of what the existence checks would otherwise report. The per-statement
+`ad_client_id = :client_id` scoping (satisfying `sql/README.md` rule 1) is still required and
+still correct — it is just not sufficient by itself when the subject table has no visibility
+filter of its own.
+
+**`@optIn: true` does not substitute for this guard, for any System-pseudo-tenant fix.**
+`optInChainGate` requires every earlier chain fix to already be `PROCESSED` in the ledger for the
+*target* client, but client `'0'` structurally never accumulates ledger rows (excluded from
+`resolveTenants`/`tenantsWithoutLedger` in `run.js`) — marking a System-pseudo-tenant fix opt-in
+makes its one sanctioned invocation (`--fix <id> --client 0`) itself fail as `BLOCKED_CHAIN_BEHIND`.
+Don't reach for it here; reach for the literal guard instead.
+
+**Rule of thumb going forward:** before shipping ANY new "System pseudo-tenant singleton" fix
+(the O1/U1/Q1 shape), check whether the servlet/handler that reads the target table(s) applies
+Etendo's standard DAL/selector client-visibility filter. If yes (like O1/U1), `ad_client_id =
+:client_id` scoping alone is an acceptable, lower-risk pattern. If no — any hand-rolled native SQL
+read path with no `ad_client_id` filter, like `SurveyConfigServlet` — ALWAYS add the literal
+`WHERE :client_id = '0' AND (...)` guard to `@check`, because the consequence of a normal sweep
+misfire is global, not tenant-contained. **Follow-up not yet done:** O1/R40 and U1/R50 were NOT
+retrofitted with this guard (out of scope for ETP-5870, low risk today only because of their
+read-path's filter) — flag before touching either file again, and consider hardening them
+proactively if that read path is ever simplified away from the DAL/selector mechanism.
+
+**Secondary, independent bug on the same file (tester-functional, same session):** `parse-fix.js`'s
+`UUID_TOKEN` regex (`/@uuid_([0-9A-Za-z]+)@/g`) is alnum-only — no underscore. A fresh
+`@uuid_<KEY>@` placeholder with an underscore in `KEY` (e.g. `@uuid_NPS_SPEED_EN@`) silently fails
+to match and is left as a literal string in the applied SQL, which gets inserted as the row's
+primary key verbatim instead of a real UUID. Always use alnum-only keys (`NPSSPEEDEN`, not
+`NPS_SPEED_EN`) in every future `@uuid_<KEY>@` placeholder; do not widen the shared regex to fix
+one fix's naming choice — that is a framework-wide change with its own review bar.
+
 ## ETP-5801 — R50: return shipments with another tenant's RTV doctype (2026-10-21)
 
 Fix: `20261021T120000Z__R50-inout-foreign-return-doctype.sql` (corrective-only; preventive is

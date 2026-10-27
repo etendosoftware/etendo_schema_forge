@@ -177,6 +177,7 @@ example: `R37-tenant-subscription-backfill`. Full detail:
 | C1/C2 | Period control | Open/Close Period Control empty; posting fails | Set `isperiodcontrolallowed`/calendar before period creation | Set org flags + backfill `c_periodcontrol` (~504 rows/yr) |
 | D1 | Legal entity | SII fields empty; `AD_GET_ORG_LE_BU` returns NULL | `MarkOrgReadyStep` recompute LE columns after `AD_Org_Ready` (ETP-4177) | Recompute denormalized LE columns |
 | E1 | Session/user | Session org stuck at `'0'` / `*` | `CreateOrgAdminStep`/`CreateClientAdminStep` set `AD_User.ad_org_id` | `UPDATE AD_User.ad_org_id` |
+| Q1 | Surveys | "Survey Configuration" window (`ETGO_Survey_Config`/`ETGO_Survey_Type`/`ETGO_Survey_Canned_Resp`) born empty — NPS/CSAT tuning hidden in frontend hardcoded defaults, `csat_onboarding` has no row at all | `OnboardingSurveyConfigService` seeds the config singleton + 4 survey type rows + 38 canned responses, wired last in `ensureOnboardingDataset` | `R51-etgo-survey-config-seed` — System pseudo-tenant singleton (like O1/U1), run via `--fix ... --client 0`; CUT deliberately NOT bumped |
 
 The `onboarding-gaps.md` doc has **verified, idempotent SQL** for these — start from it, never reinvent.
 </the_gaps>
