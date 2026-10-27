@@ -2,7 +2,7 @@ import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { useGridView } from '@/hooks/useGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Info, Loader2, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -36,11 +36,11 @@ const FORM_FIELDS = [
   ['notaryName', 'orgRepNotaryLabel', true],
 ];
 
-const GRID_COLUMNS = [
-  { key: 'taxID', column: 'Taxid', label: 'orgRepTaxIdLabel' },
-  { key: 'firstName', column: 'Firstname', label: 'orgRepFullNameLabel' },
-  { key: 'powerDate', column: 'Power_Date', label: 'orgRepPowerDateLabel' },
-  { key: 'notaryName', column: 'Notary_Name', label: 'orgRepNotaryLabel' },
+const GRID_COLUMN_DEFS = [
+  { key: 'taxID', column: 'Taxid', labelKey: 'orgRepTaxIdLabel' },
+  { key: 'firstName', column: 'Firstname', labelKey: 'orgRepFullNameLabel' },
+  { key: 'powerDate', column: 'Power_Date', labelKey: 'orgRepPowerDateLabel' },
+  { key: 'notaryName', column: 'Notary_Name', labelKey: 'orgRepNotaryLabel' },
 ];
 
 const DEFAULT_COLUMN_WIDTHS = { default: 96, taxID: 112, powerDate: 112 };
@@ -163,9 +163,10 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
     useRepresentantesLegales(orgId, apiBaseUrl);
 
   const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
-  const gridView = useGridView({ spec: 'organization', entity: 'representanteLegal', columns: GRID_COLUMNS, data: rows, enabled: gridColumnViews, apiBaseUrl });
-  const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
-  const gridLabel = (key) => ui(GRID_COLUMNS.find(column => column.column === key)?.label ?? key);
+  const gridColumns = useMemo(() => GRID_COLUMN_DEFS.map(({ labelKey, ...column }) => ({ ...column, label: ui(labelKey) })), [ui]);
+  const gridView = useGridView({ spec: 'organization', entity: 'representanteLegal', columns: gridColumns, data: rows, enabled: gridColumnViews, apiBaseUrl });
+  const columns = gridView.active ? gridView.columns : gridColumns;
+  const gridLabel = (key) => gridColumns.find(column => column.column === key)?.label ?? key;
 
   // null = no form open; 'new' = adding; otherwise the id of the row being edited.
   const [editing, setEditing] = useState(null);
@@ -323,7 +324,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
       )}
       {gridColumnViews && <GridViewControls
         gridView={gridView}
-        gridColumns={GRID_COLUMNS}
+        gridColumns={gridColumns}
         ui={ui}
         t={gridLabel}
         data-testid="GridViewControls__f6a856" />}
@@ -333,7 +334,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
             <tr className="border-b border-border bg-muted/40">
               <th className="h-9 w-20 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgRepLineLabel')}</th>
               {columns.map(column => {
-                const label = ui(column.label);
+                const label = column.label;
                 return (
                   <th key={column.key} className="relative h-9 px-3 text-left align-middle text-xs font-semibold text-foreground"
                     style={headerCellStyle(column)}

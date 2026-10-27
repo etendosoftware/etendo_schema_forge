@@ -44,11 +44,7 @@ Predates the `cli/config/regen-windows.json` convention — see [match-rule](mat
 
 ## Personal list-column views
 
-When rendered through ListModalWindow with a stable API spec/entity identity, the
-list offers Columns and Save view under the shared `grid-column-views` flag,
-enabled by default. Visibility, order and widths are personal and saved only on
-request. Selection, row actions, inline toggles and create/edit modal behavior
-remain unchanged; saved views do not alter business records or filter/sort state.
-See [the shared grid-view policy](../feature-flags.md#personal-business-grid-views)
-for identity checks and load/save failures. Automated execution and QA for this
-integration remain pending.
+The Transaction Type list is also a `ListModalWindow` surface, with the same personal
+Columns and Save view controls behind `grid-column-views`; the inline-create flow
+above is unaffected. See the [shared grid-view policy](../feature-flags.md#personal-business-grid-views)
+for identity checks, failures and rollback.

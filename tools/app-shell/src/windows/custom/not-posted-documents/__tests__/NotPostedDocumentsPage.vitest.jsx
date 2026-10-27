@@ -17,15 +17,8 @@ beforeAll(() => {
 
 let apiFetchMock = vi.fn();
 let gridColumnViewsEnabled = false;
-vi.mock('@/auth/useApiFetch.js', async () => {
-  const { useMemo } = await import('react');
-  return { useApiFetch: (baseUrl = '') => useMemo(() => (path, options = {}) =>
-    apiFetchMock(`${options.baseUrl ?? baseUrl}${path}`, options), [baseUrl]) };
-});
-vi.mock('@/lib/flags', () => ({
-  GRID_COLUMN_VIEWS: 'grid-column-views',
-  useFeatureFlag: () => gridColumnViewsEnabled,
-}));
+vi.mock('@/auth/useApiFetch.js', async () => (await import('@/test/gridViewTestDoubles.jsx')).apiFetchHookMock(() => apiFetchMock));
+vi.mock('@/lib/flags', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridFlagsMock(() => gridColumnViewsEnabled));
 
 // Identity translator; `{count}`-style params are echoed so a test can see which count was asked.
 // Hoisted and STABLE: the page memoizes on `ui`, so a new function per render would refetch forever.

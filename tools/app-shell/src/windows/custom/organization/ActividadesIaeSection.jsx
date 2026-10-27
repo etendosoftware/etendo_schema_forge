@@ -2,7 +2,7 @@ import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { useGridView } from '@/hooks/useGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, ExternalLink, Info, Loader2, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useUI } from '@/i18n';
@@ -21,11 +21,11 @@ const EPGRAFE_FIELD = { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', type: 's
 const TYPE_FIELD = { key: 'epiaeType', column: 'Epiae_Type_ID', type: 'selector', reference: 'epiae_type', inputMode: 'selector' };
 const CODE_FIELD = { key: 'epiaeCode', column: 'Epiae_Code_ID', type: 'selector', reference: 'EPIAE_Code', inputMode: 'selector' };
 
-const GRID_COLUMNS = [
-  { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', label: 'orgIaeEpigraphLabel' },
-  { key: 'epiaeType', column: 'Epiae_Type_ID', label: 'orgIaeTypeLabel' },
-  { key: 'epiaeCode', column: 'Epiae_Code_ID', label: 'orgIaeCodeLabel' },
-  { key: 'default', column: 'Isdefault', label: 'orgIaeDefaultLabel', required: true },
+const GRID_COLUMN_DEFS = [
+  { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', labelKey: 'orgIaeEpigraphLabel' },
+  { key: 'epiaeType', column: 'Epiae_Type_ID', labelKey: 'orgIaeTypeLabel' },
+  { key: 'epiaeCode', column: 'Epiae_Code_ID', labelKey: 'orgIaeCodeLabel' },
+  { key: 'default', column: 'Isdefault', labelKey: 'orgIaeDefaultLabel', required: true },
 ];
 
 const DEFAULT_COLUMN_WIDTHS = { default: 96, taxID: 112, powerDate: 112 };
@@ -101,9 +101,10 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     useActividadesIae(orgId, apiBaseUrl);
 
   const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
-  const gridView = useGridView({ spec: 'organization', entity: 'actividadesDelIae', columns: GRID_COLUMNS, data: rows, enabled: gridColumnViews, apiBaseUrl });
-  const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
-  const gridLabel = (key) => ui(GRID_COLUMNS.find(column => column.column === key)?.label ?? key);
+  const gridColumns = useMemo(() => GRID_COLUMN_DEFS.map(({ labelKey, ...column }) => ({ ...column, label: ui(labelKey) })), [ui]);
+  const gridView = useGridView({ spec: 'organization', entity: 'actividadesDelIae', columns: gridColumns, data: rows, enabled: gridColumnViews, apiBaseUrl });
+  const columns = gridView.active ? gridView.columns : gridColumns;
+  const gridLabel = (key) => gridColumns.find(column => column.column === key)?.label ?? key;
 
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -307,7 +308,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     <div className="flex flex-col gap-3" data-testid="ActividadesIaeSection__root">
       {gridColumnViews && <GridViewControls
         gridView={gridView}
-        gridColumns={GRID_COLUMNS}
+        gridColumns={gridColumns}
         ui={ui}
         t={gridLabel}
         data-testid="GridViewControls__93451b" />}
@@ -323,7 +324,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
           <thead>
             <tr className="border-b border-border bg-muted/40">
               {columns.map(column => {
-                const label = ui(column.label);
+                const label = column.label;
                 return (
                   <th key={column.key} className="relative h-9 px-3 text-left align-middle text-xs font-semibold text-foreground"
                     style={headerCellStyle(column)}

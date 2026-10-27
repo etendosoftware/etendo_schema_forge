@@ -1,19 +1,9 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx
-const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
-vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
-vi.mock('@/hooks/useGridView.js', () => ({
-  useGridView: (options) => {
-    gridBoundary.last = options;
-    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
-      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
-      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
-    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
-      reorderable: () => false, isResizable: () => false };
-  },
-}));
-vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
-  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
-}));
+const gridBoundary = await vi.hoisted(async () => (await import('@/test/gridViewTestDoubles.jsx')).createGridBoundary());
+vi.mock('@/lib/flags', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridFlagsMock(() => gridBoundary.enabled));
+vi.mock('@/hooks/useGridView.js', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewHookMock(gridBoundary));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewControlsMock());
+import { resetGridBoundary } from '@/test/gridViewTestDoubles.jsx';
 
 // Vitest render tests for SiiMonitorSection
 
@@ -72,10 +62,7 @@ const baseProps = {
 describe('SiiMonitorSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    gridBoundary.enabled = false;
-    gridBoundary.active = false;
-    gridBoundary.keys = null;
-    gridBoundary.widths = {};
+    resetGridBoundary(gridBoundary);
   });
 
   it('renders with mockRows and shows export button', () => {
@@ -151,10 +138,7 @@ describe('SiiMonitorSection personal columns', () => {
   const row = { id: 'invoice-1', documentNo: 'INV-1', invoiceDate: '2026-01-15',
     businessPartner: 'bp-1', aeatsiiEstado: 'Error', grandTotalAmount: 10 };
   beforeEach(() => {
-    gridBoundary.enabled = false;
-    gridBoundary.active = false;
-    gridBoundary.keys = null;
-    gridBoundary.widths = {};
+    resetGridBoundary(gridBoundary);
     stableApiFetch.mockReset().mockResolvedValue({ ok: true, json: async () => ({ response: { data: [row], totalRows: 1 } }) });
     stableToggleRow.mockClear();
   });
