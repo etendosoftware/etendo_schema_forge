@@ -3109,14 +3109,19 @@ standard category, "Cliente/Proveedor", for contacts that are both customer and 
 
 | Category | Customer | Vendor | Default (new tenants) | Default (existing tenants) |
 |---|---|---|---|---|
-| Cliente | Y | N | N | **Y** (unchanged) |
+| Cliente | Y | N | N (flag on) / **Y** (flag off) | **Y** (unchanged) |
 | Proveedor | N | Y | N | N |
 | Acreedor | N | Y | N | N |
-| Cliente/Proveedor | Y | Y | **Y** | N |
+| Cliente/Proveedor | Y | Y | **Y** (flag on) / N (flag off) | N |
 
-**Preventive front:** dataset-only. `referencedata/sampledata/GOClient/C_BP_GROUP.xml` ships the
-flags on all four rows and the new `Cliente/Proveedor` row (Value = Name = `Cliente/Proveedor`) as
-the default. Its posting rows need no new code: `C_BP_GROUP_ACCT` is not imported, and
+**Preventive front:** dataset plus one flag-gated onboarding step.
+`referencedata/sampledata/GOClient/C_BP_GROUP.xml` ships the flags on all four rows and the new
+`Cliente/Proveedor` row (Value = Name = `Cliente/Proveedor`), and keeps `Cliente` as the default, so
+a tenant created with the `contact-category-type` flag off is identical to one created before the
+ticket. With the flag on, `OnboardingDefaultContactCategoryService` (com.etendoerp.go) makes
+`Cliente/Proveedor` the default when the tenant is handed to the user (pool tenants included); see
+com.etendoerp.go `docs/onboarding-flow.md` "Default contact category". Its posting rows need no new
+code: `C_BP_GROUP_ACCT` is not imported, and
 `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` (+ `patchBpGroupAcctMissingColumns`) creates
 a `C_BP_Group_Acct` row from `C_AcctSchema_Default` for every imported group. `Value` is given
 explicitly, so the `DocumentNo_C_BP_Group` sequence is not involved.

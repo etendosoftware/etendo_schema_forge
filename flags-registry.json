@@ -1154,14 +1154,6 @@
           ]
         },
         {
-          "id": "onboarding-default-category",
-          "kind": "open",
-          "note": "Not gated: the onboarding sample data (GOClient C_BP_GROUP.xml) makes 'Cliente/Proveedor' the default category for every NEW tenant, flag ON or OFF. With the flag OFF a new contact therefore starts in 'Cliente/Proveedor' instead of 'Cliente' (its type still comes from the form, not the category). Pending PM decision: keep it, or ship 'Cliente' as default until the flag is on.",
-          "refs": [
-            "docs/etendo-ad/onboarding-gaps.md — 'U1 — Contact categories without customer/vendor type' (Preventive front)"
-          ]
-        },
-        {
           "id": "mcp-exposed-category-fields",
           "kind": "open",
           "note": "Not gated: the MCP/REST schema of business-partner-category exposes etgoIscustomer / etgoIsvendor, and both windows carry agentPrompts that describe the inheritance rule (business-partner-category fields and contacts customer/vendor). With the flag OFF agents still see and set those fields and are told the category decides the type, which the backend only enforces with the flag ON. Gate or reword the prompts if the flag stays OFF for long.",
