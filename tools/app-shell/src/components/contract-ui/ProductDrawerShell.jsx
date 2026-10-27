@@ -9,7 +9,10 @@ import RecordCreateModal from './RecordCreateModal.jsx';
 import {
   useProductImages,
   useProductSelectorFetch,
+  PRODUCT_SELECTOR_PAGE_SIZE,
 } from './productSelectorDrawerShared.jsx';
+import { hasCommittedValue, prependCurrentSelection, resolveSelectedIndex } from './selectorSelection.js';
+import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
 // Stable no-op so swapping it in for `onClose` does not churn the hook's ref effect.
 const NOOP = () => {};
@@ -55,11 +58,19 @@ export default function ProductDrawerShell({
   useVariant,
   maxHeight = '65vh',
   createEnabled = false,
+  value = null,
+  valueLabel = '',
+  committedItem = null,
 }) {
   const ui = useUI();
   const [activeIdx, setActiveIdx] = useState(-1);
   const [freshToken, setFreshToken] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  // ETP-5948 — the ETP-5903 reopen behaviour (see the hook call below).
+  const [locateDone, setLocateDone] = useState(false);
+  const [pinned, setPinned] = useState([]);
+  const interactedRef = useRef(false);
+  const pinAttemptRef = useRef(null);
   const resolvedTitle = title ?? ui('product');
   const apiFetch = useApiFetch();
 
@@ -130,23 +141,41 @@ export default function ProductDrawerShell({
    * that has no row in THAT tariff may not come back at all (products are seeded at 0 only on
    * the tenant's default sales and purchase tariffs). Synthesizing keeps the line usable.
    */
-  const handleCreated = useCallback(async (created) => {
-    setCreateOpen(false);
-    let row = null;
+  /**
+   * The selector rows of ONE record, found by asking this drawer's own selector for `q` and keeping
+   * only the id-equal rows (`q` is a LIKE match). An id the selector context would not offer never
+   * comes back. Shared by the created-record re-query and the ETP-5948 pin.
+   */
+  const lookupRows = useCallback(async (q, id) => {
     try {
       const params = { ...selectorContext, limit: 20, offset: 0 };
-      if (created?.searchKey) params.q = String(created.searchKey);
+      if (q) params.q = String(q);
       const res = await apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '' });
       const data = res.ok ? await res.json() : null;
-      row = (data?.items || []).find(item => item.id === created.id) ?? null;
+      return (data?.items || []).filter(item => String(item.id) === String(id));
     } catch {
-      row = null;
+      return [];
     }
+  }, [apiFetch, selectorUrl, selectorContext]);
+
+  const handleCreated = useCallback(async (created) => {
+    setCreateOpen(false);
+    const [row] = await lookupRows(created?.searchKey, created?.id);
     select(row ?? synthesizeCreatedItem(created));
-  }, [apiFetch, selectorUrl, selectorContext, select]);
+  }, [lookupRows, select]);
+
+  // ETP-5948 — the committed value pinned on top when the walk did not find it in place. Only on an
+  // empty search: a typed query shows exactly its own results.
+  const searching = fetchState.query.trim() !== '';
+  const renderedResults = searching
+    ? fetchState.results
+    : prependCurrentSelection(fetchState.results, pinned, value);
 
   const variant = useVariant({
     ...fetchState,
+    results: renderedResults,
+    value,
+    committedItem,
     open,
     activeIdx,
     setActiveIdx,
@@ -162,22 +191,55 @@ export default function ProductDrawerShell({
     token,
   });
 
+  // A pinned row belongs to one value, one search and one open.
+  useEffect(() => {
+    setPinned([]);
+    setLocateDone(false);
+    pinAttemptRef.current = null;
+  }, [value, fetchState.query, open]);
+
+  // ETP-5948 — the ETP-5903 reopen behaviour: walk the pages to the committed value (up to
+  // LOCATE_SELECTION_MAX_PAGES), centre it, and pin it on top if the walk ends without it.
+  // - `rows` only when the results on screen belong to the current query (null while closed and
+  //   while a first page is pending), so a reopen never decides on the last open's rows;
+  // - the cap counts RAW rows: the variants' transforms drop duplicates, so visible < fetched;
+  // - a failed page ends the walk (`hasMore` alone stays true after an append error).
+  const { results, pageQuery, rawOffsetRef, doFetch, loading, loadingMore, hasMore, error, listRef } = fetchState;
+  const walkPage = useCallback(() => doFetch('', rawOffsetRef.current, true), [doFetch, rawOffsetRef]);
+  useLocateCommittedValue({
+    open, query: fetchState.query, value, dropdownRef: listRef, interactedRef, selectorUrl,
+    rows: pageQuery !== null && pageQuery === fetchState.query.trim() ? results : null,
+    loadedRows: rawOffsetRef.current, loading: loading || loadingMore,
+    panelLoading: loading && results.length === 0, hasMore: hasMore && !error,
+    pageSize: PRODUCT_SELECTOR_PAGE_SIZE, settledFetches: fetchState.settledFetches,
+    locateDone, setLocateDone, fetchPage: walkPage, offsetRef: rawOffsetRef,
+    selectedIndex: variant.selectedIndex ?? -1, renderedCount: renderedResults.length, layoutKey: open,
+  });
+
+  useEffect(() => {
+    if (!open || !locateDone || searching || !hasCommittedValue(value) || !valueLabel) return;
+    if (pinAttemptRef.current || resolveSelectedIndex(results, value) !== -1) return;
+    const attempt = {};
+    pinAttemptRef.current = attempt;
+    lookupRows(valueLabel, value).then((rows) => {
+      if (pinAttemptRef.current === attempt) setPinned(fetchConfig.transform ? fetchConfig.transform(rows) : rows);
+    });
+  }, [open, locateDone, searching, value, valueLabel, results, lookupRows, fetchConfig]);
+
   if (!open) return null;
 
-  const {
-    query, setQuery, results, loading, loadingMore, error,
-    inputRef, listRef, rawOffsetRef, doFetch, handleScroll,
-  } = fetchState;
+  const { query, setQuery, inputRef, handleScroll } = fetchState;
   // A NetworkError already carries a translated message (offline / timeout); anything else —
   // a 504 from the gateway, a 500 — gets the generic search-failed text.
   const errorMessage = error && (isNetworkError(error) ? error.message : ui('productSearchError'));
   const retryFetch = () => (results.length > 0
     ? doFetch(query, rawOffsetRef.current, true)
     : doFetch(query, 0));
-  const { toolbar, body, footerCount, hasResults, onNavKeyDown } = variant;
+  const { toolbar, body, footerCount, hasResults, onNavKeyDown, activeDescendant } = variant;
 
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
+    interactedRef.current = true;
     onNavKeyDown?.(e);
   };
 
@@ -213,7 +275,8 @@ export default function ProductDrawerShell({
                   data-testid="product-search-input"
                   type="text"
                   value={query}
-                  onChange={(e) => { setQuery(e.target.value); doFetch(e.target.value, 0); }}
+                  onChange={(e) => { interactedRef.current = true; setQuery(e.target.value); doFetch(e.target.value, 0); }}
+                  aria-activedescendant={activeDescendant || undefined}
                   placeholder={`${ui('searchLabelPrefix')} ${resolvedTitle}...`}
                   // !bg-transparent (not the plain utility) is deliberate: this drawer renders
                   // inline, never through a portal, so it stays a DOM descendant of whatever

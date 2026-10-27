@@ -99,7 +99,12 @@ vi.mock('../ProductSearchDrawer.jsx', () => ({
 }));
 // ETP-5681 — the `account` lookup drawer, exposing its title while open.
 vi.mock('../AccountLookupPopup.jsx', () => ({
-  default: (props) => (props.open ? <div data-testid="account-lookup-popup-title">{props.title}</div> : null),
+  default: (props) => (props.open ? (
+    <div data-testid="account-lookup-popup-title" data-value={props.value ?? ''} data-value-label={props.valueLabel ?? ''}
+      data-committed-item={JSON.stringify(props.committedItem ?? null)}>
+      {props.title}
+    </div>
+  ) : null),
 }));
 vi.mock('./quickActionsStyle.js', () => ({
   QUICK_ACTIONS_PILL_CLASS: 'pill',
@@ -1146,6 +1151,41 @@ describe('InlineLinesPanel', () => {
     expect(trigger).toHaveTextContent('Cuenta contable');
     await act(async () => { await userEvent.click(trigger); });
     expect(screen.getByTestId('account-lookup-popup-title')).toHaveTextContent('Cuenta contable');
+  });
+
+  // ETP-5948 — the line's committed value reaches the lookup drawer, which opens marked on it.
+  it('hands the line value and its label to the lookup drawer', async () => {
+    const columns = [{
+      key: 'accountingCombination', label: 'Account', type: 'selector',
+      column: 'C_ValidCombination_ID', lookup: true, lookupDrawer: 'account',
+      onSelectMappings: [{ from: '_aux._LOC', to: 'storageBin' }],
+    }];
+    const rows = [{ id: 'AC2', accountingCombination: 'VC9', accountingCombination$_identifier: '572 - Bancos', storageBin: 'LOC-7' }];
+    render(
+      <InlineLinesPanel
+        ref={React.createRef()}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-AC2');
+    await act(async () => { await userEvent.hover(row); });
+    const editBtn = within(within(row).getByTestId('line-actions')).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    await act(async () => { await userEvent.click(within(row).getByTestId('field-accountingCombination')); });
+
+    const popup = screen.getByTestId('account-lookup-popup-title');
+    expect(popup).toHaveAttribute('data-value', 'VC9');
+    expect(popup).toHaveAttribute('data-value-label', '572 - Bancos');
+    // The item the selection mapped onto the line, rebuilt from the field's onSelectMappings.
+    expect(JSON.parse(popup.getAttribute('data-committed-item'))).toEqual({ id: 'VC9', _aux: { _LOC: 'LOC-7' } });
   });
 
   it('renders percent column with percentage sign', () => {

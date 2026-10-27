@@ -94,3 +94,30 @@ export function centerOptionInPanel(panel, option) {
   panel.scrollTop = Math.max(0, target);
   return target <= panel.scrollHeight - panel.clientHeight;
 }
+
+/**
+ * The committed lookup item rebuilt from a saved row (ETP-5948): the reverse of the field's
+ * declarative `onSelectMappings` (see `resolveOnSelectMappings` in DataTable.jsx). Each
+ * `{ from, to }` mapping copied `item[from]` into `row[to]` on selection, so `row[to]` is written
+ * back at the `from` path. Literal (`value`) mappings carry nothing from the item and are skipped.
+ *
+ * Structural: it names no entity and no selector key. A drawer reads whatever part of the item it
+ * needs to recognise its own committed row (the stock drawer: the locator it mapped to the line).
+ *
+ * @param {{ onSelectMappings?: Array<{from?: string, to?: string, value?: unknown}> }} field
+ * @param {object} row the saved row
+ * @param {*} value the committed id
+ * @returns {object|null} `{ id: value, ...mapped paths }`, or null without a committed value
+ */
+export function committedItemFromRow(field, row, value) {
+  if (!hasCommittedValue(value)) return null;
+  const item = { id: value };
+  for (const m of field?.onSelectMappings ?? []) {
+    if (!m?.from || !m.to || m.value !== undefined || row?.[m.to] == null) continue;
+    const keys = m.from.split('.');
+    let target = item;
+    for (const key of keys.slice(0, -1)) target = (target[key] ??= {});
+    target[keys.at(-1)] = row[m.to];
+  }
+  return item;
+}
