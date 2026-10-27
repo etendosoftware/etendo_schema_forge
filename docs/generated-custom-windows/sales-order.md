@@ -720,6 +720,19 @@ is now true. Purchase orders are not covered (out of scope).
 
 Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
 
+### QA follow-up over MCP: withheld buttons, creation actions that have nothing to do, and the processed-document hint — ETP-5714
+
+- **`withheldActions`.** `etendo_schema(spec, entity, view:"actions")` now lists, next to `actions`, every button the MCP configuration
+  withholds as `{action, reason}` (not counted in `actionCount` / `invokableCount`, not invokable). On the sales order that is the classic
+  *Cancel and Replace* pair, *Create Lines From* (`Create_POLines`) and *Pick from Receipt* (`RM_Pickfromreceipt`): none of them has a
+  screen in this window, so an agent cannot do what the user could not. To change a completed order: reactivate it, edit it, complete it again.
+- **`createShipment` / `createDraftInvoice` say when they have nothing to do.** With a record id, each is `availableNow:false` when no line has
+  quantity left to ship or invoice, or when a draft shipment / invoice already covers it; the reason says what to do (complete or delete the draft).
+  The call agrees: `createDraftInvoice` on an order with a linked draft invoice is refused with 409 `draftInvoiceExists` (the screen hides the
+  button then), unless the optional boolean `allowDuplicate:true` is sent; a string is a 422. The goods action stays advice only.
+- **"Documento ya procesado" on a line write.** Editing or creating a line of a completed order answers 422 with a hint (if the actions view offers `documentAction` RE for it, reactivate the order,
+  edit, complete again; the order's own rule, no linked documents, is the one that view reports) instead of the generic business-rule text.
+
 ## Unit column in the lines grid (ETP-5696)
 
 The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. pedido**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
