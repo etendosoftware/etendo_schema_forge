@@ -16,7 +16,9 @@ import {
 describe('useDiscovery', () => {
   beforeEach(() => {
     globalThis.fetch = vi.fn();
-    // Set up localStorage for token
+    // ETP-5454: this deliberately SEEDS the retired sf_auth_token key. Nothing writes it since
+    // ADR-0001 moved the session to the httpOnly cookie, so the assertions below prove the
+    // explorer ignores it rather than relying on it being absent.
     globalThis.localStorage = {
       _store: {},
       getItem(key) { return this._store[key] ?? null; },
@@ -24,6 +26,7 @@ describe('useDiscovery', () => {
       removeItem(key) { delete this._store[key]; },
     };
     localStorage.setItem('sf_auth_token', 'test-token');
+    localStorage.setItem('sf_admin_token', 'test-admin-token');
   });
 
   afterEach(() => {
@@ -101,6 +104,29 @@ describe('useDiscovery', () => {
       await waitFor(() => expect(result.current.loading).toBe(false));
 
       expect(result.current.specs).toEqual([]);
+    });
+
+    // ETP-5454: useSpecs used to read `localStorage.getItem('sf_admin_token')` and pass it as
+    // `token`. That key has no writer since the cookie session, so the read was always undefined
+    // and the request already ran on the session cookie. Asserting that no bearer is attached
+    // pins the corrected behaviour: the call relies on the cookie, it does not carry a token that
+    // looks like a credential but contributes nothing.
+    it('useAdmin does not attach the retired sf_admin_token as a bearer', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ specs: [] }),
+      });
+
+      const { result } = renderHook(() => useSpecs({ useAdmin: true }));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(globalThis.fetch).toHaveBeenCalled();
+      for (const [url, opts] of globalThis.fetch.mock.calls) {
+        expect(String(url)).not.toContain('test-admin-token');
+        const headers = opts?.headers;
+        const auth = headers && (headers.get?.('Authorization') ?? headers.Authorization ?? headers.authorization);
+        expect(auth ?? null).toBeNull();
+      }
     });
   });
 
@@ -227,6 +253,25 @@ describe('useDiscovery', () => {
       });
 
       await expect(upsertSpec({ Name: 'x', ModuleID: 'm' })).rejects.toThrow('Server error');
+    });
+
+    // ETP-5454: the webhook call had the same `token: getAdminToken()` line. It rode on the
+    // session cookie before the fix and still does; what changed is that it no longer reads a key
+    // nothing writes. The request must carry neither the seeded admin token nor a bearer header.
+    it('calls the webhook on the session credential, not the retired admin token', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        text: async () => JSON.stringify({ success: true }),
+      });
+
+      await upsertSpec({ Name: 'test-spec', ModuleID: 'mod-1' });
+
+      const [url, opts] = globalThis.fetch.mock.calls[0];
+      expect(String(url)).not.toContain('test-admin-token');
+      expect(JSON.stringify(opts ?? {})).not.toContain('test-admin-token');
+      const headers = opts?.headers;
+      const auth = headers && (headers.get?.('Authorization') ?? headers.Authorization ?? headers.authorization);
+      expect(auth ?? null).toBeNull();
     });
   });
 
