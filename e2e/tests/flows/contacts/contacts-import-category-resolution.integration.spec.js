@@ -248,7 +248,12 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     ];
 
     const categoryCreates = [];
-    const batchExchanges = [];
+    const batchBodies = [];
+    // Only the REQUEST of /sws/neo/batch is inspected: since ETP-5677 the import posts the batch
+    // asynchronously and its answer is a job, so the per-row recordIds never travel on it.
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/sws/neo/batch')) batchBodies.push(request.postDataJSON());
+    });
     page.on('response', async (response) => {
       const request = response.request();
       if (request.method() !== 'POST') return;
@@ -258,7 +263,6 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
         const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
         categoryCreates.push({ body: request.postDataJSON(), status: response.status(), id: record?.id });
       }
-      if (url.includes('/sws/neo/batch')) batchExchanges.push({ body: request.postDataJSON(), response: json });
     });
 
     await login(page, onboardingCredentials ? {
@@ -287,18 +291,43 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
       await page.getByTestId('ImportConfirmStep__confirm').click();
 
-      // Every row's businessPartner operation came back with a persisted recordId.
-      const bpResult = (row) => {
-        for (const { body, response } of batchExchanges) {
-          const op = body.operations?.find((operation) => operation.entity === 'businessPartner' && operation.body?.name === row.name);
-          if (!op) continue;
-          return { op, result: response?.operations?.find((entry) => entry.id === op.id) };
-        }
-        return null;
+      // Resolve each imported contact through the backend by its taxID — the window's own dedupe
+      // key, queried with the same `criteria=` list request the import's existing-record lookup
+      // sends (useWindowImportDialog.existingKeyFetchFn). This does not depend on the batch
+      // transport: the job settles asynchronously, so poll until every row is persisted.
+      const findContactIdByTaxId = async (taxId) => {
+        const params = new URLSearchParams();
+        params.append('criteria', JSON.stringify({
+          _constructor: 'AdvancedCriteria',
+          operator: 'or',
+          criteria: [{ fieldName: 'taxID', operator: 'equals', value: taxId }],
+        }));
+        params.append('_startRow', '0');
+        params.append('_endRow', '10');
+        const listResponse = await page.request.get(`/sws/neo/contacts/businessPartner?${params.toString()}`, { headers });
+        if (!listResponse.ok()) return null;
+        const listJson = await listResponse.json().catch(() => null);
+        const matches = (listJson?.response?.data ?? listJson?.data ?? []).filter((record) => record.taxID === taxId);
+        return matches.length === 1 ? matches[0].id : null;
       };
-      await expect.poll(() => rows.every((row) => bpResult(row)?.result?.recordId), { timeout: 30_000 }).toBe(true);
+      const resolvedIds = new Map();
+      await expect.poll(async () => {
+        for (const row of rows) {
+          if (!resolvedIds.has(row.name)) {
+            const id = await findContactIdByTaxId(row.taxId);
+            if (id) resolvedIds.set(row.name, id);
+          }
+        }
+        return resolvedIds.size;
+      }, { timeout: 60_000, intervals: [1_000, 2_000, 3_000] }).toBe(rows.length);
       // Recorded before any assertion so the cleanup below still sees them if one fails.
-      for (const row of rows) createdContactIds.push(bpResult(row).result.recordId);
+      for (const row of rows) createdContactIds.push(resolvedIds.get(row.name));
+
+      // What the SPA sent: ops are row-prefixed (`r<i>.<opId>`), so match by entity + name.
+      const bpOperation = (row) => batchBodies
+        .flatMap((body) => body.operations ?? [])
+        .find((operation) => operation.entity === 'businessPartner' && operation.body?.name === row.name);
+      for (const row of rows) expect(bpOperation(row), `expected a batch operation for ${row.name}`).toBeTruthy();
 
       expect(categoryCreates, 'the unknown category must be created exactly once').toHaveLength(1);
       expect(categoryCreates[0].body.name).toBe(newCategoryName);
@@ -307,7 +336,7 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       expect(createdCategoryId, 'expected the category create to return an id').toBeTruthy();
 
       for (const row of rows) {
-        const { op } = bpResult(row);
+        const op = bpOperation(row);
         expect(op.body.businessPartnerCategory).toBe(createdCategoryId);
         expect(op.body.customer).toBe(row.customer ? 'Y' : 'N');
         expect(op.body.vendor).toBe(row.vendor ? 'Y' : 'N');
