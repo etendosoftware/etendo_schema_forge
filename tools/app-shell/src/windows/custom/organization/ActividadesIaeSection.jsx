@@ -297,7 +297,12 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
 
   return (
     <div className="flex flex-col gap-3" data-testid="ActividadesIaeSection__root">
-      {gridColumnViews && <GridViewControls gridView={gridView} gridColumns={GRID_COLUMNS} ui={ui} t={gridLabel} />}
+      {gridColumnViews && <GridViewControls
+        gridView={gridView}
+        gridColumns={GRID_COLUMNS}
+        ui={ui}
+        t={gridLabel}
+        data-testid="GridViewControls__93451b" />}
       <div className="overflow-x-auto rounded-lg border border-border">
         {/* table-fixed: keeps the 3 selector columns (Epígrafe/Clave/Código) evenly split
             and the 2 fixed columns (Principal/actions) at their w-24/w-10 from the first
@@ -316,7 +321,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                     style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, overflowWrap: 'anywhere' } : column.key === 'default' ? { width: 96 } : column.key === 'taxID' || column.key === 'powerDate' ? { width: 112 } : undefined}
                     {...gridHeaderProps(column, gridView)}>
                     {label}
-                    {column.key === 'epgrafeIAE' && <EpigraphSearchLink />}
+                    {column.key === 'epgrafeIAE' && <EpigraphSearchLink data-testid="EpigraphSearchLink__93451b" />}
                     {column.key === 'epiaeCode' && <CodeHint data-testid="CodeHint__iaeCode" />}
                     {gridReorderHandle(column, gridView, label, ui)}
                     {gridResizeHandle(column, gridView, label, ui)}

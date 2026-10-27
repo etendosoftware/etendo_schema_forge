@@ -119,7 +119,12 @@ const YearTableWithCloseStatus = forwardRef(function YearTableWithCloseStatus(pr
   });
   return (
     <>
-      {gridView.enabled && <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={t} />}
+      {gridView.enabled && <GridViewControls
+        gridView={gridView}
+        gridColumns={gridColumns}
+        ui={ui}
+        t={t}
+        data-testid="GridViewControls__413aee" />}
       <DataTable
         ref={ref}
         columns={tableColumns}

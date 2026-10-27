@@ -1698,7 +1698,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   return (
     <div ref={panelRef} className="w-full" data-testid="inline-lines-panel">
       {gridViewEnabled && gridColumns.length > 0 && (
-        <GridViewControls gridView={activeGridView} gridColumns={gridColumns} ui={ui} t={t} />
+        <GridViewControls
+          gridView={activeGridView}
+          gridColumns={gridColumns}
+          ui={ui}
+          t={t}
+          data-testid="GridViewControls__3b7ec2" />
       )}
       {/* Header strip — sticky at the top of the scroll container so column
           labels stay visible while rows scroll. The white background and z-10

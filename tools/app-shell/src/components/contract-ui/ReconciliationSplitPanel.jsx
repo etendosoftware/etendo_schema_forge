@@ -160,9 +160,16 @@ function PersonalReconciliationGrid({ scope, columns, items, children }) {
 function ReconciliationGridControls() {
   const { scope, columns, gridView, ui } = useContext(ReconciliationGridContext);
   if (!gridView.enabled) return null;
-  return <div data-testid={`recon-grid-view-${scope.spec}-${scope.entity}`}>
-    <GridViewControls gridView={gridView} gridColumns={columns} ui={ui} t={(key) => columns.find((column) => (column.column ?? column.label) === key)?.label ?? key} />
-  </div>;
+  return (
+    <div data-testid={`recon-grid-view-${scope.spec}-${scope.entity}`}>
+      <GridViewControls
+        gridView={gridView}
+        gridColumns={columns}
+        ui={ui}
+        t={(key) => columns.find((column) => (column.column ?? column.label) === key)?.label ?? key}
+        data-testid="GridViewControls__d0f4d5" />
+    </div>
+  );
 }
 
 function flattenGridCells(children) {
@@ -171,22 +178,24 @@ function flattenGridCells(children) {
 
 function TableRow({ header = false, children, ...props }) {
   const context = useContext(ReconciliationGridContext);
-  if (!context?.gridView.active) return <BaseTableRow {...props}>{children}</BaseTableRow>;
+  if (!context?.gridView.active) return <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{children}</BaseTableRow>;
   const { columns, visible, gridView, ui } = context;
   const cells = flattenGridCells(children);
-  if (cells.length === 1 && cells[0].props.colSpan) return <BaseTableRow {...props}>{cloneElement(cells[0], { colSpan: visible.length })}</BaseTableRow>;
-  if (cells.length !== columns.length) return <BaseTableRow {...props}>{children}</BaseTableRow>;
-  return <BaseTableRow {...props}>{visible.map((column) => {
-    const cell = cells[columns.findIndex((source) => source.key === column.key)];
-    const id = gridViewColumnId(column);
-    const width = column.gridConfigurable === false ? null : gridView.columnSizing[id];
-    const style = { ...cell.props.style, ...(width != null ? { width, maxWidth: width } : {}) };
-    if (!header) return cloneElement(cell, { key: column.key, ...(cell.type === DateCell || cell.type === MoneyCell || cell.type === ProgressCell ? { gridWidth: width } : { style }) });
-    const chrome = { ...column, gridViewId: id };
-    return cloneElement(cell, { key: column.key, ...gridHeaderProps(chrome, gridView), style: { ...style, position: 'relative' },
-      children: <>{cell.props.children}{gridReorderHandle(chrome, gridView, column.label, ui)}{gridResizeHandle(chrome, gridView, column.label, ui)}</>,
-    });
-  })}</BaseTableRow>;
+  if (cells.length === 1 && cells[0].props.colSpan) return <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{cloneElement(cells[0], { colSpan: visible.length })}</BaseTableRow>;
+  if (cells.length !== columns.length) return <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{children}</BaseTableRow>;
+  return (
+    <BaseTableRow {...props} data-testid="BaseTableRow__d0f4d5">{visible.map((column) => {
+      const cell = cells[columns.findIndex((source) => source.key === column.key)];
+      const id = gridViewColumnId(column);
+      const width = column.gridConfigurable === false ? null : gridView.columnSizing[id];
+      const style = { ...cell.props.style, ...(width != null ? { width, maxWidth: width } : {}) };
+      if (!header) return cloneElement(cell, { key: column.key, ...(cell.type === DateCell || cell.type === MoneyCell || cell.type === ProgressCell ? { gridWidth: width } : { style }) });
+      const chrome = { ...column, gridViewId: id };
+      return cloneElement(cell, { key: column.key, ...gridHeaderProps(chrome, gridView), style: { ...style, position: 'relative' },
+        children: <>{cell.props.children}{gridReorderHandle(chrome, gridView, column.label, ui)}{gridResizeHandle(chrome, gridView, column.label, ui)}</>,
+      });
+    })}</BaseTableRow>
+  );
 }
 
 /* StatusBadge moved to ./reconciliationBadges.jsx (ETP-4965 QA round) so the automatch modal renders
@@ -481,19 +490,23 @@ function MoneyCell({ cellClassName, gridWidth, ...amountProps }) {
  */
 function PanelShell({ className, toolbar, headCells, loading, items, renderRow, footer, colSpan = 5, gridScope = null, gridColumns = [] }) {
   return (
-    <PersonalReconciliationGrid scope={gridScope} columns={gridColumns} items={items}>
-    <div className={cn('flex min-w-[30%] flex-1 flex-col overflow-hidden', className)}>
-      {toolbar}
-      <ReconciliationGridControls />
-      <PanelTable
-        headCells={headCells}
-        loading={loading}
-        items={items}
-        renderRow={renderRow}
-        colSpan={colSpan}
-        data-testid="PanelTable__d0f4d5" />
-      {footer}
-    </div>
+    <PersonalReconciliationGrid
+      scope={gridScope}
+      columns={gridColumns}
+      items={items}
+      data-testid="PersonalReconciliationGrid__d0f4d5">
+      <div className={cn('flex min-w-[30%] flex-1 flex-col overflow-hidden', className)}>
+        {toolbar}
+        <ReconciliationGridControls data-testid="ReconciliationGridControls__d0f4d5" />
+        <PanelTable
+          headCells={headCells}
+          loading={loading}
+          items={items}
+          renderRow={renderRow}
+          colSpan={colSpan}
+          data-testid="PanelTable__d0f4d5" />
+        {footer}
+      </div>
     </PersonalReconciliationGrid>
   );
 }

@@ -175,9 +175,17 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
 
         {/* Movements table (full-width separators) */}
         <div className="max-h-[56vh] overflow-y-auto overflow-x-auto">
-          <FinancialGridView spec="financial-account" entity="transaction" columns={PERSONAL_COLUMNS} data={txns.map((transaction) => ({ ...transaction, id: transaction.transactionId }))}>
+          <FinancialGridView
+            spec="financial-account"
+            entity="transaction"
+            columns={PERSONAL_COLUMNS}
+            data={txns.map((transaction) => ({ ...transaction, id: transaction.transactionId }))}
+            data-testid="FinancialGridView__2dbb84">
           {/* head */}
-          <FinancialGridRow header className={cn(TXN_GRID, 'min-h-[40px] border-b border-[hsl(var(--border-subtle))] px-6 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]')}>
+          <FinancialGridRow
+            header
+            className={cn(TXN_GRID, 'min-h-[40px] border-b border-[hsl(var(--border-subtle))] px-6 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]')}
+            data-testid="FinancialGridRow__2dbb84">
             <span>{ui('financeAccountMovementsColDate')}</span>
             <span>{ui('financeAccountMovementsColDocument')}</span>
             <span>{ui('financeAccountMovementsColContact')}</span>

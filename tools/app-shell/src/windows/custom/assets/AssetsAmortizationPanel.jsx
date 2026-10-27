@@ -83,8 +83,12 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     return [...cells.slice(0, 1), ...dataCells];
   };
   const gridControls = gridColumnViews && gridSpec ? (
-    <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui}
-      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key} />
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key}
+      data-testid="GridViewControls__34159c" />
   ) : null;
 
   const [processedMap, setProcessedMap] = useState(new Map());

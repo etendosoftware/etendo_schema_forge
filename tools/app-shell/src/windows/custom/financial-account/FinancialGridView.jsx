@@ -54,7 +54,12 @@ export function FinancialGridView({ spec, entity, columns, data, children }) {
   const translate = (value) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === value)?.label ?? value;
   return (
     <GridContext.Provider value={{ columns: gridColumns, visible, gridView, ui }}>
-      {enabled && <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={translate} />}
+      {enabled && <GridViewControls
+        gridView={gridView}
+        gridColumns={gridColumns}
+        ui={ui}
+        t={translate}
+        data-testid="GridViewControls__fcca93" />}
       {children}
     </GridContext.Provider>
   );
@@ -62,24 +67,24 @@ export function FinancialGridView({ spec, entity, columns, data, children }) {
 
 export function FinancialGridRow({ as: Component = 'div', header = false, children, style, ...props }) {
   const context = useContext(GridContext);
-  if (!context?.gridView.active) return <Component {...props} style={style}>{children}</Component>;
+  if (!context?.gridView.active) return <Component {...props} style={style} data-testid="Component__fcca93">{children}</Component>;
   const { columns, visible, gridView, ui } = context;
   const allChildren = Children.toArray(children);
   const overlays = allChildren.filter((cell) => cell.props?.['data-financial-grid-overlay']);
   const cells = allChildren.filter((cell) => !cell.props?.['data-financial-grid-overlay']);
   // Empty states and expanded panels are full-width content, never data columns.
   if (cells.length === 1 && cells[0]?.props?.colSpan) {
-    return <Component {...props} style={style}>{cloneElement(cells[0], { colSpan: visible.length })}</Component>;
+    return <Component {...props} style={style} data-testid="Component__fcca93">{cloneElement(cells[0], { colSpan: visible.length })}</Component>;
   }
   // Do not guess a positional mapping for a grouped/non-data row.
-  if (cells.length !== columns.length) return <Component {...props} style={style}>{children}</Component>;
+  if (cells.length !== columns.length) return <Component {...props} style={style} data-testid="Component__fcca93">{children}</Component>;
   const tracks = visible.map((column) => {
     const width = gridView.columnSizing[gridViewColumnId(column)];
     return column.gridConfigurable !== false && width != null ? `${width}px` : column.gridTrack ?? 'minmax(100px,1fr)';
   }).join(' ');
   const rowStyle = Component === 'div' ? { ...style, gridTemplateColumns: tracks } : style;
   return (
-    <Component {...props} style={rowStyle}>
+    <Component {...props} style={rowStyle} data-testid="Component__fcca93">
       {visible.map((column) => {
         const index = columns.findIndex((source) => source.key === column.key);
         const cell = cells[index];
@@ -101,5 +106,5 @@ export function FinancialGridRow({ as: Component = 'div', header = false, childr
 }
 
 export function FinancialTableRow(props) {
-  return <FinancialGridRow {...props} as={TableRow} />;
+  return <FinancialGridRow {...props} as={TableRow} data-testid="FinancialGridRow__fcca93" />;
 }

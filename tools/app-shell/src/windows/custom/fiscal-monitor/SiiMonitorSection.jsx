@@ -443,7 +443,12 @@ export default function SiiMonitorSection({
         {/* Standard (non-compact) mode: no period toggle rendered — see the
             compact-mode comment above for why (ETP-5432). Only the export
             button remains in the filter bar. */}
-        {gridColumnViews && <GridViewControls gridView={gridView} gridColumns={GRID_COLUMNS} ui={ui} t={(key) => key === 'fiscalMonitor.col.party' ? ui(tab === 'issued' ? 'fiscalMonitor.sii.party.cliente' : 'fiscalMonitor.sii.party.proveedor') : ui(key)} />}
+        {gridColumnViews && <GridViewControls
+          gridView={gridView}
+          gridColumns={GRID_COLUMNS}
+          ui={ui}
+          t={(key) => key === 'fiscalMonitor.col.party' ? ui(tab === 'issued' ? 'fiscalMonitor.sii.party.cliente' : 'fiscalMonitor.sii.party.proveedor') : ui(key)}
+          data-testid="GridViewControls__be1aa5" />}
         <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
           <ExportIcon data-testid="ExportIcon__be1aa5" /> {ui('fiscalMonitor.export')}
         </button>

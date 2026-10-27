@@ -175,7 +175,12 @@ export function CashCloseMovementsPanel({
       </div>
       {/* Tabla */}
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
-        <FinancialGridView spec="financial-account" entity="transaction" columns={PERSONAL_COLUMNS} data={visible}>
+        <FinancialGridView
+          spec="financial-account"
+          entity="transaction"
+          columns={PERSONAL_COLUMNS}
+          data={visible}
+          data-testid="FinancialGridView__64d56f">
         <Table data-testid="cash-close-table">
           <TableHeader data-testid="TableHeader__64d56f">
             {/* Same header treatment as the Movements grid: sentence case, semibold, foreground

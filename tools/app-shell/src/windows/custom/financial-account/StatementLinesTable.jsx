@@ -115,61 +115,66 @@ export function StatementLinesTable({ lines, loading, currency = 'EUR' }) {
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
 
   return (
-    <FinancialGridView spec="financial-account" entity="bankStatementLines" columns={PERSONAL_COLUMNS} data={lines}>
-    <Table data-testid="Table__2364e3">
-      <TableHeader data-testid="TableHeader__2364e3">
-        <TableRow header
-          className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"
-          data-testid="TableRow__2364e3">
-          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColLineNo')}</TableHead>
-          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColDate')}</TableHead>
-          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColDescription')}</TableHead>
-          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColReference')}</TableHead>
-          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColBpartner')}</TableHead>
-          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColAmount')}</TableHead>
-          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColMatched')}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody data-testid="TableBody__2364e3">
-        {renderBody({
-          loading,
-          lines,
-          emptyLabel: ui('financeAccountStatementLinesEmpty'),
-          renderRow: (line) => (
-            <TableRow
-              key={line.id}
-              data-testid={`statement-line-row-${line.id}`}
-              className="bg-card"
-            >
-              <TableCell className="text-sm text-[hsl(var(--muted-foreground))]" data-testid="TableCell__2364e3">{line.lineNo}</TableCell>
-              <TableCell
-                className="whitespace-nowrap text-sm text-[hsl(var(--foreground))]"
-                data-testid="TableCell__2364e3">
-                {formatDate(line.date, bcpLocale)}
-              </TableCell>
-              <TableCell
-                className="max-w-[220px] truncate text-sm text-[hsl(var(--foreground))]"
-                data-testid="TableCell__2364e3">
-                {line.description || '—'}
-              </TableCell>
-              <TableCell className="text-sm text-[hsl(var(--foreground))]" data-testid="TableCell__2364e3">{line.reference || '—'}</TableCell>
-              <TableCell className="text-sm text-[hsl(var(--foreground))]" data-testid="TableCell__2364e3">{line.bpartnerName || '—'}</TableCell>
-              <TableCell className="text-right" data-testid="TableCell__2364e3">
-                <MoneyAmount
-                  value={line.amount}
-                  currency={currency}
-                  tone="auto"
-                  className="text-sm font-semibold"
-                  data-testid="MoneyAmount__2364e3" />
-              </TableCell>
-              <TableCell data-testid="TableCell__2364e3">
-                <MatchCell line={line} ui={ui} currency={currency} bcpLocale={bcpLocale} data-testid="MatchCell__wrap" />
-              </TableCell>
-            </TableRow>
-          ),
-        })}
-      </TableBody>
-    </Table>
+    <FinancialGridView
+      spec="financial-account"
+      entity="bankStatementLines"
+      columns={PERSONAL_COLUMNS}
+      data={lines}
+      data-testid="FinancialGridView__2364e3">
+      <Table data-testid="Table__2364e3">
+        <TableHeader data-testid="TableHeader__2364e3">
+          <TableRow header
+            className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"
+            data-testid="TableRow__2364e3">
+            <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColLineNo')}</TableHead>
+            <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColDate')}</TableHead>
+            <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColDescription')}</TableHead>
+            <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColReference')}</TableHead>
+            <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColBpartner')}</TableHead>
+            <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColAmount')}</TableHead>
+            <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColMatched')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody data-testid="TableBody__2364e3">
+          {renderBody({
+            loading,
+            lines,
+            emptyLabel: ui('financeAccountStatementLinesEmpty'),
+            renderRow: (line) => (
+              <TableRow
+                key={line.id}
+                data-testid={`statement-line-row-${line.id}`}
+                className="bg-card"
+              >
+                <TableCell className="text-sm text-[hsl(var(--muted-foreground))]" data-testid="TableCell__2364e3">{line.lineNo}</TableCell>
+                <TableCell
+                  className="whitespace-nowrap text-sm text-[hsl(var(--foreground))]"
+                  data-testid="TableCell__2364e3">
+                  {formatDate(line.date, bcpLocale)}
+                </TableCell>
+                <TableCell
+                  className="max-w-[220px] truncate text-sm text-[hsl(var(--foreground))]"
+                  data-testid="TableCell__2364e3">
+                  {line.description || '—'}
+                </TableCell>
+                <TableCell className="text-sm text-[hsl(var(--foreground))]" data-testid="TableCell__2364e3">{line.reference || '—'}</TableCell>
+                <TableCell className="text-sm text-[hsl(var(--foreground))]" data-testid="TableCell__2364e3">{line.bpartnerName || '—'}</TableCell>
+                <TableCell className="text-right" data-testid="TableCell__2364e3">
+                  <MoneyAmount
+                    value={line.amount}
+                    currency={currency}
+                    tone="auto"
+                    className="text-sm font-semibold"
+                    data-testid="MoneyAmount__2364e3" />
+                </TableCell>
+                <TableCell data-testid="TableCell__2364e3">
+                  <MatchCell line={line} ui={ui} currency={currency} bcpLocale={bcpLocale} data-testid="MatchCell__wrap" />
+                </TableCell>
+              </TableRow>
+            ),
+          })}
+        </TableBody>
+      </Table>
     </FinancialGridView>
   );
 }

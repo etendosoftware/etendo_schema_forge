@@ -70,7 +70,12 @@ export default function AccountingPanel({ parentId, apiBaseUrl, onCount }) {
 
   return (
     <div data-testid={rows === undefined ? 'accounting-panel-loading' : 'accounting-panel-table'}>
-      {gridView.enabled && <GridViewControls gridView={gridView} gridColumns={columns} ui={ui} t={t} />}
+      {gridView.enabled && <GridViewControls
+        gridView={gridView}
+        gridColumns={columns}
+        ui={ui}
+        t={t}
+        data-testid="GridViewControls__d73b6d" />}
       <DataTable
         gridView={gridView}
         columns={columns}

@@ -1574,7 +1574,12 @@ export function ListView({
                     labelOverrides={labelOverrides}
                     data-testid="ListFilterBarSection__620cbc" />
                   {gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
-                    <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={t} />
+                    <GridViewControls
+                      gridView={gridView}
+                      gridColumns={gridColumns}
+                      ui={ui}
+                      t={t}
+                      data-testid="GridViewControls__620cbc" />
                   )}
                   <ViewToggle
                     galleryRenderer={galleryRenderer}
@@ -1724,7 +1729,12 @@ export function ListView({
               to DataTable. Keep personal-view controls reachable above either scroll host. */}
           {listBarHidden && gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
             <div className="flex shrink-0 items-center px-2 py-2" data-testid="grid-view-fallback-controls">
-              <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={t} />
+              <GridViewControls
+                gridView={gridView}
+                gridColumns={gridColumns}
+                ui={ui}
+                t={t}
+                data-testid="GridViewControls__620cbc" />
             </div>
           )}
 

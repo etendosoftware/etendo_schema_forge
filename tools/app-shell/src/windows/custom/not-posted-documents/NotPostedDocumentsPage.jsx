@@ -497,7 +497,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           onClear={clearSort}
           isDefaultSort={isDefaultSort}
           data-testid="ListSortPopover__npd" />
-        {gridView.enabled && <GridViewControls gridView={gridView} gridColumns={columns} ui={ui} t={t} />}
+        {gridView.enabled && <GridViewControls
+          gridView={gridView}
+          gridColumns={columns}
+          ui={ui}
+          t={t}
+          data-testid="GridViewControls__b28bb1" />}
         <RefreshButton onRefresh={reload} label={ui('refresh')} data-testid="RefreshButton__npd" />
       </div>
       {/* Refetches keep the current rows on screen under a progress bar; only the very first

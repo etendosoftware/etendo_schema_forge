@@ -143,8 +143,12 @@ export default function AmortizationLinesTable({
     return [...cells.slice(0, 2), ...dataCells, ...cells.slice(-1)];
   };
   const gridControls = gridColumnViews && gridSpec ? (
-    <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui}
-      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key} />
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key}
+      data-testid="GridViewControls__fecdcf" />
   ) : null;
 
   const [loading, setLoading] = useState(false);

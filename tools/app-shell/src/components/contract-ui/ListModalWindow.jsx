@@ -689,7 +689,12 @@ export function ListModalWindow({
             </div>
           )}
           {gridView.enabled && (
-            <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui} t={tLabel} />
+            <GridViewControls
+              gridView={gridView}
+              gridColumns={gridColumns}
+              ui={ui}
+              t={tLabel}
+              data-testid="GridViewControls__19eda5" />
           )}
           <ListSortPopover
             columns={columns}

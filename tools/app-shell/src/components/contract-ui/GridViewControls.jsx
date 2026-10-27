@@ -13,8 +13,8 @@ import {
 export function GridViewControls({ gridView, gridColumns, ui, t }) {
   return (
     <div className="flex items-center gap-1" data-testid="grid-view-controls">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <DropdownMenu data-testid="DropdownMenu__3b8cf2">
+        <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__3b8cf2">
           <Button
             type="button"
             variant="outline"
@@ -22,13 +22,16 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
             disabled={!gridView.active}
             aria-label={ui('gridViewColumns')}
             data-testid="grid-view-columns-trigger">
-            <Columns3 className="mr-1.5 h-4 w-4" />
+            <Columns3 className="mr-1.5 h-4 w-4" data-testid="Columns3__3b8cf2" />
             {ui('gridViewColumns')}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-          <DropdownMenuLabel>{ui('gridViewColumns')}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
+        <DropdownMenuContent
+          align="start"
+          className="max-h-80 overflow-y-auto"
+          data-testid="DropdownMenuContent__3b8cf2">
+          <DropdownMenuLabel data-testid="DropdownMenuLabel__3b8cf2">{ui('gridViewColumns')}</DropdownMenuLabel>
+          <DropdownMenuSeparator data-testid="DropdownMenuSeparator__3b8cf2" />
           {gridColumns.map((column) => {
             const id = gridViewColumnId(column);
             const labelKey = column.column ?? column.label ?? column.key;
@@ -54,8 +57,8 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
         onClick={() => { void gridView.save(); }}
         data-testid="grid-view-save">
         {gridView.saveState === 'saving'
-          ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-          : <Save className="mr-1.5 h-4 w-4" />}
+          ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" data-testid="Loader2__3b8cf2" />
+          : <Save className="mr-1.5 h-4 w-4" data-testid="Save__3b8cf2" />}
         {gridView.saveState === 'saving' ? ui('gridViewSaving') : ui('gridViewSave')}
       </Button>
       <span role={gridView.loadError || gridView.saveState === 'error' ? 'alert' : 'status'} className="sr-only" data-testid="grid-view-status">
@@ -66,7 +69,12 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
                 : gridView.saveState === 'saved' ? ui('gridViewSaved') : ''}
       </span>
       {gridView.loadError && (
-        <Button type="button" variant="ghost" size="sm" onClick={gridView.retryLoad}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={gridView.retryLoad}
+          data-testid="Button__3b8cf2">
           {ui('gridViewRetry')}
         </Button>
       )}

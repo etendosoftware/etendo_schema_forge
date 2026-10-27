@@ -280,59 +280,65 @@ export function StatementsTable({
     : 'transition-opacity duration-200';
 
   return (
-    <FinancialGridView spec="financial-account" entity="importedBankStatements" columns={PERSONAL_COLUMNS} data={statements}>
-    <div role="table" className={cn('w-full', dimWhileRefreshing)}>
-      {/* Header — same style as MovementsTable headers (xs / semibold / hsl(var(--foreground))). */}
-      <FinancialGridRow header
-        role="row"
-        style={GRID_STYLE}
-        className={cn(
-          GRID_CLASS,
-          'h-10 items-center border-b border-[hsl(var(--border-subtle))] px-4 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
-        )}
-      >
-        <span aria-hidden="true" />
-        {/* The cell stays even when the checkbox does not, so the grid columns keep lining up. */}
-        <span>
-          {windowReadOnly ? null : (
-            <Checkbox
-              checked={allSelected}
-              indeterminate={someSelected}
-              onChange={handleSelectAll}
-              data-testid="Checkbox__3acaeb" />
+    <FinancialGridView
+      spec="financial-account"
+      entity="importedBankStatements"
+      columns={PERSONAL_COLUMNS}
+      data={statements}
+      data-testid="FinancialGridView__3acaeb">
+      <div role="table" className={cn('w-full', dimWhileRefreshing)}>
+        {/* Header — same style as MovementsTable headers (xs / semibold / hsl(var(--foreground))). */}
+        <FinancialGridRow
+          header
+          role="row"
+          style={GRID_STYLE}
+          className={cn(
+            GRID_CLASS,
+            'h-10 items-center border-b border-[hsl(var(--border-subtle))] px-4 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
           )}
-        </span>
-        {STATEMENT_COLUMNS.map((col) => (
-          <span key={col.name}>
-            <SortableHeaderLabel
-              label={STATEMENT_CELL_RENDERERS[col.name] ? ui(STATEMENT_CELL_RENDERERS[col.name].labelKey) : col.label}
-              sortKey={col.name}
-              activeKey={sortKey}
-              direction={sortDirection}
-              onSort={onSort}
-              data-testid="SortableHeaderLabel__3acaeb" />
+          data-testid="FinancialGridRow__3acaeb">
+          <span aria-hidden="true" />
+          {/* The cell stays even when the checkbox does not, so the grid columns keep lining up. */}
+          <span>
+            {windowReadOnly ? null : (
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={handleSelectAll}
+                data-testid="Checkbox__3acaeb" />
+            )}
           </span>
-        ))}
-        {Object.entries(TAIL_SORT).map(([key, tail]) => (
-          <span key={key} className={tail.numeric ? 'text-right' : undefined}>
-            <SortableHeaderLabel
-              label={ui(tail.labelKey)}
-              sortKey={key}
-              activeKey={sortKey}
-              direction={sortDirection}
-              onSort={onSort}
-              align={tail.numeric ? 'right' : undefined}
-              data-testid="SortableHeaderLabel__3acaeb" />
-          </span>
-        ))}
-        <span aria-hidden="true" />
-      </FinancialGridRow>
-      {/* Body */}
-      {renderBody({
-        loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
-        selectedIds, onSelectionChange, linesRefreshToken, bankConnected, windowReadOnly,
-      })}
-    </div>
+          {STATEMENT_COLUMNS.map((col) => (
+            <span key={col.name}>
+              <SortableHeaderLabel
+                label={STATEMENT_CELL_RENDERERS[col.name] ? ui(STATEMENT_CELL_RENDERERS[col.name].labelKey) : col.label}
+                sortKey={col.name}
+                activeKey={sortKey}
+                direction={sortDirection}
+                onSort={onSort}
+                data-testid="SortableHeaderLabel__3acaeb" />
+            </span>
+          ))}
+          {Object.entries(TAIL_SORT).map(([key, tail]) => (
+            <span key={key} className={tail.numeric ? 'text-right' : undefined}>
+              <SortableHeaderLabel
+                label={ui(tail.labelKey)}
+                sortKey={key}
+                activeKey={sortKey}
+                direction={sortDirection}
+                onSort={onSort}
+                align={tail.numeric ? 'right' : undefined}
+                data-testid="SortableHeaderLabel__3acaeb" />
+            </span>
+          ))}
+          <span aria-hidden="true" />
+        </FinancialGridRow>
+        {/* Body */}
+        {renderBody({
+          loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
+          selectedIds, onSelectionChange, linesRefreshToken, bankConnected, windowReadOnly,
+        })}
+      </div>
     </FinancialGridView>
   );
 }
@@ -348,7 +354,12 @@ function renderBody({
 }) {
   if (loading && statements.length === 0) {
     return [1, 2, 3, 4, 5].map((n) => (
-      <FinancialGridRow key={n} role="row" style={GRID_STYLE} className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-3')}>
+      <FinancialGridRow
+        key={n}
+        role="row"
+        style={GRID_STYLE}
+        className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-3')}
+        data-testid="FinancialGridRow__3acaeb">
         {SKELETON_CELL_KEYS.map((k) => (
           <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__3acaeb" />
         ))}

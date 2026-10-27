@@ -283,7 +283,12 @@ export default function TbaiMonitorSection({
             </button>
           ))}
         </div>
-        {gridColumnViews && <GridViewControls gridView={gridView} gridColumns={GRID_COLUMNS} ui={ui} t={ui} />}
+        {gridColumnViews && <GridViewControls
+          gridView={gridView}
+          gridColumns={GRID_COLUMNS}
+          ui={ui}
+          t={ui}
+          data-testid="GridViewControls__dd7710" />}
         <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
           <ExportIcon data-testid="ExportIcon__dd7710" /> {ui('fiscalMonitor.export')}
         </button>

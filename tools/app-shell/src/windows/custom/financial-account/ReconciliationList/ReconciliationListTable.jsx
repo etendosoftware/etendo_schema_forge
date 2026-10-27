@@ -201,38 +201,44 @@ export function ReconciliationListTable({
   return (
     // Full-bleed like the Imported Statements grid: no card border/radius, the rows' own bottom
     // borders carry the structure.
-    <FinancialGridView spec="financial-account" entity="reconciliations" columns={[
-      { key: 'expand', gridConfigurable: false, gridTrack: '28px' },
-      ...layout.columns.map((col) => ({ ...col, key: col.name, labelKey: CELL_RENDERERS[col.name]?.labelKey, gridTrack: CELL_RENDERERS[col.name]?.width })),
-    ]} data={reconciliations}>
-    <div role="table" className={cn('w-full', dimWhileRefreshing)} data-testid="reconciliation-list-table">
-      {/* Header styled like the Movements table: sentence case, semibold, foreground colour —
-          not the uppercase muted small-caps used elsewhere. */}
-      <FinancialGridRow header
-        role="row"
-        style={layout.gridStyle}
-        className={cn(
-          GRID_CLASS,
-          'items-center border-b border-[hsl(var(--border-subtle))] bg-card px-4',
-          'h-10 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
-        )}
-      >
-        <span aria-hidden="true" />
-        {layout.columns.map((col) => (
-          <span key={col.name} className={amountAligned(col.name) ? 'text-right' : undefined}>
-            <SortableHeaderLabel
-              label={CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label}
-              sortKey={col.name}
-              activeKey={sortKey}
-              direction={sortDirection}
-              onSort={onSort}
-              align={amountAligned(col.name) ? 'right' : undefined}
-              data-testid="SortableHeaderLabel__d80a75" />
-          </span>
-        ))}
-      </FinancialGridRow>
-      {renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle, layout })}
-    </div>
+    <FinancialGridView
+      spec="financial-account"
+      entity="reconciliations"
+      columns={[
+        { key: 'expand', gridConfigurable: false, gridTrack: '28px' },
+        ...layout.columns.map((col) => ({ ...col, key: col.name, labelKey: CELL_RENDERERS[col.name]?.labelKey, gridTrack: CELL_RENDERERS[col.name]?.width })),
+      ]}
+      data={reconciliations}
+      data-testid="FinancialGridView__d80a75">
+      <div role="table" className={cn('w-full', dimWhileRefreshing)} data-testid="reconciliation-list-table">
+        {/* Header styled like the Movements table: sentence case, semibold, foreground colour —
+            not the uppercase muted small-caps used elsewhere. */}
+        <FinancialGridRow
+          header
+          role="row"
+          style={layout.gridStyle}
+          className={cn(
+            GRID_CLASS,
+            'items-center border-b border-[hsl(var(--border-subtle))] bg-card px-4',
+            'h-10 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
+          )}
+          data-testid="FinancialGridRow__d80a75">
+          <span aria-hidden="true" />
+          {layout.columns.map((col) => (
+            <span key={col.name} className={amountAligned(col.name) ? 'text-right' : undefined}>
+              <SortableHeaderLabel
+                label={CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label}
+                sortKey={col.name}
+                activeKey={sortKey}
+                direction={sortDirection}
+                onSort={onSort}
+                align={amountAligned(col.name) ? 'right' : undefined}
+                data-testid="SortableHeaderLabel__d80a75" />
+            </span>
+          ))}
+        </FinancialGridRow>
+        {renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle, layout })}
+      </div>
     </FinancialGridView>
   );
 }
@@ -246,7 +252,7 @@ function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, t
         role="row"
         style={layout.gridStyle}
         className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-3')}
-      >
+        data-testid="FinancialGridRow__d80a75">
         {layout.skeletonCellKeys.map((k) => <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__d80a75" />)}
       </FinancialGridRow>
     ));

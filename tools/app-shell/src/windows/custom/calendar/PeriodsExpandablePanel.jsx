@@ -288,7 +288,12 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl, readOnly 
 
   return (
     <div data-testid={loading ? 'periods-expandable-panel-loading' : 'periods-expandable-panel'}>
-      {gridView.enabled && <GridViewControls gridView={gridView} gridColumns={columns} ui={ui} t={t} />}
+      {gridView.enabled && <GridViewControls
+        gridView={gridView}
+        gridColumns={columns}
+        ui={ui}
+        t={t}
+        data-testid="GridViewControls__711967" />}
       <DataTable
         gridView={gridView}
         columns={columns}

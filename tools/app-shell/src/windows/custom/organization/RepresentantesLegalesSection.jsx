@@ -313,7 +313,12 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
           <span>{ui('orgRepLegalEntityHint')}</span>
         </p>
       )}
-      {gridColumnViews && <GridViewControls gridView={gridView} gridColumns={GRID_COLUMNS} ui={ui} t={gridLabel} />}
+      {gridColumnViews && <GridViewControls
+        gridView={gridView}
+        gridColumns={GRID_COLUMNS}
+        ui={ui}
+        t={gridLabel}
+        data-testid="GridViewControls__f6a856" />}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full table-fixed">
           <thead>
