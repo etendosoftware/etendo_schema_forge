@@ -92,5 +92,5 @@ export function centerOptionInPanel(panel, option) {
   const offsetInPanel = optionRect.top - panelRect.top + panel.scrollTop;
   const target = offsetInPanel - (panel.clientHeight - optionRect.height) / 2;
   panel.scrollTop = Math.max(0, target);
-  return !(target > panel.scrollHeight - panel.clientHeight);
+  return target <= panel.scrollHeight - panel.clientHeight;
 }
