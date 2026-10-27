@@ -330,6 +330,45 @@ describe('EditAccountModal', () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it('shows the inline name-exists error on a 409 with code duplicate_key', async () => {
+    const user = userEvent.setup();
+    const err = new Error('dup');
+    err.status = 409;
+    err.code = 'duplicate_key';
+    updateAccount.mockRejectedValueOnce(err);
+    renderModal();
+
+    const nameInput = screen.getByTestId('edit-account-name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'BBVA Renamed');
+    await user.click(screen.getByTestId('edit-account-save'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('edit-account-error')).toHaveTextContent(
+        'financeAccountsNewNameExists',
+      ),
+    );
+  });
+
+  it('toasts the server message and shows no name error on a 409 with code record_in_use', async () => {
+    const user = userEvent.setup();
+    const err = new Error('Account is used by a reconciliation.');
+    err.status = 409;
+    err.code = 'record_in_use';
+    updateAccount.mockRejectedValueOnce(err);
+    renderModal();
+
+    const nameInput = screen.getByTestId('edit-account-name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'BBVA Renamed');
+    await user.click(screen.getByTestId('edit-account-save'));
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Account is used by a reconciliation.'),
+    );
+    expect(screen.queryByText('financeAccountsNewNameExists')).not.toBeInTheDocument();
+  });
+
   it('toasts an error for a non-409 save failure', async () => {
     const user = userEvent.setup();
     const err = new Error('boom');

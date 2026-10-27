@@ -774,6 +774,17 @@ fi
 # caused entirely by a stale core-package pin that only `npm ci` — not a
 # stale local install — would have caught).
 run_step_0() {
+  # Second trigger, independent of the diff: the lockfile can be unchanged vs the
+  # target while the INSTALLED tree is older than it (e.g. develop merged in, its
+  # lockfile bumped a core package, node_modules never reinstalled -> E2E build
+  # and vitest fail on stale packages). Pure JSON compare, fast when in sync.
+  local stale_reason=""
+  if [ "$RUN_S0" != "1" ] && stale_reason="$(node "$REPO_DIR/scripts/check-node-modules-fresh.js" "$REPO_DIR")"; then
+    stale_reason=""
+  elif [ "$RUN_S0" != "1" ]; then
+    echo "==> node_modules is stale vs package-lock.json (${stale_reason:-unknown}) -> running npm ci"
+    RUN_S0=1
+  fi
   if [ "$RUN_S0" != "1" ]; then
     echo "==> [0/5] Syncing npm dependencies (npm ci)... SKIPPED ⏭️  (lockfile unchanged)"
     record_summary_row "Syncing npm dependencies with package-lock.json (npm ci)" "-" "SKIPPED" ""
@@ -782,6 +793,8 @@ run_step_0() {
   # npm ci is a pure function of the lockfile and the node major it installs for.
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" package.json package-lock.json)"
+  # A stale install must reinstall even if this lockfile already passed once.
+  [ -n "$stale_reason" ] && key=""
   run_step "0" "Syncing npm dependencies with package-lock.json (npm ci)" "$REPO_DIR" "tmp/pre-push/npm-ci.log" "npm ci || npm install" "$key"
 }
 

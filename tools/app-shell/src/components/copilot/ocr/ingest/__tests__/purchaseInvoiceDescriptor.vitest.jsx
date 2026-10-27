@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js
 import { BACK } from '../../ocrFlowSignals';
-import { classifyProductMatch, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
+import { classifyProductMatch, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
 
 // Mock simSearch to test findBp without network
 vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
@@ -593,6 +593,74 @@ describe('purchaseInvoiceDescriptor', () => {
         const { askUserForProducts } = await run('Unknown thing', [null]);
         expect(askUserForProducts.mock.calls[0][0].unmatched[0].suggestion).toBeNull();
       });
+
+      // Flow seam of the similarity rule: classification -> partition -> popup / Lines ops.
+      describe('similarity auto-match through the batch flow', () => {
+        const simMatch = (id, name, similarityPercent) => ({ id, name, similarityPercent });
+        const withCandidates = (...cs) => ({ ...cs[0], candidates: cs });
+        const runLines = async (descriptions, simResults) => {
+          globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+          simSearchMock.mockImplementation(async ({ entityName }) => (entityName === 'Product' ? simResults : []));
+          const askUserForProducts = vi.fn(async () => ({}));
+          const result = await buildPurchaseInvoiceBatch(
+            { line_items: descriptions.map((description) => ({ description, quantity: 1 })) },
+            {
+              token: 'tok',
+              apiBaseUrl: 'http://test/neo/purchase-invoice',
+              reviewedHeader: { vendor: { bpId: 'bp-1' } },
+              askUserForProducts,
+            },
+          );
+          return { result, askUserForProducts, lineOps: result.ops.filter((o) => o.entity === 'Lines') };
+        };
+
+        it('assigns a >= 90 single-top candidate without opening the popup', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Tornillo M8'], [
+            withCandidates(simMatch('p-92', 'Tornillo M9', '92.3077')),
+          ]);
+          expect(askUserForProducts).not.toHaveBeenCalled();
+          expect(lineOps).toHaveLength(1);
+          expect(lineOps[0].body.product).toBe('p-92');
+        });
+
+        it('never asks the user when every line is auto-matched by similarity', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Tornillo M8', 'Tuerca M8'], [
+            withCandidates(simMatch('p-a', 'Tornillo M9', '92.3077'), simMatch('p-x', 'Otro', '60')),
+            withCandidates(simMatch('p-b', 'Tuerca M9', '96.7')),
+          ]);
+          expect(askUserForProducts).not.toHaveBeenCalled();
+          expect(lineOps.map((o) => o.body.product)).toEqual(['p-a', 'p-b']);
+        });
+
+        it('sends only the < 90 line to the popup with its original idx and keeps the auto-matched one', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Tornillo M8', 'Servicio de mantenimiento'], [
+            withCandidates(simMatch('p-auto', 'Tornillo M9', '92.3077')),
+            withCandidates(simMatch('p-low', 'Mantenimiento', '55.5')),
+          ]);
+          expect(askUserForProducts).toHaveBeenCalledTimes(1);
+          const { unmatched } = askUserForProducts.mock.calls[0][0];
+          expect(unmatched).toHaveLength(1);
+          expect(unmatched[0]).toMatchObject({
+            idx: 1,
+            description: 'Servicio de mantenimiento',
+            suggestion: { id: 'p-low', name: 'Mantenimiento' },
+          });
+          expect(lineOps).toHaveLength(1);
+          expect(lineOps[0].body.product).toBe('p-auto');
+        });
+
+        it('sends a top tie >= 90 to the popup with the first candidate as suggestion, not assigned', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Arnes talla N'], [
+            withCandidates(simMatch('p-l', 'Arnes talla L', '96.7'), simMatch('p-m', 'Arnes talla M', '96.7')),
+          ]);
+          expect(askUserForProducts).toHaveBeenCalledTimes(1);
+          const { unmatched } = askUserForProducts.mock.calls[0][0];
+          expect(unmatched).toHaveLength(1);
+          expect(unmatched[0].idx).toBe(0);
+          expect(unmatched[0].suggestion).toEqual({ id: 'p-l', name: 'Arnes talla L' });
+          expect(lineOps).toHaveLength(0);
+        });
+      });
     });
 
     describe('classifyProductMatch', () => {
@@ -608,6 +676,102 @@ describe('purchaseInvoiceDescriptor', () => {
       it('picks the exact candidate even when it is not the first one', () => {
         const candidates = [{ id: 'a', name: 'Widget Pro' }, { id: 'b', name: 'Widget' }];
         expect(classifyProductMatch('widget', { ...candidates[0], candidates })).toEqual({ id: 'b' });
+      });
+
+      describe('similarity auto-match (ETP-5654)', () => {
+        const cand = (id, name, similarityPercent) => ({ id, name, similarityPercent });
+        const classify = (desc, ...cs) => classifyProductMatch(desc, { ...cs[0], candidates: cs });
+
+        it('exposes the threshold constant', () => {
+          expect(PRODUCT_AUTO_MATCH_MIN_SIMILARITY).toBe(90);
+        });
+
+        it('auto-assigns a single 96.7% candidate (one-char difference)', () => {
+          expect(classify('Tornillo M8', cand('p1', 'Tornillo M9', '96.7'))).toEqual({ id: 'p1' });
+        });
+
+        it('auto-assigns a 100% candidate whose name is not an exact match', () => {
+          expect(classify('Camión', cand('p1', 'Camion', 100))).toEqual({ id: 'p1' });
+        });
+
+        it('treats exactly 90 as auto and 89.9 as a suggestion', () => {
+          expect(classify('Widget A', cand('p1', 'Widget B', 90))).toEqual({ id: 'p1' });
+          expect(classify('Widget A', cand('p1', 'Widget B', 89.9)))
+            .toEqual({ suggestion: { id: 'p1', name: 'Widget B' } });
+        });
+
+        const sugg = (id, name) => ({ suggestion: { id, name } });
+
+        it('auto-assigns 96 over 94, also when the winner is listed second', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo A', 96), cand('p2', 'Tornillo B', 94)))
+            .toEqual({ id: 'p1' });
+          expect(classify('Tornillo', cand('p1', 'Tornillo B', 94), cand('p2', 'Tornillo A', 96)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it('suggests the first listed candidate when two tie at the top (96.7 vs 96.7)', () => {
+          expect(classify('Arnes talla N', cand('p1', 'Arnes talla L', 96.7), cand('p2', 'Arnes talla M', 96.7)))
+            .toEqual(sugg('p1', 'Arnes talla L'));
+          expect(classify('Arnes talla N', cand('p1', 'Arnes talla L', '96.7'), cand('p2', 'Arnes talla M', 96.7)))
+            .toEqual(sugg('p1', 'Arnes talla L'));
+        });
+
+        it('suggests the first candidate on a 3-way tie at the top', () => {
+          expect(classify('Tornillo', cand('p1', 'A', 95), cand('p2', 'B', 95), cand('p3', 'C', 95)))
+            .toEqual(sugg('p1', 'A'));
+        });
+
+        it('lets the top win over a tie lower down (96, 94, 94)', () => {
+          expect(classify('Tornillo', cand('p1', 'A', 94), cand('p2', 'B', 96), cand('p3', 'C', 94)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it('suggests on a tie at exactly 90 and auto-assigns a single 90', () => {
+          expect(classify('Widget A', cand('p1', 'W1', 90), cand('p2', 'W2', 90))).toEqual(sugg('p1', 'W1'));
+          expect(classify('Widget A', cand('p1', 'W1', 90), cand('p2', 'W2', 89))).toEqual({ id: 'p1' });
+        });
+
+        it('suggests on a tie below the threshold', () => {
+          expect(classify('Widget A', cand('p1', 'W1', 85), cand('p2', 'W2', 85))).toEqual(sugg('p1', 'W1'));
+        });
+
+        it('ignores an unparseable candidate when ranking the rest', () => {
+          expect(classify('Tornillo', cand('p1', 'A', '96.7%'), cand('p2', 'B', 92))).toEqual({ id: 'p2' });
+        });
+
+        it('picks the highest similarity even when it is not listed first', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo B', 60), cand('p2', 'Tornillo A', 97)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it.each([undefined, '', NaN, '96.7%', 'abc', null])(
+          'never auto-assigns a missing or non-numeric similarity (%s)',
+          (sim) => {
+            expect(classify('Widget A', cand('p1', 'Widget B', sim)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Widget B' } });
+          },
+        );
+
+        it('keeps two exact names ambiguous even with a high similarity', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo', 100), cand('p2', 'Tornillo', 100)))
+            .toEqual({ suggestion: { id: 'p1', name: 'Tornillo' } });
+        });
+
+        it('evaluates the exact match before similarity', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo X', 99), cand('p2', 'tornillo', 95)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it('keeps the exact name winning when the higher-similarity rival is listed first', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo XL', 99.5), cand('p2', 'Tornillo', 91)))
+            .toEqual({ id: 'p2' });
+        });
+
+        // Intentional per the ETP-5654 spec: with no description there is no exact name to
+        // compare, so the similarity path still runs and a single >= 90 candidate is auto-assigned.
+        it.each([null, undefined, '', '   '])('still auto-assigns a single 99 candidate for description %j', (desc) => {
+          expect(classify(desc, cand('p1', 'Tornillo', 99))).toEqual({ id: 'p1' });
+        });
       });
     });
 
