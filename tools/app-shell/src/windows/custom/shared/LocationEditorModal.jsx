@@ -1071,6 +1071,99 @@ export default function LocationEditorModal({
         onParentRefresh?.();
     }
 
+    function buildSavePayload() {
+        // ETP-5806 — while `structured-address-for-sepa` is off, Address Line 1/2 are the directly
+        // editable `form.address`/`form.address2` (pre-ETP-5806 behavior); the composed
+        // preview and the 3 structured fields are not rendered, so they stay empty and are
+        // sent as null, which the backend's legacy branch already handles.
+        const addressLine1 = structuredAddressEnabled ? composedAddress.address1 : (form.address || '');
+        const addressLine2 = structuredAddressEnabled ? composedAddress.address2 : (form.address2 || '');
+        const name = [form.city, addressLine1].filter(Boolean).join(', ')
+            || [form.regionLabel || form.region, form.countryLabel || form.country].filter(Boolean).join(', ')
+            || 'Location';
+        const payload = {
+            name,
+            // ETP-5806 — the backend recomputes Address1/Address2 from the structured fields
+            // and ignores these when streetName is present (see StructuredAddressComposer);
+            // sent anyway so a caller reading the create/update response sees them immediately
+            // without waiting on a round trip, and as a harmless fallback for the handler's
+            // own legacy branch (streetName blank, which `saveDisabled` never lets through here).
+            addressLine1: addressLine1 || null,
+            addressLine2: addressLine2 || null,
+            streetName: structuredAddressEnabled ? (form.streetName || null) : null,
+            buildingNumber: structuredAddressEnabled ? (form.buildingNumber || null) : null,
+            buildingName: structuredAddressEnabled ? (form.buildingName || null) : null,
+            postalCode: form.postalCode || null,
+            cityName: form.city || null,
+            country: form.country || null,
+            region: form.region || null,
+        };
+        // Address-type flags only exist in 'bpartner' mode (C_BPartner_Location);
+        // omit them entirely when the checkboxes are hidden (e.g. Warehouse).
+        if (showAddressTypeCheckboxes) {
+            payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
+            payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
+        }
+        return {payload, name};
+    }
+
+    async function saveEdit(payload, name) {
+        // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
+        // 'location' updates the plain C_Location.
+        const res = await apiFetch(`/${entityPath}/${bplLinkId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            // ETP-5806 — a non-ok response used to be completely silent: no toast, no
+            // console output, modal just sat there with nothing visibly wrong. The user
+            // had no way to tell a failed save from a successful one that was merely slow,
+            // and (worse) nothing here ever re-synced the form with what the backend
+            // actually has, so a retry could look like a no-op too. Surface it loudly.
+            console.error('[LocationEditorModal] locationAddress PUT failed with status', res.status);
+            toast.error(ui('locationSaveError'));
+            return;
+        }
+        const data = await res.json().catch(() => null);
+        const rec = data?.response?.data?.[0] ?? null;
+        showBackendMessages(rec?.messages);
+        // Return id/name so a single-FK field (Warehouse) can refresh its display.
+        onSaved?.(rec?.id ?? bplLinkId, rec?.name ?? name);
+    }
+
+    async function saveCreate(payload, name) {
+        // CREATE:
+        //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
+        //   'location' → creates a plain C_Location, no business partner link
+        const createPath = saveMode === 'location'
+            ? `/${entityPath}`
+            : `/locationAddress?parentId=${bpId}`;
+        const createBody = saveMode === 'location'
+            ? payload
+            : {...payload, businessPartner: bpId};
+        const res = await apiFetch(createPath, {
+            method: 'POST',
+            body: JSON.stringify(createBody),
+        });
+
+        if (!res.ok) {
+            console.error('[LocationEditorModal] locationAddress POST failed with status', res.status);
+            toast.error(ui('locationSaveError'));
+            return;
+        }
+
+        const data = await res.json();
+        if ((data?.response?.status ?? 0) !== 0) {
+            console.error('[LocationEditorModal] locationAddress POST returned NEO error:', data?.response);
+            toast.error(ui('locationSaveError'));
+            return;
+        }
+
+        const newRecord = data?.response?.data?.[0] ?? data?.data?.[0] ?? null;
+        showBackendMessages(newRecord?.messages);
+        onSaved?.(newRecord?.id ?? null, newRecord?.name ?? name);
+    }
+
     async function handleSave() {
         setAttemptedSave(true);
         if (saveDisabled) return;
@@ -1084,93 +1177,12 @@ export default function LocationEditorModal({
         }
         setSaving(true);
         try {
-            // ETP-5806 — while `structured-address-for-sepa` is off, Address Line 1/2 are the directly
-            // editable `form.address`/`form.address2` (pre-ETP-5806 behavior); the composed
-            // preview and the 3 structured fields are not rendered, so they stay empty and are
-            // sent as null, which the backend's legacy branch already handles.
-            const addressLine1 = structuredAddressEnabled ? composedAddress.address1 : (form.address || '');
-            const addressLine2 = structuredAddressEnabled ? composedAddress.address2 : (form.address2 || '');
-            const name = [form.city, addressLine1].filter(Boolean).join(', ')
-                || [form.regionLabel || form.region, form.countryLabel || form.country].filter(Boolean).join(', ')
-                || 'Location';
-            const payload = {
-                name,
-                // ETP-5806 — the backend recomputes Address1/Address2 from the structured fields
-                // and ignores these when streetName is present (see StructuredAddressComposer);
-                // sent anyway so a caller reading the create/update response sees them immediately
-                // without waiting on a round trip, and as a harmless fallback for the handler's
-                // own legacy branch (streetName blank, which `saveDisabled` never lets through here).
-                addressLine1: addressLine1 || null,
-                addressLine2: addressLine2 || null,
-                streetName: structuredAddressEnabled ? (form.streetName || null) : null,
-                buildingNumber: structuredAddressEnabled ? (form.buildingNumber || null) : null,
-                buildingName: structuredAddressEnabled ? (form.buildingName || null) : null,
-                postalCode: form.postalCode || null,
-                cityName: form.city || null,
-                country: form.country || null,
-                region: form.region || null,
-            };
-            // Address-type flags only exist in 'bpartner' mode (C_BPartner_Location);
-            // omit them entirely when the checkboxes are hidden (e.g. Warehouse).
-            if (showAddressTypeCheckboxes) {
-                payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
-                payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
-            }
+            const {payload, name} = buildSavePayload();
             if (bplLinkId) {
-                // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
-                // 'location' updates the plain C_Location.
-                const res = await apiFetch(`/${entityPath}/${bplLinkId}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(payload),
-                });
-                if (res.ok) {
-                    const data = await res.json().catch(() => null);
-                    const rec = data?.response?.data?.[0] ?? null;
-                    showBackendMessages(rec?.messages);
-                    // Return id/name so a single-FK field (Warehouse) can refresh its display.
-                    onSaved?.(rec?.id ?? bplLinkId, rec?.name ?? name);
-                } else {
-                    // ETP-5806 — a non-ok response used to be completely silent: no toast, no
-                    // console output, modal just sat there with nothing visibly wrong. The user
-                    // had no way to tell a failed save from a successful one that was merely slow,
-                    // and (worse) nothing here ever re-synced the form with what the backend
-                    // actually has, so a retry could look like a no-op too. Surface it loudly.
-                    console.error('[LocationEditorModal] locationAddress PUT failed with status', res.status);
-                    toast.error(ui('locationSaveError'));
-                }
-                return;
+                await saveEdit(payload, name);
+            } else {
+                await saveCreate(payload, name);
             }
-
-            // CREATE:
-            //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
-            //   'location' → creates a plain C_Location, no business partner link
-            const createPath = saveMode === 'location'
-                ? `/${entityPath}`
-                : `/locationAddress?parentId=${bpId}`;
-            const createBody = saveMode === 'location'
-                ? payload
-                : {...payload, businessPartner: bpId};
-            const res = await apiFetch(createPath, {
-                method: 'POST',
-                body: JSON.stringify(createBody),
-            });
-
-            if (!res.ok) {
-                console.error('[LocationEditorModal] locationAddress POST failed with status', res.status);
-                toast.error(ui('locationSaveError'));
-                return;
-            }
-
-            const data = await res.json();
-            if ((data?.response?.status ?? 0) !== 0) {
-                console.error('[LocationEditorModal] locationAddress POST returned NEO error:', data?.response);
-                toast.error(ui('locationSaveError'));
-                return;
-            }
-
-            const newRecord = data?.response?.data?.[0] ?? data?.data?.[0] ?? null;
-            showBackendMessages(newRecord?.messages);
-            onSaved?.(newRecord?.id ?? null, newRecord?.name ?? name);
         } finally {
             setSaving(false);
         }
