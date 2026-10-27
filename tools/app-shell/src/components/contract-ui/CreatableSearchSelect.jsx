@@ -337,7 +337,7 @@ function SearchSelectOptionsPanel({
                 data-testid={`option-${field.key}-${opt.id}-selected-indicator`} />
             )}
             {/* ETP-5902: render-only prefix (e.g. the tax rate); never part of the saved name */}
-            {renderOption ? renderOption(opt) : `${opt.labelPrefix ? `${opt.labelPrefix} - ` : ''}${opt.name}`}
+            {renderOption ? renderOption(opt) : <>{opt.labelPrefix && `${opt.labelPrefix} - `}{opt.name}</>}
           </button>
         );
       })}
