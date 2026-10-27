@@ -77,6 +77,9 @@
         "enabled": false
       },
       "fields": {
+        "invoice": {
+          "agentPrompt": "Legacy column, always empty: a shipment can be invoiced by several invoices and an invoice can cover several shipments, so nothing fills it. Whether the shipment is invoiced is invoiceStatus (0-100); which invoices cover it is linkedInvoices, on etendo_list and etendo_get."
+        },
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
