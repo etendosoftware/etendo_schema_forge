@@ -1696,15 +1696,19 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const cellStyle = buildLineCellStyle();
 
   return (
+    <>
+    {/* Rendered BEFORE the panel, not inside it: the panel's direct children are
+        the sticky header wrapper then the body scroll wrapper, and layout specs and
+        sticky math address them by position. */}
+    {gridViewEnabled && gridColumns.length > 0 && (
+      <GridViewControls
+        gridView={activeGridView}
+        gridColumns={gridColumns}
+        ui={ui}
+        t={t}
+        data-testid="GridViewControls__3b7ec2" />
+    )}
     <div ref={panelRef} className="w-full" data-testid="inline-lines-panel">
-      {gridViewEnabled && gridColumns.length > 0 && (
-        <GridViewControls
-          gridView={activeGridView}
-          gridColumns={gridColumns}
-          ui={ui}
-          t={t}
-          data-testid="GridViewControls__3b7ec2" />
-      )}
       {/* Header strip — sticky at the top of the scroll container so column
           labels stay visible while rows scroll. The white background and z-10
           keep it opaque above the scrolled content.
@@ -1907,6 +1911,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       {lineFormActive && <div ref={addRowHostRef} data-testid="inline-add-row-host" />}
       </div>
     </div>
+    </>
   );
 });
 

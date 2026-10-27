@@ -88,6 +88,12 @@ describe('InlineLinesPanel personal grid views', () => {
     expect(screen.getByTestId('balance-footer-credit')).toHaveTextContent('0,00');
   });
 
+  it('renders the view controls outside the panel so its header and body wrappers stay its first two children', async () => {
+    panel();
+    const controls = await screen.findByTestId('grid-view-controls');
+    expect(screen.getByTestId('inline-lines-panel')).not.toContainElement(controls);
+  });
+
   it('saves keyboard reorder, resize and user visibility explicitly while preserving row editing', async () => {
     const user = userEvent.setup();
     const onUpdateRow = vi.fn().mockResolvedValue();
