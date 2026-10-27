@@ -775,7 +775,7 @@ Sales invoices carry the same currency/exchange-rate editing model already shipp
   not `invoiceDate`. `CurrencyRatePicker` resolves it structurally (`resolveRateDateField`: the
   header field bound to `DateAcct`), so `window.documentDateField` stays `invoiceDate` and keeps
   driving the `invoiceDate → accountingDate` cascade.
-- The dropdown lists every selectable currency with its rate on the `accountingDate` currently in
+- The dropdown lists every selectable currency (one with a conversion range to or from the org currency on any date) with its rate on the `accountingDate` currently in
   the form (`currencyOptions?date=`); a currency with no range shows «—» and selecting it leaves
   the rate empty for the user to type with the pencil (available on new and saved invoices unless
   the currency is the org's own, `isOrgCurrency`).
