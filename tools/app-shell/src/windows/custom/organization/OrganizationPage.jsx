@@ -26,6 +26,7 @@ import { isEtendoTrue, getAeat390IdentityErrors, buildAeat390InfoPayload } from 
 // SiiSection/VerifactuSection/TbaiSection each mount surfaces the org's one real
 // certificate here too, at the org level, instead of only inside each fiscal tab.
 import CertSection from '../fiscal-config/CertSection.jsx';
+import { useFiscalSectionVisibility } from './useFiscalSectionVisibility.js';
 
 // The AD_OrgInfo "Location / Address" identifier is a composed string
 // (e.g. "Santa Fe - 446 - 5800 - Rio Cuarto - España") — the country is the
@@ -218,6 +219,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   // OrganizationPage.vitest.jsx's banner assertion order-dependent).
   const [seededBaseline, setSeededBaseline] = useState(null);
 
+  // ETP-5831 — the fiscal sections (certificate, IAE, Modelo 390) only render while a fiscal
+  // configuration that uses them is active. See useFiscalSectionVisibility.js.
+  const { showIae, show390, showCert, loading: visibilityLoading } =
+    useFiscalSectionVisibility(orgId, apiBaseUrl);
+
   useSetPageMeta({ title: ui('organizationPageTitle'), breadcrumb: `${ui('settings')} / ${ui('organizationPageTitle')}` });
 
   useEffect(() => {
@@ -229,12 +235,14 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   }, [loading, error, header, info]);
 
   // Deep link to a section (`/organization#org-section-iae`, e.g. "Editar en Organización" from a
-  // Modelo 390 incident, ETP-5716): once the page is rendered, scroll to it.
+  // Modelo 390 incident, ETP-5716): once the page is rendered, scroll to it. Waits for the fiscal
+  // section visibility too (ETP-5831): the target may be one of those sections, which only mounts
+  // once its visibility resolves. A hidden target is not in the DOM, so nothing happens.
   useEffect(() => {
-    if (loading || error) return;
+    if (loading || error || visibilityLoading) return;
     const anchor = sectionAnchorFromHash(typeof window !== 'undefined' ? window.location.hash : '');
     if (anchor) document.getElementById(anchor)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-  }, [loading, error]);
+  }, [loading, error, visibilityLoading]);
 
   const baseline = useMemo(() => buildFormFromData(header, info), [header, info]);
   const isDirty = useMemo(
@@ -281,7 +289,10 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       toast.error(ui(taxIdErrorKey));
       return;
     }
-    const identityErrors = getAeat390IdentityErrors(form);
+    // ETP-5831 — only while the Modelo 390 section is shown: a hidden section must never block the
+    // save. Its fields still travel in the payload below exactly as loaded, so hiding the section
+    // (model 390 deactivated) neither writes nor clears them.
+    const identityErrors = show390 ? getAeat390IdentityErrors(form) : {};
     const identityErrorFields = Object.keys(identityErrors);
     if (identityErrorFields.length > 0) {
       setFieldErrors(Object.fromEntries(identityErrorFields.map(f => [f, ui(identityErrors[f])])));
@@ -360,6 +371,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   }
 
   const countryFlag = getCountryFlag(form.countryLabel);
+  // The last VISIBLE section draws no bottom divider. Order matches the JSX below; Contacto is
+  // always shown, the fiscal sections only when useFiscalSectionVisibility says so.
+  const visibleSections = ['identity', 'fiscal', showCert && 'certificate', 'contact', showIae && 'iae', show390 && 'modelo390']
+    .filter(Boolean);
+  const hasDivider = (key) => visibleSections[visibleSections.length - 1] !== key;
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden" data-testid="OrganizationPage__root">
@@ -558,9 +574,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             tbai/sii/verifactu, so an unmatched/undefined context already falls back to
             ui('fiscal.cert.subtitle.default') — which is itself worded at the org level,
             not any one fiscal system. */}
+        {showCert && (
         <SectionRow
           titleKey="fiscal.cert.section.legend"
           descKey="fiscal.cert.section.hint"
+          divider={hasDivider('certificate')}
           testId="OrganizationPage__section-certificate"
           data-testid="SectionRow__a5f503">
           <CertSection
@@ -568,11 +586,13 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             data-testid="CertSection__a5f503" />
         </SectionRow>
+        )}
 
         {/* Datos de contacto */}
         <SectionRow
           titleKey="orgSectionContact"
           descKey="orgSectionContactDesc"
+          divider={hasDivider('contact')}
           testId="OrganizationPage__section-contact"
           data-testid="SectionRow__a5f503">
           {/* Email/Phone/Website now live directly on AD_OrgInfo (em_etgo_email/phone/web) —
@@ -631,10 +651,12 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             above. Independent fetch/save lifecycle: each row persists immediately
             (create/update/delete), it is NOT part of `form`/the unsaved-changes
             banner. See ActividadesIaeSection.jsx and useActividadesIae.js. */}
+        {showIae && (
         <SectionRow
           titleKey="orgSectionIae"
           descKey="orgSectionIaeDesc"
           anchorId={ORG_SECTION_ANCHOR.iae}
+          divider={hasDivider('iae')}
           testId="OrganizationPage__section-iae"
           data-testid="SectionRow__a5f503">
           <ActividadesIaeSection
@@ -643,16 +665,18 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             orgId={orgId}
             data-testid="ActividadesIaeSection__a5f503" />
         </SectionRow>
+        )}
 
         {/* Representante legal / Modelo 390 (ETP-5716) — the toggle and the natural-person
             fields are `information` fields, part of `form` and saved with the page; the
             representatives grid (shown when the org is not a natural person) persists row by
             row on its own, like the IAE grid above. See Modelo390IdentitySection.jsx. */}
+        {show390 && (
         <SectionRow
           titleKey="orgSection390"
           descKey="orgSection390Desc"
           anchorId={ORG_SECTION_ANCHOR.modelo390}
-          divider={false}
+          divider={hasDivider('modelo390')}
           testId="OrganizationPage__section-390"
           data-testid="SectionRow__a5f503">
           <Modelo390IdentitySection
@@ -663,6 +687,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             orgId={orgId}
             data-testid="Modelo390IdentitySection__a5f503" />
         </SectionRow>
+        )}
         </div>
       </div>
       {isDirty && (

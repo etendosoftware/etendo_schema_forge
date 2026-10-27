@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 
 /**
@@ -69,8 +70,11 @@ export function ArchiveAccountDialog({ open, onClose, onArchived, account }) {
       onArchived?.();
       onClose?.();
     } catch (err) {
-      const conflict = mode.conflictKey && err.status === 409;
-      toast.error(conflict ? ui(mode.conflictKey) : (err.message || ui(mode.errorKey)));
+      // ETP-5782: the 409 means "has open reconciliations" only when it carries no code (the
+      // handler's own refusal) — a classified 409 (retryable_conflict, record_in_use) says its own.
+      const conflict = mode.conflictKey && err.status === 409 && !err.code;
+      toast.error(conflict ? ui(mode.conflictKey)
+        : (translateBackendError(err.message, ui, { code: err.code }) || ui(mode.errorKey)));
     } finally {
       setSubmitting(false);
     }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getApiBase } from '@/hooks/useNeoResource.js';
+import { extractBackendErrorCode } from '@/lib/backendErrors.js';
 
 const ENDPOINT = '/sws/go/onboarding/calendar-review';
 
@@ -48,7 +49,7 @@ export function useCalendarReview() {
     if (!response.ok) {
       // The server's message is English and for logs; the caller translates by `status`.
       throw Object.assign(new Error(payload?.message || `HTTP ${response.status}`),
-        { status: response.status });
+        { status: response.status, code: extractBackendErrorCode(payload) });
     }
     setState(payload);
     return payload;

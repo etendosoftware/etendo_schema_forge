@@ -299,6 +299,32 @@ describe('NewAccountWizard', () => {
     });
   });
 
+  it.each([
+    ['duplicate_key', true],
+    ['record_in_use', false],
+  ])('on a 409 with code %s the name error is shown: %s', async (code, inline) => {
+    const user = userEvent.setup();
+    const err = new Error('Name in use elsewhere.');
+    err.status = 409;
+    err.code = code;
+    createAccount.mockRejectedValueOnce(err);
+    renderWizard();
+
+    await user.click(screen.getByTestId('new-account-type-C'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.type(screen.getByTestId('account-form-name'), 'Caja');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    if (inline) {
+      await waitFor(() =>
+        expect(screen.getByTestId('account-form-error')).toHaveTextContent('financeAccountsNewNameExists'));
+      expect(toastError).not.toHaveBeenCalled();
+    } else {
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('Name in use elsewhere.'));
+      expect(screen.queryByTestId('account-form-error')).not.toBeInTheDocument();
+    }
+  });
+
   it('toasts an error for a non-409 create failure', async () => {
     const user = userEvent.setup();
     const err = new Error('server down');

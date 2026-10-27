@@ -903,8 +903,9 @@ export default function UpgradePage() {
     // Only a purchase with a persisted demo source carries a transfer; the recorded selection
     // stays authoritative over the local choice.
     const hasPersistedDemoSource = Boolean(String(purchase?.demoClientId ?? '').trim());
+    const chosenTransfer = dataTransferChosen ? dataTransfer : null;
     const selectedTransfer = hasPersistedDemoSource
-      ? purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null)
+      ? purchaseDataTransfer(purchase, chosenTransfer)
       : null;
     setTransferWarning(hasPersistedDemoSource && isMissingRecordedSelection(purchase));
     setResumingPurchaseId(purchase.purchaseId);
@@ -1013,9 +1014,8 @@ export default function UpgradePage() {
         // A productive environment, or a demo that already originated one, starts a clean purchase,
         // so its name is not carried over.
         const currentIsNotASource = Boolean(current && !isPurchaseSourceDemo(current));
-        const prefillName = currentIsNotASource
-          ? ''
-          : current?.clientName || (demos.length === 1 ? demos[0].clientName : '');
+        const onlyDemoName = demos.length === 1 ? demos[0].clientName : '';
+        const prefillName = currentIsNotASource ? '' : current?.clientName || onlyDemoName;
         if (prefillName) {
           setForm(previous => previous.tenantName
             ? previous
