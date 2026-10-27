@@ -6,6 +6,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
+import { shouldKeepLocating, centerOptionInPanel } from './selectorSelection.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const SELECTOR_PAGE = 50;
@@ -166,10 +167,17 @@ export function SelectorInput({
     setServerOptions(null);
   }, [selectorUrl, token, contextKey]);
 
+  // ETP-5903 — the open dropdown's content node (Radix mounts it only while open), and whether the
+  // walk below had to load pages to reach the committed value during this open.
+  const contentNodeRef = useRef(null);
+  const walkedRef = useRef(false);
+
   // Callback ref: fires when SelectContent mounts (dropdown opens).
   // Triggers the first page load if we don't have server options yet, then attaches
   // the scroll listener for infinite pagination.
   const contentCallbackRef = useCallback((node) => {
+    contentNodeRef.current = node;
+    if (!node) walkedRef.current = false;
     if (!node || !selectorUrl) return;
     if (serverOptions === null && !loadingRef.current) {
       fetchPage(0);
@@ -185,6 +193,35 @@ export function SelectorInput({
 
   const baseOptions = serverOptions ?? catalogOptions;
   const hasValue = value && baseOptions.some(opt => opt.id === value);
+
+  // ETP-5903 — Radix already marks the committed item, focuses it and scrolls to it on open, and
+  // the arrow keys start from it — but only when that item is LOADED. When the value is not on
+  // the loaded pages, walk forward one page at a time (up to LOCATE_SELECTION_MAX_PAGES) while the
+  // dropdown is open. Until then the hidden `__current__` item below keeps the trigger's label;
+  // past the cap the dropdown simply opens as before. `loadingRef` is cleared before the page is
+  // applied, so the effect keyed on `serverOptions` always gets its next step.
+  useEffect(() => {
+    const node = contentNodeRef.current;
+    if (!node || !value || !selectorUrl || serverOptions == null || fetching) return;
+    const found = serverOptions.some(opt => opt.id === value);
+    if (shouldKeepLocating({
+      found, hasMore, loadedRows: serverOptions.length, pageSize: SELECTOR_PAGE, interacted: false,
+    })) {
+      walkedRef.current = true;
+      fetchPage(offsetRef.current);
+      return;
+    }
+    if (!found || !walkedRef.current) return;
+    walkedRef.current = false;
+    // The item arrived after Radix positioned the list: centre it and hand it the keyboard focus,
+    // as Radix itself does for an item that is there on open.
+    requestAnimationFrame(() => {
+      const item = node.querySelector('[role="option"][data-state="checked"]');
+      if (!item) return;
+      centerOptionInPanel(node.querySelector('[data-radix-select-viewport]') ?? node, item);
+      item.focus?.({ preventScroll: true });
+    });
+  }, [value, selectorUrl, serverOptions, fetching, hasMore, fetchPage]);
 
   const defaultTriggerClass = compact
     ? 'w-full h-8 text-sm text-text-primary bg-card focus:ring-2 focus:ring-primary'

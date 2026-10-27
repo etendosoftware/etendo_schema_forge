@@ -237,14 +237,50 @@ describe('InlineSearchCombo — ETP-5846 Enter never overwrites the committed va
     const input = await screen.findByTestId('inline-add-field-tax');
     await waitFor(() => screen.getByTestId('inline-add-option-tax-iva10'));
 
-    // From index -1: ArrowDown -> iva10, ArrowDown -> iva21, ArrowDown -> exento.
-    fireEvent.keyDown(input, { key: 'ArrowDown' });
-    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    // ETP-5903: nothing highlighted yet, so the first ArrowDown starts from the committed iva21.
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('data-highlighted', 'true');
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onChange).toHaveBeenCalledWith('exento', 'Exento', expect.objectContaining({ id: 'exento' }));
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  // ETP-5903 — arrows move from the committed value, not from the top of the list.
+  it('ArrowUp with nothing highlighted moves to the option BEFORE the committed one', async () => {
+    const user = userEvent.setup();
+    renderCombo({ value: 'iva21', options: OPTIONS, clearOnType: false });
+
+    await user.click(screen.getByTestId('inline-add-field-tax-chip'));
+    const input = await screen.findByTestId('inline-add-field-tax');
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva10'));
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('data-highlighted', 'true');
+  });
+
+  it('starts from the first option when there is no committed value', async () => {
+    const user = userEvent.setup();
+    renderCombo({ value: '', options: OPTIONS });
+
+    const input = screen.getByTestId('inline-add-field-tax');
+    await user.click(input);
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva10'));
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('data-highlighted', 'true');
+  });
+
+  it('starts from the top of the results once a search is typed, even if the committed value matches', async () => {
+    const user = userEvent.setup();
+    renderCombo({ value: 'iva21', options: OPTIONS, clearOnType: false });
+
+    await user.click(screen.getByTestId('inline-add-field-tax-chip'));
+    const input = await screen.findByTestId('inline-add-field-tax');
+    fireEvent.change(input, { target: { value: 'IVA' } });
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(2));
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('data-highlighted', 'true');
   });
 
   it('keeps selection (aria-selected) and keyboard highlight (data-highlighted) as independent states', async () => {
@@ -260,9 +296,10 @@ describe('InlineSearchCombo — ETP-5846 Enter never overwrites the committed va
     expect(screen.getByTestId('inline-add-option-tax-iva21')).not.toHaveAttribute('data-highlighted');
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    // Now the first row is highlighted AND not selected; the committed row is selected AND not highlighted.
-    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('data-highlighted', 'true');
-    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('aria-selected', 'false');
+    // ETP-5903: the row AFTER the committed one is highlighted AND not selected; the committed row is
+    // selected AND not highlighted.
+    expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('data-highlighted', 'true');
+    expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('inline-add-option-tax-iva21')).not.toHaveAttribute('data-highlighted');
   });
