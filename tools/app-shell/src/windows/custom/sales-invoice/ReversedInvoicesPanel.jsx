@@ -708,6 +708,11 @@ function renderGridCellsFor(fragment, gridView, gridColumns, ui) {
   return [...cells.slice(0, 1), ...dataCells, ...cells.slice(-1)];
 }
 
+/** The invoice spec whose reversed-invoices grid view is stored, or null outside the two supported specs. */
+function reversedInvoicesGridSpec(apiBaseUrl) {
+  return apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
+}
+
 // ── ReversedInvoicesPanel ─────────────────────────────────────────────────────
 export default function ReversedInvoicesPanel({
   recordId: recordIdProp,
@@ -741,15 +746,16 @@ export default function ReversedInvoicesPanel({
     { key: 'aEAT349IsCorrective', column: 'EM_AEAT349_IsCorrective', label: ui('rectColModel349'), sourceIndex: 4 },
     { key: 'grandTotalAmount', label: ui('rectColTotal'), sourceIndex: 5 },
   ], [ui]);
-  const gridSpec = apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
+  const gridSpec = reversedInvoicesGridSpec(apiBaseUrl);
+  const gridEnabled = gridColumnViews && Boolean(gridSpec);
   const gridView = useGridView({
     spec: gridSpec, entity: 'reversedInvoices', columns: gridColumns, data: lines,
-    enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
+    enabled: gridEnabled, apiBaseUrl,
   });
-  const renderGridCells = (fragment) => (gridColumnViews && gridSpec
+  const renderGridCells = (fragment) => (gridEnabled
     ? renderGridCellsFor(fragment, gridView, gridColumns, ui)
     : fragment);
-  const gridControls = gridColumnViews && gridSpec ? (
+  const gridControls = gridEnabled ? (
     <GridViewControls
       gridView={gridView}
       gridColumns={gridColumns}
