@@ -27,6 +27,8 @@ function isProviderEnabled(provider) {
 
 // ETP-5351 — RUM global-context marker of a support session (see providers/datadog.js).
 const SUPPORT_SESSION_KEY = 'support_session';
+/** Approved keys the gateway exempts from its sensitive-key-NAME rule (`session` in the name). */
+export const TRUSTED_CONTEXT_KEYS = [SUPPORT_SESSION_KEY];
 
 function isAnalyticsProvider(provider) {
   return provider?.analytics === true;
@@ -68,7 +70,7 @@ export function createObservability(options = {}) {
       gateway = createTelemetryGateway({
         adapters: providers,
         allowedKeys,
-        trustedKeys: [SUPPORT_SESSION_KEY],
+        trustedKeys: TRUSTED_CONTEXT_KEYS,
         logger,
         disabled: config.disabled,
         adapterTimeoutMs: config.adapterTimeoutMs,
