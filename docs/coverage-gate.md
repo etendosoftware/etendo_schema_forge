@@ -4,9 +4,12 @@
 
 Sonar's Quality Gate only evaluates **new code**, so a PR can pass it while still
 lowering the project's **overall** coverage — typically by adding new source files
-with too few tests. This gate closes that gap: `run-sonar.sh --compare-coverage`
-(invoked by the pre-push hook) blocks a push that would drop overall coverage, and
-the GitHub `Sonar Build` check fails a pull request that does.
+with too few tests. This gate closes that gap: the GitHub `Sonar Build` check fails
+a pull request that would drop overall coverage, and `run-sonar.sh --compare-coverage`
+applies the same rule to a local run. The pre-push no longer runs it (ETP-5695): it
+runs only the unit tests the change can affect (`make test-changed-coverage`), so its
+overall figure is partial by design; the comparison needs the whole suite, which the
+PR's `Tests` job runs.
 
 It mirrors Jenkins' "Compare Coverage Results" stage (`sonarUtils.compareCoverage`),
 so the local pre-push and CI apply the same rule. In this repo the rule, its
@@ -50,7 +53,7 @@ fluctuation on an otherwise-identical commit no longer flips the gate.
 | Sonar rejects the token (401/403) while polling the analysis task | ⚠️ skip — not blocking (polling stops at once) |
 | `node` not on `PATH` | ❌ block, with a readable message (`run-sonar.sh` checks before calling the script) |
 
-The table describes the pre-push (`--context push`, the default). In the GitHub
+The table describes a local run (`--context push`, the default). In the GitHub
 `Sonar Build` job (`--context ci`) the thresholds and messages are the same, minus
 the push-only hints, but a gate that cannot be evaluated **fails** instead of
 skipping: unreadable current coverage, a missing `.scannerwork/report-task.txt`,
@@ -77,18 +80,16 @@ targets a branch other than `develop` or `main` (which are analysed on every
 push) and that branch has no coverage, the step still passes but emits a
 `::warning::` annotation saying the coverage drop was **not** checked.
 
-Bypass a block with `git push --no-verify` (WIP only, and by a human in their own
-terminal — the committed `PreToolUse` hook `.claude/hooks/block-push-no-verify.sh`
-denies that flag when an agent tries it through Claude Code's Bash tool. The
-companion `.claude/hooks/block-coverage-threshold-overrides.sh` also denies
-agent-run assignments or exports of `COVERAGE_MINIMUM` and
-`COVERAGE_TOLERANCE`; adjust their reviewed defaults in
-`scripts/compare-sonar-coverage.js` instead.
-See **Agent Guardrails** in `CLAUDE.md`).
+A block is fixed, not skipped. The committed `PreToolUse` hook
+`.claude/hooks/block-push-no-verify.sh` denies `git push --no-verify` when an agent
+tries it through Claude Code's Bash tool, and the companion
+`.claude/hooks/block-coverage-threshold-overrides.sh` denies agent-run assignments or
+exports of `COVERAGE_MINIMUM` and `COVERAGE_TOLERANCE`; adjust their reviewed defaults
+in `scripts/compare-sonar-coverage.js` instead. See **Agent Guardrails** in `CLAUDE.md`.
 
 ## Where it runs
 
-- **`etendo_schema_forge` / `run-sonar.sh`** and **`com.etendoerp.go` / `run-sonar.sh`** — each repo's pre-push hook calls it with `--compare-coverage`.
+- **`etendo_schema_forge` / `run-sonar.sh`** and **`com.etendoerp.go` / `run-sonar.sh`** — `--compare-coverage` for a local run on demand. Neither repo's pre-push passes it any more (ETP-5695): both run a subset of the tests (schema_forge the selection of `scripts/select-tests.js`, go the database-free `goTestUnit`), so the overall figure would always drop.
 - **GitHub `Sonar Build`** — the `sonar` job of `.github/workflows/test.yml` runs `scripts/compare-sonar-coverage.js --context ci` after the scan on every pull request (current = the PR analysis, `pullRequest=<number>`; base = the PR's target branch, `github.base_ref`). See below.
 - **Jenkins** — `sonarUtils.compareCoverage` (shared pipeline library) applies the same tolerance + minimum on the CI side, so local and CI agree.
 
@@ -105,7 +106,7 @@ Two CI jobs run it today, and a third consumes its output:
 
 | Job | Trigger | What happens to the outputs |
 |---|---|---|
-| Jenkins `Node Tests` stage (`etendo-go/schemaforge/Jenkinsfile` in the separate `com.etendoerp.jenkins.pipelines` repo) | Its `GenericTrigger` fires on push to `develop` / `main`, PRs `mergeblock/*` → `develop`, and PRs `hotfix/*` → `main` or `develop`. `feature/*` PRs do **not** trigger it. Heavy stages are skipped when a non-hotfix PR carries the `local-validated` label | Feeds the `SonarQube Analysis` (branch analysis) and `Compare Coverage Results` stages |
+| Jenkins `Node Tests` stage (`etendo-go/schemaforge/Jenkinsfile` in the separate `com.etendoerp.jenkins.pipelines` repo) | Its `GenericTrigger` fires on push to `main`, on the daily cut (PRs `mergeblock/*` → `main`) and on PRs `hotfix/*` → `main`. PRs into `develop` and pushes to `develop` do **not** trigger it (ETP-5886) | Feeds the `SonarQube Analysis` (branch analysis) and `Compare Coverage Results` stages |
 | GitHub Action `Tests` (`.github/workflows/test.yml`), job `test` | `pull_request` (opened / synchronize / reopened) and push to `main` / `develop` | JUnit published as the "Test Results" check; both files uploaded as the `unit-coverage` workflow artifact (7-day retention) |
 | GitHub Action `Tests`, job `sonar` (check name `Sonar Build`) | Same triggers, runs after `test` | Downloads `unit-coverage` (only when `test` succeeded) and runs the SonarQube scan, which reads `coverage/merged-lcov.info` via `sonar-project.properties` |
 

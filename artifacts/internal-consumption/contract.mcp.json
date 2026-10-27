@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.22.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-09-23T17:59:06.716Z",
-  "contractChecksum": "068fee4292091293",
+  "updatedAt": "2026-10-15T19:36:08.581Z",
+  "contractChecksum": "737b7730478ad363",
   "apiPrediction": {
     "specName": "internal-consumption",
     "baseUrl": "/sws/neo/internal-consumption",
@@ -160,13 +160,16 @@
     },
     "labelOverrides": {
       "en_US": {
-        "M_Locator_ID": "Warehouse"
+        "M_Locator_ID": "Warehouse",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "M_Locator_ID": "Almacén"
+        "M_Locator_ID": "Almacén",
+        "C_UOM_ID": "Unidad"
       },
       "es_AR": {
-        "M_Locator_ID": "Almacén"
+        "M_Locator_ID": "Almacén",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -288,5 +291,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "d544a4148d348715"
+  "checksum": "900345ff7290422d"
 }

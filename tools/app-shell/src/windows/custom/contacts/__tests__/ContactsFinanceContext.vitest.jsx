@@ -1,8 +1,9 @@
-/**
- * Tests for ContactsFinanceContext — provider, hooks, and useSyncFinanceRecordId.
- */
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinanceContext.jsx
+// Requests go through `useApiFetch` (docs/request-policy.md): it is mocked with one stable
+// function, so the provider's callbacks keep their identity across renders.
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 
-// Mocks must come before imports
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
@@ -12,9 +13,10 @@ import {
   ContactsFinanceProvider,
   useContactsFinance,
   useSyncFinanceRecordId,
+  periodToMonths,
 } from '../ContactsFinanceContext';
 
-// ─── Helper components ───────────────────────────────────────────────────────
+const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
 function FinanceConsumer() {
   const ctx = useContactsFinance();
@@ -41,12 +43,11 @@ function wrapper(props) {
   );
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
+const callsTo = (kind) => mockApiFetch.mock.calls.map(([path]) => path).filter((p) => p.startsWith(`/${kind}?`));
 
 describe('ContactsFinanceProvider', () => {
   beforeEach(() => {
-    globalThis.fetch = vi.fn();
-    vi.clearAllMocks();
+    mockApiFetch.mockReset();
   });
 
   afterEach(() => {
@@ -59,10 +60,7 @@ describe('ContactsFinanceProvider', () => {
   });
 
   it('provides null stats and trend initially', () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: [] } }),
-    });
+    mockApiFetch.mockResolvedValue(ok([]));
     render(<FinanceConsumer />, { wrapper });
     expect(screen.getByTestId('stats').textContent).toBe('null');
     expect(screen.getByTestId('trend').textContent).toBe('null');
@@ -81,11 +79,8 @@ describe('ContactsFinanceProvider', () => {
     expect(screen.getByTestId('period').textContent).toBe('6M');
   });
 
-  it('setRecordId triggers fetch for bp-stats and bp-trend', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: [] } }),
-    });
+  it('setRecordId requests bp-stats and bp-trend for that contact through apiFetch', async () => {
+    mockApiFetch.mockResolvedValue(ok([]));
     render(<FinanceConsumer />, { wrapper });
 
     await act(async () => {
@@ -93,31 +88,65 @@ describe('ContactsFinanceProvider', () => {
     });
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(mockApiFetch).toHaveBeenCalledWith(
         expect.stringContaining('/bp-stats?businessPartnerId=BP1'),
-        expect.objectContaining({ headers: expect.objectContaining({ 'Accept-Language': 'es_ES' }) }),
+        expect.anything(),
       );
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(mockApiFetch).toHaveBeenCalledWith(
         expect.stringContaining('/bp-trend?businessPartnerId=BP1'),
         expect.anything(),
       );
     });
   });
 
+  it('asks bp-stats for months=3, then months=6 after setPeriod, without refetching bp-trend', async () => {
+    mockApiFetch.mockResolvedValue(ok([]));
+    render(<FinanceConsumer />, { wrapper });
+
+    await act(async () => {
+      screen.getByText('setRecordId').click();
+    });
+    await waitFor(() => expect(callsTo('bp-stats')).toHaveLength(1));
+    expect(new URLSearchParams(callsTo('bp-stats')[0].split('?')[1]).get('months')).toBe('3');
+
+    await act(async () => {
+      screen.getByText('set6M').click();
+    });
+    await waitFor(() => expect(callsTo('bp-stats')).toHaveLength(2));
+    expect(new URLSearchParams(callsTo('bp-stats')[1].split('?')[1]).get('months')).toBe('6');
+    expect(callsTo('bp-trend')).toHaveLength(1);
+  });
+
+  it('keeps the latest period when an older bp-stats response arrives last', async () => {
+    const pending = {};
+    mockApiFetch.mockImplementation((path) => {
+      if (!path.startsWith('/bp-stats')) return Promise.resolve(ok({ labels: [], revenue: [], expenses: [] }));
+      const months = new URLSearchParams(path.split('?')[1]).get('months');
+      return new Promise((resolve) => { pending[months] = resolve; });
+    });
+    render(<FinanceConsumer />, { wrapper });
+
+    await act(async () => {
+      screen.getByText('setRecordId').click();
+    });
+    await act(async () => {
+      screen.getByText('set6M').click();
+    });
+    await waitFor(() => expect(Object.keys(pending).sort()).toEqual(['3', '6']));
+
+    await act(async () => { pending['6'](ok([{ key: 'revenue', value: 6 }])); });
+    await waitFor(() => expect(screen.getByTestId('stats').textContent).toContain('"value":6'));
+
+    await act(async () => { pending['3'](ok([{ key: 'revenue', value: 3 }])); });
+    expect(screen.getByTestId('stats').textContent).toContain('"value":6');
+    expect(screen.getByTestId('stats').textContent).not.toContain('"value":3');
+  });
+
   it('sets stats from bp-stats response', async () => {
-    const statsData = [{ key: 'revenueThisMonth', value: 1000 }];
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('bp-stats')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ response: { data: statsData } }),
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ response: { data: { labels: [], revenue: [], expenses: [] } } }),
-      });
-    });
+    const statsData = [{ key: 'revenue', value: 1000 }];
+    mockApiFetch.mockImplementation((path) => Promise.resolve(
+      path.startsWith('/bp-stats') ? ok(statsData) : ok({ labels: [], revenue: [], expenses: [] }),
+    ));
 
     render(<FinanceConsumer />, { wrapper });
 
@@ -126,29 +155,25 @@ describe('ContactsFinanceProvider', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('stats').textContent).not.toBe('null');
+      expect(screen.getByTestId('stats').textContent).toBe(JSON.stringify(statsData));
     });
   });
 
-  it('resets stats and trend to null before re-fetching when recordId changes', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: [] } }),
-    });
+  it('issues one request per KPI when recordId is set', async () => {
+    mockApiFetch.mockResolvedValue(ok([]));
     render(<FinanceConsumer />, { wrapper });
 
     await act(async () => {
       screen.getByText('setRecordId').click();
     });
 
-    // stats go null again during the transition — verified by confirming fetch fires
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
     });
   });
 
-  it('handles fetch error gracefully — stats falls back to empty array', async () => {
-    globalThis.fetch.mockRejectedValue(new Error('Network error'));
+  it('handles a request error gracefully — stats falls back to empty array', async () => {
+    mockApiFetch.mockRejectedValue(new Error('Network error'));
     render(<FinanceConsumer />, { wrapper });
 
     await act(async () => {
@@ -156,27 +181,19 @@ describe('ContactsFinanceProvider', () => {
     });
 
     await waitFor(() => {
-      // After error, stats is set to []
       expect(screen.getByTestId('stats').textContent).toBe('[]');
     });
   });
 
-  it('does not fetch when recordId is null', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: [] } }),
-    });
+  it('does not request anything when recordId is null', async () => {
+    mockApiFetch.mockResolvedValue(ok([]));
     render(<FinanceConsumer />, { wrapper });
-    // No click on setRecordId — recordId stays null
     await act(async () => {});
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
   it('still fetches KPIs when the bearer token is empty (ETP-4576 cookie mode)', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: [] } }),
-    });
+    mockApiFetch.mockResolvedValue(ok([]));
     render(
       <ContactsFinanceProvider token={null} apiBaseUrl="/api">
         <FinanceConsumer />
@@ -185,16 +202,26 @@ describe('ContactsFinanceProvider', () => {
     await act(async () => {
       screen.getByText('setRecordId').click();
     });
-    // Under the cookie credential mode the bearer is empty by design; apiFetch
-    // still carries auth via the session cookie, so the KPI load must NOT be
-    // gated on the token. bp-stats + bp-trend = 2 requests.
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+    // Under the cookie credential mode the bearer is empty by design; apiFetch still carries
+    // auth via the session cookie, so the KPI load must NOT be gated on the token.
+    // bp-stats + bp-trend = 2 requests.
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('periodToMonths', () => {
+  it.each([
+    ['3M', 3],
+    ['6M', 6],
+    ['1Y', 3],
+    [undefined, 3],
+  ])('maps %s to %i months', (period, months) => {
+    expect(periodToMonths(period)).toBe(months);
   });
 });
 
 describe('useContactsFinance', () => {
   it('throws when used outside ContactsFinanceProvider', () => {
-    // Suppress React's error boundary console output
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<FinanceConsumer />)).toThrow(
       'useContactsFinance must be used inside ContactsFinanceProvider',
@@ -205,11 +232,8 @@ describe('useContactsFinance', () => {
 
 describe('useSyncFinanceRecordId', () => {
   beforeEach(() => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: [] } }),
-    });
-    vi.clearAllMocks();
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue(ok([]));
   });
 
   afterEach(() => {

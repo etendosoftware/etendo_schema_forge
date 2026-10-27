@@ -288,6 +288,67 @@ ui('orderDoc', { number: order.documentNo })
 // es_ES: "orderDoc": "Pedido #{number}"
 ```
 
+## Spanish Register and Terminology
+
+### Register per locale
+
+| Locale | Register | Vocabulary |
+|--------|----------|------------|
+| `es_ES.json` | Spain Spanish, **"tú"** (`introduce`, `selecciona`, `inténtalo`, `¿quieres…?`) | Spain terms: `importe` (not `monto`), `obligatorio` (not `requerido`), `introduce` (not `ingresá`) |
+| `es_AR.json` | Rioplatense **voseo**, on purpose (`ingresá`, `querés`, `intentalo`) | Argentine terms |
+
+Voseo in `es_ES.json` is a bug, never a style choice. When a key is added to both Spanish files,
+write each one in its own register; do not copy the `es_AR` value into `es_ES` or vice versa.
+
+### `albarán` vs `envío` (agreed with product, 2026-09-28)
+
+| Meaning | es_ES term | Examples |
+|---------|------------|----------|
+| `M_InOut` as a **document** (the record you open, list, import, return from) | **albarán / albaranes** | "Importar desde albarán", "Crear devolución desde albarán" |
+| The **action** of shipping or sending | **envío** | "Gestionar envío", shipping method/address, email sending, VERI\*FACTU / SII / TicketBAI sending |
+
+Test: if the word could be replaced by "the document", it is `albarán`; if it could be replaced by
+"the act of sending", it stays `envío`.
+
+### Regression guard: `es-ES-no-voseo.vitest.js`
+
+`tools/app-shell/src/locales/__tests__/es-ES-no-voseo.vitest.js` walks every string value in
+`es_ES.json` and fails listing each offending key path, the voseo words found and the full string.
+
+- **What it checks:** a closed denylist of whole words (case-insensitive), not an "ends in an accented
+  vowel" regex — Spain Spanish is full of legitimate `-ás`/`-és` words (`más`, `podrás`, `inglés`,
+  `después`). The denylist is derived from a `VERBS` table of infinitives: vos present (`intentás`,
+  `querés`), vos imperative (`ingresá`, `hacé`, `elegí`) and imperative + `lo/la/los/las`
+  (`intentalo`, `activala`). Reflexive forms (`asegurate`, `fijate`…) live in `REFLEXIVE_FORMS`, and
+  irregular words (`vos`, `andá`) in `EXTRA_FORMS`. A first test checks the detector itself against
+  voseo and Spain samples, so a bad `VERBS` entry fails loudly.
+- **Scope:** only `es_ES.json`. `es_AR.json` is deliberately not checked. `generated/core.es_ES.json`
+  is sliced from `es_ES.json` at build time (`tools/app-shell/vite-plugins/slice-labels.js` →
+  schema-forge-cli `slice-labels`), so guarding the source covers both — never edit `generated/`.
+- **To extend:** add the infinitive to `VERBS` (or an irregular form to `EXTRA_FORMS`). Leave out verbs
+  whose vos form equals a tú form (`estar`, `dar`, `ir`, `ver`) — they would flag valid Spain copy.
+- **Known limits:** a verb that is not in `VERBS` is not caught; and only the locale JSON is scanned —
+  hardcoded `?? 'fallback'` literals in JSX/JS are invisible to it (they are already a bug under
+  [rule 1](#1-never-hardcode-user-visible-strings)).
+
+```bash
+cd tools/app-shell && npx vitest run src/locales/__tests__/es-ES-no-voseo.vitest.js
+```
+
+### E2E specs: assert copy via `t(key)`
+
+Playwright specs must not hardcode locale strings (`'Crear Devolución desde Envío'`,
+`/Importar.*envío/i`): every copy fix then breaks an unrelated test. Resolve the text from the same
+dictionary the app uses with `t()` from `e2e/tests/helpers/i18n.js` (reads `genericLabels` of
+`es_ES` by default, `LOCALE=en_US` to override, supports `{var}` interpolation):
+
+```js
+import { t } from '../../helpers/i18n.js';
+
+await expect(dialog.getByRole('heading', { name: t('createReturnFromShipment') })).toBeVisible();
+const importBtn = page.getByText(t('importFromShipment')).first();
+```
+
 ## What Goes Where (Decision Tree)
 
 ```
@@ -369,6 +430,29 @@ Three matching mechanisms coexist — know all three before adding a new backend
      || ui('actionFailed'));
    ```
 
+   A **CRUD write** (header save, inline line PATCH, secondary-tab row such as an invoice's
+   exchange rates) carries the same fields inside its `{ error: { message, messageKeys,
+   messageParams } }` body. Read it with `parseBackendError(res)` — message and identity in one
+   pass — or translate it directly with `translateBackendErrorResponse(res, ui)`, which is what
+   `DetailView`'s `extractErrorMessage` does; `useEntity`'s `extractErrorMessage` forwards the body's
+   identity the same way. `parseBackendErrorMessage(res)` + `translateBackendError(msg, ui)` drops
+   the identity, so do not use that pair on a path that can receive a keyed refusal (ETP-5692).
+   A failed `runPreUnpost` carries `messageKeys`/`messageParams` too; pass
+   `preUnpostErrorIdentity(pre)` as the options.
+
+   **A key need not be an AD_MESSAGE.** Since ETP-5692 the invoice post/unpost refusals of
+   `com.etendoerp.go` (`CompletedInvoiceWriteFence`, `InvoicePostingGate`,
+   `InvoiceExchangeRateHandler`, `DocumentPostingService`) answer in plain English plus an
+   `ETGO_*` identity string with **no** AD_MESSAGE record behind it, so `BACKEND_ERROR_KEY_MAP` is
+   the only place they become Spanish: `ETGO_InvoiceFieldsLockedPosted`,
+   `ETGO_InvoiceExchangeRateLockedPosted`, `ETGO_InvoiceUnpostNotPosted`,
+   `ETGO_InvoiceUnpostNotCompleted`, `ETGO_PostingDocumentNotProcessed`,
+   `ETGO_CompletedInvoiceFieldsLocked`, `ETGO_InvoiceFieldsLockedStatus`,
+   `ETGO_InvoiceFieldsLockedSiiSent` (plus core `PostedDocument`). Their copy is deliberately
+   generic: the fence's `messageParams.fields` are API property names and `docStatus` a raw code,
+   neither fit to show. They surface only on a stale screen (the SPA's own gates prevent them
+   otherwise), so the copy tells the user to refresh.
+
    **Degradation is the point, not a shim.** `com.etendoerp.go` and this repo deploy separately, so
    a frontend running against a backend that predates the field is the normal steady state for a
    while. No keys → `translateBackendError` skips this mechanism entirely and behaves exactly as it
@@ -399,6 +483,23 @@ Three matching mechanisms coexist — know all three before adding a new backend
    `AD_MESSAGE_TRL` rows are never exported and drift per environment (production said
    "Grupo de Terceros").
 
+   A second composer covers the exchange-rate refusals (ETP-5840, `translateExchangeRateMissing`).
+   A foreign-currency quotation, order or invoice with an empty rate is refused with HTTP 422 on
+   every channel:
+
+   | Refusal | `messageKeys` | `messageParams` | Locale keys |
+   |---|---|---|---|
+   | Save | `ETGO_ExchangeRateMissingOnSave` + `ETGO_RateRefDateAccounting` \| `ETGO_RateRefDateOrder` \| `ETGO_RateRefDateQuotation` | `orgCurrency`, `documentCurrency`, `date` (`yyyy-MM-dd`, shown via `formatCalendarDate`), `dateField`, `referenceDate` | `backendError.exchangeRateMissingOnSave`, `backendError.rateReferenceDate.accounting` / `.order` / `.quotation` (the `{field}` label) |
+   | Complete | `ETGO_ExchangeRateMissingOnComplete` | `orgCurrency`, `documentCurrency` | `backendError.exchangeRateMissingOnComplete` |
+
+   Paths that carry the identity for these: header save and Save & Complete (`useEntity`'s
+   `extractErrorMessage`), `DetailView`'s `extractErrorMessage`, `useDocumentAction` /
+   `useNeoAction` consumers (row kebab, more-actions menu, bulk bar), and the order / quotation
+   confirm modals, which read the parsed body through `translateBackendErrorBody(body, ui, fallback)`
+   — the helper for a call site that has to parse the JSON itself. The quotation confirm modal's
+   own pre-check reuses `backendError.exchangeRateMissingOnComplete`, so it reads exactly like the
+   backend refusal.
+
    Rules for a params composer:
    - It runs **before** `BACKEND_ERROR_KEY_MAP` and only when params are present. Do not also add
      its keys to the map: that route is param-less and the first recognised key wins, so the rich
@@ -409,6 +510,24 @@ Three matching mechanisms coexist — know all three before adding a new backend
    - Account codes and other enumerations cross the wire as **stable codes**, never labels.
      Every code the backend can send needs an entry in all three top-level locales
      (`backendErrors.test.js` checks this for the invalid-account codes).
+
+**Period refusals (ETP-5577).** `PeriodNotAvailable` and `PeriodNotValid` (a G/L journal save) both
+map to `backendError.periodNotAvailable`. A toast for a refusal carrying either key also spreads
+`periodNotAvailableToastOptions(messageKeys, ui, { date })` (`lib/periodNotAvailable.js`) into its
+sonner options: the action is "Ir al calendario" (`periodNotAvailableOpenCalendar`), "Revisar
+calendario contable" (`periodNotAvailableReviewCalendar`) for an owner whose review is pending.
+Non-owners always get "Ir al calendario". The 4xx-only keying rule (5xx, 401,
+403 and 404 are never keyed) lives in the backend; see `docs/generated-custom-windows/calendar.md`.
+
+**Payment-term refusals (ETP-5826).** `PaymentTermHandler` (`com.etendoerp.go`) answers with
+key-only `ETGO_*` identities, no AD_MESSAGE behind them (the ETP-5692 pattern). The range refusals
+`ETGO_PaymentTermDaysInvalid` / `ETGO_PaymentTermDaysOutOfRange` are plain `BACKEND_ERROR_KEY_MAP`
+entries interpolating `{min}` / `{max}` / `{value}`. The duplicate refusals
+`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate` are a params composer
+(`translatePaymentTermConflict`, so they are not in the map): it needs `messageParams.paymentTermName`
+and picks the `…Inactive` sentence (with the "Reactívala en Condiciones de pago" hint) when
+`paymentTermActive` is false. Both the Payment Term window's save and the "+ Crear condición de
+pago" inline-create modal go through this one translator — see `docs/ui-customization.md` §19c.
 
 `translateBackendError` tries the message keys first (they are a stable identity; the text is not),
 then the exact-match map, then the parameterized matchers, and returns the original (untranslated)
@@ -467,9 +586,14 @@ import { DocChip, RelatedDocumentsShell, STATUS_KEYS, CHIP_COLORS, formatAmount,
 
 ## Testing
 
-i18n contract tests exist at `tools/app-shell/src/i18n/__tests__/`:
-- `es_ES-contract.test.js` — verifies es_ES mirrors en_US structure
-- `es_ES-structure.test.js` — structural validation
-- `useLabel.test.js`, `useMenuLabel.test.js` — hook behavior tests
+The i18n hooks (`useUI`, `useLabel`, `useMenuLabel`, …) are re-exported from
+`@etendosoftware/app-shell-core/i18n`; their behavior tests live in `schema_forge_core`, not here.
+This repo tests its own dictionaries and wiring:
 
-Run with `make test`.
+- `tools/app-shell/src/locales/__tests__/` — locale tests:
+  - `es-ES-no-voseo.vitest.js` — es_ES register guard (see [Regression guard](#regression-guard-es-es-no-voseovitestjs))
+  - `*-keys.vitest.js` / `*-locale-parity.vitest.js` — a feature's keys exist in every locale
+    (`en_US`, `es_ES`, `es_AR`)
+- `tools/app-shell/src/i18n/__tests__/` — `errorTranslator.vitest.js`, `useLocaleDictionaries.vitest.jsx`
+
+Run with `make test` (includes `vitest run` in `tools/app-shell`).

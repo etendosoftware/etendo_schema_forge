@@ -40,7 +40,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:user
 
 // @sf-generated-start requiredHeaderFields:user
-const requiredHeaderFields = ['name', 'active', 'email', 'locked', 'lastPasswordUpdate'];
+const requiredHeaderFields = ['name', 'active', 'email'];
 // @sf-generated-end requiredHeaderFields:user
 
 

@@ -2,12 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
-import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { TruncatedText } from '@/components/ui/truncated-text';
+import BadgeAmount, { BADGE_CHIP_FIT_CLASS } from '@/windows/custom/shared/BadgeAmount.jsx';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -44,8 +43,11 @@ const BADGE_STYLES = {
  * - Draft -> nothing
  *
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
+ *
+ * ETP-5700 — the fiscal send action no longer renders here: in the form view it lives
+ * only in the kebab (`SifSendMenuItem`, `window.customComponents.moreMenuContent`).
  */
-export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty, isDocumentReadOnly }) {
+export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -224,29 +226,29 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     if (outstandingAbs < 0.001) {
       return (
         <span
-          className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+          className="inline-flex items-center gap-2 whitespace-nowrap text-sm leading-6 font-medium h-10"
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
         >
           {ui('cpCreditFullyApplied')}
         </span>
       );
     }
-    // ETP-5268 follow-up — amount shown again, capped to ~6 digits via
-    // TruncatedText (tooltip only opens when it genuinely truncates).
+    // ETP-5268 follow-up — amount shown again. ETP-5729: BadgeAmount sizes it to its content up
+    // to a max width (no longer a fixed 72px box that clipped "1.452,00 €"); the tooltip only
+    // opens when it genuinely truncates.
     return (
       <>
         <button
           type="button"
           data-testid="payment-status-badge"
           onClick={() => setShowPaymentsModal(true)}
-          className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
+          className={`inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10 ${BADGE_CHIP_FIT_CLASS}`}
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
           {ui('cpFavorBadge')}
-          <TruncatedText
+          <BadgeAmount
             text={fmt(outstandingAbs, currency)}
-            className="w-[72px] shrink-0 text-left"
             data-testid="TruncatedText__329004" />
         </button>
         {showPaymentsModal && (
@@ -300,7 +302,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         type="button"
         data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
-        className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
+        className="inline-flex items-center gap-2 whitespace-nowrap text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
         style={{
           padding: '0 12px',
           borderRadius: '8px',
@@ -322,7 +324,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         type="button"
         data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
-        className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
+        className="inline-flex items-center gap-2 whitespace-nowrap text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
         style={{
           padding: '0 12px',
           borderRadius: '8px',
@@ -334,17 +336,6 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         {badgeInfo.label}
         <span style={{ opacity: 0.6, marginLeft: 4 }}>{ui('view')} &rarr;</span>
       </button>
-
-      <SendToSifButton
-        data={data}
-        recordId={recordId}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        status={data?.documentStatus}
-        onSave={onSave}
-        isDirty={isDirty}
-        isDocumentReadOnly={isDocumentReadOnly}
-        data-testid="SendToSifButton__329004" />
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (

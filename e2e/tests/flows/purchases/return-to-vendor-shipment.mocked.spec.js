@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/return-to-vendor-shipment/ConfirmWithCreditButton.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import {
@@ -502,9 +504,10 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     await expect(resultModal).toBeVisible({ timeout: 10_000 });
     await expect(resultModal).toContainText('FC-RTV-NEW-001');
 
-    // ETP-4737: the rectificativa invoice is created with a negative total (credit
-    // flow) — the result card must render the negative amount from the backend.
-    await expect(page.getByText(/-250,00/)).toBeVisible();
+    // ETP-5674: a return-to-vendor invoice is announced as a purchase factura
+    // rectificativa, and the result popup shows no amount (it used to render the total).
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
+    await expect(resultModal).not.toContainText('250,00');
 
     // ETP-5381: the preselected suggestion must travel on the createReturnInvoice POST —
     // ConfirmInOutModal builds `{ originInvoices: rectify.selectedIds }`. Without it the
@@ -582,9 +585,10 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // ── Case 5: create return invoice from CO ─────────────────────────────
     await createInvoiceBtn.click();
 
-    // CreateInvoiceConfirmModal — modal title is soManageDocsTitle ("Generar factura",
-    // ETP-5410 follow-up: was "Gestionar documentos")
-    await expect(page.getByText('Generar factura')).toBeVisible({ timeout: 8_000 });
+    // CreateInvoiceConfirmModal — the return window passes its own title
+    // (returnToVendor.createCreditNoteTitle), not the generic soManageDocsTitle ("Generar factura").
+    // ETP-5688
+    await expect(page.getByText('Generar factura rectificativa', { exact: true })).toBeVisible({ timeout: 8_000 });
 
     // Blue summary card shows BP name (small text) and documentNo (large text)
     await expect(page.getByText('Proveedor Test S.L.').first()).toBeVisible({ timeout: 8_000 });
@@ -656,9 +660,10 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     await expect(resultModal).toBeVisible({ timeout: 10_000 });
     await expect(resultModal).toContainText('FC-RTV-NEW-001');
 
-    // ETP-4737: same negative-total contract applies from the CO (already confirmed)
-    // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
-    await expect(page.getByText(/-250,00/)).toBeVisible();
+    // ETP-5674: same contract from the CO (already confirmed) detail flow —
+    // useConfirmWithCredit.handleCreateReturnInvoice types it as a purchase rectificativa.
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
+    await expect(resultModal).not.toContainText('250,00');
 
     // ETP-5381: the user's choice must reach the backend —
     // CreateInvoiceConfirmModal.onConfirm(priceListId, originInvoices) →
@@ -673,8 +678,9 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     const [,] = await Promise.all([
       // eslint-disable-next-line playwright/no-wait-for-timeout -- needed to absorb the reload
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {}),
-      // Close result modal — use exact match to avoid "Cerrar Copilot" button
-      page.getByRole('button', { name: 'Cerrar', exact: true }).click(),
+      // Close result modal by its test id — "Cerrar" also names the popup's X icon
+      // (ETP-5674) and the Copilot button.
+      page.getByTestId('action-confirm-result-close').click(),
     ]);
 
     // ── Case 5: button absent when invoice already exists ─────────────────

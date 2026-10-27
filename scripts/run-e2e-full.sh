@@ -65,6 +65,14 @@ cleanup() {
     kill "$PREVIEW_PID" 2>/dev/null || true
     wait "$PREVIEW_PID" 2>/dev/null || true
   fi
+  # That PID is the npm wrapper: its vite child can outlive it, still holding the port (ours, see
+  # the clean-up before the server starts).
+  if [ -n "$PREVIEW_PID" ]; then
+    local listeners
+    listeners="$(lsof -tiTCP:"$E2E_PORT" -sTCP:LISTEN 2>/dev/null || true)"
+    # shellcheck disable=SC2086 # one PID per word
+    [ -n "$listeners" ] && kill $listeners 2>/dev/null || true
+  fi
   # Only stop jsreport when THIS run started it. A developer's own
   # `make report-serve-detach` — or the CI sidecar — must outlive us.
   if [ "$JSREPORT_STARTED_BY_US" = "1" ]; then
@@ -151,9 +159,32 @@ existing_pid="$(lsof -tiTCP:"$E2E_PORT" -sTCP:LISTEN 2>/dev/null || true)"
 mkdir -p "$REPO_DIR/tmp"
 PREVIEW_LOG="$REPO_DIR/tmp/e2e-preview.log"
 
+# The mocked suite drives the real shared `LoginStep`, whose Google button only
+# renders when `getConfiguredSsoProviders()` finds a non-empty
+# `VITE_GOOGLE_CLIENT_ID` (etendo-go-core `src/onboarding/sso.js`), and a Vite
+# production build bakes that value at build time. Without it the SSO surface is
+# unreachable in every mocked run and no mocked spec can exercise it
+# (`user-invitation.mocked.spec.js`). A Google Web client id is a PUBLIC
+# identifier, not a secret (docs/architecture/07-auth-and-security.md), and the
+# specs stub the provider SDK themselves, so a placeholder is enough here. A
+# caller that has a real id (e.g. staging) still wins via the default expansion.
+# Only the mocked run needs it; the integration specs never press the button.
+if [ "$SUITE" != "integration" ]; then
+  export VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-e2e-mocked.apps.googleusercontent.com}"
+fi
+
 echo "==> Building E2E bundle (no PWA/service worker; log: tmp/e2e-build.log)..."
 BUILD_LOG="$REPO_DIR/tmp/e2e-build.log"
-if ! ( cd "$APP_SHELL_DIR" && npm run build:e2e ) > "$BUILD_LOG" 2>&1; then
+# Vite loads the gitignored tools/app-shell/.env.local, so a developer's real provider config would
+# ship in the "default" bundle and the egress spec would see traffic. Process env beats .env files;
+# configured/killed scenarios export their own fake config and are left alone.
+BUILD_ENV=()
+if [ "${E2E_TELEMETRY:-default}" = "default" ]; then
+  BUILD_ENV=(VITE_MIXPANEL_ENABLED=false VITE_DATADOG_ENABLED=false VITE_RUM_ENABLED=false
+    VITE_MIXPANEL_TOKEN= VITE_DATADOG_CLIENT_TOKEN= VITE_DATADOG_APPLICATION_ID=
+    VITE_RUM_APP_MONITOR_ID= VITE_RUM_IDENTITY_POOL_ID=)  # blank ids too: no real credential in dist
+fi
+if ! ( cd "$APP_SHELL_DIR" && env ${BUILD_ENV[@]+"${BUILD_ENV[@]}"} npm run build:e2e ) > "$BUILD_LOG" 2>&1; then
   echo "❌ Build failed. Last 40 lines of $BUILD_LOG:" >&2
   tail -n 40 "$BUILD_LOG" >&2
   exit 1
@@ -178,13 +209,34 @@ if [ "$ready" -ne 1 ]; then
 fi
 
 if [ "$SUITE" != "integration" ]; then
-  echo "==> Playwright E2E — mocked specs (${E2E_WORKERS:-4} workers — override with E2E_WORKERS)..."
+  # E2E_MOCKED_SPECS: spec paths under e2e/, space-separated, to run instead of the whole suite (the
+  # pre-push passes the changed specs when nothing else calls for all of them).
+  read -r -a mocked_specs <<< "${E2E_MOCKED_SPECS:-}"
+  only_specs=""
+  [ "${#mocked_specs[@]}" -gt 0 ] && only_specs=", only ${#mocked_specs[@]} spec(s): ${mocked_specs[*]}"
+  echo "==> Playwright E2E — mocked specs (${E2E_WORKERS:-4} workers — override with E2E_WORKERS${only_specs})..."
   # ETP-5307: --project=mocked --project=mocked-serial (not the bare default, which would
   # also run onboarding-setup/integration) — mocked-serial is the small, known-contention-
   # sensitive subset carved out to run at workers=1 while everything else stays parallel.
   # See MOCKED_SERIAL_SPECS in playwright.config.js for why.
   ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=1 BASE_URL="$BASE_URL" \
-      npx playwright test --project=mocked --project=mocked-serial )
+      npx playwright test --project=mocked --project=mocked-serial ${mocked_specs[@]+"${mocked_specs[@]}"} )
+  # ETP-5695: the quarantined flaky tests (e2e/quarantine.json) were left out of the run above.
+  # Run them once more on their own, never blocking, so a fixed one shows up as passing and an
+  # expired entry is visible. Policy: docs/testing/flaky-tests.md.
+  node "$REPO_DIR/scripts/lib/playwright-quarantine.js" check || true
+  quarantined="$(node "$REPO_DIR/scripts/lib/playwright-quarantine.js" count 2>/dev/null || echo 0)"
+  # A run of a few changed specs leaves the quarantine to the next full run.
+  if [ "$quarantined" -gt 0 ] && [ "${#mocked_specs[@]}" -eq 0 ]; then
+    echo "==> Playwright E2E — ${quarantined} quarantined mocked test(s), not blocking..."
+    # --retries=0: CI=true gives one retry, and a test that only passes on it is still flaky.
+    if ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=1 BASE_URL="$BASE_URL" E2E_QUARANTINE=only \
+        npx playwright test --project=mocked --project=mocked-serial --retries=0 ); then
+      echo "==> Quarantined tests passed. If they keep passing, take them out of e2e/quarantine.json."
+    else
+      echo "==> Quarantined tests failed (not blocking: they are in e2e/quarantine.json)."
+    fi
+  fi
 else
   echo "==> Playwright E2E — mocked specs... SKIPPED (E2E_SUITE=integration)"
 fi
@@ -236,8 +288,9 @@ if [ "$SUITE" != "mocked" ]; then
   fi
   # ETP-5548: the paid provisioning-failure spec reserves a dedicated pool tenant through
   # POST /sws/go/dev/provisioning-failure-fixture, which provisions it synchronously on first
-  # run (minutes) and blows the 15s actionTimeout. Run it locally / in the pre-push gate only;
-  # skip it under Jenkins (JENKINS_URL). An explicit E2E_PROVISIONING_FAILURE always wins.
+  # run (minutes; the spec waits up to 4 for it). It runs in local integration runs and is
+  # skipped under Jenkins (JENKINS_URL) unless the job opts in, as the develop → main cut does
+  # (ETP-5695). An explicit E2E_PROVISIONING_FAILURE always wins.
   if [ -n "${E2E_PROVISIONING_FAILURE:-}" ]; then
     provisioning_failure="$E2E_PROVISIONING_FAILURE"
   elif [ -n "${JENKINS_URL:-}" ]; then

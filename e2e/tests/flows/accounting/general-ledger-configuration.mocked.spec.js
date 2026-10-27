@@ -1,3 +1,8 @@
+// @covers tools/app-shell/src/windows/custom/general-ledger-configuration/GeneralLedgerConfigPage.jsx
+// @covers tools/app-shell/src/windows/custom/general-ledger-configuration/DefaultsTab.jsx
+// @covers tools/app-shell/src/components/contract-ui/AccountSelect.jsx
+// @covers tools/app-shell/src/components/contract-ui/SegmentedTabs.jsx
+// @covers tools/app-shell/src/components/contract-ui/toolbarClasses.js
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
@@ -17,11 +22,12 @@ import { captureScreenshot } from '../../helpers/captureScreenshot.js';
  *
  * It switches to each of the 4 tabs (General · Valores por defecto · Dimensiones ·
  * Cuentas generales), waits for that tab's content to render, runs a light sanity
- * check (no pixel/layout fidelity assertion — a human compares the PNGs to the
- * Figma), and writes a full-page screenshot per tab to e2e/test-results/.
+ * check (no pixel fidelity assertion — a human compares the PNGs to the Figma),
+ * and writes a full-page screenshot per tab to e2e/test-results/. The top bar's
+ * sizes (ETP-5736) are asserted in the behavioral suite below.
  *
  * Selectors used are the stable data-testids already emitted by the window:
- *   glc-tab-0..3, glc-save, glc-section-identity, glc-defaults-group-*,
+ *   glc-toolbar, glc-tab-0..3, glc-save, glc-section-identity, glc-defaults-group-*,
  *   glc-section-dimensions, glc-section-suspense.
  */
 
@@ -129,6 +135,47 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     });
   });
 
+  // ETP-5681 — account fields open the shared search popup (AccountSelect → SearchPopup, the one the
+  // report filters use for "Desde la cuenta"): options read "<code> - <name>" in full (the old
+  // popover cut long names off at the field's width), search matches the code, and the pick
+  // reaches the aggregate POST.
+  test('an account field shows full "code - name" options, searches by code and POSTs the pick', async ({ page }) => {
+    await page.getByTestId('glc-tab-1').click();
+    const field = page.locator('[data-testid^="glc-acct-"]').first();
+    const testId = await field.getAttribute('data-testid');
+    const key = testId.replace('glc-acct-', '');
+
+    const trigger = field.getByTestId(`field-${testId}`);
+    const current = ((await trigger.getAttribute('title')) ?? '').trim();
+    await trigger.click();
+
+    const popup = page.getByTestId(`${testId}-popup`);
+    await expect(popup).toBeVisible();
+    const options = popup.getByRole('option');
+    await expect(options.first()).toBeVisible();
+    const labels = (await options.allTextContents()).map((t) => t.trim());
+    expect(labels.length).toBeGreaterThan(1);
+    for (const label of labels) expect(label).toMatch(/^\S+ - \S/);
+
+    // Long names wrap inside the popup: no option is clipped.
+    const clipped = await options.evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
+    expect(clipped).toBe(0);
+
+    // Pick an account other than the current one, found by typing its code.
+    const target = labels.find((l) => l !== current);
+    const code = target.split(' - ')[0];
+    await page.getByTestId(`${testId}-popup-input`).fill(code);
+    const option = popup.getByRole('option', { name: target, exact: true });
+    await expect(option).toBeVisible();
+    const optionId = (await option.getAttribute('data-testid')).replace(`${testId}-popup-option-`, '');
+    await option.click();
+    await expect(popup).toBeHidden();
+    await expect(trigger).toHaveText(target);
+
+    await page.getByTestId('glc-save').click();
+    await expect.poll(() => post.last?.defaults?.[key]).toBe(optionId);
+  });
+
   test('dimensions: toggling an optional row marks dirty and POSTs the dimension change', async ({ page }) => {
     await page.getByTestId('glc-tab-2').click();
     await expect(page.getByTestId('glc-section-dimensions')).toBeVisible();
@@ -144,6 +191,25 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
 
     await expect.poll(() => post.last).not.toBeNull();
     expect(post.last.dimensions).toContainEqual({ id: 'dim-pr', active: false, mandatory: false });
+  });
+
+  // ETP-5736 — the top bar follows the record toolbar (Figma): 56px bar with 8px padding and an
+  // inset bottom rule (not a border), a 40px tab group of 32px tabs, and a 40px Save.
+  test('top bar matches the record toolbar sizes', async ({ page }) => {
+    const box = async (testId) => (await page.getByTestId(testId).boundingBox()).height;
+    expect(await box('glc-toolbar')).toBeCloseTo(56, 0);
+    expect((await page.getByRole('group').filter({ has: page.getByTestId('glc-tab-0') }).boundingBox()).height)
+      .toBeCloseTo(40, 0);
+    for (const i of [0, 1, 2, 3]) expect(await box(`glc-tab-${i}`)).toBeCloseTo(32, 0);
+    expect(await box('glc-save')).toBeCloseTo(40, 0);
+
+    const bar = await page.getByTestId('glc-toolbar').evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { boxShadow: cs.boxShadow, borderBottomWidth: cs.borderBottomWidth, padding: cs.padding };
+    });
+    expect(bar.boxShadow).toContain('inset');
+    expect(bar.borderBottomWidth).toBe('0px');
+    expect(bar.padding).toBe('8px');
   });
 
   test('dimensions: a mandatory row cannot be deactivated', async ({ page }) => {

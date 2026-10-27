@@ -18,7 +18,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Visibility: visible from the Inventory menu as `Physical Inventory`.
 - Implementation type: custom window wrapper at `tools/app-shell/src/windows/custom/physical-inventory/index.jsx`, registered in `customLoaders` in `tools/app-shell/src/windows/registry.js`. The wrapper supplies an explicit `COLUMNS` array to `InventoryTable` (`dot: false` on `movementDate`; `enumLabels` for `processed`), passes a `CustomInventoryTable` and a `hideMoreMenu` function to `GeneratedApp`. It also wires `bulkActions` (grid multi-select Post/Unpost) and `rowQuickActions` (row-hover kebab Post) — see **Design changes — ETP-5360** below.
 - Window shape: master-child. The header entity is `inventory`, and the detail entity is `inventoryLine`.
-- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference. **ETP-5133:** the `product` column is a lookup selector, so it never ellipsizes — it widens to the longest product name of the loaded lines and of the product just picked in the open add-row, and the grid scrolls horizontally on overflow; see the `noTruncate` row in `docs/decisions-reference.md`.
 - List/detail behavior: the list page opens inventory headers; the record page shows the header form plus the child line table and line form. The list toolbar omits the status filter dropdown (`hideStatusFilter`), the Link button (`hideLink`), and the Print button (`hidePrint`). The `Inventory Type` column is not shown in the list; it remains searchable via filters but not as a visible table column. The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order`. The header form has no border (`noHeaderBorder`). The "Others" tab is removed — Description, Inventory Type, and Project are all `form: false`.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 
@@ -55,7 +55,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 6. Run `Update List System Count` and confirm the action disables while pending, then the page reloads and the line-level system counts refresh.
 7. Confirm the **Confirm** button (draftMode) is absent until at least one line exists. Click it — confirm the processed status badge turns green and the locked alert banner appears. Confirm Save and Confirm buttons are no longer visible.
 8. Confirm the ⋮ button is absent on a new (unsaved) header. After saving, confirm it appears. After processing, confirm it disappears again.
-9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 10. On a header with no lines yet, confirm the empty state shows both "+ Add line" and "Generate lines automatically". Click the latter, confirm the modal shows Product Category (default "All categories"), Inventory Quantity (default `not 0`), and "Set Book Quantity to zero" (unchecked). Submit and confirm lines are generated for the header's warehouse only, a success toast appears, and the modal closes without a full page reload.
 11. On a header with existing lines, open the "+ Add line" dropdown and confirm "Generate lines automatically" is listed; confirm it opens the same modal.
 12. In the modal, pick a specific Product Category and confirm only products in that category are generated. Leave it on "All categories" and confirm products across categories are generated (i.e. the request omits `M_Product_Category_ID` rather than sending a placeholder).
@@ -272,3 +272,37 @@ no-id/no-data cases.
   `confirmKey` menuAction option through the generator in schema_forge_core), so it is out of
   scope for this reject cycle.
 
+
+## Design changes — ETP-5562
+
+- **"Create Inventory Count List" removed from the detail kebab** (`InventoryMenuContent.jsx`): it was
+  redundant with "Generate lines automatically" (`GenerateLinesModal` → `InventoryHandler`). The kebab keeps
+  "Update List System Count". `InventoryCreateListModal.jsx` is no longer used by the kebab (only by the
+  unused `InventoryTopbarActions.jsx`); the i18n key `createInventoryCountList` is kept for that file.
+- **System Count / Difference are strictly read-only in the lines grid**: `gridReadOnly: true` in
+  `decisions.json` → `readOnly: true` in `InventoryLineTable.jsx`, so `InlineLinesPanel` never renders an input.
+- **Kebab on a freshly created record** (`DetailMoreActionsMenu.jsx`): the hidden probe's verdict is now keyed
+  by record id, so the `false` measured on `/new` no longer sticks after the first save.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/physical-inventory/index.jsx` (`COLUMNS`) carry the same gate.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Conteo del usuario** (the second quantity: system count, then user count) and before **Diferencia**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 4 (it used to be 2, before both quantities; bookQuantity 2, quantityCount 3, etgoQtydiff 5)`, `gridReadOnly: true`, `display: "tag"` — it was already a read-only grid column, only in a different position; `grow: true` was dropped so the pill column does not widen. The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as a product/location is picked in the stock drawer (from the selected item's `_aux._UOM`); the backend stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft physical inventory; confirm `Unidad` sits after Conteo del usuario, before Diferencia; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.

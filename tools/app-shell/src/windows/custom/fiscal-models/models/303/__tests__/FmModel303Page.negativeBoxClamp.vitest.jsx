@@ -33,6 +33,8 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 const navigateMock = vi.fn();
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }));
@@ -267,7 +269,7 @@ describe('FmModel303Page — negative value rejected on boxes 111 and 77 (ETP-53
   // true` is seeded so the formula's other two conditions (box71 < 0, isRectificativa) are met,
   // isolating "box70 > 0" as the only thing the clamp can affect.
   it('a negative box70 commit is clamped BEFORE box111 is recomputed from it (ordering guarantee)', () => {
-    const decl = { ...BASE_DECL, identification: { tipo_declaracion: 'N', rectificativa: true } };
+    const decl = { ...BASE_DECL, identification: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'R' } };
     render(<FmModel303Page decl={decl} {...defaultProps} />);
 
     commit(27, '-500'); // box69 = -500 (< 0), box71 = -500 - box70 stays < 0 regardless of clamp.
@@ -310,7 +312,7 @@ describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange n
       summary: { accrued: 0, deductible: 0, result: 0 },
       sources: [],
     });
-    const decl = { ...CALCULAR_DECL, identification: { tipo_declaracion: 'N', rectificativa: true } };
+    const decl = { ...CALCULAR_DECL, identification: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'R' } };
     render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);
 
     await clickCalcular();
@@ -330,9 +332,13 @@ describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange n
       ...BASE_DECL,
       _precomputed: { boxes: [{ num: 27, value: -500 }], summary: {}, sources: [] },
       manualData: {
-        identification: { tipo_declaracion: 'N', rectificativa: true },
+        identification: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'R' },
         manualOverrides: { 70: -300 },
       },
+      // ETP-5725 (reopened QA fix) — "Guardar" below is gated by the corrective-consistency
+      // guard too: a persisted rectificativa: true needs a presented ordinaria sibling. Not
+      // what this test is about (the box70/111 clamp), so a sibling is simply assumed.
+      _duplicatePeriodPresented: true,
     };
     installImmediateServer();
     render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);

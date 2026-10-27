@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/useOrderWindow.jsx
 import { act, render, screen } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
 
@@ -89,11 +90,9 @@ function ConfirmModal({ orderId, onClose, onConfirmed }) {
   );
 }
 
-function ConfirmResultModal({ title, docs, currency, navigate: modalNavigate, onClose }) {
+function ConfirmResultModal({ docs, navigate: modalNavigate, onClose }) {
   return (
     <div data-testid="confirm-result">
-      <span data-testid="confirm-result-title">{title}</span>
-      <span>{currency}</span>
       <span>{docs.map((doc) => doc.num).join('|')}</span>
       <button type="button" onClick={() => modalNavigate('/sales-invoice/inv-1')}>go invoice</button>
       <button type="button" onClick={onClose}>close result</button>
@@ -270,7 +269,9 @@ describe('useOrderWindow', () => {
     });
   });
 
-  it('blocks confirmation when exchange rate is missing, then opens confirmation and result portals', async () => {
+  // ETP-5840 — Confirm no longer pre-checks validate-exchange-rate: the document's own
+  // eTGOCurrencyRate is authoritative and the backend completion check rejects an empty one.
+  it('opens confirmation without an exchange-rate pre-check, then the result portal', async () => {
     const { result } = renderOrderHook();
     const row = {
       id: 'so-10',
@@ -280,10 +281,6 @@ describe('useOrderWindow', () => {
       orderDate: '2026-07-01',
     };
 
-    fetchOptionalJson
-      .mockResolvedValueOnce({ organization: { currency: 'USD-ID', currency$_identifier: 'USD' } })
-      .mockResolvedValueOnce({ hasRate: false });
-
     const [confirmAction, manageAction] = result.current.rowQuickActions.menuActions({ row, status: 'DR' });
     expect(confirmAction).toMatchObject({ key: 'confirm', label: 'confirmOrder', visible: true });
     expect(manageAction.visible).toBe(false);
@@ -291,17 +288,8 @@ describe('useOrderWindow', () => {
     await act(async () => {
       await confirmAction.onClick({ row });
     });
-    expect(toast.error).toHaveBeenCalledWith('noExchangeRateAvailable');
-    expect(result.current.confirmPortal).toBeNull();
-
-    fetchOptionalJson
-      .mockResolvedValueOnce({ organization: { currency: 'USD-ID', currency$_identifier: 'USD' } })
-      .mockResolvedValueOnce({ hasRate: true });
-
-    const freshConfirm = result.current.rowQuickActions.menuActions({ row, status: 'DR' })[0];
-    await act(async () => {
-      await freshConfirm.onClick({ row });
-    });
+    expect(fetchOptionalJson.mock.calls.some(([url]) => String(url).includes('validate-exchange-rate'))).toBe(false);
+    expect(toast.error).not.toHaveBeenCalled();
 
     const { unmount } = render(result.current.confirmPortal);
     expect(screen.getByTestId('confirm-modal')).toHaveTextContent('so-10');
@@ -312,7 +300,6 @@ describe('useOrderWindow', () => {
 
     render(result.current.confirmResultPortal);
     expect(screen.getByTestId('confirm-result')).toHaveTextContent('GS-1|SI-1');
-    expect(screen.getByTestId('confirm-result')).toHaveTextContent('EUR');
     screen.getByText('go invoice').click();
     expect(navigate).toHaveBeenCalledWith('/sales-invoice/inv-1');
 
@@ -325,8 +312,8 @@ describe('useOrderWindow', () => {
 
   // ETP-5295 — `onCreated` now routes its `docs` into the SAME result popup the
   // "Confirmar" flow uses (previously the argument was discarded and the launcher just
-  // closed + refreshed). Assert the popup renders with the docs-created title, and that
-  // refreshKey only bumps once the popup itself is closed (not immediately on creation).
+  // closed + refreshed). Assert the popup renders the created docs, and that refreshKey only
+  // bumps once the popup itself is closed (not immediately on creation).
   it('opens manage launcher for partially fulfilled confirmed rows, shows the docs-created result, and refreshes on close', () => {
     const { result } = renderOrderHook();
     // ETP-5295 — "partially fulfilled" is now stated by the backend annotations on the row
@@ -361,7 +348,6 @@ describe('useOrderWindow', () => {
     expect(result.current.refreshKey).toBe(0);
 
     render(result.current.confirmResultPortal);
-    expect(screen.getByTestId('confirm-result-title')).toHaveTextContent('soDocsCreatedTitle');
     expect(screen.getByTestId('confirm-result')).toHaveTextContent('GS-1|SI-1');
 
     act(() => {
@@ -391,8 +377,8 @@ describe('useOrderWindow — parametrized confirm/manage result popup (ETP-5295)
         <button
           type="button"
           onClick={() => onConfirmed({
-            receipt: { id: 'receipt-1', documentNo: 'GR-1', amount: 15 },
-            invoice: { id: 'poinv-1', documentNo: 'PI-1', amount: 25 },
+            receipt: { id: 'receipt-1', documentNo: 'GR-1', amount: 15, documentStatus: 'DR' },
+            invoice: { id: 'poinv-1', documentNo: 'PI-1', amount: 25, documentStatus: 'CO' },
           })}
         >
           confirm po docs
@@ -401,13 +387,11 @@ describe('useOrderWindow — parametrized confirm/manage result popup (ETP-5295)
     );
   }
 
-  // Exposes the raw props ConfirmResultModal receives so assertions can check `type`/`route`
-  // per doc instead of fighting real modal markup, per Tester convention.
-  function InspectableResultModal({ title, docs, currency, onClose }) {
+  // Exposes the raw `docs` ConfirmResultModal receives (its only content input — title, banner
+  // and badges are derived from it) so assertions can check type/status/route per doc.
+  function InspectableResultModal({ docs, onClose }) {
     return (
       <div data-testid="inspect-result">
-        <span data-testid="inspect-title">{title}</span>
-        <span data-testid="inspect-currency">{currency}</span>
         <pre data-testid="inspect-docs">{JSON.stringify(docs)}</pre>
         <button type="button" onClick={onClose}>close result</button>
       </div>
@@ -426,7 +410,7 @@ describe('useOrderWindow — parametrized confirm/manage result popup (ETP-5295)
     };
   }
 
-  it('renders purchase-order doc shape (type/route) and poConfirmedTitle through the confirm flow', async () => {
+  it('hands the popup the purchase-order docs with their type, real status and route through the confirm flow', async () => {
     const { result } = renderOrderHook({
       confirmedTitleKey: PO_CONFIRMED_TITLE_KEY,
       primaryDoc: PO_PRIMARY_DOC,
@@ -450,14 +434,13 @@ describe('useOrderWindow — parametrized confirm/manage result popup (ETP-5295)
     unmount();
 
     render(result.current.confirmResultPortal);
-    expect(screen.getByTestId('inspect-title')).toHaveTextContent(PO_CONFIRMED_TITLE_KEY);
     expect(JSON.parse(screen.getByTestId('inspect-docs').textContent)).toEqual([
-      { type: 'entrada', num: 'GR-1', amount: 15, route: '/goods-receipt/receipt-1' },
-      { type: 'facturaCompra', num: 'PI-1', amount: 25, route: '/purchase-invoice/poinv-1' },
+      { type: 'entrada', num: 'GR-1', documentStatus: 'DR', route: '/goods-receipt/receipt-1' },
+      { type: 'facturaCompra', num: 'PI-1', documentStatus: 'CO', route: '/purchase-invoice/poinv-1' },
     ]);
   });
 
-  it('routes ManageDocsLauncher onCreated into the same result popup with the docs-created title (purchase-order)', () => {
+  it('routes ManageDocsLauncher onCreated into the same result popup (purchase-order)', () => {
     const { result } = renderOrderHook({
       confirmedTitleKey: PO_CONFIRMED_TITLE_KEY,
       primaryDoc: PO_PRIMARY_DOC,
@@ -482,9 +465,8 @@ describe('useOrderWindow — parametrized confirm/manage result popup (ETP-5295)
 
     expect(result.current.manageLauncher).toBeNull();
     render(result.current.confirmResultPortal);
-    expect(screen.getByTestId('inspect-title')).toHaveTextContent('soDocsCreatedTitle');
     expect(JSON.parse(screen.getByTestId('inspect-docs').textContent)).toEqual([
-      { type: 'entrada', num: 'GR-9', amount: 99, route: '/goods-receipt/receipt-9' },
+      { type: 'entrada', num: 'GR-9', route: '/goods-receipt/receipt-9' },
     ]);
   });
 

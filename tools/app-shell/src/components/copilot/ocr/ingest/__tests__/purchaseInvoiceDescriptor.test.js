@@ -1,48 +1,10 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildTaxSearchTerm,
   buildLineOps,
-  resolveTaxesForLines,
   toIsoDate,
   nonBlank,
 } from '../purchaseInvoiceDescriptor.js';
-
-/* -------------------------------------------------------------------------- */
-/* buildTaxSearchTerm                                                         */
-/* -------------------------------------------------------------------------- */
-
-describe('buildTaxSearchTerm', () => {
-  it('returns the textual label when present', () => {
-    assert.equal(buildTaxSearchTerm({ tax_label: 'IVA 21%', tax_rate: 21 }), 'IVA 21%');
-    assert.equal(buildTaxSearchTerm({ tax_label: 'Exento', tax_rate: null }), 'Exento');
-    assert.equal(buildTaxSearchTerm({ tax_label: 'IVA Compras 21%' }), 'IVA Compras 21%');
-  });
-
-  it('falls back to "<rate>%" when only the rate is provided', () => {
-    assert.equal(buildTaxSearchTerm({ tax_label: null, tax_rate: 21 }), '21%');
-    assert.equal(buildTaxSearchTerm({ tax_rate: 12 }), '12%');
-  });
-
-  it('returns null when no tax info is present', () => {
-    assert.equal(buildTaxSearchTerm({}), null);
-    assert.equal(buildTaxSearchTerm({ tax_label: '', tax_rate: null }), null);
-    assert.equal(buildTaxSearchTerm({ tax_label: '   ', tax_rate: null }), null);
-  });
-
-  it('ignores non-numeric rate values', () => {
-    assert.equal(buildTaxSearchTerm({ tax_rate: 'not-a-number' }), null);
-    assert.equal(buildTaxSearchTerm({ tax_rate: null, tax_label: null }), null);
-  });
-
-  it('prefers label over rate even when both are present', () => {
-    // Label carries more trigram signal than a bare percentage.
-    assert.equal(
-      buildTaxSearchTerm({ tax_label: 'IVA Compras 21%', tax_rate: 21 }),
-      'IVA Compras 21%',
-    );
-  });
-});
 
 /* -------------------------------------------------------------------------- */
 /* buildLineOps                                                               */
@@ -104,128 +66,6 @@ describe('buildLineOps', () => {
     assert.equal(lineOps[0].parentRef, 'inv');
     assert.equal(lineOps[0].spec, 'purchase-invoice');
     assert.equal(lineOps[0].entity, 'Lines');
-  });
-});
-
-/* -------------------------------------------------------------------------- */
-/* resolveTaxesForLines — fetch-mocked simSearch                              */
-/* -------------------------------------------------------------------------- */
-
-describe('resolveTaxesForLines', () => {
-  let originalFetch;
-  let originalWindow;
-  let fetchUrls;
-
-  beforeEach(() => {
-    originalFetch = globalThis.fetch;
-    originalWindow = globalThis.window;
-    // simSearch reads window.location.pathname to derive the Etendo base URL.
-    // Stub it so the helper doesn't blow up under node:test (no DOM).
-    globalThis.window = { location: { pathname: '/web/com.etendoerp.go/index.html' } };
-    fetchUrls = [];
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    if (originalWindow === undefined) delete globalThis.window;
-    else globalThis.window = originalWindow;
-  });
-
-  function mockSimSearchFetch(envelopeByCall) {
-    let callIdx = 0;
-    globalThis.fetch = async (url) => {
-      fetchUrls.push(String(url));
-      const envelope = Array.isArray(envelopeByCall) ? envelopeByCall[callIdx++] : envelopeByCall;
-      return {
-        ok: true,
-        status: 200,
-        json: async () => envelope,
-      };
-    };
-  }
-
-  // simSearch response shape (native /sws/neo/simsearch): the raw object IS the
-  // JSON body — no more { message: "<JSON-string>" } double-encoded wrapper.
-  function envelopeWith(matches) {
-    return Object.fromEntries(
-      matches.map((value, idx) => [
-        `item_${idx}`,
-        value ? { data: [{ id: value.id, name: value.name, similarity_percent: '90' }] } : { data: [] },
-      ]),
-    );
-  }
-
-  it('returns matched tax ids in the same order as the input lines', async () => {
-    mockSimSearchFetch(envelopeWith([
-      { id: 'TAX-21', name: 'IVA Compras 21%' },
-      { id: 'TAX-12', name: 'IVA Compras 12%' },
-    ]));
-    const result = await resolveTaxesForLines({
-      token: 'tok',
-      lines: [
-        { tax_label: 'IVA 21%', tax_rate: 21 },
-        { tax_label: null, tax_rate: 12 },
-      ],
-    });
-    assert.deepEqual(result, ['TAX-21', 'TAX-12']);
-    assert.equal(fetchUrls.length, 1, 'one batched simSearch call for all lines');
-    assert.match(fetchUrls[0], /entityName=FinancialMgmtTaxRate/);
-    // Native NEO Headless endpoint — no more generic Webhooks dispatcher.
-    assert.match(fetchUrls[0], /\/sws\/neo\/simsearch(\?|$)/);
-    assert.doesNotMatch(fetchUrls[0], /\/webhooks\//);
-    assert.doesNotMatch(fetchUrls[0], /name=SimSearch/);
-  });
-
-  it('returns null for lines that simSearch did not match', async () => {
-    mockSimSearchFetch(envelopeWith([
-      { id: 'TAX-21', name: 'IVA 21%' },
-      null,  // no match for the second line
-    ]));
-    const result = await resolveTaxesForLines({
-      token: 'tok',
-      lines: [
-        { tax_label: 'IVA 21%' },
-        { tax_label: 'Unknown weird tax' },
-      ],
-    });
-    assert.deepEqual(result, ['TAX-21', null]);
-  });
-
-  it('returns all-null when no line has tax info (no fetch performed)', async () => {
-    let fetched = false;
-    globalThis.fetch = async () => { fetched = true; return { ok: true, json: async () => ({}) }; };
-    const result = await resolveTaxesForLines({
-      token: 'tok',
-      lines: [
-        { description: 'A' },
-        { description: 'B', tax_label: '', tax_rate: null },
-      ],
-    });
-    assert.deepEqual(result, [null, null]);
-    assert.equal(fetched, false, 'no terms → no network call');
-  });
-
-  // ETP-4576 — no longer "token or lines": under the cookie scheme the client holds no
-  // token, so gating on one would skip the lookup for every authenticated user. Only the
-  // absence of lines short-circuits now.
-  it('returns empty array when lines are missing', async () => {
-    let fetched = false;
-    globalThis.fetch = async () => { fetched = true; return { ok: true, json: async () => ({}) }; };
-    assert.deepEqual(await resolveTaxesForLines({ lines: [] }), []);
-    assert.deepEqual(await resolveTaxesForLines({}), []);
-    assert.equal(fetched, false);
-  });
-
-  it('uses "<rate>%" when only tax_rate is provided (no label)', async () => {
-    mockSimSearchFetch(envelopeWith([{ id: 'TAX-21', name: 'IVA 21%' }]));
-    const result = await resolveTaxesForLines({
-      token: 'tok',
-      lines: [{ tax_rate: 21 }],
-    });
-    assert.deepEqual(result, ['TAX-21']);
-    // The query must include the constructed "21%" term.
-    const url = fetchUrls[0];
-    assert.match(decodeURIComponent(url), /\["21%"\]/);
   });
 });
 

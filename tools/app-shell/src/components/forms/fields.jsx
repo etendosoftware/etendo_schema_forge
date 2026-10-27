@@ -1,23 +1,15 @@
 // Form field primitives that WRAP the shared UI components used by the Sales
 // Order detail form (EntityForm), so wizard/modal inputs, selects and date
-// pickers look and behave identically across the app. Shared by the New
-// Movement wizard and the generic Payment form.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Search, ChevronDown } from 'lucide-react';
-import { useUI } from '@/i18n';
+// pickers look and behave identically across the app.
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Label as UiLabel } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
-import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
-import { FIELD_HEIGHT } from '@/components/ui/formDensity';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { formatCurrency, getCurrencySymbol, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { getCurrencyFormatConfig, isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import { parseAmountInput } from '@/lib/parseAmountInput.js';
-import {
-  Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 
 export function Field({ label, required, className = '', children }) {
   return (
@@ -34,51 +26,6 @@ export function Field({ label, required, className = '', children }) {
   );
 }
 
-/** Read-only display — the disabled base Input, consistent with the form fields. */
-export function ReadOnly({ children }) {
-  const text = Array.isArray(children) ? children.join('') : (children ?? '');
-  return <Input disabled readOnly value={text} data-testid="Input__7183e9" />;
-}
-
-export function TextInput({ className = '', name, ...rest }) {
-  // White background: these are editable; the app's default Input is grey, which
-  // reads as read-only. Caller className can still override.
-  return <Input className={`bg-card ${className}`} name={name} {...rest} data-testid={name ? `field-text-${name}` : 'field-text'} />;
-}
-
-/**
- * Enum select. `onChange` receives the selected value (string), matching the
- * Radix Select contract used across the app.
- */
-export function Select({ label, required, value, onChange, options, placeholder, className, name }) {
-  // Accept options as plain strings or as { id, name } / { value, label } objects.
-  const items = (options || []).map((o) =>
-    (typeof o === 'string' ? { value: o, label: o } : { value: o.id ?? o.value, label: o.name ?? o.label }));
-  return (
-    <Field
-      label={label}
-      required={required}
-      className={className}
-      data-testid="Field__7183e9">
-      <RSelect
-        value={value ?? ''}
-        onValueChange={onChange}
-        data-testid="RSelect__7183e9">
-        <SelectTrigger
-          className="focus:ring-2 focus:ring-primary"
-          data-testid={name ? `field-select-${name}` : 'SelectTrigger__7183e9'}>
-          <SelectValue
-            placeholder={placeholder || 'Seleccionar…'}
-            data-testid="SelectValue__7183e9" />
-        </SelectTrigger>
-        <SelectContent data-testid="SelectContent__7183e9">
-          {items.map((it) => <SelectItem key={it.value} value={it.value} data-testid="SelectItem__7183e9">{it.label}</SelectItem>)}
-        </SelectContent>
-      </RSelect>
-    </Field>
-  );
-}
-
 /** Date field. `value` is an ISO date (yyyy-mm-dd); `onChange` emits the same. */
 export function DateInput({ label, required, value, onChange, className, name, disabled }) {
   return (
@@ -92,71 +39,6 @@ export function DateInput({ label, required, value, onChange, className, name, d
   );
 }
 
-/**
- * Bare money/numeric input that keeps what the user types verbatim while
- * focused, so a parent that re-formats `value` on every change (e.g.
- * eur(parseEur(x))) doesn't fight the keystrokes. On blur it shows the formatted
- * `value`. Same UX as the Sales Order line amount fields. Unstyled — pass a
- * `className` for table-cell / inline use.
- */
-export function MoneyInput({ value, onChange, className = '', disabled, placeholder, name }) {
-  const [buffer, setBuffer] = useState(value);
-  const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setBuffer(value); }, [value, focused]);
-  return (
-    <input
-      className={className}
-      value={focused ? buffer : value}
-      onChange={(e) => { setBuffer(e.target.value); onChange?.(e); }}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      disabled={disabled}
-      placeholder={placeholder}
-      data-testid={name ? `field-number-${name}` : 'field-number'}
-    />
-  );
-}
-
-export function AmountInput({ label, required, value, onChange, onBlur, placeholder, readOnly, className, name, currency }) {
-  // Keep what the user types verbatim while the field is focused, so a parent
-  // that re-formats `value` on every change (e.g. eur(parseEur(x))) doesn't
-  // fight the keystrokes. On blur we fall back to the formatted `value` and run
-  // the optional `onBlur` (parents use it to normalize, e.g. "20" → "20,00").
-  const [buffer, setBuffer] = useState(value);
-  const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setBuffer(value); }, [value, focused]);
-
-  // ETP-4314 follow-up: the symbol side (left for USD/GBP/etc., right for EUR)
-  // isn't hardcoded — read from C_CURRENCY.ISSYMBOLRIGHTSIDE via
-  // isCurrencySymbolRightSide(), same source formatCurrency() uses for the
-  // read-only display of this same amount elsewhere in the app.
-  const rightSide = isCurrencySymbolRightSide(currency);
-
-  return (
-    <Field
-      label={label}
-      required={required}
-      className={className}
-      data-testid="Field__7183e9">
-      <div className="relative">
-        <Input
-          className={`${rightSide ? 'pr-8' : 'pl-8'} text-right tabular-nums ${readOnly ? '' : 'bg-card'}`}
-          value={focused ? buffer : value}
-          onChange={(e) => { setBuffer(e.target.value); onChange?.(e); }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => { setFocused(false); onBlur?.(); }}
-          placeholder={placeholder}
-          disabled={readOnly}
-          data-testid={name ? `field-number-${name}` : 'field-number'} />
-        <span
-          className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground`}>
-          {getCurrencySymbol(currency) || '€'}
-        </span>
-      </div>
-    </Field>
-  );
-}
-
 // ─── MaskedAmountInput internals (ETP-5107) ───────────────────────────────
 // The canonical masked money input, and the one every EDITABLE amount field in
 // the app must use. See
@@ -164,15 +46,6 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
 // the migration and the rule that goes with it: once a field renders this
 // component its value is CLEAN, so it must be read back with parseLocaleNumber,
 // never with a structural/grouping-aware parser.
-//
-// AmountInput and MoneyInput above are the deliberate exception, and NOT a
-// migration that was forgotten. Their only editable consumer is PaymentForm,
-// which is reachable solely through NewMovementWizard — dead since ETP-4500
-// (2026-07-15) replaced it with NewTransactionModal. AmountInput's one live
-// caller, ReversedInvoicesPanel, passes no `onChange` and is display-only.
-// Migrating them would have changed only unreachable code, so they were left
-// exactly as they were. If NewMovementWizard is ever revived, they are the
-// first thing to move onto this component.
 
 function countSignificantChars(str, thousandsSeparator) {
   if (!thousandsSeparator) return str.length;
@@ -235,6 +108,28 @@ function filterMaskChars(raw, decimalSeparator, strictDecimal) {
     // misplaced '-' — dropped outright, never transiently inserted.
   }
   return result;
+}
+
+/**
+ * A number as plain digits with a '.' decimal point — never exponent notation. `String(n)` switches
+ * to `1e+21` from 1e21 up, which no mask filter can read back. This is a serialization of the value
+ * for the mask (the same shape `toCleanValue` produces), not a display format.
+ */
+function toPlainNumberString(n) {
+  const s = String(n);
+  if (!/e/i.test(s)) return s;
+  // >= 1e21 is always an integer in IEEE-754; smaller exponent forms are tiny fractions.
+  if (Math.abs(n) >= 1e21) return BigInt(Math.trunc(n)).toString();
+  return trimTrailingFractionZeros(n.toFixed(20));
+}
+
+/** Drops trailing '0's of the fraction and a then-trailing '.' — a plain scan, no regex. */
+function trimTrailingFractionZeros(s) {
+  if (!s.includes('.')) return s;
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '0') end -= 1;
+  if (end > 0 && s[end - 1] === '.') end -= 1;
+  return s.slice(0, end);
 }
 
 function groupIntegerDigits(digits, separator) {
@@ -336,12 +231,15 @@ function toIdleDisplay(value, grouping) {
  * @param {boolean} [bare=false] - skip the `Field`/label wrapper, for a dense table cell
  * @param {boolean} [grouping=true] - live thousands-grouping + 2-decimal idle format (price/amount-shaped fields); false keeps a plain, ungrouped look (quantity/integer/number/decimal/percent — matches today's behavior)
  * @param {import('react').RefObject} [inputRef] - optional external ref to the underlying input (e.g. for a caller-managed autoFocus)
+ * @param {(clean: string) => boolean} [isAllowed] - optional keystroke/paste veto on the CLEAN candidate value: returning false refuses the edit outright (the field keeps showing what it had, `onChange` does not fire) — for a hard length/precision ceiling the caller owns, e.g. an AEAT record width (ETP-5597)
  * @param {boolean} [clearZeroOnFocus=false] - ETP-5611: when the committed value is exactly 0, focus shows an empty field so the user types straight in; blurring it still blank without a keystroke commits nothing and the 0 comes back (line-grid amount cells)
+ * @param {string} [aria-label] - accessible name for the underlying input, for a `bare` cell that has no visible label
  */
 export function MaskedAmountInput({
   label, required, value, onChange, onCommit, onBlur, onFocus, onKeyDown, placeholder, disabled,
   className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
-  inputMode = 'decimal', clearZeroOnFocus = false, 'data-testid': dataTestId,
+  inputMode = 'decimal', isAllowed, clearZeroOnFocus = false, 'data-testid': dataTestId,
+  'aria-label': ariaLabel,
 }) {
   const internalRef = useRef(null);
   const activeRef = inputRef || internalRef;
@@ -399,13 +297,15 @@ export function MaskedAmountInput({
 
     const sigBeforeCursor = countSignificantChars(rawValue.slice(0, cursorPos), groupSeparator);
     const filtered = filterMaskChars(rawValue, decimalSeparator, grouping);
+    const clean = toCleanValue(filtered, decimalSeparator);
+    // Refused edit: nothing changes, so the controlled input re-renders the previous text.
+    if (isAllowed && !isAllowed(clean)) return;
     const newDisplay = grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered;
 
     desiredCursorRef.current = positionAfterSignificant(newDisplay, sigBeforeCursor, groupSeparator);
     zeroClearedRef.current = false;
     setDraft(newDisplay);
 
-    const clean = toCleanValue(filtered, decimalSeparator);
     onChange?.(clean, parseLocaleNumber(clean).value);
   };
 
@@ -438,10 +338,17 @@ export function MaskedAmountInput({
     if (parsed == null || !Number.isFinite(parsed)) return;
 
     e.preventDefault();
-    zeroClearedRef.current = false;
     const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
-    const clean = String(parsed);
-    const filtered = filterMaskChars(clean.split('.').join(decimalSeparator), decimalSeparator, grouping);
+    // The clean value is derived exactly as the typing path derives it (filter → toCleanValue),
+    // from a plain-digit rendering of the number, so `isAllowed` and `onChange` see the same shape
+    // whether the value was typed or pasted (never `String(n)`'s exponent form for huge numbers).
+    const filtered = filterMaskChars(
+      toPlainNumberString(parsed).split('.').join(decimalSeparator), decimalSeparator, grouping);
+    const clean = toCleanValue(filtered, decimalSeparator);
+    if (isAllowed && !isAllowed(clean)) return;
+    // Reset only for an ACCEPTED paste (like the typing path): a refused one changes nothing, so a
+    // clearZeroOnFocus blur must still restore the 0 instead of committing the empty draft.
+    zeroClearedRef.current = false;
     setDraft(grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered);
     onChange?.(clean, parsed);
   };
@@ -482,8 +389,8 @@ export function MaskedAmountInput({
   // `bare` (the 3 real call sites): `className` is the caller's own full cell
   // styling, applied directly to the input — mirrors DataTable's/InlineLinesPanel's
   // pre-existing raw-<input>/<Input> contract. Non-bare (unused today, kept for
-  // API parity with AmountInput): `className` goes on the Field wrapper instead,
-  // the input gets a fixed internal class string — matches AmountInput exactly.
+  // API parity with the former AmountInput): `className` goes on the Field wrapper instead,
+  // the input gets a fixed internal class string.
   const inputClassName = bare
     ? `text-right tabular-nums ${paddingClass} ${className}`.trim()
     : `${paddingClass} text-right tabular-nums bg-card`.trim();
@@ -507,6 +414,7 @@ export function MaskedAmountInput({
       required={required}
       autoFocus={autoFocus}
       className={inputClassName}
+      aria-label={ariaLabel}
       data-testid={dataTestId || (name ? `field-number-${name}` : 'field-number')} />
   );
 
@@ -534,280 +442,43 @@ export function MaskedAmountInput({
 }
 
 /**
- * Searchable lookup field shared across the app (G/L item, business partner…).
- * Built on Radix Popover (non-modal) so it positions, portals and closes-outside
- * correctly even inside the transformed Radix Dialog, and clicks aren't treated
- * as "outside the dialog". Focus stays on the input so the user can keep typing.
+ * Chip-style searchable single-select used by every Finance selector (accounting concept, contact,
+ * dimensions, payment method, destination account…). ETP-5728: it is now a THIN WRAPPER over
+ * {@link CreatableSearchSelect} — the same system-wide selector as the "País" field of the account
+ * editor — so the panel, keyboard navigation, clear (X), click-outside and the chevron TOGGLE
+ * (a second click on the arrow closes the open list) behave identically everywhere. Only the
+ * `{ id, name }` row contract of the finance lookups is adapted here.
  *
- * @param {function} useLookup - hook `(query) => { results, loading }` returning
- *   `{ id, name }` rows. Pass a pre-bound hook (e.g. `(q) => useBPartnerLookup(q,
- *   'customer')`) to add extra args while keeping React's rules of hooks intact.
- * @param {{ id, name } | null} value
- * @param {(row: { id, name } | null) => void} onChange
- */
-export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar…' }) {
-  const [query, setQuery] = useState(value?.name ?? '');
-  const [open, setOpen] = useState(false);
-  const { results, loading } = useLookup(query);
-
-  useEffect(() => { setQuery(value?.name ?? ''); }, [value]);
-
-  const showList = open && (results.length > 0 || loading);
-
-  return (
-    <Popover open={showList} onOpenChange={setOpen} data-testid="Popover__7183e9">
-      <PopoverAnchor asChild data-testid="PopoverAnchor__7183e9">
-        <div className="relative">
-          <Input
-            className="bg-card pr-9"
-            value={query}
-            placeholder={placeholder}
-            onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(null); }}
-            onFocus={() => setOpen(true)}
-            data-testid="Input__7183e9" />
-          <Search
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            data-testid="Search__7183e9" />
-        </div>
-      </PopoverAnchor>
-      <PopoverContent
-        align="start"
-        sideOffset={4}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onFocusOutside={(e) => e.preventDefault()}
-        className="max-h-56 overflow-auto rounded-lg border border-[hsl(var(--border-control))] bg-card p-0 shadow-lg"
-        style={{ width: 'var(--radix-popover-trigger-width)' }}
-        data-testid="PopoverContent__7183e9">
-        {loading && results.length === 0 ? (
-          <div className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">…</div>
-        ) : null}
-        {results.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            onClick={() => { onChange(r); setOpen(false); }}
-            className="block w-full px-3 py-2 text-left text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
-          >
-            {r.name}
-          </button>
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/**
- * Chip-style searchable single-select, matching the Funds-transfer modal's
- * accounting-item selector: once chosen, the value shows as a removable chip
- * (label + ×) inside the field; clicking it returns to typing mode. The dropdown
- * is a Radix `Popover`, portalled to `document.body` and auto-flipping on collision,
- * so it is never clipped by an ancestor's overflow (e.g. a scrollable modal body).
- * Data comes from a `useLookup` hook, exactly like {@link LookupPicker}.
+ * Data comes from a `useLookup` hook, from a lookup hook. The hook is called by
+ * CreatableSearchSelect on every render, so pass a module-level hook (stable identity), never an
+ * inline one.
  *
- * Keyboard: ArrowUp/Down move a highlighted option (clamped, no wrap), Home/End jump
- * to the first/last, Enter commits the highlighted option (no fallback to the first
- * result if nothing is highlighted yet), Escape closes without changing the value —
- * ported from `CreatableSearchSelect`'s `handleInputKeyDown` (ETP-4924 follow-up).
+ * Test ids are CreatableSearchSelect's own, derived from `testId`: `field-${testId}` (input),
+ * `field-${testId}-chip`, `ChevronDown__${testId}`, `options-${testId}` (panel) and
+ * `option-${testId}-${id}` (rows).
  *
  * @param {{ id, name } | null} value
- * @param {(row: { id, name } | null) => void} onChange
+ * @param {(row: { id, name } | null) => void} onChange - called with the picked lookup row, or null on clear
  * @param {function} useLookup - hook `(query) => { results, loading }` returning `{ id, name }` rows
  * @param {string} [placeholder]
  * @param {string} [testId] - base for the field's data-testids
+ * @param {boolean} [disabled]
  */
 export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar…', testId = 'chip-select', disabled = false }) {
-  const ui = useUI();
-  const inputRef = useRef(null);
-  const dropdownRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [query, setQuery] = useState('');
-  const { results } = useLookup(query);
-  const showChip = !!value && !editing;
-  const close = () => { setOpen(false); setEditing(false); setQuery(''); };
-  const startEditing = () => { setEditing(true); setOpen(true); setQuery(''); };
-
-  // Keep focus in the input while the (portaled) list is open, so the user can keep typing.
-  useEffect(() => { if (editing && open) inputRef.current?.focus(); }, [editing, open]);
-
-  // Keyboard navigation over `results` (ported from CreatableSearchSelect's
-  // handleInputKeyDown — the "Método de pago" field and every other generic
-  // FK selector already behave this way; ChipSelect had no keyboard handling
-  // at all until now, mouse-only). -1 = nothing highlighted.
-  const [activeIndex, setActiveIndex] = useState(-1);
-
-  // A fresh open or a changed search resets the highlight — a stale index from
-  // a previous open/query would highlight the wrong option.
-  useEffect(() => {
-    setActiveIndex(-1);
-  }, [open, query]);
-
-  // Keep the highlighted option scrolled into view.
-  useEffect(() => {
-    if (activeIndex < 0) return;
-    const el = dropdownRef.current?.querySelector(`[data-option-index="${activeIndex}"]`);
-    el?.scrollIntoView?.({ block: 'nearest' });
-  }, [activeIndex]);
-
-  const selectResult = (r) => { onChange(r); close(); };
-
-  const handleInputKeyDown = (e) => {
-    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      e.preventDefault();
-      setOpen(true);
-      return;
-    }
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setActiveIndex((i) => Math.min(i + 1, results.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
-        break;
-      case 'Home':
-        if (results.length > 0) { e.preventDefault(); setActiveIndex(0); }
-        break;
-      case 'End':
-        if (results.length > 0) { e.preventDefault(); setActiveIndex(results.length - 1); }
-        break;
-      case 'Enter':
-        if (activeIndex >= 0 && results[activeIndex]) {
-          e.preventDefault();
-          selectResult(results[activeIndex]);
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        close();
-        break;
-      default:
-        break;
-    }
+  const field = useMemo(() => ({ key: testId, id: testId, clearable: true }), [testId]);
+  const handleChange = (id, name, opt) => {
+    if (!id) { onChange(null); return; }
+    onChange(opt ?? { id, name });
   };
-
-  // Radix Popover portals the list to the body and auto-flips on collision, so it is never
-  // clipped by an ancestor's overflow (e.g. the modal body) — unlike an inline dropdown.
   return (
-    <Popover open={!disabled && open} onOpenChange={(v) => { if (!disabled) (v ? setOpen(true) : close()); }} data-testid="Popover__chip">
-      <PopoverAnchor asChild data-testid="PopoverAnchor__chip">
-        <div
-          // `group` is load-bearing, not decoration: SelectorChip's clear (X) is
-          // `opacity-0 group-hover:opacity-100 group-focus-within:opacity-100`, so without a `.group`
-          // ancestor it stays permanently invisible — the X was in the DOM but never shown in ANY
-          // ChipSelect (this modal, GL Item Difference in Editar cuenta, the reconciliation payment
-          // method, ManualStatementModal, PaymentForm, FundsTransferModal). CreatableSearchSelect,
-          // which renders the same chip for the FK pickers in sales-invoice, has always had it.
-          //
-          // The box itself is deliberately the SAME shell CreatableSearchSelect draws for those FK
-          // pickers — shared FIELD_HEIGHT, rounded-lg, token-based shadow, --field-hover fill, the
-          // shared disabled fill/border (no opacity, ETP-5479) and a ring-2/ring-primary focus state. It used to hardcode `h-10 rounded-md` with its own
-          // focus treatment, which made an accounting-concept picker 4px taller and differently
-          // rounded than the plain `Input` sitting right next to it in the same modal row (Importe),
-          // let alone than the equivalent field in every generated window. Height, radius and focus
-          // belong to the density tokens, not to this component.
-          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] ring-2 ring-transparent focus-within:ring-primary ${disabled ? 'border-[hsl(var(--field-disabled-border))] bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed' : 'border-[hsl(var(--border-control))] bg-card hover:bg-[hsl(var(--field-hover))]'}`}
-          onClick={!disabled && showChip ? startEditing : undefined}
-        >
-          {showChip ? (
-            <SelectorChip
-              label={value.name}
-              onClick={startEditing}
-              onClear={() => { onChange(null); close(); }}
-              clearAriaLabel={ui('clear')}
-              testId={`${testId}-chip`}
-              disabled={disabled}
-              data-testid={`${testId}-chip`} />
-          ) : (
-            <input
-              ref={inputRef}
-              // `text-ellipsis` so a placeholder/query wider than a narrow host column
-              // (e.g. a lines table cell) crops with a visible "…" instead of an abrupt
-              // raw cut — matches SelectorChip's own `truncate` on the selected-value label.
-              className="h-full min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
-              value={query}
-              placeholder={placeholder}
-              disabled={disabled}
-              onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-              onFocus={() => !disabled && setOpen(true)}
-              onKeyDown={handleInputKeyDown}
-              role="combobox"
-              aria-expanded={open}
-              data-testid={`${testId}-search`} />
-          )}
-          <ChevronDown className="ml-auto h-4 w-4 flex-none text-muted-foreground" data-testid={`${testId}-chevron`} />
-        </div>
-      </PopoverAnchor>
-      <PopoverContent
-        ref={dropdownRef}
-        align="start"
-        sideOffset={6}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onFocusOutside={(e) => e.preventDefault()}
-        // `z-[600]` overrides the shared PopoverContent's `z-50`. A dropdown has to paint above
-        // whatever opened it, and this one is used inside hosts that stack far higher than 50 —
-        // LifecycleConfirmModal's portal sits at 500 (it has to clear Radix dialogs), which left
-        // the option list rendering BEHIND the card, with only the part overflowing past its bottom
-        // edge visible. 600 clears that host while staying under the app's toast/overlay layers.
-        className="z-[600] max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-control))] bg-card p-1.5 shadow-lg"
-        // Auto-width, non-truncating panel (matches the "Impuesto" line-item selector,
-        // InlineSearchCombo's ETP-4600 behavior): the field itself stays a fixed width,
-        // but the dropdown grows to fit its longest option instead of wrapping a long
-        // BPartner/GL-item name onto multiple lines. `minWidth` keeps it never narrower
-        // than the trigger; `maxWidth` caps it so an extreme outlier can't blow past the
-        // viewport (Radix's own collision/shift handling keeps it on-screen horizontally).
-        style={{ minWidth: 'var(--radix-popover-trigger-width)', width: 'max-content', maxWidth: 'min(420px, 90vw)' }}
-        data-testid={`${testId}-popover`}
-        // Radix Dialog's page-scroll lock (react-remove-scroll) swallows native wheel
-        // scrolling on this body-portalled list even though overflow-auto + a real
-        // maxHeight are correctly set. Bypass it manually — same fix already used by
-        // LookupPicker.jsx and CreatableSearchSelect.jsx for the identical scenario.
-        // Only adjust when `e.defaultPrevented` is already true (react-remove-scroll's
-        // capture-phase listener runs before this bubble-phase handler, so that flag
-        // tells us whether native scroll was actually blocked) — ChipSelect's other
-        // callers are all inside a Dialog today, but if one ever isn't, native
-        // scrolling already works there and adding deltaY on top would double-scroll.
-        onWheel={(e) => {
-          e.stopPropagation();
-          if (e.defaultPrevented) {
-            e.currentTarget.scrollTop += e.deltaY;
-          }
-        }}
-      >
-        {results.length === 0 ? (
-          <div className="px-2.5 py-3 text-sm text-[hsl(var(--muted-foreground))]">—</div>
-        ) : null}
-        {results.map((r, index) => (
-          <button
-            key={r.id}
-            type="button"
-            onClick={() => selectResult(r)}
-            data-testid={`${testId}-option-${r.id}`}
-            data-option-index={index}
-            aria-selected={index === activeIndex}
-            className={`flex w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--page-bg))] ${index === activeIndex || value?.id === r.id ? 'bg-[hsl(var(--page-bg))]' : ''}`}
-          >
-            {r.name}
-          </button>
-        ))}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-export function Note({ children }) {
-  return (
-    <div className="flex items-start gap-2 rounded-lg border border-[hsl(var(--border-subtle))] bg-card px-3 py-2.5 text-xs leading-[17px] text-[hsl(var(--muted-foreground))] [&_b]:font-semibold [&_b]:text-[hsl(var(--foreground))]">
-      {children}
-    </div>
-  );
-}
-
-export function SectionLabel({ children }) {
-  return (
-    <div className="mb-3 mt-[18px] text-xs font-bold uppercase leading-4 tracking-[0.06em] text-[hsl(var(--text-disabled))] first:mt-1.5">
-      {children}
-    </div>
+    <CreatableSearchSelect
+      field={field}
+      value={value?.id ?? ''}
+      displayValue={value?.name || ' '}
+      onChange={handleChange}
+      useLookup={useLookup}
+      placeholderOverride={placeholder}
+      disabled={disabled}
+      data-testid="CreatableSearchSelect__7183e9" />
   );
 }

@@ -17,6 +17,8 @@
 | [NEO Constraints](neo-pending-constraints.md) | UNIQUE constraints applied to ETGO_SF_* tables (2026-04-13) — regression guard against duplicate inserts |
 | [NEO Duplicates Report 2026-04-13](neo-duplicates-report-2026-04-13.md) | Snapshot of spec/entity/field duplicates found on 2026-04-13 (pre-dedupe), plus the 54 AD-label naming cases |
 | [Widget Endpoints Guide](widget-endpoints.md) | How to create widget endpoints: handler pattern, XML registration, frontend `useWidget` hook, response contracts |
+| [Public API (unified reference)](public-api.md) | **Etendo Go Public API**: the three layers (UI flag, `/oauth2/api-keys` credential API, `/api/v1/*` resource API), field selection (`publicApi` curation or window-form default) and generation chain, gateway contract with ETag/If-Match concurrency, capabilities, OpenAPI endpoint matrix, and a validation checklist. |
+| [Public API configuration](public-api-configuration.md) | Step-by-step guide for product cells: publish or hide a field, read-only fields and entities, input-only fields, actions, the platform guarantees, and how to regenerate and verify the manifest. |
 | [Architecture Radar (sf-radar)](architecture-radar.md) | Guide for the sf-radar CLI tool — query and update architecture decisions (optional repo) |
 
 ## Testing
@@ -27,7 +29,7 @@
 | [testing/etendo-test-skill-review.md](testing/etendo-test-skill-review.md) | Where the `dev-assistant:etendo-test` skill conflicts with the test reuse policy, plus the upstream change request |
 | [e2e-testing-guide.md](e2e-testing-guide.md) | E2E testing guide: discover with agent-browser, automate with Playwright |
 | [etp-5045-durable-payment-state.md](etp-5045-durable-payment-state.md) | **ETP-5045 as one summary** (both repos): why payment state moved out of process memory into `ETGO_CHECKOUT_REQUEST` and `ETGO_BILLING_EVENT`, the forward-only checkout lifecycle, the webhook claim and its at-most-once crash window, why check ordering is a security control, the two Stripe credentials, and the `smartbuild` sampledata gap |
-| [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix, plus the ETP-5443 subscription lifecycle (grace anchor, correlation, offline/Test Mode recipes, the two account endpoints) |
+| [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix, plus the ETP-5443 subscription lifecycle (grace anchor, correlation, offline/Test Mode recipes, the two account endpoints) and ETP-5047 (open-row correlation, close on cancel and re-subscription, the lifecycle access matrix, the structured 402 and the `environment-access-enforcement-off` kill switch, disputes as alerts, a canceled customer buying again into a clean environment, matrix SF-STRIPE-LOCAL-21…27), and a §10 happy-flow walkthrough (demo expiry → purchase → billing period → failed renewal → grace → pay → cancel) |
 
 ## Tooling
 
@@ -64,6 +66,7 @@
 | [TDD-anex.md](TDD-anex.md) | API versioning implementation details |
 | [plans/etp-5396-demo-to-pro-prd.md](plans/etp-5396-demo-to-pro-prd.md) | ETP-5396 — Demo-to-PRO product requirements, account billing, trial/grace policy and acceptance criteria; proposed, not implemented |
 | [plans/etp-5396-demo-to-pro-technical-design.md](plans/etp-5396-demo-to-pro-technical-design.md) | ETP-5396 — Final ETP-5045-2 baseline; modular boundaries for new billing/access logic and a thin legacy bridge, without refactoring existing Stripe coupling |
+| [plans/grid-customization-evaluation.md](plans/grid-customization-evaluation.md) | ETP-5834 — Grid customization (resize/reorder/visibility) and saved views: current-state evidence, option matrix (extend vs TanStack vs AG Grid vs MUI X), recommendation, saved-views contract proposal, rollout/rollback; decision PENDING human approval |
 | [conventions.md](conventions.md) | Edge case conventions (13 rules for extraction, validation, DB access) |
 | [decisions-versioning.md](decisions-versioning.md) | Decisions.json versioning system: writing migrations, batch upgrades, FAQ |
 
@@ -80,6 +83,9 @@ backlog it produces. Refresh with the `/mcp-comparison` skill.
 | [mcp-comparison-holded-vs-etendo-go.md](mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md) | Baseline benchmark: architecture contrast, tool/spec inventories, coverage matrix, and each item's `BEFORE`/`AFTER`/`Done when:` specification |
 | [mcp-comparison-post-audit-2026-08-05.md](mcp-evaluation/mcp-comparison-post-audit-2026-08-05.md) | Run report (2026-08-05, `etendo-go-local`): live read + authorized write evidence, defects, IMP-11…IMP-15, M1–M4, and the MARI baseline (28) |
 | [mcp-comparison-post-audit-2026-08-06.md](mcp-evaluation/mcp-comparison-post-audit-2026-08-06.md) | Run report (2026-08-06, `etendo-go-local` + Holded demo): full-coverage run — all 6 probe surfaces closed, M1/M2 re-measured on the frozen 5-task suite, IMP-16…IMP-21, quota re-based 73 → 97, **MARI 28 → 49** |
+| [../mcp-tests/README.md](../mcp-tests/README.md) | **Operator guide of the agentic MCP test harness** (`mcp-tests/`): prerequisites, `make mcp-test` / `mcp-seed` / `mcp-compare` / `mcp-report` / `mcp-stability`, the official-run workflow (re-initialize → seed → compare, twice) and how to read `summary.md` |
+| [plans/2026-09-11-mcp-test-harness-design.md](plans/2026-09-11-mcp-test-harness-design.md) | Harness design and record of what is built: run/compare/summary file formats, metrics, decisions D1–D50, plus Track B (production telemetry, `neo_feedback`) |
+| [plans/2026-10-14-mcp-tests-reproducible-comparison-plan.md](plans/2026-10-14-mcp-tests-reproducible-comparison-plan.md) | ETP-5750 — Reproducible Etendo Go vs Holded comparison: decision rule, fresh environments, "not possible" outcome, slices (S1–S6 built; S7 `okr` suite and S8 official baseline pending), open question 14 (Holded freshness) |
 
 ## Etendo AD Reference
 
@@ -104,10 +110,10 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 
 | Path | Description |
 |------|-------------|
-| [feature-flags.md](feature-flags.md) | **Feature flag reference**: OpenFeature as the app API over a local provider (Mixpanel planned), `useFeatureFlag`, safe defaults, the "visual gating only, never authorization" rule, `VITE_FEATURE_FLAGS`, the single swap point for changing control plane, exposure events, the flag code layout rule, and the tenant upgrade flow |
+| [feature-flags.md](feature-flags.md) | **Feature flag reference**: OpenFeature as the app API, provider order `VITE_FEATURE_FLAGS` → Datadog Feature Flags (ETP-5751) → ConfigCat fallback → safe defaults, `VITE_FLAGS_PROVIDER` and its rollback to ConfigCat, `useFeatureFlag`, safe defaults, the "visual gating only, never authorization" rule, `VITE_FEATURE_FLAGS`, the single swap point for changing control plane, exposure events, the flag code layout rule, and the tenant upgrade flow |
 | [flag-debt.md](flag-debt.md) | **Flag debt scorecard** (`make flag-debt`): scores per-flag technical debt — touch points, missing tests, coverage, TTL overrun, and open items (deferred decisions the flag still carries) — derived from `flags-registry.json`, which is canonical for per-flag paths. Report-only in v0 |
 | [technical-debt-playbook.md](technical-debt-playbook.md) | **How to handle technical debt here** (agent-facing): debt belongs to the feature and the flag is the unit of accounting, so every feature is born behind a flag registered on day one. The taxonomy (4 spec states, `deferredItems`, `$knownGapComment`), the protocols (accepted debt is always a human decision; verify claims by grep pattern; never document a property the code lacks), and the flag lifecycle through retirement. Companion to the `feature-debt` skill |
-| [paid-tenant-infrastructure.md](paid-tenant-infrastructure.md) | **The `tenant-upgrade` feature as one linear narrative** (ETP-4686), self-contained and readable without the code: the product story from free tenant to second productive tenant, the flag architecture on both sides, the paywall contract and plan marker, the debt system through the current scorecard, and the two futures (hosted control plane, real payments) with their preconditions. Snapshot — the canonical sources are named in its header |
+| [paid-tenant-infrastructure.md](paid-tenant-infrastructure.md) | **The `tenant-upgrade` feature as one linear narrative** (ETP-4686), self-contained and readable without the code: the product story from free tenant to second productive tenant, the flag architecture on both sides, the paywall contract and plan marker, what happens after the purchase (grace, blocking, the pay path — ETP-5443/5047), the debt system through the current scorecard, and the two futures (hosted control plane, real payments) with their preconditions. Snapshot — the canonical sources are named in its header |
 
 ## Generated/custom windows
 
@@ -133,6 +139,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | File | Description |
 |------|-------------|
 | [ops/cloudfront-alb-routing.md](ops/cloudfront-alb-routing.md) | CloudFront + ALB routing for the SPA, same-origin `/etendo/*` forwarding, and deployment runbook |
+| [ops/public-api-gateway-deploy.md](ops/public-api-gateway-deploy.md) | Public API gateway manual build and deploy runbook: pinned SHAs, image tag convention, ECR/ECS steps, smoke check, rollback and deployment record |
 | [ops/transactional-email-security.md](ops/transactional-email-security.md) | Transactional email security runbook: secrets, throttle, suppression, kill switches, incident response, and metrics |
 | [ops/copilot-pr-review.md](ops/copilot-pr-review.md) | Copilot-aligned PR review gate: review instructions, deterministic findings, PR comments, and request-changes behavior |
 | [ops/window-doc-freshness.md](ops/window-doc-freshness.md) | Window-specific doc freshness warning: diff-based CI review for `docs/generated-custom-windows/<window>.md` |
@@ -169,7 +176,7 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 | File | Description |
 |------|-------------|
 | [plans/2026-08-27-recurring-billing-and-resource-limits-prd.md](plans/2026-08-27-recurring-billing-and-resource-limits-prd.md) | Recurring monthly billing, configurable resource limits and plan change (ETP-5045/5046/5047/5048/5049/5050/5051/5053) — supersedes the one-off checkout PRD for forward scope. **Draft for team validation** |
-| [plans/2026-09-22-etp-5443-subscription-lifecycle-design.md](plans/2026-09-22-etp-5443-subscription-lifecycle-design.md) | ETP-5443 — Wires Stripe subscription/invoice webhooks into the `EnvironmentAccessPolicy` access decision and gives the account owner a Subscription section on `/account` reaching the Stripe Customer Portal; implements part of the recurring-billing PRD above. **Approved for implementation** |
+| [plans/2026-09-22-etp-5443-subscription-lifecycle-design.md](plans/2026-09-22-etp-5443-subscription-lifecycle-design.md) | ETP-5443 — Wires Stripe subscription/invoice webhooks into the `EnvironmentAccessPolicy` access decision and gives the account owner a Subscription section on `/account` reaching the Stripe Customer Portal; implements part of the recurring-billing PRD above. **Approved for implementation**; storage, correlation and enforcement since extended by ETP-5046/5047 (note at its top) |
 | [plans/2026-09-22-etp-5443-subscription-lifecycle-plan.md](plans/2026-09-22-etp-5443-subscription-lifecycle-plan.md) | ETP-5443 — Task-by-task implementation plan for the design above (pure lifecycle interpretation, webhook correlation, the two account endpoints, API clients, the Subscription section, E2E) |
 | [plans/2026-08-03-etp-4315-attachment-preview-sync.md](plans/2026-08-03-etp-4315-attachment-preview-sync.md) | ETP-4315 — Purchase invoice/goods receipt attachment vs. preview sync: root cause, window inventory, reverse-plan rejection, forward-plan cost, open questions — **investigation in progress** |
 | [plans/completed/2026-03-12/process-and-report-pipeline.md](plans/completed/2026-03-12/process-and-report-pipeline.md) | Process & Report Pipeline — **All 4 phases complete** (processes, reports, form detection, unified entry point) |

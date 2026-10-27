@@ -2095,5 +2095,50 @@
     ],
     "author": "pipeline",
     "date": "2026-09-28"
+  },
+  {
+    "from": "0.53.0",
+    "to": "0.54.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"grandTotalAmount\" property \"form\" changed from \"true\" to \"false\" in frontend (patch)",
+      "Field \"grandTotalAmount\" property \"section\" changed from \"summary\" to \"undefined\" in frontend (additive)",
+      "Field \"summedLineAmount\" property \"form\" changed from \"true\" to \"false\" in frontend (patch)",
+      "Field \"summedLineAmount\" property \"section\" changed from \"summary\" to \"undefined\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-10-15"
+  },
+  {
+    "from": "0.54.0",
+    "to": "0.55.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"listPrice\" property \"gridOrder\" changed from \"4\" to \"5\" in frontend (additive)",
+      "Field \"discount\" property \"gridOrder\" changed from \"5\" to \"6\" in frontend (additive)",
+      "Field \"tax\" property \"gridOrder\" changed from \"6\" to \"7\" in frontend (additive)",
+      "Field \"lineGrossAmount\" property \"gridOrder\" changed from \"7\" to \"8\" in frontend (additive)",
+      "Field \"uOM\" property \"grid\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"uOM\" property \"display\" changed from \"undefined\" to \"tag\" in frontend (additive)",
+      "Field \"uOM\" property \"gridOrder\" changed from \"undefined\" to \"4\" in frontend (additive)",
+      "Field \"uOM\" property \"gridReadOnly\" changed from \"undefined\" to \"true\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-10-19"
+  },
+  {
+    "from": "0.55.0",
+    "to": "0.56.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"paymentTerms\" property \"allowCreate\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"paymentTerms\" property \"createLabelKey\" changed from \"undefined\" to \"paymentTermCreate\" in frontend (additive)",
+      "Field \"paymentTerms\" property \"createTitleKey\" changed from \"undefined\" to \"paymentTermCreateTitle\" in frontend (additive)",
+      "Field \"paymentTerms\" property \"createNamePlaceholderKey\" changed from \"undefined\" to \"paymentTermDaysPlaceholder\" in frontend (additive)",
+      "Field \"paymentTerms\" property \"createSpec\" changed from \"undefined\" to \"payment-term\" in frontend (additive)",
+      "Field \"paymentTerms\" property \"createEntity\" changed from \"undefined\" to \"header\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-10-22"
   }
 ]

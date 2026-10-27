@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, Upload, Trash2 } from 'lucide-react';
+import { MoreVertical, Maximize, Upload, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -133,6 +133,7 @@ export default function UploadedFileViewer({
         <PdfViewer
           url={file.objectUrl}
           toolbarExtra={moreMenu}
+          fitIcon={Maximize}
           onExpand={openLightbox}
           data-testid="PdfViewer__688c6e" />
       )}

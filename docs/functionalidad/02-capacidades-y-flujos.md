@@ -198,16 +198,18 @@ Nota importante: `docs/feature-flags.md` (sección "tenant upgrade flow") y `doc
 
 - **Actor:** Cuenta autenticada, Rama C (ya posee ≥1 tenant, quiere uno adicional pago o convertir el demo).
 - **Superficie:** Formulario `upgrade-checkout` en `UpgradePage.jsx`.
+- **Plan selection (ETP-5049):** the checkout is three steps — Plan → Add-ons → Payment. The plan is chosen on the **Plan** step, one card per plan of `GET /sws/go/plans` (`upgrade-plan-card-<planKey>`; a single plan is preselected, several require a choice). The Payment step only summarizes it read-only (`upgrade-plan-summary`) and the submit sends its `planKey`; if a catalog re-read drops the chosen plan it offers **Choose a plan** (`upgrade-plan-summary-choose`) back to the Plan step. A catalog answering 401 offers **Sign in again** (`upgrade-plans-sign-in-again`). There is no price fallback: `GET /sws/go/billing/offers` is no longer read by the page.
 - **Objetivo:** Obtener una URL de redirect hosteada por Stripe sin que el navegador vea precio/moneda/producto.
 - **Precondiciones:** Token válido; `clientName` no vacío y no ya-propio.
 - **Trigger:** Submit del formulario de checkout.
 - **Flujo principal:**
-  1. `POST /sws/go/checkout/sessions` con `{action:'productive-tenant', upgradeAction, clientName, language}` — **sin precio, moneda ni datos de tarjeta** (asertado por test unitario explícito que verifica que el body NO matchea `/cardNumber|paymentToken|priceId|amount/`).
+  1. `POST /sws/go/checkout/sessions` con `{action:'productive-tenant', upgradeAction, clientName, language, planKey}` (ETP-5046: `planKey` comes from `GET /sws/go/plans`; the server resolves the plan's Stripe price) — **sin precio, moneda ni datos de tarjeta** (asertado por test unitario explícito que verifica que el body NO matchea `/cardNumber|paymentToken|priceId|amount/`).
   2. Backend `handleCheckoutSession` resuelve la cuenta autenticada, exige `clientName` no vacío.
   3. `HostedCheckoutService.createSession(...)`: genera un `requestId` (UUID) server-side, arma `success_url`/`cancel_url` apuntando de vuelta a `/upgrade?checkout=success|cancelled&requestId=...`, y postea **directo a `https://api.stripe.com/v1/checkout/sessions`** (API real de Stripe) con `mode`, `line_items[0][price]` (price ID server-side), `client_reference_id`, `customer_email`, y `metadata` con account_email/client_name/request_id.
   4. Respuesta `{requestId, checkoutUrl, mode}` (HTTP 201): se guarda en `sessionStorage` (nombre/acción/timestamp del tenant pendiente) y el navegador hace `window.location.assign(checkoutUrl)` — **redirect de página completa al dominio de Stripe**.
 - **Variantes / errores observables:**
-  - [Hecho] Config incompleta (`CheckoutConfiguration.isConfigured()` false — falta secret key, price ID o webhook secret) → **HTTP 503 `CHECKOUT_NOT_CONFIGURED`**.
+  - [Hecho] Config incompleta (`CheckoutConfiguration.isConfigured()` false — falta secret key o webhook secret; since ETP-5046 it no longer checks a price id) → **HTTP 503 `CHECKOUT_NOT_CONFIGURED`**. Same answer for an active plan with no provider price id.
+  - [Hecho] ETP-5046: unknown/inactive `planKey`, or `legacy-productive`/no key while the legacy price fallback is inactive → **HTTP 400 `PLAN_NOT_AVAILABLE`**; the page shows `upgradePlanNotAvailable` (reload).
   - [Hecho] Cualquier otro error (Stripe rechaza el request, falla de red) → **HTTP 502 `CHECKOUT_PROVIDER_ERROR`**.
   - [Hecho] Respuesta 2xx sin `checkoutUrl`/`requestId` → frontend lanza error `checkoutUnavailable`.
   - [Hecho] E2E: 503 → se muestra `upgrade-error`, se queda en `upgrade-checkout`, nunca se llama a onboarding.

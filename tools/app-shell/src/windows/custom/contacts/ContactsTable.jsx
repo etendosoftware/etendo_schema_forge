@@ -45,10 +45,15 @@ function TypeBadge({ row, t }) {
 // generic `renderDefaultCell` gives every column, but these columns opt out of
 // it by defining their own `render` (needed for inline editing), which bypasses
 // CELL_RENDERERS entirely (see DataTable.jsx's `renderCellValue`).
-function TextCell({ value, className = '' }) {
+//
+// ETP-5510 — non-first text columns clamp to 2 lines (same as `renderDefaultCell`) so a long
+// address wraps instead of ellipsising on one line; the first column (`lines={1}`) stays on one.
+// The `max-w-[200px]` cap is kept, matching `renderDefaultCell`'s cap for non-grow columns.
+function TextCell({ value, className = '', lines = 2 }) {
   return (
     <TruncatedText
       text={value ?? '—'}
+      lines={lines}
       className={`max-w-[200px] ${className}`.trim()}
       data-testid="TruncatedText__5c74a8" />
   );
@@ -58,6 +63,13 @@ function TextCell({ value, className = '' }) {
  * The website as a link tag (Figma): grey `Tag` look, a link icon, the address without its
  * scheme. Opens in a new tab and stops the click so the row does not navigate to the record.
  * An empty value falls back to the plain text cell, exactly as before.
+ *
+ * ETP-5600 (Figma "Página web" chip): radius md (not the Tag's pill), 16px #828FA3 link icon,
+ * and on hover the #121217 @ 5% overlay (≈ #EAECEE) over the unchanged #F5F7F9, 300ms ease-out.
+ * The Tag paints its colours through an inline `background` shorthand, so the overlay is an
+ * inset box-shadow (drawn above the background, below the content) instead of a second
+ * background layer the inline style would reset; `!rounded-md` likewise has to beat the
+ * inline `borderRadius`.
  */
 function WebsiteCell({ value }) {
   const href = toWebsiteHref(value);
@@ -71,11 +83,14 @@ function WebsiteCell({ value }) {
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
       title={label}
-      className="inline-flex max-w-[200px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+      className="group/web inline-flex max-w-[200px] cursor-pointer rounded-md no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
       data-testid="ContactsTable__websiteLink"
     >
-      <Tag variant="neutral" className="gap-1 max-w-full" data-testid="Tag__5c74a8">
-        <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="Link2__5c74a8" />
+      <Tag
+        variant="neutral"
+        className="gap-1 max-w-full !rounded-md transition-shadow duration-300 ease-out group-hover/web:shadow-[inset_0_0_0_999px_rgba(18,18,23,0.05)]"
+        data-testid="Tag__5c74a8">
+        <Link2 className="h-4 w-4 shrink-0 text-[#828FA3]" aria-hidden="true" data-testid="Link2__5c74a8" />
         <span className="min-w-0 truncate">{label}</span>
       </Tag>
     </a>
@@ -157,7 +172,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('name', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : <TextCell value={row.name} className="font-semibold" data-testid="TextCell__5c74a8" />,
+          : <TextCell value={row.name} lines={1} className="font-semibold" data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoFirstname', column: 'EM_Etgo_Firstname', type: 'string', label: t('firstNameColumn'),

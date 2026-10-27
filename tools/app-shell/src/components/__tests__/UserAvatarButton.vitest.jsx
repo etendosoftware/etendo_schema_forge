@@ -96,6 +96,15 @@ vi.mock('../ChangePasswordDialog.jsx', () => ({
     ) : null,
 }));
 
+// ETP-5734 — the "Mis empresas" entry is gated by a frontend flag. Everything else in
+// `@/lib/flags` stays real; only the evaluation is driven by the test.
+let flagValues = {};
+
+vi.mock('@/lib/flags', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useFeatureFlag: (key) => flagValues[key] ?? false,
+}));
+
 import { UserAvatarButton } from '../UserAvatarButton.jsx';
 import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
@@ -107,6 +116,7 @@ describe('UserAvatarButton', () => {
     localeOverrides = {};
     resetSupportSessionForTests();
     uiTranslations = ROLE_NAME_TRANSLATIONS;
+    flagValues = {};
   });
 
   // ETP-5115. Six tests used to live here, all about a "Change Password" item this menu no longer
@@ -151,6 +161,23 @@ describe('UserAvatarButton', () => {
     await user.click(screen.getByTestId('menu-account'));
 
     expect(navigateMock).toHaveBeenCalledWith('/account');
+  });
+
+  it('hides the My companies entry while its flag is off', () => {
+    render(<UserAvatarButton />);
+
+    expect(screen.queryByTestId('menu-my-companies')).not.toBeInTheDocument();
+  });
+
+  it('offers the My companies entry and opens the page when its flag is on', async () => {
+    const user = userEvent.setup();
+    flagValues = { 'my-companies-page': true };
+
+    render(<UserAvatarButton />);
+    await user.click(screen.getByTestId('menu-my-companies'));
+
+    expect(screen.getByTestId('menu-my-companies')).toHaveTextContent('myCompaniesMenuAction');
+    expect(navigateMock).toHaveBeenCalledWith('/companies');
   });
 
   it('no longer hosts the change password dialog itself', async () => {

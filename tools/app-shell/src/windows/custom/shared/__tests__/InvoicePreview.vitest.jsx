@@ -87,8 +87,8 @@ vi.mock('../useFiscalStatus.js', () => ({
   useFiscalStatus: (...args) => useFiscalStatusMock(...args),
 }));
 
-vi.mock('@/windows/custom/fiscal-monitor/FmPrimitives.jsx', () => ({
-  StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
+vi.mock('../FiscalStatusBadge.jsx', () => ({
+  FiscalStatusBadge: ({ status }) => <span data-testid="fiscal-status-badge">{status}</span>,
 }));
 
 // `importActual` keeps the rest of the real module intact while
@@ -431,23 +431,23 @@ describe('InvoicePreview', () => {
   // ETP-5229 regression: a null status from useFiscalStatus (invoice genuinely
   // never relevant to that fiscal system — e.g. sent under a since-deactivated
   // config that a naive lookup could no longer resolve) must render as a dash
-  // via StatusPill, never a fabricated 'PE'/'Pendiente' default. This proves the
+  // via FiscalStatusBadge, never a fabricated 'PE'/'Pendiente' default. This proves the
   // second half of the bug fix: the call sites in InvoiceGeneralTab no longer
-  // coerce a null siiStatus/tbaiStatus/vfStatus before handing it to StatusPill.
+  // coerce a null siiStatus/tbaiStatus/vfStatus before handing it to FiscalStatusBadge.
   describe('fiscal status badge never defaults a null status to Pendiente (ETP-5229)', () => {
     function fiscalInfoRows() {
       const props = SummaryCard.mock.calls.at(-1)[0];
       return (props.children || []).filter((el) => el?.props?.label);
     }
 
-    function statusPillFor(labelKey) {
+    function statusBadgeFor(labelKey) {
       const row = fiscalInfoRows().find((el) => el.props.label === labelKey);
       return row?.props?.children;
     }
 
     // SII gates on `accountingDate` (not `invoiceDate`) — defaultInvoice has no
     // accountingDate, which would hide the SII InfoRow before this test even
-    // reaches the StatusPill. Add it explicitly so all three rows render.
+    // reaches the FiscalStatusBadge. Add it explicitly so all three rows render.
     const invoiceWithAccountingDate = { ...defaultInvoice, accountingDate: defaultInvoice.invoiceDate };
 
     beforeEach(() => {
@@ -458,30 +458,40 @@ describe('InvoicePreview', () => {
       useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: invoiceWithAccountingDate }));
     });
 
-    it('renders a null SII status as StatusPill with no fabricated estado (not "PE")', () => {
+    it('renders a null SII status as FiscalStatusBadge with no fabricated estado (not "PE")', () => {
       renderInvoicePreview({ specName: 'sales-invoice', invoice: invoiceWithAccountingDate });
-      const pill = statusPillFor('invoicePreview.fiscalStatus.sii');
-      expect(pill).toBeTruthy();
-      expect(pill.props.estado).toBeFalsy();
-      expect(pill.props.estado).not.toBe('PE');
-      expect(pill.props.estado).not.toBe('Pendiente');
+      const badge = statusBadgeFor('invoicePreview.fiscalStatus.sii');
+      expect(badge).toBeTruthy();
+      expect(badge.props.status).toBeFalsy();
+      expect(badge.props.status).not.toBe('PE');
+      expect(badge.props.status).not.toBe('Pendiente');
     });
 
-    it('renders a null TBAI status as StatusPill with no fabricated estado (not "Pendiente")', () => {
+    it('renders a null TBAI status as FiscalStatusBadge with no fabricated estado (not "Pendiente")', () => {
       renderInvoicePreview({ specName: 'sales-invoice', invoice: invoiceWithAccountingDate });
-      const pill = statusPillFor('invoicePreview.fiscalStatus.tbai');
-      expect(pill).toBeTruthy();
-      expect(pill.props.estado).toBeFalsy();
-      expect(pill.props.estado).not.toBe('Pendiente');
+      const badge = statusBadgeFor('invoicePreview.fiscalStatus.tbai');
+      expect(badge).toBeTruthy();
+      expect(badge.props.status).toBeFalsy();
+      expect(badge.props.status).not.toBe('Pendiente');
     });
 
-    it('renders a null VERI*FACTU status as StatusPill with no fabricated estado (not "vf_pending"/"PE")', () => {
+    it('renders a null VERI*FACTU status as FiscalStatusBadge with no fabricated estado (not "vf_pending"/"PE")', () => {
       renderInvoicePreview({ specName: 'sales-invoice', invoice: invoiceWithAccountingDate });
-      const pill = statusPillFor('invoicePreview.fiscalStatus.verifactu');
-      expect(pill).toBeTruthy();
-      expect(pill.props.estado).toBeFalsy();
-      expect(pill.props.estado).not.toBe('vf_pending');
-      expect(pill.props.estado).not.toBe('PE');
+      const badge = statusBadgeFor('invoicePreview.fiscalStatus.verifactu');
+      expect(badge).toBeTruthy();
+      expect(badge.props.status).toBeFalsy();
+      expect(badge.props.status).not.toBe('vf_pending');
+      expect(badge.props.status).not.toBe('PE');
+    });
+
+    // ETP-5700: the detail rows used the fiscal-monitor `StatusPill`, whose `.fm-pill`
+    // styles are only loaded inside the Fiscal Monitor page, so QA saw plain text.
+    it('renders each fiscal status through FiscalStatusBadge (the same chip the grid uses)', () => {
+      useFiscalStatusMock.mockReturnValueOnce({ sii: 'EE', tbai: 'Error', verifactu: 'rejected', loading: false });
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: invoiceWithAccountingDate });
+      expect(statusBadgeFor('invoicePreview.fiscalStatus.sii').props.status).toBe('EE');
+      expect(statusBadgeFor('invoicePreview.fiscalStatus.tbai').props.status).toBe('Error');
+      expect(statusBadgeFor('invoicePreview.fiscalStatus.verifactu').props.status).toBe('rejected');
     });
   });
 
@@ -1131,7 +1141,7 @@ describe('InvoicePreview — Solo-Lectura tier (ETP-5205)', () => {
     renderInvoicePreview(salesProps);
 
     expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
-    expect(screen.queryByText('sendToSif')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^sendToSifLabel/)).not.toBeInTheDocument();
     expect(screen.queryByText('invoicePreviewAddCollection')).not.toBeInTheDocument();
     expect(screen.getByText('invoicePreviewDownloadPdf').closest('button')).toBeEnabled();
     expect(lastAttachmentConfig().readOnly).toBe(true);
@@ -1221,8 +1231,8 @@ describe('InvoicePreview — delivery row (ETP-5549)', () => {
 
   const lastSummaryProps = () => SummaryCard.mock.calls.at(-1)[0];
 
-  function renderWithDelivery(specName, eTGODeliveryStatus) {
-    const inv = { ...defaultInvoice, eTGODeliveryStatus };
+  function renderWithDelivery(specName, eTGODeliveryStatus, extra = {}) {
+    const inv = { ...defaultInvoice, eTGODeliveryStatus, ...extra };
     useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
       displayInvoice: inv,
       isSalesInvoice: specName === 'sales-invoice',
@@ -1260,6 +1270,17 @@ describe('InvoicePreview — delivery row (ETP-5549)', () => {
   ])('passes no deliveryPercent when eTGODeliveryStatus is %s', (_label, value) => {
     renderWithDelivery('sales-invoice', value);
     expect(lastSummaryProps().deliveryPercent).toBeUndefined();
+  });
+
+  // A rectificative has no delivery to track: hidden on sales only; the purchase
+  // "Received" row is deliberately unchanged.
+  it.each([
+    ['sales-invoice', 'RECTIFICATIVA', undefined],
+    ['sales-invoice', 'FAC', 60],
+    ['purchase-invoice', 'RECTIFICATIVA', 60],
+  ])('%s with arInvoiceSubtype %s passes deliveryPercent %s', (specName, arInvoiceSubtype, expected) => {
+    renderWithDelivery(specName, 60, { arInvoiceSubtype });
+    expect(lastSummaryProps().deliveryPercent).toBe(expected);
   });
 
   it('still forwards status and fiscal rows alongside the delivery props', () => {

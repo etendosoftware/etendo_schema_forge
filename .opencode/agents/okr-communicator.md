@@ -1,7 +1,7 @@
 ---
 description: "writer -- HERALD — OKR Communicator. You are HERALD, the OKR Communicator for Etendo GO."
 mode: subagent
-color: "#06B6D4"
+color: "#06b6d4"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/okr-communicator.md - Regenerate: make sync-agents

@@ -59,16 +59,25 @@ echo "==> Running pre-push checks..."
 
 cd "$REPO_DIR"
 
+# The push's ref lines (stdin), read once: the trailer check and the target branch both use them.
+# A manual run from a terminal has none.
+PUSH_REFS=""
+[ -t 0 ] || PUSH_REFS="$(cat)"
+# shellcheck source=lib/target-branch.sh
+. "$SCRIPT_DIR/lib/target-branch.sh"
+
 # ----------------------------------------------------------------------------
 # Hooks-Verified: every commit being pushed must carry a valid trailer, proving
 # the pre-commit hooks were installed and ran for that exact tree.
-# Set HOOKS_VERIFY_SKIP=1 to bypass (e.g. when pushing imported/legacy history).
+# HOOKS_VERIFY_SKIP=1 exists only for maintenance pushes of imported history;
+# CI's verify check applies regardless.
 # ----------------------------------------------------------------------------
 if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
   . "$SCRIPT_DIR/lib/hooks-proof.sh"
   # stdin: <local ref> <local sha> <remote ref> <remote sha>
   UNVERIFIED=""
   while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ -n "$local_sha" ] || continue                                                # no ref lines
     [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue   # branch deletion
     if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
       # New branch: only check commits not already reachable from any remote ref.
@@ -86,7 +95,7 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
         UNVERIFIED="$UNVERIFIED $sha"
       fi
     done
-  done
+  done <<< "$PUSH_REFS"
 
   if [ -n "$UNVERIFIED" ]; then
     echo "❌ ERROR: commits without a valid '${HOOKS_TRAILER_KEY}' trailer:"
@@ -94,8 +103,9 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
       printf '     %s  %s\n' "$(git rev-parse --short "$sha")" "$(git log -1 --format=%s "$sha")"
     done
     echo ""
-    echo "   This means the git hooks were not active when those commits were made"
-    echo "   (or the content changed afterwards)."
+    echo "   They were made without the git hooks, or changed after them (an amend with"
+    echo "   --no-verify, a rebase that resolved a conflict). CI's verify check refuses"
+    echo "   them too."
     # Resolve the exact base so the fix can be copy-pasted instead of derived by
     # hand — reading it off the list above is the step people get wrong.
     REBASE_BASE="$(hooks_rebase_base $UNVERIFIED || true)"
@@ -112,7 +122,6 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
       echo "   (<base> = the parent of the oldest commit listed above; it could not be"
       echo "    resolved automatically here.)"
     fi
-    echo "   Bypass (discouraged): HOOKS_VERIFY_SKIP=1 git push"
     exit 1
   fi
   echo "✔ Hooks-Verified trailer present on all pushed commits."
@@ -125,6 +134,20 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
   echo "   Switch to Node 22 before pushing (e.g. nvm use 22, volta install node@22, etc.)."
   exit 1
 fi
+
+# Local parallelism (ETP-5695). Vitest defaults to one jsdom fork per CPU but one, and the mocked
+# Playwright suite to 4 browsers; next to each other they kept 8-thread laptops at 99% CPU for the
+# whole push. The pre-push gives vitest half the logical CPUs (TEST_WORKERS, read by
+# scripts/test-changed.sh) and the mocked suite at most that many workers. PRE_PUSH_WORKERS sets
+# the share; an exported TEST_WORKERS or E2E_WORKERS still wins. Integration keeps its own default.
+CPUS="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+PRE_PUSH_WORKERS="${PRE_PUSH_WORKERS:-$(( CPUS / 2 > 1 ? CPUS / 2 : 1 ))}"
+export TEST_WORKERS="${TEST_WORKERS:-$PRE_PUSH_WORKERS}"
+MOCKED_E2E_WORKERS="${E2E_WORKERS:-$(( PRE_PUSH_WORKERS < 4 ? PRE_PUSH_WORKERS : 4 ))}"
+# Even half the CPUs left a 12-thread ThinkBook at 97% (ETP-5695): the hook and everything it starts
+# run at nice 10, so the editor and the browser stay responsive and an idle machine loses no time.
+# PRE_PUSH_NICE=0 turns it off.
+renice -n "${PRE_PUSH_NICE:-10}" -p $$ >/dev/null 2>&1 || true
 
 # Path where run-sonar.sh writes a copy-pasteable handoff prompt when the
 # Quality Gate fails. Cleared up-front so a stale file is never shown.
@@ -139,20 +162,25 @@ LAST_FAILED_FILE="$REPO_DIR/tmp/pre-push/last-failed-step"
 # Fail fast: Check for uncommitted or untracked changes
 if [ -n "$(git status --porcelain)" ]; then
   echo "❌ ERROR: You have uncommitted or untracked changes in your working tree."
-  echo "   Please commit or stash them before pushing, or use 'git push --no-verify' to bypass."
+  echo "   Commit or stash them before pushing: the checks below must see what you push."
   echo "   Uncommitted files:"
   git status --porcelain
   exit 1
 fi
 
-# Resolve base branch dynamically at the start
+# Measure everything against the branch this push will merge into (lib/target-branch.sh): the
+# conflict check, the relevance diff, Sonar's base ref and the unit-test selection.
+TARGET_BRANCH="$(target_branch "$(pushed_branch "$PUSH_REFS")")"
+git rev-parse --verify --quiet "origin/$TARGET_BRANCH" >/dev/null \
+  || git fetch --quiet origin "$TARGET_BRANCH" 2>/dev/null || true
 BASE_REF=""
-for branch in "origin/develop" "origin/main"; do
+for branch in "origin/$TARGET_BRANCH" "origin/develop" "origin/main"; do
   if git rev-parse --verify --quiet "$branch" >/dev/null; then
     BASE_REF="$branch"
     break
   fi
 done
+echo "==> Target branch: ${BASE_REF:-none} (PRE_PUSH_TARGET=<branch> overrides it)"
 
 # ----------------------------------------------------------------------------
 # Live progress helpers
@@ -421,59 +449,6 @@ run_domain_boundary_check() {
   fi
 }
 
-# 0. Fetch the base branch and fail fast if this branch conflicts with it.
-# Runs BEFORE the expensive checks so a conflicting branch is rejected quickly.
-check_base_conflicts() {
-  echo "==> Checking for conflicts with base branch (fetch + merge-tree)..."
-
-  # Fetch the latest base branch (prefer develop, then main).
-  local base_branch=""
-  for b in "develop" "main"; do
-    if git fetch --quiet origin "$b" 2>/dev/null; then
-      base_branch="$b"
-      break
-    fi
-  done
-
-  if [ -z "$base_branch" ]; then
-    echo "    SKIPPED ⚠️ (could not fetch any base branch from origin — offline?)"
-    return 0
-  fi
-
-  local base_ref="origin/$base_branch"
-
-  # Tree-level merge check — no working-tree changes (git >= 2.38).
-  local out rc
-  set +e
-  out="$(git merge-tree --write-tree --name-only "$base_ref" HEAD 2>/dev/null)"
-  rc=$?
-  set -e
-
-  if [ "$rc" -eq 0 ]; then
-    echo "    SUCCESS ✅ (merges cleanly into $base_ref)"
-    return 0
-  elif [ "$rc" -eq 1 ]; then
-    # Conflicts. Output is: <tree-oid> on line 1, then conflicted file paths.
-    echo "    FAILED ❌ (conflicts with $base_ref)"
-    echo ""
-    echo "========================================================================="
-    echo "❌ ERROR: This branch has merge conflicts with $base_ref."
-    echo "========================================================================="
-    echo "Conflicting file(s):"
-    echo "$out" | tail -n +2 | sed 's/^/  - /'
-    echo ""
-    echo "👉 Update your branch and resolve the conflicts before pushing:"
-    echo "     git merge $base_ref        # or: git rebase $base_branch"
-    echo "   Then re-run the push (or bypass with 'git push --no-verify')."
-    echo "========================================================================="
-    exit 1
-  else
-    # rc > 1: merge-tree errored or unsupported — warn but don't hard-block.
-    echo "    SKIPPED ⚠️ (merge-tree unavailable or errored, rc=$rc)"
-    return 0
-  fi
-}
-
 # Check that the sibling com.etendoerp.go checkout (used as REGEN_CHECK_PREV_XML_DIR
 # below) has no local commits missing from origin. offline-regen-check.yml resolves
 # its own branch there (exact match, else hotfix/*->main, else->develop) and 
@@ -543,7 +518,6 @@ check_go_module_push_sync() {
   echo "   would disagree."
   echo "👉 Push com.etendoerp.go first, then re-run this push:"
   echo "     git -C etendo_core/modules/com.etendoerp.go push origin $expected_branch"
-  echo "   or bypass with 'git push --no-verify'."
   echo "========================================================================="
   record_failure "com.etendoerp.go not fully pushed (blocks step 4 comparison)"
   STEP_OK=0
@@ -551,7 +525,9 @@ check_go_module_push_sync() {
 }
 
 # ----------------------------------------------------------------------------
-# Playwright E2E tests (MANDATORY) — mocked + integration must pass before push.
+# Playwright E2E tests — mocked must pass before push. Integration specs need the local
+# Etendo backend and run for ~12 min, so they are left to CI's full pipeline (ETP-5695);
+# PRE_PUSH_INTEGRATION=1 runs them here too when they are relevant.
 # ----------------------------------------------------------------------------
 # Delegates to scripts/run-e2e-full.sh (ETP-4883): it owns the whole server
 # lifecycle itself (builds a dedicated no-PWA bundle, serves it with `vite
@@ -562,7 +538,7 @@ check_go_module_push_sync() {
 # so a mocked failure never prevents integration from also running and being
 # reported — same "collect everything, don't stop at the first problem"
 # contract as the rest of this hook.
-# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS. WIP bypass: git push --no-verify.
+# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS.
 # backend_url defaults to the LOCAL environment's own configured context (read from
 # ../config/Openbravo.properties' context.url) rather than a hardcoded /etendo — different
 # developer machines legitimately deploy under different context names (e.g. /etendogoclean).
@@ -594,7 +570,7 @@ run_playwright() {
   local password="${E2E_PASSWORD:-12345}"
   local backend_url="${E2E_BACKEND_URL:-$(resolve_backend_url)}"
 
-  if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
+  if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ] && [ "$PW_INTEGRATION_DEFERRED" != "1" ]; then
     echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"
     record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
     record_summary_row "Playwright — integration" "-" "SKIPPED" ""
@@ -602,7 +578,23 @@ run_playwright() {
   fi
 
   if [ "$RUN_PW_MOCKED" = "1" ]; then
-    run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
+    # Only mocked specs changed: run those, not all of them (the PR's mini pipeline runs the whole
+    # suite). UI source, e2e infrastructure or dependencies still run it whole.
+    local changed_specs spec
+    changed_specs="$(printf '%s\n' "${CHANGED_FILES:-}" | relevance_mocked_specs)"
+    MOCKED_SPECS=""
+    for spec in $changed_specs; do
+      [ -f "$REPO_DIR/$spec" ] && MOCKED_SPECS="$MOCKED_SPECS ${spec#e2e/}"
+    done
+    MOCKED_SPECS="${MOCKED_SPECS# }"
+    if [ -n "$changed_specs" ] && [ -z "$MOCKED_SPECS" ]; then
+      echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (the change only deletes mocked specs)"
+      record_summary_row "Playwright — mocked" "-" "SKIPPED" "only deleted specs"
+    elif [ -n "$MOCKED_SPECS" ]; then
+      run_e2e_suite mocked "mocked specs, only the $(printf '%s\n' $MOCKED_SPECS | wc -l | tr -d ' ') changed" "$password" "$backend_url"
+    else
+      run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
+    fi
   else
     echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"
     record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
@@ -610,6 +602,9 @@ run_playwright() {
 
   if [ "$RUN_PW_INTEGRATION" = "1" ]; then
     run_e2e_suite integration "integration specs" "$password" "$backend_url"
+  elif [ "$PW_INTEGRATION_DEFERRED" = "1" ]; then
+    echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (left to CI's full pipeline; PRE_PUSH_INTEGRATION=1 runs them here)"
+    record_summary_row "Playwright — integration" "-" "SKIPPED" "left to CI (PRE_PUSH_INTEGRATION=1 runs it here)"
   else
     echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (no integration-spec / UI changes)"
     record_summary_row "Playwright — integration" "-" "SKIPPED" ""
@@ -675,7 +670,12 @@ run_e2e_suite() {
   echo "==> Playwright E2E — ${label}..."
   start=$SECONDS
   set +e
-  ( cd "$REPO_DIR" && E2E_SUITE="$suite" E2E_PASSWORD="$password" \
+  # Only the mocked suite gets the local worker cap: integration specs share one admin and one
+  # tenant, so more workers there mean data races (see playwright.config.js).
+  local workers_env="" specs=""
+  [ "$suite" = "mocked" ] && { workers_env="E2E_WORKERS=$MOCKED_E2E_WORKERS"; specs="${MOCKED_SPECS:-}"; }
+  # shellcheck disable=SC2086 # workers_env is empty or a single NAME=value word
+  ( cd "$REPO_DIR" && env $workers_env E2E_MOCKED_SPECS="$specs" E2E_SUITE="$suite" E2E_PASSWORD="$password" \
       E2E_BACKEND_URL="$backend_url" ETENDO_URL="$backend_url" \
       E2E_RETRIES="${retries:-0}" \
       ./scripts/run-e2e-full.sh ) 2>&1 | tee "$log"
@@ -710,7 +710,8 @@ run_e2e_suite() {
   fi
 }
 
-check_base_conflicts
+# 0. Fail fast when the branch no longer merges cleanly into its target (lib/target-branch.sh).
+check_target_conflicts "$TARGET_BRANCH"
 
 # ----------------------------------------------------------------------------
 # Relevance detection — run only the checks a change actually requires.
@@ -751,6 +752,13 @@ else
   echo "==> Relevance: no reliable change set (base='${BASE_REF:-none}') → running ALL checks."
 fi
 
+# Relevant integration specs are left to CI unless PRE_PUSH_INTEGRATION=1 (see run_playwright).
+PW_INTEGRATION_DEFERRED=0
+if [ "$RUN_PW_INTEGRATION" = "1" ] && [ "${PRE_PUSH_INTEGRATION:-0}" != "1" ]; then
+  RUN_PW_INTEGRATION=0
+  PW_INTEGRATION_DEFERRED=1
+fi
+
 # 0. Sync node_modules with package-lock.json (CI parity)
 #
 # CI's "Install dependencies" step runs `npm ci || npm install` against the
@@ -766,6 +774,17 @@ fi
 # caused entirely by a stale core-package pin that only `npm ci` — not a
 # stale local install — would have caught).
 run_step_0() {
+  # Second trigger, independent of the diff: the lockfile can be unchanged vs the
+  # target while the INSTALLED tree is older than it (e.g. develop merged in, its
+  # lockfile bumped a core package, node_modules never reinstalled -> E2E build
+  # and vitest fail on stale packages). Pure JSON compare, fast when in sync.
+  local stale_reason=""
+  if [ "$RUN_S0" != "1" ] && stale_reason="$(node "$REPO_DIR/scripts/check-node-modules-fresh.js" "$REPO_DIR")"; then
+    stale_reason=""
+  elif [ "$RUN_S0" != "1" ]; then
+    echo "==> node_modules is stale vs package-lock.json (${stale_reason:-unknown}) -> running npm ci"
+    RUN_S0=1
+  fi
   if [ "$RUN_S0" != "1" ]; then
     echo "==> [0/5] Syncing npm dependencies (npm ci)... SKIPPED ⏭️  (lockfile unchanged)"
     record_summary_row "Syncing npm dependencies with package-lock.json (npm ci)" "-" "SKIPPED" ""
@@ -774,6 +793,8 @@ run_step_0() {
   # npm ci is a pure function of the lockfile and the node major it installs for.
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" package.json package-lock.json)"
+  # A stale install must reinstall even if this lockfile already passed once.
+  [ -n "$stale_reason" ] && key=""
   run_step "0" "Syncing npm dependencies with package-lock.json (npm ci)" "$REPO_DIR" "tmp/pre-push/npm-ci.log" "npm ci || npm install" "$key"
 }
 
@@ -790,17 +811,61 @@ run_step_1() {
   run_step "1" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid" "$key"
 }
 
+# Test hygiene (reuse-first protocol, docs/testing/test-reuse-policy.md): the same
+# scripts/check-test-hygiene.js the PR's `test-hygiene (reuse-first protocol)` job runs, over
+# the same change set (BASE_REF...HEAD). It takes well under a second and only looks at the
+# changed test files itself, so it is not relevance-gated and never cached. The mode comes from
+# TEST_HYGIENE_MODE in .github/workflows/ratchet-guards.yml, so the hook and CI share ONE switch:
+# `annotate` prints the findings and never blocks; `block` blocks the push exactly when CI would.
+run_test_hygiene() {
+  local name="Running test-hygiene check (reuse-first protocol)"
+  if [ -z "$BASE_REF" ]; then
+    echo "==> $name... SKIPPED ⚠️  (no target branch to diff against)"
+    record_summary_row "$name" "-" "SKIPPED" ""
+    return 0
+  fi
+  local mode out findings status=0 start=$SECONDS duration
+  mode="$(sed -n -E 's/^[[:space:]]*TEST_HYGIENE_MODE:[[:space:]]*([a-z]+).*/\1/p' \
+    "$REPO_DIR/.github/workflows/ratchet-guards.yml" 2>/dev/null | head -n 1)"
+  [ -n "$mode" ] || mode=annotate
+  out="$(cd "$REPO_DIR" && node scripts/check-test-hygiene.js --base "$BASE_REF" --head HEAD --mode "$mode" 2>&1)" || status=$?
+  duration=$(( SECONDS - start ))
+  findings="$(printf '%s\n' "$out" | grep -cE '^::(warning|error)' || true)"
+  if [ "$status" -ne 0 ]; then
+    echo "==> $name... FAILED ❌ (${duration}s, mode: $mode)"
+  elif [ "$findings" -gt 0 ]; then
+    echo "==> $name... ${findings} WARNING(S) ⚠️  (${duration}s, mode: $mode — not blocking)"
+  else
+    echo "==> $name... SUCCESS ✅ (${duration}s)"
+  fi
+  # GitHub annotation lines (`::warning file=F,line=N,title=T::msg`) shown as `F:N [T] msg`.
+  if [ "$findings" -gt 0 ] || [ "$status" -ne 0 ]; then
+    printf '%s\n' "$out" \
+      | sed -E 's/^::(warning|error) file=([^,]*),line=([0-9]+),title=([^:]*)::/   \2:\3 [\4] /; s/^::(warning|error) title=([^:]*)::/   [\2] /'
+  fi
+  if [ "$status" -ne 0 ]; then
+    record_failure "$name"
+    record_summary_row "$name" "$duration" "FAILED" "${findings} finding(s)"
+  else
+    record_summary_row "$name" "$duration" "OK" "${findings} warning(s), mode: ${mode}"
+  fi
+  return 0
+}
+
 # Domain boundary check disabled: repos are now split at the repo level
 # (schema_forge_core vs etendo_schema_forge), so the monorepo cross-domain
 # check no longer applies. Re-enable by uncommenting the call.
 # run_domain_boundary_check
 
 # 2. Run unit tests and SonarQube analysis
-# --fail-on-gate makes run-sonar.sh exit non-zero when the Quality Gate is in
-# ERROR, so this step (and the push) is blocked exactly when CI's gate would fail.
-# --compare-coverage additionally blocks when this branch's OVERALL coverage drops
-# below the base branch's — mirroring Jenkins' "Compare Coverage Results" stage,
-# which the new-code-only Quality Gate does not cover.
+# --coverage-changed runs only the unit tests this branch can affect (make
+# test-changed-coverage → scripts/select-tests.js, ETP-5695) and hands their
+# coverage to Sonar; CI runs the whole suite. --fail-on-gate makes run-sonar.sh
+# exit non-zero when the Quality Gate is in ERROR, so this step (and the push) is
+# blocked exactly when CI's gate would fail. The overall coverage comparison
+# (--compare-coverage) is not run here: with a selection the overall figure always
+# drops. The PR's required "Sonar Build" check runs it over the whole suite, as does
+# Jenkins' "Compare Coverage Results" stage (docs/coverage-gate.md).
 run_step_2() {
   if [ "$RUN_S2" != "1" ]; then
     echo "==> [2/5] Running unit tests and SonarQube analysis... SKIPPED ⏭️  (no source/test/sonar-config changes)"
@@ -809,9 +874,9 @@ run_step_2() {
   fi
   local sonar_cmd
   if [ -n "$BASE_REF" ]; then
-    sonar_cmd="./run-sonar.sh --base-ref \"$BASE_REF\" --coverage --fail-on-gate --compare-coverage"
+    sonar_cmd="./run-sonar.sh --base-ref \"$BASE_REF\" --coverage-changed --fail-on-gate"
   else
-    sonar_cmd="./run-sonar.sh --all-issues --coverage --fail-on-gate --compare-coverage"
+    sonar_cmd="./run-sonar.sh --all-issues --coverage --fail-on-gate"
   fi
   run_step "2" "Running unit tests and SonarQube analysis" "$REPO_DIR" "tmp/pre-push/sonar-and-tests.log" "$sonar_cmd"
 
@@ -822,6 +887,11 @@ run_step_2() {
   local abs_log="$REPO_DIR/tmp/pre-push/sonar-and-tests.log" counts
   counts="$(grep -E '^[[:space:]]*Tests[[:space:]]+[0-9]' "$abs_log" 2>/dev/null | tail -1 \
     | sed -E 's/^[[:space:]]*Tests[[:space:]]+//; s/ \| /, /g; s/\(([0-9]+)\)/(\1 total)/')"
+  # How much of the suite the selection ran, e.g. "314/1386 test files selected".
+  local selected
+  selected="$(grep -E '^select-tests: [0-9]+/[0-9]+ ' "$abs_log" 2>/dev/null | tail -1 \
+    | sed -E 's/^select-tests: ([0-9]+\/[0-9]+) .*/\1 test files selected/')"
+  [ -n "$selected" ] && counts="${selected}${counts:+; vitest: ${counts}}"
   if [ -n "$counts" ] && [ "${#SUMMARY_ROWS[@]}" -gt 0 ]; then
     local last_idx=$(( ${#SUMMARY_ROWS[@]} - 1 )) name dur row_status
     IFS='|' read -r name dur row_status _ <<< "${SUMMARY_ROWS[$last_idx]}"
@@ -895,7 +965,6 @@ process.stdout.write(r.windows.filter(w=>{\
     echo "👉 Either regenerate + commit (make regen ONLY=<window>), or the pinned"
     echo "   core package (@etendosoftware/schema-forge-cli) is missing/behind a"
     echo "   generator feature the committed artifacts already rely on."
-    echo "   Bypass with 'git push --no-verify'."
     echo "========================================================================="
     mkdir -p "$(dirname "$LAST_FAILED_FILE")"
     echo "3" > "$LAST_FAILED_FILE"
@@ -969,6 +1038,7 @@ if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ]; then
 else
   run_step_0
   run_step_1
+  run_test_hygiene
   run_step_2
   run_step_3
   run_step_4
@@ -1021,7 +1091,7 @@ if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
   done
   echo ""
   echo "   Fix everything listed, then re-push (each is re-checked together —"
-  echo "   no need to push once per problem). Bypass with 'git push --no-verify'."
+  echo "   no need to push once per problem)."
   echo "=========================================="
   exit 1
 fi

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * ETP-5281 — `hasDimensionsPanel` must ask "are any dimension FIELDS actually
  * visible", not "does a `dimensionsPanel` COLUMN exist in `columns`".
@@ -66,7 +67,8 @@ vi.mock('../ProductSearchDrawer.jsx', () => ({ default: () => null }));
 // Real predicate (not an always-true stub) — the exclusion of `dimensionsPanel`
 // from the grid-column set is orthogonal to (and must not be confused with)
 // the hiddenColumns-driven gate under test here.
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnMinWidthPx: () => 100,
   columnFlex: () => '1 0 100px',
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',

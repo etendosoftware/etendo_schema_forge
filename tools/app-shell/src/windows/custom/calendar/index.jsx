@@ -4,9 +4,10 @@ import YearPage from '@generated/fiscal-calendar/generated/web/fiscal-calendar/Y
 import AccountingPanel from './AccountingPanel.jsx';
 import PeriodsExpandablePanel from './PeriodsExpandablePanel.jsx';
 import YearCloseStatusBadge from './YearCloseStatusBadge.jsx';
-import YearTableWithCloseStatus from './YearTableWithCloseStatus.jsx';
+import YearTableWithCloseStatus, { CurrentFiscalYearContext } from './YearTableWithCloseStatus.jsx';
 import { useYearCloseStatus } from './useYearCloseStatus.js';
 import { useYearHasPeriods } from './useYearHasPeriods.js';
+import { useCalendarReview } from '@/pages/first-steps/useCalendarReview.js';
 import CloseYearModal from '@/windows/custom/fiscal-calendar/CloseYearModal';
 import UndoCloseYearModal from '@/windows/custom/fiscal-calendar/UndoCloseYearModal';
 
@@ -43,6 +44,15 @@ const CREATE_PERIODS_PROCESS = {
     },
   ],
 };
+
+function withFiscalYearStartDefault(fiscalYearStart) {
+  if (!fiscalYearStart) return CREATE_PERIODS_PROCESS;
+  return {
+    ...CREATE_PERIODS_PROCESS,
+    params: CREATE_PERIODS_PROCESS.params.map((param) => (param.key === 'FISCALYEARSTART'
+      ? { ...param, defaultValue: fiscalYearStart } : param)),
+  };
+}
 
 /**
  * The `calendar` custom window has no backing NEO spec of its own (ETP-4478 rework — the
@@ -81,10 +91,10 @@ function PeriodsExpandablePanelForCalendar(props) {
   );
 }
 
-// `topbarRight` (DetailView.jsx's slot for "right side of detail topbar (replaces status
-// badge)") passes { data, recordId, token, apiBaseUrl, api, onProcess, onRefresh } — `apiBaseUrl`
-// here is DetailView's own base (`.../fiscal-calendar`), so it needs the same rewrite as the
-// secondary-tab panels above to reach the `end-year-close` spec's accounting endpoint.
+// `topbarExtra` (DetailView.jsx's left-group slot, right after Cancel and the status pills — where
+// every document shows its status, ETP-5592) passes { data, recordId, token, apiBaseUrl, api, ... }
+// — `apiBaseUrl` here is DetailView's own base (`.../fiscal-calendar`), so it needs the same
+// rewrite as the secondary-tab panels above to reach the `end-year-close` spec's accounting endpoint.
 function YearCloseStatusBadgeForCalendar(props) {
   return (
     <YearCloseStatusBadge
@@ -132,9 +142,13 @@ export default function CalendarWindow(props) {
   // from outside). While the existence check is still loading (`undefined`) or failed (`null`),
   // default to showing the button — the common case (a not-yet-populated year) — rather than
   // hiding a valid action on a transient fetch hiccup.
+  //
+  // ETP-5577 (H1): the range preselects the start month of the calendar's current fiscal year,
+  // because a new year with a different start would overlap it (the backend answers 409).
+  const { fiscalYearStart, year: currentYear } = useCalendarReview();
   const processesForCalendar = useMemo(
-    () => (hasPeriods === true ? [] : [CREATE_PERIODS_PROCESS]),
-    [hasPeriods]
+    () => (hasPeriods === true ? [] : [withFiscalYearStartDefault(fiscalYearStart)]),
+    [hasPeriods, fiscalYearStart]
   );
 
   const menuActionsForCalendar = useCallback(({ data }) => {
@@ -148,12 +162,12 @@ export default function CalendarWindow(props) {
   }, [closed]);
 
   return (
-    <>
+    <CurrentFiscalYearContext.Provider value={currentYear ?? null}>
       <YearPage
         {...props}
         apiBaseUrl={yearApiBaseUrl}
         secondaryTabs={secondaryTabs}
-        topbarRight={YearCloseStatusBadgeForCalendar}
+        topbarExtra={YearCloseStatusBadgeForCalendar}
         Table={YearTableWithCloseStatus}
         menuActions={menuActionsForCalendar}
         processes={processesForCalendar}
@@ -179,6 +193,6 @@ export default function CalendarWindow(props) {
           onSaved={() => { setUndoCloseYearTarget(null); window.location.reload(); }}
           data-testid="UndoCloseYearModal__5e732c" />
       )}
-    </>
+    </CurrentFiscalYearContext.Provider>
   );
 }

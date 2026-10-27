@@ -6,6 +6,7 @@ export {
   PUBLIC_API_KEYS,
   UNIFIED_CALENDAR_POC,
   IMPORT_BATCH_SIZE,
+  MY_COMPANIES_PAGE,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from './flag-keys.js';

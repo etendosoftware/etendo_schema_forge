@@ -1,8 +1,8 @@
 {
-  "version": "0.38.0",
+  "version": "0.40.0",
   "generatedAt": "2026-07-29T14:51:09.380Z",
-  "updatedAt": "2026-10-07T11:18:34.362Z",
-  "checksum": "3639f70ede02fea4",
+  "updatedAt": "2026-10-15T19:36:08.726Z",
+  "checksum": "a0049898586eb0f6",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -45,10 +45,12 @@
       "summaryFields": [],
       "labelOverrides": {
         "en_US": {
-          "Processed": "Status"
+          "Processed": "Status",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "Processed": "Estado"
+          "Processed": "Estado",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -73,7 +75,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -199,6 +201,7 @@
             "defaultValue": "N",
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -568,7 +571,7 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 4,
+            "gridOrder": 3,
             "grow": true,
             "columnWidth": 192,
             "validation": {
@@ -596,8 +599,8 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
-            "gridOrder": 2,
-            "grow": true,
+            "display": "tag",
+            "gridOrder": 4,
             "gridReadOnly": true,
             "validation": {
               "required": true,
@@ -616,9 +619,10 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 3,
+            "gridOrder": 2,
             "grow": true,
             "columnWidth": 192,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -664,6 +668,7 @@
             "gridOrder": 5,
             "grow": true,
             "columnWidth": 192,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 10
             }
@@ -746,10 +751,12 @@
       "summaryFields": [],
       "labelOverrides": {
         "en_US": {
-          "Processed": "Status"
+          "Processed": "Status",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "Processed": "Estado"
+          "Processed": "Estado",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -773,7 +780,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -1411,10 +1418,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "Processed": "Status"
+        "Processed": "Status",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "Processed": "Estado"
+        "Processed": "Estado",
+        "C_UOM_ID": "Unidad"
       }
     }
   },

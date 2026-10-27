@@ -1,16 +1,16 @@
-import { useState } from 'react';
-import { ArrowUp, ArrowDown, LineChart } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { LineChart } from 'lucide-react';
+import { IconicArrowUpIcon, IconicArrowDownIcon } from '@/components/ui/custom-icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StatusTag } from '@/components/ui/status-tag';
 import { BPChartSVGContent } from './BPChartSVGContent';
 import ContactsPeriodButton from './ContactsPeriodButton';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
-import { formatCurrency } from '@/lib/formatCurrency';
-import { useContactsFinance, useSyncFinanceRecordId } from './ContactsFinanceContext';
+import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency';
+import { useContactsFinance, useSyncFinanceRecordId, PERIOD_MONTHS } from './ContactsFinanceContext';
 
 /* eslint-disable react/prop-types */
-
-const PERIOD_MONTHS = { '3M': 3, '6M': 6 };
 
 // ─── KPI derivation ─────────────────────────────────────────────────────────
 
@@ -18,63 +18,163 @@ function findKpi(stats, key) {
   return Array.isArray(stats) ? stats.find(k => k.key === key) : null;
 }
 
-// Period-aware trend: % change of the last month vs the first month of the
-// selected window (e.g. 3M → Jun vs Apr). Computed from the bp-trend series so
-// it stays consistent with the chart and actually changes with the period.
-// Returns null when the window has fewer than 2 points or the base month is
-// zero / non-finite (no badge is shown in that case).
-function windowTrend(arr, months) {
-  if (!Array.isArray(arr)) return null;
-  const w = arr.slice(-months);
-  if (w.length < 2) return null;
-  const first = w[0];
-  const last = w[w.length - 1];
-  if (!Number.isFinite(first) || first === 0 || !Number.isFinite(last)) return null;
-  const t = ((last - first) / Math.abs(first)) * 100;
+function finiteOr(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// ETP-5600: the variation of a period block compares the two windows bp-stats
+// returns (`months`-aware): `value` = last N calendar months, `previousValue` = the
+// N months before. It is computed HERE from those raw amounts, not read from the
+// backend's `trend`, which bp-stats already rounds to one decimal — rounding that
+// again turned −54.545% into −54.5 and then into −54% (QA pass 2). The ratio is
+// rounded exactly once, by roundPercent. Shown only when the backend reports a
+// previous window (`hasPrevious`) and the ratio is finite — never "0%" / "∞".
+function blockTrend(block) {
+  if (!block?.hasPrevious) return null;
+  const cur = Number(block.value);
+  const prev = Number(block.previousValue);
+  if (!Number.isFinite(cur) || !Number.isFinite(prev) || prev === 0) return null;
+  const t = ((cur - prev) / Math.abs(prev)) * 100;
   return Number.isFinite(t) ? t : null;
 }
 
-function buildKpis(stats, trend, period) {
-  const revenue = findKpi(stats, 'revenueThisMonth');
-  const expenses = findKpi(stats, 'expensesThisMonth');
-  const revVal = revenue?.value ?? 0;
-  const expVal = expenses?.value ?? 0;
-  const months = PERIOD_MONTHS[period] ?? 3;
-  const revArr = trend?.revenue ?? [];
-  const expArr = trend?.expenses ?? [];
-  const netArr = revArr.map((r, i) => (r ?? 0) - (expArr[i] ?? 0));
+/**
+ * The single rounding of a variation: to a whole percent, half away from zero and
+ * symmetric for negatives (−54.5 → −55, 54.5 → 55), unlike `Math.round`, which
+ * rounds −54.5 up to −54. The 1e-9 only absorbs binary floating-point noise in the
+ * raw ratio (54.5 computed as 54.49999999999999); it never moves a real value.
+ */
+function roundPercent(value) {
+  const rounded = Math.round(Math.abs(value) + 1e-9);
+  return value < 0 ? -rounded : rounded;
+}
+
+// Net balance variation, computed client-side from the two blocks:
+// (revCur − expCur) vs (revPrev − expPrev). Hidden when the previous net is 0
+// (no base to compare to); the base uses Math.abs so a negative previous net
+// still yields the real direction of the change.
+function netTrend(revenue, expenses) {
+  if (!revenue?.hasPrevious && !expenses?.hasPrevious) return null;
+  const cur = finiteOr(revenue?.value) - finiteOr(expenses?.value);
+  const prev = finiteOr(revenue?.previousValue) - finiteOr(expenses?.previousValue);
+  if (prev === 0) return null;
+  const t = ((cur - prev) / Math.abs(prev)) * 100;
+  return Number.isFinite(t) ? t : null;
+}
+
+// Amounts are the selected period's totals (bp-stats `revenue` / `expenses`,
+// net of VAT), so they follow the period selector.
+function buildKpis(stats) {
+  const revenue = findKpi(stats, 'revenue');
+  const expenses = findKpi(stats, 'expenses');
+  const revVal = finiteOr(revenue?.value);
+  const expVal = finiteOr(expenses?.value);
   const netVal = revVal - expVal;
   return [
     { key: 'netBalance', labelKey: 'bpNetBalance', value: netVal,
-      trend: netVal === 0 ? null : windowTrend(netArr, months), positiveTone: netVal >= 0 },
+      trend: netTrend(revenue, expenses), positiveTone: netVal >= 0 },
     { key: 'income', labelKey: 'bpRevenue', value: revVal,
-      trend: revVal === 0 ? null : windowTrend(revArr, months), positiveTone: true },
+      trend: blockTrend(revenue), positiveTone: true },
     { key: 'expenses', labelKey: 'bpExpenses', value: expVal,
-      trend: expVal === 0 ? null : windowTrend(expArr, months), positiveTone: false },
+      trend: blockTrend(expenses), positiveTone: false },
   ];
 }
 
 // ─── Trend badge ────────────────────────────────────────────────────────────
 
+// Direction icons: the Figma "Iconic" arrows (24-grid, filled, currentColor), so the
+// arrow takes the chip's text colour (#17663A / #D50B3E).
+const TREND_ICONS = { up: IconicArrowUpIcon, down: IconicArrowDownIcon };
+
+/**
+ * ETP-5600 (QA pass 2) — the largest variation shown in full: up to |9.999| % the
+ * rounded value is printed whole (grouped with the instance thousands separator,
+ * `formatGroupedNumber`). From |10.000| % up only the NUMBER is cut with an
+ * ellipsis, inside a box exactly as wide as the rendered cap ("−9.999%" with the
+ * configured separator); the "vs últimos N meses" suffix stays whole and the full
+ * value is in the tooltip (`title`, as the other contacts components do).
+ *
+ * The box is sized by the browser, not estimated: an invisible in-flow copy of the
+ * cap string gives it its width (same font, inherited), and the real number sits
+ * on top of it, `absolute inset-0 truncate`. `tabular-nums` on both makes every
+ * digit equally wide, so any 4-digit value fits exactly and a 5-digit one always
+ * overflows. (A `ch` max-width did not work: most glyphs are narrower than "0", so
+ * the cap was wider than the real text and nothing was ever cut.)
+ */
+const MAX_FULL_PERCENT = 9999;
+
+/**
+ * Variation chip (Figma "Badge sm", pill, no border): 24px high, 4px/8px padding,
+ * gap 0, 16px icon then Inter 400 12/16 text. Both the ARROW and the COLOUR
+ * follow the SIGN of the change, for every KPI including Expenses (ETP-5600 QA
+ * pass 2): a positive % is green, a negative % red, via the shared StatusTag
+ * success/destructive tones (#EEFBF4/#17663A, #FEF0F4/#D50B3E). The value is
+ * rounded once (roundPercent); a change that rounds to 0% is hidden like a
+ * missing one: a "0%" chip carries no information.
+ */
 function TrendBadge({ trend, period, ui }) {
   if (trend == null) return null;
-  const up = trend >= 0;
-  const vsLabel = period === '3M' ? ui('bpVsLast3Months') : ui('bpVsLast6Months');
-  const Arrow = up ? ArrowUp : ArrowDown;
-  const pct = `${up ? '+' : '−'}${Math.abs(Math.round(trend))}%`;
+  const percent = roundPercent(trend);
+  if (percent === 0) return null;
+  const up = percent > 0;
+  const rounded = Math.abs(percent);
+  const sign = up ? '+' : '\u2212';
+  const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
+  const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
+  const number = `${sign}${formatGroupedNumber(rounded)}%`;
+  const text = `${number} ${vsLabel}`;
+  const capped = rounded > MAX_FULL_PERCENT;
+  // StatusTag (core) does not spread extra props, so the testid lives on a wrapper.
+  // ETP-5600 — the chip may shrink to its column (`min-w-0 max-w-full`, no
+  // `shrink-0`): when even its own line is too narrow, the " vs últimos N meses"
+  // suffix truncates with an ellipsis (the capped number box keeps its width) and
+  // the `title` carries the full text. It never paints over the next KPI.
+  return (
+    <span className="inline-flex min-w-0 max-w-full" data-testid="StatusTag__22ed51">
+      <StatusTag
+        tone={up ? 'success' : 'destructive'}
+        className="h-6 min-w-0 max-w-full overflow-hidden tracking-[-0.005em]"
+        label={(
+          <>
+            <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
+            {capped ? (
+              <span className="flex min-w-0 items-center whitespace-nowrap" title={text} data-testid="contacts-trend-text">
+                <span className="relative inline-block shrink-0 align-top tabular-nums" data-testid="contacts-trend-number">
+                  <span className="invisible" aria-hidden="true" data-testid="contacts-trend-number-cap">
+                    {`${sign}${formatGroupedNumber(MAX_FULL_PERCENT)}%`}
+                  </span>
+                  <span className="absolute inset-0 truncate">{number}</span>
+                </span>
+                {/* nbsp: a leading plain space would collapse at the start of the box. */}
+                <span className="min-w-0 truncate">{`\u00A0${vsLabel}`}</span>
+              </span>
+            ) : (
+              <span className="min-w-0 truncate" title={text} data-testid="contacts-trend-text">{text}</span>
+            )}
+          </>
+        )}
+        data-testid="StatusTag__22ed51" />
+    </span>
+  );
+}
+
+/**
+ * ETP-5600 (QA pass 2) — no previous period to compare with (bp-stats `hasPrevious`
+ * false, or a missing/zero previous value): neutral muted text instead of a chip,
+ * mirroring the dashboard's FinancialSummaryCard (`financial-summary-no-trend`):
+ * the chip's height (24px, 4px vertical padding, 12/16), muted foreground, no pill,
+ * no arrow, ellipsis when it does not fit. No horizontal padding: with no pill
+ * background the chip's 8px would read as an indent when the text wraps below the
+ * amount; beside the amount, the row's `gap-x-2` already provides the 8px.
+ */
+function NoPreviousTrend({ ui }) {
   return (
     <span
-      className="flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-normal whitespace-nowrap"
-      style={{
-        background: up ? 'var(--status-success-bg)' : 'var(--status-destructive-bg)',
-        color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))',
-      }}
+      data-testid="contacts-summary-no-trend"
+      className="flex items-center h-6 py-1 max-w-full min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-xs leading-4 font-normal text-[hsl(var(--muted-foreground))]"
     >
-      <Arrow
-        className="h-4 w-4 shrink-0"
-        style={{ color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))' }}
-        data-testid="Arrow__22ed51" />
-      {`${pct} ${vsLabel}`}
+      {ui('financialSummaryNoPrevious')}
     </span>
   );
 }
@@ -82,17 +182,26 @@ function TrendBadge({ trend, period, ui }) {
 function KpiBlock({ kpi, period, currencyCode, ui }) {
   const valueColor = kpi.positiveTone ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
   return (
-    <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
-      <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] truncate">{ui(kpi.labelKey)}</span>
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-base font-medium leading-6" style={{ color: valueColor }}>
+    // ETP-5600 — narrow widths (e.g. a 1280px viewport): the amount stays on the first
+    // line and, when amount + chip do not fit side by side, the chip (or the
+    // no-previous text) wraps BELOW it, left-aligned (`flex-wrap`, 2px row gap). Wide
+    // screens are unchanged (8px column gap, one line). `overflow-hidden` on the block
+    // is the last guard: nothing ever paints over the next KPI.
+    <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1 overflow-hidden">
+      <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] truncate max-w-full">{ui(kpi.labelKey)}</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 max-w-full" data-testid="contacts-kpi-value-row">
+        <span className="text-base font-medium leading-6 whitespace-nowrap max-w-full truncate" style={{ color: valueColor }}>
           {formatCurrency(currencyCode ?? 'USD', kpi.value)}
         </span>
-        <TrendBadge
-          trend={kpi.trend}
-          period={period}
-          ui={ui}
-          data-testid="TrendBadge__22ed51" />
+        {kpi.trend == null ? (
+          <NoPreviousTrend ui={ui} data-testid="NoPreviousTrend__22ed51" />
+        ) : (
+          <TrendBadge
+            trend={kpi.trend}
+            period={period}
+            ui={ui}
+            data-testid="TrendBadge__22ed51" />
+        )}
       </div>
     </div>
   );
@@ -124,6 +233,7 @@ function ChartLegend({ ui }) {
  */
 function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
   const { locale } = useLocaleSwitch();
+  const contentRef = useRef(null);
 
   const labels = trend?.labels ?? [];
   const revenue = trend?.revenue ?? [];
@@ -143,7 +253,13 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__22ed51">
       <DialogContent
-        className="max-w-[720px] w-full bg-popover text-popover-foreground sm:rounded-md"
+        className="max-w-[720px] w-full bg-popover text-popover-foreground sm:rounded-md focus:outline-none"
+        // ETP-5600 (CP-5): opening the dialog must not land focus on the close X, which
+        // drew a focus ring before any keyboard interaction. Focus moves to the content
+        // itself instead (Radix sets tabIndex=-1) so screen readers land inside the dialog;
+        // `focus:outline-none` keeps the content from drawing a ring of its own.
+        ref={contentRef}
+        onOpenAutoFocus={(e) => { e.preventDefault(); contentRef.current?.focus(); }}
         data-testid="DialogContent__22ed51">
         <DialogHeader data-testid="DialogHeader__22ed51">
           <DialogTitle data-testid="DialogTitle__22ed51">
@@ -194,7 +310,7 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
   if (!data?.id) return null;
 
   const loading = stats === null;
-  const kpis = buildKpis(stats, trend, period);
+  const kpis = buildKpis(stats);
 
   return (
     // ETP-5600 spacing: no top padding (the tabs bar above already has 8px below it) and

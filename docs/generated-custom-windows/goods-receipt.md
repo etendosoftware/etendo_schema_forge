@@ -33,7 +33,7 @@ A user should be able to:
 - Implementation type: custom window override registered in `tools/app-shell/src/windows/registry.js`, built on top of the generated goods-receipt window
 - Window shape: master-child window with a header record (`goodsReceipt`) and child received lines (`goodsReceiptLine`).
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
-- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference. **ETP-5133:** the `product` column is a lookup selector, so it never ellipsizes — it widens to the longest product name of the loaded lines and of the product just picked in the open add-row, and the grid scrolls horizontally on overflow; see the `noTruncate` row in `docs/decisions-reference.md`.
 - **Create a product from the line's product selector (ETP-5254):** the product lookup drawer opened from a line shows a pinned `+ Crear producto` row at the top. It opens a popup that **mounts the Products window itself** — its own form, its own primary tabs and its own **Precio / Costo / Contabilidad / Adjuntos** strip — on a private memory router inside this page, with the app chrome dropped. Nothing is reimplemented, so a tab or field added to the Products window appears here with no change. Saving happens with the window's own `Guardar`; `Completado` then closes the popup and selects the new product in the line. Cancelling before saving leaves the receipt untouched, and Escape closes only the popup — the drawer comes back with the search intact. The line still arrives at **price 0** unless a price is set for the document's tariff, in which case the user types it on the line. The popup creates no cost line: that rule belongs to the Products window, which states and enforces it there (ETP-5245), so a stockable product created here still needs its cost set. The create row is reachable by pointer and Tab, not through the arrow-key ring. Full mechanism, why nesting a router is legal, the seven in-scope specs and the known limitations: `docs/ui-customization.md` section 19.
 - **Preview panel** (`GoodsReceiptPreview.jsx`): rendered via `renderPreview` prop on the generated app. Opens from row selection. Shows document header, a General tab with receipt stats (BP, warehouse, PO link, invoice %, date), a Messages tab, and a History tab, plus an `invoicePreviewEdit` button that opens the record for editing. **Corrected (2026-09):** this doc previously claimed the preview exposed a "Create Invoice" action opening a `ReceiptInvoicePreview` component — that component does not exist in `tools/app-shell/src/windows/custom/goods-receipt/`. The preview panel has no invoice-creation trigger of its own; `Create Invoice` lives on the form-view topbar (`GoodsReceiptActions.jsx`, see below) and, since 2026-09, on the list selection bar (`BulkInvoiceFromReceipt.jsx` — see "Bulk invoice creation from the list"). The PO identifier in the stats panel is a clickable link that closes the preview and navigates to `/purchase-order/:id`. This window does **not** expose any document-email / "send by email" access — the send-document feature is intentionally disabled (`window.sendDocument.enabled = false` in `decisions.json`), so no email action appears on rows, in the preview panel, or in the form action bar (ETP-4372).
 - **ETP-4729 — Eye row quick-action removed**: `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` sets `hideEyeCount` on the list wrapper, so the preview no longer opens from a hover "eye" icon on the row. Goods Receipt is out of scope for the ETP-4729 unified printable-documents work, so its preview remains reachable only by selecting/opening the row, not via that quick-action icon.
@@ -41,7 +41,7 @@ A user should be able to:
 - **Clone result verification (ETP-5547):** clone results are verified per row by the shared `CloneOrderModal` — a clone that cannot be found is shown as a failed row instead of a link. See `docs/ui-customization.md` §3b, "Clone result verification".
 - **Draft status chips** (`GoodsReceiptDraftChips.jsx`): custom chip set shown in the draft-mode banner, providing at-a-glance receipt progress indicators while the document is in draft.
 - **Invoiced progress badge:** the `Invoiced <N>%` badge in `artifacts/goods-receipt/custom/GoodsReceiptDraftChips.jsx` is a thin wrapper over the shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/ProgressFieldBadge.jsx`, rendered with `DocumentStatusPill` and a 16px `ProgressRing` passed through its `icon` prop, tone from `getProgressTone`: 0% neutral, 1-99% neutral, 100% success) as a single label `<Label> <N>%`. It is shown when the document is completed (`documentStatus === 'CO'`), including at 0% (neutral), or in any other status (e.g. a draft) when `invoiceStatus > 0` (`showWhenPositive`); it is hidden otherwise or when `invoiceStatus` is missing (`data-testid="goods-receipt-invoice-badge"` preserved).
-- **Purchase Return Wizard** (`PurchaseReturnWizard.jsx`): 2-step wizard for initiating a purchase return from a completed receipt, launched from the primary "Crear devolución" topbar button (see the Button order entry above — NOT a menu action, correcting a stale claim here). Since ETP-5429 it is a thin wrapper around the shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx` (unified with `ReturnWizard.jsx` on goods-shipment); `createPurchaseReturn` is a confirmed-working live action, verified end-to-end.
+- **Purchase Return Wizard** (`PurchaseReturnWizard.jsx`): single-step dialog (step 2 removed in ETP-5729 — the shared wizard creates the return straight from the lines screen; see `goods-shipment.md` → *Create return — single step*) for initiating a purchase return from a completed receipt, launched from the primary "Crear devolución" topbar button (see the Button order entry above — NOT a menu action, correcting a stale claim here). Since ETP-5429 it is a thin wrapper around the shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx` (unified with `ReturnWizard.jsx` on goods-shipment); `createPurchaseReturn` is a confirmed-working live action, verified end-to-end. Since the ETP-5729 follow-up the shared wizard's quantity column reads «Disponible para devolver» / "Available to return" (`availableToReturn`) instead of «Entregado»: the value is `movementQuantity` from `availableReceiptLines`, i.e. received minus what non-voided returns (drafts included) already hold. The wizard also accepts an optional `linesLoading` prop (loading row / *nothing left to return* empty state); `GoodsReceiptActions.jsx` does not pass it yet, so the purchase dialog renders as before. Open on the Purchase side (reported, not changed): the receipt is refreshed only when the return-result modal is closed, not when the user opens the return, and `return-to-vendor-shipment` writes do not invalidate the cached `goods-receipt` record — the same stale-button pattern fixed for Sales (see `goods-shipment.md` → *Stale shipment after a return*).
 
 In practice, the header behaves like the receipt execution record and the child area behaves like the intake workspace. The custom implementation narrows the visible line table to receipt-focused columns and adds receipt-specific actions for line import and related-document navigation.
 
@@ -75,6 +75,12 @@ No current evidence shows:
 
 Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
 
+## MCP agent actions — ETP-5709
+
+The MCP publishes `documentAction`, `createPurchaseInvoice` and `cloneRecord` for this window (declared by `GoodsReceiptHeaderHandler`). `documentAction` is declared with `docAction` restricted to `CO` (complete the draft receipt/shipment: DR to CO; no void or any other action is offered, and a completed document is corrected with a return). It is declared because AD hides `DocAction` on this window (`IsDisplayed=N`), which made the MCP list it as not invokable although the call works; a declared contract replaces that listing. The SPA posts the same flat `{docAction: 'CO'}` body, and contract validation runs only on the MCP path. `createPurchaseInvoice` takes optional `receiptIds[]` (invoice several receipts of one partner together), optional `priceListId` and optional `lines[{receiptLineId, quantity}]` for partial invoicing, and creates AND completes a purchase invoice in the same call. Source-document preconditions: the source must be completed (`CO`), otherwise the call answers 400 naming the document and its status and creates nothing. A closed (`CL`) source is refused on purpose, not by omission: a closed order has nothing pending (closing sets ordered = delivered) and a closed receipt/shipment is not a supported source; the 400 names the number and the status. This applies to the receipt and to every id of `receiptIds`. The classic `invoicefromshipment` button is redirected to `createPurchaseInvoice`: on a purchase receipt the classic process creates a SALES invoice, does not mark the receipt as invoiced and can report success without creating anything. (`goods-shipment` keeps it: it is the legitimate sales path.) The receipt itself, when generated from a purchase order, uses the draft-aware pending quantity described in the purchase-order guide. `cloneRecord` clones into a NEW DRAFT with a new document number and none of the source's related documents (declared, no parameters; calling it twice creates two copies) The copied lines are reset to not-invoiced (`QtyInvoiced = 0`, `IsInvoiced = N`, in `CloneShipmentHook`): a clone of a fully invoiced document no longer looks invoiced although it has no invoice line. Reference: `modules/com.etendoerp.go/docs/neo-headless.md` (ETP-5709 paragraphs of §4.12.9 and the `actions` table). `createPurchaseInvoice` invoices only the pending quantity of each receipt line (draft invoices count) and answers 400 when nothing is pending, for a single receipt and for `receiptIds` alike; an explicit `lines[{receiptLineId, quantity}]` quantity above what is pending for that line (or for a line with nothing pending) is a 400 naming the line and its pending quantity, never a silent cap.
+
+**Partial invoicing is scoped to the receipt's own lines (ETP-5709).** `createPurchaseInvoice` emits ONE entry per receipt line, bound to that receipt line (`shipmentInOutLine`), at the explicit `lines` quantity or the line's pending quantity. Before this, entries were folded per order line without that binding and the native process replaced them with every not-yet-invoiced receipt line of the order line at full quantity: a receipt lowered to 3 with `lines:[{receiptLineId, quantity:1}]` produced an invoice of 3, and other receipts of the same order line were dragged into the invoice. Now a receipt of 3 with quantity 1 gives an invoice of 1 and other receipts are untouched; the multi-receipt (`receiptIds`) and no-purchase-order paths already honoured `lines`. The SPA bodies (`{priceListId}`, `{receiptIds, priceListId}`) carry no `lines`, so they invoice each line's pending quantity as before. An invoice generated from a receipt cannot have its quantities edited afterwards (reactivating it refuses with "No se puede modificar la cantidad de una línea de factura reactivada que esté relacionada con una línea de albarán"), so a partial quantity has to be given at creation.
+
 ## Gap assessment
 
 - The business semantics suggest that confirming a goods receipt should finalize vendor delivery intake, but the current evidence only proves draft processing is wired through `documentAction=CO`; it does not prove the exact status transitions, stock effects, or downstream accounting effects after confirmation.
@@ -97,7 +103,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 8. Confirm the receipt and verify the document leaves draft status and the draft-only import affordances disappear. Confirm with the "Crear Factura de Compra" toggle left OFF (`goodsReceipt.confirmModal.createInvoiceTitle` — the label no longer carries the "en borrador" suffix this step used to quote; or use a receipt that is already fully invoiced, where the confirm popup only offers registering the movement) and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `goodsReceipt.confirmModal.confirmedTitle` ("Albarán de compra confirmado" / "Goods receipt confirmed") and the page refreshes (ETP-5063). Repeat with the toggle ON and confirm the result modal still appears, listing the created invoice.
 9. Open **Related Documents** and confirm the purchase-order chip routes to `/purchase-order/:id` and invoice chips route to `/purchase-invoice/:id`.
 10. Select two or more draft goods receipts from the list and confirm the bulk action bar shows a `Procesar (N)` button. Open it, confirm the document-action dropdown offers **Confirmar** (`CO`) as its only entry, trigger it, and verify all selected receipts move to completed status and a result toast appears.
-11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 12. Confirm there is **no** document-email access anywhere in this window: no envelope action on a list row hover, no "Enviar" button in the preview panel header, and no email envelope in the form-view action bar. The send-document feature is disabled for this window (ETP-4372).
 13. In the list, select 0, then 1, then 2+ receipts and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/goods-receipt/<id>`. Open a saved receipt and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
 14. Create a receipt from a purchase order confirmed in a non-org currency via the "Manage Receipt" action and confirm the new receipt's Currency field is pre-filled from the order, not the org default.
@@ -115,7 +121,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 - **ETP-5302 — selection-bar button renamed to "Procesar", dropdown option renamed to "Confirmar"**: the floating selection-bar button is now mounted with `labelKey="process"` ("Procesar" / "Process") — the `confirmBulk` key it used before was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. In the same move, `BulkDocumentAction`'s `CO` entry (in both `buildInOutActions` and the default `buildActions`) switched from `labelKey: 'book'` to `labelKey: 'confirm'`, so the dropdown option that completes the document now reads "Confirmar" / "Confirm". The `RE` entry keeps `labelKey: 'reactivate'`. Labels only — the dialog, the per-row `Promise.allSettled` loop, the `documentAction=CO` call and the result toast are untouched. The second selection-bar button added by ETP-5209 (`labelKey="post"`, "Contabilizar") is unaffected.
 - **ETP-5209 — Post reachable from the list, not just form view**: `tools/app-shell/src/windows/custom/goods-receipt/index.jsx`'s `rowQuickActions.menuActions` adds a `{ neoAction: 'post' }` entry to the row-hover kebab, gated on `!posted && processed` (the same gate `menuActionsForForm` already applies to the detail-view kebab). A successful post refreshes the list (`onMenuActionExecuted` bumps `refreshKey`). For bulk, `GoodsReceiptBulkAction` renders a second `BulkDocumentAction` instance (`entity="goodsReceipt"`, `actionMode="neoAction"`, `buildActions={buildPostActions}`, `rowFilter={postRowFilter}`, `labelKey="post"`) alongside the existing CO-only one — `buildPostActions`/`postRowFilter` are exported from `BulkDocumentAction.jsx` and shared across purchase-invoice, sales-invoice, goods-receipt, and goods-shipment. `postRowFilter` is a plain `(row, action, ui) => ...` function (not a `createPostRowFilter(ui)` factory), so it is passed by reference — the `ui` translator is supplied by `BulkDocumentAction`'s own `handleDone` at call time, not by the window wrapper. A row already posted, or not yet processed (completed), is excluded from the bulk run with a translated rejection message (`bulkRowAlreadyPosted` / `bulkRowNotCompleted`). Note: `menuActionsForForm` (passed explicitly to `GeneratedApp`) already overrides whatever `artifacts/goods-receipt/decisions.json → window.menuActions` declares for the form-view kebab — the decisions.json array is not the live source for this window's Post/Unpost gate.
 - **ETP-5302 — bulk "Descontabilizar"**: `GoodsReceiptBulkAction` in `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` now mounts a *third* `BulkDocumentAction` instance (`entity="goodsReceipt"`, `actionMode="neoAction"`, `buildActions={buildUnpostActions}`, `rowFilter={unpostRowFilter}`, `labelKey="unpost"`). `buildUnpostActions(rows)` — exported from `BulkDocumentAction.jsx` — offers `{ value: 'unpost', labelKey: 'unpost' }` only when at least one selected row is posted, so the button does not render otherwise; `unpostRowFilter(row, action, ui)` blocks a not-posted row with `ui('bulkRowNotPosted')`. No backend or i18n work was required: the per-row call is `POST …/{id}/action/unpost` served by `DocumentPostingService`, the same endpoint this window's detail kebab already used, and the `unpost`, `bulkRowNotPosted` and `documentUnposted` keys already existed in all three locale files.
-  - **Why a separate pair from `buildPostActions`/`postRowFilter`:** `sales-invoice` and `purchase-invoice` mount the post pair too and must **not** offer a standalone unpost — on an invoice, reversing the accounting is a step inside Reactivate (`preUnpost`), never an action of its own. Only `goods-receipt` and `goods-shipment`, whose detail kebab already exposes *Descontabilizar*, mount the unpost pair.
+  - **Why a separate pair from `buildPostActions`/`postRowFilter`:** a window opts into the standalone unpost explicitly, and only a window whose detail kebab also declares *Descontabilizar* should mount the unpost pair. ETP-5302 kept `sales-invoice` and `purchase-invoice` out of it on purpose (invoice unposting lived only inside Reactivate, `preUnpost`); ETP-5692 reversed that: both invoice windows now offer a bulk unpost too, through their own CO-gated pair (`buildInvoiceUnpostActions`/`invoiceUnpostRowFilter` in `shared/useInvoiceWindow.js`), leaving this pair unchanged.
   - **Why its own button rather than a second option inside "Contabilizar":** the dropdown sits under a button whose label *is* the action, so *Descontabilizar* offered there would appear under a button reading "Contabilizar" — named as the opposite of what it does. In practice the two buttons are rarely on screen together, since one needs a posted row and the other a processed-not-posted one.
 - **ETP-5302 — bulk actions refetch in place instead of reloading the page**: `ListView.jsx` now hands `refresh` (a stable in-place refetch) to the `bulkActions` slot context, and `BulkDocumentAction` ends with `clearSelection()` → toast → `refresh()`. The old `sessionStorage` + `window.location.reload()` path survives only as a fallback for a host mounted outside `ListView`'s slot. Full contract: `docs/ui-customization.md` §9e.
 - **ETP-5302 — dialog confirm button reads "Aceptar"**: `BulkDocumentAction`'s dialog footer now calls `ui('accept')` instead of `ui('done')`. `done` translates to "Completado", the name of a document *state* shown in this very list's status column, so the button read as though it would mark the documents completed. `accept` is a new key in `en_US.json`, `es_ES.json` and `es_AR.json`; `done` was deliberately left in place because `RecordCreateModal.jsx` still uses it.
@@ -139,7 +145,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
   - `tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx` — shared result modal used after invoice creation from receipt
 - The generated `GoodsReceiptPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
-- **ETP-4032 — Receipt invoice preview modal**: `GoodsReceiptPreview.jsx` now exposes a "Create Invoice" action for completed receipts. `ConfirmResultModal` was extracted to `tools/app-shell/src/components/contract-ui/` and is now shared across goods-receipt, goods-shipment, purchase-order, and sales-order.
+- **ETP-4032 — Receipt invoice preview modal**: `GoodsReceiptPreview.jsx` now exposes a "Create Invoice" action for completed receipts. `ConfirmResultModal` was extracted to `tools/app-shell/src/components/contract-ui/` and is now shared across goods-receipt, goods-shipment, purchase-order, and sales-order (and, since ETP-5674, by every Sales and Purchases flow that creates documents — see the last section).
 - **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`. **Since ETP-5260**, the detail-topbar Copy link button no longer lives in `GoodsReceiptActions.jsx` (`topbarRight`) — it moved to `GoodsReceiptSecondaryActions.jsx` (`topbarSecondary`), left of Save/Confirm, alongside Clone.
 - **ETP-4028 — Currency field**: same `EM_ETGO_CURRENCY_ID` column on `M_InOut` as goods-shipment (shared table). `NeoCommercialDocumentFactory.java` and `CreatePurchaseReturnHandler.java` set `.setEtgoCurrency(...)` on every receipt-creation path. `artifacts/goods-receipt/decisions.json` declares `etgoCurrency` (editable, `defaultExpr: "@C_Currency_ID@"`, locked on `Processed='Y'`) plus `window.labelOverrides`.
 - **ETP-4028 — Currency-filtered imports**: `artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx` and `ImportFromPurchaseInvoiceModal.jsx` fetch the receipt header for `etgoCurrency` and filter candidate documents by matching currency, computing `statusAndBpCandidates` first and then narrowing by currency (so the "excluded by currency" empty state only fires when status/BP-eligible documents exist but none match the currency).
@@ -344,7 +350,7 @@ On a **completed** receipt with no invoice yet, "Crear Factura" opens the shared
 `CreateInvoiceConfirmModal.jsx` ("Gestionar documentos"). Before this fix, clicking "Crear →"
 closed the modal **synchronously** in `handleCreateInvoice` (`GoodsReceiptActions.jsx`) via
 `onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}`
-— the request then ran with no visible UI, and the "Factura de compra creada" result modal only
+— the request then ran with no visible UI, and the "Factura creada" result modal only
 appeared once it resolved. `CreateInvoiceConfirmModal.jsx` already accepted a `loading` prop and
 rendered a spinner + "Procesando…" on its primary button (`loading={creatingInvoice}` was
 already passed here), but it was dead code: the modal unmounted before the loading state could
@@ -643,6 +649,33 @@ Backend: the email send contract and every attachment write answer 403 for this 
 (`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
 Print and Download PDF are deliberately NOT restricted (they only expose readable data).
 
+## Generated-documents popup — ETP-5674
+
+Both results of this window go through the shared `ConfirmResultModal`, which derives its whole
+copy from the doc `type` — the window passes no title, `primary` label, `currency` or amount
+(no `goodsReceipt.confirmModal.confirmedTitle` / `poInvoiceCreated` popup title; the
+`purchaseReturnCreatedTitle` i18n key and the `invoiceResultTitleKey` param were removed):
+
+- **Invoice** — detail **Confirmar** with the invoice toggle ON, post-completion «Crear Factura»
+  (`GoodsReceiptActions.jsx`), list bulk invoice (`BulkInvoiceFromReceipt.jsx`) and row
+  **Confirmar** (`useRowConfirmAction`, `invoiceDocType: 'facturaCompra'`): «Factura creada», one
+  card «Factura de compra · Completada · Nº …», «Cerrar» + «Ver factura».
+- **Purchase return** — the `PurchaseReturnWizard` success is now a `devolucionCompra` doc (it used
+  to be mislabelled `salida`, «Albarán de venta»): «Devolución de compra creada», card «Devolución de
+  compra · Borrador · Nº …», «Cerrar» + «Ver devolución» → `/return-to-vendor-shipment/{id}`.
+
+`onClose` still refreshes the header via `onRefresh` unless the user navigated (ETP-4779).
+`goodsReceipt.confirmModal.confirmedTitle` remains the toast of a confirm that created no
+invoice. Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** Create a purchase return from a completed receipt and verify the popup
+reads «Devolución de compra creada» and «Ver devolución» opens the return-to-vendor shipment. Confirm
+a draft receipt with the invoice toggle ON and verify «Factura creada» with a «Completada» badge and
+no amount.
+
+**Automated evidence.** `tools/app-shell/src/windows/custom/goods-receipt/__tests__/GoodsReceiptActions.vitest.jsx`
+(`purchase return result`).
+
 ## Related documents — form and list preview share one definition — ETP-5539
 
 The form's Related Documents tab (`tools/app-shell/src/windows/custom/goods-receipt/RelatedDocuments.jsx`,
@@ -651,3 +684,108 @@ now a thin wrapper over `RelatedDocumentsSection`) and the preview's `RelatedDoc
 purchase invoices and return-to-vendor shipments (`linkedOrders` / `linkedInvoices` / `linkedReturns`).
 The backend injects these on the detail GET only, so the preview no longer reads them from the list
 row (which left the card empty): it loads the detail record itself. See `docs/ui-customization.md` §7.a.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/goods-receipt/index.jsx` (`HEADER_COLUMNS`) carry the same gate — they are what the list actually renders.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. movida** and before **Cant. pedido**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 3 (all four grid columns now carry an explicit `gridOrder`: product 1, movementQuantity 2, uOM 3, orderQuantity 4)`, `gridReadOnly: true`, `display: "tag"` — it had no visibility declared (`form: false`). The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as the product is chosen: this window's line callout answers `uOM` with an empty object, so the unit is taken from the selected item's `_aux` (`_UOM`, serialised as `UOM(<id>) (name: <name>)`) by `lib/auxReference.js`; the backend then stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft receipt; confirm `Unidad` sits between Cant. movida and Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## Return to vendor from the receipt (`createPurchaseReturn`) — ETP-5711
+
+`createPurchaseReturn` is now declared to MCP by `GoodsReceiptHeaderHandler.actionContracts()` (after
+`createPurchaseInvoice`). Body, both optional: `lines: [{lineId, returnQuantity}]` and `reason` (kept as the
+return's description). **Omit `lines` to return everything still returnable**; with `lines`, exactly those (a line
+listed twice counts both; a `lineId` that is not on the receipt is a 422 `returnLineNotInDocument`). The receipt must
+be completed (422 `sourceNotCompleted`). The return is **always left in draft**; the 201 answers `{id, documentNo,
+documentStatus, lines:[{id, product, productName, returnedQuantity, originalQuantity, sourceLineId}]}` so the linkage
+can be reported. More than is returnable is a 422 `returnQuantityExceedsAvailable` and nothing is created; nothing
+left at all is 422 `nothingLeftToReturn`. The SPA wizard sends explicit lines and is unchanged; a second partial return
+now works. Cap rule and error shape: `return-to-vendor-shipment.md` and neo-headless.md §4.12.32.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Import order lines into a draft goods receipt over MCP — ETP-5713
+
+An agent fills a DRAFT goods receipt from purchase orders, the way the window's "Add from order" modal does, with three declared
+actions on `goodsReceipt` (`GoodsReceiptHeaderHandler` through `ImportOrderLinesIntoInOutHandler`): `availableOrders` lists the
+completed purchase orders of the goods receipt's business partner and currency that still have quantity to receive; `availableOrderLines`
+(`{orderId}`) lists an order's pending lines with their `pendingQuantity`; `importOrderLines`
+(`{orderId, lines?:[{sourceLineId, quantity}]}`) adds them. The `id` of every call is the draft goods receipt.
+`lines` omitted imports everything still pending; given, exactly those lines (a line listed twice counts both).
+
+- **Cap = pending including drafts.** pending = ordered - delivered - what any DRAFT goods receipt (this one included) already
+  holds. More than that on any line is a 422 `importQuantityExceedsPending` (naming the product, the requested and the
+  pending quantity) and **nothing is created**; the same order line can be imported again while it stays under the cap.
+  The order's delivered quantity only moves when the goods receipt is completed, so an import lowers the pending, not the delivered.
+- **Preconditions (422, before anything is written):** the goods receipt must be a draft (`importTargetNotDraft`), the order
+  completed (`importSourceNotCompleted`), of the same business partner (`importBusinessPartnerMismatch`), currency
+  (`importCurrencyMismatch`) and direction (`importDirectionMismatch`). A stockable line needs an active storage bin in
+  the goods receipt's warehouse (`importNoStorageBin`).
+- **Header link.** The goods receipt's `salesOrder` is set when every line it holds comes from that one order (the order's
+  Documents panel finds the goods receipt through it) and left empty when several orders are mixed; a link set by an earlier
+  import is cleared when a second order joins. The answer reports `headerLinked` and `salesOrder`.
+- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
+- The classic `Create Lines From` button is redirected to `importOrderLines` through `MCP_CONFIG`. `createGoodsReceipt` on the purchase order remains the
+  one-step alternative. The spec prompt (`agent-prompts/goods-receipt/spec.md`) describes the flow.
+
+The window itself is unchanged: its modal still posts one line at a time through the lines CRUD (uncapped by the server).
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34.
+
+Discovery and edge cases of the goods receipt import (ETP-5713 review):
+- `availableOrders` is a bounded scan: the 200 most recent completed purchase orders of the partner, client and currency, at most 50 returned. Every `available*` answer carries `hasMore`, `limit` and `scanLimit`; `hasMore:true` means the list may be incomplete (a purchase order not listed can still be imported when its id is known).
+- An over-delivered order line (ordered 5, delivered 7) is neither listed nor imported (its "pending" would be -2); a negative order line keeps its negative pending. The one-step `createGoodsReceipt` shares the underlying factory and still has that flip (follow-up).
+- `headerLinked` / `salesOrder` report the truth: if the header already links purchase order X and the lines come only from purchase order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
+- A goods receipt or purchase order of another client answers 404 exactly like a missing one.
+- The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.
+
+## Which actions apply now, and what the values mean over MCP — ETP-5714
+
+Agents (MCP) no longer have to learn what a goods receipt allows from refusals:
+
+- `etendo_schema(spec, entity, view:"actions", id:<goods receipt id>)` lists every action and, for that record, says `availableNow`
+  (true or false) and, when false, `unavailableReason`; `documentAction` also carries `availableValuesNow`. Unavailable
+  actions stay listed (never hidden). **Advice only**: it never blocks a call; the handlers still validate everything.
+  Without `id` each action shows when it applies (`availableWhen`, `valuesByStatus`).
+- `documentAction` on the record is the document's next default action (what its Process button would run); `--` means none,
+  the document is in a final state.
+- A draft takes `CO` only. A completed goods receipt cannot be reactivated or voided through MCP: `documentAction` offers CO alone, a
+  `docAction` of RE or RC answers 422 saying so, and the document is corrected with a return (`createPurchaseReturn`).
+- Applies to a draft: the import actions. Applies to a completed document: `createPurchaseInvoice`, `createPurchaseReturn`.
+- Response keys the window adds to a record (`invoiceStatus` and `returnStatus` percentages, `linkedInvoices`, `linkedReturns`, `linkedOrders`) are declared, so `fields:[…]` projections do not list them under
+  `unknownFields`.
+- Posting a just-completed document (`post`) can answer **409 `costNotCalculated`** with `retryAfterSeconds: 30`: cost is
+  calculated in the background about every 30 seconds, nothing was posted (`posted` stays as Etendo set it, `NC`), and the same
+  post succeeds a moment later. The SPA reads the same flat `message` / `messageKeys`; REST also sends `Retry-After`.
+- The tool accepts entity names with other capitals (`Header` is routed as `header`), and a refusal keyed 20501 ("Documento ya
+  procesado") carries a hint about reactivation and the actions view.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35. The spec prompt (`agent-prompts/<window>/spec.md`) says the same to the agent.
+
+### Booking the goods receipt over MCP: `post` / `unpost`, never `Posted` — ETP-5714
+
+The goods receipt's accounting is booked with the `post` and `unpost` actions, exactly what the window's Post / Unpost buttons call. They are
+listed in `etendo_schema(view:"actions")`: `post` applies to a completed document that is not posted, `unpost` to a completed one that
+is (`availableNow` says so for a given record). A `post` right after completing can answer **409 `costNotCalculated`** (wait
+`retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
+`Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
+

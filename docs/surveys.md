@@ -438,6 +438,7 @@ carries the score in that case, so there is no overlap between the two events.
 | `source` | Survey id |
 | `score` | Numeric score selected by the user |
 | `orgId` | Selected organization id (if available) |
+| `account_id` | Client-level SaaS tenant id, if available |
 
 ### `survey_shown`
 
@@ -448,6 +449,7 @@ Fired by `useSurveyEngine.checkAndShowSurvey` immediately before setting the act
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id (e.g. `'nps'`, `'csat_order'`) |
 | `orgId` | Selected organization id (if available) |
+| `account_id` | Client-level SaaS tenant id, if available |
 
 ### `survey_responded`
 
@@ -462,6 +464,7 @@ Fired by `useSurveyEngine.handleRespond` when the user submits a score (triggere
 | `hasComment` | Boolean — whether the user typed any feedback text (the text itself is never sent to Mixpanel) |
 | `tags` | Comma-separated tag string (omitted if none selected) |
 | `orgId` | Selected organization id (if available) |
+| `account_id` | Client-level SaaS tenant id, if available |
 
 ### `survey_dismissed`
 
@@ -472,6 +475,7 @@ Fired by `useSurveyEngine.handleDismiss` when the user clicks the close button o
 | `type` | Survey type: `'nps'` or `'csat'` |
 | `source` | Survey id |
 | `orgId` | Selected organization id (if available) |
+| `account_id` | Client-level SaaS tenant id, if available |
 
 **Note:** Clicking the backdrop or close button **after** the thank-you screen has appeared does not fire `survey_dismissed` — `SurveyModal.handleClose` routes through `onDismiss` only when `phase !== 'thanks'`.
 
@@ -647,7 +651,11 @@ to stop identifying individual users to Mixpanel outright, not to hash or otherw
 login. `accountId` (the selected `AD_Org`) was renamed to **`orgId`** in the same change, to
 disambiguate it from the unrelated Client-level `account_id` Mixpanel Group (`group('account_id', …)`
 in `health-events.js`, which is untouched and stays exactly as it was — it identifies the tenant,
-not an individual, and was explicitly out of scope). IP-based geolocation
+not an individual, and was explicitly out of scope). **Update (ETP-5808):** `account_id` is now also
+carried directly as a property on all four survey events themselves (`useSurveyEngine.js`, same
+Client-level id, same null-handling as `health-events.js`'s Group call) — not only set via the
+`health-events.js` Group — since it identifies the tenant rather than an individual, this remains
+within the scope confirmed above. IP-based geolocation
 (`providers/mixpanel.js`), consent gating, and the `identify`/`group`/`groupSet` sanitizer bypass
 remain separate, lower-priority findings from the same audit — still open, tracked there.
 

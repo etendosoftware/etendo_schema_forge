@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx
+// @covers tools/app-shell/src/windows/custom/organization/useActividadesIae.js
 // Vitest component tests for ActividadesIaeSection — the "Actividades del IAE"
 // editable grid in the Organization window (ETP-4975).
 //
@@ -45,8 +47,8 @@ vi.mock('@/components/ui/checkbox', () => ({
 }));
 
 vi.mock('@/components/ui/add-line-button', () => ({
-  AddLineButton: ({ onClick, label, 'data-testid': testId }) => (
-    <button type="button" data-testid={testId} onClick={onClick}>{label}</button>
+  AddLineButton: ({ onClick, label, disabled, 'data-testid': testId }) => (
+    <button type="button" data-testid={testId} onClick={onClick} disabled={disabled}>{label}</button>
   ),
 }));
 
@@ -77,6 +79,7 @@ vi.mock('@/components/contract-ui/CreatableSearchSelect', () => ({
 }));
 
 import ActividadesIaeSection from '../ActividadesIaeSection.jsx';
+import { iaeCapState } from '../useActividadesIae.js';
 
 const API_BASE_URL = '/sws/neo/organization';
 const ORG_ID = 'org-1';
@@ -424,5 +427,85 @@ describe('ActividadesIaeSection — missing-code warning on the default row', ()
     render(<ActividadesIaeSection {...baseProps} />);
     await screen.findByTestId('ActividadesIaeSection__row-row-1');
     expect(screen.queryByTestId('TriangleAlert__iaeMissingCode')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Modelo 390 cap — 1 main + 5 others (the classic generator fails beyond that)
+// ---------------------------------------------------------------------------
+
+describe('ActividadesIaeSection — Modelo 390 cap (1 main + 5 others)', () => {
+  const rowsOf = (n, { defaults = 1 } = {}) => Array.from({ length: n }, (_, i) => ({
+    id: `row-${i}`, default: i < defaults, epgrafeIAE: `e${i}`,
+  }));
+
+  it('computes the cap state from the main / other split', () => {
+    expect(iaeCapState(rowsOf(5))).toEqual({ atCap: false, overCap: false });
+    expect(iaeCapState(rowsOf(6))).toEqual({ atCap: true, overCap: false });
+    expect(iaeCapState(rowsOf(6, { defaults: 0 }))).toEqual({ atCap: true, overCap: true });
+    expect(iaeCapState(rowsOf(8))).toEqual({ atCap: true, overCap: true });
+    expect(iaeCapState(undefined)).toEqual({ atCap: false, overCap: false });
+  });
+
+  it('keeps "Añadir" enabled below the cap', async () => {
+    global.fetch = makeFetchMock({ rows: rowsOf(5) });
+    render(<ActividadesIaeSection {...baseProps} />);
+    await screen.findByTestId('ActividadesIaeSection__row-row-4');
+    expect(screen.getByTestId('ActividadesIaeSection__addButton')).not.toBeDisabled();
+    expect(screen.queryByTestId('ActividadesIaeSection__capHint')).not.toBeInTheDocument();
+  });
+
+  it('disables "Añadir" with a hint at 1 main + 5 others', async () => {
+    global.fetch = makeFetchMock({ rows: rowsOf(6) });
+    render(<ActividadesIaeSection {...baseProps} />);
+    await screen.findByTestId('ActividadesIaeSection__row-row-5');
+    expect(screen.getByTestId('ActividadesIaeSection__addButton')).toBeDisabled();
+    expect(screen.getByTestId('ActividadesIaeSection__capHint')).toHaveTextContent('orgIaeCapHint');
+    expect(screen.queryByTestId('ActividadesIaeSection__overCapWarning')).not.toBeInTheDocument();
+  });
+
+  it('shows every existing row plus a warning when an organization is already over the cap', async () => {
+    global.fetch = makeFetchMock({ rows: rowsOf(8) });
+    render(<ActividadesIaeSection {...baseProps} />);
+    await screen.findByTestId('ActividadesIaeSection__row-row-7');
+    expect(screen.getAllByTestId(/^ActividadesIaeSection__row-/)).toHaveLength(8);
+    expect(screen.getByTestId('ActividadesIaeSection__overCapWarning')).toHaveTextContent('orgIaeOverCapWarning');
+    expect(screen.getByTestId('ActividadesIaeSection__addButton')).toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AEAT IAE heading search link (Epígrafe column header)
+// ---------------------------------------------------------------------------
+
+describe('ActividadesIaeSection — AEAT IAE heading search link', () => {
+  it('links to the AEAT IAE search in a new tab, without opener or referrer', async () => {
+    global.fetch = makeFetchMock({ rows: [] });
+    render(<ActividadesIaeSection {...baseProps} />);
+
+    const link = await screen.findByTestId('ActividadesIaeSection__epigraphSearchLink');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', 'https://sede.agenciatributaria.gob.es/Sede/buscador-iae.html');
+    expect(link).toHaveAttribute('target', '_blank');
+    const rel = link.getAttribute('rel').split(/\s+/);
+    expect(rel).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
+  });
+
+  it('shows a translated text and a translated accessible name', async () => {
+    global.fetch = makeFetchMock({ rows: [] });
+    render(<ActividadesIaeSection {...baseProps} />);
+
+    const link = await screen.findByTestId('ActividadesIaeSection__epigraphSearchLink');
+    expect(link).toHaveTextContent('orgIaeEpigraphSearchLink');
+    expect(link).toHaveAttribute('aria-label', 'orgIaeEpigraphSearchLinkAria');
+    expect(screen.getByRole('link', { name: 'orgIaeEpigraphSearchLinkAria' })).toBe(link);
+  });
+
+  it('sits in the Epígrafe column header, also while the grid is still loading', () => {
+    global.fetch = vi.fn(() => new Promise(() => {}));
+    render(<ActividadesIaeSection {...baseProps} />);
+
+    const link = screen.getByTestId('ActividadesIaeSection__epigraphSearchLink');
+    expect(link.closest('th')).toHaveTextContent('orgIaeEpigraphLabel');
   });
 });

@@ -144,6 +144,12 @@ describe('OcrSidePanel — OCR reader gating', () => {
     expect(screen.queryByTestId('ocr-uploader')).toBeNull();
     expect(screen.queryByText('ocrSidePanelTitle')).toBeNull();
   });
+
+  it('never mounts the OCR reader for a read-only role, even on a new record (ETP-5830)', () => {
+    render(<OcrSidePanel {...defaultProps} isNew readOnly />);
+    expect(screen.queryByTestId('ocr-uploader')).toBeNull();
+    expect(screen.queryByText('ocrSidePanelTitle')).toBeNull();
+  });
 });
 
 /**
@@ -176,12 +182,13 @@ describe('OcrSidePanel — the document slot', () => {
     expect(screen.queryByText('ocrSidePanelNoAttachments')).toBeNull();
   });
 
-  it('renders a PDF slot file in the PdfViewer, with the attach action still available', async () => {
+  it('renders a PDF slot file in the PdfViewer, with no file-name header above it', async () => {
     hookState = withFile({ attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' });
     render(<OcrSidePanel {...defaultProps} />);
 
-    expect(screen.getByText('supplier.pdf')).toBeInTheDocument();
-    expect(screen.getByText('ocrSidePanelAttach')).toBeInTheDocument();
+    // ETP-5518: the StoredFileHeader (file name + attach button) is gone; replace/delete live in the menu.
+    expect(screen.queryByText('supplier.pdf')).toBeNull();
+    expect(screen.queryByText('ocrSidePanelAttach')).toBeNull();
     await waitFor(() => expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument());
   });
 
@@ -272,14 +279,16 @@ describe('OcrSidePanel — drag and drop', () => {
   });
 });
 
-describe('OcrSidePanel — re-attach button', () => {
-  it('clicking the re-attach button opens the hidden file input', () => {
+describe('OcrSidePanel — re-attach through the viewer menu', () => {
+  it('choosing Replace in the menu opens the hidden file input', async () => {
     hookState = withFile({ attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' });
     const { container } = render(<OcrSidePanel {...defaultProps} />);
     const input = fileInput(container);
     const clickSpy = vi.spyOn(input, 'click');
 
-    fireEvent.click(screen.getByText('ocrSidePanelAttach'));
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId('file-viewer-more'));
+    await user.click(await screen.findByTestId('file-viewer-replace'));
 
     expect(clickSpy).toHaveBeenCalled();
   });
@@ -303,7 +312,7 @@ describe('ReadOnlyOcrSidePanel (ETP-5205)', () => {
 
     const { container } = render(<ReadOnlyOcrSidePanel {...defaultProps} />);
 
-    expect(screen.getByText('scan.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('scan.pdf')).toBeNull();
     expect(screen.queryByText('ocrSidePanelAttach')).not.toBeInTheDocument();
     expect(fileInput(container)).toBeNull();
   });
@@ -398,7 +407,7 @@ describe('OcrSidePanel — file actions (ETP-5518)', () => {
 
       expect(deleteCalls).toBe(1);
       expect(unhandled).not.toHaveBeenCalled();
-      expect(screen.getByText('supplier.pdf')).toBeInTheDocument();
+      expect(screen.queryByText('supplier.pdf')).toBeNull();
       expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument();
     } finally {
       process.off('unhandledRejection', unhandled);

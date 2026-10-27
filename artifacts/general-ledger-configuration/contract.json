@@ -1,7 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.11.0",
   "generatedAt": "2026-09-22T13:50:52.147Z",
-  "checksum": "04c23c3673ef8af1",
+  "updatedAt": "2026-10-22T17:04:30.310Z",
+  "checksum": "0a09095ef98a6893",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -725,24 +726,6 @@
             "section": "closing",
             "validation": {
               "maxLength": 32
-            }
-          },
-          {
-            "name": "suspenseErrorUse",
-            "apiKey": "suspenseErrorUse",
-            "column": "UseSuspenseError",
-            "label": "Suspense Error Use",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "section": "suspense",
-            "validation": {
-              "required": true,
-              "maxLength": 1
             }
           },
           {
@@ -2108,7 +2091,7 @@
             "apiKey": "suspenseErrorUse",
             "column": "UseSuspenseError",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -3074,13 +3057,19 @@
       "Cuentas generales": {
         "get": true,
         "getById": true,
-        "post": true,
+        "post": false,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
         "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "PUT",
+          "PATCH"
+        ]
       },
       "Valores por defecto": {
         "get": true,
@@ -3930,14 +3919,6 @@
         "description": "Field 'suspenseBalancingUse' should be present in Cuentas generales"
       },
       {
-        "id": "t-field-presence-Cuentas-generales-suspenseErrorUse",
-        "category": "field-presence",
-        "entity": "Cuentas generales",
-        "field": "suspenseErrorUse",
-        "runner": "node",
-        "description": "Field 'suspenseErrorUse' should be present in Cuentas generales"
-      },
-      {
         "id": "t-field-presence-Dimensiones-accountElement",
         "category": "field-presence",
         "entity": "Dimensiones",
@@ -4480,14 +4461,6 @@
         "field": "suspenseBalancingUse",
         "runner": "node",
         "description": "Field 'suspenseBalancingUse' should have type 'boolean' in Cuentas generales"
-      },
-      {
-        "id": "t-field-type-Cuentas-generales-suspenseErrorUse",
-        "category": "field-type",
-        "entity": "Cuentas generales",
-        "field": "suspenseErrorUse",
-        "runner": "node",
-        "description": "Field 'suspenseErrorUse' should have type 'boolean' in Cuentas generales"
       },
       {
         "id": "t-field-type-Dimensiones-accountElement",
@@ -5769,6 +5742,14 @@
         "description": "System field 'suspenseError' should exist in backend but not frontend for Cuentas generales"
       },
       {
+        "id": "t-system-field-Cuentas-generales-suspenseErrorUse",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "suspenseErrorUse",
+        "runner": "node",
+        "description": "System field 'suspenseErrorUse' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
         "id": "t-system-field-Cuentas-generales-updated",
         "category": "system-field",
         "entity": "Cuentas generales",
@@ -6422,24 +6403,24 @@
       }
     ],
     "summary": {
-      "total": 361,
+      "total": 360,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 4,
         "default-value-type": 4,
         "displaylogic-evaluable": 14,
         "displaylogic-valid": 14,
-        "field-presence": 69,
-        "field-type": 69,
+        "field-presence": 68,
+        "field-type": 68,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
         "selector-endpoint": 56,
-        "system-field": 89,
+        "system-field": 90,
         "visibility": 4
       },
       "byRunner": {
-        "node": 361,
+        "node": 360,
         "junit": 0
       }
     }

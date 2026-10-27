@@ -49,6 +49,12 @@ vi.mock('@/hooks/useGuardedNavigate.js', () => ({
   default: () => navigateMock,
 }));
 
+// ETP-5577 — the calendar review panel's "Ver guía". Unavailable unless a test says otherwise.
+const walkthrough = vi.hoisted(() => ({ available: false, launch: vi.fn() }));
+vi.mock('@/lib/walkthrough/useLaunchWalkthrough.js', () => ({
+  useLaunchWalkthrough: () => ({ canLaunch: () => walkthrough.available, launch: walkthrough.launch }),
+}));
+
 const hookState = vi.hoisted(() => ({ value: null }));
 vi.mock('@/pages/first-steps/FirstStepsContext.jsx', () => ({
   useFirstStepsState: () => hookState.value,
@@ -64,6 +70,7 @@ import {
   visibleFirstSteps,
 } from '@/pages/first-steps/firstStepsConfig.js';
 import { demoDataTransferStepState } from '@/pages/first-steps/demoDataTransferStep.js';
+import { calendarReviewStepState } from '@/pages/first-steps/calendarReviewStep.js';
 
 const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
 
@@ -80,7 +87,7 @@ const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
  */
 function setHook({ completed = [], loading = false, error = null, toggleResult = true,
   plan = PLAN_PRODUCTIVE, dismissed = false, dismissResult = true,
-  dataTransfer = {} } = {}) {
+  dataTransfer = {}, calendarReview = {} } = {}) {
   const toggleStep = vi.fn(async () => toggleResult);
   const markSeen = vi.fn(async () => true);
   const setDismissed = vi.fn(async () => dismissResult);
@@ -95,6 +102,17 @@ function setHook({ completed = [], loading = false, error = null, toggleResult =
     ...dataTransfer,
   };
   const demoDataTransfer = demoDataTransferStepState(transfer);
+  // ETP-5577 — defaults to a tenant without the review marker: no calendar row.
+  const review = {
+    required: false,
+    reviewed: false,
+    loading: false,
+    canRegenerate: true,
+    confirm: vi.fn(async () => ({})),
+    regenerate: vi.fn(async () => ({})),
+    ...calendarReview,
+  };
+  const calendarReviewStep = calendarReviewStepState(review);
   hookState.value = {
     completed,
     seen: false,
@@ -105,13 +123,15 @@ function setHook({ completed = [], loading = false, error = null, toggleResult =
     markSeen,
     setDismissed,
     plan,
-    steps: visibleFirstSteps(plan, demoDataTransfer),
-    completedCount: countCompletedSteps(completed, plan, demoDataTransfer),
-    total: firstStepsTotal(plan, demoDataTransfer),
+    steps: visibleFirstSteps(plan, demoDataTransfer, calendarReviewStep),
+    completedCount: countCompletedSteps(completed, plan, demoDataTransfer, calendarReviewStep),
+    total: firstStepsTotal(plan, demoDataTransfer, calendarReviewStep),
     dataTransfer: transfer,
     demoDataTransfer,
+    calendarReview: review,
+    calendarReviewStep,
   };
-  return { toggleStep, markSeen, setDismissed, dataTransfer: transfer };
+  return { toggleStep, markSeen, setDismissed, dataTransfer: transfer, calendarReview: review };
 }
 
 beforeEach(() => {
@@ -306,6 +326,116 @@ describe('FirstStepsPage — demo-to-productive data transfer', () => {
     await user.click(screen.getByTestId('first-steps-title-demo-data-transfer'));
     await user.click(screen.getByTestId('first-steps-data-transfer-retry'));
     expect(toastMock.error).toHaveBeenCalledWith('genericError');
+  });
+});
+
+describe('FirstStepsPage — accounting calendar review (ETP-5577)', () => {
+  const PENDING = {
+    required: true,
+    year: '2026',
+    startDate: '2026-01-01',
+    endDate: '2026-12-31',
+    periodCount: 12,
+    fiscalYearStart: 'JULY',
+  };
+  const openRow = async (user) => {
+    render(<FirstStepsPage />);
+    await user.click(screen.getByTestId('first-steps-title-calendar-review'));
+  };
+
+  it('is absent for a tenant without the review marker', () => {
+    render(<FirstStepsPage />);
+    expect(screen.queryByTestId('first-steps-step-calendar-review')).not.toBeInTheDocument();
+  });
+
+  it('shows the summary and no completion checkbox while the review is pending', async () => {
+    const user = userEvent.setup();
+    setHook({ calendarReview: PENDING });
+    await openRow(user);
+    expect(screen.getByTestId('first-steps-calendar-review-summary'))
+      .toHaveTextContent('firstStepsCalendarReviewSummary');
+    expect(screen.queryByTestId('first-steps-toggle-calendar-review')).not.toBeInTheDocument();
+  });
+
+  it('re-reads the review state on every visit (a period opened in Calendar completes it)', () => {
+    const refresh = vi.fn();
+    setHook({ calendarReview: { ...PENDING, refresh } });
+    render(<FirstStepsPage />);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirms, then sends the user to Calendar to open periods', async () => {
+    const user = userEvent.setup();
+    const { calendarReview } = setHook({ calendarReview: PENDING });
+    await openRow(user);
+    await user.click(screen.getByTestId('first-steps-calendar-review-confirm'));
+    expect(calendarReview.confirm).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/calendar'));
+  });
+
+  it('regenerates with the chosen start month', async () => {
+    const user = userEvent.setup();
+    const { calendarReview } = setHook({ calendarReview: PENDING });
+    await openRow(user);
+    await user.click(screen.getByTestId('first-steps-calendar-review-modify'));
+    await user.click(screen.getByTestId('first-steps-calendar-review-apply'));
+    expect(calendarReview.regenerate).toHaveBeenCalledWith('JULY');
+  });
+
+  it('explains a calendar already in use instead of offering Modify', async () => {
+    const user = userEvent.setup();
+    setHook({ calendarReview: { ...PENDING, canRegenerate: false } });
+    await openRow(user);
+    expect(screen.getByTestId('first-steps-calendar-review-modify')).toBeDisabled();
+    expect(screen.getByTestId('first-steps-calendar-review-locked'))
+      .toHaveTextContent('firstStepsCalendarReviewInUse');
+  });
+
+  it('translates a 409 refusal and stays on the page', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.fn(async () => { throw Object.assign(new Error('in use'), { status: 409 }); });
+    setHook({ calendarReview: { ...PENDING, confirm } });
+    await openRow(user);
+    await user.click(screen.getByTestId('first-steps-calendar-review-confirm'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('firstStepsCalendarReviewInUse'));
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not call a classified non-"in use" 409 an in-use calendar (ETP-5782)', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.fn(async () => {
+      throw Object.assign(new Error('busy'), { status: 409, code: 'retryable_conflict' });
+    });
+    setHook({ calendarReview: { ...PENDING, confirm } });
+    await openRow(user);
+    await user.click(screen.getByTestId('first-steps-calendar-review-confirm'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('genericError'));
+  });
+
+  it('offers the Calendar tour when it is available, and starts it', async () => {
+    const user = userEvent.setup();
+    walkthrough.available = true;
+    setHook({ calendarReview: PENDING });
+    await openRow(user);
+    await user.click(screen.getByTestId('first-steps-calendar-review-view-guide'));
+    expect(walkthrough.launch).toHaveBeenCalledWith('accounting-calendar');
+    walkthrough.available = false;
+  });
+
+  it('hides the tour button when the tour is not available', async () => {
+    const user = userEvent.setup();
+    setHook({ calendarReview: PENDING });
+    await openRow(user);
+    expect(screen.queryByTestId('first-steps-calendar-review-view-guide')).not.toBeInTheDocument();
+  });
+
+  it('reads as done, with only the way to Calendar, once reviewed', async () => {
+    const user = userEvent.setup();
+    setHook({ calendarReview: { ...PENDING, reviewed: true } });
+    await openRow(user);
+    expect(screen.getByTestId('first-steps-done-calendar-review')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-calendar-review-confirm')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-calendar-review-open-calendar')).toBeInTheDocument();
   });
 });
 

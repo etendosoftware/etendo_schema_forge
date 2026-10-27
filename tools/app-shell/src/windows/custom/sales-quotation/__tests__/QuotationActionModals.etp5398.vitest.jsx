@@ -11,7 +11,15 @@
 // The modals live in artifacts/sales-quotation/custom/ (outside vitest's src/** include), so
 // they are imported through the @generated alias like the window wrapper does.
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+// Every key echoes itself, except the backendError.* sentences, which resolve against es_ES so
+// the exchange-rate refusals can be asserted as the user reads them.
+vi.mock('@/i18n', async () => {
+  const es = (await import('@/locales/es_ES.json')).default.genericLabels;
+  const ui = (key, params = {}) => (key.startsWith('backendError.')
+    ? Object.entries(params).reduce((text, [p, v]) => text.replace(`{${p}}`, v), es[key] ?? key)
+    : key);
+  return { useUI: () => ui };
+});
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,6 +46,7 @@ function jsonResponse(body, ok = true, status = 200) {
 }
 
 const RECORD_URL = `${API_BASE}/quotation/${QUOTATION_ID}`;
+const RATE_MISSING_ES = 'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.';
 
 /**
  * Stubs fetch with a list of [urlFragment, response] routes; the first matching fragment
@@ -159,7 +168,11 @@ describe('QuotationConfirmModal — mounted on ActionChoiceModal (ETP-5398)', ()
     const urls = calledUrls(fetchMock);
     expect(urls).toContain(`${API_BASE}/quotation/${QUOTATION_ID}/action/createDraftInvoice`);
     expect(urls.some((url) => url.includes('Convertquotation'))).toBe(false);
-    expect(await screen.findByText('soInvoiceCreated')).toBeInTheDocument();
+    // ETP-5674 — the invoice branch ends in the shared ConfirmResultModal, badged from the
+    // invoice's real status.
+    const card = await screen.findByTestId('confirm-result-card-0');
+    expect(card).toHaveAttribute('data-doc-type', 'facturaVenta');
+    expect(card).toHaveAttribute('data-doc-status', 'CO');
   });
 
   it('shows the server error inside the modal when the conversion fails', async () => {
@@ -170,6 +183,43 @@ describe('QuotationConfirmModal — mounted on ActionChoiceModal (ETP-5398)', ()
     await renderAndSettle(<QuotationConfirmModal {...modalProps()} />);
     await clickPrimary();
     expect(screen.getByRole('alert')).toHaveTextContent('sqOrderConfirmedErrorboom');
+  });
+
+  it('translates a missing-exchange-rate refusal of the conversion from its identity', async () => {
+    stubFetch([
+      linesRoute(1),
+      ['/action/Convertquotation', () => jsonResponse({ error: {
+        message: 'prose in the AD language',
+        messageKeys: ['ETGO_ExchangeRateMissingOnComplete'],
+        messageParams: { orgCurrency: 'EUR', documentCurrency: 'USD' },
+      } }, false, 422)],
+    ]);
+    await renderAndSettle(<QuotationConfirmModal {...modalProps()} />);
+    await clickPrimary();
+    expect(screen.getByRole('alert')).toHaveTextContent(`sqOrderConfirmedError${RATE_MISSING_ES}`);
+  });
+
+  // The pre-check blocks only an explicitly empty rate on a foreign-currency quotation, reading the
+  // freshly saved record first; a manual rate is never second-guessed and validate-exchange-rate is
+  // never queried.
+  it.each([
+    ['blocks an empty rate', { eTGOCurrencyRate: null }, undefined, true],
+    ['blocks when the saved record has an empty rate', { eTGOCurrencyRate: 1.2 }, { id: QUOTATION_ID, eTGOCurrencyRate: null }, true],
+    ['lets a manual rate through', { eTGOCurrencyRate: 1.2 }, undefined, false],
+    ['leaves a source without the rate field to the backend', {}, undefined, false],
+  ])('pre-check %s', async (_label, rateFields, savedRecord, blocked) => {
+    const fetchMock = stubFetch([
+      linesRoute(1),
+      ['/session', () => jsonResponse({ organization: { 'currency$_identifier': 'EUR' } })],
+    ]);
+    const data = { ...QUOTATION, 'currency$_identifier': 'USD', ...rateFields };
+    const onSave = savedRecord ? vi.fn().mockResolvedValue(savedRecord) : undefined;
+    await renderAndSettle(<QuotationConfirmModal {...modalProps({ data, onSave })} />);
+    await clickPrimary();
+    const urls = calledUrls(fetchMock);
+    expect(urls.some((url) => url.includes('validate-exchange-rate'))).toBe(false);
+    expect(urls.some((url) => url.includes('Convertquotation'))).toBe(!blocked);
+    if (blocked) expect(screen.getByRole('alert')).toHaveTextContent(RATE_MISSING_ES);
   });
 
   it('closes through onClose from the cancel button', async () => {

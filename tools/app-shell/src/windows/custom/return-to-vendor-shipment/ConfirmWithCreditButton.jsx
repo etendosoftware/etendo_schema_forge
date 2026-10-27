@@ -25,8 +25,7 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
         isDocumentReadOnly={isDocumentReadOnly}
         entitySegment="returnToVendorShipment"
         invoiceRoute="/purchase-invoice/"
-        invoiceType="facturaCompra"
-        invoiceCreatedTitleKey="returnToVendor.invoiceCreatedTitle"
+        invoiceType="facturaRectificativaCompra"
         specName="return-to-vendor-shipment"
         entityName="returnToVendorShipment"
         confirmDrLabel={ui('confirmReturn')}
@@ -36,6 +35,7 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
         infoRowPost={ui('returnToVendor.confirmModal.infoRowPost')}
         confirmWithInvoiceLabel={ui('returnToVendor.confirmModal.confirmWithInvoice')}
         postConfirmButtonLabel={ui('returnToVendor.createCreditNote')}
+        createInvoiceModalTitle={ui('returnToVendor.createCreditNoteTitle')}
         cardTitle={ui('returnToVendor.createCreditNote')}
         cardDesc={ui('returnToVendor.createCreditNoteDescription')}
         data-testid="ConfirmWithCreditButtonBase__218245" />

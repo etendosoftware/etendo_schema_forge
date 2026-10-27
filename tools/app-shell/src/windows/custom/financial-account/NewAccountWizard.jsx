@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { AccountFormStep } from './AccountFormStep.jsx';
 import { searchBanks, institutionsFor } from './bankCatalog.js';
@@ -191,12 +191,12 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
       onCreated?.();
       onClose?.();
     } catch (err) {
-      if (err.status === 409) {
+      if (isDuplicateConflict(err.status, err.code)) {
         setFormError(ui('financeAccountsNewNameExists'));
       } else {
         // ETP-4896 QA follow-up: this used to show the backend's raw English literal. Routed
         // through the shared translator so the create flow matches the edit modal.
-        toast.error(translateBackendError(err.message, ui) || ui('financeAccountsNewCreateError'));
+        toast.error(translateBackendError(err.message, ui, { code: err.code }) || ui('financeAccountsNewCreateError'));
       }
     } finally {
       setSubmitting(false);

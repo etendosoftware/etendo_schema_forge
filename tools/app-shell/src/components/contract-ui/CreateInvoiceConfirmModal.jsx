@@ -63,6 +63,9 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *                      so this skips the modal's own `pendingQtyUrl` fetch (which only ever
  *                      targets one document) instead of duplicating N requests. Omit to keep the
  *                      `pendingQtyUrl` fetch.
+ *   title            — optional dialog title. Defaults to the generic `soManageDocsTitle`
+ *                      ("Generar factura"); a caller whose action is not a plain invoice (e.g. the
+ *                      return windows' rectificative invoice, ETP-5688) passes its own text.
  *   onPriceListChange — optional. Called with the picker's current `priceListId` every time it
  *                      changes (including the initial preselect/resolve). The picker's selection
  *                      is internal state this modal owns; a bulk caller that needs to react to it
@@ -84,6 +87,7 @@ export default function CreateInvoiceConfirmModal({
   cardAmountLoading,
   pendingQtyTotal,
   onPriceListChange,
+  title,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch();
@@ -174,7 +178,7 @@ export default function CreateInvoiceConfirmModal({
 
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--border-subtle))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {ui('soManageDocsTitle')}
+            {title ?? ui('soManageDocsTitle')}
           </div>
           <button type="button" onClick={dismiss} disabled={loading} style={closeBtnStyle}>&times;</button>
         </div>

@@ -250,6 +250,22 @@ export function CommandPalette() {
     };
   }, []);
 
+  const {
+    exact: exactVectorMatches,
+    semantic: semanticVectorMatches,
+    related: relatedVectorMatches,
+    concentrated: vectorMatchesConcentrated,
+  } = rankVectorMatches(
+    vectorMatches,
+    query,
+    false,
+  );
+  // Visible = what the groups below actually render (related is hidden when concentrated),
+  // not the raw backend list, which may hold only noise the ranking discarded.
+  const hasVisibleVectorMatches = exactVectorMatches.length > 0
+    || semanticVectorMatches.length > 0
+    || (relatedVectorMatches.length > 0 && !vectorMatchesConcentrated);
+
   useEffect(() => {
     const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [data-global-search-item="true"]'));
     items.forEach((item, index) => {
@@ -262,7 +278,7 @@ export function CommandPalette() {
         item.scrollIntoView?.({ block: 'nearest' });
       }
     });
-  }, [keyboardIndex, query, vectorMatches, recentSearches, open, isTargetPickerOpen]);
+  }, [keyboardIndex, query, exactVectorMatches.length, semanticVectorMatches.length, relatedVectorMatches.length, vectorMatchesConcentrated, recentSearches, open, isTargetPickerOpen]);
 
   useEffect(() => {
     const setExternalScope = (event) => {
@@ -351,17 +367,6 @@ export function CommandPalette() {
     if (!Array.isArray(item.targets) || item.targets.length === 0) return true;
     return item.targets.some((target) => requestedVectorSearchTargetKeys.includes(target));
   });
-  const {
-    exact: exactVectorMatches,
-    semantic: semanticVectorMatches,
-    related: relatedVectorMatches,
-    concentrated: vectorMatchesConcentrated,
-  } = rankVectorMatches(
-    vectorMatches,
-    query,
-    false,
-  );
-
   const featureFlagValues = {
     [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
     [PUBLIC_API_KEYS]: publicApiKeysEnabled,
@@ -481,7 +486,7 @@ export function CommandPalette() {
         </div>
       )}
       <CommandList data-testid="CommandList__73263e">
-        {query.trim().length > 0 && !isVectorSearchLoading && vectorMatches.length === 0 && matchingMenuGroups.length === 0 && (
+        {query.trim().length > 0 && !isVectorSearchLoading && !hasVisibleVectorMatches && matchingMenuGroups.length === 0 && (
           <CommandEmpty data-testid="CommandEmpty__73263e">{ui('noResultsFound')}</CommandEmpty>
         )}
         {query.trim().length === 0 && (

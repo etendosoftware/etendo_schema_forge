@@ -36,7 +36,7 @@ Use this window to register stock consumed inside the organization rather than s
 - **No form card border:** the header fields render without the rounded card/border/shadow (`noHeaderBorder`); fields remain fully visible.
 - **Accounting status pill:** the detail header shows a status pill for `posted` (`statusPills` → **Contabilizado** / **Sin contabilizar**), next to the document-status badge. The `_note` in `decisions.json` records that it is intended for financial and admin roles only; that permission enforcement is still pending, so every role currently sees it.
 - **No Others tab:** `description` is discarded, which removes both the field and the **Others** tab that previously held it.
-- **Lines tab layout:** this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference.
+- **Lines tab layout:** this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference. **ETP-5133:** the `product` column is a lookup selector, so it never ellipsizes — it widens to the longest product name of the loaded lines and of the product just picked in the open add-row, and the grid scrolls horizontally on overflow; see the `noTruncate` row in `docs/decisions-reference.md`.
 - **Lines columns:** the **Line No.** column is hidden in the grid (`lineNo.grid = false`). `movementQuantity` sets `columnWidth: 160` so the "Movement Quantity" header fits on one line; Product takes the remaining width.
 - **Product picker:** the Product column on lines uses the shared, window-agnostic lookup drawer (`ProductStockSearchDrawer`), registered as `product-stock` in `lookupDrawers.js` (also used by `goods-movements`). The drawer groups results by product, filters by warehouse, and shows available stock per warehouse for the selected product, auto-filling the Storage Bin field (labeled by warehouse name) on selection. The stock shown in the drawer is informational only — it is not copied into the line quantity (see **New line quantity** below).
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
@@ -118,7 +118,7 @@ Use this window to register stock consumed inside the organization rather than s
 
 ### Cross-window
 17. Open "Documentos no contabilizados" (`/not-posted-documents`) and confirm Internal Consumption appears as a document-type filter option and that an unposted Internal Consumption row can be posted from there.
-18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; 'Download all (ZIP)' and 'Delete all' with confirmation when multiple files exist).
+18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; with two rows ticked, the selection bar offers a ZIP download of just those and a delete with confirmation — the header has no bulk controls since ETP-5526).
 
 ## Automated evidence
 
@@ -161,3 +161,43 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Design changes — ETP-5681
+
+- **The line form opens the same product drawer as the grid.** `EntityForm.LookupFormField` used to hardcode
+  `ProductSearchDrawer` and ignore the field's `lookupDrawer`. It now resolves the drawer through
+  `lookupDrawers.js`, so the line form opens the declared `product-stock` drawer as the add row and the inline
+  edit already did.
+- `onSelectMappings` (the storage-bin fill from `_aux._LOC`) is still applied caller-side by the grid only
+  (`DataTable.applyOnSelectMappings`), so the form behaves as before for that mapping.
+- `decisions.json`: only the `lookupTitle` removal below.
+- **Drawer title translated.** The product field no longer declares `lookupTitle`, which was a literal English string
+  ("Product" / "Product + Warehouse") that made the drawer search read "Buscar Product..." in Spanish. The title and the
+  placeholder now come from the field's translated label ("Buscar Producto...").
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped).
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. movida** and before **Almacén**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 3 (explicit `gridOrder` on all four grid columns: product 1, movementQuantity 2, uOM 3, storageBin 4)`, `gridReadOnly: true`, `display: "tag"` — it was already a read-only grid column in that position; `gridReadOnly` and `display: "tag"` were added. The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES, es_AR) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as a product/location is picked in the stock drawer (from the selected item's `_aux._UOM`); the backend stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft internal consumption; confirm `Unidad` sits after Cant. movida; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." Confirmar from the form and from the grid row kebab show the refusal toast with **Ir al calendario**, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

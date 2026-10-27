@@ -119,7 +119,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
   7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
   8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
-  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully.
+  9. As a non-admin with a non-empty role menu, check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it; only Admin/client-admin (sidebar exemption above) or a role with a hand-made grant does.
   10. As GOAdmin or GOClient Admin, confirm all three anchor entries are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
 
 ### 3. Generated/custom window loading
@@ -191,26 +191,83 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Layout: the pair lives in one `flex-1 min-w-[16rem]` block inside the already-`flex-wrap`
     bar, so it takes the leftover width when there is room and drops to a second line of the same
     bar when there is not — it never squeezes the days label or the button.
-- **Colour.** The non-expired state is amber: `status-warning` (`bg`/`foreground`/`border`), the
-  only orange trio the core Tailwind preset defines, which brings its dark-mode values with it.
-  Changing it was a token swap, not new CSS.
-  - ⚠️ **The expired state's classes do not exist.** `status-danger` is defined **nowhere** — not
-    in `@etendosoftware/app-shell-core`'s Tailwind preset (which has `success`, `warning`, `info`
-    and `neutral`) and not in any stylesheet; the red family is called `destructive`. So
-    `bg-status-danger`, `text-status-danger-foreground`, `border-status-danger-border`,
-    `bg-status-danger-border` and `bg-status-danger-foreground` all generate no CSS and the
-    expired banner renders with no background, border or text colour of its own. This is
-    pre-existing and `TopBar.jsx` is the only file in the repo that uses those class names. Left
-    as found: red-vs-amber is a design decision, not a rename.
+- **Colour.** An active trial with more than 3 days left is amber: `status-warning`
+  (`bg`/`foreground`/`border`), the only orange trio the core Tailwind preset defines, which brings
+  its dark-mode values with it.
+- **Escalation (ETP-5049).** With 3 days or fewer left (`BILLING_WARNING_ESCALATION_DAYS`), and
+  once expired, the bar is red: the core preset's `destructive` family (`bg-destructive/10`,
+  `border-destructive`, a solid `bg-destructive` pill and progress fill). `data-variant` on
+  `topbar-demo-trial-indicator` reads `warning` or `destructive`. The state is the pure
+  `demoTrialStatus(environment)` in `lib/environmentPresentation.js`; the CTA (**Ir al pago**,
+  `/upgrade`) stays visible to everyone, as before — upgrading is not owner-gated (an invited
+  member buys a clean productive environment). This bar is the in-environment trial warning:
+  ETP-5049 deliberately did not add a second banner for an ending trial.
+  - Before ETP-5049 the expired state used `status-danger-*` classes, which are not a token of the
+    core preset, so it rendered with no colour of its own. They are gone.
+- **One day left** reads "1 day left" / "Queda 1 día" (`environmentTrialDaysRemainingOne`, picked
+  by `environmentTrialDaysKey`), also in the company list's trial label.
 - **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
   — both caveats' presence and their position after the button, that they are two sibling `<p>`
   neither of which carries the other's text, that no second link is drawn, the wrap classes, the
-  amber token, and the three states that render nothing or keep the caveats.
+  amber token, the destructive variant at 3 and 1 days left and once expired (and no
+  `status-danger` class), the singular day label, and the three states that render nothing or
+  keep the caveats.
 - **Manual verification path:**
   1. On a trial tenant, confirm the bar is amber and the two caveats read to the right of Ir al
      pago, on two separate lines.
   2. Narrow the window and confirm the block wraps onto its own row instead of crushing the bar.
   3. On a productive tenant, confirm the whole bar is gone.
+  4. Set the trial so 3 days or fewer remain (`docs/etp-5396-local-lifecycle-tool.md`) and confirm
+     the bar turns red while still counting down; with 1 day left it reads "Queda 1 día".
+
+#### 3.2a The failed-payment banner (`BillingStatusBanner`, ETP-5049)
+
+- **Why:** a failed renewal payment turns the subscription `PAST_DUE`, and the environment keeps
+  working for the grace period (`etendo.go.billing.grace.days`, default 15) before every request is
+  refused with 402. Without this banner the first in-app signal was the blocked screen, although
+  most failed payments are fixable within grace.
+- **Where:** `tools/app-shell/src/components/billing/BillingStatusBanner.jsx`, mounted by
+  `AppLayoutInner` (`layout/AppLayout.jsx`) above the top bar, in the normal authenticated layout
+  only. Not in an embedded (chromeless) window, never on the blocked screen.
+- **The decision is pure:** `paymentGraceWarning(environment, now)` in
+  `lib/environmentPresentation.js`, fed by the current environment from `GET /sws/go/environments`
+  (`useEnvironmentSwitch`). It answers `null` unless `subscriptionStatus === 'PAST_DUE'` and
+  `graceEndsAt` is an instant still ahead. `graceEndsAt` is the backend's own grace end (the same
+  `EnvironmentAccessPolicy.graceEndsAt` the 402 gate decides on), so the banner disappears exactly
+  when the blocked screen takes over.
+- **Copy and CTA:** *"Your last payment failed. This environment will be blocked on {date}."* —
+  the date is the viewer's local calendar day of the `graceEndsAt` instant, formatted with
+  `formatCalendarDate` in the UI locale.
+  - Owner (`ownedByAccount: true`, the signal ETP-5742 gates re-subscription on, via
+    `ownsEnvironmentSubscription`): **Update payment** → `/account`, where the Subscription section
+    opens the Stripe Customer Portal.
+  - Anyone else: *"Contact your company's administrator."*, no button.
+- **Escalation:** more than 3 days (`BILLING_WARNING_ESCALATION_DAYS`) before `graceEndsAt` it is
+  amber and can be dismissed for the browser session (sessionStorage key
+  `etendo:billing-warning-dismissed:<clientId>:<graceEndsAt>`, so a new failed payment warns
+  again; storage failures only mean it shows again). In the last 3 days it is red
+  (`data-variant="destructive"`, `role="alert"`) and has no close button.
+- **Hidden on `/account` and `/upgrade`:** `/account` is the CTA's own destination and already
+  shows the grace countdown next to the portal button. `/upgrade` is a full-screen overlay
+  (`upgrade-page-shell`, `fixed inset-0 z-50`) drawn over the layout, so the banner would be
+  invisible there yet still in the accessibility tree — escalated, an unseen `role="alert"`. It
+  stays on `/companies` and on every in-environment page, where nothing else says it.
+- **Known limitation — the kill switch (accepted, not a bug to fix here):** with the backend kill
+  switch `environment-access-enforcement-off` on for the tenant, the environment is **not** blocked
+  on `graceEndsAt`, but the banner still says it will be; after that date the banner hides itself
+  and no blocked screen follows, so the tenant keeps working with no warning. The banner cannot
+  know: during grace `accessState` is `ALLOWED` whether or not the switch is on (the switch is
+  consulted only when access would be refused), and no other field of `GET /sws/go/environments`
+  reveals it. Accepted because the switch is a rare incident lever and the failed payment is still
+  real. A fix would need a backend field (e.g. `accessEnforced` per environment) for the banner to
+  read. Full record: `com.etendoerp.go/docs/open-and-notable-topics.md` §4.17.
+- **Test ids:** `billing-status-banner` (with `data-variant`), `billing-status-banner-message`,
+  `billing-status-banner-cta`, `billing-status-banner-member-hint`,
+  `billing-status-banner-dismiss`.
+- **i18n keys:** `billingPaymentFailedBanner`, `billingUpdatePaymentCta`,
+  `billingPaymentFailedContactAdmin` (en_US, es_ES, es_AR).
+- **Manual verification path:** `docs/stripe-local-testing.md`, the end-to-end walk-through,
+  Step 5; or the local lifecycle tool (`docs/etp-5396-local-lifecycle-tool.md`, check 3).
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
@@ -320,10 +377,31 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   written to `ETGO_ACCOUNT.FIRST_STEPS.completed`. The row shows progress while the job runs,
   result counts when it completes, and a retry button if it fails. Closing the page does not
   cancel the job; reopening the page reads its latest server status.
+- **Calendar review (`action: 'calendarReview'`, ETP-5577).** "Revisar calendario contable" is
+  productive-only and, like the transfer row, server-owned: it is spliced in right after
+  Configuración fiscal (`calendarReviewStep.js`) only when `GET /sws/go/onboarding/calendar-review`
+  answers `required: true` — productive tenants onboarded since ETP-5577, whose periods all start
+  never-opened — and it is done when the server says `reviewed`. It adds one to the productive
+  total. The body (`CalendarReviewPanel.jsx`) summarizes the current fiscal year and offers
+  **Confirmar** (keep it) or **Modificar** → quarter select → **Aplicar** (regenerate the calendar
+  with another fiscal-year start; disabled with an explanation once a period was opened or
+  anything posted). Either way the user lands on `/calendar` to open the periods they need;
+  **Ver guía** starts the Calendar tour. `403` (not the owner) and `409` (calendar in use) are
+  translated toasts. Opening any period from Calendar also completes the row; the state is read
+  once per app load by the provider and re-read every time Primeros pasos is opened. When a
+  document is refused with `PeriodNotAvailable` while the review is pending, the toast sends the
+  owner here; anyone else, and everyone afterwards, gets **Ir al calendario** (opening a period
+  completes the review; the Calendar window's access decides who may open one)
+  (`lib/periodNotAvailable.js`, registered by `AppLayout`).
+  **Known gap — dismissed accounts.** "Finalizar configuración inicial" is per account, the review
+  per environment: an owner who dismissed First Steps (e.g. on the demo, before upgrading) never
+  sees this row. Their refusal toast offers **Ir al calendario** instead, so they can still open
+  periods, but they cannot regenerate the calendar from the UI.
 - **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
   and its action until it is answered. The only one today is **Configuración fiscal** (a
   `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún
-  Sistema de Facturación (SIF), como SII, Verifactu o TicketBai?"*
+  Sistema de Información Fiscal (SIF) como SII, TicketBai o Verifactu?"* (ETP-5597: systems listed
+  in the order SII, TicketBai, Verifactu; en_US "Fiscal Information System (SIF)")
   - **Sí** reveals the ordinary body — the description, the Configure button to `/fiscal-config`,
     the time estimate. It persists nothing: the user still has to do the step.
   - **No** marks the step completed, because for a tenant that reports to no SIF the answer IS
@@ -345,6 +423,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     failed-write / re-ask-after-untick paths.
   - `e2e/tests/flows/first-steps-onboarding.mocked.spec.js` — the gate in a real browser
     (Sí → navigation, No → completion persisted, un-tick → asked again).
+  - ETP-5577: `pages/first-steps/__tests__/calendarReviewStep.vitest.js` (splice, totals, done
+    state), `FirstStepsPage.vitest.jsx` (panel actions, refusals, Ver guía) and
+    `first-steps-onboarding.mocked.spec.js` (row shown, Confirmar → `/calendar`, hidden without
+    the marker).
 - **Manual verification path:**
   1. On a productive tenant, open Primeros pasos → "Configuración fiscal" and confirm it opens
      with the SIF question instead of the Configurar button.
@@ -354,6 +436,12 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   5. On a productive tenant, inspect demo data transfer while it runs, after completion, and
      after a failed job; confirm the row shows progress, result counts, and retry respectively.
      Reload after completion and confirm the completed row and progress count remain in place.
+  6. (ETP-5577) On a new productive tenant, open "Revisar calendario contable": check the year
+     summary, **Confirmar** and confirm it lands on Calendar and the row is done. On another new
+     tenant, **Modificar** → Julio → **Aplicar** and confirm the calendar now has one July - June
+     year. Sign in as a non-owner and confirm Confirmar answers "only the owner", and that a
+     refused document offers **Ir al calendario**. Create next year's periods in Calendar as that
+     non-owner and confirm the owner can no longer regenerate (409, calendar in use).
 
 ### 4. Entity list/detail data flow
 
@@ -363,7 +451,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - Sorting is tracked in hook state and can switch to the companion `$_identifier` field when present so foreign-key sorts are alphabetical.
   - Selecting a row uses the record data already present in the list and fetches that record's children; loading by id is the path that fetches the full record and its children.
   - `handleNew()` requests `/<entity>/defaults`, normalizes returned values, and pre-fills the form when defaults exist. Combo-style fields (Price List, Payment Terms) are pre-selected by the backend; Search-type fields (Contact, Business Partner) are left empty for the user to fill explicitly.
-  - While the defaults request is in flight the hook exposes `defaultsLoading: true` and `DetailView` shows the loading gate for the new-record route, so the user cannot type into a form whose values are about to be merged (ETP-4741). The 4-second timeout is a UX budget, not a correctness mechanism: when it fires it releases the gate so the user can start working, and nothing else — the request is **not** aborted and the session is **not** invalidated, so a response arriving later still merges. That late merge is also what fires `DetailView`'s initial-callout chain, which is latched on `editing` becoming non-empty and would never fire on a form left permanently empty (one residual gap in that latch is recorded under "Failure or edge behavior" below). When the merge runs — before or after the release — it skips any field the user already changed (and its `$_identifier` companion). Each `handleNew()` emits at most one `defaults_block` timing event: exactly one for the session that survives to settlement (`status`: `ok`/`error`/`timeout` — see `docs/ops/app-shell-observability.md`); a session superseded by a newer `handleNew()` **before it settles** emits none. Invalidation is reserved for genuinely superseded sessions: a newer `handleNew()`, or loading an existing record (`handleSelect` or `fetchById`) while the defaults request is still pending — the latter neutralizes it, aborting the request (still possible after the timeout, which keeps the abort handle), discarding its late response, releasing `defaultsLoading` immediately, and — when the session had not already settled — emitting no `defaults_block` event. A session that already settled as `timeout` and is only afterwards superseded or neutralized keeps that one event: the timing handle is one-shot, so no second event can follow.
+  - While the defaults request is in flight the hook exposes `defaultsLoading: true` and `DetailView` shows the loading gate for the new-record route, so the user cannot type into a form whose values are about to be merged (ETP-4741). The 4-second timeout is a UX budget, not a correctness mechanism: when it fires it releases the gate so the user can start working, and nothing else — the request is **not** aborted and the session is **not** invalidated, so a response arriving later still merges. The settle is also what arms `DetailView`'s one-shot initial-callout chain (ETP-4744): the chain waits for `defaultsPending` to clear — not for `editing` to merely become non-empty — and only then computes its trigger list from the merged state, so the defaulted selectors still fire their callouts even when the user typed into a plain, non-selector field while the request was in flight. A form left permanently empty fires nothing and leaves the latch unarmed. When the merge runs — before or after the release — it skips any field the user already changed (and its `$_identifier` companion). Each `handleNew()` emits at most one `defaults_block` timing event: exactly one for the session that survives to settlement (`status`: `ok`/`error`/`timeout` — see `docs/ops/app-shell-observability.md`); a session superseded by a newer `handleNew()` **before it settles** emits none. Invalidation is reserved for genuinely superseded sessions: a newer `handleNew()`, or loading an existing record (`handleSelect` or `fetchById`) while the defaults request is still pending — the latter neutralizes it, aborting the request (still possible after the timeout, which keeps the abort handle), discarding its late response, releasing `defaultsLoading` immediately, and — when the session had not already settled — emitting no `defaults_block` event. A session that already settled as `timeout` and is only afterwards superseded or neutralized keeps that one event: the timing handle is one-shot, so no second event can follow.
   - Before a `POST`, `handleSave()` validates that all visible required fields have a value. `EntityForm` registers only currently-visible fields via `registerFields(displayFields)` so hidden fields never block the save. If any required field is empty, `fieldErrors` is set and each offending field renders a red border with an inline "Required" message — the POST is not sent.
   - If the backend still returns a structured `400 MISSING_REQUIRED_FIELDS` response, the `fields` array is parsed and mapped to `fieldErrors` as a second validation layer.
   - New records use `POST`; existing records use `PATCH` with changed fields only.
@@ -372,7 +460,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - List refresh and pagination logout on HTTP 401.
   - If the defaults endpoint fails, the form still opens with an empty object and `defaultsLoading` returns to false. If it merely overruns the 4s budget, `defaultsLoading` also returns to false, but the request keeps running and its defaults are applied when they land.
   - **ETP-5002 — the required-field gate defers to a pending defaults session.** The hook exposes a second flag, `defaultsPending`, tracking the *request* window rather than the UX window: it goes true with `defaultsLoading` and clears only when the response lands, the request errors, or the session is neutralized — the 4s timer deliberately does **not** touch it. `useEntity` passes `deferBlocking: defaultsPending && !editing?.id` into `useFormValidity`, so while a NEW record's defaults are still in the air the ETP-4933 required-field gate blocks nothing. Without this, the two flags disagreed in exactly the window the budget opens: `defaultsLoading` released the form, the still-flying default left a required field empty, and the gate disabled the primary action on a value the user was never meant to type. `purchase-order` is the concrete case — `warehouse` is `required: true` with no contract default, so every new PO whose defaults request overran 4s rendered **both** Guardar and Confirmar disabled, tooltip "Completa primero los campos obligatorios: Almacén", which is how the rectificativa integration specs failed. The moment the session settles the gate applies in full: if the defaults arrived without the required field, it blocks — correctly, because now we know nobody is going to fill it. The deferral is scoped to new records because an existing one has no defaults session (`fetchById` neutralizes any in flight) and its own `skipUnchangedInvalid` policy already spares untouched empties. The backend's `MISSING_REQUIRED_FIELDS` validation remains the net underneath the deferral window.
-  - Known gap (pre-existing, narrowed but not closed by ETP-4741): `DetailView`'s initial-callout latch arms on `editing` becoming non-empty for **any** reason, including the user typing into a plain non-selector field. If that happens before the defaults land — only possible in the window between the 4s gate release and a late response — the latch is consumed while no selector field has a value yet, so the defaults still merge but the callout chain never runs. See `docs/feedback.md` (`[2026-07-31] ETP-4741`).
+  - The initial-callout latch is armed by the arrival of the defaults session, not by `editing` becoming non-empty (ETP-4744, closing the residual gap recorded for ETP-4741). `DetailView` calls `resolveInitialCalloutTriggers` (detailViewHelpers.jsx), which only reports `ready` once `defaultsPending` is false and the form holds a value, and computes the trigger list from the merged state. A user typing into a plain, non-selector field during the window between the 4s gate release and a late response no longer consumes the one-shot latch, so the defaults merge **and** the chain runs. See `docs/feedback.md` (`[2026-07-31] ETP-4741`, `[2026-10-16] ETP-4744`).
   - Partial or empty batches stop pagination.
   - Save blocked by missing required fields surfaces per-field `fieldErrors` highlights and a toast; the record is not created.
   - Save and child-row creation failures surface `saveError` and toast feedback; delete and process failures surface toast feedback.
@@ -486,6 +574,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   5. Confirm "Match Rule"/"Reglas de matcheo" and "Periods"/"Períodos" do NOT appear anywhere in the matrix (hidden-only in `menu.json`), even for a role known to hold real `AD_Window_Access` on them.
   6. Confirm "Fiscal Monitor", "Fiscal Models", and "Not Posted Documents" appear in the matrix with cells that track their proxy's access (SII Monitor / Tax Report / the proxy process, respectively) rather than always showing full access.
   7. Pick a role with no access to the SII Monitor window and confirm "Fiscal Monitor" is also absent from that role's real sidebar (not just shown as "none" in the matrix) — this is the sidebar-visibility side effect, not only an admin-matrix display change.
+- **Admin-only and capability-only rows (ETP-5830):** five matrix rows are deliberate and stay: *Relación albarán-factura* (window `107`, granted by the ETP-5075 template lines), and four Admin-only configuration windows with no template grant — *Centro de costos*, *Proyecto*, *Organización* (`110`) and *Secuencias de documentos* (`112`). They show a check for Admin and a dash for the four template roles. Hiding one would mean adding it to `UI_EXCLUDED_WINDOW_IDS`, which also hides it from the NEO/MCP UI view, so they are not hidden. *Proceso Contable* (`acct-process-monitor`) never appears: it is a capability page gated by `isAdminOrClientAdmin` with no `AD_Window_ID`, so the window-access matrix has nothing to show. Making it appear would need a permission-anchor pseudo-window like Smart Scan's.
 
 ### 6d. Informes subsection (ETP-5402, same `/roles` page)
 
@@ -851,3 +940,63 @@ because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an 
 a gratuitous accounting reversal. Full reference, including the `isPosted` /
 `runPreUnpost` contracts and why the helper is a plain module rather than a hook:
 [`../ui-customization.md`](../ui-customization.md) §9e.
+
+## Read-only role access — every write path is gated — ETP-5830
+
+A window whose role tier is `read-only` (`useWindowAccess(windowId)`, from `SFWindowAccessMap`)
+renders with `window.readOnly = true`. `DetailView` turns that into two signals:
+
+- `windowReadOnly` — the static window flag **or** the role tier. Drives header, lines and sub-tabs.
+- `menuActionsReadOnly` — the role tier only. Drives the kebab menu, the `/new` route and attachments.
+
+What a read-only role gets, surface by surface:
+
+| Surface | Read-only behaviour | Where |
+|---|---|---|
+| Header form, "Nuevo", processes, kebab | not editable / hidden | `DetailView.jsx`, `DetailMoreActionsMenu.jsx` (ETP-5116) |
+| `/new` reached by URL | redirected to the list, with no defaults fetch (skipped for `?embedded=1`) | `useNewRouteEditingReset` in `detailViewHelpers.jsx` |
+| "Open the add row" hand-offs (`openAddSecondaryLine`, `openCustomTabAdd` router state on `/{id}`) | not gated: they are router state, not URL, and only an in-app save sets them, which a read-only role cannot do | `DetailView.jsx` deep-link effect |
+| Sub-tab tables (inline and non-inline) | no "+ Añadir", no inline edit, no delete, no hover pencil; an empty tab shows an empty table, not the add illustration (same as `readOnlyLogic` tabs) | `SecondaryTableTab` — `tabReadOnly = windowReadOnly \|\| readOnlyLogic` |
+| Sub-tab sidebar detail / form sub-tabs | read-only form, no Save/Delete | sidebar + `SecondaryFormTab` |
+| Sub-tabs with a `customAddModal` (Contactos → Dirección) | row click opens nothing — the address modal has no read-only mode | `resolveSecondaryRowClickHandler` |
+| Custom `Panel` sub-tabs and `CustomLines` | receive `editing=false` / `readOnly` | `SecondaryPanelTab`, primary Panel |
+| Attachments tab | no upload dropzone, no delete, no description edit; download and preview kept | `AttachmentsTab` `accessReadOnly` |
+
+`AttachmentsTab` has three independent signals; only `accessReadOnly` (the role tier) hides the
+dropzone. A completed document keeps accepting attachments (`isDocumentReadOnly` is ignored,
+ETP-5526), and `readOnly` alone removes deletion only (ETP-5432). Attachment errors now go through
+`translateBackendError`, so the backend's `accessDeniedToSpec` 403 shows as a translated toast,
+not the raw English message.
+
+Custom panels that write on their own each take the signal explicitly: Contactos → Financiero
+(`BillingPreferencesForm`, `FiscalDefaultsSection`), Calendario → Períodos
+(`PeriodsExpandablePanel`), Producto → precios (`ProductPriceBar`), Activos → amortización
+(`AssetsAmortizationPanel`), the SIF tab (`SifTab` / `useSifFieldPatcher` `locked`), facturas
+rectificadas (`ReversedInvoicesPanel`), and the purchase-invoice OCR uploader (`OcrSidePanel`,
+never mounted on `/new` for a read-only role). A new custom panel that writes must read
+`editing` / `readOnly` / `accessReadOnly` the same way — the role tier does not reach it by itself.
+
+An inline "+ create" row that writes to **another** spec (`allowCreate`, e.g. "+ Crear condición de
+pago" in every payment-term selector, ETP-5826) is gated by the tier of the **target** window, not the
+host's: `useCanCreateInSpec(createSpec)` hides it unless the role has `full` on that window (or is
+admin / client-admin), fail closed while the access map is not loaded. A spec with no `windowId` in
+`menu.json` (`transaction-type`) is not gated. Rules and table: `docs/ui-customization.md` §19c.
+
+**Why the PO/SO "Confirmar" asymmetry happened (ETP-5116), and why it matters for new code.** A
+read-only role could reactivate a Sales Order but not a Purchase Order. The cause was not grants
+or `processes`: `DetailMoreActionsMenu` never checked `windowReadOnly`. Sales Order declares a
+`menuActions` reactivate entry, Purchase Order declares none, so PO only *looked* gated because
+it had nothing to show. The same exposure existed in every window with `menuActions`. Lesson: a
+surface that renders actions must check the read-only signal itself; "it works on window X" proves
+nothing if X has nothing to render there.
+
+- **Automated evidence:** `DetailView.secondaryTabs.vitest.js` (sub-tab table, sidebar, form tab,
+  `customAddModal`, Panel forwarding), `detailViewHelpers.vitest.js` (`/new` redirect),
+  `AttachmentsTab.vitest.jsx` / `useAttachments.vitest.jsx` (dropzone, delete, translated 403),
+  and the panel suites `PeriodsExpandablePanel`, `FiscalDefaultsSection`, `ProductPriceBar`,
+  `OcrSidePanel`.
+- **Manual verification path:** with a role whose tier for Contactos is `read-only`, open a
+  contact: no "+ Añadir" in Persona / Cuenta bancaria / Dirección, a Dirección row opens nothing,
+  the Financiero panel is all disabled, the attachments tab shows files but no dropzone. Open
+  `/contacts/new` directly and confirm it lands on the list. Repeat the attachments check on
+  Payment terms, Product category and Business partner category.

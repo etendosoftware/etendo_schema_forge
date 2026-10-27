@@ -8,7 +8,7 @@ const columns = [
   { key: 'startingbalance', column: 'Startingbalance', type: 'amount', label: 'Starting Balance', required: true },
   { key: 'endingBalance', column: 'Endingbalance', type: 'amount', label: 'Ending Balance', required: true },
   { key: 'documentStatus', column: 'Docstatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docstatusCl', 'CO': 'docstatusCo', 'DR': 'docstatusDr', 'NA': 'docstatusNa', 'WP': 'docstatusWp', 'RE': 'docstatusRe', 'TEMP': 'docstatusTemp', 'IP': 'docstatusIp', '??': 'docstatus', 'VO': 'docstatusVo' }, required: true },
-  { key: 'posted', column: 'Posted', type: 'string', label: 'Posted', required: true, maxLength: 60 },
+  { key: 'posted', column: 'Posted', type: 'string', label: 'Posted', required: true, maxLength: 60, visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end columns:reconciliations
 

@@ -11,41 +11,172 @@ optional independent Mixpanel for analytics, and legacy AWS RUM during migration
 Sentry/GlitchTip are removed. See [current migration/configuration](#datadog-migration-etp-5605)
 and the committed `.env.observability.example` for all current environment variables.
 
+### Every provider goes through the telemetry gateway (ETP-4578)
+
+The three providers are the core's adapters (`@etendosoftware/app-shell-core/observability/adapters/*`)
+with this app's environment wiring (`providers/datadog.js`, `rum.js`, `providers/mixpanel.js`).
+The facade (`observability/core.js`) hands every payload to the core's sanitizing gateway, which
+applies the host allowlist again before any adapter sees it; the adapters then close what each
+SDK collects on its own in the SDK's own hooks (Datadog `beforeSend`, AWS RUM `clientBuilder`,
+Mixpanel `before_send_*`). The full inventory, what each hook rewrites and the open items live in
+the core's `docs/security/telemetry-egress.md`.
+
+`observability/sdk.js` is the only file allowed to import a provider SDK;
+`test/no-direct-provider-sdk.test.js` fails on any other. Datadog and Mixpanel are lazy-loaded,
+only when enabled and not killed. The rule covers every provider SDK, not only the RUM/analytics
+ones: the Datadog **Feature Flags** SDK (`loadDatadogFlags`) lives there too, because flag
+exposure events are telemetry the SDK reports to Datadog on its own, and
+`lib/flags/bootstrap.js` receives it by injection (`createFlagProvider({ datadogLoader })`).
+
+| Provider | Enabled when |
+|----------|--------------|
+| Datadog | `VITE_DATADOG_ENABLED=true` plus application id, client token, site and `VITE_APP_ENV` |
+| AWS RUM | `VITE_RUM_ENABLED=true` and both RUM IDs are set |
+| Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set |
+
+AWS RUM is opt-in (ETP-4578): the injected IDs alone no longer switch it on. Its SDK has no
+before-send hook, so every batch is sanitized through the SDK's `clientBuilder` before it is
+serialized and signed (page titles, record ids and query strings never leave). Cookies are off
+unless `VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy. RUM also calls
+`cognito-identity` at startup and keeps temporary credentials in `localStorage`.
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_RUM_ENABLED` | Set to `true` to enable AWS RUM. Off by default; both RUM IDs are also required. |
+| `VITE_RUM_ALLOW_COOKIES` | Set to `true` to let RUM keep its session in cookies. Off by default (consent is undecided). |
+| `VITE_TELEMETRY_KILL` | Build-default kill switch: `true` stops every provider, a comma list (`mixpanel,aws-rum`) stops those. See [Kill Switch](#kill-switch). |
+
+## Kill Switch
+
+Telemetry can be stopped without a deploy (ETP-4578). Two layers decide whether a
+provider may run, and a provider stopped by either is not "paused": before start it
+is never started (its SDK is not even imported, so nothing goes out), and after start
+it is shut down in place.
+
+| Layer | How | Scope |
+|-------|-----|-------|
+| Build default | `VITE_TELEMETRY_KILL=true`, or a comma list such as `mixpanel,aws-rum` | Holds from the first millisecond, needs no network, and cannot be lifted remotely. |
+| Runtime flag | `telemetry-kill-all`, `telemetry-kill-datadog`, `telemetry-kill-aws-rum`, `telemetry-kill-mixpanel` in the OpenFeature control plane (ConfigCat, or `VITE_FEATURE_FLAGS` locally) | Applies to a running tab when the control plane pushes the change (poll interval `VITE_CONFIGCAT_POLL_SECONDS`, 60 s by default). Setting it back to `false` restarts the provider. |
+
+The provider names are the gateway's adapter names: `datadog`, `aws-rum`, `mixpanel`.
+
+- A flag can only STOP telemetry the build allows; it never starts a provider the build
+  did not configure, and it never lifts a kill the build asked for.
+- The defaults are `false` for every switch, so an unreachable control plane keeps
+  today's behaviour instead of silently turning telemetry off. The four flags must exist in
+  ConfigCat before a deploy that reads them: a missing key is evaluated as `false` but the
+  ConfigCat SDK logs an error for it on every evaluation.
+- Datadog cannot drop a view event from `beforeSend`, so its kill withdraws tracking consent
+  (`setTrackingConsent('not-granted')`): the SDK sends the end of the current view, sanitized,
+  and stops collecting. Lifting it grants consent again and starts a new session.
+- If the flag client itself breaks, a running gateway keeps its current state: a broken
+  read never revives a stopped provider.
+- Startup waits at most 1.5 s for the flag provider (`FLAGS_READY_WAIT_MS`) before starting
+  telemetry. A kill flag that answers later still applies, in place, **but traffic has
+  already gone out by then** (for RUM, its 2 `cognito-identity` calls, measured with the real
+  SDK). **For a kill that holds from the very first request, use `VITE_TELEMETRY_KILL` (a
+  build default), not the flag.** The wait is deliberately not longer: it would delay the
+  first errors of every session for the sake of a rare case.
+- The switches are not reported as flag exposures (they would emit telemetry about the
+  telemetry they control) and are operational controls, not feature flags, so they are
+  not in `flags-registry.json` and do not enter the flag-debt scorecard.
+
+### Verifying egress in a browser
+
+`e2e/tests/flows/platform/telemetry-egress.mocked.spec.js` aborts and records every request to the
+providers' hosts (Datadog intake, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
+are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
+one and passes `VITE_*` through to it. The fake values below never reach a real account.
+
+Scenario 1 is the default bundle, so the regular mocked suite (and the pre-push) already runs
+it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_ENABLED`,
+`VITE_DATADOG_ENABLED` and `VITE_RUM_ENABLED` forced to `false`, so a developer's gitignored
+`tools/app-shell/.env.local` no longer leaks real providers into the default bundle. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
+
+```bash
+# 2. Positive control, providers configured and NOT killed: requests are attempted.
+(
+  export VITE_DATADOG_ENABLED=true
+  export VITE_DATADOG_APPLICATION_ID=fake-application
+  export VITE_DATADOG_CLIENT_TOKEN=fake-client-token
+  export VITE_DATADOG_SITE=datadoghq.eu
+  export VITE_APP_ENV=e2e
+  export VITE_MIXPANEL_ENABLED=true
+  export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_RUM_ENABLED=true
+  export VITE_RUM_APP_MONITOR_ID=fake-monitor
+  export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
+  export E2E_TELEMETRY=configured E2E_SUITE=mocked
+  scripts/run-e2e-full.sh
+  grep -rlF fake-monitor tools/app-shell/dist-e2e/assets | wc -l   # must be 1 or more
+)
+
+# 3. Providers configured and killed by the build default: zero requests.
+(
+  export VITE_DATADOG_ENABLED=true
+  export VITE_DATADOG_APPLICATION_ID=fake-application
+  export VITE_DATADOG_CLIENT_TOKEN=fake-client-token
+  export VITE_DATADOG_SITE=datadoghq.eu
+  export VITE_APP_ENV=e2e
+  export VITE_MIXPANEL_ENABLED=true
+  export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_RUM_ENABLED=true
+  export VITE_RUM_APP_MONITOR_ID=fake-monitor
+  export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
+  export VITE_TELEMETRY_KILL=true
+  export E2E_TELEMETRY=killed E2E_SUITE=mocked
+  scripts/run-e2e-full.sh
+  grep -rlF fake-monitor tools/app-shell/dist-e2e/assets | wc -l   # must be 1 or more
+)
+```
+
+- One `export` per line, inside a subshell: a single long command line gets wrapped by the
+  terminal, the variables before the break never reach the build, and scenario 2 then fails
+  while scenario 3 passes without proving anything. The `grep` confirms the configuration made
+  it into the bundle; if it prints `0`, the run is void.
+- Each run executes the whole mocked suite (about 5 minutes): since ETP-5307 the script runs
+  `--project=mocked --project=mocked-serial` and `E2E_FILES` no longer narrows the mocked suite.
+
+Run 2 before trusting 3: if the control sees no request, the interceptor is what is broken.
+
+## Known limits
+
+- **`/oauth2-clients` is reported as `/:id`.** A route whose FIRST segment is 12+ characters
+  mixing letters and digits (`oauth2-clients`: 14 characters and a `2`) reads as an id to the
+  core's scrub, which runs on the route after it is normalized and cannot tell it is a route.
+  The host has always kept a first segment as the screen name, so this loses the page's name in
+  Datadog, Mixpanel and RUM. It over-collapses and leaks nothing. Follow-up (a core change, so a
+  new preview and repin): a route's first segment must never collapse, which means routing
+  `gateway.page` and the adapters through a route-aware sanitize. Anchor:
+  `KNOWN_COLLAPSED` in `tools/app-shell/src/lib/__tests__/observability-routes.test.js`, which
+  turns red when it is fixed.
+
 ### Support sessions silence product analytics (ETP-5351)
 
 An Etendo operator can enter a tenant as "Soporte Etendo" from Classic (see
 `lib/supportSession.js`). Nothing that session does may count as the customer's activity, so
-while it lasts product events are suppressed, and monitoring keeps running:
+while it lasts product events are suppressed, and monitoring keeps running. The cut is a single
+switch in the facade, `setAnalyticsSuppressed(true)` (`observability/core.js`), on top of the gateway:
 
-- A pure product-analytics provider declares `analytics: true` (today only Mixpanel).
-  `createObservability().setAnalyticsSuppressed(true)` keeps every call away from it — `init`,
-  events, `page`, `identify`, `group`/`groupSet` (health score), feature-flag exposure, `flush`,
-  `reset` — and an init that runs while suppressed skips it; it is initialized only if the
-  suppression is lifted.
-- A monitoring provider that also records product events lists `analytics` in its
-  `capabilities` (Datadog). It stays on and loses only `track`: no shared business event
-  (`session_started`, `document_created`, `transaction_posted`, KPIs, `feature_flag_evaluated`,
-  ...) becomes a Datadog custom action. Errors, views, resources, long tasks, session replay,
-  feature-flag evaluations (error correlation) and `identify`/`group` (error attribution) keep
-  flowing. AWS RUM has no `track` and is not affected.
-- The core tells those providers about the suppression through their optional
-  `setAnalyticsSuppressed(suppressed)` hook, before their `init` and on every change. Datadog uses
-  it to set the RUM global-context property `support_session: true` for as long as the support
-  session lasts, and to remove it when it ends. The mark survives `setContext`/`reset` (which
-  replace the whole global context) and the `beforeSend` allowlist (only a literal `true`).
-  Automatic click actions cannot be cut without turning `trackUserInteractions` off for every
-  user, so they still arrive: Datadog dashboards and Product Analytics queries over customer
-  usage must exclude `@context.support_session:true`.
+- A pure product-analytics adapter is tagged `analytics: true` (today only Mixpanel, in
+  `providers/mixpanel.js`). The facade kills it by name on the gateway kill switch: its SDK is
+  never started and it receives no event, `page`, `identify`, `group`, `reset` or flag exposure.
+  Lifting the suppression starts it. The flag-driven `enable(name)` cannot revive it meanwhile.
+- `track` is dropped for every provider, so no shared business event (`session_started`,
+  `document_created`, `transaction_posted`, KPIs, ...) becomes a Datadog custom action either.
+  Errors, views, resources, long tasks, session replay, feature-flag evaluations and
+  `identify`/`group` (error attribution) keep flowing. AWS RUM has no `track` and is not affected.
+- Monitoring adapters are marked through the gateway context: `support_session: true` (allowlisted
+  boolean and a gateway/adapter `trustedKeys` entry, because its name contains `session`). Datadog
+  sets it as its RUM global context; the facade re-applies it after `reset`, which replaces the
+  whole global context. Automatic click actions cannot be cut without turning
+  `trackUserInteractions` off for every user, so they still arrive: dashboards over customer usage
+  must exclude `@context.support_session:true`.
 - The switch is driven by the support-session store, wired once in `lib/observability.js`.
-  `main.jsx` calls `bootSupportSession()` before `initBrowserObservability()`, so a support
-  load never initializes the Mixpanel SDK and is marked in Datadog from its first view: the store
-  starts in support mode on the handoff route and whenever the `sf_support_session` marker
-  (written by the handoff and by every `/me` that reports a `supportSession`) is still live.
+  `main.jsx` calls `bootSupportSession()` first, so a support load never starts the Mixpanel SDK
+  and is marked in Datadog from its first view (the store starts in support mode on the handoff
+  route and whenever the `sf_support_session` marker is still live).
 - NPS/CSAT surveys are off in the same session (`useSurveyEngine`), see `docs/surveys.md`.
-
-Whatever replaces these providers (the telemetry gateway adapters) must keep the contract:
-`analytics: true` for a pure analytics destination, the `analytics` capability for a monitoring
-destination that also takes product events, and the support marker on the latter.
 
 ## Events
 
@@ -352,13 +483,16 @@ Expected tests for new instrumentation:
 
 ## Adding A Provider
 
-1. Implement a provider object with `name`, `enabled`, and any supported methods:
-   `init`, `track`, `page`, `identify`, `captureException`, `setContext`, or
-   `flush`.
-2. Register it from `buildBrowserObservabilityConfig`.
-3. Keep initialization optional and failure-contained.
-4. Add unit tests for disabled config, missing config, successful dispatch, and
-   provider failures.
+1. Add an adapter to the core (`packages/app-shell-core/src/observability/adapters/`) that
+   receives its SDK by injection and closes the SDK's own egress in its hooks. It needs a
+   core preview and a repin; the provider-import guard bans the SDK everywhere else.
+2. Import the SDK only in `observability/sdk.js`, wire the adapter in a host provider file and
+   register it from `buildBrowserObservabilityConfig`. Add its name to
+   `TELEMETRY_KILL_PROVIDER_FLAGS` (`lib/flags/flag-keys.js`).
+3. Keep it opt-in, and initialization failure-contained (the gateway already isolates
+   adapter failures and timeouts).
+4. Add unit tests for disabled config, missing config, successful dispatch, provider
+   failures, and a real-SDK test of what goes on the wire.
 
 The Mixpanel provider passes a callback as the fourth argument to `client.track`
 so that the returned `Promise` resolves after Mixpanel confirms dispatch. This is
@@ -395,8 +529,14 @@ the initial view is created during SDK initialization and a duplicate initial ro
 is suppressed. Browser uncaught exceptions and unhandled rejections are collected
 by the SDK; the root React error boundary reports caught rendering errors through
 `captureException`. Manual errors retain their Error stack, and metadata passes
-through the common allowlist. SDK `beforeSend` also strips query strings, referrers,
-resource URLs, email addresses and common credential patterns in error text.
+through the common allowlist. The core adapter's `beforeSend` normalizes and scrubs view,
+resource, LCP and long-task URLs, error messages and stacks, action names and the event context
+with the gateway's sanitizers: an error message carrying an email or a token is sent as
+`[REDACTED]`. A referrer from another site is dropped. Stack frame URLs and positions are kept,
+so source maps still resolve (a frame whose URL had a query string loses its position). The SDK
+reverts changes to `usr`, `account` and `error.causes`, so only an opaque `id` is ever set on
+the first two, and an error whose causes would need scrubbing is dropped.
+`observability-datadog-envelope.test.js` drives the real SDK and checks what reaches the intake.
 
 Configure the values in `tools/app-shell/.env.observability.example`. Set
 `VITE_DATADOG_ENABLED=true` and supply `VITE_DATADOG_APPLICATION_ID`,
@@ -406,10 +546,13 @@ release builds. The session sample rate is a percentage bounded to 0..100 (defau
 100), and `VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE` defaults to 20. Set
 `VITE_DATADOG_REMOTE_CONFIGURATION_ID` to enable Datadog-managed RUM settings.
 RUM feature flag context is attached to views, errors, vitals, actions, long
-tasks and resources when the ConfigCat OpenFeature provider is enabled. The
+tasks and resources whenever a remote OpenFeature provider (Datadog Feature
+Flags or the ConfigCat fallback) is registered. The
 OpenFeature exposure hook forwards real evaluations to RUM independently of
 the shared `feature_flag_evaluated` business event, which remains the single
-manual exposure event. RUM keys are sanitized for Datadog's identifier rules;
+manual exposure event. The Datadog flag provider is created with
+`enableRumFeatureFlagTracking: false` so this hook stays the only RUM source
+(see `docs/feature-flags.md`). RUM keys are sanitized for Datadog's identifier rules;
 the business event retains the original flag key.
 There is no browser API key. Incomplete configuration stays disabled and warns.
 
@@ -422,8 +565,10 @@ An old session response arriving after logout cannot restore identity.
 CI resolves application ID/client token separately for PRODUCTION, EXPERIMENTAL
 and STAGING from `VITE_DATADOG_APPLICATION_ID_<TARGET>` and
 `VITE_DATADOG_CLIENT_TOKEN_<TARGET>` Actions variables. `DD_SITE` sets the site;
-`VITE_DATADOG_ENABLED` enables RUM and `VITE_CONFIGCAT_SDK_KEY` enables remote
-feature flags independently. Mixpanel is independently opt-in through
+`VITE_DATADOG_ENABLED` enables RUM. Feature flags are independent of it: the
+same RUM application ID/client token plus `VITE_APP_ENV` enable Datadog Feature
+Flags (`VITE_FLAGS_PROVIDER`, default `datadog`), and `VITE_CONFIGCAT_SDK_KEY`
+keeps ConfigCat available as the fallback. Mixpanel is independently opt-in through
 `VITE_MIXPANEL_ENABLED`.
 
 When Datadog telemetry is enabled, CI uploads hidden source maps using the

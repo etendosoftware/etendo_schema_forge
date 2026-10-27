@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/rowVisuals.js
 /**
  * Integration test for InlineLinesPanel — renders the component in jsdom
  * with minimal mocks. No server, no DB, no browser needed.
@@ -8,6 +10,14 @@ import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
 
 // --- Mocks (one block, no spreading across files) ---
+
+// The line edit/delete buttons render the Iconic edit/trash from the core custom-icons
+// barrel; the published core may predate them, so stub them while keeping every other icon real.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
+}));
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -31,13 +41,19 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 }));
 
 vi.mock('@/lib/resolveColumnLabel.js', () => ({
-  resolveColumnLabel: (col) => col.label || col.key,
+  // Raw label by default; a column may carry `testResolvedLabel` to stand in for a locale
+  // translation (ETP-5681 lookup-title test).
+  resolveColumnLabel: (col) => col.testResolvedLabel || col.label || col.key,
 }));
 
 vi.mock('@/lib/linesColumnWidth.js', () => ({
+  withLinesAbsorberColumn: (cols) => cols,
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
+  // Read by linesContentWidth.js to size a lookup selector (no-truncate) column; widths are
+  // pinned by the columnFlex stub above, so the measured value is irrelevant here.
+  measureTextPx: () => 0,
 }));
 
 // Stub the heavy sub-components that need their own providers
@@ -81,6 +97,10 @@ vi.mock('../SelectorInput.jsx', () => ({
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
 }));
+// ETP-5681 — the `account` lookup drawer, exposing its title while open.
+vi.mock('../AccountLookupPopup.jsx', () => ({
+  default: (props) => (props.open ? <div data-testid="account-lookup-popup-title">{props.title}</div> : null),
+}));
 vi.mock('./quickActionsStyle.js', () => ({
   QUICK_ACTIONS_PILL_CLASS: 'pill',
 }));
@@ -121,8 +141,7 @@ function renderPanel(props = {}) {
 
 // Radix Select needs a few pointer-capture DOM APIs jsdom does not implement —
 // only exercised by the "resolves enum option labels through ui()" test below,
-// which opens a real Select dropdown (see AccountBadgeSelect.vitest.jsx for the
-// same pattern).
+// which opens a real Select dropdown.
 beforeAll(() => {
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
@@ -349,7 +368,9 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     // Edit (pencil) must still render — only delete is gated.
     expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
-    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeNull();
+    // ETP-5600 — the edit glyph is the Figma Iconic edit; the testid stays stable.
+    expect(within(actions).getByTestId('Pencil__3b7ec2')).toHaveAttribute('data-icon', 'iconic-edit');
+    expect(within(actions).queryByTestId('IconicTrashIcon__3b7ec2')).toBeNull();
     expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
   });
 
@@ -360,7 +381,88 @@ describe('InlineLinesPanel', () => {
       await userEvent.hover(row);
     });
     const actions = within(row).getByTestId('line-actions');
-    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeInTheDocument();
+    expect(within(actions).queryByTestId('IconicTrashIcon__3b7ec2')).toBeInTheDocument();
+  });
+
+  // The line action buttons are the list quick actions' Figma Icon Button sm: 32x32
+  // round, a #828FA3 neutral icon (`--sf-icon-outline-secondary`) with the #121217 @ 5% hover overlay, and a
+  // destructive delete that tints to the light destructive background on hover.
+  describe('Figma action buttons in the line hover strip', () => {
+    async function hoverRow(id) {
+      const row = screen.getByTestId(`line-row-${id}`);
+      await act(async () => { await userEvent.hover(row); });
+      return row;
+    }
+
+    const NEUTRAL_TOKENS = ['h-8', 'w-8', 'rounded-full', 'text-[hsl(var(--sf-icon-outline-secondary))]', 'hover:bg-[rgba(18,18,23,0.05)]'];
+    const DESTRUCTIVE_TOKENS = [
+      'h-8', 'w-8', 'rounded-full',
+      'text-[var(--status-destructive-fg)]', 'hover:bg-[var(--status-destructive-bg)]', 'disabled:opacity-50',
+    ];
+
+    it.each([
+      ['extra action', (row) => within(row).getByTestId('line-action-archive')],
+      ['edit', (row) => within(row).getByRole('button', { name: 'editLineTooltip' })],
+    ])('the %s button carries the neutral tokens and no destructive ones', async (_label, pick) => {
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: (p) => <span {...p} />, tooltip: 'Archive', onClick: vi.fn(), testId: 'line-action-archive' }],
+      });
+      const btn = pick(await hoverRow('L1'));
+      expect(btn).toHaveClass(...NEUTRAL_TOKENS);
+      expect(btn).not.toHaveClass('text-[var(--status-destructive-fg)]');
+      expect(btn).not.toHaveClass('hover:bg-[var(--status-destructive-bg)]');
+    });
+
+    it('sizes the edit and extra-action icons at 20px', async () => {
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: (p) => <span {...p} />, tooltip: 'Archive', onClick: vi.fn() }],
+      });
+      const row = await hoverRow('L1');
+      expect(within(row).getByTestId('Pencil__3b7ec2')).toHaveClass('h-5', 'w-5');
+      expect(within(row).getByTestId('archiveIcon__3b7ec2')).toHaveClass('h-5', 'w-5');
+    });
+
+    it('the delete button carries the destructive tokens and renders the Iconic trash', async () => {
+      renderPanel();
+      const row = await hoverRow('L1');
+      const del = within(row).getByRole('button', { name: 'deleteRowTooltip' });
+      expect(del).toHaveClass(...DESTRUCTIVE_TOKENS);
+      expect(del).not.toHaveClass('text-[hsl(var(--sf-icon-outline-secondary))]');
+      const icon = within(del).getByTestId('IconicTrashIcon__3b7ec2');
+      expect(icon).toHaveAttribute('data-icon', 'iconic-trash');
+      expect(icon).toHaveClass('h-5', 'w-5');
+    });
+
+    it('disables the delete button while the delete is in flight and re-enables it after', async () => {
+      let resolveDelete;
+      const onDeleteRow = vi.fn(() => new Promise((resolve) => { resolveDelete = resolve; }));
+      renderPanel({ onDeleteRow });
+      const row = await hoverRow('L1');
+      const del = within(row).getByRole('button', { name: 'deleteRowTooltip' });
+      expect(del).not.toBeDisabled();
+
+      await act(async () => { await userEvent.click(del); });
+      expect(onDeleteRow).toHaveBeenCalledWith(ROWS[0]);
+      expect(within(row).getByRole('button', { name: 'deleteRowTooltip' })).toBeDisabled();
+
+      await act(async () => { resolveDelete(); });
+      expect(within(row).getByRole('button', { name: 'deleteRowTooltip' })).not.toBeDisabled();
+    });
+
+    it('keeps the hover overlay at rest only on the edit button of the line being edited', async () => {
+      renderPanel();
+      const rowL1 = await hoverRow('L1');
+      const editL1 = within(rowL1).getByRole('button', { name: 'editLineTooltip' });
+      expect(editL1).not.toHaveClass('bg-[rgba(18,18,23,0.05)]');
+
+      await act(async () => { await userEvent.click(editL1); });
+      expect(within(rowL1).getByRole('button', { name: 'editLineTooltip' })).toHaveClass('bg-[rgba(18,18,23,0.05)]');
+
+      const rowL2 = await hoverRow('L2');
+      const editL2 = within(rowL2).getByRole('button', { name: 'editLineTooltip' });
+      expect(editL2).toHaveClass('hover:bg-[rgba(18,18,23,0.05)]');
+      expect(editL2).not.toHaveClass('bg-[rgba(18,18,23,0.05)]');
+    });
   });
 
   it('numeric column headers are right-aligned', () => {
@@ -1005,6 +1107,45 @@ describe('InlineLinesPanel', () => {
     const lookupBtn = within(row).getByTestId('field-product');
     expect(lookupBtn).toBeInTheDocument();
     expect(lookupBtn.tagName).toBe('BUTTON');
+  });
+
+  // ETP-5681 — the lookup popup's title and the empty trigger use the locale-resolved column
+  // label, never the raw English AD label (the G/L journal Account popup read "Account" in Spanish).
+  it('titles the lookup drawer with the locale-resolved column label', async () => {
+    const columns = [
+      {
+        key: 'accountingCombination',
+        label: 'Account',
+        testResolvedLabel: 'Cuenta contable',
+        type: 'selector',
+        column: 'C_ValidCombination_ID',
+        lookup: true,
+        lookupDrawer: 'account',
+      },
+    ];
+    const rows = [{ id: 'AC1', accountingCombination: '' }];
+    render(
+      <InlineLinesPanel
+        ref={React.createRef()}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-AC1');
+    await act(async () => { await userEvent.hover(row); });
+    const editBtn = within(within(row).getByTestId('line-actions')).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const trigger = within(row).getByTestId('field-accountingCombination');
+    expect(trigger).toHaveTextContent('Cuenta contable');
+    await act(async () => { await userEvent.click(trigger); });
+    expect(screen.getByTestId('account-lookup-popup-title')).toHaveTextContent('Cuenta contable');
   });
 
   it('renders percent column with percentage sign', () => {
@@ -1948,6 +2089,141 @@ describe('InlineLinesPanel', () => {
       const emptyAction = within(emptyRow).getByTestId('line-action-add-dimensions');
       expect(emptyAction).toHaveAttribute('title', 'editDimensionsTooltip');
     });
+
+    // `isFieldEditableWhenReadOnly` — draftMode.editableLineFieldsWhenCompleted: on a
+    // completed (read-only) document, the dimension fields the gate accepts stay editable in
+    // the sub-row and are saved through commitField; every other field stays locked.
+    describe('isFieldEditableWhenReadOnly (completed document)', () => {
+      async function expandRow() {
+        const row = screen.getByTestId('line-row-L1');
+        await act(async () => {
+          await userEvent.click(within(row).getByTestId('dimensions-panel-toggle'));
+        });
+        return screen.getByTestId('dimensions-panel-L1');
+      }
+
+      it('renders only the accepted field as editable on a read-only document', async () => {
+        const gate = vi.fn((row, key) => key === 'project');
+        renderDimensionsPanel([], { isDocumentReadOnly: true, isFieldEditableWhenReadOnly: gate });
+        const subRow = await expandRow();
+        expect(within(subRow).getByTestId('dimension-field-project')).toBeInTheDocument();
+        expect(within(subRow).queryByTestId('dimension-field-costcenter')).toBeNull();
+        expect(within(subRow).getByDisplayValue('HQ')).toBeDisabled();
+        expect(gate).toHaveBeenCalledWith(dimensionRows[0], 'project');
+        expect(gate).toHaveBeenCalledWith(dimensionRows[0], 'costcenter');
+      });
+
+      it('saves an accepted field through onUpdateRow', async () => {
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        renderDimensionsPanel([], {
+          isDocumentReadOnly: true,
+          isFieldEditableWhenReadOnly: (row, key) => key === 'project',
+          onUpdateRow,
+        });
+        const subRow = await expandRow();
+        await act(async () => {
+          await userEvent.click(within(subRow).getByTestId('dimension-field-project-set'));
+        });
+        expect(onUpdateRow).toHaveBeenCalledTimes(1);
+        const [row, key, value] = onUpdateRow.mock.calls[0];
+        expect(row.id).toBe('L1');
+        expect(key).toBe('project');
+        expect(value).toBe('NEWVAL');
+      });
+
+      it('blocks commitField for a field the gate rejects at save time', async () => {
+        // The gate accepts while the sub-row renders, then rejects (e.g. the document got
+        // posted meanwhile): commitField re-asks it and must not reach onUpdateRow.
+        let allow = true;
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        renderDimensionsPanel([], {
+          isDocumentReadOnly: true,
+          isFieldEditableWhenReadOnly: (row, key) => allow && key === 'project',
+          onUpdateRow,
+        });
+        const subRow = await expandRow();
+        allow = false;
+        await act(async () => {
+          await userEvent.click(within(subRow).getByTestId('dimension-field-project-set'));
+        });
+        expect(onUpdateRow).not.toHaveBeenCalled();
+      });
+
+      it('flips with the gate on re-render, without remounting (header posted Y → N → Y)', async () => {
+        // DetailView rebuilds the gate from the current header on every render; the grid must
+        // follow the NEW gate it is handed, with the sub-row left open.
+        const lockedGate = () => false;
+        const unpostedGate = (row, key) => key === 'project' || key === 'costcenter';
+        const { rerender } = renderDimensionsPanel([], { isDocumentReadOnly: true, isFieldEditableWhenReadOnly: lockedGate });
+        let subRow = await expandRow();
+        expect(within(subRow).queryByTestId('dimension-field-project')).toBeNull();
+        expect(within(subRow).getByDisplayValue('Project Alpha')).toBeDisabled();
+
+        const props = {
+          columns: dimensionColumns, data: dimensionRows, hiddenColumns: [], entity: 'lines', token: 'test',
+          apiBaseUrl: '/api', selectorContext: {}, onSelectionChange: vi.fn(),
+          onUpdateRow: vi.fn().mockResolvedValue(), onDeleteRow: vi.fn().mockResolvedValue(), isDocumentReadOnly: true,
+        };
+        rerender(<InlineLinesPanel {...props} isFieldEditableWhenReadOnly={unpostedGate} />);
+        subRow = screen.getByTestId('dimensions-panel-L1');
+        expect(within(subRow).getByTestId('dimension-field-project')).toBeInTheDocument();
+        expect(within(subRow).getByTestId('dimension-field-costcenter')).toBeInTheDocument();
+        await act(async () => {
+          await userEvent.click(within(subRow).getByTestId('dimension-field-costcenter-set'));
+        });
+        expect(props.onUpdateRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'L1' }), 'costcenter', 'NEWVAL', expect.anything());
+
+        rerender(<InlineLinesPanel {...props} isFieldEditableWhenReadOnly={lockedGate} />);
+        subRow = screen.getByTestId('dimensions-panel-L1');
+        expect(within(subRow).queryByTestId('dimension-field-project')).toBeNull();
+        expect(within(subRow).queryByTestId('dimension-field-costcenter')).toBeNull();
+      });
+
+      it('keeps every other line column locked and offers no edit / delete / add action', async () => {
+        const columns = [{ key: 'invoicedQuantity', label: 'Qty', type: 'number' }, ...dimensionColumns];
+        const data = [{ ...dimensionRows[0], invoicedQuantity: 3 }];
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        const onEditRow = vi.fn();
+        renderDimensionsPanel([], {
+          columns, data, isDocumentReadOnly: true, onUpdateRow, onEditRow,
+          isFieldEditableWhenReadOnly: (row, key) => key === 'project' || key === 'costcenter',
+        });
+        const row = screen.getByTestId('line-row-L1');
+        await act(async () => {
+          await userEvent.hover(row);
+          await userEvent.click(within(row).getByText('3'));
+        });
+        // No inline editor opened for the non-dimension column, no edit modal requested.
+        expect(within(row).queryByTestId('field-invoicedQuantity')).toBeNull();
+        expect(onEditRow).not.toHaveBeenCalled();
+        expect(onUpdateRow).not.toHaveBeenCalled();
+        // The hover strip renders no buttons at all (no Pencil, no Trash, no add-dimensions).
+        const actions = within(row).queryByTestId('line-actions');
+        if (actions) expect(within(actions).queryAllByRole('button')).toHaveLength(0);
+        expect(within(row).queryByTestId('Pencil__3b7ec2')).toBeNull();
+        expect(within(row).queryByTestId('Trash2__3b7ec2')).toBeNull();
+        expect(screen.queryByTestId('inline-add-row-host')).toBeNull();
+      });
+
+      it('without the prop, a read-only document keeps every dimension field locked (unchanged)', async () => {
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        renderDimensionsPanel([], { isDocumentReadOnly: true, onUpdateRow });
+        const subRow = await expandRow();
+        expect(within(subRow).queryByTestId('dimension-field-project')).toBeNull();
+        expect(within(subRow).queryByTestId('dimension-field-costcenter')).toBeNull();
+        expect(within(subRow).getByDisplayValue('Project Alpha')).toBeDisabled();
+        expect(within(subRow).getByDisplayValue('HQ')).toBeDisabled();
+      });
+
+      it('is ignored on an editable (draft) document: every dimension field stays editable', async () => {
+        const gate = vi.fn(() => false);
+        renderDimensionsPanel([], { isDocumentReadOnly: false, isFieldEditableWhenReadOnly: gate });
+        const subRow = await expandRow();
+        expect(within(subRow).getByTestId('dimension-field-project')).toBeInTheDocument();
+        expect(within(subRow).getByTestId('dimension-field-costcenter')).toBeInTheDocument();
+        expect(gate).not.toHaveBeenCalled();
+      });
+    });
   });
 
   // ETP-4610 — generic hover-action extension slot (`rowActions` prop). Verifies the
@@ -2324,5 +2600,33 @@ describe('InlineLinesPanel — commitField error toast dedupe (ETP-5073 / DOC-04
     await editAndBlurProduct(row, 'Changed');
 
     expect(toast.error).toHaveBeenLastCalledWith('networkError');
+  });
+});
+
+describe('InlineLinesPanel — display: tag column (neutral pill)', () => {
+  const TAG_COLUMNS = [
+    { key: 'product', label: 'Product', type: 'string' },
+    { key: 'uOM', label: 'Unit', type: 'string', display: 'tag' },
+    { key: 'note', label: 'Note', type: 'string' },
+  ];
+  const TAG_ROWS = [
+    { id: 'T1', product: 'Widget', uOM: 'u1', 'uOM$_identifier': 'Centimeter', note: 'Centimeter' },
+    { id: 'T2', product: 'Gadget', uOM: '', note: 'x' },
+  ];
+
+  it('shows the unit as a pill on a saved line and nothing for an empty value', () => {
+    const { container } = renderPanel({ columns: TAG_COLUMNS, data: TAG_ROWS });
+    const pills = container.querySelectorAll('.status-tag.status-tag--neutral');
+    expect(pills).toHaveLength(1);
+    expect(pills[0]).toHaveTextContent('Centimeter');
+  });
+
+  it('leaves a column without display:tag as plain text (no pill)', () => {
+    const { container } = renderPanel({
+      columns: TAG_COLUMNS.map((c) => (c.key === 'uOM' ? { ...c, display: undefined } : c)),
+      data: TAG_ROWS,
+    });
+    expect(container.querySelector('.status-tag')).toBeNull();
+    expect(screen.getAllByText('Centimeter').length).toBeGreaterThan(0);
   });
 });

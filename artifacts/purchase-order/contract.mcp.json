@@ -1,8 +1,8 @@
 {
-  "version": "0.53.0",
+  "version": "0.56.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-09-25T14:58:12.563Z",
-  "contractChecksum": "526461b2ff26637d",
+  "updatedAt": "2026-10-26T18:32:54.185Z",
+  "contractChecksum": "10f2edec74d1c466",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -1054,7 +1054,8 @@
         "InvoiceStatus": "Estado de facturación",
         "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
         "EM_ETGO_Invoice_Status": "Estado de facturación",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -1062,7 +1063,8 @@
         "DeliveryStatusPurchase": "Reception Status",
         "InvoiceStatus": "Invoicing Status",
         "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-        "EM_ETGO_Invoice_Status": "Invoicing Status"
+        "EM_ETGO_Invoice_Status": "Invoicing Status",
+        "C_UOM_ID": "Unit"
       }
     }
   },
@@ -1674,7 +1676,8 @@
     "dangerousOperations": [
       "cancelandreplace",
       "confirmcancelandreplace"
-    ]
+    ],
+    "agentPrompt": "Purchase orders: orders to vendors. Entity `header` is the order, `lines` its lines. Complete (book) one with etendo_action documentAction and parameters {\"docAction\":\"CO\"}; the documentAction field prompt lists the other values. Document tools. Several orders at once (up to 50, one result each, not atomic): etendo_action_batch (e.g. complete them all, or void drafts). Attachments: etendo_request_attachment_upload, etendo_list_attachments, etendo_delete_attachment; do not pass main:true here, the main file is the document's own PDF. PDF: etendo_get_document_pdf returns the stored PDF; a draft has none, and on no_pdf or pdf_stale the user opens the document's preview in the application. Email: etendo_send_document_email (preview:true first). Editing an order with etendo_update: a required field (for example scheduledDeliveryDate or businessPartner) cannot be cleared; sending null or an empty value for it is refused with 422 validation_error, so leave it out to keep it. A draft's currency cannot be changed to one that differs from its price list's: that update is refused with 422, so send a price list in the new currency (priceList) in the same call, or keep the currency. The order date is also the accounting date: changing orderDate updates both."
   },
-  "checksum": "1005ee1ff3f7cb40"
+  "checksum": "368c769f49d26f4d"
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
-import { TruncatedText } from '@/components/ui/truncated-text';
+import BadgeAmount, { BADGE_CHIP_FIT_CLASS } from '@/windows/custom/shared/BadgeAmount.jsx';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import FollowUpDocumentButton from '@/components/follow-up-documents/FollowUpDocumentButton.jsx';
@@ -67,27 +67,27 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
           if (badge.kind === 'credit-applied') {
             return (
               <span
-                className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+                className="inline-flex items-center gap-2 whitespace-nowrap text-sm leading-6 font-medium h-10"
                 style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
               >
                 {ui('cpCreditFullyApplied')}
               </span>
             );
           }
-          // ETP-5268 follow-up — amount shown again, capped to ~6 digits via
-          // TruncatedText (tooltip only opens when it genuinely truncates).
+          // ETP-5268 follow-up — amount shown again. ETP-5729: BadgeAmount sizes it to its
+          // content up to a max width; the tooltip only opens when it genuinely truncates.
           return (
             <span
-              className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+              className={`inline-flex items-center gap-2 text-sm leading-6 font-medium h-10 ${BADGE_CHIP_FIT_CLASS}`}
               style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
               onClick={handleBadgeClick}
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-info-fg)' }} />
               {ui('cpFavorBadge')}
-              <TruncatedText
+              <BadgeAmount
                 text={formatCurrency(currency || 'USD', badge.amount)}
-                className="w-[72px] shrink-0 text-left font-semibold tabular-nums"
+                className="font-semibold"
                 data-testid="TruncatedText__8addd1" />
             </span>
           );
@@ -95,7 +95,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
         if (isFullyPaid) {
           return (
             <span
-              className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+              className="inline-flex items-center gap-2 whitespace-nowrap text-sm leading-6 font-medium h-10"
               style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
             onClick={handleBadgeClick}
@@ -109,7 +109,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
         }
         return (
           <span
-            className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+            className="inline-flex items-center gap-2 whitespace-nowrap text-sm leading-6 font-medium h-10"
             style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', cursor: 'pointer' }}
             data-testid="payment-status-badge"
             onClick={handleBadgeClick}

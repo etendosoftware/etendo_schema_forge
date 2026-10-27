@@ -44,8 +44,8 @@
         <td>{{lookup this 'category'}}</td>
         <td>{{lookup this 'uom'}}</td>
         <td data-cell-type="number">{{round2 (lookup this 'qtyOnHand')}}</td>
-        <td data-cell-type="number">{{round2 (lookup this 'unitCost')}}</td>
-        <td data-cell-type="number">{{round2 (lookup this 'totalValuation')}}</td>
+        <td data-cell-type="{{numCellType (lookup this 'unitCost')}}">{{dashIfBlank (lookup this 'unitCost') (round2 (lookup this 'unitCost'))}}</td>
+        <td data-cell-type="{{numCellType (lookup this 'totalValuation')}}">{{dashIfBlank (lookup this 'totalValuation') (round2 (lookup this 'totalValuation'))}}</td>
       </tr>
       {{/each}}
     </tbody>

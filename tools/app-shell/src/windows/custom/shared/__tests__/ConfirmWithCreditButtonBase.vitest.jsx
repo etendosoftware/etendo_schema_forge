@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/shared/ConfirmWithCreditButtonBase.jsx
+// @covers tools/app-shell/src/windows/custom/shared/useConfirmWithCredit.js
 // Real-render coverage companion to ConfirmWithCreditButtonBase.test.js (which
 // only asserts regex/string matches against the source text and therefore
 // contributes zero executed lines to coverage). Mirrors the sibling
@@ -31,26 +33,33 @@ vi.mock('@/components/contract-ui/ConfirmInOutModal', () => ({
   // invoiceAction/defaultCreateInvoice are exposed as data-attributes (ETP-4848)
   // so tests can assert what ConfirmWithCreditButtonBase computed and passed down,
   // without needing to render the real modal's internals.
-  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice }) => (
+  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice, title }) => (
     <div
       data-testid="confirm-inout-modal"
       data-invoice-action={invoiceAction ?? ''}
       data-default-create-invoice={String(defaultCreateInvoice)}
+      data-title={title ?? ''}
     >
-      <button data-testid="confirm-inout-confirm-with-id" onClick={() => onConfirmed({ invoice: { id: 'INV-1', documentNo: 'FC-001', amount: 100 } })} />
+      <button data-testid="confirm-inout-confirm-with-id" onClick={() => onConfirmed({ invoice: { id: 'INV-1', documentNo: 'FC-001', amount: 100, documentStatus: 'CO' } })} />
       <button data-testid="confirm-inout-confirm-no-id" onClick={() => onConfirmed({ invoice: {} })} />
       <button data-testid="confirm-inout-close" onClick={onClose} />
     </div>
   ),
 }));
 
+// `docs` is captured whole: it is all this component decides for the popup (title, label,
+// badge and buttons are derived from it inside ConfirmResultModal).
+let mockResultDocs;
 vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
-  ConfirmResultModal: ({ navigate, onClose }) => (
-    <div data-testid="confirm-result-modal">
-      <button data-testid="result-navigate" onClick={() => navigate('/some/route')} />
-      <button data-testid="result-close" onClick={onClose} />
-    </div>
-  ),
+  ConfirmResultModal: ({ docs, navigate, onClose }) => {
+    mockResultDocs = docs;
+    return (
+      <div data-testid="confirm-result-modal">
+        <button data-testid="result-navigate" onClick={() => navigate('/some/route')} />
+        <button data-testid="result-close" onClick={onClose} />
+      </div>
+    );
+  },
 }));
 
 // ETP-5333 — the mock exposes `loading` (forwarded by ConfirmWithCreditButtonBase
@@ -59,8 +68,8 @@ vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
 // flight, and stays mounted until it resolves — mirroring the real
 // CreateInvoiceConfirmModal's own loading contract.
 vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
-  default: ({ onConfirm, onClose, loading }) => (
-    <div data-testid="create-invoice-confirm-modal">
+  default: ({ onConfirm, onClose, loading, title }) => (
+    <div data-testid="create-invoice-confirm-modal" data-title={title ?? ''}>
       <button data-testid="create-invoice-confirm" onClick={onConfirm} disabled={loading}>
         {loading ? 'soProcessing' : 'soCreateDocsBtn'}
       </button>
@@ -80,7 +89,6 @@ const BASE_PROPS = {
   entitySegment: 'someWindow',
   invoiceRoute: '/sales-invoice/',
   invoiceType: 'facturaVenta',
-  invoiceCreatedTitleKey: 'invoiceCreatedTitle',
   generatePdfFn: vi.fn(),
   getPdfLabelsFn: () => ({}),
   specName: 'some-window',
@@ -120,6 +128,22 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
     const btn = screen.getByTestId('action-create-return-invoice');
     expect(btn).toHaveTextContent('Crear Factura Rectificativa');
     expect(btn).not.toHaveTextContent('createReturnInvoice');
+  });
+
+  it('renders the document icon (svg) before the label, like "Crear Factura"', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+        postConfirmButtonLabel="Crear Factura Rectificativa"
+      />
+    );
+    const btn = screen.getByTestId('action-create-return-invoice');
+    const svg = btn.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(btn.firstElementChild).toBe(svg);
+    expect(svg).toHaveClass('w-5', 'h-5');
+    expect(btn.textContent).toBe('Crear Factura Rectificativa');
   });
 
   it('does not render the post-confirm button at all when status is CO but hasReturnInvoice is true', () => {
@@ -315,6 +339,48 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
   });
 
+  // ETP-5688 — the CO popup's title is its own prop; `cardTitle` / `confirmModalTitle` belong to
+  // the DR confirm-time modal and must not leak into it (nor the other way round).
+  it('hands createInvoiceModalTitle to the CO CreateInvoiceConfirmModal as its title', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+        createInvoiceModalTitle="Generate rectificative invoice"
+        cardTitle="Card title (DR only)"
+        confirmModalTitle="Confirm modal title (DR only)"
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toHaveAttribute('data-title', 'Generate rectificative invoice');
+  });
+
+  it('passes no title to the CO modal without createInvoiceModalTitle (it keeps its own default), ignoring cardTitle', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+        cardTitle="Card title (DR only)"
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toHaveAttribute('data-title', '');
+  });
+
+  it('leaves the DR ConfirmInOutModal title on confirmModalTitle, unaffected by createInvoiceModalTitle', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+        confirmModalTitle="Confirm modal title (DR only)"
+        createInvoiceModalTitle="Generate rectificative invoice"
+      />
+    );
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toHaveAttribute('data-title', 'Confirm modal title (DR only)');
+    expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
+  });
+
   it('closes ConfirmInOutModal without producing a result when its onClose fires', async () => {
     render(
       <ConfirmWithCreditButtonBase
@@ -343,6 +409,8 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
 
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
     expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
+    // The invoice is typed by the window's `invoiceType`, keeps its real status, carries no amount.
+    expect(mockResultDocs).toEqual([{ type: 'facturaVenta', num: 'FC-001', documentStatus: 'CO', route: '/sales-invoice/INV-1' }]);
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
@@ -508,12 +576,13 @@ describe('ConfirmWithCreditButtonBase — CreateInvoiceConfirmModal stays open d
     await act(async () => {
       resolveFetch({
         ok: true,
-        json: () => Promise.resolve({ response: { data: { id: 'RET-1', documentNo: 'FC-002', grandTotalAmount: 50 } } }),
+        json: () => Promise.resolve({ response: { data: { id: 'RET-1', documentNo: 'FC-002', grandTotalAmount: 50, documentStatus: 'CO' } } }),
       });
     });
 
     expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
     expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
+    expect(mockResultDocs).toEqual([{ type: 'facturaVenta', num: 'FC-002', documentStatus: 'CO', route: '/sales-invoice/RET-1' }]);
   });
 
   it('on failure: the modal stays open, returns to the idle label, and toast.error is called — no result modal', async () => {

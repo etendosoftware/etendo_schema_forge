@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * Regression pin: WHICH descriptor decides the add-row product control.
  *
@@ -17,7 +18,7 @@
  * Unlike its sibling DataTable suites, this spec deliberately does NOT stub
  * ProductSearchDrawer — the assertion is precisely that the real drawer opens.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -51,6 +52,10 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 }));
 // The stock variant is irrelevant here and pulls its own chrome — stub it, keep the default one real.
 vi.mock('../ProductStockSearchDrawer.jsx', () => ({ default: () => null }));
+// The `account` drawer as a marker while open, so a test can tell which drawer the add-row opened.
+vi.mock('../AccountLookupPopup.jsx', () => ({
+  default: (props) => (props.open ? <div data-testid="account-lookup-popup-open">{props.selectorUrl}</div> : null),
+}));
 vi.mock('../SelectorInput.jsx', () => ({ SelectorInput: () => <div data-testid="selector-input" /> }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -71,12 +76,12 @@ const ENTRY_FIELDS = [
   { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', label: 'Qty', defaultValue: 1 },
 ];
 
-function renderAddRow(fields = ENTRY_FIELDS) {
+function renderAddRow(fields = ENTRY_FIELDS, columns = INVOICE_COLUMNS) {
   return render(
     <DataTable
       apiBaseUrl={API_BASE_URL}
       entity={ENTITY}
-      columns={INVOICE_COLUMNS}
+      columns={columns}
       data={[]}
       token="test-token"
       addRow={{ active: true, fields, onAdd: vi.fn(() => Promise.resolve(true)), onCancel: vi.fn(), catalogs: {} }}
@@ -157,6 +162,9 @@ describe('DataTable add-row — the product control comes from addRow.fields, no
       expect(screen.getByTestId('inline-add-field-product')).toHaveTextContent('Agua mineral');
     });
     expect(screen.getByTestId('inline-add-field-product')).not.toHaveAttribute('data-placeholder');
+    // ETP-5133 — the add-row cell truncates until the line is saved, so the full name is on hover.
+    expect(within(screen.getByTestId('inline-add-field-product')).getByText('Agua mineral'))
+      .toHaveAttribute('title', 'Agua mineral');
   });
 
   it('falls back to the selector combo when the add-row entry itself is not a lookup', async () => {
@@ -170,6 +178,24 @@ describe('DataTable add-row — the product control comes from addRow.fields, no
     // The selector branch is a typeahead combo over its own inline options listbox — it can
     // never open the product drawer, which is what the lookup branch above exists for.
     expect(control).toHaveAttribute('aria-controls', 'inline-options-product');
+    expect(screen.queryByTestId('product-search-drawer')).not.toBeInTheDocument();
+  });
+
+  // ETP-5681 — the generator flags only the first `search` add-line field as the lookup, so the
+  // G/L journal Account (a `selector` FK) declares its popup through `lookupDrawer` alone.
+  it('renders a lookup button for a selector-type field that names a lookupDrawer, opening that drawer', async () => {
+    const user = userEvent.setup();
+    renderAddRow(
+      [{ key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookupDrawer: 'account' }],
+      [{ key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account' }],
+    );
+
+    const control = screen.getByTestId('inline-add-field-accountingCombination');
+    expect(control.tagName).toBe('BUTTON');
+    await user.click(control);
+
+    expect(screen.getByTestId('account-lookup-popup-open'))
+      .toHaveTextContent(`${API_BASE_URL}/${ENTITY}/selectors/C_ValidCombination_ID`);
     expect(screen.queryByTestId('product-search-drawer')).not.toBeInTheDocument();
   });
 

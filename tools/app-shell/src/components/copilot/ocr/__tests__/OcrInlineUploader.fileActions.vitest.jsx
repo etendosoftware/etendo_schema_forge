@@ -25,12 +25,9 @@ vi.mock('../ocrDocTypes', () => ({
   getOcrDocType: (id) => (id === 'purchase-invoice' ? {
     id: 'purchase-invoice',
     routePrefix: '/purchase-invoice/',
-    toolName: 'SimpleOcrTool',
     eventName: 'copilot:ocr-prefill:purchase-invoice',
-    question: 'Extract invoice fields',
     tabId: '290',
     tableName: 'C_Invoice',
-    structuredOutput: true,
   } : null),
 }));
 
@@ -38,16 +35,24 @@ vi.mock('../listAttachments', () => ({
   uploadAndMarkMainAttachment: vi.fn().mockResolvedValue({ id: 'att-1' }),
 }));
 
-vi.mock('../buildOcrSchema', () => ({
-  buildOcrSchema: () => ({ type: 'object', properties: {} }),
+vi.mock('../useOcrConfig', () => ({
+  useOcrConfig: () => ({
+    status: 'ready',
+    config: { docType: 'purchase-invoice', toolName: 'SimpleOcrTool', question: 'q', schema: { type: 'object' } },
+    retry: () => {},
+  }),
 }));
 
 vi.mock('../useOcrExtraction', () => ({
+  OCR_NO_DATA_ERROR: 'ocr-no-data',
+  OCR_TIMEOUT_ERROR: 'ocr-timeout',
+  OCR_NETWORK_ERROR: 'ocr-network',
+  OCR_SESSION_CHANGED_ERROR: 'ocr-session-changed',
   useOcrExtraction: () => mockExtractionReturn,
 }));
 
 vi.mock('../useOcrFlow', () => ({
-  useOcrFlow: () => ({ result: null, loading: false, pendingModal: null }),
+  useOcrFlow: () => ({ result: null, loading: false, pendingModal: null, clearResult: () => {} }),
 }));
 
 // The stub renders `toolbarExtra`, where UploadedFileViewer mounts the PDF's "Más" menu.

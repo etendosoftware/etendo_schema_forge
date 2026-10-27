@@ -1,5 +1,9 @@
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { apiAuthHeaders, login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
@@ -9,11 +13,12 @@ import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
 import {
-  loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  addProductLine, ensureVendorSetup, openDraftRow, openListRow, clickConfirmButton,
+  loadCredentials, slow, waitForDetailReady, selectVendorBP,
+  addProductLine, createDraftWithFirstLine, ensureVendorSetup, openDraftRow, openListRow,
+  clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, expectAlreadyConfirmed,
   safeReload, readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
-  waitForDerivedFieldValue,
+  waitForDerivedFieldValue, findNegativeLineRow,
 } from '../../helpers/purchase-helpers.js';
 
 /**
@@ -42,47 +47,6 @@ import {
 
 const onboardingCreds = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_SALES_INTEGRATION === '1';
-
-/**
- * Locate the line row (rendered by the shared InlineLinesPanel —
- * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
- * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
- * `qtyFieldKey` cell holds a negative value, and return a locator bound to
- * that row's PRODUCT. The purchase and sales full-flow specs carry identical
- * copies of this helper — keep them in sync.
- *
- * What is guaranteed:
- *   - The quantity and the product are read from the SAME DOM snapshot (one
- *     `evaluateAll` over every row), so the product returned is the one whose
- *     quantity was negative — a re-render that reorders the table between two
- *     separate reads can no longer pair the negative quantity with the
- *     positive line's product.
- *   - The scan is retried, so the detail view's reload flash (0 rows, cells
- *     not rendered yet) does not make it wrongly conclude there is none.
- *   - The returned locator is matched by product, not by position, so it
- *     keeps pointing at that line however the table reorders afterwards.
- *
- * What is NOT guaranteed: that the row's cells still hold the same values when
- * the caller reads them. Callers must read them with retrying assertions
- * (`toHaveText`, `readSettledCellAmount`), never a one-shot `textContent()`.
- * Reading the cell value (rather than pattern-matching the row's text) avoids
- * false positives from unrelated hyphens in a product name/description.
- */
-async function findNegativeLineRow(page, qtyFieldKey) {
-  const rows = page.locator('[data-testid^="line-row-"]');
-  let productName = null;
-  await expect(async () => {
-    const cells = await rows.evaluateAll((els, key) => els.map((el) => ({
-      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
-      product: el.querySelector('[data-cell-key="product"]')?.textContent?.trim() ?? '',
-    })), qtyFieldKey);
-    productName = cells.find((c) => c.product && parseAmount(c.qty) < 0)?.product ?? null;
-    expect(productName,
-      `No line row with a negative "${qtyFieldKey}" was found (rows: ${JSON.stringify(cells)})`,
-    ).toBeTruthy();
-  }).toPass({ timeout: 15_000 });
-  return rows.filter({ has: page.locator('[data-cell-key="product"]', { hasText: productName }) });
-}
 
 /**
  * Locate the line row whose product cell names `productName`. Rows are matched
@@ -338,17 +302,12 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await selectVendorBP(page);
     });
 
-    await test.step('Save PO as draft', async () => {
-      await saveDraft(page);
-
-      await expect(page,
-        'After saving, URL should include the PO record ID',
-      ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-      await waitForDetailReady(page);
-    });
-
-    await test.step('Add two product lines', async () => {
-      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+    // No Guardar first: "+ Añadir líneas" saves the header itself, the path a user
+    // takes. The manual-save path is kept by the ALL-negative case below.
+    await test.step('Add two product lines, the first from the empty state (no manual save)', async () => {
+      await createDraftWithFirstLine(page, {
+        spec: 'purchase-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
       await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '3' });
 
       await expect(page.locator('tbody tr'),
@@ -386,10 +345,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     });
 
     await test.step('Verify success modal shows the created receipt', async () => {
-      const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-      await expect(successMsg,
+      // ETP-5674: the result popup is titled after the created receipt, not the PO.
+      await expect(page.getByTestId('confirm-result-title'),
         '[Plan 6.2] Success modal should confirm PO was completed and receipt was created',
-      ).toBeVisible({ timeout: 30_000 });
+      ).toHaveText(/^(Albarán creado|Receipt created)$/, { timeout: 30_000 });
 
       await expect(page.getByText(/entrada|recibo|receipt/i).first(),
         '[Plan 6.2] Success modal should show a link to the created goods receipt',
@@ -635,7 +594,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await ensureProductFixtures(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 2: Create PO, save as draft
+    // STEP 2: Create PO and fill its header (no manual save — see STEP 3)
     // ═══════════════════════════════════════════════════════════════════════
 
     await navigateTo(page, 'purchase-order');
@@ -647,20 +606,16 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await slow(page);
 
     await selectVendorBP(page);
-    await saveDraft(page);
-
-    await expect(page,
-      'After saving, URL should include the PO record ID',
-    ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await waitForDetailReady(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: Add a baseline positive line, capture totals BEFORE the
-    // negative line is added
+    // STEP 3: Add a baseline positive line straight from the empty state,
+    // which saves the header itself; capture totals BEFORE the negative line
+    // is added
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+    await createDraftWithFirstLine(page, {
+      spec: 'purchase-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+    });
 
     // [ETP-4567 check #4] Price column header reads "Precio", not the old
     // default AD label ("Precio tarifa" / "Net List Price"). Checked here,
@@ -781,8 +736,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
     await slow(page);
 
-    const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-    await expect(successMsg).toBeVisible({ timeout: 30_000 });
+    // ETP-5674: the result popup is titled after the created receipt, not the PO.
+    await expect(page.getByTestId('confirm-result-title'),
+      '[ETP-4567] Confirming the PO should announce the created receipt',
+    ).toHaveText(/^(Albarán creado|Receipt created)$/, { timeout: 30_000 });
     await dismissSuccessModal(page);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1200,13 +1157,6 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await slow(page);
 
     await selectVendorBP(page);
-    await saveDraft(page);
-
-    await expect(page,
-      'After saving, URL should include the PO record ID',
-    ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await waitForDetailReady(page);
 
     // Two NEGATIVE-quantity lines — every line negative, so the document
     // total itself goes fully negative (unlike the mixed-sign case above).
@@ -1218,7 +1168,12 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     ];
     const expectedSubtotal = LINES.reduce((sum, l) => sum + l.qty * l.product.listPrice, 0);
 
-    await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: String(LINES[0].qty) });
+    // Manual "Guardar" before the first line — the creation path this case keeps
+    // covered for the purchase order; the other PO specs go straight from the empty state.
+    await createDraftWithFirstLine(page, {
+      spec: 'purchase-order', via: 'save',
+      productName: PRODUCT_FIXTURE_ALPHA.name, quantity: String(LINES[0].qty),
+    });
     await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: String(LINES[1].qty) });
 
     await waitForLinesSettled(page, 2, 'PO should have 2 lines, both negative');
@@ -1290,10 +1245,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       'Creating the goods receipt from a fully-negative PO');
     expect(receipt?.id, '[ETP-4567] createGoodsReceipt should return the new receipt id').toBeTruthy();
 
-    const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-    await expect(successMsg,
+    // ETP-5674: the result popup is titled after the created receipt, not the PO.
+    await expect(page.getByTestId('confirm-result-title'),
       '[ETP-4567] PO with a fully-negative total should confirm successfully',
-    ).toBeVisible({ timeout: 30_000 });
+    ).toHaveText(/^(Albarán creado|Receipt created)$/, { timeout: 30_000 });
     await expect(page.getByText(/no pending lines|no hay líneas pendientes/i),
       '[ETP-4567] The PO result must not show "No pending lines to invoice"',
     ).toHaveCount(0);

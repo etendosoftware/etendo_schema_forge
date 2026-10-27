@@ -12,7 +12,7 @@ import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { ETGO_DTO_PRODUCT_ID } from '@/lib/documentTotals.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
 // ETP-5024 x ETP-4576: this modal used to hand-build its headers, and they were missing
 // `Accept-Language` — the backend (NeoAuthenticator.applyRequestLanguage) silently falls
 // back to AD_User.AD_Language, so the "business partner is on hold" refusal from
@@ -176,13 +176,13 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
   const confirmedPanel = confirmedDocs && hasConfirmedDoc
     ? createPortal(
+        // ETP-5674 — the popup derives its title and banner from `docs`; `confirmedTitle` only
+        // feeds the no-document toast below.
         <ConfirmResultModal
-          title={confirmedTitle || ui('soConfirmedTitle')}
           docs={[
-            confirmedDocs?.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, documentStatus: confirmedDocs.shipment.documentStatus, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, documentStatus: confirmedDocs.invoice.documentStatus, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
-          currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
           onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
           data-testid="ConfirmResultModal__18d1f0" />,
@@ -462,7 +462,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${processRes.status})`);
+          // ETP-5840 — translated from the refusal's identity (e.g. the missing exchange rate);
+          // an unkeyed refusal still shows the backend's own sentence.
+          throw new Error(translateBackendErrorBody(e, ui, `Error (${processRes.status})`));
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
@@ -490,7 +492,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           throw new Error(ui('soOrderConfirmedShipmentError') + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
-        currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5674: carry documentStatus so the result modal badges the shipment from its real status.
+        currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         setShipmentResult(currentShipment);
         trackDocumentCreated('goods-shipment');
       } catch (e) {
@@ -803,7 +806,8 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           throw new Error(translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
-        result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5674: carry documentStatus so the result modal badges the shipment from its real status.
+        result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         trackDocumentCreated('goods-shipment');
       }
 

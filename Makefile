@@ -92,6 +92,14 @@ test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml
 
+.PHONY: test-changed
+test-changed: ## Inner loop: run only the unit tests your diff can affect (BASE=origin/develop, PLAN=1 prints the selection)
+	@./scripts/test-changed.sh
+
+.PHONY: test-changed-coverage
+test-changed-coverage: ## test-changed with LCOV coverage in coverage/, what the pre-push hands to Sonar (BASE=origin/develop)
+	@./scripts/test-changed.sh --coverage
+
 .PHONY: test-ci-coverage
 test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (CI mode, single pass)
 	@mkdir -p test-results coverage
@@ -130,6 +138,16 @@ find-tests: ## Find existing tests for a file or Java class before writing one (
 .PHONY: validate-pipeline
 validate-pipeline: ## Validate pipeline completeness across all artifacts
 	$(SF) sf-validate-pipeline --format=text
+
+# The report helper modules exist as one copy per repo (templates/ is not published).
+# This mirrors this repo's canonical copies into schema_forge_core and refreshes the
+# parity contract (parity.json, identical bytes in both repos). Commit the result in
+# BOTH repos. `sync-report-helpers-check` only reports (exit 1 when out of parity).
+.PHONY: sync-report-helpers sync-report-helpers-check
+sync-report-helpers: ## Mirror templates/reports/helpers/*.js into schema_forge_core + refresh parity.json (CORE_DIR=)
+	CORE_DIR=$(CORE_DIR) node scripts/sync-report-helpers.mjs
+sync-report-helpers-check: ## Report (without writing) whether the two report-helper copies are in parity (CORE_DIR=)
+	CORE_DIR=$(CORE_DIR) node scripts/sync-report-helpers.mjs --check
 
 .PHONY: method-budget
 method-budget: ## Ratchet guard: fail only if a tracked class grew past its method baseline
@@ -368,16 +386,18 @@ regen-help: ## Show usage and examples for `make regen`
 
 # --- Public API Gateway (ETP-5345) ---
 #
-# Resolves artifacts/*/contract.json's field-level `publicApi` curation into one flat
-# allowlist artifact per API version (artifacts/_public-api/allowlist.<version>.json),
-# consumed by the gateway/ NestJS app. Same LOCAL_CORE dispatcher as `regen` above.
+# The gateway/ NestJS app serves public-api/base.v1.json, built by
+# `generate-base-public-api-manifest` from artifacts/*/contract.json and the gitignored
+# artifacts/*/schema-raw.json. `regen-public-api` writes a separate allowlist
+# (artifacts/_public-api/allowlist.v1.json) that no runtime component reads.
+# Same LOCAL_CORE dispatcher as `regen` above.
 
 .PHONY: regen-public-api
 regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
 	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
 
 .PHONY: generate-base-public-api-manifest
-generate-base-public-api-manifest: ## Generate the editable primary-entity Base-window public API manifest
+generate-base-public-api-manifest: ## Generate public-api/base.v1.json, the manifest the public API gateway serves
 	node scripts/generate-base-public-api-manifest.mjs artifacts public-api/base.v1.json
 	node scripts/validate-base-public-api-manifest.mjs public-api/base.v1.json
 
@@ -597,6 +617,8 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "  DRY_RUN=1          Report what WOULD run (executes @check, commits nothing)"
 	@echo "  CLIENT=<clientId>  Restrict to a single tenant (ad_client_id)"
 	@echo "  FIX=<fix_id>       Force exactly ONE fix (ignores chain order + baseline cutoff; does not advance)"
+	@echo "                     The only way to run an OPT-IN fix (@optIn: true), and only for tenants whose"
+	@echo "                     chain is current up to its date (others: BLOCKED_CHAIN_BEHIND, no ledger row)"
 	@echo "  MARK_FIXED=1       Mark a fix as manually resolved (counts as success; runs nothing)"
 	@echo "  REASON=\"...\"       Mandatory note for MARK_FIXED — what was done by hand"
 	@echo ""
@@ -613,6 +635,8 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "  - fix_id = the .sql filename without .sql (e.g. 20260611T143000Z__R3-periodcontrol)."
 	@echo "  - Authoring rules + skeleton: cli/src/data-fixes/sql/README.md."
 	@echo "  - Exit code is non-zero if any tenant's chain halted on a FAILED fix."
+	@echo "  - Opt-in fixes (@optIn: true, e.g. R37-tenant-subscription-backfill) are never run by a full"
+	@echo "    run; LIST_CLIENTS=1 shows them in the OPT-IN column, never as PENDING."
 
 # --- Remote DB tunnel (SSH → RDS in a private VPC) ---
 #
@@ -814,6 +838,10 @@ sync-agents-check: ## Fail if the AGENTS.md mirrors are stale (CI guard)
 merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + copy-paste merge cmds (TASK="ETP-XXXX [ETP-YYYY ...]")
 	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
 	@./scripts/merge-block-check.sh $(TASK)
+
+.PHONY: check-modules
+check-modules: ## Check every Etendo repo/module is on its expected branch (FETCH=0, ONLY=a,b, ROOT=<env path>[,<path>], ALL_ENVS=1)
+	@node scripts/check-modules.js $(if $(filter 0,$(FETCH)),--no-fetch,) $(if $(ONLY),--only=$(ONLY),) $(if $(ROOT),--root=$(ROOT),) $(if $(ALL_ENVS),--all-envs,)
 
 # --- CI parity -------------------------------------------------------------
 # These variable names are shared with unrelated targets earlier in this file
@@ -1054,14 +1082,54 @@ TARGET ?= local
 SUITE  ?= sales-order
 PROBE  ?=
 MODEL  ?=
+REPEAT ?=
 
 .PHONY: mcp-test
-mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=)
-	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL))
+mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=, CONCURRENCY=)
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY))
+
+TARGETS     ?= local,holded
+SUBJECT     ?=
+CONCURRENCY ?=
+SEED        ?=
+
+# D44: one compareId, one run per target under runs/<compareId>/targets/, run
+# concurrently, then summary.json + summary.md. REPEAT defaults to 3 here, 1 in
+# mcp-test. Every target needs `platform` in config.toml. Pass SEED=<run A's
+# seed> to start the second run of a stability pair.
+.PHONY: mcp-compare
+mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
+	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
+
+# Plan §5.4 / §5.9 (S6): load the baseline dataset into a FRESHLY INITIALIZED target through its
+# own MCP, and record a seed manifest (.seeds/<target>.json). Order for an official comparison:
+# initialize -> mcp-seed -> mcp-compare. A stability pair's run B RE-INITIALIZES and RE-SEEDS every
+# target again (mcp-stability refuses a run B that reuses run A's seed). Re-seeding a seeded target
+# is a no-op; a half-seeded or foreign one is refused, never duplicated. CAPTURE=1 seeds nothing and
+# prints the init allowlist for fixtures/fresh.<platform>.yaml.
+# TARGET must be passed explicitly: seeding writes, so the `TARGET ?= local` default above never
+# picks the target for it (checked when the recipe expands, so `make -n mcp-seed` fails too).
+FIXTURE        ?= okr-baseline
+INITIALIZED_AT ?=
+.PHONY: mcp-seed
+mcp-seed: ## Seed a freshly initialized target (TARGET=, FIXTURE=okr-baseline, INITIALIZED_AT=<ISO>, CAPTURE=1)
+	$(if $(or $(filter file default undefined,$(origin TARGET)),$(if $(strip $(TARGET)),,empty)),$(error TARGET is required (the TARGET ?= local default does not apply to seeding), e.g. make mcp-seed TARGET=local INITIALIZED_AT=2026-10-20T09:00Z))
+	cd mcp-tests && uv run python -m runner.seed --target $(TARGET) $(if $(CAPTURE),--capture-allowlist,--fixture $(FIXTURE) $(if $(INITIALIZED_AT),--initialized-at $(INITIALIZED_AT)))
 
 .PHONY: mcp-login
 mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prerequisite for mcp-test.
 	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --login
+
+# Pure, from files: never contacts an MCP or an LLM, never reads events.ndjson (D48).
+.PHONY: mcp-report
+mcp-report: ## Derive summary.json + summary.md of a comparison (RUN=<compareId>|<path>)
+	@if [ -z "$(RUN)" ]; then echo "RUN is required, e.g. make mcp-report RUN=20261014T1000-cmp-a1b2"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report report $(RUN)
+
+.PHONY: mcp-stability
+mcp-stability: ## Winner agreement between two comparisons; exit 2 if pins differ or a run is unofficial (A=, B=)
+	@if [ -z "$(A)" ] || [ -z "$(B)" ]; then echo "A and B are required, e.g. make mcp-stability A=<compareId> B=<compareId>"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report stability $(A) $(B)
 
 # Deliberately NOT folded into mcp-test: that target must stay a command that
 # starts, runs and returns an exit code, so it keeps working from a script and

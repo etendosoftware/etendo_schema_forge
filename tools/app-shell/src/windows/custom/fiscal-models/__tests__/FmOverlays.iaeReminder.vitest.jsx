@@ -77,6 +77,17 @@ describe('NewDeclModal — IAE activity reminder trigger', () => {
     expect(showIaeActivityReminder).toHaveBeenCalledTimes(1);
   });
 
+  // ETP-5716 — the 303 can be created for 2025 too: the year-end reminder is year-agnostic.
+  it('fires for a 303 of 2025 too, T4 and monthly 12', () => {
+    const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(container.querySelector('.fm-newdecl-year-trigger'));
+    fireEvent.click(Array.from(container.querySelectorAll('.fm-newdecl-year-option')).find(o => o.textContent.trim() === '2025'));
+    fireEvent.click(getPeriodBtn(container, 'T4'));
+    selectMonthly(container);
+    fireEvent.click(getPeriodBtn(container, '12'));
+    expect(showIaeActivityReminder).toHaveBeenCalledTimes(2);
+  });
+
   it('does NOT fire for model=303 and a non-last quarterly period (T1)', () => {
     const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
     fireEvent.click(getPeriodBtn(container, 'T1'));

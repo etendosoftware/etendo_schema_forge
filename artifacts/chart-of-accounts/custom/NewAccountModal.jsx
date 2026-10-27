@@ -9,7 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
-import { AccountBadgeSelect } from '@/components/contract-ui';
+import { AccountSelect } from '@/components/contract-ui';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
 import { parseBackendErrorMessage, translateBackendError } from '@/lib/backendErrors.js';
 
@@ -291,7 +291,8 @@ export default function NewAccountModal({
           ? prev.accountType
           : deriveDefaultAccountType(null, parentCode, accountRows),
       }));
-      setErrors((prev) => ({ ...prev, parentAccountId: undefined }));
+      // The code is reset to the new prefix, so a code error about the old one no longer applies.
+      setErrors((prev) => ({ ...prev, parentAccountId: undefined, searchKey: undefined }));
     },
     [parentOptions, accountRows],
   );
@@ -386,14 +387,13 @@ export default function NewAccountModal({
 
         <div className="flex flex-col gap-5 py-2 min-w-0" data-testid="new-account-modal-fields">
           {/* ── Parent Account ── */}
-          <AccountBadgeSelect
+          <AccountSelect
             label={ui('parentAccount')}
             required
             value={form.parentAccountId || null}
             options={parentOptions.map((p) => ({ id: p.id, code: p.searchKey, name: p.name }))}
             onChange={(id) => handleParentChange({ target: { value: id ?? '' } })}
             error={errors.parentAccountId}
-            modal
             data-testid="new-account-modal-parent"
           />
 
@@ -433,14 +433,10 @@ export default function NewAccountModal({
                 record={accountCodeRecord}
                 readOnly={false}
                 placeholder={lastUsedSuffix}
+                error={errors.searchKey}
                 data-testid="AccountCodeField__2c756f"
               />
             </div>
-            {errors.searchKey && (
-              <p className={ERROR_CLS} role="alert">
-                {errors.searchKey}
-              </p>
-            )}
           </div>
 
           {/* ── Account Type ── */}

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @covers tools/app-shell/src/components/contract-ui/ConfirmInOutModal.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ETP-5316 — the modal's only use of `useUI()` is `translateBackendError(err.message, ui, …)`,
@@ -41,6 +42,7 @@ vi.mock('@/components/ui/select', () => ({
 
 import ConfirmInOutModal from '../ConfirmInOutModal.jsx';
 import * as backendErrorsModule from '@/lib/backendErrors.js';
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { inlineFontFamiliesUpToBody } from './fontInheritance.js';
 
 const BASE_PROPS = {
@@ -177,6 +179,29 @@ describe('ConfirmInOutModal', () => {
     render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} />);
     fireEvent.click(screen.getByText('Confirm'));
     await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument());
+  });
+
+  // ETP-5577 — a period refusal offers its way out inside the modal: the action closes the modal
+  // and opens the calendar on the fiscal year of the document's date.
+  it('offers the calendar on a period refusal, dated from periodDate', async () => {
+    const go = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    try {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ message: 'El Periodo no existe o no está abierto', messageKeys: ['PeriodNotAvailable'] }),
+      }));
+      const onClose = vi.fn();
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} periodDate="2027-01-15" onClose={onClose} />);
+      fireEvent.click(screen.getByText('Confirm'));
+      const link = await screen.findByTestId('PeriodRecoveryLink');
+      expect(link).toHaveTextContent('periodNotAvailableOpenCalendar');
+      fireEvent.click(link);
+      expect(onClose).toHaveBeenCalled();
+      expect(go).toHaveBeenCalledWith('2027-01-15');
+    } finally {
+      setPeriodRecovery(null);
+    }
   });
 
   // ── ETP-4848: invoiceAction gating + default-checked toggle ────────────────
@@ -764,6 +789,66 @@ describe('ConfirmInOutModal', () => {
       render(<ConfirmInOutModal {...BASE_PROPS} />);
       expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.title))).toEqual([]);
       expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.cardTitle))).toEqual([]);
+    });
+  });
+
+  describe('footer button hover', () => {
+    const CANCEL_REST = 'hsl(var(--card))';
+    const CONFIRM_REST = 'var(--status-info-fg)';
+    const CONFIRM_DISABLED = 'var(--status-info-border)';
+
+    it('Cancel rests on the white card token, not transparent', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      expect(screen.getByTestId('confirm-modal-cancel-btn').style.background).toBe(CANCEL_REST);
+    });
+
+    it('Cancel hover changes the background (not the footer gray) and mouseLeave restores white', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      const btn = screen.getByTestId('confirm-modal-cancel-btn');
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).not.toBe(CANCEL_REST);
+      expect(btn.style.background).not.toBe('hsl(var(--muted))');
+      expect(btn.style.background).not.toBe('transparent');
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CANCEL_REST);
+    });
+
+    it('Confirm hover switches to --primary-hover and mouseLeave restores the rest colour', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      const btn = screen.getByTestId('confirm-modal-confirm-btn');
+      expect(btn.style.background).toBe(CONFIRM_REST);
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).toBe('var(--primary-hover)');
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CONFIRM_REST);
+    });
+
+    it('Confirm has no hover effect while disabled (price list required but not chosen)', async () => {
+      mockFetchRouter({ priceLists: [] });
+      render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+      await waitFor(() => expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument());
+      const btn = screen.getByTestId('confirm-modal-confirm-btn');
+      expect(btn).toBeDisabled();
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+    });
+
+    it('neither button reacts to hover while loading', async () => {
+      let resolveFetch;
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(r => { resolveFetch = r; })));
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      const cancel = screen.getByTestId('confirm-modal-cancel-btn');
+      const confirm = screen.getByTestId('confirm-modal-confirm-btn');
+      await waitFor(() => expect(cancel).toBeDisabled());
+      fireEvent.mouseEnter(cancel);
+      expect(cancel.style.background).toBe(CANCEL_REST);
+      fireEvent.mouseEnter(confirm);
+      expect(confirm.style.background).toBe(CONFIRM_DISABLED);
+      resolveFetch?.({ ok: true, json: async () => ({ response: { data: {} } }) });
     });
   });
 });

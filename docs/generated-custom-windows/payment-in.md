@@ -52,7 +52,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 6b. Confirm the detail-view "more" (⋮) button is no longer rendered at all on the payment-in detail page, in any status — the kebab-menu **Remove Payment** entry was removed in ETP-4479 as redundant with the trash-icon delete button.
 7. Open the `Lines` child dataset for a payment with allocations and confirm the line surface exposes at least due date, received amount, and invoice payment schedule, all scoped to the current payment via `parentId`.
 8. Create or edit allocation lines tied to invoice schedules and confirm the bottom panel reflects linked invoices and any remaining unallocated credit after refresh.
-9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, confirm the "Download all (ZIP)" and "Delete all" actions appear in the table header, and that "Delete all" shows a confirmation dialog before removing all files.
+9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 10. **ETP-4940 follow-up:** on a draft (`RPAP`) payment, edit the amount WITHOUT clicking Save, then go to the "Apply to Invoices" tab and click through to apply + process. Confirm the payment processes with the edited amount, not the original one.
 
 ## Automated evidence
@@ -214,7 +214,7 @@ both sides plus the rate that was actually booked:
 
 ```
 Importe del cobro
-+ 21,34 $
+21,34 $
   (0,680272)  14,52 €
 ```
 
@@ -394,3 +394,53 @@ the same `FieldItem`) and is **not** changed here.
 payment whose customer or deposit account has a long name. The date shows in full, for example
 `23/09/2026`, and the long values end in "…". Hovering a cut value shows the full text, and hovering
 a value that fits shows no tooltip.
+
+## List summary panel (ETP-5778)
+
+The left panel of the Payment In (Receipts) list ("Cobrado") is fed by `meta.summary`, which the backend computes over the
+**whole filtered set** (every page, every active filter), not over the rows loaded so far. It is identical on
+every page of the same query. While the summary is missing the panel shows a skeleton; the rows are never
+added up in the browser, because they may be in different currencies.
+
+- **Title:** fixed "Cobrado" plus an info tooltip (same blue tooltip as the Cuentas "Saldo"). The old "este mes" wording is gone.
+- **Subtitle:** `<period> · <N> cobros`. The period is the active `paymentDate` filter: a preset shows its own label
+  ("Hoy", "Últimos 30 días", ...), no filter or "Cualquier fecha" shows "Todo el tiempo", and a custom range shows
+  `dd/mm/yyyy – dd/mm/yyyy`. N counts every non-voided payment in the period, drafts included.
+- **Total (Cobrado):** deposited payments (`DEPOSITED_STATUSES`, which includes PPM), converted to the organization
+  currency at **today's rate**, as Cuentas does. A currency with no rate is left out of the total and flagged with
+  the "No incluye: ... (sin tasa de cambio)" warning.
+- **Pendiente / Por confirmar:** every non-deposited, non-voided payment (drafts and ETGOERR). Pendiente is converted;
+  Por confirmar is the count.
+- **Por método de pago:** deposited payments converted per method.
+- **Detalle por moneda:** the deposited payments of each currency in their original currency (never converted),
+  organization currency first, then by amount descending. Informational only: no hover, no click, no filtering. It is
+  always shown, even with a single currency.
+- **Voided payments (RPVOID) are excluded** from every bucket.
+- **`≈`:** shown (muted, in front of the amount) on the total, on Pendiente and on each method when a non-zero subtotal
+  in a currency other than the organization's was converted. "Detalle por moneda" and the grid rows never show it.
+- Each subtotal is converted and rounded separately, so the methods can add up to a cent away from the total.
+
+Implementation: `PaymentSidebar` in `PaymentHeaderTableBase.jsx` (shared by both windows), period text in
+`paymentSummaryPeriod.js`, shared pieces (`CurrencyBreakdown`, `InfoTooltipButton`, `buildBalanceDisplay`) in
+`components/currency-summary/`, which the Cuentas sidebar also uses.
+
+## Amount sign and colour — ETP-5728
+
+Payment In amounts carry no `+` prefix and use the default (black) text colour (`hsl(var(--foreground))`),
+whether or not the receipt is deposited: the list Amount column (`PaymentHeaderTableBase.buildColumns`),
+the list sidebar hero ("Cobrado", see the summary panel section) and the detail sidebar hero (`PaymentDetailSidebarBase`).
+Payment Out is identical (no sign, default colour). Neither direction is green or red; the direction is
+conveyed by the window itself (Receipts vs Payments). `formatCurrency` still prints its own `-` for
+genuinely negative values; nothing is prefixed on top of it.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Default date filter: Last 30 days — ETP-5778
+
+The list opens with the date filter on "Últimos 30 días" (`window.listViewOptions.defaultDatePreset: "last30"` in `decisions.json`, applied to `dateFilterKey: paymentDate`). Choosing "Cualquier fecha"/"Todo el tiempo" is honoured and kept while the user stays in the window; a saved session view wins over the default. See `docs/decisions-reference.md` (Default date preset).

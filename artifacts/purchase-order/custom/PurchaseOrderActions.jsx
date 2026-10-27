@@ -11,7 +11,10 @@ import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
+import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
@@ -157,12 +160,10 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const confirmedPanel = confirmedDocs && hasConfirmedDoc
     ? createPortal(
         <ConfirmResultModal
-          title={confirmedTitle || ui('poConfirmedTitle')}
           docs={[
-            confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, amount: confirmedDocs.receipt.amount, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
-          currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
           onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
           data-testid="ConfirmResultModal__8b5323" />,
@@ -265,9 +266,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     const needsReceipt = needsPrimaryDoc ?? (qtyPending !== 0 && receiptsDraft.length === 0);
     const needsInvoice = needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft);
 
-    if      (needsReceipt && needsInvoice) buttonLabel = ui('poManageReceiptAndInvoice');
-    else if (needsReceipt)                 buttonLabel = ui('poManageReceipt');
-    else if (needsInvoice)                 buttonLabel = ui('poManageInvoice');
+    buttonLabel = poManageDocsLabel(ui, needsReceipt, needsInvoice);
 
     derived = {
       receiptsComplete, invoicesComplete,
@@ -339,6 +338,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   const [createInvoice,  setCreateInvoice]  = useState(false);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState(null);
+  const [errorRecovery,  setErrorRecovery]  = useState({});
   const [freshData,      setFreshData]      = useState(null);
   const [lineCount,      setLineCount]      = useState(null);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
@@ -408,6 +408,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (loading) return;
     setLoading(true);
     setError(null);
+    setErrorRecovery({});
 
     // ETP-4468 — force-save any unsaved header edit before confirming. Without
     // this, an edit made right before clicking Confirm (without hitting Save
@@ -442,8 +443,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          const rawMsg = e?.response?.message || e?.message || `Error (${processRes.status})`;
-          throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('soNoLinesError') : rawMsg);
+          const rawMsg = e?.error?.message || e?.response?.message || e?.message || `Error (${processRes.status})`;
+          // ETP-5840 — translated from the refusal's identity (e.g. the missing exchange rate);
+          // an unkeyed refusal still shows the backend's own sentence.
+          throw new Error(rawMsg.includes('@OrderWithoutLines@')
+            ? ui('soNoLinesError')
+            : translateBackendErrorBody(e, ui, rawMsg));
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
@@ -495,7 +500,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           // ETP-5381: mirrors the sales twin — this was the only branch here not translating the
           // backend message, so the new duplicate-invoice and completion messages would have
           // surfaced in English.
-          throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
+          throw invoiceRefusal(e, res.status, ui, ui('poOrderConfirmedInvoiceError') + ' ');
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -511,6 +516,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         trackDocumentCreated('purchase-invoice');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
+        setErrorRecovery(invoiceRefusalRecovery(e, ui));
       }
     }
 
@@ -664,6 +670,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
+            <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={onClose} />
           </div>
         )}
 
@@ -745,6 +752,31 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, im
 
 // ── CreateDocsModal (CO orders — create docs without re-confirming) ────────────
 
+// ETP-5577 — a refused purchase invoice keeps its identity (`messageKeys`), so a period refusal
+// renders in the UI locale and offers the calendar. The invoice is dated today.
+function invoiceRefusal(body, status, ui, prefix = '') {
+  const messageKeys = extractBackendMessageKeys(body);
+  const raw = body?.error?.message || body?.response?.message || body?.message || `Error (${status})`;
+  const err = new Error(prefix + translateBackendError(raw, ui, { messageKeys }));
+  err.messageKeys = messageKeys;
+  return err;
+}
+
+function invoiceRefusalRecovery(err, ui) {
+  return periodNotAvailableToastOptions(err?.messageKeys, ui, { date: todayCalendarISO() });
+}
+
+// ETP-5688 — ONE owner for the "Gestionar …" wording: the detail button's label and the
+// CreateDocsModal title it opens are the same string (mirrors manageDocsLabel in sales-order's
+// OrderCreateInvoice.jsx), so a receipt-only order no longer opens a dialog titled "Generar
+// factura". Follows what is PENDING, not what the user ticked. Null when nothing is pending.
+export const poManageDocsLabel = (ui, needsReceipt, needsInvoice) => {
+  if (needsReceipt && needsInvoice) return ui('poManageReceiptAndInvoice');
+  if (needsReceipt) return ui('poManageReceipt');
+  if (needsInvoice) return ui('poManageInvoice');
+  return null;
+};
+
 export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
   const apiFetch = useApiFetch('');
   const ui = useUI();
@@ -758,6 +790,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   const [createInvoice, setCreateInvoice] = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState(null);
+  const [errorRecovery, setErrorRecovery] = useState({});
 
   const d          = data || {};
   const documentNo = d.documentNo || '';
@@ -789,6 +822,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
     if (loading || (!receiptWanted && !invoiceWanted)) return;
     setLoading(true);
     setError(null);
+    setErrorRecovery({});
     try {
       const result = {};
 
@@ -810,7 +844,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw invoiceRefusal(e, res.status, ui);
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -824,6 +858,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
       onCreated(result);
     } catch (e) {
       setError(e.message || ui('poErrorOccurred'));
+      setErrorRecovery(invoiceRefusalRecovery(e, ui));
       setLoading(false);
     }
   };
@@ -837,7 +872,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {ui('soManageDocsTitle')}
+            {poManageDocsLabel(ui, needsReceipt, needsInvoice) ?? ui('soManageDocsTitle')}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
         </div>
@@ -887,6 +922,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
+            <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={onClose} />
           </div>
         )}
 

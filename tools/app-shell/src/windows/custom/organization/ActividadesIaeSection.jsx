@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Info, Loader2, Trash2, TriangleAlert, X } from 'lucide-react';
+import { Check, ExternalLink, Info, Loader2, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
-import { useActividadesIae } from './useActividadesIae.js';
+import { useActividadesIae, iaeCapState, IAE_MAX_SECONDARY_ACTIVITIES } from './useActividadesIae.js';
 
 // Field descriptors mirror `artifacts/organization/contract.json`'s
 // `actividadesDelIae` entity (ETP-4975) — same shape SelectorInput/DataTable
@@ -43,6 +43,27 @@ function CodeHint() {
   );
 }
 
+// ETP-5831 — the AEAT's public IAE heading search, linked next to the Epígrafe column header so a
+// user who does not know their heading can look it up without leaving the grid unexplained.
+export const AEAT_IAE_SEARCH_URL = 'https://sede.agenciatributaria.gob.es/Sede/buscador-iae.html';
+
+function EpigraphSearchLink() {
+  const ui = useUI();
+  return (
+    <a
+      href={AEAT_IAE_SEARCH_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={ui('orgIaeEpigraphSearchLinkAria')}
+      title={ui('orgIaeEpigraphSearchLinkAria')}
+      className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-normal text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+      data-testid="ActividadesIaeSection__epigraphSearchLink">
+      {ui('orgIaeEpigraphSearchLink')}
+      <ExternalLink size={12} aria-hidden="true" data-testid="ExternalLink__iaeEpigraphSearch" />
+    </a>
+  );
+}
+
 /**
  * "Actividades del IAE" — editable grid backing `EPIAE_OrgInfo_Epigraph`
  * (ETP-4975). Rendered as a 4th `SectionRow` in `OrganizationPage.jsx`, at the
@@ -65,6 +86,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
   const [addingRow, setAddingRow] = useState(false);
   const [newRow, setNewRow] = useState({});
   const [savingNew, setSavingNew] = useState(false);
+
+  const { atCap, overCap } = iaeCapState(rows);
 
   function selectorUrlFor(field) {
     return `${apiBaseUrl}/actividadesDelIae/selectors/${field.column}`;
@@ -266,7 +289,10 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeEpigraphLabel')}</th>
+              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">
+                {ui('orgIaeEpigraphLabel')}
+                <EpigraphSearchLink data-testid="EpigraphSearchLink__iae" />
+              </th>
               <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeTypeLabel')}</th>
               <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">
                 {ui('orgIaeCodeLabel')}
@@ -356,12 +382,29 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
           </tbody>
         </table>
       </div>
+      {/* Modelo 390 cap (1 main + 5 others, see IAE_MAX_SECONDARY_ACTIVITIES): existing rows are
+          never hidden — over the cap a warning asks to remove some; at the cap "Añadir" is off. */}
+      {!loading && overCap && (
+        <p
+          role="alert"
+          className="flex items-start gap-1.5 text-xs leading-[18px] text-[var(--status-warning-fg)]"
+          data-testid="ActividadesIaeSection__overCapWarning">
+          <TriangleAlert size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__iaeOverCap" />
+          <span>{ui('orgIaeOverCapWarning', { max: IAE_MAX_SECONDARY_ACTIVITIES })}</span>
+        </p>
+      )}
       {!addingRow && (
-        <div>
+        <div className="flex items-center gap-2">
           <AddLineButton
             onClick={() => setAddingRow(true)}
             label={ui('orgIaeAddRow')}
+            disabled={atCap}
             data-testid="ActividadesIaeSection__addButton" />
+          {atCap && !overCap && (
+            <span className="text-xs text-muted-foreground" data-testid="ActividadesIaeSection__capHint">
+              {ui('orgIaeCapHint', { max: IAE_MAX_SECONDARY_ACTIVITIES })}
+            </span>
+          )}
         </div>
       )}
     </div>

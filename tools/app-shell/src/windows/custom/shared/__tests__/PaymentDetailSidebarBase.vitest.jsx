@@ -1,14 +1,20 @@
+// @covers tools/app-shell/src/windows/custom/shared/PaymentDetailSidebarBase.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+// ETP-5684 — the "Asiento contabilizado" entry is gated on showAccountingFields (fail closed).
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 // --- Import under test ---
 
 import { render, screen, within, act } from '@testing-library/react';
 import PaymentDetailSidebarBase from '../PaymentDetailSidebarBase.jsx';
 import { notifyRecordUpdated } from '../useRecordRefreshSignal';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 function baseData(overrides = {}) {
   return {
@@ -49,6 +55,24 @@ describe('PaymentDetailSidebarBase — amount formatting', () => {
     const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
     expect(panel.getAllByText(/1\.500,50\s€/).length).toBeGreaterThan(0);
     expect(panel.queryByText(/1500,50\s€/)).toBeNull();
+  });
+
+  it('renders the out hero amount without a minus sign and in the default foreground colour', async () => {
+    const data = baseData({ amount: '100', 'currency$_identifier': 'EUR' });
+    render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
+    const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
+    const hero = panel.getAllByText(/100,00\s€/).find((el) => el.style.color);
+    expect(hero.textContent).not.toContain('−');
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
+  });
+
+  it('renders the in hero amount without a sign and in the default foreground colour', async () => {
+    const data = baseData({ amount: '100', 'currency$_identifier': 'EUR' });
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
+    const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
+    const hero = panel.getAllByText(/100,00\s€/)[0];
+    expect(hero.textContent).not.toContain('+');
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 });
 
@@ -319,5 +343,24 @@ describe('PaymentDetailSidebarBase — activity history', () => {
     const label = await screen.findByText('cobroConfirmado');
     const dateLine = label.parentElement.nextSibling;
     expect(dateLine.textContent).toContain('15:42');
+  });
+});
+
+// ETP-5684 — the accounting entry is a posting status: a role without "Show Accounting
+// Fields" does not see "Asiento contabilizado" in the activity history.
+describe('PaymentDetailSidebarBase — accounting capability gate (ETP-5684)', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
+  });
+
+  it('lists the posted entry when the role can see accounting', () => {
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={baseData({ status: 'RPR', processed: true, posted: 'Y' })} token="t" apiBaseUrl="http://x" />);
+    expect(screen.getByText('asientoContabilizado')).toBeInTheDocument();
+  });
+
+  it('leaves the posted entry out when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={baseData({ status: 'RPR', processed: true, posted: 'Y' })} token="t" apiBaseUrl="http://x" />);
+    expect(screen.queryByText('asientoContabilizado')).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
@@ -22,6 +22,44 @@ const SERVER_SEARCH_PAGE = 50;
 // second and re-open the very "nothing happens when I click" hole `loadingFirstPage` exists to
 // close.
 const TYPED_SEARCH_DEBOUNCE_MS = 1000;
+// ETP-5846 — page size for the ONE extra request that resolves the committed value when it is
+// not on any loaded page (see `fetchCurrentSelection`). Deliberately much smaller than
+// SERVER_SEARCH_PAGE: it is a lookup of a single known id, not a page of the browsable list, and
+// it must not move `offsetRef`/`hasMoreRef` (see the effect on open). It is not 1 either — the
+// backend's `q` is a substring match (`lower(display) LIKE :search`), so a label can legitimately
+// match several rows and the exact id may be behind a look-alike; the response is filtered by id.
+const CURRENT_SELECTION_SEARCH_LIMIT = 20;
+
+/**
+ * Index of the row that holds the committed `value`, or -1 when it is not among `rows`.
+ *
+ * The committed option is marked with a check icon + a bolder label, never with the highlight
+ * background: a colour-only cue would be indistinguishable from hover in a monochrome/high-contrast
+ * rendering, and would collide with the keyboard highlight state.
+ *
+ * ETP-5846 — the component's ONLY source of truth for "which option is the current selection" is
+ * the `value` prop, so this marker can never drift from what the parent holds. Pure and exported
+ * for direct unit coverage.
+ *
+ * @param {Array<{id?: string}>} rows the rendered option rows
+ * @param {string} value the committed id
+ * @returns {number} index of the current option, or -1
+ */
+export function resolveSelectedIndex(rows, value) {
+  if (value == null || value === '') return -1;
+  return rows.findIndex(o => String(o.id) === String(value));
+}
+
+/**
+ * Rows resolved for the committed value but absent from the loaded pages, kept in front of the
+ * list. Deduplicated by id so the pinned row can never render twice.
+ */
+function prependCurrentSelection(rows, pinned, value) {
+  if (pinned.length === 0 || resolveSelectedIndex(rows, value) !== -1) return rows;
+  const known = new Set(rows.map(o => String(o.id)));
+  const missing = pinned.filter(o => !known.has(String(o.id)));
+  return missing.length === 0 ? rows : [...missing, ...rows];
+}
 
 /**
  * Compact inline combobox for search-type FK fields in rapid line entry.
@@ -60,7 +98,16 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   const [anchorRight, setAnchorRight] = useState(false);
   // Keyboard-nav highlight over `filtered` (ETP-4600 Gap A parity, ported from
   // CreatableSearchSelect). -1 = nothing highlighted (mouse-only interaction so far).
+  //
+  // ETP-5846 — this is the KEYBOARD/HOVER focus only. It is deliberately NOT the current
+  // selection: opening resets it to -1 (see the effect below), so it can never double as "the value
+  // you already chose". That state is derived from `value` instead (`resolveSelectedIndex`).
   const [activeIndex, setActiveIndex] = useState(-1);
+  // ETP-5846 — the committed value's row(s) when they are NOT on any loaded page (a catalog that
+  // pages 50 at a time). Resolved once per open by `fetchCurrentSelection` and prepended to the
+  // list so reopening a cell identifies what it holds. Cleared whenever `value` changes, when a new
+  // search starts, and on close — a previous selection must never be shown as the current one.
+  const [pinnedOptions, setPinnedOptions] = useState([]);
   const rootRef = useRef(null);
   const dropdownRef = useRef(null);
   // ETP-4600: `inputRef` is caller-supplied and OPTIONAL — DataTable only wires it up for the
@@ -110,6 +157,15 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // a stale in-flight request from an already-superseded search can never overwrite/append onto a
   // newer one's results.
   const searchGenerationRef = useRef(0);
+  // ETP-5846 — `{ id, generation }` of the current-selection resolution in flight, so a late
+  // answer is discarded once the committed value (or the search) changed under it. Mirrors the
+  // generation guard `fetchServerResults` applies to its own results.
+  const pinRequestRef = useRef(null);
+  // ETP-5846 — id whose resolution was already requested during this open. Every "load more" page
+  // changes `serverResults` and re-runs the resolution effect; without this guard a value that is
+  // on none of the loaded pages would be looked up again on every page. Cleared on open/close and
+  // whenever `value` or the query changes (see the reset effect), so each open resolves at most once.
+  const pinAttemptedRef = useRef(null);
 
   // Resets pagination state before a fresh search (new typed query, or reopening with an
   // empty query) — mirrors the resets CreatableSearchSelect.jsx performs at each of its
@@ -189,6 +245,49 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     }
   }, [selectorUrl, selectorContext, token, apiFetch]);
 
+  // ETP-5846 — resolves the committed value's row when it is not on any loaded page, so
+  // reopening a cell identifies what it holds without the user typing anything.
+  //
+  // The combo already knows the value's LABEL (`resolvedLabel`, from the caller's `$_identifier`,
+  // the catalog or `displayLabel`), so it asks the SAME selector endpoint for that label, with the
+  // SAME `selectorContext` — an id the caller's context forbids (a tax from the wrong `IsSOTrx`
+  // direction, one filtered out by a validation rule) simply never comes back and nothing is
+  // pinned. That is what keeps this from widening what the user may pick.
+  //
+  // It is a LOOKUP, not a page: `offsetRef`, `hasMoreRef`, `hasMore`, `fetchInFlightRef` and
+  // `loadingFirstPage` are all left alone, so scroll-triggered paging and the first-page skeleton
+  // behave exactly as they did before (the panel must not fall back to a skeleton over rows the
+  // user can already act on). Results are filtered STRICTLY by id — `q` is a LIKE match, so a
+  // label such as "IVA 4%" can also match "IVA 4% Recargo".
+  const fetchCurrentSelection = useCallback(() => {
+    const id = value == null ? '' : String(value);
+    const label = (resolvedLabel || '').trim();
+    if (!selectorUrl || !id || !label) return;
+    if (pinAttemptedRef.current === id) return;
+    pinAttemptedRef.current = id;
+    const generation = searchGenerationRef.current;
+    pinRequestRef.current = { id, generation };
+    const queryParams = { ...selectorContext, q: label, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
+    apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        const request = pinRequestRef.current;
+        // Abandoned: the value changed, a new search started, or this answer is late.
+        if (!request || request.id !== id || request.generation !== generation) return;
+        if (searchGenerationRef.current !== generation) return;
+        const items = (data?.items ?? [])
+          .filter(it => String(it.id) === id)
+          .map(it => ({ id: it.id, name: it.label || it.name, ...it }));
+        setPinnedOptions(items);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (pinRequestRef.current?.id === id && pinRequestRef.current?.generation === generation) {
+          pinRequestRef.current = null;
+        }
+      });
+  }, [selectorUrl, selectorContext, value, resolvedLabel, apiFetch]);
+
   const filtered = useMemo(() => {
     let base;
     if (serverResults) {
@@ -210,8 +309,13 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     // Drop the excluded value (e.g. the document currency) from both the local
     // catalog and any server-side results so it can never be chosen here.
     if (excludeId != null) base = base.filter(o => o.id !== excludeId);
-    return base;
-  }, [query, options, serverResults, excludeId]);
+    // ETP-5846 — a resolved current-selection row is subject to the SAME exclusion as any other
+    // option (an excluded value must never be offered back), and it is only prepended while the
+    // committed id is genuinely absent from the loaded rows — which is re-evaluated on every page
+    // append, so "load more" can never produce a duplicate.
+    if (excludeId != null) return prependCurrentSelection(base, pinnedOptions.filter(o => o.id !== excludeId), value);
+    return prependCurrentSelection(base, pinnedOptions, value);
+  }, [query, options, serverResults, excludeId, pinnedOptions, value]);
 
   const handleSelect = (opt) => {
     onChange(opt.id, opt.name || opt.label || opt._identifier || '', opt);
@@ -219,6 +323,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setQuery('');
     setServerResults(null);
     setLoadingFirstPage(false);
+    // ETP-5846 — the row resolved for the PREVIOUS value is stale the moment the value changes.
+    setPinnedOptions([]);
+    pinRequestRef.current = null;
   };
 
   // Chip body click → re-enter edit mode, mirroring CreatableSearchSelect's handleChipClick:
@@ -332,12 +439,61 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setActiveIndex(-1);
   }, [open, query]);
 
+  // ETP-5846 — a resolved current-selection row belongs to ONE committed value, ONE search and ONE
+  // open. Drop it when the value changes (including being cleared), when a new typed query starts,
+  // and on open/close, so a previous selection can never keep being shown as the current one and
+  // the next open re-resolves from scratch.
+  useEffect(() => {
+    setPinnedOptions([]);
+    pinRequestRef.current = null;
+    pinAttemptedRef.current = null;
+  }, [value, query, open]);
+
+  // ETP-5846 — when the combo OPENS with a committed value that is nowhere in what it can already
+  // show, resolve its row. "Nowhere" covers BOTH catalogs, because the option list is fed by
+  // whichever is available: the caller's static `options` (a preloaded catalog) and the pages
+  // fetched from `selectorUrl`. Waiting for the first page to land before asking is what keeps the
+  // resolution to ONE request per open: a value that IS on page 0 — the overwhelmingly common
+  // case — needs no lookup at all, and one that is not gets resolved right after the list the user
+  // is looking at has been established. The opening page fetch has its own generation, so a `q`
+  // result arriving after the user started typing is discarded by the guard inside
+  // `fetchCurrentSelection`.
+  const currentValueIsShown = useMemo(
+    () => resolveSelectedIndex(options, value) !== -1
+      || (serverResults != null && resolveSelectedIndex(serverResults, value) !== -1),
+    [options, serverResults, value]
+  );
+  useEffect(() => {
+    // The lookup exists to make the OPENED dropdown identify what the cell holds. Every other
+    // situation is deliberately out of its scope:
+    //  - closed, or the value is already in the local catalog or a loaded page -> nothing to do;
+    //  - no selector -> there is nothing to ask (the local catalog is the only catalog);
+    //  - the opening page has not landed -> resolving against an empty list would fire on every
+    //    open of a cell whose value is perfectly visible on page 0. `serverResults` stays null
+    //    until that page resolves;
+    //  - the user has typed -> a query is its own explicit search, its results are what the list
+    //    shows, and the pin is cleared anyway (see the reset effect above).
+    if (!open || currentValueIsShown) return;
+    if (!selectorUrl || serverResults == null || query.trim() !== '') return;
+    fetchCurrentSelection();
+  }, [open, currentValueIsShown, serverResults, selectorUrl, query, fetchCurrentSelection]);
+
   // Keep the highlighted option scrolled into view (mirrors CreatableSearchSelect).
   useEffect(() => {
     if (activeIndex < 0) return;
     const el = dropdownRef.current?.querySelector(`[data-option-index="${activeIndex}"]`);
     el?.scrollIntoView?.({ block: 'nearest' });
   }, [activeIndex]);
+
+  // ETP-5846 — "clearly identified" also means VISIBLE: a committed option sitting at row 40 of a
+  // scrollable panel is marked but off-screen on reopen. Scroll it into view without moving focus
+  // or changing the keyboard highlight (`block: 'nearest'` only scrolls when it is out of view).
+  const selectedIndex = resolveSelectedIndex(filtered, value);
+  useEffect(() => {
+    if (!open || selectedIndex < 0) return;
+    const el = dropdownRef.current?.querySelector(`[data-option-index="${selectedIndex}"]`);
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [open, selectedIndex]);
 
   useEffect(() => {
     if (!open) {
@@ -448,9 +604,25 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               case 'Enter': {
                 e.preventDefault();
                 e.stopPropagation();
+                // ETP-5846 — reopening a cell that ALREADY holds a value and pressing Enter with
+                // nothing typed and nothing highlighted is not a choice, so it must not be turned
+                // into one: it closes the panel and leaves `value` exactly as it was. Before this,
+                // `activeIndex` was -1 (opening resets it) and the fallback below took filtered[0],
+                // so confirming a reopen silently rewrote the user's own selection with whatever
+                // sorted first — measured on the unmodified component: committed "iva21", Enter,
+                // onChange("iva10").
+                const hasCommittedValue = value != null && value !== '';
+                if (activeIndex < 0 && hasCommittedValue && query.trim() === '') {
+                  setOpen(false);
+                  setQuery('');
+                  return;
+                }
                 // Deliberate divergence from CreatableSearchSelect (which requires
                 // activeIndex >= 0): falls back to filtered[0] so the fast "type + Enter"
-                // grid entry flow keeps working when no arrow key was pressed at all.
+                // grid entry flow keeps working when no arrow key was pressed at all — and,
+                // with no committed value, the one-shot "just Enter the first option" flow.
+                // Both remain reachable: typing is explicit intent (the user is picking among
+                // matches) and so is any arrow/Home/End key.
                 const opt = activeIndex >= 0 ? filtered[activeIndex] : filtered[0];
                 if (opt) handleSelect(opt);
                 return;
@@ -511,7 +683,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
           data-inline-add-portal="true"
-          // Same fix as CreatableSearchSelect's identical panel (and LookupPicker.jsx) — see
+          // Same fix as CreatableSearchSelect's identical panel — see
           // CreatableSearchSelect's onWheel comment for the full root cause (Radix Dialog's
           // react-remove-scroll blocks the native wheel-to-scroll translation for anything
           // portaled outside the dialog's own DOM subtree). Bypass it manually, but only when
@@ -568,22 +740,46 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                 ))}
               </div>
             )}
-            {filtered.map((opt, index) => (
-              <button
-                key={opt.id}
-                id={`${field.key}-inline-option-${opt.id}`}
-                type="button"
-                role="option"
-                aria-selected={index === activeIndex}
-                data-option-index={index}
-                data-testid={`inline-add-option-${field.key}-${opt.id}`}
-                className={`w-full block text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap${index === activeIndex ? ' bg-status-info' : ''}`}
-                onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
-                {opt.name || opt.label || opt._identifier || opt.id}
-              </button>
-            ))}
+            {filtered.map((opt, index) => {
+              // ETP-5846 — TWO INDEPENDENT per-row states, deliberately never derived from one
+              // another:
+              //  - `isSelected`: this row IS the committed value. It is what `aria-selected`
+              //    reports, and what the bold label + check icon show. It does NOT move with the
+              //    mouse or the keyboard.
+              //  - `isHighlighted`: keyboard/hover focus (`data-highlighted` + the info
+              //    background). `aria-activedescendant` on the input is its accessible
+              //    counterpart; a screen reader must not read it as "this is your selection".
+              // A row can be both (the user arrowed onto their own value), which is correct.
+              const isSelected = index === selectedIndex;
+              const isHighlighted = index === activeIndex;
+              // The label span carries `whitespace-nowrap`, NOT `truncate`: the panel sizes itself to
+              // `width: max-content` so it grows to fit its longest option instead of truncating it
+              // (ETP-4600 Gap C), and `truncate`'s `overflow: hidden` would let the row's intrinsic
+              // width collapse instead of growing with the content.
+              return (
+                <button
+                  key={opt.id}
+                  id={`${field.key}-inline-option-${opt.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  {...(isHighlighted ? { 'data-highlighted': 'true' } : {})}
+                  data-option-index={index}
+                  data-testid={`inline-add-option-${field.key}-${opt.id}`}
+                  className={`w-full flex text-left px-2 py-1.5 text-sm hover:bg-status-info cursor-pointer whitespace-nowrap items-center gap-2${isHighlighted ? ' bg-status-info' : ''}${isSelected ? ' font-medium text-foreground' : ''}`}
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
+                  onMouseEnter={() => setActiveIndex(index)}
+                >
+                  {isSelected && (
+                    <Check
+                      aria-hidden="true"
+                      className="h-4 w-4 shrink-0 text-primary"
+                      data-testid={`inline-add-option-${field.key}-${opt.id}-selected-indicator`} />
+                  )}
+                  <span className="whitespace-nowrap">{opt.name || opt.label || opt._identifier || opt.id}</span>
+                </button>
+              );
+            })}
             {/* "Loading more" footer while a scroll-triggered next page fetches. Gated on
                 `serverResults != null` rather than a separate loading flag — that's also true
                 exactly while the INITIAL page is still in flight (serverResults stays null

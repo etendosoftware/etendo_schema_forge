@@ -3,10 +3,11 @@ import { useAuthOptional, notifyAmbientUnauthorized } from '@etendosoftware/app-
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { reset } from '../lib/observability.js';
 import { forgetSupportSessionMarker } from '../lib/supportSession.js';
+import { setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 
 /**
  * Returns a logout function that resets session-scoped UI state (the dashboard
- * period filter) before delegating to the core logout.
+ * period filter, the environment-access block) before delegating to the core logout.
  *
  * Use this everywhere instead of `useAuth().logout` so that EVERY exit path —
  * the user menu, the post-password-change flow, and the automatic 401
@@ -23,6 +24,10 @@ export function useLogout() {
   const logout = auth?.logout;
   return useCallback(() => {
     clearStoredDateRange();
+    // ETP-5047 — forget a recorded environment-access block. `fetchWindowAccess` clears it only
+    // on a granted access map, and this logout stays in the SPA (no reload), so the next login
+    // in this tab would otherwise open on the previous session's blocked screen.
+    setEnvironmentAccessDecision(null);
     // Reset the observability identity before logging out: otherwise the
     // account_id super-property set during this session stays registered
     // inside the Mixpanel SDK and can leak into events fired by the NEXT

@@ -1,3 +1,4 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -7,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 // `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
 import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
 import { ETGO_DTO_PRODUCT_ID } from '../../../../tools/app-shell/src/lib/documentTotals.js';
+import { translateBackendErrorBody } from '../../../../tools/app-shell/src/lib/backendErrors.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'OrderCreateInvoice.jsx'), 'utf8');
@@ -674,16 +676,22 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
-  // ETP-4312: the modal must DERIVE the view label from each doc's type. Passing
-  // a hardcoded primary={ui('soViewInvoice')} would force "Ver factura" on a
-  // shipment-only result. The arrow now comes from the modal's SVG, not the label.
-  describe('ConfirmResultModal primary label (ETP-4312 regression)', () => {
-    it('does not force a hardcoded soViewInvoice primary label', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('soViewInvoice'\)\}/);
+  // ETP-4312 / ETP-5674: ConfirmResultModal derives its title, banner and "Ver …" label
+  // from each doc's type. The caller hands it only `docs`; a title/primary/currency prop
+  // would be silently ignored (and was how "Ver factura" ended up on a shipment-only result).
+  describe('ConfirmResultModal receives only docs, never presentational props (ETP-4312)', () => {
+    it('passes no title, primary or currency prop to the modal', () => {
+      const element = src.match(/<ConfirmResultModal[\s\S]*?\/>/);
+      assert.ok(element, 'ConfirmResultModal element not found');
+      assert.doesNotMatch(element[0], /\b(title|primary|currency)=/);
     });
 
-    it('does not pass any hardcoded primary view label to the modal', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('(soViewInvoice|poViewInvoice|soViewShipment|poViewReceipt|sqViewOrder)'\)\}/);
+    // The shipment's badge follows its real status: both places that build the shipment
+    // result carry `documentStatus`, and the modal's shipment doc forwards it.
+    it('forwards the real shipment documentStatus to the modal', () => {
+      assert.match(src, /currentShipment = \{[^}]*documentStatus: doc\?\.documentStatus \?\? null \}/);
+      assert.match(src, /result\.shipment = \{[^}]*documentStatus: doc\?\.documentStatus \?\? null \}/);
+      assert.match(src, /type: 'salida', num: confirmedDocs\.shipment\.documentNo, documentStatus: confirmedDocs\.shipment\.documentStatus/);
     });
   });
 
@@ -1106,10 +1114,26 @@ describe('OrderCreateInvoice', () => {
     const flatErrBody = (message = REAL_MESSAGE) => ({ status: 'error', message });
 
     describe('ConfirmModal.handleConfirm — Step 1 (documentAction/confirm)', () => {
-      function resolveMessage(e, processRes) {
+      // ETP-5840: Step 1 goes through translateBackendErrorBody (message + identity). The real
+      // helper runs here with an identity `ui`, so an unkeyed body still yields its raw message.
+      function resolveMessage(e, processRes, ui = (k) => k) {
         const expr = extractCallExprAfter(src, 'action/documentAction', 'throw new Error(');
-        return new Function('e', 'processRes', `return ${expr};`)(e, processRes);
+        return new Function('e', 'processRes', 'ui', 'translateBackendErrorBody', `return ${expr};`)(
+          e, processRes, ui, translateBackendErrorBody);
       }
+
+      it('translates the missing-exchange-rate completion refusal from its identity', () => {
+        const es = JSON.parse(readFileSync(join(__dirname, '../../../../tools/app-shell/src/locales/es_ES.json'), 'utf8')).genericLabels;
+        const ui = (key, params = {}) => Object.entries(params)
+          .reduce((text, [p, v]) => text.replace(`{${p}}`, v), es[key] ?? key);
+        const body = { error: {
+          message: 'prose in the AD language',
+          messageKeys: ['ETGO_ExchangeRateMissingOnComplete'],
+          messageParams: { orgCurrency: 'EUR', documentCurrency: 'USD' },
+        } };
+        assert.equal(resolveMessage(body, { status: 422 }, ui),
+          'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.');
+      });
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {
         assert.equal(resolveMessage(flatErrBody(), { status: 400 }), REAL_MESSAGE);

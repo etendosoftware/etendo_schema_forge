@@ -448,7 +448,7 @@ and what "Share" copies always agree.
 `SI` sales-invoice, `PI` purchase-invoice, `GS` goods-shipment, `GR` goods-receipt, `RMR`
 return-material-receipt, `RVS` return-to-vendor-shipment, `INV` physical-inventory, `M`
 goods-movements, `MI` matched-purchase-invoices, `IC` internal-consumption, `GLJ`
-simple-g-l-journal, `A` amortization — route `/{spec}/{documentId}` (each window's header table is
+manual-journals, `A` amortization — route `/{spec}/{documentId}` (each window's header table is
 the posting table). `T` (transaction) opens `/financial-account/{financialAccountId}`. Any other
 code, or a missing id, shows no link. It opens in the same tab; Back restores the filters.
 
@@ -526,3 +526,7 @@ Only `en_US` and `es_ES` have the copy; an `es_AR` user gets core's English text
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java` — `@Named("not-posted-documents")`; dynamic `c_acctschema_table` check + `APRM_DISABLED_TYPES` static exclusion set (includes BS, PIN, POT, R plus the ETP-4452 global exclusions BMP, DD, LC, LCC, CA); `DS_LABEL_TO_DOCUMENT_TYPE_CODE` + `tableIdForLabel` row enrichment (ETP-5591; replaced `DOCUMENT_TYPE_TO_TABLE_ID`), `enrichWithAccountingState` / `loadAccountingStates` (row status + transaction account), all covered by `NotPostedDocumentsHandlerTest`; `ACCOUNTING_STATUS_KEY_TO_ID` UUID map; `DEFAULT_ACCOUNTING_STATUS_KEYS`; `AccessibleDS` inner subclass.
 - `modules/com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml` — `isget=Y, ispost=Y`.
 - i18n keys (`en_US.json` / `es_ES.json`): `notPostedDocuments`, `allDocuments`, `allErrors`, `postedStatusCostNotCalculated` (shared), `statusesCount`, `openDocument`, `notPostedStatusUnposted`, `notPostedStatusInvalidAccount`, `notPostedStatusError`, `notPostedEmptyFilteredTitle`, `notPostedEmptyFilteredDescription`, `notPostedEmptyNoneTitle`, plus shared `postedStatusPeriodClosed`, `statusLabel`, `documentType`, `resetFilters`, `selected`, `post`, `postingFailed`, `documentPosted`, `documentsLoadError`, `linkCopied`, `copyFailed`, `copyLink`, `accountingDate`.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." Contabilizar on a row shows the refusal toast with **Ir al calendario**, dated by the row's accounting date; the bulk Contabilizar opens the calendar list. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

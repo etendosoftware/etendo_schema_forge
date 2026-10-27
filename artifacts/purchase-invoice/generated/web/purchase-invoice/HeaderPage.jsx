@@ -16,6 +16,7 @@ import SifTab from '@/windows/custom/shared/SifTab.jsx';
 import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx';
 import PurchaseInvoiceBottomPanel from '../../../custom/PurchaseInvoiceBottomPanel';
 import PurchaseInvoiceReceiptBadge from '../../../custom/PurchaseInvoiceReceiptBadge';
+import SifSendMenuItem from '../../../custom/SifSendMenuItem';
 import catalogs from './mockCatalogs';
 
 
@@ -50,13 +51,20 @@ const draftMode = {
   "label": "Confirm",
   "keepSaveWhenCompletedFields": [
     "orderReference",
-    "accountingDate"
+    "accountingDate",
+    "project",
+    "costcenter",
+    "aeatsiiErrorRegistral"
+  ],
+  "editableLineFieldsWhenCompleted": [
+    "project",
+    "costcenter"
   ]
 };
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -474,6 +482,14 @@ export const api = {
       "reference": "GLAccount",
       "inputMode": "search",
       "url": "/sws/neo/purchase-invoice/lines/selectors/account"
+    },
+    {
+      "entity": "lines",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/purchase-invoice/lines/selectors/uOM"
     },
     {
       "entity": "lines",
@@ -1002,7 +1018,8 @@ export const api = {
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
       "em_etgo_tbai_status": "Estado Batuz",
-      "DocumentNo": "N° interno"
+      "DocumentNo": "N° interno",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "POReference": "Document No.",
@@ -1012,10 +1029,12 @@ export const api = {
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
       "em_etgo_tbai_status": "Batuz Status",
-      "DocumentNo": "Internal No."
+      "DocumentNo": "Internal No.",
+      "C_UOM_ID": "Unit"
     },
     "es_AR": {
-      "OutstandingAmt": "Saldo pendiente"
+      "OutstandingAmt": "Saldo pendiente",
+      "C_UOM_ID": "Unidad"
     }
   }
 };
@@ -1063,9 +1082,11 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {"saveBeforeAttach":true} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
         bottomSection={PurchaseInvoiceBottomPanel}
         topbarExtra={PurchaseInvoiceReceiptBadge}
+        customMenuContent={SifSendMenuItem}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
-          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: status === 'CO' && (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}

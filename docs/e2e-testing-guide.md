@@ -46,6 +46,36 @@ E2E_CAPTURE_SCREENSHOTS=1 npx playwright test --project=mocked
 explicit evidence screenshots and Playwright's automatic failure screenshots are
 available. The default is disabled; `0` and any other value also leave capture off.
 
+### Running the specs of one cell
+
+Every spec lives in a folder under `e2e/tests/flows/`, and every folder belongs to a
+product cell. The cell names match the `com.etendoerp.go` Java cells (`src-test/cells/`):
+
+| Cell | Folders |
+|------|---------|
+| `ventas` | `sales`, `contacts`, `sales-purchases` |
+| `compras` | `purchases`, `sales-purchases` |
+| `almacenes` | `inventory`, `products` |
+| `contabilidad` | `accounting` |
+| `financiero` | `finance` |
+| `localizacion` | `fiscal` |
+| `plataforma` | `platform`, `system`, `dashboard`, `onboarding` |
+
+`sales-purchases` holds the specs that exercise both sales and purchase documents, so it
+runs with either cell. From `e2e/`:
+
+```bash
+npm run test:cell -- ventas                  # mocked + integration
+npm run test:cell -- compras mock            # projects mocked + mocked-serial
+npm run test:cell -- almacenes integration   # project integration
+npm run test:cell -- ventas mock --list      # anything after the kind goes to Playwright
+npm run test:cell -- --check                 # fails on a loose spec or a folder with no cell
+```
+
+A new spec goes in the folder of its cell, never loose in `tests/flows/`. A new folder must be
+added to `CELLS` in `e2e/support/test-cell.mjs`; `scripts/__tests__/e2e-test-cell.test.js`
+fails otherwise.
+
 ---
 
 ## Copilot Agent Navigation (`webmcp-agent-chat`)
@@ -121,6 +151,28 @@ See `e2e/tests/helpers/__tests__/period-helpers.test.js` for the guard's own uni
 
 ---
 
+## Document Creation Paths — `CREATION_PATHS` (ETP-5771)
+
+A new document's header can reach the server before its first line in two ways, and every integration spec that creates a document must **name the path it takes**. The helpers live in `e2e/tests/helpers/purchase-helpers.js` (generic despite the file name):
+
+| Helper | What it does |
+|---|---|
+| `CREATION_PATHS` | `['emptyState', 'save']`. `emptyState` is the real user flow: fill the header on `/<spec>/new` and go straight to an empty-lines action ("+ Añadir líneas", "Importar desde …"), which saves the header itself — no Guardar click. `save` clicks Guardar (`saveDraft`) first, then the same action on the saved record. |
+| `leaveNewDocumentThroughEmptyLines(page, { spec, via, trigger? })` | Runs the chosen path from `/<spec>/new` and returns the saved record id. With `emptyState` it asserts the action is offered on the UNSAVED document and that clicking it moves to `/<spec>/<id>`. `trigger` defaults to "+ Añadir líneas"; pass an import button for the import paths. An unknown `via` throws. |
+| `openFirstLineRow(page, { spec, via })` | The above, then waits for the inline-add row of the first line (re-clicking only if the click was lost to the redirect). For specs that fill the line themselves. |
+| `createDraftWithFirstLine(page, { spec, via, ...line })` | `openFirstLineRow` plus committing the product line (`productName`, `productIndex`, `quantity`, as in `addProductLine`). |
+
+Rules:
+
+- **Declare the path explicitly** in every spec that creates a document. Most use `emptyState`; a minority keep `save` (today `purchase-order-full-flow`, `sales-quotation-full-flow`, `sales-order-return-rectificativa`, `goods-receipt-stock-defaults`, `printable-download-purchase`) so both paths stay covered.
+- `addProductLine({ isFirst: true })` now **throws**. Add the first line with `createDraftWithFirstLine`; `addProductLine` is only for further lines through "+ Añadir línea".
+
+Why: every spec used to save first, so nothing noticed that "+ Añadir líneas" never rendered on an unsaved sales order, sales invoice, purchase order or quotation — the header totals sat in `requiredHeaderFields` and `/defaults` returned them null.
+
+`e2e/tests/flows/platform/new-movement-document-first-lines.integration.spec.js` covers the documents that had no from-scratch creation spec: goods shipment ("+ Añadir líneas" → the first product line persists), customer return ("Importar desde albarán" opens the shipment import) and return to vendor ("Añadir desde Albarán" opens the receipt import), all without Guardar. Gated by `E2E_SALES_INTEGRATION=1`.
+
+---
+
 ## NEO Backend Contract Smokes (ETP-4793)
 
 Three API-level specs validate NEO Headless backend contracts directly against the `request`
@@ -153,14 +205,17 @@ Like the contextual-selector smoke above, they get a bearer JWT through
 ## Paid Provisioning Failure Integration (ETP-5548)
 
 `e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
-ordinary integration project through `scripts/run-e2e-full.sh`, including the local
-`make test-e2e-headless` run and the pre-push E2E gate, where the runner sets
-`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the
-runner sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips: on first run the backend
-fixture (`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool
-tenant synchronously, which takes minutes and exceeds the 15 s `actionTimeout`. An explicit
-`E2E_PROVISIONING_FAILURE` value always wins — export `E2E_PROVISIONING_FAILURE=1` to force
-the spec on (including under Jenkins), or `0` to skip it locally.
+ordinary integration project through `scripts/run-e2e-full.sh`: the local
+`make test-e2e-headless` run, and the pre-push only with `PRE_PUSH_INTEGRATION=1` (the pre-push
+leaves integration specs to CI since ETP-5695). There the runner sets
+`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the runner
+sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips, unless the job opts in with
+`E2E_PROVISIONING_FAILURE=1`, as the develop → main cut does. On first run the backend fixture
+(`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool tenant
+synchronously, which takes minutes: the spec gives that request 240 s instead of the 15 s
+`actionTimeout`, because a request the client abandons still completes on the backend and
+leaves a reservation nobody can clean up. An explicit `E2E_PROVISIONING_FAILURE` value always
+wins — export `E2E_PROVISIONING_FAILURE=1` to force the spec on, or `0` to skip it locally.
 The spec creates a paid checkout through a local backend fixture, follows the real
 `/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
 same request ID, verifies the durable `provisioning_failed` state and visible recovery
@@ -1032,6 +1087,12 @@ make test-e2e-report    # Opens the report in browser
 
 Reports are saved to `artifacts/e2e-report/`. Screenshots from failed tests are in `e2e/test-results/`.
 
+## Flaky Mocked Tests
+
+A mocked test that fails and then passes with no change is a flake: log it, and quarantine it when it
+repeats, in `e2e/quarantine.json`. Gating runs leave quarantined tests out and `run-e2e-full.sh` runs
+them afterwards without blocking. The log and the rules are in `docs/testing/flaky-tests.md`.
+
 ## `data-testid` Convention
 
 Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit `data-testid` attributes automatically. Use `page.getByTestId()` in tests — it's language-independent and survives text changes.
@@ -1051,14 +1112,17 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `attachments-tab-panel` | — | AttachmentsTab root container |
 | `attachments-dropzone` | — | UploadDropzone drag-and-drop area |
 | `attachments-file-input` | — | Hidden `<input type="file">` — use `setInputFiles()` |
-| `attachments-table` | — | AttachmentsTable `<table>` element |
+| `attachments-table` | — | AttachmentsTable root (wraps the generic `DataTable`, ETP-5526) |
 | `attachments-empty-state` | — | Empty state shown when no files exist |
-| `attachments-download-all` | — | "Download All (ZIP)" header button |
-| `attachments-delete-all` | — | "Delete All" header button |
-| `attachment-row-{id}` | `attachment-row-att-001` | Individual attachment row |
+| `attachments-download-all` | — | "Download All (ZIP)" link above the grid (only callers passing `onDownloadAll`, e.g. SifAttachmentsSection) |
+| `attachments-table-toolbar` | — | Row above the grid holding `attachments-download-all` (only rendered when `onDownloadAll` is passed) |
+| `attachments-table-body` | — | Wrapper around the attachments `DataTable` |
+| `row-{id}` | `row-att-001` | Individual attachment row — DataTable's own row testid since ETP-5526 (was `attachment-row-{id}`). Row checkboxes and the select-all are DataTable's (`Checkbox__eb5261`); the old `attachment-select-{id}` / `attachments-select-all` are gone |
+| `attachment-uploading-{id}` | — | Name cell of an in-flight upload row (spinner, disabled checkbox when selection is on, no actions) |
+| `attachment-actions-{id}` | `attachment-actions-att-001` | Hover action strip of a row (inside DataTable's quick-actions cell) |
 | `attachment-name-{id}` | `attachment-name-att-001` | File name cell |
-| `attachment-download-{id}` | `attachment-download-att-001` | Per-row download button (revealed on hover) |
-| `attachment-delete-{id}` | `attachment-delete-att-001` | Per-row delete button (revealed on hover) |
+| `attachment-download-{id}` | `attachment-download-att-001` | Per-row download button (revealed on hover, `ROW_ACTION_BUTTON_NEUTRAL`) |
+| `attachment-delete-{id}` | `attachment-delete-att-001` | Per-row delete button (revealed on hover, `ROW_ACTION_BUTTON_DESTRUCTIVE` + `IconicTrashIcon`) |
 | `confirm-delete-dialog` | — | ConfirmDeleteDialog content (also used for replace confirmation) |
 | `confirm-delete-confirm` | — | Confirm button inside the dialog |
 | `confirm-delete-cancel` | — | Cancel button inside the dialog |
@@ -1301,6 +1365,22 @@ test.describe('My feature — sales-order', () => {
 - **Custom field keys** — some windows expose the document number under a different field (e.g. purchase-invoice uses `orderReference`, not `documentNo`). Mirror the value into both keys when mocking so a single locator works across windows.
 - **Per-window expected buttons** — if your overlay/feature is gated by the custom window file (`onClone`, `onEmail`, `menuActions`, `documentPreview`), parametrize the asserts so each window verifies its own wiring (catches regressions where a custom window stops passing a handler).
 - **Numeric field clearing normalises to `defaultValue`** — when a user clears a numeric inline-add or inline-edit field and moves focus away, `DataTable.jsx` and `InlineLinesPanel.jsx` automatically substitute the field's `defaultValue` (or `min` if `defaultValue` is absent) before the save payload is built. In tests, assert the intercepted POST/PATCH body contains the expected numeric value (e.g. `0` for discount, `1` for quantity), never `undefined` or `''`. Do not assert that the input displays empty after blur — it will display the normalised value. See `docs/feedback.md` (ETP-4277) for the full root-cause explanation.
+
+### Mocking the shared `LoginStep` SSO button (Google)
+
+The shared `LoginStep` (`etendo-go-core`) renders its Google button only when
+`getConfiguredSsoProviders()` finds a non-empty `import.meta.env.VITE_GOOGLE_CLIENT_ID`
+(`src/onboarding/sso.js`), and a Vite build bakes that value at build time — so a mocked
+run has no SSO surface unless the E2E build is configured for it. `scripts/run-e2e-full.sh`
+sets a public placeholder for the mocked suite (`VITE_GOOGLE_CLIENT_ID`, a Google Web
+client id is a public identifier, not a secret).
+
+The provider SDK itself is the boundary a spec stubs, the way the unit test mocks
+`onboarding/sso`: define `window.google.accounts.id` with `page.addInitScript` — its
+`initialize` captures the credential callback and its `renderButton` renders a button whose
+click fires that callback. `loadGoogleIdentityScript()` short-circuits on an existing
+`window.google.accounts.id`, so Google's CDN is never contacted. Example:
+`e2e/tests/flows/system/user-invitation.mocked.spec.js`.
 
 ### Gotcha: a route pattern ending in a bare `word**` does NOT match a sub-path after `word`
 

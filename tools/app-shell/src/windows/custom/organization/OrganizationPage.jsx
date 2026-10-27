@@ -18,12 +18,15 @@ import OrgLogoField from './OrgLogoField.jsx';
 import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
 import ActividadesIaeSection from './ActividadesIaeSection.jsx';
+import Modelo390IdentitySection from './Modelo390IdentitySection.jsx';
+import { isEtendoTrue, getAeat390IdentityErrors, buildAeat390InfoPayload } from './representanteLegal.js';
 // ETP-5391 — reused as-is from fiscal-config (NOT forked): the backend
 // (`GET/POST/DELETE /sws/neo/certificate?orgId=...`, NeoCertificateHelper.java) is
 // already organization-scoped, not per fiscal system, so the same component that
 // SiiSection/VerifactuSection/TbaiSection each mount surfaces the org's one real
 // certificate here too, at the org level, instead of only inside each fiscal tab.
 import CertSection from '../fiscal-config/CertSection.jsx';
+import { useFiscalSectionVisibility } from './useFiscalSectionVisibility.js';
 
 // The AD_OrgInfo "Location / Address" identifier is a composed string
 // (e.g. "Santa Fe - 446 - 5800 - Rio Cuarto - España") — the country is the
@@ -49,6 +52,13 @@ const emptyForm = {
   email: '',
   phone: '',
   web: '',
+  // Modelo 390 identity (ETP-5716) — AD_OrgInfo EM_AEAT390_* columns.
+  aeat390Isperson: false,
+  aeat390Firstname: '',
+  aeat390Surname1: '',
+  aeat390Surname2: '',
+  aeat390RepNif: '',
+  aeat390RepName: '',
 };
 
 // BUG-1 (QA rejection round): the backend rejects (500) when a required field is blank —
@@ -98,6 +108,11 @@ function getTaxIdErrorKey(form) {
   return getTaxIdError(form.taxID);
 }
 
+// ETP-5716 — the Modelo 390 natural-person identity (Nombre / Primer apellido required, the
+// representative NIF and name both-or-neither, a non-empty representative NIF must be valid) is
+// checked by `getAeat390IdentityErrors` in representanteLegal.js — only while "Persona física"
+// is on, the fields are hidden otherwise.
+
 const EMAIL_FIELD_DESCRIPTOR = { key: 'email' };
 const WEBSITE_FIELD_DESCRIPTOR = { key: 'web', inputPrefix: 'https://' };
 const PHONE_FIELD_DESCRIPTOR = { key: 'phone' };
@@ -133,6 +148,12 @@ function buildFormFromData(header, info) {
     email: info?.etgoEmail ?? '',
     phone: info?.etgoPhone ?? '',
     web: info?.etgoWeb ?? '',
+    aeat390Isperson: isEtendoTrue(info?.aeat390Isperson),
+    aeat390Firstname: info?.aeat390Firstname ?? '',
+    aeat390Surname1: info?.aeat390Surname1 ?? '',
+    aeat390Surname2: info?.aeat390Surname2 ?? '',
+    aeat390RepNif: info?.aeat390RepNif ?? '',
+    aeat390RepName: info?.aeat390RepName ?? '',
   };
 }
 
@@ -141,15 +162,29 @@ function buildFormFromData(header, info) {
  * (sentence-case title + description) and a flexible right column (fields).
  * `divider` draws the border between sections — every section but the last one.
  */
+/** DOM ids of the sections another window can deep-link to (`/organization#<id>`). */
+export const ORG_SECTION_ANCHOR = Object.freeze({
+  fiscal: 'org-section-fiscal',
+  iae: 'org-section-iae',
+  modelo390: 'org-section-390',
+});
+
+/** The section id a location hash names (`#org-section-iae`), or `null` when it names none. */
+export function sectionAnchorFromHash(hash) {
+  const id = String(hash ?? '').replace(/^#/, '');
+  return Object.values(ORG_SECTION_ANCHOR).includes(id) ? id : null;
+}
+
 function FieldError({ message, testId }) {
   if (!message) return null;
   return <p role="alert" className="text-xs text-destructive mt-0.5" data-testid={testId}>{message}</p>;
 }
 
-function SectionRow({ titleKey, descKey, divider = true, testId, children }) {
+function SectionRow({ titleKey, descKey, divider = true, testId, anchorId, children }) {
   const ui = useUI();
   return (
     <section
+      id={anchorId}
       className={
         'grid gap-2 py-4' + (divider ? ' border-b border-border' : '')
       }
@@ -184,6 +219,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   // OrganizationPage.vitest.jsx's banner assertion order-dependent).
   const [seededBaseline, setSeededBaseline] = useState(null);
 
+  // ETP-5831 — the fiscal sections (certificate, IAE, Modelo 390) only render while a fiscal
+  // configuration that uses them is active. See useFiscalSectionVisibility.js.
+  const { showIae, show390, showCert, loading: visibilityLoading } =
+    useFiscalSectionVisibility(orgId, apiBaseUrl);
+
   useSetPageMeta({ title: ui('organizationPageTitle'), breadcrumb: `${ui('settings')} / ${ui('organizationPageTitle')}` });
 
   useEffect(() => {
@@ -193,6 +233,16 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       setSeededBaseline(JSON.stringify(seeded));
     }
   }, [loading, error, header, info]);
+
+  // Deep link to a section (`/organization#org-section-iae`, e.g. "Editar en Organización" from a
+  // Modelo 390 incident, ETP-5716): once the page is rendered, scroll to it. Waits for the fiscal
+  // section visibility too (ETP-5831): the target may be one of those sections, which only mounts
+  // once its visibility resolves. A hidden target is not in the DOM, so nothing happens.
+  useEffect(() => {
+    if (loading || error || visibilityLoading) return;
+    const anchor = sectionAnchorFromHash(typeof window !== 'undefined' ? window.location.hash : '');
+    if (anchor) document.getElementById(anchor)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }, [loading, error, visibilityLoading]);
 
   const baseline = useMemo(() => buildFormFromData(header, info), [header, info]);
   const isDirty = useMemo(
@@ -239,6 +289,16 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       toast.error(ui(taxIdErrorKey));
       return;
     }
+    // ETP-5831 — only while the Modelo 390 section is shown: a hidden section must never block the
+    // save. Its fields still travel in the payload below exactly as loaded, so hiding the section
+    // (model 390 deactivated) neither writes nor clears them.
+    const identityErrors = show390 ? getAeat390IdentityErrors(form) : {};
+    const identityErrorFields = Object.keys(identityErrors);
+    if (identityErrorFields.length > 0) {
+      setFieldErrors(Object.fromEntries(identityErrorFields.map(f => [f, ui(identityErrors[f])])));
+      toast.error(ui(identityErrors[identityErrorFields[0]]));
+      return;
+    }
     const formatErrorKey = getInvalidFormatErrorKey(form);
     if (formatErrorKey) {
       toast.error(ui(formatErrorKey));
@@ -260,6 +320,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
           etgoEmail: form.email,
           etgoPhone: form.phone,
           etgoWeb: form.web,
+          // Blank → null, representative NIF normalized (buildAeat390InfoPayload).
+          ...buildAeat390InfoPayload(form),
         },
       });
       await refetch();
@@ -309,6 +371,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
   }
 
   const countryFlag = getCountryFlag(form.countryLabel);
+  // The last VISIBLE section draws no bottom divider. Order matches the JSX below; Contacto is
+  // always shown, the fiscal sections only when useFiscalSectionVisibility says so.
+  const visibleSections = ['identity', 'fiscal', showCert && 'certificate', 'contact', showIae && 'iae', show390 && 'modelo390']
+    .filter(Boolean);
+  const hasDivider = (key) => visibleSections[visibleSections.length - 1] !== key;
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden" data-testid="OrganizationPage__root">
@@ -393,6 +460,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionFiscal"
           descKey="orgSectionFiscalDesc"
+          anchorId={ORG_SECTION_ANCHOR.fiscal}
           testId="OrganizationPage__section-fiscal"
           data-testid="SectionRow__a5f503">
           <div className="grid grid-cols-2 gap-4">
@@ -506,9 +574,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             tbai/sii/verifactu, so an unmatched/undefined context already falls back to
             ui('fiscal.cert.subtitle.default') — which is itself worded at the org level,
             not any one fiscal system. */}
+        {showCert && (
         <SectionRow
           titleKey="fiscal.cert.section.legend"
           descKey="fiscal.cert.section.hint"
+          divider={hasDivider('certificate')}
           testId="OrganizationPage__section-certificate"
           data-testid="SectionRow__a5f503">
           <CertSection
@@ -516,11 +586,13 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             data-testid="CertSection__a5f503" />
         </SectionRow>
+        )}
 
         {/* Datos de contacto */}
         <SectionRow
           titleKey="orgSectionContact"
           descKey="orgSectionContactDesc"
+          divider={hasDivider('contact')}
           testId="OrganizationPage__section-contact"
           data-testid="SectionRow__a5f503">
           {/* Email/Phone/Website now live directly on AD_OrgInfo (em_etgo_email/phone/web) —
@@ -579,10 +651,12 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             above. Independent fetch/save lifecycle: each row persists immediately
             (create/update/delete), it is NOT part of `form`/the unsaved-changes
             banner. See ActividadesIaeSection.jsx and useActividadesIae.js. */}
+        {showIae && (
         <SectionRow
           titleKey="orgSectionIae"
           descKey="orgSectionIaeDesc"
-          divider={false}
+          anchorId={ORG_SECTION_ANCHOR.iae}
+          divider={hasDivider('iae')}
           testId="OrganizationPage__section-iae"
           data-testid="SectionRow__a5f503">
           <ActividadesIaeSection
@@ -591,6 +665,29 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             orgId={orgId}
             data-testid="ActividadesIaeSection__a5f503" />
         </SectionRow>
+        )}
+
+        {/* Representante legal / Modelo 390 (ETP-5716) — the toggle and the natural-person
+            fields are `information` fields, part of `form` and saved with the page; the
+            representatives grid (shown when the org is not a natural person) persists row by
+            row on its own, like the IAE grid above. See Modelo390IdentitySection.jsx. */}
+        {show390 && (
+        <SectionRow
+          titleKey="orgSection390"
+          descKey="orgSection390Desc"
+          anchorId={ORG_SECTION_ANCHOR.modelo390}
+          divider={hasDivider('modelo390')}
+          testId="OrganizationPage__section-390"
+          data-testid="SectionRow__a5f503">
+          <Modelo390IdentitySection
+            form={form}
+            fieldErrors={fieldErrors}
+            onFieldChange={updateField}
+            apiBaseUrl={apiBaseUrl}
+            orgId={orgId}
+            data-testid="Modelo390IdentitySection__a5f503" />
+        </SectionRow>
+        )}
         </div>
       </div>
       {isDirty && (

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/rowVisuals.js
 /**
  * Covers row-selection interactions in InlineLinesPanel — toggleRow,
  * toggleAll, and the "prune deleted IDs from selection" effect — none of
@@ -7,8 +9,16 @@
  */
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import InlineLinesPanel from '../InlineLinesPanel.jsx';
+import InlineLinesPanel, { computeBodyScrollClassName } from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
+
+// The line delete button renders the Iconic trash from the core custom-icons barrel;
+// the published core may predate it, so stub it while keeping every other icon real.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
+}));
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -32,6 +42,7 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
 }));
 
 vi.mock('@/lib/linesColumnWidth.js', () => ({
+  withLinesAbsorberColumn: (cols) => cols,
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
@@ -223,16 +234,25 @@ describe('InlineLinesPanel row selection (toggleRow / toggleAll)', () => {
  * never reached the row's className, so the selected row rendered
  * byte-identically to an unselected one.
  *
- * The reference behaviour lives in DataTable: `selectedRowBg` (DataTable.jsx,
- * `bg-primary/5` for the non-hoverRowActions grids) applied inside
- * `getRowClassName`, guarded by `selectionPainted` so the row's own hardcoded
- * base background is dropped while a selection is painting the row (Tailwind
- * resolves two competing `background-color` utilities by stylesheet order, not
- * by class order). InlineLinesPanel must mirror both halves of that contract so
- * the tab grid and the main list grid shade a selected row the same way.
+ * The reference behaviour came from DataTable, which applies its checked-row
+ * colour inside `getRowClassName` and paints only that one background while a
+ * selection is painting the row (Tailwind resolves two competing
+ * `background-color` utilities by stylesheet order, not by class order).
+ * InlineLinesPanel mirrors that contract with the same checked colour DataTable
+ * uses: `--field-hover` (Figma "Fila / Selected", #F5F7F9), kept on hover, and
+ * exported as `--row-hover-bg` (ETP-5600; DataTable's side is covered in
+ * DataTable.rowHoverStyle.vitest.jsx). Tokens are spelled out literally here.
  */
-const SELECTED_ROW_BG = 'bg-primary/5';
+const SELECTED_ROW_BG = 'bg-[hsl(var(--field-hover))]';
+const CHECKED_TOKENS = [
+  SELECTED_ROW_BG,
+  'hover:bg-[hsl(var(--field-hover))]',
+  '[--row-hover-bg:hsl(var(--field-hover))]',
+];
 const BASE_ROW_BG = 'bg-card';
+// Figma Shadows/lg: on hover for a lifted line, unconditional for the line being edited.
+const HOVER_LIFT_SHADOW = 'hover:shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]';
+const LIFT_SHADOW_STATIC = 'shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]';
 
 function getRow(rowId) {
   return screen.getByTestId(`line-row-${rowId}`);
@@ -254,6 +274,18 @@ describe('InlineLinesPanel row selection shading (ETP-5030)', () => {
     expect(isRowShaded('L1')).toBe(true);
     expect(isRowShaded('L2')).toBe(false);
     expect(isRowShaded('L3')).toBe(false);
+  });
+
+  it('paints a ticked line with the --field-hover checked colour, kept on hover, instead of the former tint', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(getRowCheckbox('L1'));
+
+    const tokens = getRow('L1').className.split(/\s+/);
+    expect(tokens).toEqual(expect.arrayContaining(CHECKED_TOKENS));
+    expect(tokens).not.toContain('bg-primary/5');
+    expect(tokens).not.toContain(BASE_ROW_BG);
   });
 
   it('shades every selected row when several are ticked, leaving the rest untouched', async () => {
@@ -418,18 +450,13 @@ describe('InlineLinesPanel row highlight vs selection (ETP-5030)', () => {
     const edited = getRow('L1');
     expect(edited.querySelector('[data-testid="field-quantity"]')).not.toBeNull();
     expect(backgroundUtilitiesOn('L1')).toEqual([SELECTED_ROW_BG]);
+    // The line being edited stays lifted with the same Figma Shadows/lg, unconditionally.
+    expect(edited.classList.contains(LIFT_SHADOW_STATIC)).toBe(true);
     expect(edited.classList.contains('relative')).toBe(true);
     expect(edited.classList.contains('z-20')).toBe(true);
   });
 });
 
-/**
- * Behavioural counterpart to the source-text assertion in
- * InlineLinesPanel.test.js ("lifts the row with a shadow on hover"). That
- * regex-over-source check was previously satisfied by a stale prose comment
- * (`hover:z-10`) while the emitted class was `hover:z-20`, so it could not have
- * caught a drift. These assert the classes actually present on the rendered row.
- */
 /**
  * ETP-5029 — ticking a row's selection checkbox ALSO fired the row-body click
  * handler, so in Contacts' "Dirección" tab (whose `onRowClick` opens
@@ -545,16 +572,36 @@ describe('InlineLinesPanel selection checkbox vs row click (ETP-5029)', () => {
   });
 });
 
+/**
+ * Row hover elevation — the classes actually present on the rendered row. A
+ * line lifts on hover with Figma Shadows/lg, instantly (no shadow transition),
+ * stacked above its neighbours so the shadow spills over the rows below; a
+ * read-only (completed) document's lines do not lift at all.
+ */
 describe('InlineLinesPanel row hover elevation', () => {
-  it('gives every row the hover lift utilities so the shadow is not clipped by its neighbors', () => {
+  it('gives every row the instant hover lift so the shadow is not clipped by its neighbors', () => {
     renderPanel();
 
     for (const rowId of ['L1', 'L2', 'L3']) {
       const { classList } = getRow(rowId);
+      expect(classList.contains('transition-none')).toBe(true);
       expect(classList.contains('hover:relative')).toBe(true);
       expect(classList.contains('hover:z-20')).toBe(true);
+      expect(classList.contains(HOVER_LIFT_SHADOW)).toBe(true);
       expect(classList.contains('hover:z-10')).toBe(false);
-      expect(classList.contains('transition-shadow')).toBe(true);
+      expect(classList.contains('transition-shadow')).toBe(false);
+    }
+  });
+
+  it('does not lift the lines of a read-only document', () => {
+    renderPanel({ isDocumentReadOnly: true });
+
+    for (const rowId of ['L1', 'L2', 'L3']) {
+      const { classList } = getRow(rowId);
+      expect(classList.contains('hover:relative')).toBe(false);
+      expect(classList.contains('hover:z-20')).toBe(false);
+      expect(classList.contains(HOVER_LIFT_SHADOW)).toBe(false);
+      expect([...classList].some((cls) => cls.includes('shadow'))).toBe(false);
     }
   });
 
@@ -567,5 +614,50 @@ describe('InlineLinesPanel row hover elevation', () => {
     for (const rowId of ['L1', 'L2']) {
       expect(getRow(rowId).classList.contains('hover:z-20')).toBe(true);
     }
+  });
+});
+
+/**
+ * Last-line shadow room. The rows' body box is an `overflow-x-auto` scroll box,
+ * so it clips vertically too: with nothing after the last line inside it, that
+ * line's hover shadow was cut. `computeBodyScrollClassName` reserves `pb-4` for
+ * it and, without horizontal overflow, takes it back with `-mb-4` plus
+ * click-through padding; with overflow it keeps only the padding so the native
+ * scrollbar is neither covered nor disabled.
+ */
+describe('InlineLinesPanel last-line shadow room', () => {
+  it.each([
+    [{ reserveShadowRoom: false, hasHorizontalOverflow: false }, 'overflow-x-auto'],
+    [{ reserveShadowRoom: false, hasHorizontalOverflow: true }, 'overflow-x-auto'],
+    [{ reserveShadowRoom: true, hasHorizontalOverflow: true }, 'overflow-x-auto pb-4'],
+    [
+      { reserveShadowRoom: true, hasHorizontalOverflow: false },
+      'overflow-x-auto pb-4 -mb-4 pointer-events-none [&>*]:pointer-events-auto',
+    ],
+  ])('computeBodyScrollClassName(%o) returns %s', (input, expected) => {
+    expect(computeBodyScrollClassName(input)).toBe(expected);
+  });
+
+  // The rows are direct children of the body scroll box (bodyScrollRef).
+  const getBodyBox = () => getRow('L1').parentElement;
+
+  it('reserves and takes back the room when editable lines end the box (jsdom: no horizontal overflow)', () => {
+    renderPanel();
+
+    const { classList } = getBodyBox();
+    expect(classList.contains('overflow-x-auto')).toBe(true);
+    expect(classList.contains('pb-4')).toBe(true);
+    expect(classList.contains('-mb-4')).toBe(true);
+    expect(classList.contains('pointer-events-none')).toBe(true);
+  });
+
+  it.each([
+    ['the document is read-only', { isDocumentReadOnly: true }],
+    ['a balance footer follows the lines', { balanceFooter: { debitField: 'quantity', creditField: 'product' } }],
+    ['the add-row form is active', { lineFormActive: true }],
+  ])('reserves no room when %s', (_label, props) => {
+    renderPanel(props);
+
+    expect(getBodyBox().className).toBe('overflow-x-auto');
   });
 });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DistinctValuesList.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
@@ -537,7 +538,7 @@ test.describe('User role assignment — Users grid role filter', () => {
 
   test('filtering by a template role narrows the grid to users carrying that composed role', async ({ page }) => {
     const popover = await openRoleQuickFilter(page);
-    await popover.getByRole('button', { name: 'Finanzas' }).click();
+    await popover.getByRole('option', { name: 'Finanzas' }).click();
 
     await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
     await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);

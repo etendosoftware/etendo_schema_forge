@@ -513,15 +513,15 @@ Same-shaped file, same generated-`HeaderPage.jsx` import site, same unreachable-
 **Open item surfaced by this correction:** as of this write-up, none of this file's grid columns carry `required: true` (checked all `key:` entries), while `contract.json` marks `documentNo` and `businessPartner` as required. The ETP-4609 fix commit for sales-invoice (`509650592`) only touched `sales-invoice/index.jsx`, not this file — so the required-flag drift this ticket exists to fix may still be present here and was not part of the 13-window pass. Not fixed as part of this DOCS entry (out of scope for Sage); flagged for whoever picks up the open "extend audit to `artifacts/*/custom/` locations" task.
 
 **Lesson:** the registry `customLoaders > windowLoaders` unreachability argument only proves the *generated* `HeaderPage.jsx` import site is dead — it says nothing about whether the same artifact file has a second, independent importer elsewhere (as happened here via the `@generated` alias). Always grep for **all** importers of a suspected-dead file before declaring it dead, even when two sibling windows look identical at a glance; `purchase-invoice` and `sales-invoice` diverged in exactly this way despite having same-named custom files.
-## [2026-07-28] ETP-4610 — "Add dimensions" moved from a fixed grid column to a hover action; regen-gap on goods-receipt/simple-g-l-journal closed
+## [2026-07-28] ETP-4610 — "Add dimensions" moved from a fixed grid column to a hover action; regen-gap on goods-receipt/manual-journals closed
 
 **Follow-up to ETP-4529/ETP-4543.** Scope: move the "+ Añadir dimensiones" trigger out of the `dimensionsPanel` grid column and into `InlineLinesPanel`'s per-row hover-action strip (next to Pencil/Trash), and hide the "Dimensiones contables" column entirely. See `docs/ui-customization.md` §14b/§14c for the resulting UX and the new generic `rowActions` extension slot this introduced.
 
 **No `schema_forge_core` change was needed.** `InlineLinesPanel.jsx`, `DimensionsPanel.jsx`, and `useAccountingDimensionFields` all live only in this functional repo's `tools/app-shell/src/` — none of them are part of `@etendosoftware/app-shell-core` (verified: `diff` against `../schema_forge_core/packages/app-shell-core/src/components/contract-ui/` shows `InlineLinesPanel.jsx`/`DimensionsPanel.jsx` don't exist there at all, and the `@` vite alias always resolves `@/components/contract-ui/*` to this repo's own `./src`, never the core package, even in `LOCAL_CORE=1` mode). `generate-frontend.js`'s `buildDimensionsPanelColumn` still emits the exact same `type: 'dimensionsPanel'` column literal as before — the generator's job (declaring the metadata) didn't change, only how the generic consumer renders it.
 
-**Regen-gap discovered and closed while validating:** `goods-receipt` and `simple-g-l-journal`'s generated `<Window>LineTable.jsx` had NOT actually picked up their `decisions.json` `dimensionsPanel: true` flags — `contract.json` for both had zero `dimensionsPanel` references despite the flags being present and committed (likely lost across the `epic/ETP-3504` merges preceding this branch — the earlier ETP-4529 feedback entry above claims all four original windows, including goods-receipt/goods-shipment, were already regenerated). Regenerated both via `make regen ONLY=<window> SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed clean (`sf-validate-pipeline`, 0 violations) and additive version bumps in both `contract-changelog.json`s.
+**Regen-gap discovered and closed while validating:** `goods-receipt` and `manual-journals`'s generated `<Window>LineTable.jsx` had NOT actually picked up their `decisions.json` `dimensionsPanel: true` flags — `contract.json` for both had zero `dimensionsPanel` references despite the flags being present and committed (likely lost across the `epic/ETP-3504` merges preceding this branch — the earlier ETP-4529 feedback entry above claims all four original windows, including goods-receipt/goods-shipment, were already regenerated). Regenerated both via `make regen ONLY=<window> SKIP_EXTRACT=1 LOCAL_CORE=1`; confirmed clean (`sf-validate-pipeline`, 0 violations) and additive version bumps in both `contract-changelog.json`s.
 
-**goods-shipment hit the already-documented `AD_Ref_List_Trl` translation-stripping issue** (see "`make regen` Silently Strips es_ES Enum Labels..." entry above) on its `etblkpAccountingstatus` field — regenerating it on this sandbox silently dropped 18 `es_ES` option labels, an unrelated local-DB data gap, not a real change. Per that entry's own lesson, the regen was NOT committed for goods-shipment; `sales-invoice`/`purchase-invoice` were left un-regenerated in this pass too (their `decisions.json` flags are already correct — see the ETP-4529 entry above — regenerating them was optional validation, not required to ship this ticket, and re-running risked hitting the same translation-stripping symptom on unrelated fields). `goods-receipt` and `simple-g-l-journal` did not hit this symptom (neither has that reference list on an entity touched by the regen) and were safe to commit as regenerated.
+**goods-shipment hit the already-documented `AD_Ref_List_Trl` translation-stripping issue** (see "`make regen` Silently Strips es_ES Enum Labels..." entry above) on its `etblkpAccountingstatus` field — regenerating it on this sandbox silently dropped 18 `es_ES` option labels, an unrelated local-DB data gap, not a real change. Per that entry's own lesson, the regen was NOT committed for goods-shipment; `sales-invoice`/`purchase-invoice` were left un-regenerated in this pass too (their `decisions.json` flags are already correct — see the ETP-4529 entry above — regenerating them was optional validation, not required to ship this ticket, and re-running risked hitting the same translation-stripping symptom on unrelated fields). `goods-receipt` and `manual-journals` did not hit this symptom (neither has that reference list on an entity touched by the regen) and were safe to commit as regenerated.
 
 **`purchase-invoice`, `goods-shipment` still not validated end-to-end via `make regen` in this pass** — a future task should re-attempt them once the sandbox's `AD_Ref_List_Trl` es_ES rows are backfilled (see the entry above), or regen with the label-restore workaround already documented there.
 
@@ -533,7 +533,7 @@ Same-shaped file, same generated-`HeaderPage.jsx` import site, same unreachable-
 
 **Test coverage added post-QA:** following Sentinel's one recommendation, dedicated coverage was added for both the live label/icon transition and the helper in isolation: `InlineLinesPanel.vitest.jsx` gained a `rowActions — generic hover-action extension slot` describe block (rendering, static `show: false`, per-row `show` function, declared-order rendering) plus explicit "flips from addDimensionsTooltip to editDimensionsTooltip"/"flips back" live-transition tests inside the `dimensionsPanel column` describe block; `hasFilledDimensionValues.js` gained its own dedicated `hasFilledDimensionValues.vitest.js` (7 cases, deliberately not mocking `resolveIdentifier` so the real `''`-vs-`null` contract above is exercised end-to-end).
 
-**`goods-shipment` regen finally resolved, plus the deferred `contract.mcp.json`/`contract.prev.json` drift closed — via the pre-push hook itself.** `git push` on this branch failed its CI-parity "UI / contract drift" check (`make regen`-from-cache against the PINNED published core package + a frozen cached AD snapshot, compared against committed artifacts) with drift on 10 files: `financial-account/contract.mcp.json` (the version-stuck drift from earlier in this entry), `goods-receipt`/`purchase-invoice`'s `contract.mcp.json`+`contract.prev.json` (version/checksum only, catching up to already-committed `contract.json` content), `sales-invoice`/`simple-g-l-journal`'s `contract.mcp.json` (same), and — notably — `goods-shipment`'s `contract.json`, `contract.mcp.json`, AND `GoodsShipmentLineTable.jsx`. Inspected every diff: all 9 non-goods-shipment files were pure version/checksum/sync catch-up, zero structural change. `goods-shipment`'s diff was the expected clean `dimensionsPanel: true` addition on `project`/`costcenter` — **no translation-label loss at all**, because this offline pipeline regenerates from a frozen cached AD snapshot, not the local sandbox's live (translation-incomplete) DB. This confirms the two earlier `goods-shipment` regen failures were purely a local-DB data gap, never a real blocker — the fix was already sitting in the CI-parity codepath the whole time. Accepted this regen output wholesale (`sf-validate-pipeline --scope=goods-shipment`: OK, full suite: 9746 passing), closing both the goods-shipment deferral AND the 3-file deferred drift from the top of this entry in one commit. **Lesson:** when a local-DB `make regen` hits a translation-stripping symptom, the pre-push hook's own offline/cached-snapshot regen (or `sf-validate-pipeline`'s underlying drift check) may succeed cleanly where the live-DB regen can't — worth trying before accepting a window as "regen blocked until the sandbox is backfilled."
+**`goods-shipment` regen finally resolved, plus the deferred `contract.mcp.json`/`contract.prev.json` drift closed — via the pre-push hook itself.** `git push` on this branch failed its CI-parity "UI / contract drift" check (`make regen`-from-cache against the PINNED published core package + a frozen cached AD snapshot, compared against committed artifacts) with drift on 10 files: `financial-account/contract.mcp.json` (the version-stuck drift from earlier in this entry), `goods-receipt`/`purchase-invoice`'s `contract.mcp.json`+`contract.prev.json` (version/checksum only, catching up to already-committed `contract.json` content), `sales-invoice`/`manual-journals`'s `contract.mcp.json` (same), and — notably — `goods-shipment`'s `contract.json`, `contract.mcp.json`, AND `GoodsShipmentLineTable.jsx`. Inspected every diff: all 9 non-goods-shipment files were pure version/checksum/sync catch-up, zero structural change. `goods-shipment`'s diff was the expected clean `dimensionsPanel: true` addition on `project`/`costcenter` — **no translation-label loss at all**, because this offline pipeline regenerates from a frozen cached AD snapshot, not the local sandbox's live (translation-incomplete) DB. This confirms the two earlier `goods-shipment` regen failures were purely a local-DB data gap, never a real blocker — the fix was already sitting in the CI-parity codepath the whole time. Accepted this regen output wholesale (`sf-validate-pipeline --scope=goods-shipment`: OK, full suite: 9746 passing), closing both the goods-shipment deferral AND the 3-file deferred drift from the top of this entry in one commit. **Lesson:** when a local-DB `make regen` hits a translation-stripping symptom, the pre-push hook's own offline/cached-snapshot regen (or `sf-validate-pipeline`'s underlying drift check) may succeed cleanly where the live-DB regen can't — worth trying before accepting a window as "regen blocked until the sandbox is backfilled."
 
 ---
 
@@ -3073,7 +3073,7 @@ the router's functional `prev`. Read the latest params from a ref. The rule is a
 
 ## [2026-10-05] ETP-5611 — Manual journals: four platform gaps found while fixing the window
 
-Found while fixing `simple-g-l-journal` (window guide: `docs/generated-custom-windows/simple-g-l-journal.md`
+Found while fixing `manual-journals` (window guide: `docs/generated-custom-windows/manual-journals.md`
 → "Manual journal fixes — ETP-5611"). Two are fixed generically, two are only worked around.
 
 **Fixed generically:**
@@ -3134,3 +3134,92 @@ passes and the failure only surfaces at file generation.
 
 **Reference:** `docs/generated-custom-windows/fiscal-models.md` → "Tipo de declaración vs. casilla
 69, bank block requiredness and boxes 70/109 (ETP-5597)", part 2.
+
+---
+
+## [2026-10-13] ETP-5573 — Stock Report warehouse selector omits warehouses created from the Warehouse window
+
+**Component:** `ReportSelectorsServlet.buildWarehouseQuery()` (`com.etendoerp.go`) and its dev-server twin,
+the `warehouse` branch of `tools/app-shell/vite-plugins/report-api.js`.
+
+**Symptom:** a warehouse created in the Etendo GO Warehouse window shows up in the window, in the Stock
+Report output and in every document selector (sales/purchase order, goods receipt/shipment, physical
+inventory, returns), but is missing from the Stock Report "Warehouse" scope selector.
+
+**Root cause:** the selector required an `ad_org_warehouse` row (the Classic organization↔warehouse
+assignment, Organization window → Warehouse tab) for one of the role's readable organizations. Etendo GO
+never creates that row when a warehouse is added (no core trigger, no NEO handler), and no other GO
+selector asks for it — they scope by the warehouse's own organization (`m_warehouse.ad_org_id`), as does
+`WarehouseLookupHelper`. The restriction came in with the Stock Report (ETP-3585, copied to the servlet in
+ETP-3637) and has no documented rationale.
+
+**Why it hid locally:** `localhost:3100` answers `/sws/report-selectors/*` from the Vite plugin, not from the
+servlet, and the popup sends no org parameters, so the plugin never applied the filter. Only the real
+servlet reproduces it. Call Tomcat directly (`<etendo>/sws/report-selectors/warehouse?q=` with a bearer
+token) to test selector changes.
+
+**Fix:** both implementations now scope by `m_warehouse.ad_org_id` (selectedOrgId also accepts the root org
+`'0'`; roleOrgIds is the role's readable orgs) and never touch `ad_org_warehouse`. No handler and no data
+fix: existing warehouses become visible as soon as the new build is deployed.
+
+**Lesson:** a selector that ignores the rule every sibling selector follows is a bug magnet, and the
+dev-server plugin duplicates the servlet's SQL (see also ETP-5483) — change both in the same commit. The
+other two ticket items (accent in "Almacén", "Unidad de Medida" capitalization) were already fixed by
+ETP-5492.
+
+**Reference:** `docs/plans/2026-10-13-etp-5573-stock-report-warehouse-selector.md`.
+
+---
+
+## [2026-10-16] ETP-4744 — Initial-callout latch no longer consumed before the defaults land
+
+**Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx` — the "fire callouts for
+non-dependent selector fields" effect; now backed by `resolveInitialCalloutTriggers`
+(`detailViewHelpers.jsx`).
+
+**Symptom:** same as the pre-existing defect recorded under `[2026-07-31] ETP-4741` below: on a `/new` route
+the backend defaults merge into the form, but the initial callout chain (`businessPartner` → `priceList` /
+`paymentTerms` / address) never runs, so the dependent fields stay empty until the user re-picks a value.
+
+**Root cause:** the effect's one-shot latch (`defaultCalloutsTriggeredRef`) armed on `editing` becoming
+non-empty *for any reason*, not on the defaults session having settled. A keystroke in a plain, non-selector
+field while `GET /{entity}/defaults` was in flight consumed the latch with an empty trigger list; when the
+defaults merged the effect returned early on the already-set latch, and it only resets on `!isNew`, so the
+chain stayed broken for the whole creation session. ETP-4741's 4s gate narrowed the window to
+`4s → late response` but did not close it.
+
+**Fix:** the latch is now armed by the arrival of the defaults session. The new helper waits for
+`hook.defaultsPending` (useEntity's request window, ETP-5002) to clear — and for `editing` to hold a value —
+before reporting `ready`, and computes its trigger list from the merged state. A form left empty never consumes
+the latch; a session that settles with no selector value consumes it (so a later manual pick cannot make the
+effect fire a second callout).
+
+**Lesson:** a "the form has some value" predicate is not a "the async seed has arrived" predicate. When an
+effect must act once, on the completion of an async load, gate it on that load's own lifecycle flag
+(`defaultsPending`), never on a side effect (the form being non-empty) that other actors — the user, a seed —
+can also produce.
+
+**Reference:** `docs/generated-custom-windows/app-shell-functional-flows.md` §4; tests
+`DetailView.newRecordEffects.vitest.jsx` ("initial callout chain is armed by the defaults session") and
+`DetailView.extractedHelpers.vitest.js` (`resolveInitialCalloutTriggers`).
+
+---
+
+## [2026-10-21] ETP-5830 — es_AR is missing most `backendError.*` translations (known gap, one key ported)
+
+**Component:** `tools/app-shell/src/locales/es_AR.json` → `genericLabels`, read by `translateBackendError()`
+(`tools/app-shell/src/lib/backendErrors.js`).
+
+**Symptom:** an es_AR user sees the raw English backend message, or the generic fallback, where an
+es_ES user sees a translated error. Seen first on attachments: a read-only role uploading a file got
+the raw `accessDeniedToSpec` 403 text.
+
+**Root cause:** es_AR does not fall back to es_ES key by key, and 86 `backendError.*` keys present in
+es_ES are absent from es_AR (count measured 2026-10-21, after this ticket ported one).
+
+**Fix in ETP-5830:** only `backendError.accessDeniedToSpec` was ported (voseo: "No tenés acceso para
+realizar esta acción."), because that is the one the new read-only gating surfaces. The other 86 are
+**not fixed**. They need a translation pass, not a copy, because es_AR uses voseo.
+
+**Lesson:** when adding a `backendError.*` key, add it to es_AR too. A guardrail test comparing the
+`backendError.*` sets of es_ES and es_AR would stop the gap from growing.

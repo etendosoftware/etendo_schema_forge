@@ -1,3 +1,5 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { installHeaderConfirmMock } from '../../helpers/confirmMocks.js';
@@ -255,8 +257,9 @@ test.describe('Sales Order — Confirm Modal idempotency (mocked)', () => {
     // Retry — invoice mock now succeeds
     await clickConfirm(page);
 
-    // Wait for the result modal (modal title appears after onConfirmed fires)
-    await expect(page.getByText(/Pedido confirmado|Order confirmed/i)).toBeVisible({ timeout: 5000 });
+    // Wait for the result modal (its title appears after onConfirmed fires; shipment +
+    // invoice → the plural "Documentos creados")
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Documentos creados|Documents created/i, { timeout: 5000 });
 
     // CRITICAL: documentAction and createShipment must NOT have been called again
     expect(state.calls.documentAction).toBe(1);
@@ -294,7 +297,7 @@ test.describe('Sales Order — Confirm Modal idempotency (mocked)', () => {
     // Retry — shipment mock now succeeds, invoice is locked and skipped by the !invoiceResult guard
     await clickConfirm(page);
 
-    await expect(page.getByText(/Pedido confirmado|Order confirmed/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Documentos creados|Documents created/i, { timeout: 5000 });
 
     // CRITICAL: documentAction must not be called again, shipment is retried, invoice is NOT re-run
     expect(state.calls.documentAction).toBe(1);
@@ -332,7 +335,7 @@ test.describe('Sales Order — Confirm Modal idempotency (mocked)', () => {
     // Retry — both mocks now succeed
     await clickConfirm(page);
 
-    await expect(page.getByText(/Pedido confirmado|Order confirmed/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Documentos creados|Documents created/i, { timeout: 5000 });
     expect(state.calls.documentAction).toBe(1);
     expect(state.calls.createShipment).toBe(2);
     expect(state.calls.createDraftInvoice).toBe(2);

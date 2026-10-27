@@ -82,7 +82,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 8. Open the **Asset Amortization** child surface and confirm line ordering follows sequence number, with processed rows becoming non-editable.
 9. Open the **Accounting** child surface and confirm the record exposes selectors for general ledger, accumulated depreciation, and depreciation accounts.
 10. If amortization lines already exist, confirm the asset currency can no longer be edited.
-11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 
 ## ETP-4190 changes (feature/ETP-4190)
 
@@ -422,10 +422,14 @@ selection drops to zero. Displays selection count, an icon-only red **Delete** b
 visible "Eliminar" label, `title` tooltip only — ETP-4972 Figma-driven restyle), and the
 shell's own built-in **Close** (×) button.
 
-**Bulk delete** — `handleDeleteSelected` fires `Promise.allSettled` with parallel `DELETE
-/amortizationLine/{id}` requests for every selected row id. On completion, selection is
-cleared and `fetchLines()` is called to refresh the table. The delete button shows a
-loading spinner (`deleting` flag) while requests are in flight.
+**Bulk delete** — since ETP-5758 `handleDeleteSelected` opens the app's generic bulk-delete
+dialog (`useBatchDeleteDialog` → `DeleteConfirmDialog`, testids `batch-delete-*`; before it
+deleted with no confirmation). On confirm the dialog stays open and locked (spinner +
+"Eliminando…", "Eliminando N registro(s). Esto puede tardar unos segundos.", Cancel disabled,
+not dismissible) while one `DELETE /amortizationLine/{id}` per selected row runs in parallel;
+the trash button is disabled meanwhile. Then ONE outcome toast fires (a one-line 4xx refusal
+names the backend's reason); if at least one line was deleted the failed ids stay selected and
+`fetchLines()` refreshes the table, and if all failed the selection is left untouched.
 
 **Automatic selection clear** — a `useEffect` on `[lines]` calls `setSelectedRows(new Set())`
 whenever the lines array is replaced (e.g. after "Create Amortization" triggers a
@@ -1079,3 +1083,21 @@ The pattern used here (`EntityPersistenceEventObserver`) is the same sibling pat
 5. **Verify translation in both locales:**
    - Switch the session locale to Spanish and repeat steps 2–3 — confirm the error message reads **"Ya existe un activo con este identificador en esta organización."**
    - Switch the session locale to English — confirm it reads **"There is already an asset with this identifier in this organization."**
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting (`assetAcct`)** tab (`accumulatedDepreciation`, `depreciation`) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the asset accounting mappings now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via the new `@NeoExtension` `AssetAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## Read-only role tier: amortization panel — ETP-5830
+
+With a `read-only` tier, `AssetsAmortizationPanel` lists the amortization lines but never shows the selection toolbar (bulk actions). Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

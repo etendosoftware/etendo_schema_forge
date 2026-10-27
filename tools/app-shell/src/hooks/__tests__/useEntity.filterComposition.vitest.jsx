@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useEntity } from '../useEntity';
 
@@ -261,6 +262,108 @@ describe('useEntity — list query composition', () => {
       expect(params.getAll('criteria')).toHaveLength(1);
       expect(JSON.parse(params.getAll('criteria')[0])[0].fieldName).toBe('salesTransaction');
     });
+  });
+});
+
+describe('useEntity — buildDistinctQuery', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const crit = (fieldName, extra = {}) =>
+    encodeURIComponent(JSON.stringify({ fieldName, operator: 'equals', value: 'x', ...extra }));
+  const fieldsOf = (query) =>
+    JSON.parse(new URLSearchParams(query).getAll('criteria')[0] ?? '[]').map((c) => c.fieldName);
+
+  async function ready(opts) {
+    const hook = renderList(opts);
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    return hook.result;
+  }
+
+  it('leaves the excluded column filter out and keeps every other layer', async () => {
+    const result = await ready({
+      baseFilter: `criteria=${crit('subsetTab')}&active=true`,
+      columnFilters: {
+        docStatus: { type: 'set', values: ['CO'] },
+        bpartner: { type: 'set', values: ['BP1'] },
+      },
+      columnDefs: { docStatus: { key: 'docStatus' }, bpartner: { key: 'bpartner' } },
+      trailingFilter: `criteria=${crit('advancedField')}`,
+    });
+
+    const query = result.current.buildDistinctQuery(['docStatus']);
+    const fields = JSON.stringify(fieldsOf(query));
+    expect(fields).toContain('subsetTab');
+    expect(fields).toContain('bpartner');
+    expect(fields).toContain('advancedField');
+    expect(fields).not.toContain('docStatus');
+    expect(new URLSearchParams(query).getAll('criteria')).toHaveLength(1);
+    expect(new URLSearchParams(query).get('active')).toBe('true');
+  });
+
+  it('keeps a date-range criteria carried by the base filter', async () => {
+    const range = encodeURIComponent(JSON.stringify([
+      { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-01-01' },
+      { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-01-31' },
+    ]));
+    const result = await ready({
+      baseFilter: `criteria=${range}`,
+      columnFilters: { docStatus: { type: 'set', values: ['CO'] } },
+      columnDefs: { docStatus: { key: 'docStatus' } },
+    });
+
+    const parsed = JSON.parse(new URLSearchParams(result.current.buildDistinctQuery(['docStatus'])).get('criteria'));
+    expect(parsed.map((c) => c.operator)).toEqual(['greaterOrEqual', 'lessOrEqual']);
+  });
+
+  it('carries no sort or paging params', async () => {
+    const result = await ready({ baseFilter: 'active=true' });
+    const params = new URLSearchParams(result.current.buildDistinctQuery([]));
+    expect(params.has('_sortBy')).toBe(false);
+    expect(params.has('_startRow')).toBe(false);
+    expect(params.has('_endRow')).toBe(false);
+  });
+
+  it('returns an empty string when there are no filters', async () => {
+    const result = await ready();
+    expect(result.current.buildDistinctQuery(['docStatus'])).toBe('');
+    expect(result.current.buildDistinctQuery()).toBe('');
+  });
+
+  it('returns the same string for the same filters', async () => {
+    const result = await ready({
+      baseFilter: 'active=true',
+      columnFilters: { docStatus: { type: 'set', values: ['CO'] } },
+      columnDefs: { docStatus: { key: 'docStatus' } },
+    });
+    expect(result.current.buildDistinctQuery(['x'])).toBe(result.current.buildDistinctQuery(['x']));
+  });
+
+  it('treats excluding a key that is not set as a no-op', async () => {
+    const result = await ready({
+      baseFilter: 'active=true',
+      columnFilters: { bpartner: { type: 'set', values: ['BP1'] } },
+      columnDefs: { bpartner: { key: 'bpartner' } },
+    });
+    expect(result.current.buildDistinctQuery(['docStatus'])).toBe(result.current.buildDistinctQuery([]));
+    expect(fieldsOf(result.current.buildDistinctQuery(['docStatus']))).toContain('bpartner');
+  });
+
+  it('keeps passthrough params when the only column filter is excluded', async () => {
+    const result = await ready({
+      baseFilter: 'active=true&salesTransaction=Y',
+      columnFilters: { docStatus: { type: 'set', values: ['CO'] } },
+      columnDefs: { docStatus: { key: 'docStatus' } },
+    });
+    const params = new URLSearchParams(result.current.buildDistinctQuery(['docStatus']));
+    expect(params.get('active')).toBe('true');
+    expect(params.get('salesTransaction')).toBe('Y');
+    expect(params.has('criteria')).toBe(false);
   });
 });
 

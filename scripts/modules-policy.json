@@ -1,0 +1,38 @@
+{
+  "_comment": "Source of truth for scripts/check-modules.js. Keep in sync with the 'Base repos' and 'Module repos' tables in README.md (CLAUDE.md requires updating both when a module is added or changes kind).",
+  "epic": "epic/ETP-3504",
+  "repos": [
+    { "name": "etendo_schema_forge", "kind": "base", "location": "self", "remote": "etendosoftware/etendo_schema_forge" },
+    { "name": "schema_forge_core", "kind": "base", "location": "root", "envDir": "SCHEMA_FORGE_CORE", "remote": "etendosoftware/schema_forge_core", "optional": true },
+    { "name": "com.etendoerp.go", "kind": "base", "location": "modules", "remote": "etendosoftware/com.etendoerp.go" },
+
+    { "name": "etendo_core", "kind": "epic", "location": "etendo-root", "remote": "etendosoftware/etendo_core" },
+
+    { "name": "com.etendoerp.sif.general", "kind": "epic", "location": "modules", "remote": "koodu_software/com.etendoerp.sif.general" },
+    { "name": "com.smf.ticketbai", "kind": "epic", "location": "modules", "remote": "koodu_software/com.smf.ticketbai" },
+    { "name": "com.etendoerp.verifactu", "kind": "epic", "location": "modules", "remote": "koodu_software/com.etendoerp.verifactu" },
+    { "name": "org.openbravo.module.aeat347apr.es", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.aeat347apr.es" },
+    { "name": "org.openbravo.module.aeat390.es", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.aeat390.es" },
+    { "name": "org.openbravo.module.intrastat", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.intrastat" },
+    { "name": "org.openbravo.module.sii", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.sii" },
+    { "name": "org.openbravo.module.taxreportlauncher", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.taxreportlauncher" },
+    { "name": "org.openbravo.module.aeat303.es", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.aeat303.es" },
+    { "name": "org.openbravo.module.aeat349.es", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.aeat349.es" },
+    { "name": "org.openbravo.module.bptaxidkey", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.module.bptaxidkey" },
+    { "name": "com.smf.currency.apiconfig", "kind": "epic", "location": "modules", "remote": "koodu_software/com.smf.currency.apiconfig" },
+    { "name": "com.smf.currency.conversionrate", "kind": "epic", "location": "modules", "remote": "koodu_software/com.smf.currency.conversionrate" },
+    { "name": "com.etendoerp.psd2.bank.integration", "kind": "epic", "location": "modules", "remote": "koodu_software/com.etendoerp.psd2.bank.integration" },
+    { "name": "com.etendoerp.copilot", "kind": "epic", "location": "modules", "remote": "etendosoftware/com.etendoerp.copilot" },
+    { "name": "com.etendoerp.db.extended", "kind": "epic", "location": "modules", "remote": "etendosoftware/com.etendoerp.db.extended" },
+    { "name": "com.etendoerp.go.template", "kind": "epic", "location": "modules", "remote": "etendosoftware/com.etendoerp.go.template" },
+    { "name": "com.etendoerp.go.localization.es.data", "kind": "epic", "location": "modules", "remote": "etendosoftware/com.etendoerp.go.localization.es.data" },
+    { "name": "com.etendoerp.service.integration.amazon.s3", "kind": "epic", "location": "modules", "remote": "koodu_software/com.etendoerp.service.integration.amazon.s3", "optional": true },
+
+    { "name": "com.etendoerp.tomcat", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.tomcat", "optional": true },
+    { "name": "com.etendoerp.docker", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.docker", "optional": true },
+    { "name": "com.etendoerp.copilot.devassistant", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.copilot.devassistant", "optional": true },
+    { "name": "com.etendoerp.webhookevents", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.webhookevents", "optional": true },
+    { "name": "org.openbravo.utility.hqlquerytool", "kind": "usual", "location": "modules", "remote": "etendosoftware/org.openbravo.utility.hqlquerytool", "optional": true },
+    { "name": "com.etendoerp.openapi", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.openapi", "optional": true }
+  ]
+}

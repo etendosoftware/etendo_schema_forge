@@ -1,8 +1,8 @@
 {
-  "version": "0.45.0",
+  "version": "0.46.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-10-08T13:55:29.886Z",
-  "checksum": "8e1e693cce4ce2cc",
+  "updatedAt": "2026-10-09T15:04:44.533Z",
+  "checksum": "e6d001108548a80c",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -1067,6 +1067,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "validation": {
               "required": true,
               "maxLength": 32
@@ -1086,6 +1088,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "validation": {
               "required": true,
               "maxLength": 32

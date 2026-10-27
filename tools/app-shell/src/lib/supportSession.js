@@ -60,11 +60,12 @@ export const SUPPORT_HANDOFF_FAILURES = Object.freeze({
 
 /**
  * Router entries that a support session must not reach: account settings (password, sign-in
- * methods, email, subscription), the upgrade/billing flow, and the screens that mint credentials
+ * methods, email, subscription), the upgrade/billing flow, the company list (ETP-5734: switching
+ * company), and the screens that mint credentials
  * which outlive the session (public API keys, OAuth2 clients). The backend refuses all of them for
  * a support session; hiding them is what keeps the operator from walking into those refusals.
  */
-export const SUPPORT_RESTRICTED_ROUTES = Object.freeze(['account', 'upgrade', 'api-keys', 'oauth2-clients']);
+export const SUPPORT_RESTRICTED_ROUTES = Object.freeze(['account', 'upgrade', 'companies', 'api-keys', 'oauth2-clients']);
 
 /** The menu capability that marks an owner-only entry (menu.json `"capability": "isOwner"`). */
 const OWNER_CAPABILITY = 'isOwner';

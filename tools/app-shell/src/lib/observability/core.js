@@ -1,76 +1,58 @@
-import { buildEventPayload } from './payload.js';
+import { createTelemetryGateway } from '@etendosoftware/app-shell-core/observability/gateway';
+import { buildEventPayload, SAFE_EVENT_PROPERTY_KEYS } from './payload.js';
+
+/**
+ * The host's observability facade (ETP-4578). Callers keep this API; every payload now
+ * leaves through the core's sanitizing gateway instead of being handed to the providers
+ * directly:
+ *
+ *  - the host still COMPOSES an event (`buildEventPayload`: metadata + context + properties
+ *    + timestamp + normalized route), then the gateway sanitizes it again with the host
+ *    allowlist before any provider sees it — a second boundary, on purpose;
+ *  - `identify`, `group`, `groupSet` and `captureException` used to reach providers with no
+ *    sanitization at all, and now cross the same boundary;
+ *  - provider failures, timeouts, the kill switch and the start/stop lifecycle are the
+ *    gateway's.
+ *
+ * The gateway contract requires `init()` before anything else: it is what starts the
+ * adapters, and a `disable()` only stops an adapter that was started. So the gateway is
+ * created and `init()`-ed inside `initObservability()`, flagged synchronously before its
+ * first await, and every other operation is a no-op until then.
+ */
+const MAX_PENDING_FLAG_EVALUATIONS = 100;
 
 function isProviderEnabled(provider) {
   return provider && provider.enabled !== false;
 }
 
-// ETP-5351 — while analytics are suppressed (a support session) nothing the session does may count
-// as the customer's activity. Two levels:
-// - A pure product-analytics provider (Mixpanel) declares `analytics: true` and goes quiet as a
-//   whole: no SDK init, no event, no identity call, no reset.
-// - A monitoring provider that also records product events (Datadog, `capabilities` includes
-//   'analytics') stays on — errors, views, resources, identity, flag evaluations — and only loses
-//   `track`, the one path that becomes a product event (a Datadog custom action). It is told about
-//   the suppression through its optional `setAnalyticsSuppressed` hook, to mark the session.
-// A bug an operator hits while helping a customer is still a bug.
+// ETP-5351 — RUM global-context marker of a support session (see providers/datadog.js).
+const SUPPORT_SESSION_KEY = 'support_session';
+
 function isAnalyticsProvider(provider) {
   return provider?.analytics === true;
 }
 
-function recordsProductEvents(provider) {
-  return isAnalyticsProvider(provider) || provider?.capabilities?.includes('analytics') === true;
-}
-
-function getProviderName(provider) {
-  return provider?.name || 'unknown-provider';
-}
-
-function warn(logger, message, error) {
-  if (typeof logger?.warn === 'function') {
-    logger.warn(message, error);
-  }
-}
-
 export function createObservability(options = {}) {
   let logger = options.logger ?? console;
+  const allowedKeys = options.allowedKeys ?? SAFE_EVENT_PROPERTY_KEYS;
+  let gateway;
   let providers = [];
   let context = {};
   let metadata = {};
   let initialized = false;
+  const pendingFlags = new Map();
+  // ETP-5351 — the single switch for product analytics (a support session is not the customer):
+  // a pure-analytics provider (`analytics: true`, Mixpanel) is killed by name on the gateway, so
+  // its SDK never starts and it gets no event, identity or reset; `track` is dropped for every
+  // provider (a Datadog custom action is a product event). Monitoring (errors, views, replay,
+  // identity, flag evaluations) stays on and carries the support marker instead.
   let analyticsSuppressed = false;
-  // Analytics providers skipped by an init that ran while suppressed; initialized if it lifts.
-  let deferredAnalytics = [];
 
-  function activeProviders() {
-    return analyticsSuppressed ? providers.filter(provider => !isAnalyticsProvider(provider)) : providers;
-  }
+  const analyticsNames = () => providers.filter(isAnalyticsProvider).map(provider => provider.name);
 
-  function trackingProviders() {
-    return analyticsSuppressed ? providers.filter(provider => !recordsProductEvents(provider)) : providers;
-  }
-
-  function notifySuppression(suppressed) {
-    return Promise.all(
-      providers
-        .filter(provider => !isAnalyticsProvider(provider))
-        .map(provider => callProvider(provider, 'setAnalyticsSuppressed', [suppressed]))
-    );
-  }
-
-  async function callProvider(provider, methodName, args) {
-    const method = provider?.[methodName];
-    if (typeof method !== 'function') return undefined;
-
-    try {
-      return await method.apply(provider, args);
-    } catch (error) {
-      warn(
-        logger,
-        `[observability] ${getProviderName(provider)}.${methodName} failed`,
-        error
-      );
-      return undefined;
-    }
+  function markSupport() {
+    context = { ...context, [SUPPORT_SESSION_KEY]: analyticsSuppressed };
+    return initialized ? gateway.setContext({ [SUPPORT_SESSION_KEY]: analyticsSuppressed }) : undefined;
   }
 
   function getContext() {
@@ -83,32 +65,40 @@ export function createObservability(options = {}) {
       providers = (config.providers ?? []).filter(isProviderEnabled);
       context = { ...(config.context ?? {}) };
       metadata = { ...(config.metadata ?? {}) };
+      gateway = createTelemetryGateway({
+        adapters: providers,
+        allowedKeys,
+        trustedKeys: [SUPPORT_SESSION_KEY],
+        logger,
+        disabled: config.disabled,
+        adapterTimeoutMs: config.adapterTimeoutMs,
+      });
       initialized = true;
-      deferredAnalytics = analyticsSuppressed ? providers.filter(isAnalyticsProvider) : [];
-      // Before init, so a provider can mark the session from its very first event.
-      if (analyticsSuppressed) await notifySuppression(true);
 
-      await Promise.all(
-        activeProviders().map(provider => callProvider(provider, 'init', [{ context: getContext() }]))
-      );
+      if (analyticsSuppressed) {
+        // Before init(): a kill ahead of init means zero calls to that adapter.
+        await Promise.all(analyticsNames().map(name => gateway.disable(name)));
+        context = { ...context, [SUPPORT_SESSION_KEY]: true };
+      }
+      await gateway.init(getContext());
+      if (analyticsSuppressed) await markSupport();
+      const pending = [...pendingFlags];
+      pendingFlags.clear();
+      await Promise.all(pending.map(([key, value]) => gateway.addFeatureFlagEvaluation(key, value)));
     },
 
     /**
-     * ETP-5351 — the single switch for product analytics. Cutting here, and not at each event,
-     * is what makes "no product event reaches Mixpanel or Datadog" hold for events nobody has
-     * written yet. Lifting it initializes the analytics providers an earlier init skipped.
+     * ETP-5351 — start or end suppression. Safe before `initObservability()`: it is applied then.
+     * Shortcut: lifting it re-enables Mixpanel even if the telemetry kill switch had killed it;
+     * acceptable because a support session ends with the page (Exit reloads), not mid-flight.
      */
     async setAnalyticsSuppressed(suppressed) {
       const next = Boolean(suppressed);
       if (next === analyticsSuppressed) return;
       analyticsSuppressed = next;
       if (!initialized) return;
-      const pending = next ? [] : deferredAnalytics;
-      if (!next) deferredAnalytics = [];
-      await Promise.all([
-        notifySuppression(next),
-        ...pending.map(provider => callProvider(provider, 'init', [{ context: getContext() }])),
-      ]);
+      await Promise.all(analyticsNames().map(name => (next ? gateway.disable(name) : gateway.enable(name))));
+      await markSupport();
     },
 
     isAnalyticsSuppressed() {
@@ -116,100 +106,79 @@ export function createObservability(options = {}) {
     },
 
     async track(eventName, properties = {}) {
-      if (!initialized || !eventName) return;
+      if (!initialized || !eventName || analyticsSuppressed) return;
       const payload = buildEventPayload({ properties, context, metadata });
-
-      await Promise.all(
-        trackingProviders().map(provider =>
-          callProvider(provider, 'track', [eventName, payload, { context: getContext() }])
-        )
-      );
+      await gateway.track(eventName, payload);
     },
 
+    /**
+     * A flag evaluation for the providers that attach flag state to their events (Datadog).
+     * The flag provider usually answers before telemetry starts, and each evaluation is
+     * reported once per page (`flag-exposure.js`), so those made before `initObservability()`
+     * are kept (the latest value per key, bounded) and replayed once the gateway is up.
+     */
     async addFeatureFlagEvaluation(key, value) {
-      if (!initialized || !key) return;
-      // activeProviders(): a suppressed analytics provider was never initialized, and an exposure
-      // must not be what lazy-loads its SDK in a support session.
-      await Promise.all(
-        activeProviders()
-          .filter(provider => provider.capabilities?.includes('featureFlagTracking'))
-          .map(provider => callProvider(provider, 'addFeatureFlagEvaluation', [key, value]))
-      );
+      if (!key) return;
+      if (!initialized) {
+        if (pendingFlags.has(key) || pendingFlags.size < MAX_PENDING_FLAG_EVALUATIONS) pendingFlags.set(key, value);
+        return;
+      }
+      await gateway.addFeatureFlagEvaluation(key, value);
     },
 
     async page(path, properties = {}) {
       if (!initialized || !path) return;
       const payload = buildEventPayload({ properties, context, metadata, route: path });
-
-      await Promise.all(
-        activeProviders().map(provider =>
-          callProvider(provider, 'page', [payload.route, payload, { context: getContext() }])
-        )
-      );
+      await gateway.page(payload.route, payload);
     },
 
     async identify(userId, traits = {}) {
       if (!initialized || !userId) return;
-
-      await Promise.all(
-        activeProviders().map(provider =>
-          callProvider(provider, 'identify', [userId, { ...traits }, { context: getContext() }])
-        )
-      );
+      await gateway.identify(userId, traits);
     },
 
     async group(groupKey, groupId, traits = {}) {
       if (!initialized || !groupKey || !groupId) return;
-
-      await Promise.all(
-        activeProviders().map(provider =>
-          callProvider(provider, 'group', [groupKey, groupId, { ...traits }, { context: getContext() }])
-        )
-      );
+      await gateway.group(groupKey, groupId, traits);
     },
 
     async groupSet(groupKey, groupId, properties = {}) {
       if (!initialized || !groupKey || !groupId) return;
-
-      await Promise.allSettled(
-        activeProviders().map(provider =>
-          callProvider(provider, 'groupSet', [groupKey, groupId, { ...properties }, { context: getContext() }])
-        )
-      );
+      await gateway.groupSet(groupKey, groupId, properties);
     },
 
     async captureException(error, details = {}) {
       if (!initialized || !error) return;
-
-      await Promise.all(
-        activeProviders().map(provider =>
-          callProvider(provider, 'captureException', [error, { ...details }, { context: getContext() }])
-        )
-      );
+      await gateway.captureException(error, details);
     },
 
     async flush() {
       if (!initialized) return;
-
-      await Promise.all(
-        activeProviders().map(provider => callProvider(provider, 'flush', [{ context: getContext() }]))
-      );
+      await gateway.flush();
     },
 
     async reset() {
-      await Promise.all(
-        activeProviders().map(provider => callProvider(provider, 'reset', [{ context: getContext() }]))
-      );
+      if (!initialized) return;
+      await gateway.reset();
+      // The RUM SDK's reset replaces its whole global context, support marker included.
+      if (analyticsSuppressed) await markSupport();
     },
 
     async setContext(nextContext = {}) {
       context = { ...context, ...nextContext };
-
       if (!initialized) return;
+      await gateway.setContext(nextContext);
+    },
 
-      await Promise.all(
-        activeProviders().map(provider => callProvider(provider, 'setContext', [getContext()]))
-      );
+    /** Kill switch, per provider name or global (no argument). Needs initObservability() first. */
+    async disable(name) {
+      if (gateway) await gateway.disable(name);
+    },
+
+    async enable(name) {
+      // The flag-driven kill switch must not revive product analytics inside a support session.
+      if (analyticsSuppressed && analyticsNames().includes(name)) return;
+      if (gateway) await gateway.enable(name);
     },
 
     getContext,

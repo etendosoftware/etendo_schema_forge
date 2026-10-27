@@ -18,9 +18,10 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveFkNavigation } from './fkNavigation.js';
 import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
+import { resolveLookupDrawer } from './lookupDrawers.js';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
-import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
+import { CurrencyRatePicker, resolveRateDateField } from './CurrencyRatePicker.jsx';
 import PrefixedInput from './PrefixedInput.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
@@ -288,11 +289,13 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
 }
 
 /**
- * Form field that opens a ProductSearchDrawer for lookup-enabled search fields.
+ * Form field that opens the field's lookup drawer (`field.lookupDrawer`, resolved through the
+ * shared registry — the product search drawer by default) for lookup-enabled search fields.
  */
 function LookupFormField({ field, value, displayValue, selectorUrl, selectorContext, token, resolvedLabel, onChange }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
+  const Drawer = resolveLookupDrawer(field.lookupDrawer);
   const display = displayValue || value || '';
   return (
     <>
@@ -311,7 +314,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
           <span className="flex-1 truncate text-muted-foreground">{buildSearchPlaceholder(ui, resolvedLabel)}</span>
         )}
       </button>
-      <ProductSearchDrawer
+      <Drawer
         open={open}
         onClose={() => setOpen(false)}
         onSelect={(item) => {
@@ -700,7 +703,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *    container (a bare fragment), so the caller can splice them into another
  *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows, documentDateField }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -1549,6 +1552,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             token={token}
             apiBaseUrl={apiBaseUrl}
             entityPath={entity}
+            rateDateField={resolveRateDateField(fields, documentDateField)}
             isReadOnly={isRateReadOnly}
             data-testid="CurrencyRatePicker__a8d626" />
         );

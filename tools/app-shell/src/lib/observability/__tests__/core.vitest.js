@@ -117,33 +117,33 @@ describe('track', () => {
 });
 
 describe('addFeatureFlagEvaluation', () => {
-  it('forwards only to initialized providers with feature flag capability', async () => {
+  it('forwards through the gateway to the providers that implement it', async () => {
     const obs = createObservability();
     const datadog = makeProvider('datadog', {
-      capabilities: ['featureFlagTracking'],
       addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
     });
-    const other = makeProvider('mixpanel', {
-      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
-    });
+    const other = makeProvider('mixpanel');
     await obs.initObservability({ providers: [datadog, other] });
 
     await obs.addFeatureFlagEvaluation('sample_flag', true);
 
     expect(datadog.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
-    expect(other.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+    expect(other.addFeatureFlagEvaluation).toBeUndefined();
   });
 
-  it('does not load or call providers before initialization', async () => {
+  it('holds evaluations made before initialization and sends them once it happens', async () => {
     const obs = createObservability();
     const provider = makeProvider('datadog', {
-      capabilities: ['featureFlagTracking'],
       addFeatureFlagEvaluation: vi.fn(),
     });
 
+    await obs.addFeatureFlagEvaluation('sample_flag', false);
     await obs.addFeatureFlagEvaluation('sample_flag', true);
-
     expect(provider.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+
+    await obs.initObservability({ providers: [provider] });
+    expect(provider.addFeatureFlagEvaluation).toHaveBeenCalledTimes(1);
+    expect(provider.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
   });
 });
 
@@ -175,8 +175,16 @@ describe('identify', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p] });
-    await obs.identify('user1', { role: 'admin' });
-    expect(p.identify).toHaveBeenCalledWith('user1', { role: 'admin' }, expect.any(Object));
+    await obs.identify('user1', { status: 'active' });
+    expect(p.identify).toHaveBeenCalledWith('user1', { status: 'active' }, expect.any(Object));
+  });
+
+  it('drops traits outside the host allowlist before they reach a provider (ETP-4578)', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.identify('user1', { status: 'active', role: 'admin' });
+    expect(p.identify).toHaveBeenCalledWith('user1', { status: 'active' }, expect.any(Object));
   });
 
   it('does nothing before init', async () => {
@@ -198,11 +206,11 @@ describe('group', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p], context: { locale: 'es' } });
-    await obs.group('account_id', 'client-1', { tier: 'gold' });
+    await obs.group('account_id', 'client-1', { category: 'gold' });
     expect(p.group).toHaveBeenCalledWith(
       'account_id',
       'client-1',
-      { tier: 'gold' },
+      { category: 'gold' },
       expect.objectContaining({ context: expect.objectContaining({ locale: 'es' }) }),
     );
   });
@@ -252,13 +260,29 @@ describe('groupSet', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p], context: { locale: 'es' } });
-    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    await obs.groupSet('account_id', 'client-1', { category: 'gold' });
     expect(p.groupSet).toHaveBeenCalledWith(
       'account_id',
       'client-1',
-      { $name: 'Acme' },
+      { category: 'gold' },
       expect.objectContaining({ context: expect.objectContaining({ locale: 'es' }) }),
     );
+  });
+
+  it('does not send the organization name unless the host approves $name (ETP-4578, D6)', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    expect(p.groupSet).toHaveBeenCalledWith('account_id', 'client-1', {}, expect.any(Object));
+  });
+
+  it('sends $name when the host adds it to the allowlist', async () => {
+    const obs = createObservability({ allowedKeys: ['$name'] });
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    expect(p.groupSet).toHaveBeenCalledWith('account_id', 'client-1', { $name: 'Acme' }, expect.any(Object));
   });
 
   it('defaults properties to an empty object when omitted', async () => {
@@ -305,8 +329,21 @@ describe('captureException', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p] });
-    await obs.captureException(new Error('test'), { extra: 'info' });
-    expect(p.captureException).toHaveBeenCalledWith(expect.any(Error), { extra: 'info' }, expect.any(Object));
+    await obs.captureException(new Error('test'), { reason: 'info' });
+    expect(p.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Error', message: 'test' }),
+      { reason: 'info' },
+      expect.any(Object),
+    );
+  });
+
+  it('hands providers a sanitized summary, never the Error itself (ETP-4578)', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    const error = new Error('boom');
+    await obs.captureException(error);
+    expect(p.captureException.mock.calls[0][0]).not.toBe(error);
   });
 
   it('does nothing before init', async () => {
@@ -381,13 +418,13 @@ describe('callProvider error handling', () => {
     expect(logger.warn.mock.calls[0][0]).toContain('broken.track failed');
   });
 
-  it('uses "unknown-provider" when provider has no name', async () => {
+  it('uses "unknown-adapter" when provider has no name', async () => {
     const logger = { warn: vi.fn() };
     const obs = createObservability({ logger });
     const p = { enabled: true, track: vi.fn().mockRejectedValue(new Error('x')) };
     await obs.initObservability({ providers: [p], logger });
     await obs.track('event');
-    expect(logger.warn.mock.calls[0][0]).toContain('unknown-provider');
+    expect(logger.warn.mock.calls[0][0]).toContain('unknown-adapter');
   });
 
   it('handles logger without warn method', async () => {
@@ -399,24 +436,24 @@ describe('callProvider error handling', () => {
 });
 
 // ETP-5351 — a support session must send nothing to product analytics. The cut is one switch on
-// the core, so every event goes quiet, including ones nobody has written yet; error/performance
-// providers (no `analytics` flag) keep working.
+// the core (the gateway kill switch for `analytics: true` providers, plus dropping `track`), so
+// events nobody has written yet go quiet too; the other providers keep monitoring.
 describe('setAnalyticsSuppressed', () => {
-  const METHODS = [
+  const QUIET = [
     ['track', (obs) => obs.track('event', { a: 1 })],
     ['page', (obs) => obs.page('/dashboard')],
     ['identify', (obs) => obs.identify('user-1')],
     ['group', (obs) => obs.group('account_id', 'acc-1')],
-    ['groupSet', (obs) => obs.groupSet('account_id', 'acc-1', { plan: 'x' })],
     ['captureException', (obs) => obs.captureException(new Error('x'))],
     ['flush', (obs) => obs.flush()],
     ['reset', (obs) => obs.reset()],
     ['setContext', (obs) => obs.setContext({ k: 'v' })],
   ];
+  const makeAnalytics = () => makeProvider('mixpanel', { analytics: true, reset: vi.fn(), shutdown: vi.fn() });
 
   it('never initializes an analytics provider while suppressed, but does the others', async () => {
     const obs = createObservability();
-    const analytics = makeProvider('mixpanel', { analytics: true });
+    const analytics = makeAnalytics();
     const monitoring = makeProvider('rum');
     await obs.setAnalyticsSuppressed(true);
     await obs.initObservability({ providers: [analytics, monitoring] });
@@ -426,139 +463,82 @@ describe('setAnalyticsSuppressed', () => {
     expect(obs.isAnalyticsSuppressed()).toBe(true);
   });
 
-  it.each(METHODS)('keeps %s away from analytics providers while suppressed', async (method, call) => {
+  it.each(QUIET)('keeps %s away from analytics providers while suppressed', async (method, call) => {
     const obs = createObservability();
-    const analytics = makeProvider('mixpanel', { analytics: true, reset: vi.fn() });
-    const monitoring = makeProvider('rum', { reset: vi.fn() });
-    await obs.initObservability({ providers: [analytics, monitoring] });
+    const analytics = makeAnalytics();
+    await obs.initObservability({ providers: [analytics] });
     await obs.setAnalyticsSuppressed(true);
+    analytics[method].mockClear();
 
     await call(obs);
 
     expect(analytics[method]).not.toHaveBeenCalled();
-    expect(monitoring[method]).toHaveBeenCalled();
   });
 
-  it('initializes the skipped analytics providers once lifted, and delivers again', async () => {
+  it('drops track for every provider while suppressed, and delivers again once lifted', async () => {
     const obs = createObservability();
-    const analytics = makeProvider('mixpanel', { analytics: true });
-    await obs.setAnalyticsSuppressed(true);
-    await obs.initObservability({ providers: [analytics] });
-    await obs.track('dropped');
-
-    await obs.setAnalyticsSuppressed(false);
-    await obs.track('delivered');
-
-    expect(analytics.init).toHaveBeenCalledTimes(1);
-    expect(analytics.track).toHaveBeenCalledTimes(1);
-    expect(analytics.track.mock.calls[0][0]).toBe('delivered');
-  });
-
-  it('keeps feature-flag exposure away from analytics providers while suppressed', async () => {
-    const obs = createObservability();
-    const analytics = makeProvider('mixpanel', {
-      analytics: true,
-      capabilities: ['featureFlagTracking'],
-      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
-    });
-    const monitoring = makeProvider('datadog', {
-      capabilities: ['featureFlagTracking'],
-      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
-    });
+    const analytics = makeAnalytics();
+    const monitoring = makeProvider('datadog');
     await obs.initObservability({ providers: [analytics, monitoring] });
-    await obs.setAnalyticsSuppressed(true);
-
-    await obs.addFeatureFlagEvaluation('sample_flag', true);
-
-    expect(analytics.addFeatureFlagEvaluation).not.toHaveBeenCalled();
-    expect(monitoring.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
-  });
-
-  // Datadog lists `analytics` among its capabilities: it records product events (custom actions)
-  // AND carries error and performance monitoring. Suppression cuts only the product events.
-  function makeDatadogLike() {
-    return makeProvider('datadog', {
-      capabilities: ['analytics', 'errors', 'performance', 'identity', 'featureFlagTracking'],
-      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
-      setAnalyticsSuppressed: vi.fn().mockResolvedValue(undefined),
-      reset: vi.fn().mockResolvedValue(undefined),
-    });
-  }
-
-  it('keeps track away from a monitoring provider that records product events, and delivers again once lifted', async () => {
-    const obs = createObservability();
-    const datadog = makeDatadogLike();
-    const monitoring = makeProvider('rum');
-    await obs.initObservability({ providers: [datadog, monitoring] });
 
     await obs.setAnalyticsSuppressed(true);
     await obs.track('document_created', { entity: 'sales_order' });
-    expect(datadog.track).not.toHaveBeenCalled();
-    expect(monitoring.track).toHaveBeenCalledTimes(1);
+    expect(monitoring.track).not.toHaveBeenCalled();
 
     await obs.setAnalyticsSuppressed(false);
     await obs.track('document_created', { entity: 'sales_order' });
-    expect(datadog.track).toHaveBeenCalledTimes(1);
-    expect(datadog.track.mock.calls[0][0]).toBe('document_created');
+    expect(monitoring.track).toHaveBeenCalledTimes(1);
+    expect(analytics.track).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps errors, views, identity and flag evaluations flowing to that provider while suppressed', async () => {
+  it('keeps errors, views and identity flowing to monitoring providers while suppressed', async () => {
     const obs = createObservability();
-    const datadog = makeDatadogLike();
+    const monitoring = makeProvider('datadog');
     await obs.setAnalyticsSuppressed(true);
-    await obs.initObservability({ providers: [datadog] });
+    await obs.initObservability({ providers: [monitoring] });
 
-    const error = new Error('boom');
-    await obs.captureException(error);
+    await obs.captureException(new Error('boom'));
     await obs.page('/sales-order');
     await obs.identify('account-1');
-    await obs.group('account_id', 'tenant-1');
-    await obs.addFeatureFlagEvaluation('sample_flag', true);
-    await obs.setContext({ app: 'app-shell' });
+
+    expect(monitoring.captureException).toHaveBeenCalledTimes(1);
+    expect(monitoring.page).toHaveBeenCalledTimes(1);
+    expect(monitoring.identify).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks monitoring providers with the support context, also after a reset', async () => {
+    const obs = createObservability();
+    const monitoring = makeProvider('datadog');
+    await obs.setAnalyticsSuppressed(true);
+    await obs.initObservability({ providers: [monitoring] });
+    expect(monitoring.setContext).toHaveBeenLastCalledWith(expect.objectContaining({ support_session: true }));
+
+    monitoring.setContext.mockClear();
     await obs.reset();
-
-    expect(datadog.init).toHaveBeenCalledTimes(1);
-    expect(datadog.captureException).toHaveBeenCalledWith(error, {}, expect.anything());
-    expect(datadog.page).toHaveBeenCalledTimes(1);
-    expect(datadog.identify).toHaveBeenCalledTimes(1);
-    expect(datadog.group).toHaveBeenCalledTimes(1);
-    expect(datadog.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
-    expect(datadog.setContext).toHaveBeenCalledTimes(1);
-    expect(datadog.reset).toHaveBeenCalledTimes(1);
+    expect(monitoring.setContext).toHaveBeenLastCalledWith(expect.objectContaining({ support_session: true }));
   });
 
-  it('tells the monitoring providers about the suppression before their init and on each change', async () => {
+  it('starts the skipped analytics provider once lifted', async () => {
     const obs = createObservability();
-    const datadog = makeDatadogLike();
-    const mixpanel = makeProvider('mixpanel', { analytics: true, setAnalyticsSuppressed: vi.fn() });
+    const analytics = makeAnalytics();
     await obs.setAnalyticsSuppressed(true);
-    await obs.initObservability({ providers: [datadog, mixpanel] });
-
-    expect(datadog.setAnalyticsSuppressed).toHaveBeenCalledWith(true);
-    expect(datadog.setAnalyticsSuppressed.mock.invocationCallOrder[0])
-      .toBeLessThan(datadog.init.mock.invocationCallOrder[0]);
-
-    await obs.setAnalyticsSuppressed(false);
-    expect(datadog.setAnalyticsSuppressed).toHaveBeenLastCalledWith(false);
-    expect(datadog.setAnalyticsSuppressed).toHaveBeenCalledTimes(2);
-    expect(mixpanel.setAnalyticsSuppressed).not.toHaveBeenCalled();
-  });
-
-  it('does not tell the providers anything when there is no suppression at init', async () => {
-    const obs = createObservability();
-    const datadog = makeDatadogLike();
-    await obs.initObservability({ providers: [datadog] });
-
-    expect(datadog.setAnalyticsSuppressed).not.toHaveBeenCalled();
-  });
-
-  it('does not initialize an analytics provider twice when it was already running', async () => {
-    const obs = createObservability();
-    const analytics = makeProvider('mixpanel', { analytics: true });
     await obs.initObservability({ providers: [analytics] });
-    await obs.setAnalyticsSuppressed(true);
+
     await obs.setAnalyticsSuppressed(false);
 
     expect(analytics.init).toHaveBeenCalledTimes(1);
+  });
+
+  it('the telemetry kill switch cannot revive an analytics provider during a support session', async () => {
+    const obs = createObservability();
+    const analytics = makeAnalytics();
+    await obs.setAnalyticsSuppressed(true);
+    await obs.initObservability({ providers: [analytics] });
+
+    await obs.enable('mixpanel');
+    await obs.track('event');
+
+    expect(analytics.init).not.toHaveBeenCalled();
+    expect(analytics.track).not.toHaveBeenCalled();
   });
 });

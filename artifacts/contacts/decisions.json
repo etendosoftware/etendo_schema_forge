@@ -261,7 +261,7 @@
           "grid": false,
           "section": "principal",
           "order": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true }
         },
         "businessPartnerCategory": {
           "visibility": "editable",
@@ -522,8 +522,19 @@
       "javaQualifier": "businessPartnerHandler"
     },
     "locationAddress": {
+      "publicApi": {
+        "inputFields": [
+          { "name": "address_line1", "internalPath": "addressLine1", "dataType": "string", "readable": true },
+          { "name": "address_line2", "internalPath": "addressLine2", "dataType": "string", "readable": true },
+          { "name": "city_name", "internalPath": "cityName", "dataType": "string", "readable": true },
+          { "name": "postal_code", "internalPath": "postalCode", "dataType": "string", "readable": true },
+          { "name": "country", "internalPath": "country", "dataType": "string", "readable": true },
+          { "name": "region_name", "internalPath": "regionName", "dataType": "string", "readable": true }
+        ]
+      },
       "fields": {
         "name": {
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": true,
           "searchable": true,
@@ -534,6 +545,7 @@
           "section": "principal"
         },
         "shipToAddress": {
+          "publicApi": { "exposed": true, "name": "shipToAddress", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -543,6 +555,7 @@
           }
         },
         "invoiceToAddress": {
+          "publicApi": { "exposed": true, "name": "invoiceToAddress", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -552,14 +565,28 @@
           }
         },
         "phone": {
+          "publicApi": { "exposed": true, "name": "phone", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": false,
           "section": "other"
         },
         "active": {
+          "publicApi": { "exposed": true, "name": "active", "type": "passthrough", "handlerId": null },
           "visibility": "readOnly",
           "grid": false,
           "section": "other"
+        },
+        "locationAddress": {
+          "publicApi": { "exposed": true, "name": "locationAddress", "type": "passthrough", "handlerId": null }
+        },
+        "alternativePhone": {
+          "publicApi": { "exposed": true, "name": "alternativePhone", "type": "passthrough", "handlerId": null }
+        },
+        "fax": {
+          "publicApi": { "exposed": true, "name": "fax", "type": "passthrough", "handlerId": null }
+        },
+        "taxLocation": {
+          "publicApi": { "exposed": true, "name": "taxLocation", "type": "passthrough", "handlerId": null }
         }
       },
       "javaQualifier": "contactsLocationAddressHandler"
@@ -714,6 +741,8 @@
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "customerReceivablesNo": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "required": true,
@@ -724,6 +753,8 @@
           }
         },
         "customerPrepayment": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -740,6 +771,8 @@
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "vendorLiability": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "required": true,
@@ -750,6 +783,8 @@
           }
         },
         "vendorPrepayment": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "section": "principal",

@@ -1,39 +1,19 @@
 /**
  * OCR document-type registry.
  *
- * Each entry binds a URL route prefix to the extraction config (which copilot
- * assistant tool runs and what JSON schema it returns) and the per-doctype
- * window event the extractor dispatches. The actual mapping from extracted
+ * Each entry binds a URL route prefix to the UI side of the extraction (the review
+ * modals' fields and columns) and the per-doctype window event the extractor
+ * dispatches. What the extraction tool is ASKED — the tool, the question and the strict
+ * JSON schema of its answer — is NOT here: it lives once, in the server's OCR
+ * configuration (`GET /sws/neo/ocrconfig?docType=<id>`, see `useOcrConfig.js`), the same one
+ * the MCP's document-reading tools use, so the two cannot drift apart. Every payload key the
+ * fields below read (`extractFrom`, `createPrefilledFrom`) must be in that schema. The actual
+ * mapping from extracted
  * JSON to a `/sws/neo/batch` payload lives in a per-window descriptor under
  * `ingest/<window>Descriptor.js` and is wired up in `useOcrFlow.jsx`'s
  * DESCRIPTORS map — adding a new window is one descriptor file plus one
  * entry here.
  */
-
-// ETP-5585 — issuer / receiver parties, used to validate the invoice is addressed to the active
-// organisation. Descriptions validated against real invoices; keep them verbatim.
-const ISSUER_DESCRIPTION = 'The party that issued the invoice (seller/supplier): usually the letterhead, logo or sender block. NOT the customer.';
-const RECEIVER_DESCRIPTION = "The party being invoiced: the buyer/customer who owes payment (labels such as Bill to, Sold to, Customer, Cliente, Client, Destinatario, Kunde, Rechnungsempfänger). It is NOT the issuer/seller (the party that emits the invoice, usually with the logo or letterhead) and NOT the Ship to / delivery address, unless Ship to is the only buyer shown. Labels may be absent: infer roles from document structure (issuer = letterhead / sender block; receiver = the other party block). Return null if the receiver is not identifiable.";
-const ISSUER_TAX_ID_DESCRIPTION = 'Tax identifier of the ISSUER only, exactly as printed (keep prefix, letters, digits; do not reformat). Null if not printed.';
-const RECEIVER_TAX_ID_DESCRIPTION = "Tax identifier of the RECEIVER only, exactly as printed (keep any country prefix, letters and digits; do not reformat, do not invent). It may appear far from the receiver's name, for example in a table row like 'Cliente | NIF'; use any label or row that is explicitly attached to the customer. NEVER copy the issuer's tax id here. If the only id printed for the receiver is a personal id (DNI, passport, SSN) set tax_id_type='personal_id'. If no receiver tax id is printed, return null; do not guess.";
-const TAX_ID_LABEL_DESCRIPTION = "The exact label text printed with the id (e.g. 'NIF', 'CIF', 'VAT ID', 'CUIT'). Null if none.";
-// Informational only: the comparison runs whatever the type is.
-const TAX_ID_TYPES = ['vat', 'national_tax_id', 'company_registration', 'personal_id', 'unknown'];
-
-function partyProperties(party) {
-  const isReceiver = party === 'receiver';
-  return [
-    { name: 'name', kind: 'text', description: `Name of the ${party}, as printed. Null if not printed.` },
-    { name: 'tax_id_raw', kind: 'text', description: isReceiver ? RECEIVER_TAX_ID_DESCRIPTION : ISSUER_TAX_ID_DESCRIPTION },
-    { name: 'tax_id_label', kind: 'text', description: TAX_ID_LABEL_DESCRIPTION },
-    {
-      name: 'tax_id_type',
-      kind: 'text',
-      enum: TAX_ID_TYPES,
-      description: `Kind of the ${party}'s tax identifier, as best as can be told from its format and label. Informational only. Null if there is no id.`,
-    },
-  ];
-}
 
 export const OCR_DOC_TYPES = [
   {
@@ -41,9 +21,7 @@ export const OCR_DOC_TYPES = [
     // ETP-5585 — name of the pre-flight check in useOcrFlow's VALIDATORS map.
     validateExtraction: 'receiverTaxId',
     routePrefix: '/purchase-invoice/',
-    toolName: 'SimpleOcrTool',
     eventName: 'copilot:ocr-prefill:purchase-invoice',
-    question: 'Extract all invoice fields: vendor name, vendor tax id, vendor address (street, postal code, city, country), vendor email and phone, document number, invoice date, line items (description, quantity, unit price). Return strict JSON.',
     // AD_Tab_ID of the Purchase Invoice header tab. Required by the AttachFile
     // webhook so the uploaded PDF lands in the AD_Attachment grid for the new
     // record. Look up via: SELECT ad_tab_id FROM ad_tab JOIN ad_window USING(ad_window_id)
@@ -129,72 +107,16 @@ export const OCR_DOC_TYPES = [
         // validation rule needs @DateInvoiced@, which NEO turns into NULL here, so it lists
         // nothing. The invoice tax tab's C_Tax_ID has no rule — every tax of the client.
         selector: 'purchase-invoice/tax/C_Tax_ID',
-        preResolve: 'findTax',
+        // Preselected by the backend `defaultTax` action from the printed rate (ETP-5585),
+        // never by a similarity search on the label.
+        preResolve: 'findDefaultTax',
         emptyOptionLabel: 'ocrLinesTaxDefault',
         searchPlaceholder: 'ocrLinesTaxSearch',
         noMatchesLabel: 'ocrLinesTaxNoMatches',
         clearLabel: 'ocrLinesTaxClear',
-        width: 'w-48',
-      },
-    ],
-    // Header-level fields no review-modal row surfaces, but which pre-fill the
-    // create-contact popup via `createPrefilledFrom` above. Fed into the LLM
-    // output schema by buildOcrSchema. Every `vendor_*` description names the *issuer* to
-    // keep the model from picking up the recipient's address block, which on a
-    // purchase invoice is our own organisation. The one deliberate exception is the
-    // `receiver` object below (ETP-5585): it reads that recipient block on purpose, to
-    // compare its tax id with the active organisation's (see receiverTaxIdCheck.js).
-    extraHeaderFields: [
-      {
-        name: 'issuer',
-        kind: 'object',
-        description: ISSUER_DESCRIPTION,
-        properties: partyProperties('issuer'),
-      },
-      {
-        name: 'receiver',
-        kind: 'object',
-        description: RECEIVER_DESCRIPTION,
-        properties: partyProperties('receiver'),
-      },
-      {
-        name: 'vendor_address',
-        kind: 'text',
-        description: "Street address of the party issuing the invoice (the supplier): street name and number only. Exclude postal code, city and country. Null if not printed.",
-      },
-      {
-        name: 'vendor_postal_code',
-        kind: 'text',
-        description: 'Postal code of the issuing party address, exactly as printed. Null if not printed.',
-      },
-      {
-        name: 'vendor_city',
-        kind: 'text',
-        description: 'City or town of the issuing party address. Null if not printed.',
-      },
-      {
-        name: 'vendor_country',
-        kind: 'text',
-        description: "Country of the issuing party address, as printed (e.g. 'España'). Null if not printed — do not infer it from the currency or language.",
-      },
-      {
-        name: 'vendor_email',
-        kind: 'text',
-        description: 'Email address of the issuing party. Null if not printed.',
-      },
-      {
-        name: 'vendor_phone',
-        kind: 'text',
-        description: 'Telephone number of the issuing party. Null if not printed.',
-      },
-    ],
-    // Line-level fields the descriptor needs but the review modal doesn't
-    // surface. Fed into the LLM output schema by buildOcrSchema.
-    extraLineFields: [
-      {
-        name: 'tax_rate',
-        kind: 'number',
-        description: "Numeric tax percentage on this line if printed (e.g., 21.0 for '21%' or 'IVA 21%'). Null if only a textual label is shown or no tax info is present.",
+        // Fixed layout (OcrLinesReviewModal `table-fixed`): quantity 96 + price 112 + tax 320 leave
+        // the description ~200 of the 728px content width, whatever the tax label length.
+        width: 'w-80',
       },
     ],
   },

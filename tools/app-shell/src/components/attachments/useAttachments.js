@@ -5,6 +5,7 @@ import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-
 import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 // Re-exported so this module's public surface (and its tests) are unchanged; the
 // implementation moved to `lib/` so a caller that wants only the formatter does not
 // have to import a React hook module — and the `@/i18n` barrel — to get it.
@@ -52,6 +53,16 @@ async function extractErrorMessage(res) {
   }
 }
 
+/**
+ * Normalizes an id list coming from a UI selection: tolerates `null`/`undefined`,
+ * drops falsy entries and collapses duplicates while keeping the caller's order
+ * (ETP-5526). A duplicate id would otherwise be DELETEd twice — the second call
+ * 404s and rolls the whole optimistic batch back.
+ */
+function dedupeIds(ids) {
+  return Array.from(new Set((ids || []).filter(Boolean)));
+}
+
 const EMPTY_ITEMS = [];
 const EMPTY_LIST_STATE = { key: null, items: EMPTY_ITEMS, loaded: false };
 const EMPTY_COUNT_STATE = { key: null, count: null };
@@ -97,8 +108,10 @@ function recordKey(tableName, recordId) {
  *   upload: (file: File, opts?: { recordId?: string }) => Promise<void>,
  *   download: (attachment: object) => Promise<void>,
  *   downloadAll: () => Promise<void>,
+ *   downloadSelection: (attachmentIds: string[]) => Promise<void>,
  *   remove: (attachmentId: string) => Promise<void>,
  *   removeAll: () => Promise<void>,
+ *   removeMany: (attachmentIds: string[]) => Promise<void>,
  *   updateDescription: (attachmentId: string, description: string) => Promise<void>,
  *   formatBytes: (bytes: number) => string,
  * }}
@@ -378,7 +391,7 @@ export function useAttachments({
       if (err.name === 'AbortError') return;
       if (generation === stateGenerationRef.current) {
         setError(err);
-        toast.error(err.message || ui('attachmentsListError'));
+        toast.error(translateBackendError(err.message, ui) || ui('attachmentsListError'));
       }
     } finally {
       // Unconditional: this call is done (success, error, or superseded) either
@@ -519,7 +532,7 @@ export function useAttachments({
       announceChange();
       toast.success(ui('attachmentsUploadSuccess'));
     } catch (err) {
-      toast.error(err.message || ui('attachmentsUploadError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsUploadError'));
     } finally {
       setUploadingFiles((prev) => {
         const next = new Map(prev);
@@ -544,18 +557,28 @@ export function useAttachments({
       const blob = await res.blob();
       triggerBlobDownload(blob, attachment.name || attachment.fileName || `attachment-${attachment.id}`);
     } catch (err) {
-      toast.error(err.message || ui('attachmentsDownloadError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsDownloadError'));
     }
   }, [apiFetch, token, ui]);
 
-  // ── download all (zip) ──────────────────────────────────────────────────
-  const downloadAll = useCallback(async () => {
+  // ── download as zip (all, or a subset) ──────────────────────────────────
+  // ETP-5526 — the subset is expressed as the `ids` query parameter of the same
+  // GET /zip endpoint, the shape its sibling record endpoints already use for
+  // optional arguments (`?markAsMain=`, `?tabId=`). Omitting it keeps the original
+  // "every attachment of the record" contract byte-for-byte, which is what
+  // SifAttachmentsSection still relies on. The server re-checks that every id
+  // belongs to this record — the client-side filter here is convenience, not the
+  // authorization.
+  const downloadZip = useCallback(async (attachmentIds) => {
     if (!tableName || !recordId) return;
+    const subset = attachmentIds == null ? null : dedupeIds(attachmentIds);
+    if (subset && !subset.length) return;
+    const query = subset ? `?ids=${subset.map(encodeURIComponent).join(',')}` : '';
     try {
       // ETP-5424 — the server builds the whole archive before it answers, so a record with many
       // attachments can outlive the default read timeout; opt out.
       const res = await apiFetch(
-        `/sws/neo/attachments/${tableName}/${recordId}/zip`,
+        `/sws/neo/attachments/${tableName}/${recordId}/zip${query}`,
         { token, timeout: 0 },
       );
       if (!res.ok) {
@@ -565,9 +588,14 @@ export function useAttachments({
       const blob = await res.blob();
       triggerBlobDownload(blob, `attachments-${recordId}.zip`);
     } catch (err) {
-      toast.error(err.message || ui('attachmentsDownloadError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsDownloadError'));
     }
   }, [apiFetch, tableName, recordId, token, ui]);
+
+  // Takes no argument on purpose: call sites wire it straight to an onClick, which
+  // would otherwise hand it the click event as a would-be id list.
+  const downloadAll = useCallback(() => downloadZip(null), [downloadZip]);
+  const downloadSelection = useCallback((ids) => downloadZip(ids), [downloadZip]);
 
   // ── remove (optimistic) ─────────────────────────────────────────────────
   const remove = useCallback(async (attachmentId) => {
@@ -590,20 +618,27 @@ export function useAttachments({
       toast.success(ui('attachmentsDeleteSuccess'));
     } catch (err) {
       replaceItems(key, snapshot);
-      toast.error(err.message || ui('attachmentsDeleteError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsDeleteError'));
     }
   }, [apiFetch, token, ui, invalidateList, refreshCountIfUnloaded, announceChange, currentKey, replaceItems]);
 
-  // ── removeAll (optimistic) ──────────────────────────────────────────────
-  const removeAll = useCallback(async () => {
+  // ── bulk remove (optimistic) ────────────────────────────────────────────
+  // One primitive behind both `removeAll` and `removeMany` (ETP-5526): same
+  // optimistic removal, same all-or-nothing rollback, only the toast wording
+  // differs. Deleting a selection and deleting everything are the same operation
+  // over a different id list, and a second hand-written copy of this would be the
+  // one that forgets to roll back.
+  const removeByIds = useCallback(async (attachmentIds, successKey, errorKey) => {
+    const ids = dedupeIds(attachmentIds);
+    if (!ids.length) return;
     const key = currentKey;
     const snapshot = itemsRef.current;
-    if (!snapshot.length) return;
-    replaceItems(key, []);
+    const doomed = new Set(ids);
+    replaceItems(key, snapshot.filter((it) => !doomed.has(it.id)));
     try {
       await Promise.all(
-        snapshot.map((it) =>
-          apiFetch(`/sws/neo/attachments/file/${it.id}`, {
+        ids.map((id) =>
+          apiFetch(`/sws/neo/attachments/file/${id}`, {
             method: 'DELETE',
             token,
           }).then((res) => {
@@ -614,12 +649,24 @@ export function useAttachments({
       invalidateList();
       refreshCountIfUnloaded();
       announceChange();
-      toast.success(ui('attachmentsDeleteAllSuccess'));
+      toast.success(ui(successKey, { count: ids.length }));
     } catch (err) {
       replaceItems(key, snapshot);
-      toast.error(err.message || ui('attachmentsDeleteAllError'));
+      toast.error(translateBackendError(err.message, ui) || ui(errorKey));
     }
   }, [apiFetch, token, ui, invalidateList, refreshCountIfUnloaded, announceChange, currentKey, replaceItems]);
+
+  const removeAll = useCallback(() => removeByIds(
+    itemsRef.current.map((it) => it.id),
+    'attachmentsDeleteAllSuccess',
+    'attachmentsDeleteAllError',
+  ), [removeByIds]);
+
+  const removeMany = useCallback((ids) => removeByIds(
+    ids,
+    'attachmentsDeleteSelectedSuccess',
+    'attachmentsDeleteSelectedError',
+  ), [removeByIds]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {
@@ -644,7 +691,7 @@ export function useAttachments({
       toast.success(ui('attachmentsUpdateSuccess'));
     } catch (err) {
       replaceItems(key, snapshot);
-      toast.error(err.message || ui('attachmentsUpdateError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsUpdateError'));
     }
   }, [apiFetch, token, ui, invalidateList, currentKey, replaceItems]);
 
@@ -659,8 +706,10 @@ export function useAttachments({
     upload,
     download,
     downloadAll,
+    downloadSelection,
     remove,
     removeAll,
+    removeMany,
     updateDescription,
     formatBytes,
   };

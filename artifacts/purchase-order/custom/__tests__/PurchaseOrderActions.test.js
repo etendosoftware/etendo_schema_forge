@@ -1,3 +1,4 @@
+// @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 // ETP-5295 — the REAL reader, not a stub: the computation blocks extracted below now call
 // `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
 import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
+import { translateBackendErrorBody } from '../../../../tools/app-shell/src/lib/backendErrors.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'PurchaseOrderActions.jsx'), 'utf8');
@@ -392,6 +394,38 @@ describe('PurchaseOrderActions', () => {
       });
     });
 
+    // Step 1 (documentAction CO): the real rawMsg line and throw expression run with the real
+    // translateBackendErrorBody, so the refusal is rendered from its identity while the legacy
+    // @OrderWithoutLines@ token and unkeyed prose keep their old outcome.
+    describe('ConfirmModal.handleConfirm — Step 1 (documentAction/confirm)', () => {
+      const es = JSON.parse(readFileSync(join(__dirname, '../../../../tools/app-shell/src/locales/es_ES.json'), 'utf8')).genericLabels;
+      const esUi = (key, params = {}) => Object.entries(params)
+        .reduce((text, [p, v]) => text.replace(`{${p}}`, v), es[key] ?? key);
+
+      function resolveMessage(e, processRes) {
+        const from = src.indexOf('action/documentAction');
+        const rawMsgLine = src.slice(from).match(/const rawMsg = [^;]+;/)[0];
+        const expr = extractCallExprAfter(src, 'action/documentAction', 'throw new Error(');
+        return new Function('e', 'processRes', 'ui', 'translateBackendErrorBody',
+          `${rawMsgLine}\nreturn ${expr};`)(e, processRes, esUi, translateBackendErrorBody);
+      }
+
+      const cases = [
+        ['translates the missing-exchange-rate refusal from its identity',
+          { error: { message: 'prose', messageKeys: ['ETGO_ExchangeRateMissingOnComplete'],
+            messageParams: { orgCurrency: 'EUR', documentCurrency: 'USD' } } },
+          'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.'],
+        ['still maps the legacy @OrderWithoutLines@ token', { message: '@OrderWithoutLines@' }, es.soNoLinesError],
+        ['keeps unkeyed backend prose', flatErrBody(), REAL_MESSAGE],
+        ['falls back to Error (status) for an empty body', null, 'Error (500)'],
+      ];
+      for (const [label, body, expected] of cases) {
+        it(label, () => {
+          assert.equal(resolveMessage(body, { status: 500 }), expected);
+        });
+      }
+    });
+
     describe('CreateDocsModal.handleCreate — receipt step (sibling to ConfirmModal, ETP-5276)', () => {
       const createDocsModalSrc = src.slice(src.indexOf('export function CreateDocsModal'));
 
@@ -694,16 +728,14 @@ describe('PurchaseOrderActions', () => {
     });
   });
 
-  // ETP-4312: the modal must DERIVE the view label from each doc's type. Passing
-  // a hardcoded primary={ui('soViewInvoice')} would force "Ver factura" on a
-  // receipt-only result. The arrow now comes from the modal's SVG, not the label.
-  describe('ConfirmResultModal primary label (ETP-4312 regression)', () => {
-    it('does not force a hardcoded soViewInvoice primary label', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('soViewInvoice'\)\}/);
-    });
-
-    it('does not pass any hardcoded primary view label to the modal', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('(soViewInvoice|poViewInvoice|soViewShipment|poViewReceipt|sqViewOrder)'\)\}/);
+  // ETP-4312 / ETP-5674: ConfirmResultModal derives its title, banner and "Ver …" label
+  // from each doc's type. The caller hands it only `docs`; a title/primary/currency prop
+  // would be silently ignored (and was how "Ver factura" ended up on a receipt-only result).
+  describe('ConfirmResultModal receives only docs, never presentational props (ETP-4312)', () => {
+    it('passes no title, primary or currency prop to the modal', () => {
+      const element = src.match(/<ConfirmResultModal[\s\S]*?\/>/);
+      assert.ok(element, 'ConfirmResultModal element not found');
+      assert.doesNotMatch(element[0], /\b(title|primary|currency)=/);
     });
   });
 

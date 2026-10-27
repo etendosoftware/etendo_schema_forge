@@ -34,7 +34,7 @@
   --fm-blue-50:    var(--status-info-bg);
   --fm-blue-200:   var(--status-info-border);
   --fm-blue-700f:  var(--status-info-fg);
-  /* Model-tag colors (303/349) — single source of truth for every "303"/"349" pill/badge
+  /* Model-tag colors (303/349/390) — single source of truth for every "303"/"349" pill/badge
      in this window (list rows, "Modal Modelos" filter dropdown, catalog cards, upcoming
      sidebar). Fixed brand hex values, not theme-derived — see fm-model-badge--*,
      fm-catalog-card__badge--*, fm-upcoming__badge--* below, all of which reference these. */
@@ -44,6 +44,9 @@
   --fm-model-349-bg:     #F4F1FD;
   --fm-model-349-fg:     #4316CA;
   --fm-model-349-border: #C6B6F7;
+  --fm-model-390-bg:     #ECFDF5;
+  --fm-model-390-fg:     #047857;
+  --fm-model-390-border: #A7F3D0;
   --fm-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --fm-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --fm-bg-page:   hsl(var(--card));
@@ -240,9 +243,13 @@
   color: var(--fm-fg-1); vertical-align: middle;
 }
 .fm-table tr:last-child td { border-bottom: 0; }
-.fm-table tbody tr { transition: box-shadow .12s, background .12s; }
-.fm-table tbody tr:hover { position: relative; z-index: 2; cursor: pointer; box-shadow: 0 4px 12px hsl(var(--foreground) / 0.10), 0 -1px 4px hsl(var(--foreground) / 0.04); }
-.fm-table tbody tr:hover td { background: hsl(var(--card)); }
+/* ETP-5600 — same row hover as the shared DataTable (Figma "Fila"): instant, Shadows/lg and
+   NO lines (ROW_LIFT_HOVER_NO_BORDERS in rowVisuals.js): the hovered row's own
+   border-bottom and the previous row's border-bottom (its top line in the collapsed grid)
+   turn transparent. Resting rows keep their separators. */
+.fm-table tbody tr:hover { position: relative; z-index: 2; cursor: pointer; box-shadow: 0 4px 6px -2px rgba(18, 18, 23, 0.05), 0 10px 15px -3px rgba(18, 18, 23, 0.08); }
+.fm-table tbody tr:hover td { background: hsl(var(--card)); border-bottom-color: transparent; }
+.fm-table tbody tr:has(+ tr:hover) td { border-bottom-color: transparent; }
 .fm-table tr.fm-table__row--current td { background: var(--fm-info-bg); }
 .fm-table tbody tr.fm-table__row--selected td { background: hsl(var(--muted)); box-shadow: inset 0 1px 0 hsl(var(--border-control)), inset 0 -1px 0 hsl(var(--border-control)); }
 /* ETP-5030 — selected-row tint, converged on the app-wide selection colour.
@@ -435,7 +442,7 @@
   content: ''; flex: 1; height: 1px; background: var(--fm-border-1);
 }
 .fm-catalog-card {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding: 14px 16px; border-radius: 12px;
   border: 1.5px solid var(--fm-border-1);
   background: var(--fm-bg-card, hsl(var(--card)));
@@ -456,6 +463,7 @@
 }
 .fm-catalog-card__badge--303 { background: var(--fm-model-303-bg); color: var(--fm-model-303-fg); border-color: var(--fm-model-303-border); }
 .fm-catalog-card__badge--349 { background: var(--fm-model-349-bg); color: var(--fm-model-349-fg); border-color: var(--fm-model-349-border); }
+.fm-catalog-card__badge--390 { background: var(--fm-model-390-bg); color: var(--fm-model-390-fg); border-color: var(--fm-model-390-border); }
 .fm-catalog-card__badge--muted { background: hsl(var(--muted)); color: hsl(var(--text-disabled)); border-color: hsl(var(--border-control)); }
 .fm-catalog-card__body { flex: 1; min-width: 0; }
 .fm-catalog-card__name {
@@ -766,6 +774,7 @@
   color: var(--fm-fg-2); margin-bottom: 6px;
 }
 .fm-newdecl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fm-newdecl-row--single { grid-template-columns: 1fr; }
 .fm-newdecl-field__label-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
 .fm-newdecl-field__label-hint { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); }
 
@@ -780,7 +789,9 @@
 }
 .fm-newdecl-model-trigger:hover { background: var(--fm-bg-subtle); }
 .fm-newdecl-model-trigger:disabled { cursor: not-allowed; opacity: .6; }
-.fm-newdecl-model-trigger__name { flex: 1; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-newdecl-model-trigger__text { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; }
+.fm-newdecl-model-trigger__name { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-newdecl-model-trigger__desc { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fm-newdecl-model-trigger__chevron { color: var(--fm-fg-3); flex-shrink: 0; transition: transform .15s; }
 .fm-newdecl-model-trigger[aria-expanded="true"] .fm-newdecl-model-trigger__chevron { transform: rotate(180deg); }
 .fm-newdecl-model-panel {
@@ -857,13 +868,17 @@
 
 /* ETP-5597 — 349 header "Tipo: Normal | Sustitutiva": same segmented idiom, inline-sized. */
 .fm-349-type-segmented { width: auto; padding: 2px; gap: 2px; }
-.fm-349-type-segmented .fm-newdecl-segmented__btn { flex: 0 0 auto; padding: 4px 12px; font-size: 14px; }
-.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled { cursor: default; }
-.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled:not(.fm-newdecl-segmented__btn--active):hover { color: var(--fm-fg-3); }
+.fm-349-type-segmented .fm-newdecl-segmented__btn,
+.fm-type-segmented .fm-newdecl-segmented__btn { flex: 0 0 auto; padding: 4px 12px; font-size: 14px; }
+.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled,
+.fm-type-segmented .fm-newdecl-segmented__btn:disabled { cursor: default; }
+.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled:not(.fm-newdecl-segmented__btn--active):hover,
+.fm-type-segmented .fm-newdecl-segmented__btn:disabled:not(.fm-newdecl-segmented__btn--active):hover { color: var(--fm-fg-3); }
 
 /* ETP-5597 — 349 substitutive-declaration banner (warning role). Wraps the identifier block
    below the text on narrow widths. */
-.fm-349-substitutive-banner {
+.fm-349-substitutive-banner,
+.fm-substitutive-banner {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 12px 24px; padding: 12px 16px; border-radius: 8px;
   background: var(--status-warning-bg); border: 1px solid var(--status-warning-border);
@@ -1285,6 +1300,7 @@
 }
 .fm-model-badge--303 { background: var(--fm-model-303-bg); color: var(--fm-model-303-fg); border: 1px solid var(--fm-model-303-border); border-radius: 8px; font: 400 12px/16px var(--fm-font-sans, system-ui); padding: 4px 10px; }
 .fm-model-badge--349 { background: var(--fm-model-349-bg); color: var(--fm-model-349-fg); border: 1px solid var(--fm-model-349-border); border-radius: 8px; font: 400 12px/16px var(--fm-font-sans, system-ui); padding: 4px 10px; }
+.fm-model-badge--390 { background: var(--fm-model-390-bg); color: var(--fm-model-390-fg); border: 1px solid var(--fm-model-390-border); border-radius: 8px; font: 400 12px/16px var(--fm-font-sans, system-ui); padding: 4px 10px; }
 .fm-model-year { font: 600 14px/20px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
 
 /* ─── Utility cells ────────────────────────────────────────────────── */
@@ -1380,6 +1396,7 @@
 .fm-upcoming__badge-num { font: 700 14px/16px var(--fm-font-mono, monospace); }
 .fm-upcoming__badge--303 { background: var(--fm-model-303-bg); color: var(--fm-model-303-fg); border: 1px solid var(--fm-model-303-border); }
 .fm-upcoming__badge--349 { background: var(--fm-model-349-bg); color: var(--fm-model-349-fg); border: 1px solid var(--fm-model-349-border); }
+.fm-upcoming__badge--390 { background: var(--fm-model-390-bg); color: var(--fm-model-390-fg); border: 1px solid var(--fm-model-390-border); }
 .fm-upcoming__info { flex: 1; min-width: 0; }
 .fm-upcoming__model-label { font: 500 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fm-upcoming__meta { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
@@ -1521,3 +1538,177 @@
    toggles, so the reserved space is exactly the banner's own height. */
 .fm-aeat-testmode-slot { visibility: hidden; }
 .fm-aeat-testmode-slot--visible { visibility: visible; }
+/* 390 (conformity check above): collapsed while unchecked — the slot is the last row. */
+.fm-aeat-testmode-slot--collapsible:not(.fm-aeat-testmode-slot--visible) { display: none; }
+
+/* ─── ETP-5716 — Modelo 390 ───────────────────────────────────────────────── */
+/* Catalog: SII confirmation under the card (a full-width row of the card's flex box). */
+.fm-catalog-sii-warning {
+  flex: 1 0 100%; order: 3;
+  display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 18px;
+}
+.fm-catalog-sii-warning__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.fm-catalog-sii-warning__msg { display: flex; align-items: flex-start; gap: 8px; }
+.fm-catalog-sii-warning__icon, .fm-newdecl-notice__icon { flex-shrink: 0; margin-top: 1px; }
+.fm-catalog-sii-warning strong, .fm-newdecl-notice strong { font-weight: 600; }
+/* The card whose activation waits on the SII confirmation. */
+.fm-catalog-card--attention { border-color: hsl(var(--foreground)); }
+
+/* "Nueva declaración": inline notices (duplicate ordinary, missing companion declarations). */
+.fm-newdecl-notice { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 8px; margin-top: 12px; font-size: 13px; line-height: 18px; }
+.fm-newdecl-notice__text { flex: 1; min-width: 0; }
+/* Annual-only model: "Anual" pill + "no frequency or period" hint under the Año field. */
+.fm-newdecl-annual-hint { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; line-height: 16px; color: var(--fm-fg-3); }
+.fm-newdecl-annual-hint .fm-catalog-card__pill { flex-shrink: 0; }
+
+/* Detail page */
+.fm-390-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px 20px; background: hsl(var(--card)); flex-shrink: 0; }
+@media (max-width: 1100px) { .fm-390-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* The cuadre with the year's 303s (Reconciliation390): the shared rich `.fm-banner` (success /
+   warn), full width between the KPI cards and the tabs with the cards' 20px gutter. */
+.fm-390-reconcile-row { padding: 0 20px 4px; background: hsl(var(--card)); flex-shrink: 0; }
+.fm-390-reconcile__btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; }
+/* The extra content of a block (the year's 303s) while "Ver detalle por trimestre" points at it. */
+.fm-390-block-extra { border-radius: 8px; transition: box-shadow .3s; }
+.fm-390-block-extra--highlight { box-shadow: 0 0 0 2px hsl(var(--primary)); }
+.fm-390-tab { background: hsl(var(--card)); flex: 1; }
+.fm-390-former-input {
+  width: 180px; height: 36px; box-sizing: border-box; padding: 7px 12px; font-size: 14px;
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; outline: none;
+  color: hsl(var(--foreground)); background: hsl(var(--card));
+}
+.fm-390-former-input--invalid { border-color: hsl(var(--destructive)); }
+.fm-390-inline-error { font-size: 12px; line-height: 16px; color: hsl(var(--destructive)); }
+
+/* Casillas tab: sticky block index on the left, content on the right. Below 1200px the index
+   folds into a select above the content (1280×720 keeps the index). */
+.fm-390-boxes { display: flex; align-items: flex-start; gap: 8px; padding: 0; }
+.fm-390-index {
+  /* 280px keeps every block name on one line, active (500) included (the 11 items fit under the tabs bar at 1280×720). */
+  width: 280px; flex-shrink: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: 49px;
+}
+/* Same item metrics as the 303 Casillas section nav (8px 12px, 14/20, radius 8). */
+.fm-390-index__item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: none; border-radius: 8px;
+  background: transparent; color: hsl(var(--foreground)); font-size: 14px; line-height: 20px;
+  text-align: left; cursor: pointer; transition: background .1s;
+}
+.fm-390-index__item:hover { background: hsl(var(--muted)); }
+.fm-390-index__item--active { background: hsl(var(--muted)); font-weight: 500; }
+.fm-390-index__num { width: 18px; flex-shrink: 0; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
+.fm-390-index-select { display: none; }
+@media (max-width: 1200px) {
+  .fm-390-boxes { flex-direction: column; }
+  .fm-390-index { display: none; }
+  .fm-390-index-select { display: block; margin: 8px 24px 0; max-width: 360px; }
+}
+.fm-390-boxes__content { flex: 1; min-width: 0; padding: 6px 24px 24px; }
+.fm-390-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 4px 0 12px; }
+.fm-390-search { display: flex; align-items: center; gap: 8px; }
+.fm-390-search__field {
+  display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; width: 240px;
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+}
+.fm-390-search__field input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 14px; color: hsl(var(--foreground)); }
+.fm-390-search__miss { font-size: 12px; color: hsl(var(--muted-foreground)); }
+/* Groups of system notice banners (`@/components/InfoBanner.jsx`) in the 390 screen: consistent
+   spacing between consecutive banners; `--gutter` adds the tab's 20px side gutter. */
+.fm-390-notices { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
+.fm-390-notices--gutter { margin: 12px 20px; }
+.fm-390-notice__lead { font-weight: 600; }
+.fm-390-notice__line { display: block; font-weight: 400; }
+.fm-390-hint { margin: 8px 0; font-size: 13px; line-height: 18px; color: hsl(var(--muted-foreground)); }
+/* Blocks whose data comes from the Organization (OrgSyncedCard of FmBoxes390.jsx): a flush
+   `.fm-section-card` with title + "sincronizado con Organización" and the Editar pill. */
+.fm-390-org-card { margin: 4px 0 12px; }
+.fm-390-org-card__title { font: 600 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); }
+.fm-390-org-card__edit { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 14px; }
+.fm-390-org-card__body { padding: 0 16px 14px; }
+.fm-390-org-card__body > .fm-390-hint:first-child { margin-top: 0; }
+.fm-390-org-fields { display: flex; flex-wrap: wrap; gap: 12px 40px; }
+.fm-390-org-field { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+.fm-390-org-field__label { font: 600 11px/14px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); text-transform: uppercase; letter-spacing: .06em; }
+.fm-390-org-field__value { font: 500 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); }
+.fm-390-mono { font-family: var(--fm-font-mono, ui-monospace, monospace); }
+.fm-390-org-table { width: 100%; }
+.fm-390-org-table thead { position: static; }
+.fm-dtable--plain.fm-390-org-table th { font: 600 11px/14px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); text-transform: uppercase; letter-spacing: .06em; height: 36px; }
+.fm-390-org-table td { white-space: normal; }
+.fm-390-org-table__name { font-weight: 600; }
+.fm-dtable--plain .fm-390-org-table__muted { color: hsl(var(--muted-foreground)); font-size: 13px; }
+.fm-390-code-badge {
+  display: inline-block; padding: 1px 6px; margin-right: 4px; border-radius: 4px;
+  font: 500 12px/16px var(--fm-font-mono, ui-monospace, monospace);
+  background: var(--status-info-bg); color: var(--status-info-fg); border: 1px solid var(--status-info-border);
+}
+.fm-390-rank {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px;
+  font: 500 12px/16px var(--fm-font-sans, system-ui); white-space: nowrap;
+  border: 1px solid hsl(var(--border-control)); color: hsl(var(--foreground)); background: hsl(var(--card));
+}
+.fm-390-rank--main { background: hsl(var(--foreground)); border-color: hsl(var(--foreground)); color: hsl(var(--background)); }
+.fm-390-rank--muted { color: hsl(var(--muted-foreground)); white-space: normal; text-align: left; }
+/* In-block table of the year's 303s (Settlements303Table390): the 303 `.fm-dtable--plain` look,
+   full section width; the header does not stick (it would slide under the sticky tabs bar). */
+.fm-390-mini-table { width: 100%; margin-bottom: 8px; }
+.fm-390-mini-table thead { position: static; }
+.fm-390-rate-group { margin-bottom: 4px; }
+.fm-390-fold { display: inline-block; margin: 2px 0 6px; font-size: 13px; }
+.fm-390-cell--input { position: relative; }
+.fm-390-cell__input { line-height: 40px; }
+.fm-390-cell--modified { border-color: var(--status-warning-border); }
+.fm-390-cell--locked { background: hsl(var(--muted)); }
+.fm-390-cell--highlight { box-shadow: 0 0 0 2px hsl(var(--primary)); }
+.fm-390-cell--input:focus-within { box-shadow: 0 0 0 2px hsl(var(--ring, var(--primary)) / .5); }
+.fm-390-territory-toggle { border-bottom: none; padding-top: 0; }
+.fm-390-pager { display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; }
+.fm-390-pager .fm-btn { display: inline-flex; align-items: center; gap: 4px; }
+.fm-390-filegen__label { display: block; font-size: 14px; color: hsl(var(--foreground)); margin-bottom: 6px; }
+.fm-390-filegen__input {
+  width: 100%; font-size: 14px; padding: 8px 12px; height: 40px; box-sizing: border-box; outline: none;
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; color: hsl(var(--foreground)); background: hsl(var(--card));
+}
+.fm-390-filegen__summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 16px 0 0; font-size: 14px; }
+.fm-390-filegen__summary dt { color: hsl(var(--muted-foreground)); }
+.fm-390-filegen__summary dd { margin: 0; color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; }
+
+/* ── Modelo 390 · Facturas tab (FmSources390.jsx) and "Ver facturas" on a box ── */
+/* "Ver facturas" overlays the right edge of the cell only on hover / keyboard focus, so at rest the
+   value shows whole, like any 303 cell (it used to take 32px for good and truncate the amounts). */
+.fm-390-cell--calc { position: relative; }
+.fm-390-cell__invoices {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-left: 1px solid hsl(var(--border-subtle)); background: hsl(var(--muted)); cursor: pointer;
+  color: hsl(var(--muted-foreground)); opacity: 0; transition: opacity .1s;
+}
+.fm-390-cell--calc:hover .fm-390-cell__invoices,
+.fm-390-cell__invoices:focus-visible { opacity: 1; }
+.fm-390-cell__invoices:hover { color: hsl(var(--foreground)); background: hsl(var(--card)); }
+.fm-390-cell__invoices:focus-visible { outline: 2px solid hsl(var(--ring, var(--primary))); outline-offset: -2px; }
+@media (hover: none) { .fm-390-cell__invoices { opacity: 1; } }
+.fm-390-sources { display: flex; flex-direction: column; flex: 1; min-height: 0; background: hsl(var(--card)); }
+.fm-390-sources__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 20px 8px; }
+.fm-390-sources__toolbar .fm-btn { display: inline-flex; align-items: center; gap: 6px; }
+.fm-390-sources__box-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.fm-390-sources__select {
+  height: 36px; padding: 0 8px; max-width: 220px; font-size: 14px; color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));
+}
+.fm-390-sources__table { flex: 1; min-height: 0; }
+.fm-390-sources__table tfoot td { position: sticky; bottom: 0; background: hsl(var(--muted)); font-weight: 700; border-top: 1px solid hsl(var(--border-control)); }
+.fm-390-sources__placeholder { text-align: center; padding: 24px 0 !important; color: hsl(var(--muted-foreground)); }
+.fm-390-sources__footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 20px 12px; font-size: 13px; }
+.fm-390-sources__pager { display: inline-flex; align-items: center; gap: 12px; }
+.fm-390-sources__pager .fm-btn { display: inline-flex; align-items: center; gap: 4px; }
+/* Modelo 390 — Incidencias tab (Incidents390Tab, ETP-5716): Bloqueantes / Advertencias. */
+.fm-390-incidents { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.fm-390-incident__actions { display: inline-flex; flex-wrap: wrap; gap: 12px; }
+/* Same link as the 303 Incidencias action ("Facturas >"): plain, underlined, 14px. */
+.fm-incident-action {
+  display: inline-flex; align-items: center; gap: 2px; padding: 0; border: none; background: none;
+  cursor: pointer; white-space: nowrap; font-size: 14px; color: hsl(var(--foreground)); text-decoration: underline;
+}
+.fm-incident-action:hover { opacity: .75; }

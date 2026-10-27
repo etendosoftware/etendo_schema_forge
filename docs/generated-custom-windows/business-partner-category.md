@@ -30,6 +30,7 @@ The window uses these layout overrides (all set in `decisions.json → window`, 
 | Key | Value | Effect |
 |-----|-------|--------|
 | `detailEntity` | `"accounting"` | Accounting tab as the primary child entity |
+| `detailVisibleWhenCapability` | `"showAccountingFields"` | **(ETP-5648)** The Accounting tab is this window's detail tab, so it is hidden, and never fetched, for a role without the capability; the header form stays available. The server refuses `<spec>/accounting` with `403` for such a role anyway |
 | `linesLayout` | `"inlineEditable"` | Inline editing on Accounting rows |
 | `noHeaderBorder` | `true` | Removes the border under the header form |
 | `toolbarBorderBottom` | `true` | No effect since ETP-5601 (the record toolbar is standardized) |
@@ -93,3 +94,21 @@ Window onboarded from scratch as part of feature/ETP-4402 (branch `feat/contact-
 **`entities.accounting.hideDelete: true`** added — the pre-existing `window.maxDetailLines: 1` already caps the Accounting tab at one record; this pass adds the matching entity-level delete guard (`apiPrediction.crud.accounting.delete: false`). Regenerated via `make regen ONLY=business-partner-category`; `sf-validate-pipeline --scope=business-partner-category` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.
 
 **Auto-creation gap (requirement 3, DB-verified):** of the 33 most-recently-created `C_BP_Group` records, only 29 (88%) have a corresponding `C_BP_Group_Acct` row — a partial gap, not a total failure like `financial-account`/`warehouse` (see the coordinator report on ETP-4565). Flagged for follow-up investigation in `com.etendoerp.go`, not fixed in this pass.
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting** tab (all 21 customer/vendor account fields) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `BusinessPartnerCategoryAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## Read-only role tier: no attachment uploads — ETP-5830
+
+With a `read-only` tier on this window the Attachments tab lists, previews and downloads files but shows no upload dropzone and no delete or description edit (`AttachmentsTab` `accessReadOnly`). Before ETP-5830 the dropzone stayed enabled and the upload failed with the raw backend 403; that error is now translated too. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

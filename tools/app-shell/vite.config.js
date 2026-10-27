@@ -6,6 +6,7 @@ import { readFileSync } from 'fs';
 import schemaApiPlugin from './vite-plugins/schema-api.js';
 import reportApiPlugin from './vite-plugins/report-api.js';
 import mcpRetryProxy from './vite-plugins/mcp-proxy.js';
+import singleCoreInstancePlugin from './vite-plugins/single-core-instance.js';
 import appsSpikePlugin from './vite-plugins/apps-spike.js';
 import sliceLabelsPlugin from './vite-plugins/slice-labels.js';
 
@@ -235,6 +236,7 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     react(),
+    singleCoreInstancePlugin(),
     sliceLabelsPlugin(),
     schemaApiPlugin(),
     reportApiPlugin({ etendoUrl: ETENDO_URL, jsreportUrl: JSREPORT_URL }),

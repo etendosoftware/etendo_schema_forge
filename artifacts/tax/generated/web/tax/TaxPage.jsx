@@ -6,7 +6,7 @@ import TaxTable from './TaxTable';
 import TaxForm from './TaxForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
-import TaxSifField from '@/windows/custom/shared/TaxSifField';
+import TaxSifField from '../../../custom/TaxSifField';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -45,14 +45,14 @@ const draftMode = null;
 // @sf-generated-end draftMode:tax
 
 // @sf-generated-start requiredHeaderFields:tax
-const requiredHeaderFields = ['name', 'validFrom', 'taxCategory', 'rate', 'applicableTo', 'docTaxAmount', 'baseAmount'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:tax
 
 // @sf-generated-start addLineFields:accounting
 const addLineFields = {
   entry: [
-    { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', required: true, label: 'Tax Due', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', required: true, label: 'Tax Credit', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', required: true, label: 'Tax Due', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+    { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', required: true, label: 'Tax Credit', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
   ],
   derived: [
 
@@ -64,8 +64,8 @@ const addLineFields = {
 // @sf-generated-end addLineFields:accounting
 
 export const api = {
-  "specName": "tax-rate",
-  "baseUrl": "/sws/neo/tax-rate",
+  "specName": "tax",
+  "baseUrl": "/sws/neo/tax",
   "crud": {
     "tax": {
       "get": true,
@@ -74,8 +74,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": false,
-      "listUrl": "/sws/neo/tax-rate/tax",
-      "detailUrl": "/sws/neo/tax-rate/tax/{id}",
+      "listUrl": "/sws/neo/tax/tax",
+      "detailUrl": "/sws/neo/tax/tax/{id}",
       "supportedFilters": [
         "name",
         "applicableTo"
@@ -88,8 +88,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": false,
-      "listUrl": "/sws/neo/tax-rate/accounting",
-      "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+      "listUrl": "/sws/neo/tax/accounting",
+      "detailUrl": "/sws/neo/tax/accounting/{id}",
       "supportedFilters": []
     }
   },
@@ -100,7 +100,7 @@ export const api = {
       "column": "C_TaxCategory_ID",
       "reference": "TaxCategory",
       "inputMode": "selector",
-      "url": "/sws/neo/tax-rate/tax/selectors/taxCategory"
+      "url": "/sws/neo/tax/tax/selectors/taxCategory"
     },
     {
       "entity": "accounting",
@@ -108,7 +108,7 @@ export const api = {
       "column": "T_Due_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+      "url": "/sws/neo/tax/accounting/selectors/taxDue"
     },
     {
       "entity": "accounting",
@@ -116,7 +116,7 @@ export const api = {
       "column": "T_Credit_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+      "url": "/sws/neo/tax/accounting/selectors/taxCredit"
     }
   ],
   "actions": [],
@@ -194,7 +194,6 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
-        requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}

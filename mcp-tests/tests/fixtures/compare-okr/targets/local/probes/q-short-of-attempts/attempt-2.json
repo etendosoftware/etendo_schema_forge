@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 5,
+  "runId": "run-local",
+  "probeId": "q-short-of-attempts",
+  "attempt": 2,
+  "replaces": null,
+  "mode": "read",
+  "prompt": "p",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "finishedAt": "2026-10-14T10:01:00Z",
+  "effectVerified": null,
+  "effectCheck": null,
+  "silentWrong": null,
+  "finalAnswer": "listo",
+  "usage": {
+    "loop": {
+      "turns": 1,
+      "turnsWithUsage": 1,
+      "inputTokens": 2900,
+      "outputTokens": 100,
+      "totalTokens": 3000,
+      "cachedInputTokens": 0
+    },
+    "report": {
+      "turns": 1,
+      "turnsWithUsage": 1,
+      "inputTokens": 400,
+      "outputTokens": 100,
+      "totalTokens": 500,
+      "cachedInputTokens": 0
+    }
+  },
+  "servedModel": {
+    "models": [
+      "gpt-5.2"
+    ],
+    "systemFingerprints": [
+      "fp_1"
+    ]
+  },
+  "toolCallCount": 1,
+  "toolCalls": [
+    {
+      "id": "c-etendo_list",
+      "tool": "etendo_list",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    }
+  ],
+  "exhausted": false,
+  "setup": [],
+  "teardown": [],
+  "teardownClean": null,
+  "harnessError": {
+    "kind": "setup",
+    "detail": "setup failed"
+  },
+  "verdict": null
+}

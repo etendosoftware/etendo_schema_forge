@@ -1,13 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Pencil, Copy, Mail, MoreVertical, Trash2, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash are the Iconic set on
+// the 20x20 frame (core custom-icons), so the band never mixes icon families.
+import { IconicCopyIcon, IconicDotsVerticalIcon, IconicEditIcon, IconicMailIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
-import { runPreUnpost } from '@/lib/preUnpost.js';
+import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { filterPostingActions } from '@/lib/capabilityVisibility.js';
+import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE, ROW_STICKY_ACTIONS } from './rowVisuals.js';
 
 // Resolves whether an action should render, given its actionsConfig entry
 // (decisions.json → window.rowQuickActions.actions.<key>) and an optional fallback
@@ -106,7 +112,7 @@ export default function RowQuickActions({
   onClone,
   onEmail,
   onDelete,
-  onMenuActionExecuted, // (action, result) — host can refresh after execution
+  onMenuActionExecuted, // (action, result, row) — host can refresh after execution
   // Optional per-action config from decisions.json → window.rowQuickActions.actions.
   // Shape: { edit: { show: true, visibleWhen?: string }, duplicate: ..., email: ..., delete: ...,
   //          <processKey>: { show: 'fixed'|'kebab'|false, visibleWhen?: string } }
@@ -128,6 +134,7 @@ export default function RowQuickActions({
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
+  const capabilities = useCapabilitiesSafe();
   const [menuPos, setMenuPos] = useState(null);
   const [inFlight, setInFlight] = useState({});
   const moreRef = useRef(null);
@@ -210,19 +217,22 @@ export default function RowQuickActions({
   const resolvedMenuActions = typeof menuActions === 'function'
     ? menuActions({ row, data: row, status: statusField ? row?.[statusField] : undefined })
     : menuActions;
-  const visibleMenuActions = (Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [])
+  // ETP-5684: a role without "Show Accounting Fields" sees no post/unpost action.
+  const visibleMenuActions = filterPostingActions(Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [], capabilities)
     .filter(a => a && a.visible !== false)
     // Prefer the per-key override in actionsConfig (decisions.json) — including its
     // `show: false` hide — fall back to the visibleWhen possibly attached to the
     // menuAction descriptor itself.
     .filter(a => isActionVisible(actionsConfig?.[a.key], a.visibleWhen, row));
 
-  // ETP-3504 — Figma exact colors:
-  // - Neutral icons (Edit, Clone, Email, More): hsl(var(--text-disabled))
-  // - Delete: hsl(var(--destructive))
-  // Hover darkens slightly: neutrals → text-foreground; delete → red-700.
-  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors';
-  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive transition-colors';
+  // ETP-5600 — Figma "Fila Contactos / Hover" buttons: sm 32x32, Round, Tertiary, 20px icon,
+  // 200ms ease-in. No fill at rest. Neutral icons stay #828FA3 (gray/400) in every state and
+  // hover only adds the #121217 @ 5% overlay; delete stays #D50B3E and hovers to the light
+  // destructive tint (--status-destructive-bg), never a solid red fill. Focus-visible draws the
+  // two-ring halo (2px white gap + 4px ink / pink-500) on a white fill. Supersedes ETP-3504.
+  // The class strings live in rowVisuals.js, shared with the document-line action strip.
+  const neutralBtnCls = ROW_ACTION_BUTTON_NEUTRAL;
+  const dangerBtnCls = ROW_ACTION_BUTTON_DESTRUCTIVE;
 
   const handleMenuActionClick = useCallback(async (action) => {
     setShowMenu(false);
@@ -231,6 +241,21 @@ export default function RowQuickActions({
     setInFlight(prev => ({ ...prev, [key]: true }));
     try {
       if (action.documentAction) {
+        // ETP-5745 QA follow-up — an OPTIONAL per-action guard, checked BEFORE preUnpost:
+        // a row whose document action is already known to be refused (e.g. invoice
+        // reactivation blocked by InvoiceReactivationGuard, com.etendoerp.go) must not
+        // run preUnpost either, or this row-hover kebab un-posts the row and THEN fails —
+        // the exact side effect ETP-5745 exists to prevent on the other two surfaces
+        // (detail kebab, bulk bar). Generic here on purpose: this component stays
+        // domain-agnostic, the actual check is supplied by the window
+        // (`buildInvoiceRowQuickActions`'s `reactivateRowFilter`, useInvoiceWindow.js).
+        if (typeof action.preUnpostGuard === 'function') {
+          const guardResult = await action.preUnpostGuard(row, action.documentAction, ui);
+          if (guardResult !== true) {
+            onMenuActionExecuted?.(action, { success: false, message: guardResult });
+            return;
+          }
+        }
         // ETP-5378 — same rule the detail kebab applies (DetailMoreActionsMenu's
         // runDocumentAction): reactivating an already-posted document must reverse its
         // accounting first, or the backend rejects the bare docAction with "Factura
@@ -247,7 +272,7 @@ export default function RowQuickActions({
           return;
         }
         const result = await docAction.execute(row?.id, action.documentAction);
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       if (action.neoAction) {
@@ -278,17 +303,17 @@ export default function RowQuickActions({
           // never runs, so there is no `result` for the host's `onMenuActionExecuted` to
           // report on its own. Toasting here (mirroring `DetailMoreActionsMenu.jsx`'s own
           // identical preUnpost failure handling) is the one exception to that rule.
-          toast.error(translateBackendError(pre.message, ui) || ui('actionFailed'));
+          toast.error(translateBackendError(pre.message, ui, preUnpostErrorIdentity(pre)) || ui('actionFailed'));
           onMenuActionExecuted?.(action, { success: false, message: pre.message });
           return;
         }
         const result = await neoAction.execute(row?.id, wireActionName);
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       if (action.onClick) {
         const result = await action.onClick({ row, windowName, apiBaseUrl, token });
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       // columnName-based AD process buttons require the detail-page hook (handleProcess)
@@ -302,7 +327,10 @@ export default function RowQuickActions({
       // {success:false} instead), so without this the host never heard about a failed
       // documentAction row action and the user saw nothing at all. Hand it the same
       // {success:false, message} shape the neoAction path already delivers.
-      onMenuActionExecuted?.(action, { success: false, message: err?.message });
+      // ETP-5577 — and its identity plus the row, so a period refusal can offer the calendar.
+      onMenuActionExecuted?.(action, {
+        success: false, message: err?.message, messageKeys: err?.messageKeys,
+      }, row);
     } finally {
       setInFlight(prev => {
         const next = { ...prev };
@@ -355,22 +383,16 @@ export default function RowQuickActions({
       // opacity. Since this pill is narrower than the cell's own reserved
       // width, that mismatch painted as a seam INSIDE one cell — solid gray
       // under the icons, lighter translucent gray in the gutter beside them
-      // — live-verified. This div now sets NO background of its own at
-      // all: the masking/tinting background lives on the enclosing `<td>`
-      // instead (DataTable's quickActionsColumnClassName), applied to the
-      // WHOLE cell so gutter and icons always match — solid `bg-muted` only
-      // when hover-sticky can actually float this pill over real data
-      // (masking beats color-matching there), otherwise nothing, letting
-      // the row's own `hover:bg-muted/50` show through this div exactly as
-      // it does everywhere else in the row, at rest AND transitioning.
-      className={[
-        // `right-0` (not `right-3`) — flush against the cell's own right
-        // edge, no outer margin: "que se empuje al fondo, tiene como un
-        // espacio" (a `right-3` gap here read as an unexplained sliver of
-        // the reserved column left uncovered at the true edge). `px-3`
-        // keeps the icons themselves off the very edge as inner padding.
-        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100',
-      ].join(' ')}
+      // — live-verified.
+      //
+      // ETP-5600 (QA pass 2) — this div IS the Figma "Sticky Acciones" layer and
+      // carries the masking background again, now as the Figma gradient
+      // (transparent -> `--row-hover-bg` at 10.58%), exactly as wide as its cell, which
+      // DataTable reserves at no less than QUICK_ACTIONS_MIN_BAND_PX (ROW_STICKY_ACTIONS
+      // in rowVisuals.js), so it never reaches past the cell. The `<td>`
+      // paints nothing: its own gradient left a visible seam at the cell's left
+      // edge. Same colour end as before, so the gutter and the icons still match.
+      className={ROW_STICKY_ACTIONS}
       data-testid="row-quick-actions"
       onClick={stop}
     >
@@ -385,7 +407,7 @@ export default function RowQuickActions({
           title={ui('quickAction.edit')}
           data-testid="row-quick-action-edit"
         >
-          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Pencil className="h-5 w-5" data-testid="Pencil__ec6673" />}
+          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicEditIcon className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
       {/* Clone — only when host wires onClone (no generic default exists); never on read-only. */}
@@ -399,7 +421,7 @@ export default function RowQuickActions({
           title={ui('quickAction.clone')}
           data-testid="row-quick-action-clone"
         >
-          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Copy className="h-5 w-5" data-testid="Copy__ec6673" />}
+          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicCopyIcon className="h-5 w-5" data-testid="Copy__ec6673" />}
         </button>
       )}
       {/* Email — gated by sendDocument.enabled (default true for eligible
@@ -415,7 +437,7 @@ export default function RowQuickActions({
           title={ui('quickAction.email')}
           data-testid="row-quick-action-email"
         >
-          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Mail className="h-5 w-5" data-testid="Mail__ec6673" />}
+          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicMailIcon className="h-5 w-5" data-testid="Mail__ec6673" />}
         </button>
       )}
       {/* More — popover with menuActions[] */}
@@ -429,7 +451,7 @@ export default function RowQuickActions({
             title={ui('quickAction.more')}
             data-testid="row-quick-action-more"
           >
-            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ec6673" />
+            <IconicDotsVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ec6673" />
           </button>
           {showMenu && menuPos && createPortal(
             <>
@@ -499,7 +521,7 @@ export default function RowQuickActions({
           title={ui('quickAction.delete')}
           data-testid="row-quick-action-delete"
         >
-          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__ec6673" />}
+          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__ec6673" />}
         </button>
       )}
     </div>

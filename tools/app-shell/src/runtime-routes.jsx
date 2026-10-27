@@ -34,6 +34,7 @@ const UnifiedCalendarPage = lazy(() => import('./pages/UnifiedCalendarPage.jsx')
 const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage.jsx'));
+const MyCompaniesPage = lazy(() => import('./pages/MyCompaniesPage.jsx'));
 const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage.jsx'));
 const DevLifecyclePage = import.meta.env.DEV
   ? lazy(() => import('./pages/DevLifecyclePage.jsx')) : null;
@@ -143,6 +144,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     // point, not the route, and the backend enforces the paywall regardless.
     lazyRoute('upgrade', UpgradePage),
     lazyRoute('account', AccountSettingsPage),
+    // ETP-5734. Registered unconditionally: the `my-companies-page` flag gates the user-menu
+    // entry, not the route, and every call the page makes is authorized by the account session.
+    lazyRoute('companies', MyCompaniesPage),
     { path: 'artifacts', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
     { path: 'artifacts/:windowName', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
     { path: ':windowName/:recordId', public: false, element: (

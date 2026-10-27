@@ -1,12 +1,15 @@
 import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
 import { parseCalendarDate } from '../../../lib/dateOnly.js';
+import { parseLocaleNumber } from '../../../lib/parseLocaleNumber.js';
 import { toast } from 'sonner';
 // ETP-5431 pt.2 — box 111's autocompletion formula lives next to its field definition in
 // fm303Layouts.js (like every other `derivedValue`); `recomputeDerivedBoxes` below is its single
 // authoritative consumer. One-directional dependency only (fm303Layouts.js imports nothing from
 // this file), so no import cycle.
 import { computeBox111 } from './models/303/fm303Layouts.js';
+import { getModelOrDefault, DEFAULT_MODEL_ID } from './modelRegistry.js';
+import { isAnnualPeriod } from './fiscalPeriods.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -271,6 +274,15 @@ export function exceedsTypedDecimalDigits(rawStr) {
   return trimmed.length - dotIndex - 1 > 2;
 }
 
+// ETP-5716 (review W3) — true for an inline-cell draft that is not empty yet holds no number (a lone
+// "-", a lone decimal separator: what MaskedAmountInput reports while the user is mid-typing).
+// parseLocaleNumber reads it as null, and committing null deletes the stored box value, so the 303
+// and 390 cells drop such an edit instead. An empty draft is a deliberate clear and still commits.
+export function isUnparseableDraft(raw) {
+  if (raw == null || String(raw).trim() === '') return false;
+  return parseLocaleNumber(raw).value == null;
+}
+
 // ETP-5456 (fiscal-advisory correction) — the AEAT record-length ceiling (Lon=17: 15 integer
 // digits + 2 decimals for `Num`, 14+2 for a negative `N`) is a PRESENTATION-FORMAT constraint on
 // how the file is written, not a fiscal rule that authorizes changing the declared amount. An
@@ -527,6 +539,19 @@ function applyComplementariaParams(params, identChecks) {
 
 export function applyIdentParams(params, identChecks) {
   applyMappedIdentParams(params, identChecks);
+  // ETP-5725 (reopened QA review, Blocker B1) — a DEDICATED, unambiguous flag for the backend's
+  // corrective/ordinaria consistency guard (FiscalDeclCrudHandler#checkCorrectiveConsistency,
+  // read via Fiscal303BoxesHandler#dispatch's GENERATE branch AND, as of this fix,
+  // Fiscal303SubmissionSupport#handleSubmit — the real AEAT telematic submit endpoint).
+  // Deliberately set here, in the SHARED param builder every 303 request that can file/generate
+  // goes through (`generate303File` AND `AeatSubmitFlow.jsx`'s own submit request), not in one
+  // caller — the original version of this fix set it only inside `generate303File`, which is
+  // exactly how `AeatSubmitFlow.jsx`'s submit request missed it and left the real filing
+  // endpoint unguarded (review B1). `applyRectificativaParams` below also sets
+  // `IsComplementary=Y`, but that param is shared with the UNRELATED legacy "complementaria"
+  // checkbox (`applyComplementariaParams`), so it cannot be trusted server-side to mean "this is
+  // a rectificativa" — this one always means exactly that, only ever "Y" or absent.
+  if (identChecks?.rectificativa) params.set('Rectificativa', 'Y');
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
   // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
@@ -675,7 +700,18 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
       method: 'PUT',
       body: JSON.stringify(body),
     });
-    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    if (!res.ok) {
+      // ETP-5725 (reopened QA fix, UX follow-up) — on a reactivation blocked by a sibling
+      // declaration (FiscalDeclCrudHandler#rejectReactivationWithSibling), the 409 alone cannot
+      // tell the caller WHY: this same status also covers re-presenting an already-submitted
+      // declaration (rejectRepresentation) and the plain draft-sibling case. The backend tags
+      // its message with a stable `[reason=...]` marker precisely so this layer doesn't have to
+      // guess — see that guard's own `reactivationBlockReason` doc for the exact values.
+      const raw = await res.text().catch(() => '');
+      const message = parseServerMessage(raw);
+      const reasonMatch = message ? message.match(/\[reason=([a-z_]+)\]/) : null;
+      return { ok: false, error: `http_${res.status}`, reason: reasonMatch?.[1] };
+    }
     const snapshot = await readSubmittedSnapshot(res);
     return snapshot ? { ok: true, submittedSnapshot: snapshot } : { ok: true };
   } catch (_) {
@@ -797,30 +833,45 @@ const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
  * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
  * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
  *
- * `model` selects which route to hit (`303` by default). Per `AbstractFiscalHandler#handleIncidents`,
+ * `model` selects which route to hit (the registry's default model, `303`, by default). Per `AbstractFiscalHandler#handleIncidents`,
  * `/fiscal303/incidents` and `/fiscal349/incidents` are both backed by the same
  * `ETGO_Fiscal_Decl_Incident` table, so a 349 declaration can be queried the same way — it will
  * simply come back empty today, since only the 303 telematic submission flow writes rows there.
  */
-export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = '303' } = {}) {
+export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = DEFAULT_MODEL_ID } = {}) {
   if (!apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, { baseUrl: '', token });
     if (!res.ok) return EMPTY_INCIDENTS;
     const body = await res.json().catch(() => null);
-    const rows = Array.isArray(body?.data) ? body.data : [];
-    const items = rows.map(r => ({
-      origin: r.code ?? '',
-      message: r.message ?? '',
-      severity: r.severity === 'warn' ? 'warn' : 'block',
-    }));
-    const blocking = items.filter(i => i.severity === 'block').length;
-    const warning = items.filter(i => i.severity === 'warn').length;
-    return { blocking, warning, items };
+    return incidentsFromRows(body?.data);
   } catch (_) {
     return EMPTY_INCIDENTS;
   }
+}
+
+/**
+ * The backend incident rows (`GET /fiscal<model>/incidents`, `POST /fiscal390/validate`) as
+ * `{ blocking, warning, items }`. Each item's `origin` is the incident code; an incident a model
+ * computes itself (ETP-5716, Modelo 390) also carries its `params` and `action` — the page
+ * translates it by code and offers the action.
+ */
+export function incidentsFromRows(data) {
+  const rows = Array.isArray(data) ? data : [];
+  const items = rows.map(r => {
+    const item = {
+      origin: r.code ?? '',
+      message: r.message ?? '',
+      severity: r.severity === 'warn' ? 'warn' : 'block',
+    };
+    if (r.params && typeof r.params === 'object') item.params = r.params;
+    if (r.action && typeof r.action === 'object') item.action = r.action;
+    return item;
+  });
+  const blocking = items.filter(i => i.severity === 'block').length;
+  const warning = items.filter(i => i.severity === 'warn').length;
+  return { blocking, warning, items };
 }
 
 export const STATUSES = [
@@ -1064,17 +1115,34 @@ export function withBox111NonZeroFlag(identification, liveBoxes) {
   return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
 }
 
-// ETP-5597 pt.1 — superset of `withBox111NonZeroFlag`: also merges `_box69Positive` (casilla 69,
-// "Resultado de la autoliquidación", strictly > 0 — an amount to pay), which fm303Layouts.js's
-// tipo_declaracion options read through `disabledWhen` to lock Compensación/Devolución types.
-// A missing box 69 (nothing computed yet) is `false`, so nothing is locked before the first
-// calculation. Use this wherever the identification object feeds the layout engine (rendering
-// and pre-flight gates); `withBox111NonZeroFlag` stays for callers that only need box 111.
+/**
+ * ETP-5597 — the single place where the result boxes decide which `tipo_declaracion` options are
+ * allowed (consumed through `_tipoDeclRestriction` by fm303Layouts.js's option `disabledWhen`):
+ *   - casilla 71 > 0 (amount to pay)            → 'positive_result' (C/D/V/X disabled)
+ *   - casilla 69 > 0 AND casilla 71 < 0          → 'zero_only' (only N allowed)
+ *   - anything else, incl. 69/71 not computed yet → null (no restriction)
+ * Mutually exclusive by the sign of casilla 71, so the order of the checks is not significant.
+ */
+export function resolveTipoDeclaracionRestriction(box69, box71) {
+  const r71 = box71 == null ? null : Number(box71);
+  if (r71 == null || Number.isNaN(r71)) return null;
+  if (r71 > 0) return 'positive_result';
+  const r69 = box69 == null ? null : Number(box69);
+  if (r71 < 0 && r69 != null && r69 > 0) return 'zero_only';
+  return null;
+}
+
+// ETP-5597 pt.1 — superset of `withBox111NonZeroFlag`: also merges `_tipoDeclRestriction` (see
+// `resolveTipoDeclaracionRestriction`), which fm303Layouts.js's tipo_declaracion options read
+// through `disabledWhen`. A missing box 69/71 (nothing computed yet) yields no restriction, so
+// nothing is locked before the first calculation. Use this wherever the identification object
+// feeds the layout engine (rendering and pre-flight gates); `withBox111NonZeroFlag` stays for
+// callers that only need box 111.
 export function withDerivedBoxFlags(identification, liveBoxes) {
-  const box69 = getBoxValue(liveBoxes, 69);
   return {
     ...withBox111NonZeroFlag(identification, liveBoxes),
-    _box69Positive: box69 != null && Number(box69) > 0,
+    _tipoDeclRestriction: resolveTipoDeclaracionRestriction(
+      getBoxValue(liveBoxes, 69), getBoxValue(liveBoxes, 71)),
   };
 }
 
@@ -1285,27 +1353,15 @@ function getQuarterlyDeadline(year, quarter) {
   return new Date(year, month - 1, 20);
 }
 
-// Monthly 349 deadline. July's 349 is consolidated with August → deadline is
-// Sept 20, not Aug 20. Every other month → day 20 of the following month.
-function getMonthly349Deadline(year, month) {
-  if (month === 7) return new Date(year, 8, 20);
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return new Date(nextYear, nextMonth - 1, 20);
-}
+// The MONTHLY rule is per model and lives with the model: `monthlyDeadline` of its
+// `modelRegistry.js` entry (`models/303/deadline303.js`, `models/349/deadline349.js`). An
+// unknown model — or a model never filed monthly (`monthlyDeadline: null`) — falls back to the
+// default model's (303) rule, as it always did.
+//
+// The ANNUAL rule (period `ANNUAL_PERIOD`, '0A') is per model too: `annualDeadline` of the
+// entry (ETP-5716, `models/390/deadline390.js`). A model without one has no annual deadline.
 
-// Monthly 303 deadline (and default fallback for any other/unspecified
-// monthly model): day 30 of the following month, except January which
-// extends to the last day of February. `new Date(year, 2, 0)` = "day 0 of
-// March" = the last day of February, automatically leap-year aware.
-function getMonthly303Deadline(year, month) {
-  if (month === 1) return new Date(year, 2, 0);
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return new Date(nextYear, nextMonth - 1, 30);
-}
-
-// Dispatches to the quarterly/monthly-303/monthly-349 rule above based on
+// Dispatches to the quarterly rule above or to the model's own monthly rule based on
 // `period`'s shape and `model`. Split out of a single branch-heavy function
 // (SonarQube S3776) into these small, independently-testable helpers — same
 // dates, same logic, just decomposed.
@@ -1315,7 +1371,12 @@ function getDeadlineDate(model, year, period) {
   }
   if (/^\d{2}$/.test(period)) {
     const m = parseInt(period, 10);
-    return model === '349' ? getMonthly349Deadline(year, m) : getMonthly303Deadline(year, m);
+    const monthlyRule = getModelOrDefault(model).monthlyDeadline
+      ?? getModelOrDefault(DEFAULT_MODEL_ID).monthlyDeadline;
+    return monthlyRule(year, m);
+  }
+  if (isAnnualPeriod(period)) {
+    return getModelOrDefault(model).annualDeadline?.(year) ?? null;
   }
   return null;
 }

@@ -1,7 +1,8 @@
 // @covers tools/app-shell/src/components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js
-import { classifyProductMatch, nonBlank, toIsoDate, buildTaxSearchTerm, buildLineOps, findBp, resolveTaxesForLines, findTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
+import { BACK } from '../../ocrFlowSignals';
+import { classifyProductMatch, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
 
-// Mock simSearch to test findBp/resolveTaxesForLines without network
+// Mock simSearch to test findBp without network
 vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
   simSearch: vi.fn().mockResolvedValue([]),
 }));
@@ -54,33 +55,6 @@ describe('purchaseInvoiceDescriptor', () => {
 
     it('returns unparseable strings as-is', () => {
       expect(toIsoDate('not a date')).toBe('not a date');
-    });
-  });
-
-  describe('buildTaxSearchTerm', () => {
-    it('returns tax_label when present', () => {
-      expect(buildTaxSearchTerm({ tax_label: 'IVA 21%', tax_rate: 21 })).toBe('IVA 21%');
-    });
-
-    it('returns rate% when label is empty', () => {
-      expect(buildTaxSearchTerm({ tax_label: '', tax_rate: 21 })).toBe('21%');
-    });
-
-    it('returns null when no label or rate', () => {
-      expect(buildTaxSearchTerm({})).toBeNull();
-      expect(buildTaxSearchTerm({ tax_label: '', tax_rate: null })).toBeNull();
-    });
-
-    it('handles zero rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: 0 })).toBe('0%');
-    });
-
-    it('returns null for NaN rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: 'abc' })).toBeNull();
-    });
-
-    it('trims label whitespace', () => {
-      expect(buildTaxSearchTerm({ tax_label: '  Exento  ' })).toBe('Exento');
     });
   });
 
@@ -213,100 +187,6 @@ describe('purchaseInvoiceDescriptor', () => {
     });
   });
 
-  describe('resolveTaxesForLines', () => {
-    // ETP-4576 — a missing token is not a reason to skip the lookup: under the cookie scheme
-    // no client holds one, so this returned empty for every authenticated user.
-    it('still resolves when no token is held', async () => {
-      expect(await resolveTaxesForLines({ lines: [{}] })).not.toEqual([]);
-    });
-
-    it('returns empty for empty lines', async () => {
-      expect(await resolveTaxesForLines({ token: 'tk', lines: [] })).toEqual([]);
-    });
-
-    it('returns null-filled array when all terms are empty', async () => {
-      const result = await resolveTaxesForLines({ token: 'tk', lines: [{ tax_label: '', tax_rate: null }] });
-      expect(result).toEqual([null]);
-    });
-
-    it('returns empty when lines is not an array', async () => {
-      expect(await resolveTaxesForLines({ token: 'tk', lines: 'not-array' })).toEqual([]);
-    });
-
-    it('returns empty when lines is null', async () => {
-      expect(await resolveTaxesForLines({ token: 'tk', lines: null })).toEqual([]);
-    });
-
-    it('calls simSearch and maps results to ids when terms exist', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-21' }, null, { id: 'TAX-0' }]);
-      const lines = [
-        { tax_label: 'IVA 21%' },
-        { tax_label: '', tax_rate: null },
-        { tax_rate: 0 },
-      ];
-      const result = await resolveTaxesForLines({ token: 'tk', lines });
-      expect(result).toEqual(['TAX-21', null, 'TAX-0']);
-      expect(simSearch).toHaveBeenCalledWith(expect.objectContaining({
-        entityName: 'FinancialMgmtTaxRate',
-        items: ['IVA 21%', '', '0%'],
-        minSimPercent: 50,
-      }));
-    });
-
-    it('returns null for entries where simSearch match has no id', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ name: 'no-id-field' }]);
-      const result = await resolveTaxesForLines({ token: 'tk', lines: [{ tax_label: 'Exento' }] });
-      expect(result).toEqual([null]);
-    });
-  });
-
-  describe('findTax', () => {
-    it('returns null when no token', async () => {
-      expect(await findTax({ token: null, value: 'IVA' })).toBeNull();
-    });
-
-    it('returns null when no term', async () => {
-      expect(await findTax({ token: 'tk', value: '', extracted: {} })).toBeNull();
-    });
-
-    it('returns matched tax with id and label when simSearch finds a match', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-21', name: 'IVA Compras 21%' }]);
-      const result = await findTax({ token: 'tk', value: 'IVA 21%' });
-      expect(result).toEqual({ id: 'TAX-21', label: 'IVA Compras 21%' });
-    });
-
-    it('uses value term for label when match has no name', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-21' }]);
-      const result = await findTax({ token: 'tk', value: 'IVA 21%' });
-      expect(result).toEqual({ id: 'TAX-21', label: 'IVA 21%' });
-    });
-
-    it('returns null when simSearch returns empty match', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([null]);
-      const result = await findTax({ token: 'tk', value: 'IVA' });
-      expect(result).toBeNull();
-    });
-
-    it('returns null when simSearch returns match without id', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ name: 'something' }]);
-      const result = await findTax({ token: 'tk', value: 'IVA' });
-      expect(result).toBeNull();
-    });
-
-    it('falls back to extracted.tax_label when value is null', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([{ id: 'TAX-EX', name: 'Exento' }]);
-      const result = await findTax({ token: 'tk', value: null, extracted: { tax_label: 'Exento' } });
-      expect(result).toEqual({ id: 'TAX-EX', label: 'Exento' });
-    });
-  });
-
   describe('buildLineOps — null/undefined field edge cases', () => {
     it('handles line with null description', () => {
       const lines = [{ description: null, quantity: 3, unit_price: 10 }];
@@ -358,32 +238,6 @@ describe('purchaseInvoiceDescriptor', () => {
 
     it('converts mixed separator dd/mm/yyyy', () => {
       expect(toIsoDate('31/12/2025')).toBe('2025-12-31');
-    });
-  });
-
-  describe('buildTaxSearchTerm — edge cases', () => {
-    it('returns rate% for negative rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: -5 })).toBe('-5%');
-    });
-
-    it('returns null for Infinity rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: Infinity })).toBeNull();
-    });
-
-    it('returns null for -Infinity rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: -Infinity })).toBeNull();
-    });
-
-    it('returns null for undefined line', () => {
-      expect(buildTaxSearchTerm(undefined)).toBeNull();
-    });
-
-    it('returns null for null line', () => {
-      expect(buildTaxSearchTerm(null)).toBeNull();
-    });
-
-    it('returns rate% for string numeric rate', () => {
-      expect(buildTaxSearchTerm({ tax_rate: '10.5' })).toBe('10.5%');
     });
   });
 
@@ -604,6 +458,24 @@ describe('purchaseInvoiceDescriptor', () => {
       expect(result.cancelled).toBe(true);
     });
 
+    // ETP-5654 — backing out of the popup is a navigation signal, not a cancel, and builds nothing.
+    it('reports back (not cancelled) when the popup is backed out of', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+      simSearchMock.mockResolvedValue([]);
+
+      const result = await buildPurchaseInvoiceBatch(
+        { line_items: [{ description: 'Unknown product' }] },
+        {
+          token: 'tok',
+          apiBaseUrl: 'http://test/neo/purchase-invoice',
+          reviewedHeader: { vendor: { bpId: 'bp-1' } },
+          askUserForProducts: async () => BACK,
+        },
+      );
+
+      expect(result).toEqual({ back: true });
+    });
+
     // The line's own M_Product_ID selector is ProductSimple (built over product prices), which
     // hides unpriced products; the popup searches the plain product selector instead.
     it('hands the product popup the plain product selector and the product spec', async () => {
@@ -625,6 +497,49 @@ describe('purchaseInvoiceDescriptor', () => {
         selectorUrl: 'http://test/neo/purchase-invoice/intrastat/selectors/M_Product_ID',
         productSpecUrl: 'http://test/neo/product',
       }));
+    });
+
+    // ETP-5585 — the popup rows carry the line's tax so the create form can prefill its category.
+    describe('popup rows carry the line tax id', () => {
+      const runWith = async (lines, reviewedLines, simResult = []) => {
+        globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+        simSearchMock.mockImplementation(async ({ entityName }) => (entityName === 'Product' ? simResult : []));
+        const askUserForProducts = vi.fn(async () => ({}));
+        await buildPurchaseInvoiceBatch(
+          { line_items: lines },
+          {
+            token: 'tok',
+            apiBaseUrl: 'http://test/neo/purchase-invoice',
+            reviewedHeader: { vendor: { bpId: 'bp-1' } },
+            reviewedLines,
+            askUserForProducts,
+          },
+        );
+        return askUserForProducts.mock.calls[0][0].unmatched;
+      };
+
+      it('uses the tax id held by the lines review (preselected or manually changed)', async () => {
+        const unmatched = await runWith(
+          [{ description: 'A' }, { description: 'B' }],
+          [{ tax_id: 'TAX10' }, { tax_id: 'TAX21' }],
+        );
+        expect(unmatched.map((row) => row.taxId)).toEqual(['TAX10', 'TAX21']);
+      });
+
+      it('is null when the line stayed on "Autocompletar" or there was no lines review', async () => {
+        expect((await runWith([{ description: 'A' }], [{ tax_id: null }]))[0].taxId).toBeNull();
+        expect((await runWith([{ description: 'A' }], undefined))[0].taxId).toBeNull();
+      });
+
+      it('also carries it on suggestion rows', async () => {
+        const unmatched = await runWith(
+          [{ description: 'Servicio de desarrollo y mantenimiento web' }],
+          [{ tax_id: 'TAX10' }],
+          [{ id: 'p-mw', name: 'Mantenimiento Web', similarityPercent: 55, candidates: [{ id: 'p-mw', name: 'Mantenimiento Web' }] }],
+        );
+        expect(unmatched[0].suggestion).toEqual({ id: 'p-mw', name: 'Mantenimiento Web' });
+        expect(unmatched[0].taxId).toBe('TAX10');
+      });
     });
 
     describe('product matching (no silent partial matches)', () => {
@@ -656,7 +571,7 @@ describe('purchaseInvoiceDescriptor', () => {
 
       it('requests several candidates so an ambiguous exact match can be detected', async () => {
         await run('Widget', []);
-        expect(simSearchMock).toHaveBeenCalledWith(expect.objectContaining({ entityName: 'Product', qtyResults: 3, minSimPercent: 30 }));
+        expect(simSearchMock).toHaveBeenCalledWith(expect.objectContaining({ entityName: 'Product', qtyResults: 3, minSimPercent: 50 }));
       });
 
       it('auto-assigns an exact name match ignoring case and surrounding spaces', async () => {
@@ -678,6 +593,74 @@ describe('purchaseInvoiceDescriptor', () => {
         const { askUserForProducts } = await run('Unknown thing', [null]);
         expect(askUserForProducts.mock.calls[0][0].unmatched[0].suggestion).toBeNull();
       });
+
+      // Flow seam of the similarity rule: classification -> partition -> popup / Lines ops.
+      describe('similarity auto-match through the batch flow', () => {
+        const simMatch = (id, name, similarityPercent) => ({ id, name, similarityPercent });
+        const withCandidates = (...cs) => ({ ...cs[0], candidates: cs });
+        const runLines = async (descriptions, simResults) => {
+          globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+          simSearchMock.mockImplementation(async ({ entityName }) => (entityName === 'Product' ? simResults : []));
+          const askUserForProducts = vi.fn(async () => ({}));
+          const result = await buildPurchaseInvoiceBatch(
+            { line_items: descriptions.map((description) => ({ description, quantity: 1 })) },
+            {
+              token: 'tok',
+              apiBaseUrl: 'http://test/neo/purchase-invoice',
+              reviewedHeader: { vendor: { bpId: 'bp-1' } },
+              askUserForProducts,
+            },
+          );
+          return { result, askUserForProducts, lineOps: result.ops.filter((o) => o.entity === 'Lines') };
+        };
+
+        it('assigns a >= 90 single-top candidate without opening the popup', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Tornillo M8'], [
+            withCandidates(simMatch('p-92', 'Tornillo M9', '92.3077')),
+          ]);
+          expect(askUserForProducts).not.toHaveBeenCalled();
+          expect(lineOps).toHaveLength(1);
+          expect(lineOps[0].body.product).toBe('p-92');
+        });
+
+        it('never asks the user when every line is auto-matched by similarity', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Tornillo M8', 'Tuerca M8'], [
+            withCandidates(simMatch('p-a', 'Tornillo M9', '92.3077'), simMatch('p-x', 'Otro', '60')),
+            withCandidates(simMatch('p-b', 'Tuerca M9', '96.7')),
+          ]);
+          expect(askUserForProducts).not.toHaveBeenCalled();
+          expect(lineOps.map((o) => o.body.product)).toEqual(['p-a', 'p-b']);
+        });
+
+        it('sends only the < 90 line to the popup with its original idx and keeps the auto-matched one', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Tornillo M8', 'Servicio de mantenimiento'], [
+            withCandidates(simMatch('p-auto', 'Tornillo M9', '92.3077')),
+            withCandidates(simMatch('p-low', 'Mantenimiento', '55.5')),
+          ]);
+          expect(askUserForProducts).toHaveBeenCalledTimes(1);
+          const { unmatched } = askUserForProducts.mock.calls[0][0];
+          expect(unmatched).toHaveLength(1);
+          expect(unmatched[0]).toMatchObject({
+            idx: 1,
+            description: 'Servicio de mantenimiento',
+            suggestion: { id: 'p-low', name: 'Mantenimiento' },
+          });
+          expect(lineOps).toHaveLength(1);
+          expect(lineOps[0].body.product).toBe('p-auto');
+        });
+
+        it('sends a top tie >= 90 to the popup with the first candidate as suggestion, not assigned', async () => {
+          const { askUserForProducts, lineOps } = await runLines(['Arnes talla N'], [
+            withCandidates(simMatch('p-l', 'Arnes talla L', '96.7'), simMatch('p-m', 'Arnes talla M', '96.7')),
+          ]);
+          expect(askUserForProducts).toHaveBeenCalledTimes(1);
+          const { unmatched } = askUserForProducts.mock.calls[0][0];
+          expect(unmatched).toHaveLength(1);
+          expect(unmatched[0].idx).toBe(0);
+          expect(unmatched[0].suggestion).toEqual({ id: 'p-l', name: 'Arnes talla L' });
+          expect(lineOps).toHaveLength(0);
+        });
+      });
     });
 
     describe('classifyProductMatch', () => {
@@ -693,6 +676,102 @@ describe('purchaseInvoiceDescriptor', () => {
       it('picks the exact candidate even when it is not the first one', () => {
         const candidates = [{ id: 'a', name: 'Widget Pro' }, { id: 'b', name: 'Widget' }];
         expect(classifyProductMatch('widget', { ...candidates[0], candidates })).toEqual({ id: 'b' });
+      });
+
+      describe('similarity auto-match (ETP-5654)', () => {
+        const cand = (id, name, similarityPercent) => ({ id, name, similarityPercent });
+        const classify = (desc, ...cs) => classifyProductMatch(desc, { ...cs[0], candidates: cs });
+
+        it('exposes the threshold constant', () => {
+          expect(PRODUCT_AUTO_MATCH_MIN_SIMILARITY).toBe(90);
+        });
+
+        it('auto-assigns a single 96.7% candidate (one-char difference)', () => {
+          expect(classify('Tornillo M8', cand('p1', 'Tornillo M9', '96.7'))).toEqual({ id: 'p1' });
+        });
+
+        it('auto-assigns a 100% candidate whose name is not an exact match', () => {
+          expect(classify('Camión', cand('p1', 'Camion', 100))).toEqual({ id: 'p1' });
+        });
+
+        it('treats exactly 90 as auto and 89.9 as a suggestion', () => {
+          expect(classify('Widget A', cand('p1', 'Widget B', 90))).toEqual({ id: 'p1' });
+          expect(classify('Widget A', cand('p1', 'Widget B', 89.9)))
+            .toEqual({ suggestion: { id: 'p1', name: 'Widget B' } });
+        });
+
+        const sugg = (id, name) => ({ suggestion: { id, name } });
+
+        it('auto-assigns 96 over 94, also when the winner is listed second', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo A', 96), cand('p2', 'Tornillo B', 94)))
+            .toEqual({ id: 'p1' });
+          expect(classify('Tornillo', cand('p1', 'Tornillo B', 94), cand('p2', 'Tornillo A', 96)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it('suggests the first listed candidate when two tie at the top (96.7 vs 96.7)', () => {
+          expect(classify('Arnes talla N', cand('p1', 'Arnes talla L', 96.7), cand('p2', 'Arnes talla M', 96.7)))
+            .toEqual(sugg('p1', 'Arnes talla L'));
+          expect(classify('Arnes talla N', cand('p1', 'Arnes talla L', '96.7'), cand('p2', 'Arnes talla M', 96.7)))
+            .toEqual(sugg('p1', 'Arnes talla L'));
+        });
+
+        it('suggests the first candidate on a 3-way tie at the top', () => {
+          expect(classify('Tornillo', cand('p1', 'A', 95), cand('p2', 'B', 95), cand('p3', 'C', 95)))
+            .toEqual(sugg('p1', 'A'));
+        });
+
+        it('lets the top win over a tie lower down (96, 94, 94)', () => {
+          expect(classify('Tornillo', cand('p1', 'A', 94), cand('p2', 'B', 96), cand('p3', 'C', 94)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it('suggests on a tie at exactly 90 and auto-assigns a single 90', () => {
+          expect(classify('Widget A', cand('p1', 'W1', 90), cand('p2', 'W2', 90))).toEqual(sugg('p1', 'W1'));
+          expect(classify('Widget A', cand('p1', 'W1', 90), cand('p2', 'W2', 89))).toEqual({ id: 'p1' });
+        });
+
+        it('suggests on a tie below the threshold', () => {
+          expect(classify('Widget A', cand('p1', 'W1', 85), cand('p2', 'W2', 85))).toEqual(sugg('p1', 'W1'));
+        });
+
+        it('ignores an unparseable candidate when ranking the rest', () => {
+          expect(classify('Tornillo', cand('p1', 'A', '96.7%'), cand('p2', 'B', 92))).toEqual({ id: 'p2' });
+        });
+
+        it('picks the highest similarity even when it is not listed first', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo B', 60), cand('p2', 'Tornillo A', 97)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it.each([undefined, '', NaN, '96.7%', 'abc', null])(
+          'never auto-assigns a missing or non-numeric similarity (%s)',
+          (sim) => {
+            expect(classify('Widget A', cand('p1', 'Widget B', sim)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Widget B' } });
+          },
+        );
+
+        it('keeps two exact names ambiguous even with a high similarity', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo', 100), cand('p2', 'Tornillo', 100)))
+            .toEqual({ suggestion: { id: 'p1', name: 'Tornillo' } });
+        });
+
+        it('evaluates the exact match before similarity', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo X', 99), cand('p2', 'tornillo', 95)))
+            .toEqual({ id: 'p2' });
+        });
+
+        it('keeps the exact name winning when the higher-similarity rival is listed first', () => {
+          expect(classify('Tornillo', cand('p1', 'Tornillo XL', 99.5), cand('p2', 'Tornillo', 91)))
+            .toEqual({ id: 'p2' });
+        });
+
+        // Intentional per the ETP-5654 spec: with no description there is no exact name to
+        // compare, so the similarity path still runs and a single >= 90 candidate is auto-assigned.
+        it.each([null, undefined, '', '   '])('still auto-assigns a single 99 candidate for description %j', (desc) => {
+          expect(classify(desc, cand('p1', 'Tornillo', 99))).toEqual({ id: 'p1' });
+        });
       });
     });
 
@@ -790,7 +869,7 @@ describe('purchaseInvoiceDescriptor', () => {
       expect(header.body.businessPartner).toBe('$ref:bp');
     });
 
-    it('uses tax from simSearch when no reviewedLine _tax_id', async () => {
+    it('omits tax (callout decides) when the lines modal holds no tax id, never a simSearch one', async () => {
       globalThis.fetch.mockImplementation(async (url) => {
         if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'A' }]);
         return { ok: true, json: async () => ({ response: { data: [] } }) };
@@ -813,40 +892,166 @@ describe('purchaseInvoiceDescriptor', () => {
       );
 
       const lineOp = result.ops.find(o => o.entity === 'Lines');
-      expect(lineOp.body.tax).toBe('tax-sim');
+      expect('tax' in lineOp.body).toBe(false);
+    });
+
+    it('never runs a tax similarity search and posts the tax id held by the lines modal', async () => {
+      globalThis.fetch.mockImplementation(async (url) => {
+        if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'A' }]);
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+      simSearchMock.mockImplementation(async ({ entityName }) => (
+        entityName === 'Product' ? [{ id: 'prod-1', name: 'Widget' }, { id: 'prod-1', name: 'Widget' }] : [{ id: 'tax-sim' }]
+      ));
+
+      const result = await buildPurchaseInvoiceBatch(
+        {
+          vendor_name: 'A', tax_id: 'B1',
+          line_items: [
+            { description: 'Widget', quantity: 1, tax_rate: 21 },
+            { description: 'Widget', quantity: 1, tax_rate: 10 },
+          ],
+        },
+        {
+          token: 'tok',
+          apiBaseUrl: 'http://test/neo/purchase-invoice',
+          reviewedLines: [
+            { description: 'Widget', quantity: 1, tax_id: 'tax-21' },
+            { description: 'Widget', quantity: 1, tax_id: null },
+          ],
+        },
+      );
+
+      expect(simSearchMock.mock.calls.every(([arg]) => arg.entityName === 'Product')).toBe(true);
+      const [first, second] = result.ops.filter(o => o.entity === 'Lines');
+      expect(first.body.tax).toBe('tax-21');
+      expect('tax' in second.body).toBe(false);
     });
   });
 
-  describe('resolveTaxesForLines — simSearch returns objects without .id', () => {
-    it('returns null for entries where match has no .id property', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([
-        { name: 'IVA 21%' },          // no .id
-        { similarity: 0.8 },           // no .id
-        { id: 'TAX-OK', name: 'OK' }, // has .id
-      ]);
-      const lines = [
-        { tax_label: 'IVA 21%' },
-        { tax_rate: 10 },
-        { tax_label: 'Exento' },
-      ];
-      const result = await resolveTaxesForLines({ token: 'tk', lines });
-      expect(result).toEqual([null, null, 'TAX-OK']);
+  // ETP-5585 — the line tax comes from the backend `defaultTax` read action, never a simSearch.
+  describe('findDefaultTax', () => {
+    const base = 'http://test/neo/purchase-invoice';
+    const newCtx = (over = {}) => ({
+      partnerAddressId: 'loc-1', invoiceDate: '2026-03-04', cache: new Map(), noMatch: new Set(), ...over,
+    });
+    const call = (taxContext, ...rest) => findDefaultTax({
+      token: 'tok', apiBaseUrl: base, extracted: { tax_rate: rest.length ? rest[0] : 21 }, taxContext,
+    });
+    const answer = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
+
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
-    it('returns null for undefined match entries', async () => {
-      const { simSearch } = await import('@etendosoftware/app-shell-core/lib/simSearch.js');
-      simSearch.mockResolvedValueOnce([undefined, null]);
-      const lines = [
-        { tax_label: 'Missing' },
-        { tax_rate: 5 },
-      ];
-      const result = await resolveTaxesForLines({ token: 'tk', lines });
-      expect(result).toEqual([null, null]);
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('POSTs the partner address, invoice date and rate (no product) to the lines defaultTax action', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-21', identifier: 'IVA 21%', rate: 21 }));
+
+      const result = await call(newCtx());
+
+      expect(result).toEqual({ id: 'TAX-21', label: 'IVA 21%', rate: 21 });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = globalThis.fetch.mock.calls[0];
+      expect(String(url)).toBe(`${base}/lines/new/action/defaultTax`);
+      expect(init.method).toBe('POST');
+      expect(new Headers(init.headers).get('Content-Type')).toBe('application/json');
+      expect(JSON.parse(init.body)).toEqual({ partnerAddressId: 'loc-1', invoiceDate: '2026-03-04', rate: 21 });
+    });
+
+    it('normalizes the invoice date and falls back to the id and the asked rate', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-X' }));
+
+      const result = await call(newCtx({ invoiceDate: '04/03/2026' }), '10');
+
+      expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toEqual({
+        partnerAddressId: 'loc-1', invoiceDate: '2026-03-04', rate: 10,
+      });
+      expect(result).toEqual({ id: 'TAX-X', label: 'TAX-X', rate: 10 });
+    });
+
+    it.each([null, undefined, '', '  ', 'abc', NaN, Infinity])('makes no request for the rate %s', async (rate) => {
+      expect(await call(newCtx(), rate)).toBeNull();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('makes no request without a partner address or a tax context', async () => {
+      expect(await call(newCtx({ partnerAddressId: null }))).toBeNull();
+      expect(await call(undefined)).toBeNull();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('accepts a zero rate', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-0', identifier: 'Exento', rate: 0 }));
+      expect(await call(newCtx(), 0)).toEqual({ id: 'TAX-0', label: 'Exento', rate: 0 });
+    });
+
+    it('memoizes per rate: one request for two lines at 21, two for 21 and 10', async () => {
+      globalThis.fetch.mockResolvedValue(answer({ taxId: 'TAX-21', identifier: 'IVA', rate: 21 }));
+      const ctx = newCtx();
+
+      const [a, b] = await Promise.all([call(ctx, 21), call(ctx, 21)]);
+      expect(a).toEqual(b);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      await call(ctx, 10);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('records the rate in noMatch only when the backend answered without a tax', async () => {
+      globalThis.fetch.mockResolvedValueOnce(answer({ taxId: null }));
+      const ctx = newCtx();
+      expect(await call(ctx, 21)).toBeNull();
+      expect([...ctx.noMatch]).toEqual([21]);
+    });
+
+    it('returns null without recording noMatch on a non-OK answer', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+      const ctx = newCtx();
+      expect(await call(ctx, 21)).toBeNull();
+      expect(ctx.noMatch.size).toBe(0);
+    });
+
+    it('returns null without recording noMatch on a network error, and never throws', async () => {
+      globalThis.fetch.mockRejectedValue(new Error('network'));
+      const ctx = newCtx();
+      await expect(call(ctx, 21)).resolves.toBeNull();
+      expect(ctx.noMatch.size).toBe(0);
+    });
+
+    it('returns null without recording noMatch when the body is unreadable', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => { throw new Error('bad'); } });
+      const ctx = newCtx();
+      expect(await call(ctx, 21)).toBeNull();
+      expect(ctx.noMatch.size).toBe(0);
     });
   });
 
-  // ETP-5654 — same vendor + same supplier document number warns about a duplicate upload.
+  describe('findBpLocation', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('is exported and returns the first address id of the vendor', async () => {
+      globalThis.fetch.mockResolvedValue(selectorItems([{ id: 'loc-9', label: 'c' }]));
+      expect(await findBpLocation({ token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1' })).toBe('loc-9');
+    });
+
+    it('returns null without a vendor id and when the vendor has no address', async () => {
+      expect(await findBpLocation({ token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: null })).toBeNull();
+      globalThis.fetch.mockResolvedValue(selectorItems([]));
+      expect(await findBpLocation({ token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1' })).toBeNull();
+    });
+  });
+
   describe('findDuplicatePurchaseInvoices', () => {
     const ctx = { token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1', documentNo: ' ABC-1 ' };
     const crudRows = (data) => ({ ok: true, json: async () => ({ response: { data } }) });

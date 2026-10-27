@@ -1,7 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.11.0",
   "generatedAt": "2026-09-22T13:50:52.147Z",
-  "contractChecksum": "04c23c3673ef8af1",
+  "updatedAt": "2026-10-22T17:04:30.310Z",
+  "contractChecksum": "0a09095ef98a6893",
   "apiPrediction": {
     "specName": "general-ledger-configuration",
     "baseUrl": "/sws/neo/general-ledger-configuration",
@@ -31,13 +32,19 @@
       "Cuentas generales": {
         "get": true,
         "getById": true,
-        "post": true,
+        "post": false,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
         "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "PUT",
+          "PATCH"
+        ]
       },
       "Valores por defecto": {
         "get": true,
@@ -629,9 +636,6 @@
           },
           "suspenseBalancing": {},
           "retainedEarning": {},
-          "suspenseErrorUse": {
-            "required": true
-          },
           "incomeSummary": {
             "required": true
           },
@@ -749,7 +753,6 @@
         "balanced",
         "mandatory",
         "suspenseBalancingUse",
-        "suspenseErrorUse",
         "incomeSummary",
         "currencyBalancingUse",
         "createClosing",
@@ -804,5 +807,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "738c7065dadd4222"
+  "checksum": "2610f127154eb30a"
 }

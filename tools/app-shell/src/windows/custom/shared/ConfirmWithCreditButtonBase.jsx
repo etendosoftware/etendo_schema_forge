@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
+import { documentPeriodDate } from '@/lib/periodNotAvailable.js';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
 
@@ -25,13 +26,16 @@ import { useConfirmWithCredit } from './useConfirmWithCredit';
  */
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
-  entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+  entitySegment, invoiceRoute, invoiceType,
   specName, entityName,
   confirmEventName,
   saveGate, onRefresh, isDocumentReadOnly,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
+  // ETP-5688 — title of the post-confirm (CO) invoice popup; `cardTitle` below belongs to the DR
+  // ConfirmInOutModal and must not be reused for it.
+  createInvoiceModalTitle,
   cardTitle: cardTitleProp,
   cardDesc: cardDescProp,
   extraActions,
@@ -40,13 +44,13 @@ export default function ConfirmWithCreditButtonBase({
   const navigate = useNavigate();
   const resultNavigatedRef = useRef(false);
   const {
-    ui, status, currency, hasReturnInvoice,
+    ui, status, hasReturnInvoice,
     headers, base, showModal, setShowModal,
     creatingInvoice, result, setResult,
     handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   } = useConfirmWithCredit({
     data, recordId, token, apiBaseUrl,
-    entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+    entitySegment, invoiceRoute, invoiceType,
   });
 
   // ETP-5408 — the generic draftMode Confirm button dispatches this event (see the doc
@@ -82,6 +86,12 @@ export default function ConfirmWithCreditButtonBase({
         // #121217 fill with white text. Was the `--status-info-fg` badge token (saturated blue).
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
           className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90 transition-colors">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
           {postConfirmButtonLabel ?? ui('createReturnInvoice')}
         </button>
       )}
@@ -98,6 +108,7 @@ export default function ConfirmWithCreditButtonBase({
           defaultCreateInvoice={!isFullyInvoiced}
           rectifiableInvoicesUrl={rectifiableInvoicesUrl}
           token={token}
+          periodDate={documentPeriodDate(data)}
           title={confirmModalTitle}
           docInfo={{ bpName: data?.['businessPartner$_identifier'], documentNo: data?.documentNo }}
           infoRowPre={infoRowPre}
@@ -124,6 +135,7 @@ export default function ConfirmWithCreditButtonBase({
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
+          title={createInvoiceModalTitle}
           token={token}
           rectifiableInvoicesUrl={rectifiableInvoicesUrl}
           onConfirm={(_priceListId, originInvoices) => handleCreateReturnInvoice(originInvoices)}
@@ -133,11 +145,8 @@ export default function ConfirmWithCreditButtonBase({
       )}
       {result && createPortal(
         <ConfirmResultModal
-          title={result.title}
           docs={result.docs}
-          currency={currency}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
-          primary={result.docs.length > 0 ? ui('soViewInvoice') : undefined}
           onClose={() => {
             setResult(null);
             setTimeout(() => {

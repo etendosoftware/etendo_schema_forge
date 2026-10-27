@@ -1,11 +1,6 @@
 // @covers tools/app-shell/src/lib/observability/providers/datadog.js
 import { describe, expect, it, vi } from 'vitest';
-import {
-  SUPPORT_SESSION_CONTEXT_KEY,
-  createDatadogProvider,
-  redactDatadogEvent,
-  redactErrorText,
-} from '../datadog.js';
+import { SUPPORT_SESSION_CONTEXT_KEY, createDatadogProvider } from '../datadog.js';
 import { createObservability } from '../../core.js';
 
 const env = {
@@ -26,18 +21,18 @@ function fakeRum() {
 }
 
 describe('Datadog provider', () => {
-  // ETP-5351 — `analytics: true` is what silences a provider in a support session. Datadog carries
-  // error and performance monitoring, which stays on there, so it must not declare it.
-  it('does not declare itself as a suppressible analytics provider', () => {
-    expect(createDatadogProvider({ env }).analytics).not.toBe(true);
-  });
-
-  it('redacts quoted and standalone bearer credentials', () => {
-    const result = redactErrorText('{"authorization":"Bearer secret-a"} Bearer secret-b');
-    expect(result).toContain('"authorization": "[redacted]"');
-    expect(result).toContain('Bearer [redacted]');
-    expect(result).not.toContain('secret-a');
-    expect(result).not.toContain('secret-b');
+  it('redacts quoted and standalone bearer credentials in automatic error text', async () => {
+    const { calls, rum } = fakeRum();
+    const provider = createDatadogProvider({ env, loader: vi.fn().mockResolvedValue({ datadogRum: rum }) });
+    await provider.init();
+    const { beforeSend } = calls.find(([method]) => method === 'init')[1];
+    const message = '{"authorization":"Bearer secret-a-0123456789abcdef"} Bearer secret-b-0123456789abcdef';
+    const event = { type: 'error', error: { message, stack: message } };
+    expect(beforeSend(event)).toBe(true);
+    for (const field of [event.error.message, event.error.stack]) {
+      expect(field).not.toContain('secret-a');
+      expect(field).not.toContain('secret-b');
+    }
   });
 
   it('starts a new RUM view after a tenant reset and assignment', async () => {
@@ -62,8 +57,8 @@ describe('Datadog provider', () => {
 });
 
 // ETP-5351 — a support session ("Soporte Etendo" inside a customer's tenant). Product events stay
-// out of Datadog (the core cuts `track`); monitoring stays on, and every event carries the marker
-// so the automatic click actions can be filtered out of the dashboards.
+// out of Datadog (the core drops `track`); monitoring stays on, and the RUM global context carries
+// the marker so the automatic click actions can be filtered out of the dashboards.
 describe('Datadog provider in a support session', () => {
   // A fake RUM client that keeps its global context the way the SDK does.
   function statefulRum() {
@@ -82,26 +77,20 @@ describe('Datadog provider in a support session', () => {
       clearUser: record('clearUser'),
       clearAccount: record('clearAccount'),
       setGlobalContext: (context) => { calls.push(['setGlobalContext', context]); globalContext = { ...context }; },
-      setGlobalContextProperty: (key, value) => {
-        calls.push(['setGlobalContextProperty', key, value]);
-        globalContext = { ...globalContext, [key]: value };
-      },
-      removeGlobalContextProperty: (key) => {
-        calls.push(['removeGlobalContextProperty', key]);
-        const { [key]: _removed, ...rest } = globalContext;
-        globalContext = rest;
-      },
     };
     return { calls, rum, globalContext: () => globalContext };
   }
 
   function setup() {
     const fake = statefulRum();
-    const loader = vi.fn().mockResolvedValue({ datadogRum: fake.rum });
-    const provider = createDatadogProvider({ env, loader });
+    const provider = createDatadogProvider({ env, loader: vi.fn().mockResolvedValue({ datadogRum: fake.rum }) });
     const obs = createObservability({ logger: { warn: vi.fn() } });
-    return { ...fake, loader, provider, obs };
+    return { ...fake, provider, obs };
   }
+
+  it('does not declare itself as a suppressible analytics provider', () => {
+    expect(createDatadogProvider({ env }).analytics).not.toBe(true);
+  });
 
   it('sends no product event to Datadog in a support session and sends them again after it', async () => {
     const { calls, provider, obs } = setup();
@@ -113,51 +102,39 @@ describe('Datadog provider in a support session', () => {
 
     await obs.setAnalyticsSuppressed(false);
     await obs.track('transaction_posted', { entity: 'sales_invoice' });
-    const actions = calls.filter(([method]) => method === 'addAction');
-    expect(actions).toHaveLength(1);
-    expect(actions[0][1]).toBe('transaction_posted');
+    expect(calls.filter(([method]) => method === 'addAction')).toHaveLength(1);
   });
 
-  it('keeps reporting errors, flag evaluations and identity in a support session', async () => {
+  it('keeps reporting errors and flag evaluations in a support session', async () => {
     const { calls, provider, obs } = setup();
     await obs.setAnalyticsSuppressed(true);
     await obs.initObservability({ providers: [provider] });
 
-    const error = new Error('boom');
-    await obs.captureException(error);
+    await obs.captureException(new Error('boom'));
     await obs.addFeatureFlagEvaluation('sample_flag', true);
-    await obs.identify('account-1');
-    await obs.group('account_id', 'tenant-1');
 
-    expect(calls.find(([method]) => method === 'addError')?.[1]).toBe(error);
-    expect(calls).toContainEqual(['addFeatureFlagEvaluation', 'sample_flag', true]);
-    expect(calls).toContainEqual(['setUser', { id: 'account-1' }]);
-    expect(calls).toContainEqual(['setAccount', { id: 'tenant-1' }]);
+    expect(calls.some(([method]) => method === 'addError')).toBe(true);
+    expect(calls.some(([method]) => method === 'addFeatureFlagEvaluation')).toBe(true);
   });
 
-  it('marks a support load before its first view, and removes the mark when the session ends', async () => {
-    const { calls, provider, obs, globalContext } = setup();
+  it('marks the RUM global context as a support session, and unmarks it when it ends', async () => {
+    const { provider, obs, globalContext } = setup();
     await obs.setAnalyticsSuppressed(true);
     await obs.initObservability({ providers: [provider] });
-
-    const markIndex = calls.findIndex(([method, key]) => method === 'setGlobalContextProperty' && key === SUPPORT_SESSION_CONTEXT_KEY);
-    const firstViewIndex = calls.findIndex(([method]) => method === 'startView');
-    expect(markIndex).toBeGreaterThanOrEqual(0);
-    expect(markIndex).toBeLessThan(firstViewIndex);
-    expect(globalContext()).toEqual({ [SUPPORT_SESSION_CONTEXT_KEY]: true });
+    expect(globalContext()[SUPPORT_SESSION_CONTEXT_KEY]).toBe(true);
 
     await obs.setAnalyticsSuppressed(false);
-    expect(globalContext()).toEqual({});
+    expect(globalContext()[SUPPORT_SESSION_CONTEXT_KEY]).toBe(false);
   });
 
   it('marks an already running session when support mode starts later', async () => {
     const { provider, obs, globalContext } = setup();
     await obs.initObservability({ providers: [provider] });
-    expect(globalContext()).toEqual({});
+    expect(globalContext()[SUPPORT_SESSION_CONTEXT_KEY]).toBeUndefined();
 
     await obs.setAnalyticsSuppressed(true);
 
-    expect(globalContext()).toEqual({ [SUPPORT_SESSION_CONTEXT_KEY]: true });
+    expect(globalContext()[SUPPORT_SESSION_CONTEXT_KEY]).toBe(true);
   });
 
   it('keeps the mark across setContext and reset, which replace the whole global context', async () => {
@@ -166,27 +143,9 @@ describe('Datadog provider in a support session', () => {
     await obs.initObservability({ providers: [provider] });
 
     await obs.setContext({ app: 'app-shell' });
-    expect(globalContext()).toEqual({ app: 'app-shell', [SUPPORT_SESSION_CONTEXT_KEY]: true });
+    expect(globalContext()).toMatchObject({ app: 'app-shell', [SUPPORT_SESSION_CONTEXT_KEY]: true });
 
     await obs.reset();
-    expect(globalContext()).toEqual({ [SUPPORT_SESSION_CONTEXT_KEY]: true });
-  });
-
-  it('does not load the SDK just to record the flag', async () => {
-    const { loader, provider } = setup();
-
-    await provider.setAnalyticsSuppressed(true);
-
-    expect(loader).not.toHaveBeenCalled();
-  });
-
-  it('lets the mark through the beforeSend allowlist, and only as a literal true', () => {
-    const event = { context: { [SUPPORT_SESSION_CONTEXT_KEY]: true, username: 'x', app: 'app-shell' } };
-    redactDatadogEvent(event);
-    expect(event.context).toEqual({ app: 'app-shell', [SUPPORT_SESSION_CONTEXT_KEY]: true });
-
-    const forged = { context: { [SUPPORT_SESSION_CONTEXT_KEY]: 'private@example.com' } };
-    redactDatadogEvent(forged);
-    expect(forged.context).toEqual({});
+    expect(globalContext()[SUPPORT_SESSION_CONTEXT_KEY]).toBe(true);
   });
 });

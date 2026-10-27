@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
@@ -27,6 +27,7 @@ import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackS
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { notifySaveBlock } from '@/lib/saveBlockSignal.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
@@ -248,7 +249,12 @@ export async function extractErrorMessage(res, ui) {
             }
 
             const raw = decoded.replace(/\s+/g, ' ').trim();
-            return translateBackendError(raw, ui) || raw;
+            // ETP-5692 — the body's identity rides along: the invoice write fence answers in
+            // English plus `messageKeys`, and only the key can be translated.
+            return translateBackendError(raw, ui, {
+                messageKeys: extractBackendMessageKeys(data),
+                messageParams: extractBackendMessageParams(data),
+            }) || raw;
         };
 
 
@@ -273,6 +279,16 @@ export async function extractErrorMessage(res, ui) {
     } catch { /* body not JSON */
     }
     return `${translate('error', 'Error')} ${res.status}`;
+}
+
+// ETP-5577 — a refusal's `messageKeys`, read from a clone so the body stays readable. Never
+// throws: a response that cannot be cloned or parsed simply has no keys.
+export async function readMessageKeys(res) {
+    try {
+        return extractBackendMessageKeys(await res.clone().json());
+    } catch {
+        return undefined;
+    }
 }
 
 const BATCH_SIZE = 75;
@@ -1043,12 +1059,13 @@ export async function saveWithReadOnlyFieldRetry(apiFetch, url, method, payload,
  */
 const SAVE_CONFLICT_TOAST_ID = 'etgo-save-conflict';
 
-export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord) {
+export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord, record) {
     // ETP-3894: parse a structured MISSING_REQUIRED_FIELDS 400 from the backend so
     // the UI can highlight the missing fields. Falls back to the regular error
     // extraction for any other error shape.
     let backendFieldErrors = null;
     let staleConflict = false;
+    let messageKeys;
     try {
         const cloned = res.clone();
         const body = await cloned.json();
@@ -1062,7 +1079,10 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
         // Keyed off the machine-readable discriminator, never the status alone — a duplicate-key
         // rejection is also a 409 and its remedy is the opposite (change your data, not your
         // baseline).
-        staleConflict = body?.error === 'stale_record';
+        // Both shapes: flat IMP-5 `{error:"stale_record"}` and nested `{error:{code}}` (ETP-5782).
+        staleConflict = extractBackendErrorCode(body) === 'stale_record';
+        // ETP-5577 — read here: the body is consumed below, so a later clone() would fail.
+        messageKeys = extractBackendMessageKeys(body);
     } catch {
         // ignore — fall through to the legacy extractor
     }
@@ -1100,7 +1120,12 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
     }
     const msg = await extractErrorMessage(res, ui);
     setSaveError(msg);
-    toast.error(msg);
+    // ETP-5577 — a save refused for the document's period (GL_JOURNAL's trigger) offers the
+    // calendar, opened on the fiscal year of the record's date.
+    const recovery = periodNotAvailableToastOptions(messageKeys, ui,
+        { date: documentPeriodDate(record) });
+    if (Object.keys(recovery).length > 0) toast.error(msg, recovery);
+    else toast.error(msg);
 }
 
 export function getSaveSuccessMessage(isNew, ui) {
@@ -1449,6 +1474,27 @@ export function useEntity(entity, childEntity, {
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
         return queryParams;
     }, [sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter]);
+
+    /**
+     * The filter layers of the list query as a plain URL-params string, WITHOUT sort or paging
+     * and without the column filters named in `excludeKeys` (ETP-5561). Feeds the options of a
+     * column's filter dropdown so they reflect the current view (subset tab, date range,
+     * advanced filter, other column filters) while leaving out the dropdown's own filter —
+     * otherwise picking one option would collapse the list to that option.
+     *
+     * Returns a string so callers can use it as a dependency: its content only changes when
+     * the filters do.
+     */
+    const buildDistinctQuery = useCallback((excludeKeys = []) => {
+        const skip = new Set(excludeKeys || []);
+        const filters = {};
+        for (const [key, parsed] of Object.entries(columnFilters || {})) {
+            if (!skip.has(key)) filters[key] = parsed;
+        }
+        const queryParams = new URLSearchParams();
+        applyFilterParams(queryParams, baseFilter, filters, columnDefs, trailingFilter);
+        return queryParams.toString();
+    }, [baseFilter, columnFilters, columnDefs, trailingFilter]);
 
     // Shared list loader. `force=false` (mount) reuses a fresh cached page;
     // `force=true` (explicit refresh) always reaches the backend.
@@ -2220,7 +2266,7 @@ export function useEntity(entity, childEntity, {
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
-                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, discardChangesAndReload);
+                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, discardChangesAndReload, editing);
                 return null;
             }
         } catch (err) {
@@ -2503,6 +2549,8 @@ export function useEntity(entity, childEntity, {
             timeout: 0,
         });
         if (!res.ok) {
+            // ETP-5577: the refusal's identity, read before extractErrorMessage consumes the body.
+            const messageKeys = await readMessageKeys(res);
             const msg = await extractErrorMessage(res, ui);
             // ETP-5024: same routing as handleProcess above — a BP-on-hold refusal of the
             // draft-mode Complete flow becomes a persistent banner, not a toast.
@@ -2512,7 +2560,10 @@ export function useEntity(entity, childEntity, {
             } else {
                 // ETP-5037: same rationale as handleProcessFailure above — a long
                 // process-rejection message needs more than sonner's default 4s.
-                toast.error(msg, { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+                toast.error(msg, {
+                    duration: PROCESS_FAILURE_TOAST_DURATION_MS,
+                    ...periodNotAvailableToastOptions(messageKeys, ui, { date: documentPeriodDate(saved) }),
+                });
             }
             // A refused process may still have bumped `updated` — see refreshRecordVersion.
             await refreshRecordVersion(saved.id);
@@ -2559,7 +2610,13 @@ export function useEntity(entity, childEntity, {
     const handleProcessSuccess = useCallback((process) => {
         const specificKey = `${process.columnName ?? process.name}Completed`;
         const specificMsg = ui(specificKey);
-        const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
+        const defaultProcessCompleted = ui('processCompleted');
+        const fallbackDefault = defaultProcessCompleted !== 'processCompleted'
+            ? defaultProcessCompleted
+            : 'Process completed';
+        const fallbackMsg = process.label
+            ? `${ui(process.label) || process.label} ${ui('completed')}`
+            : fallbackDefault;
         toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
         window.dispatchEvent(new CustomEvent('neo:processSuccess', {
             detail: {
@@ -2593,6 +2650,8 @@ export function useEntity(entity, childEntity, {
     // Extracted alongside handleProcessSuccess above, same rationale — the verbatim
     // `else` body of handleProcess's `if (res.ok)`.
     const handleProcessFailure = useCallback(async (res) => {
+        // ETP-5577: the refusal's identity, read before extractErrorMessage consumes the body.
+        const messageKeys = await readMessageKeys(res);
         const msg = await extractErrorMessage(res, ui);
         // ETP-5024: a "BP on hold" Complete-time refusal must render as a persistent
         // inline banner instead of an auto-dismissing toast — skip the toast for it and
@@ -2606,7 +2665,10 @@ export function useEntity(entity, childEntity, {
             // combined multi-product insufficient-stock message) — the default sonner
             // duration (4s) isn't enough to read it. Longer, fixed duration for every
             // process-failure toast, not just this one message.
-            toast.error(msg, { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+            toast.error(msg, {
+                duration: PROCESS_FAILURE_TOAST_DURATION_MS,
+                ...periodNotAvailableToastOptions(messageKeys, ui, { date: documentPeriodDate(selected) }),
+            });
         }
         // A refused process may still have bumped `updated` — see refreshRecordVersion.
         await refreshRecordVersion(selected?.id);
@@ -2714,6 +2776,7 @@ export function useEntity(entity, childEntity, {
         // cache that the collection they just changed is no longer what it holds.
         invalidateChildrenCache,
         buildListQuery,
+        buildDistinctQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
 }
