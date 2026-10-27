@@ -62,7 +62,11 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
           className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-[11px] font-semibold"
           style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}
         >
-          <Percent size={10} strokeWidth={2.4} aria-hidden="true" />
+          <Percent
+            size={10}
+            strokeWidth={2.4}
+            aria-hidden="true"
+            data-testid="Percent__b75e6e" />
           {ui('importGlobalDiscountTag', { pct: fmtPct(pct) })}
         </span>
       );
@@ -113,7 +117,12 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
             className="flex items-start gap-2.5 px-4 py-3"
             style={{ background: 'var(--status-warning-bg)', borderTop: '1px solid var(--status-warning-border)' }}
           >
-            <AlertTriangle size={16} className="mt-px shrink-0" style={{ color: 'var(--status-warning-fg)' }} aria-hidden="true" />
+            <AlertTriangle
+              size={16}
+              className="mt-px shrink-0"
+              style={{ color: 'var(--status-warning-fg)' }}
+              aria-hidden="true"
+              data-testid="AlertTriangle__b75e6e" />
             <div>
               <strong className="block text-[13px] text-foreground">{title}</strong>
               <p className="mt-0.5 text-xs leading-normal text-foreground">
