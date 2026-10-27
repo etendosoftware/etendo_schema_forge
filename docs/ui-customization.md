@@ -3070,8 +3070,10 @@ threads `documentDateField` into the header `<Form>` calls; no generator change 
 - Options come from `GET {entity}/{id|new}/action/currencyOptions?date=yyyy-MM-dd&organization=<form org>`
   (the org scopes a NEW document's rates; a saved one uses its own org), fetched
   eagerly on load and again whenever the record or the reference date changes, plus on every
-  open. ALL selectable currencies are listed; one with no range on the date has `rate: null`
-  and shows «—» (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
+  open. Listed: the org currency plus every currency with a conversion range to or from it
+  on ANY date (client or system, document org or `0`); a currency with no range at all is not
+  offered. One whose ranges do not cover the reference date has `rate: null` and shows «—»
+  (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
   dd/mm/yyyy (`currencyRatesAtDate`, `formatCalendarDate`).
 - Selecting a currency ALWAYS stages its rate — `null` when there is no range — so neither the
   previous currency's rate nor a manual rate survives a currency change. There is no
