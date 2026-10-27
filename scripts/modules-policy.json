@@ -26,6 +26,10 @@
     { "name": "com.etendoerp.db.extended", "kind": "epic", "location": "modules", "remote": "etendosoftware/com.etendoerp.db.extended" },
     { "name": "com.etendoerp.go.template", "kind": "epic", "location": "modules", "remote": "etendosoftware/com.etendoerp.go.template" },
     { "name": "com.etendoerp.go.localization.es.data", "kind": "epic", "location": "modules", "remote": "etendosoftware/com.etendoerp.go.localization.es.data" },
+    { "name": "org.openbravo.sepa.iso20022", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.sepa.iso20022" },
+    { "name": "org.openbravo.sepa.iso20022.template", "kind": "epic", "location": "modules", "remote": "etendosoftware/org.openbravo.sepa.iso20022.template" },
+    { "name": "org.openbravo.sepa.iso20022.credittransfer.customertobank", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.sepa.iso20022.credittransfer.customertobank" },
+    { "name": "org.openbravo.sepa.iso20022.coredirectdebit.customertobank", "kind": "epic", "location": "modules", "remote": "koodu_software/org.openbravo.sepa.iso20022.coredirectdebit.customertobank" },
     { "name": "com.etendoerp.service.integration.amazon.s3", "kind": "epic", "location": "modules", "remote": "koodu_software/com.etendoerp.service.integration.amazon.s3", "optional": true },
 
     { "name": "com.etendoerp.tomcat", "kind": "usual", "location": "modules", "remote": "etendosoftware/com.etendoerp.tomcat", "optional": true },
