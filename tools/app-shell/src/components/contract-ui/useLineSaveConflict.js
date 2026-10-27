@@ -14,6 +14,7 @@
  */
 import { useCallback } from 'react';
 import { toast } from 'sonner';
+import { extractBackendErrorCode } from '@/lib/backendErrors.js';
 import { openSaveConflict, dismissSaveConflict } from '@/lib/saveConflict.js';
 import { rememberRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
 
@@ -27,7 +28,7 @@ import { rememberRecordVersion } from '@etendosoftware/app-shell-core/lib/record
 export async function isStaleRecordResponse(res) {
   try {
     const body = await res.clone().json();
-    return body?.error === 'stale_record';
+    return extractBackendErrorCode(body) === 'stale_record';
   } catch {
     return false;
   }

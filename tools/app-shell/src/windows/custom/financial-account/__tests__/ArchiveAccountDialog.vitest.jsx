@@ -91,6 +91,20 @@ describe('ArchiveAccountDialog', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('toasts the server message, not the open-reconciliation key, on a coded 409', async () => {
+    const user = userEvent.setup();
+    const err = new Error('The record is busy.');
+    err.status = 409;
+    err.code = 'retryable_conflict';
+    archiveAccount.mockRejectedValueOnce(err);
+    renderDialog();
+
+    await user.click(screen.getByTestId('archive-account-confirm'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('The record is busy.'));
+    expect(toastError).not.toHaveBeenCalledWith('financeAccountsArchiveOpenRecon');
+  });
+
   it('toasts the backend message for a non-409 failure', async () => {
     const user = userEvent.setup();
     const err = new Error('boom');

@@ -669,3 +669,7 @@ through `etendo_update` (the sales order shares them; the first applies to every
   updates the accounting date. No separate field is published; the agent prompt says so.
 
 Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP-5726 rows of §4.12.9.
+
+## Manage-documents popup title follows the pending action — ETP-5688
+
+`CreateDocsModal` (`artifacts/purchase-order/custom/PurchaseOrderActions.jsx`) used to title itself with the fixed `soManageDocsTitle` ("Generar factura") even when only the receipt was pending. The title now comes from the same `poManageDocsLabel(ui, needsReceipt, needsInvoice)` helper that labels the detail-view button: `poManageReceiptAndInvoice` ("Gestionar recepción y factura") when both are pending, `poManageInvoice` ("Gestionar factura") for invoice only, `poManageReceipt` ("Gestionar recepción") for receipt only, falling back to `soManageDocsTitle` only if the modal opens with nothing pending. It follows what is **pending** (`derived.needsReceipt` / `derived.needsInvoice`), not what the user ticked, and applies to both openers (the detail button and `ManageDocsLauncher`, used by the list-row kebab). Mirrors the Sales Order change in ETP-5525.

@@ -629,3 +629,7 @@ is (`availableNow` says so for a given record). A `post` right after completing 
 `retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
 `Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
 
+
+## "Generar factura rectificativa" title on the post-confirm invoice popup — ETP-5688
+
+The popup opened by "Crear Factura Rectificativa" on a completed (CO), not-yet-invoiced return is the shared `CreateInvoiceConfirmModal`, which was titled with the generic `soManageDocsTitle` ("Generar factura"). It now accepts an optional `title` prop (default unchanged for every other consumer); `ConfirmWithCreditButtonBase` forwards its new `createInvoiceModalTitle` prop, which this window supplies as `returnToVendor.createCreditNoteTitle` ("Generar factura rectificativa"). `cardTitle` is NOT used for this: it belongs to the draft-time `ConfirmInOutModal`, whose title ("¿Gestionar factura rectificativa?") is unchanged. The row-hover Confirmar (`ReturnToVendorShipmentRowConfirmModal`) only opens that draft-time modal, so it never shows this popup.

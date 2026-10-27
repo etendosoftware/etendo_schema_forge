@@ -1625,6 +1625,26 @@ Automated: Vitest 453 files / 9296 tests, `node --test` 2408 tests, Playwright m
 
 Observations unrelated to the change: the tax-category default shown on a new product is the System row `IVA Normal (FF808181)` (a local-data row, `IsDefault='Y'`, renamed in the DB itself); the create-product popup does not prefill `Nombre` with the lookup text.
 
+### Narrow windows: minimum content width — ETP-5696
+
+**Symptom.** On a narrow window the three checkboxes of row 3 (`Almacenable`, `Retornable`, `Activo`) overlapped, and the header fields were squeezed to a few dozen pixels.
+
+**Cause.** The header form is `<EntityForm cols={3}>` (`formCols: 3` in `decisions.json`, since ETP-4190), so it keeps 3 columns however narrow it gets. It shares its row with two blocks that never shrink — the 256 px image and the fixed 320 px stock side panel — and its grid cells use `minmax(0, 1fr)`, so the columns shrink instead of overflowing and no scrollbar ever appears. Whatever width is left is split in three: at a 900 px window with the menu collapsed each cell measured about 55 px, while `Almacenable` needs about 111 px (box + gap + label). The Price tab does not overlap because it is a table: it overflows and its container scrolls. The content column already scrolled horizontally for that table, but the header block stayed at the visible width, so scrolling right only revealed empty space.
+
+**Fix.** `tools/app-shell/src/windows/custom/product/index.jsx` passes `sidebarFormScrollPaddingX="px-2 pb-2 [&>*]:min-w-[680px]"` to `DetailView` (through `ProductPage`). That prop is the class string `DetailView` appends to its scrolling content area when the window has a side panel; `px-2 pb-2` is the default it already used, and `[&>*]:min-w-[680px]` gives the content column (header form + bottom tabs) a minimum width of 680 px. Below that the content area scrolls horizontally, like the Price table, instead of compressing the form; above it nothing changes.
+
+**Measured** (local environment): with the minimum width the header grid stays at 384 px = 3 columns of 117 px at any content width under about 700 px, with no overlap and every label whole (the tightest one, `Almacenable`, keeps 6 px to spare: it needs about 111 px). At wider windows the grid grows (3 columns of 122 px at 710 px of content, 177 px at 874 px, 395 px at 1920 px). Scrolled fully to the right, the image sits at the end of the content with no empty gap.
+
+**Why 680 px and not more.** ETP-5513 fixes 1280×720 as the minimum desktop viewport and requires that the product form area does not scroll horizontally there (`form-view-1280.mocked.spec.js`, "price columns stay inside the tab"). At that viewport the content area is about 690 px wide; a first attempt with 820 px made it scroll by 130 px and broke that spec. 680 px keeps 1280×720 free of scroll and still gives each column the 111 px its checkbox label needs.
+
+**Decisions and limits.**
+- It is a product-only change (the file is this window's own wrapper), so no other window is affected. Other windows with a fixed `formCols` and a neighbour that does not shrink can show the same squeeze (seen on `warehouse`, milder on `product-category` and `assets`); they are not changed here.
+- The class goes through `sidebarFormScrollPaddingX`, which is named for padding: a dedicated `DetailView` prop would read better but means growing `DetailView.jsx`, which the repo's growth guard blocks. `formCardPadding` does not work for this window, because `DetailView` ignores it when `linesLayout` is `inlineEditable`.
+- A `formColsResponsive` generator option (`cols` as a maximum instead of a fixed count) was prototyped and dropped: with the minimum width the grid always has room for its 3 columns.
+- The 680 px minimum also applies to the bottom tabs (Price, Cost, …), which share the column.
+
+Manual verification: open a product, narrow the window until the content area is below ~700 px; confirm a horizontal scrollbar appears under the content, the three columns and the checkboxes stay readable and separate, and scrolling right ends on the image with no blank gap.
+
 ## ETP-5680 — Tax category follows the product type
 
 The Tax Category field (`taxCategory`, `C_TaxCategory_ID`, "Grupo de impuestos") follows the Product Type live in the form: **Service (`S`) -> "IVA Normal Servicios"**; **Item (`I`), Resource (`R`), Expense (`E`) -> "IVA Normal"**. Categories are matched by `C_TaxCategory.Name` inside the tenant (own client, then the System client), active rows only.
