@@ -259,6 +259,8 @@ by client and org and, since ETP-5840, returns every selectable currency for the
 `date` it receives (`rate: null` when no range covers it) with an `isOrgCurrency`
 flag. Full reference: `docs/ui-customization.md` §22.
 
+Reopening the picker on a saved currency marks that currency with a check and centres it, and arrows start from it; picking it again just closes the panel (ETP-5948, see `docs/ui-customization.md`).
+
 ### Convertquotation — preserved prices
 
 `SalesQuotationHeaderHandler.handle()` intercepts the `Convertquotation` action
