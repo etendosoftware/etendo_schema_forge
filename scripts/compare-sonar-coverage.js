@@ -250,7 +250,6 @@ export const ANALYSED_BASE_BRANCHES = ['develop', 'main'];
 export function formatResult(result, { current, base, tolerance, minimum, label, baseBranch, context }) {
   const ci = context === 'ci';
   const again = ci ? 'then push again.' : 'then re-push.';
-  const bypass = ci ? [] : ["   Bypass with 'git push --no-verify' (WIP only)."];
   switch (result.verdict) {
     case 'no-current':
       return ci
@@ -264,7 +263,6 @@ export function formatResult(result, { current, base, tolerance, minimum, label,
           `    ${label} coverage: ${f2(current)}%`,
           `\n❌ COVERAGE BELOW MINIMUM — ${f2(current)}% < ${f2(minimum)}% required.`,
           `   Add tests until overall coverage reaches the minimum, ${again}`,
-          ...bypass,
         ],
         annotation: `Coverage ${f2(current)}% is below the ${f2(minimum)}% minimum.`,
       };
@@ -291,7 +289,6 @@ export function formatResult(result, { current, base, tolerance, minimum, label,
             : "\n❌ COVERAGE DECREASED — this push would fail Jenkins' 'Compare Coverage Results'.",
           `   ${f2(current)}% < ${f2(result.minRequired)}% (base ${f2(base)}% − ${f2(tolerance)}pp) on '${baseBranch}' (short ${f2(result.short)}pp).`,
           `   Add tests until overall coverage is >= the base (minus tolerance), ${again}`,
-          ...bypass,
         ],
         annotation: `Coverage ${f2(current)}% < ${f2(result.minRequired)}% `
           + `(${baseBranch} ${f2(base)}% − ${f2(tolerance)}pp tolerance).`,

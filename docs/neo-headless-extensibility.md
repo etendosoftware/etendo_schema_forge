@@ -203,6 +203,7 @@ handler opts in only when it needs to:
 | `servesActions()` | `false` (`true` if `actionContracts()` is non-empty) | this handler answers ACTION requests | §2.7 |
 | `actionContracts()` | empty map | which named actions it answers, with their parameters | §2.7.1 |
 | `serverResolvedCreateFields()` | empty set | which mandatory fields the server derives on create | §2.7.2 |
+| `resolveServerCreateFields(ctx)` | no-op | fills create fields **before** the MCP mandatory pre-check | §2.7.3 |
 | `protectedCreateCalloutFields(ctx)` | empty set | which caller values the create callout cascade must not overwrite | — |
 
 This is how the structure-vs-identity rule (Golden Rule) is kept: the shared MCP/REST code reads
@@ -576,6 +577,38 @@ for this declaration.
 > §4.12.3 *Selector context*.
 
 Full runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.22 (point 3).
+
+### 2.7.3 `resolveServerCreateFields(ctx)`: fill a field before the MCP pre-check (ETP-5710)
+
+The rule above leaves a gap: a field your `handle()` pre-hook fills on REST is refused on MCP
+`etendo_create`, because the mandatory pre-check runs first. This hook closes it. `etendo_create`
+calls it on the resolved customization **after** `McpBillToInjector` and **before** the mandatory
+pre-check, with a CRUD `POST` context over the live request body, so whatever it writes is what is
+validated and persisted.
+
+```java
+// AbstractInvoiceHeaderHandler (purchase-invoice / sales-invoice header)
+public void resolveServerCreateFields(NeoContext ctx) {
+  injectPartnerAddressIfMissing(ctx);   // the same default handle() applies on REST
+}
+```
+
+- **Contract:** idempotent (the later `handle()` may run the same default again), never overwrites
+  a value the caller sent, never throws for missing data. An exception is swallowed and the
+  pre-check then reports the missing field.
+- **Abstaining is part of the contract.** When the default cannot decide (e.g. a partner with
+  several invoicing addresses), leave the body untouched: the pre-check answers the usual 422
+  `missingFields` with the `etendo_selectors` hint.
+- **Not the same as `serverResolvedCreateFields()`.** Do not also declare a field there when this
+  hook can abstain: the schema would call it optional while the server can still require it.
+- **Data scope:** the MCP call runs under `OBContext.setAdminMode()`, which skips only the entity
+  access check. Keep the `OBCriteria` readable-client/organization filters on in the lookups this
+  hook runs, so another tenant's data is never found.
+
+Full runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.22 (next to
+`serverResolvedCreateFields`) and *Invoice header defaults for a write that leaves them out
+(ETP-5703)*; the documents that still diverge on `etendo_create` are listed under §4.12.9
+*Still divergent*.
 
 ---
 

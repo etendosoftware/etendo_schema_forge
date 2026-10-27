@@ -299,3 +299,230 @@ describe('useBatch — runBatch', () => {
     expect(result.current.loading).toBe(false);
   });
 });
+
+// ETP-5677 — async mode: submit, poll the job, fold the result into the envelope callers read.
+describe('useBatch — async job mode (ETP-5677)', () => {
+  const ops = [{ id: 'r0.product', spec: 'product', entity: 'product', body: {} }];
+
+  /** A scripted fetch: each call takes the next response; a function is called to build it. */
+  function script(...responses) {
+    const queue = [...responses];
+    globalThis.fetch = vi.fn(async () => {
+      const next = queue.shift();
+      if (typeof next === 'function') return next();
+      if (next instanceof Error) throw next;
+      return next;
+    });
+  }
+
+  const reply = (status, body, headers = {}) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (name) => headers[name] ?? null },
+    text: async () => JSON.stringify(body),
+  });
+
+  const accepted = reply(202, { jobId: 'J1', state: 'QUEUED', totalRows: 2, totalOps: 2 });
+  const row = (index, ok, extra = {}) => ({ index, ids: [`r${index}.product`], committed: ok, ...extra });
+
+  async function run(options = {}) {
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+    let out;
+    let thrown;
+    await act(async () => {
+      try {
+        out = await result.current.runBatch(ops, { async: true, pollIntervalMs: 0, ...options });
+      } catch (e) {
+        thrown = e;
+      }
+    });
+    return { out, thrown, result };
+  }
+
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('posts async:true and polls GET /batch/jobs/{id} until the job is done', async () => {
+    script(accepted,
+      reply(200, { jobId: 'J1', state: 'RUNNING', done: false, processedRows: 1, totalRows: 2, rows: [] }),
+      reply(200, { jobId: 'J1', state: 'SUCCEEDED', done: true, processedRows: 2, totalRows: 2, rows: [
+        row(0, true, { operations: [{ id: 'r0.product', ok: true, recordId: 'P-1' }] }),
+        row(1, true, { operations: [{ id: 'r1.product', ok: true, recordId: 'P-2' }] }),
+      ] }));
+    const onProgress = vi.fn();
+
+    const { out } = await run({ onlyReturnIds: true, onProgress });
+
+    const [submitUrl, submitOpts] = globalThis.fetch.mock.calls[0];
+    expect(submitUrl).toBe('/sws/neo/batch');
+    expect(JSON.parse(submitOpts.body)).toEqual({ operations: ops, _onlyReturnIds: true, async: true });
+    expect(globalThis.fetch.mock.calls[1][0]).toBe('/sws/neo/batch/jobs/J1');
+    expect(globalThis.fetch.mock.calls[1][1].method).toBe('GET');
+    expect(out).toEqual({ committed: true, operations: [
+      { id: 'r0.product', ok: true, recordId: 'P-1' },
+      { id: 'r1.product', ok: true, recordId: 'P-2' },
+    ] });
+    expect(onProgress.mock.calls.map(([p]) => p)).toEqual([
+      { processedRows: 1, totalRows: 2 },
+      { processedRows: 2, totalRows: 2 },
+    ]);
+  });
+
+  it('keeps per-row results of a partly rejected job and never claims an atomic rollback', async () => {
+    const rows = [
+      row(0, true, { operations: [{ id: 'r0.product', ok: true, recordId: 'P-1' }] }),
+      row(1, false, { failedAt: { id: 'r1.product', index: 0 }, error: { status: 400, message: 'bad name' } }),
+    ];
+    script(accepted, reply(200, { jobId: 'J1', state: 'PARTIAL', done: true, processedRows: 2, totalRows: 2, rows, hint: 'resend failed rows' }));
+
+    const { out } = await run();
+
+    expect(out.committed).toBe(false);
+    expect(out.partial).toBe(true);
+    expect(out.rows).toEqual(rows);
+    expect(out.error).toEqual({ status: 400, message: 'bad name' });
+    expect(out.failedAt).toEqual({ id: 'r1.product', index: 0 });
+    expect(out).not.toHaveProperty('atomic');
+    expect(out).not.toHaveProperty('persisted');
+  });
+
+  it('reports a cancelled or interrupted job with the rows it has, not as a rollback', async () => {
+    script(accepted, reply(200, { jobId: 'J1', state: 'INTERRUPTED', done: true, processedRows: 1, totalRows: 2,
+      rows: [row(0, true, { operations: [{ id: 'r0.product', ok: true, recordId: 'P-1' }] })] }));
+
+    const { out } = await run();
+
+    expect(out).toMatchObject({ committed: false, partial: true, state: 'INTERRUPTED' });
+    expect(out.rows).toHaveLength(1);
+  });
+
+  it('survives transient poll failures but gives up (outcome unknown) after five in a row', async () => {
+    script(accepted, new Error('network'), new Error('network'),
+      reply(200, { jobId: 'J1', state: 'SUCCEEDED', done: true, processedRows: 1, totalRows: 1, rows: [
+        row(0, true, { operations: [{ id: 'r0.product', ok: true, recordId: 'P-1' }] }),
+      ] }));
+    const recovered = await run();
+    expect(recovered.out.committed).toBe(true);
+
+    script(accepted, ...Array.from({ length: 5 }, () => new Error('network down')));
+    const { thrown, result } = await run();
+    expect(thrown.message).toBe('network down');
+    expect(result.current.error).toBe(thrown);
+  });
+
+  it('throws a classified error when the job vanished (404)', async () => {
+    script(accepted, reply(404, { error: { message: 'Job not found' } }));
+
+    const { thrown } = await run();
+
+    expect(thrown.messageKey).toBe('importErrorServerFailure');
+    expect(thrown.params).toEqual({ status: 404 });
+  });
+
+  it('waits out a 429 with the advertised Retry-After and resubmits instead of failing the rows', async () => {
+    vi.useFakeTimers();
+    script(reply(429, { error: { message: 'Too many' } }, { 'Retry-After': '2' }), accepted,
+      reply(200, { jobId: 'J1', state: 'SUCCEEDED', done: true, processedRows: 1, totalRows: 1, rows: [
+        row(0, true, { operations: [{ id: 'r0.product', ok: true, recordId: 'P-1' }] }),
+      ] }));
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let out;
+    await act(async () => {
+      const pending = result.current.runBatch(ops, { async: true, pollIntervalMs: 0 });
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      out = await pending;
+    });
+
+    expect(out.committed).toBe(true);
+    expect(globalThis.fetch.mock.calls[0][1].method).toBe('POST');
+    expect(globalThis.fetch.mock.calls[1][1].method).toBe('POST');
+  });
+
+  it('stops polling the moment the signal aborts, and a rejection is what the engine reads as unknown', async () => {
+    const controller = new AbortController();
+    script(accepted,
+      reply(200, { jobId: 'J1', state: 'RUNNING', done: false, processedRows: 0, totalRows: 2, rows: [] }),
+      reply(200, { jobId: 'J1', state: 'RUNNING', done: false, processedRows: 0, totalRows: 2, rows: [] }));
+    const onProgress = vi.fn(() => controller.abort());
+
+    const { thrown, result } = await run({ signal: controller.signal, onProgress, pollIntervalMs: 50 });
+
+    expect(thrown.name).toBe('AbortError');
+    expect(result.current.error).toBe(thrown);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // the submit and ONE poll
+  });
+
+  it('stops waiting out a 429 when the signal aborts, without resubmitting', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    script(reply(429, { error: { message: 'Too many' } }, { 'Retry-After': '30' }), accepted);
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let thrown;
+    await act(async () => {
+      const pending = result.current.runBatch(ops, { async: true, signal: controller.signal })
+        .catch((e) => { thrown = e; });
+      await vi.advanceTimersByTimeAsync(5000);
+      controller.abort();
+      await pending;
+    });
+
+    expect(thrown.name).toBe('AbortError');
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to start when the signal is already aborted', async () => {
+    script(accepted);
+    const controller = new AbortController();
+    controller.abort();
+
+    const { thrown } = await run({ signal: controller.signal });
+
+    expect(thrown.name).toBe('AbortError');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('after 15 minutes of 429 answers with the 429 body — a definite, retryable failure, not a hang', async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn(async () => reply(429, { error: { status: 429, message: 'Too many' } }, { 'Retry-After': '30' }));
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let out;
+    await act(async () => {
+      const pending = result.current.runBatch(ops, { async: true });
+      await vi.advanceTimersByTimeAsync(16 * 60 * 1000);
+      out = await pending;
+    });
+
+    expect(out.error.status).toBe(429);
+    expect(globalThis.fetch.mock.calls.length).toBeGreaterThan(20);
+  });
+
+  it('returns a synchronous answer as it is when the server does not know async', async () => {
+    const sync = { committed: true, operations: [{ id: 'r0.product', ok: true, recordId: 'P-1' }] };
+    script(reply(200, sync));
+
+    const { out } = await run();
+
+    expect(out).toEqual(sync);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a refused submit (400) like a synchronous refusal: the body, no polling', async () => {
+    script(reply(400, { error: { status: 400, message: 'operations[0].id duplicates an earlier op' } }));
+
+    const { out } = await run();
+
+    expect(out.error.status).toBe(400);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send async unless the caller asks (the synchronous contract is unchanged)', async () => {
+    script(reply(200, { committed: true, operations: [] }));
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+    await act(async () => { await result.current.runBatch(ops); });
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toEqual({ operations: ops });
+  });
+});

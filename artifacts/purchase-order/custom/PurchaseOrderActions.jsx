@@ -11,7 +11,7 @@ import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
@@ -266,9 +266,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     const needsReceipt = needsPrimaryDoc ?? (qtyPending !== 0 && receiptsDraft.length === 0);
     const needsInvoice = needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft);
 
-    if      (needsReceipt && needsInvoice) buttonLabel = ui('poManageReceiptAndInvoice');
-    else if (needsReceipt)                 buttonLabel = ui('poManageReceipt');
-    else if (needsInvoice)                 buttonLabel = ui('poManageInvoice');
+    buttonLabel = poManageDocsLabel(ui, needsReceipt, needsInvoice);
 
     derived = {
       receiptsComplete, invoicesComplete,
@@ -445,8 +443,12 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          const rawMsg = e?.response?.message || e?.message || `Error (${processRes.status})`;
-          throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('soNoLinesError') : rawMsg);
+          const rawMsg = e?.error?.message || e?.response?.message || e?.message || `Error (${processRes.status})`;
+          // ETP-5840 — translated from the refusal's identity (e.g. the missing exchange rate);
+          // an unkeyed refusal still shows the backend's own sentence.
+          throw new Error(rawMsg.includes('@OrderWithoutLines@')
+            ? ui('soNoLinesError')
+            : translateBackendErrorBody(e, ui, rawMsg));
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
@@ -764,6 +766,17 @@ function invoiceRefusalRecovery(err, ui) {
   return periodNotAvailableToastOptions(err?.messageKeys, ui, { date: todayCalendarISO() });
 }
 
+// ETP-5688 — ONE owner for the "Gestionar …" wording: the detail button's label and the
+// CreateDocsModal title it opens are the same string (mirrors manageDocsLabel in sales-order's
+// OrderCreateInvoice.jsx), so a receipt-only order no longer opens a dialog titled "Generar
+// factura". Follows what is PENDING, not what the user ticked. Null when nothing is pending.
+export const poManageDocsLabel = (ui, needsReceipt, needsInvoice) => {
+  if (needsReceipt && needsInvoice) return ui('poManageReceiptAndInvoice');
+  if (needsReceipt) return ui('poManageReceipt');
+  if (needsInvoice) return ui('poManageInvoice');
+  return null;
+};
+
 export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
   const apiFetch = useApiFetch('');
   const ui = useUI();
@@ -859,7 +872,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {ui('soManageDocsTitle')}
+            {poManageDocsLabel(ui, needsReceipt, needsInvoice) ?? ui('soManageDocsTitle')}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
         </div>

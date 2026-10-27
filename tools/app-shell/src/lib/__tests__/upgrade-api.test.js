@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/upgrade/api.js
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -11,7 +12,6 @@ import {
   createBillingPurchase,
   createCheckoutSession,
   fetchPlans,
-  getBillingOffer,
   getBillingOverview,
   getBillingPurchase,
   getCheckoutStatus,
@@ -152,7 +152,6 @@ describe('the module surface', () => {
       'createPortalSession',
       'createSubscriptionReactivation',
       'fetchPlans',
-      'getBillingOffer',
       'getBillingOverview',
       'getBillingPurchase',
       'getCheckoutStatus',
@@ -773,24 +772,6 @@ describe('the account billing reads', () => {
     assert.deepEqual(await getBillingOverview(''), { purchases: [] });
   });
 
-  it('reads the server-owned billing offer', async () => {
-    declareCookieSession();
-    const stripeOffer = { code: 'productive-tenant', amountMinor: 1000, currency: 'USD', interval: 'year' };
-    installFetch(jsonResponse(stripeOffer));
-
-    const result = await getBillingOffer('https://api.test');
-
-    assert.deepEqual(result, stripeOffer);
-    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/offers');
-  });
-
-  it('does not invent amount or interval when the billing offer omits them', async () => {
-    declareCookieSession();
-    installFetch(jsonResponse({ currency: 'EUR' }));
-
-    assert.deepEqual(await getBillingOffer('https://api.test'), { currency: 'EUR' });
-  });
-
   it('escapes the purchase id into the path', async () => {
     declareCookieSession();
     installFetch(jsonResponse({ purchaseId: 'purchase/1', status: 'CREATED' }));
@@ -817,7 +798,6 @@ describe('the account billing reads', () => {
   // with a test.
   for (const [name, call] of [
     ['getBillingOverview', () => getBillingOverview('https://api.test')],
-    ['getBillingOffer', () => getBillingOffer('https://api.test')],
     ['getBillingPurchase', () => getBillingPurchase('https://api.test', 'purchase-1')],
     ['getSubscription', () => getSubscription('https://api.test')],
   ]) {

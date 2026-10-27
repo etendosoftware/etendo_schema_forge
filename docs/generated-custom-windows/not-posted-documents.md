@@ -448,7 +448,7 @@ and what "Share" copies always agree.
 `SI` sales-invoice, `PI` purchase-invoice, `GS` goods-shipment, `GR` goods-receipt, `RMR`
 return-material-receipt, `RVS` return-to-vendor-shipment, `INV` physical-inventory, `M`
 goods-movements, `MI` matched-purchase-invoices, `IC` internal-consumption, `GLJ`
-simple-g-l-journal, `A` amortization — route `/{spec}/{documentId}` (each window's header table is
+manual-journals, `A` amortization — route `/{spec}/{documentId}` (each window's header table is
 the posting table). `T` (transaction) opens `/financial-account/{financialAccountId}`. Any other
 code, or a missing id, shows no link. It opens in the same tab; Back restores the filters.
 

@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+// @covers tools/app-shell/src/components/contract-ui/toolbarClasses.js
 //
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //
@@ -67,6 +68,7 @@ import {
   isDangerProcess,
   panelEditing,
 } from '../detailViewHelpers.jsx';
+import * as sharedToolbarClasses from '../toolbarClasses.js';
 
 describe('evalDisplayLogicRaw', () => {
   it('defaults to visible when there is no expression or no parseable clause', () => {
@@ -423,20 +425,16 @@ describe('class-name and small value helpers', () => {
     expect(getInlineEditableShrinkClassName('table')).toBe('');
   });
 
-  it('uses one constant record-toolbar class: p-2 plus the inset bottom rule, no border-b', () => {
-    const cls = getLinesToolbarClassName();
-    expect(cls).toContain('p-2');
-    expect(cls).toContain('shadow-[inset_0_-1px_0_var(--status-neutral-border)]');
-    expect(cls).not.toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', true)).toBe(cls);
+  // The class strings themselves are tested in toolbarClasses.vitest.js (ETP-5736 moved them there).
+  it('re-exports the shared record-toolbar classes', () => {
+    expect(getLinesToolbarClassName).toBe(sharedToolbarClasses.getLinesToolbarClassName);
+    expect(getSaveBtnCls).toBe(sharedToolbarClasses.getSaveBtnCls);
   });
 
-  it('always sizes square buttons h-10 w-10 and the save button h-10', () => {
+  it('always sizes square buttons h-10 w-10', () => {
     expect(getSqBtnSize()).toBe('h-10 w-10');
     expect(getSqBtnSize('default')).toBe('h-10 w-10');
     expect(getSqBtnSize('sm')).toBe('h-10 w-10');
-    expect(getSaveBtnCls()).toContain('h-10');
-    expect(getSaveBtnCls('sm')).toContain('h-10');
   });
 
   it('stacks the side panel below the content until lg', () => {
