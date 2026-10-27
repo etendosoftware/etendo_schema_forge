@@ -10,6 +10,10 @@ import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { parseCalendarDate, formatCalendarDate } from '@/lib/dateOnly.js';
+import {
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
+} from './selectorSelection.js';
+import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
 // ETP-5479: the Moneda field must look and behave exactly like the field it replaces.
 // In every window NOT matched by EntityForm's isCurrencyRateSelectorField (e.g. Albaranes)
@@ -146,8 +150,11 @@ export function CurrencyRatePicker({
   const [loading, setLoading] = useState(false);
   const [editingRate, setEditingRate] = useState(false);
   const [rateInput, setRateInput] = useState('');
+  const [activeIdx, setActiveIdx] = useState(-1);
   const containerRef = useRef(null);
   const searchRef = useRef(null);
+  const listRef = useRef(null);
+  const interactedRef = useRef(false);
 
   const recordId = formData?.id;
   const hasRecord = recordId && recordId !== 'new';
@@ -210,8 +217,34 @@ export function CurrencyRatePicker({
   const filtered = options.filter(o =>
     !search || o.isoCode.toLowerCase().includes(search.toLowerCase()),
   );
+  // ETP-5948 — a stored currency the list no longer offers (no rate range at all, or inactive) is
+  // pinned on top with the ISO the form already holds, so reopening still shows what is selected.
+  const pinned = !search && value && !loading ? [{ id: value, isoCode: displayValue || value }] : [];
+  const rows = prependCurrentSelection(filtered, pinned, value);
+  const selectedIndex = resolveSelectedIndex(rows, value);
+  const optionId = (opt) => `${field.key}-currency-option-${opt.id}`;
+
+  useEffect(() => { setActiveIdx(-1); }, [open, search]);
+
+  // ETP-5948 — the ETP-5903 reopen behaviour; the list is not paged, so only the centring applies.
+  useLocateCommittedValue({
+    open, query: search, value, dropdownRef: listRef, interactedRef, paged: false,
+    panelLoading: loading, selectedIndex, renderedCount: rows.length,
+  });
+
+  useEffect(() => {
+    if (activeIdx < 0) return;
+    listRef.current?.querySelector(`[data-option-index="${activeIdx}"]`)?.scrollIntoView?.({ block: 'nearest' });
+  }, [activeIdx]);
 
   const handleSelect = useCallback((opt) => {
+    // ETP-5948 — re-picking the current currency changes nothing: restaging its rate would wipe a
+    // manual rate, or (for a pinned currency with no rate) leave one the save refuses.
+    if (opt.id === value) {
+      setOpen(false);
+      setSearch('');
+      return;
+    }
     // Stage currency change
     onChange(field.key, opt.id, field.column);
     onChange(field.key + '$_identifier', opt.isoCode);
@@ -221,7 +254,20 @@ export function CurrencyRatePicker({
     onChange('eTGOCurrencyRate', opt.rate ?? null, 'EM_ETGO_Currency_Rate');
     setOpen(false);
     setSearch('');
-  }, [field, onChange]);
+  }, [field, onChange, value]);
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Escape') { setOpen(false); return; }
+    interactedRef.current = true;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      setActiveIdx(i => nextActiveIndex(i, arrowStartIndexFor(search, selectedIndex), delta, rows.length));
+    } else if (e.key === 'Enter' && activeIdx >= 0 && rows[activeIdx]) {
+      e.preventDefault();
+      handleSelect(rows[activeIdx]);
+    }
+  };
 
   const handleRateEdit = useCallback((e) => {
     e.stopPropagation();
@@ -418,8 +464,9 @@ export function CurrencyRatePicker({
               placeholder={ui('currencyRateSearchPlaceholder')}
               className="w-full text-sm bg-transparent outline-none placeholder:text-muted-foreground"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+              onChange={(e) => { interactedRef.current = true; setSearch(e.target.value); }}
+              onKeyDown={handleSearchKeyDown}
+              aria-activedescendant={activeIdx >= 0 && rows[activeIdx] ? optionId(rows[activeIdx]) : undefined}
             />
           </div>
           {rateDate && (
@@ -429,29 +476,46 @@ export function CurrencyRatePicker({
               {ui('currencyRatesAtDate', { date: formatCalendarDate(rateDate) })}
             </div>
           )}
-          <div className="max-h-56 overflow-y-auto py-1">
+          <div className="max-h-56 overflow-y-auto py-1" role="listbox" ref={listRef}>
             {loading && (
               <div className="px-3 py-2 text-xs text-muted-foreground" data-testid={"Loading__" + field.id}>
                 {ui('loading')}
               </div>
             )}
-            {!loading && filtered.length === 0 && (
+            {!loading && rows.length === 0 && (
               <div className="px-3 py-2 text-sm text-muted-foreground text-center">
                 {ui('noResults')}
               </div>
             )}
             {!loading &&
-              filtered.map((opt) => (
+              rows.map((opt, idx) => {
+                // ETP-5948 — the ETP-5903 contract: ✓ + aria-selected mark the COMMITTED currency;
+                // the keyboard highlight is data-highlighted (exposed via aria-activedescendant).
+                const isSelected = idx === selectedIndex;
+                const isHighlighted = idx === activeIdx;
+                return (
                 <button
                   key={opt.id}
+                  id={optionId(opt)}
                   type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  data-option-index={idx}
+                  data-testid={`currency-rate-option-${opt.id}`}
+                  {...(isHighlighted ? { 'data-highlighted': 'true' } : {})}
                   className={[
                     'w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted text-left transition-colors',
-                    opt.id === value ? 'bg-muted/60 font-medium' : '',
+                    isHighlighted ? 'bg-muted' : '',
+                    isSelected ? 'font-medium' : '',
                   ].join(' ')}
                   onClick={() => handleSelect(opt)}
                 >
-                  <span>{opt.isoCode}</span>
+                  <span className="flex items-center gap-1.5">
+                    {isSelected
+                      ? <Check className="h-3.5 w-3.5 text-primary shrink-0" data-testid="currency-rate-option-check" />
+                      : <span className="w-3.5 shrink-0" />}
+                    {opt.isoCode}
+                  </span>
                   {opt.rate == null && !opt.isOrgCurrency ? (
                     <span
                       className="text-muted-foreground ml-3"
@@ -465,7 +529,8 @@ export function CurrencyRatePicker({
                     </span>
                   )}
                 </button>
-              ))}
+                );
+              })}
           </div>
         </div>
       )}
