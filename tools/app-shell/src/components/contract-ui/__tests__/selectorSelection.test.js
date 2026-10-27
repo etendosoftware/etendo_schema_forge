@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   LOCATE_SELECTION_MAX_PAGES, resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
   hasCommittedValue,
-  shouldKeepLocating, centerOptionInPanel, committedItemFromRow,
+  shouldKeepLocating, centerOptionInPanel, committedItemFromRow, pinSearchTerms,
 } from '../selectorSelection.js';
 
 const ROWS = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
@@ -125,4 +125,12 @@ test('committedItemFromRow skips empty targets and works without mappings', () =
 test('committedItemFromRow is null without a committed value', () => {
   assert.equal(committedItemFromRow({ onSelectMappings: [] }, {}, ''), null);
   assert.equal(committedItemFromRow({ onSelectMappings: [] }, {}, null), null);
+});
+
+test('pinSearchTerms tries the full label, then the segment before the first " - "', () => {
+  assert.deepEqual(pinSearchTerms('60000000 - Compras de mercaderías'), ['60000000 - Compras de mercaderías', '60000000']);
+  assert.deepEqual(pinSearchTerms('A - B - C'), ['A - B - C', 'A']);
+  assert.deepEqual(pinSearchTerms('TestProduct'), ['TestProduct']);
+  assert.deepEqual(pinSearchTerms(''), []);
+  assert.deepEqual(pinSearchTerms(null), []);
 });

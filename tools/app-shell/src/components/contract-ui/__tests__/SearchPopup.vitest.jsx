@@ -222,6 +222,16 @@ describe('SearchPopup — committed value (ETP-5948)', () => {
     expect(screen.getAllByRole('option')).toHaveLength(181);
   });
 
+  // The backend matches each identifier column on its own, so "<code> - <name>" as a whole finds
+  // nothing (seen live on the product account popup); the code alone does.
+  it('retries the pin with the code segment when the full "code - name" label finds nothing', async () => {
+    const loadPage = pager(1000);
+    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500 - Compras de mercaderías' });
+
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-500'));
+    expect(labelLookups(loadPage).map(([q]) => q)).toEqual(['Account 0500 - Compras de mercaderías', 'Account 0500']);
+  });
+
   it('stops walking when a page fails, without retrying it', async () => {
     const loadPage = pager(1000, { failAt: 60 });
     renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });

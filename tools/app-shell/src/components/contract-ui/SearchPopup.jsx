@@ -4,7 +4,7 @@ import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue, pinSearchTerms,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
@@ -175,10 +175,16 @@ export function SearchPopup({
     // or open is dropped.
     const attempt = {};
     pinAttemptedRef.current = attempt;
-    Promise.resolve(loadPageRef.current(valueLabel, 0, new AbortController().signal))
-      .then(({ items = [] } = {}) => {
-        if (pinAttemptedRef.current === attempt) setPinned(items.filter((o) => String(o.id) === String(value)));
-      })
+    const lookup = async () => {
+      for (const term of pinSearchTerms(valueLabel)) {
+        const { items = [] } = (await loadPageRef.current(term, 0, new AbortController().signal)) ?? {};
+        const match = items.filter((o) => String(o.id) === String(value));
+        if (match.length || pinAttemptedRef.current !== attempt) return match;
+      }
+      return [];
+    };
+    lookup()
+      .then((match) => { if (pinAttemptedRef.current === attempt) setPinned(match); })
       .catch(() => {});
     return undefined;
   }, [open, locateDone, searching, value, valueLabel, options]);

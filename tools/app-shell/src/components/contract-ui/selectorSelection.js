@@ -121,3 +121,18 @@ export function committedItemFromRow(field, row, value) {
   }
   return item;
 }
+
+/**
+ * ETP-5948 — search terms for pinning a committed value by its label: the label itself, then the
+ * segment before the first ` - ` (the AD identifier separator). Selector search matches each
+ * identifier column on its own, so a `"<code> - <name>"` label like an account's finds nothing
+ * as a whole, while its code does.
+ *
+ * @param {string} label The committed value's display label.
+ * @returns {string[]} One or two distinct, non-empty terms, in the order to try them.
+ */
+export function pinSearchTerms(label) {
+  const full = String(label ?? '').trim();
+  const head = full.split(' - ')[0].trim();
+  return [...new Set([full, head])].filter(Boolean);
+}

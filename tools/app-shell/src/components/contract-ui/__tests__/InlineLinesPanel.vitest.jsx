@@ -1154,11 +1154,17 @@ describe('InlineLinesPanel', () => {
   });
 
   // ETP-5948 — the line's committed value reaches the lookup drawer, which opens marked on it.
-  it('hands the line value and its label to the lookup drawer', async () => {
+  // Generated grid columns carry no onSelectMappings: the inline commit reads them from the entry
+  // fields (addRow.fields), so the committed item must be rebuilt from there too.
+  const LOC_MAPPINGS = [{ from: '_aux._LOC', to: 'storageBin' }];
+  it.each([
+    ['the column', { onSelectMappings: LOC_MAPPINGS }, undefined],
+    ['the entry fields (addRow.fields)', {}, { fields: [{ key: 'accountingCombination', onSelectMappings: LOC_MAPPINGS }] }],
+  ])('hands the line value and its label to the lookup drawer, mappings from %s', async (_label, columnExtra, addRow) => {
     const columns = [{
       key: 'accountingCombination', label: 'Account', type: 'selector',
       column: 'C_ValidCombination_ID', lookup: true, lookupDrawer: 'account',
-      onSelectMappings: [{ from: '_aux._LOC', to: 'storageBin' }],
+      ...columnExtra,
     }];
     const rows = [{ id: 'AC2', accountingCombination: 'VC9', accountingCombination$_identifier: '572 - Bancos', storageBin: 'LOC-7' }];
     render(
@@ -1173,6 +1179,7 @@ describe('InlineLinesPanel', () => {
         onSelectionChange={vi.fn()}
         onUpdateRow={vi.fn().mockResolvedValue()}
         onDeleteRow={vi.fn().mockResolvedValue()}
+        addRow={addRow}
       />,
     );
     const row = screen.getByTestId('line-row-AC2');
