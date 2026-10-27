@@ -9,6 +9,38 @@ import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { uniqueValidCif } from '../../helpers/tax-id.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 
+/**
+ * Contacts import category resolution — live Tomcat backend (E2E_USE_MOCK=0).
+ *
+ * The category rule follows the `contact-category-type` feature flag, which has TWO halves that
+ * must agree: the backend reads `etendo.go.flags.contact-category-type` from Openbravo.properties
+ * (Tomcat restart needed after changing it) and the SPA reads `VITE_FEATURE_FLAGS` when Vite starts.
+ *
+ *  - ON  (ETP-5791): an unknown category is never created (it would carry no contact type); the
+ *        rows naming it fail with "create it first" and the rest still import.
+ *  - OFF (pre-ETP-5791, ETP-4905): an unknown category is auto-created and the imported contact
+ *        points at it; the Cliente / Proveedor columns (ETP-5544) set the contact's roles.
+ *
+ * Each flag-dependent test skips itself in the other state (same switch as the mocked spec,
+ * `contacts-import-category-resolution.mocked.spec.js`):
+ *
+ *   # flag OFF (default) — property absent or `etendo.go.flags.contact-category-type=false`
+ *   cd tools/app-shell && npx vite --port 3105
+ *   cd e2e && E2E_USE_MOCK=0 BASE_URL=http://localhost:3105 \
+ *     npx playwright test tests/flows/contacts/contacts-import-category-resolution.integration.spec.js --project=integration
+ *
+ *   # flag ON — `etendo.go.flags.contact-category-type=true` in Openbravo.properties, Tomcat restarted
+ *   cd tools/app-shell && VITE_FEATURE_FLAGS='{"contact-category-type":true}' npx vite --port 3106
+ *   cd e2e && E2E_USE_MOCK=0 BASE_URL=http://localhost:3106 E2E_CONTACT_CATEGORY_TYPE_FLAG=on \
+ *     npx playwright test tests/flows/contacts/contacts-import-category-resolution.integration.spec.js --project=integration
+ *
+ * Both need E2E_PASSWORD (or `e2e/.auth-credentials.json`). The OFF test names everything it
+ * creates with a `QA5791` prefix plus a timestamp and deletes it best-effort at the end.
+ */
+
+const FLAG_ON = process.env.E2E_CONTACT_CATEGORY_TYPE_FLAG === 'on';
+const isYes = (value) => value === true || value === 'Y' || value === 'true';
+
 function loadCredentials() {
   try {
     const credentialsPath = resolve(import.meta.dirname, '../../../.auth-credentials.json');
@@ -35,6 +67,7 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
   // auto-created (it would carry neither type and every contact on it would be refused). Rows
   // naming one fail on their own row with the not-found message; the rest still import.
   test('persists contacts with an existing category by code or name, and fails rows naming an unknown category', async ({ page }) => {
+    test.skip(!FLAG_ON, 'Lookup-only category resolution needs contact-category-type ON (E2E_CONTACT_CATEGORY_TYPE_FLAG=on)');
     const evidenceDir = resolve(import.meta.dirname, '../../../../artifacts/delivery-evidence/ETP-4905');
     mkdirSync(evidenceDir, { recursive: true });
     const unique = Date.now();
@@ -74,7 +107,6 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     const categories = categoriesPayload.body?.response?.data ?? categoriesPayload.body?.data ?? [];
     // A category that grants at least one contact type: one with neither (legacy, not yet
     // migrated) gives its contacts no type, which the backend refuses since ETP-5791.
-    const isYes = (value) => value === true || value === 'Y' || value === 'true';
     const typed = categories.filter((category) => isYes(category.etgoIscustomer) || isYes(category.etgoIsvendor));
     const existingCategory = typed.find((category) => {
       const label = String(category.name ?? category._identifier ?? '').trim().toLowerCase();
@@ -203,5 +235,103 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await page.getByTestId('tab-locationAddress').click();
     await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible({ timeout: 15_000 });
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-detail.png'), fullPage: true });
+  });
+
+  test('auto-creates an unknown category once and persists the contacts on it with their Cliente / Proveedor roles', async ({ page }) => {
+    test.skip(FLAG_ON, 'Category auto-create and the Cliente / Proveedor columns only exist with contact-category-type OFF');
+    const unique = Date.now();
+    const newCategoryName = `QA5791 Category ${unique}`;
+    // Both rows name the same unknown category: it must be created ONCE and shared.
+    const rows = [
+      { name: `QA5791 Customer ${unique}`, taxId: uniqueValidCif(unique, 6), cliente: 'Sí', proveedor: 'No', customer: true, vendor: false },
+      { name: `QA5791 Vendor ${unique}`, taxId: uniqueValidCif(unique, 7), cliente: 'No', proveedor: 'Sí', customer: false, vendor: true },
+    ];
+
+    const categoryCreates = [];
+    const batchExchanges = [];
+    page.on('response', async (response) => {
+      const request = response.request();
+      if (request.method() !== 'POST') return;
+      const url = response.url();
+      const json = await response.json().catch(() => null);
+      if (url.includes('/sws/neo/business-partner-category/businessPartnerCategory')) {
+        const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
+        categoryCreates.push({ body: request.postDataJSON(), status: response.status(), id: record?.id });
+      }
+      if (url.includes('/sws/neo/batch')) batchExchanges.push({ body: request.postDataJSON(), response: json });
+    });
+
+    await login(page, onboardingCredentials ? {
+      user: onboardingCredentials.email,
+      password: onboardingCredentials.password,
+    } : {});
+    const headers = await apiAuthHeaders(page);
+    const createdContactIds = [];
+    try {
+      await navigateTo(page, 'contacts');
+      await expect(page.getByTestId('action-new-more')).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('action-new-more').click();
+      await page.getByTestId('action-new-import').click();
+      await expect(page.getByRole('dialog').getByTestId('ImportDropzone__zone')).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('dialog').getByTestId('ImportDropzone__fileInput').setInputFiles({
+        name: 'contacts-qa5791-auto-create.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from([
+          'nombre comercial,cif/nif,categoria,cliente,proveedor',
+          ...rows.map((row) => [row.name, row.taxId, newCategoryName, row.cliente, row.proveedor].join(',')),
+        ].join('\n')),
+      });
+
+      await expect(page.getByTestId('ImportDialog__importButton')).toContainText(`Importar ${rows.length}`);
+      await page.getByTestId('ImportDialog__importButton').click();
+      await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
+      await page.getByTestId('ImportConfirmStep__confirm').click();
+
+      // Every row's businessPartner operation came back with a persisted recordId.
+      const bpResult = (row) => {
+        for (const { body, response } of batchExchanges) {
+          const op = body.operations?.find((operation) => operation.entity === 'businessPartner' && operation.body?.name === row.name);
+          if (!op) continue;
+          return { op, result: response?.operations?.find((entry) => entry.id === op.id) };
+        }
+        return null;
+      };
+      await expect.poll(() => rows.every((row) => bpResult(row)?.result?.recordId), { timeout: 30_000 }).toBe(true);
+      // Recorded before any assertion so the cleanup below still sees them if one fails.
+      for (const row of rows) createdContactIds.push(bpResult(row).result.recordId);
+
+      expect(categoryCreates, 'the unknown category must be created exactly once').toHaveLength(1);
+      expect(categoryCreates[0].body.name).toBe(newCategoryName);
+      expect(categoryCreates[0].status).toBeLessThan(300);
+      const createdCategoryId = categoryCreates[0].id;
+      expect(createdCategoryId, 'expected the category create to return an id').toBeTruthy();
+
+      for (const row of rows) {
+        const { op } = bpResult(row);
+        expect(op.body.businessPartnerCategory).toBe(createdCategoryId);
+        expect(op.body.customer).toBe(row.customer ? 'Y' : 'N');
+        expect(op.body.vendor).toBe(row.vendor ? 'Y' : 'N');
+      }
+
+      // Read back what the backend persisted, not only what the SPA sent.
+      for (const [index, row] of rows.entries()) {
+        const readResponse = await page.request.get(`/sws/neo/contacts/businessPartner/${createdContactIds[index]}`, { headers });
+        expect(readResponse.status()).toBe(200);
+        const readJson = await readResponse.json();
+        const persisted = readJson?.response?.data?.[0] ?? readJson?.data?.[0] ?? readJson;
+        expect(persisted.name).toBe(row.name);
+        expect(persisted.businessPartnerCategory).toBe(createdCategoryId);
+        expect(isYes(persisted.customer), `${row.name} customer`).toBe(row.customer);
+        expect(isYes(persisted.vendor), `${row.name} vendor`).toBe(row.vendor);
+      }
+    } finally {
+      // Best-effort cleanup: names are unique per run, so a leftover never breaks a later run.
+      for (const id of createdContactIds) {
+        await page.request.delete(`/sws/neo/contacts/businessPartner/${id}`, { headers }).catch(() => {});
+      }
+      for (const { id } of categoryCreates) {
+        if (id) await page.request.delete(`/sws/neo/business-partner-category/businessPartnerCategory/${id}`, { headers }).catch(() => {});
+      }
+    }
   });
 });

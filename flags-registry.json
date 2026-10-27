@@ -1138,7 +1138,8 @@
           },
           {
             "root": "frontend",
-            "path": "e2e/tests/flows/contacts/contacts-import-category-resolution.integration.spec.js"
+            "path": "e2e/tests/flows/contacts/contacts-import-category-resolution.integration.spec.js",
+            "note": "Live backend (E2E_USE_MOCK=0); runs in both flag states, and both halves of the flag must agree: backend etendo.go.flags.contact-category-type in Openbravo.properties (Tomcat restart) and frontend VITE_FEATURE_FLAGS. OFF (default) covers category auto-create, the contacts persisted on it and the Cliente/Proveedor roles, cleaning up its QA5791-prefixed records; ON (property true, VITE_FEATURE_FLAGS='{\"contact-category-type\":true}' plus E2E_CONTACT_CATEGORY_TYPE_FLAG=on) covers existing-category resolution and rows naming an unknown category failing. The test of the other state skips itself."
           }
         ]
       },
