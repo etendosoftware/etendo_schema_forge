@@ -117,7 +117,9 @@ const BACKEND_ERROR_MAP = {
   'Invalid country': 'backendError.invalidCountry',
   // ETP-5473 (FinancialAccountHandler). Country is mandatory for every financial-account type on
   // create; the IBAN is never used to derive it. (Clearing it on update of a Bank account that
-  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.)
+  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.) These three
+  // now travel with `messageKeys` (ETGO_FinAcc*, see BACKEND_ERROR_KEY_MAP) and are written in the
+  // request language; the English literals are kept only as the fallback for a keyless backend.
   'Country is required': 'backendError.countryRequired',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
@@ -497,6 +499,13 @@ const BACKEND_ERROR_KEY_MAP = {
   // translatePaymentTermConflict.
   ETGO_PaymentTermDaysInvalid: 'backendError.paymentTermDaysInvalid',
   ETGO_PaymentTermDaysOutOfRange: 'backendError.paymentTermDaysOutOfRange',
+  // ETP-5473 — com.etendoerp.go FinancialAccountHandler: the country refusals of a financial
+  // account. The backend now answers them in the request language (REST/MCP have no SPA to
+  // translate), so the text is no longer a stable English literal; these keys are. The English
+  // exact-match entries in BACKEND_ERROR_MAP stay as the fallback for a backend that predates them.
+  ETGO_FinAccCountryRequired: 'backendError.countryRequired',
+  ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
+  ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
