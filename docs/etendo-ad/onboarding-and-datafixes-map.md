@@ -38,6 +38,13 @@ Every gap fix produces three deliverables that **must ship in the same PR**:
 
 **Ordering rule:** the `.sql` can ship alone (safe — legacy tenants get fixed, new tenants hit `@check → SKIPPED_NOT_NEEDED`). The CUT bump **must never** ship without its `.sql` already in the repo — that would silently skip the fix for new tenants who actually need it.
 
+**Exception — CUT not moved (ETP-5902, 2026-10-27).** Step 4 is not universal. When the newest
+fixes before T have no onboarding twin (e.g. R36-costing-background-schedule), moving the CUT past
+them would make every new tenant skip them silently. ETP-5902 (A11) therefore bumped only
+`OnboardingProvisioningChain.CHAIN_REVISION` (retires pooled tenants built by the old chain) and
+left `ONBOARDING_PROVISIONED_THROUGH` at `20261022T150000Z`: a new tenant runs R53 and gets
+`SKIPPED_NOT_NEEDED`. Same as the K2 companion (§1, "NOT bumped").
+
 **Result:** legacy tenants → runner applies the `.sql`. New tenants → onboarding provisions correctly, runner skips via watermark.
 
 ---

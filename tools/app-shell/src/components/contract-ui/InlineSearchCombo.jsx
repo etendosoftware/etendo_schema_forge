@@ -774,7 +774,11 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                       className="h-4 w-4 shrink-0 text-primary"
                       data-testid={`inline-add-option-${field.key}-${opt.id}-selected-indicator`} />
                   )}
-                  <span className="whitespace-nowrap">{opt.name || opt.label || opt._identifier || opt.id}</span>
+                  <span className="whitespace-nowrap">
+                    {/* ETP-5902: render-only prefix (e.g. the tax rate); never part of the saved name */}
+                    {opt.labelPrefix ? `${opt.labelPrefix} - ` : ''}
+                    {opt.name || opt.label || opt._identifier || opt.id}
+                  </span>
                 </button>
               );
             })}
