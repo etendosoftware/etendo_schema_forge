@@ -219,11 +219,14 @@ decision).
 
 **MCP schema hints.** `etendo_schema view:"create"` lists `etgoIscustomer` / `etgoIsvendor` as
 optional with `serverDefaulted: true` (the AD default `N` is resolved), which on its own suggests
-both can be omitted, but omitting both is refused with `ETGO_BPGroupContactTypeRequired`. Each
-field therefore declares an `agentPrompt`
+both can be omitted, but with the flag on omitting both is refused with
+`ETGO_BPGroupContactTypeRequired`. Each field therefore declares an `agentPrompt`
 (`agent-prompts/business-partner-category/category.etgo-iscustomer.md` / `category.etgo-isvendor.md`,
-persisted to `ETGO_SF_FIELD.AGENT_PROMPT`) that says at least one of the two must be true and that
-new contacts in the category inherit them.
+persisted to `ETGO_SF_FIELD.AGENT_PROMPT`) that explains what the flag means and that at least one of
+the two should be set. The prompt is flag-agnostic: it does not claim the server always refuses N/N or
+always copies the flags into new contacts (with the flag off it does neither). With the flag off the
+two fields stay exposed in the MCP schema although the UI hides them — tracked as the `cosmetic`
+deferred item `mcp-exposed-category-fields` of `contact-category-type` in `flags-registry.json`.
 
 ## ETP-5693 — Posting accounts only, on write
 

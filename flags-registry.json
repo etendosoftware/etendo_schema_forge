@@ -1156,13 +1156,10 @@
         },
         {
           "id": "mcp-exposed-category-fields",
-          "kind": "open",
-          "note": "Not gated: the MCP/REST schema of business-partner-category exposes etgoIscustomer / etgoIsvendor, and both windows carry agentPrompts that describe the inheritance rule (business-partner-category fields and contacts customer/vendor). With the flag OFF agents still see and set those fields and are told the category decides the type, which the backend only enforces with the flag ON. Gate or reword the prompts if the flag stays OFF for long.",
+          "kind": "cosmetic",
+          "note": "Not gated: with the flag OFF the MCP/REST schema of business-partner-category still exposes etgoIscustomer / etgoIsvendor, which the UI hides. Harmless: the C_BP_Group columns exist and R53/R54 are re-run before the flag is turned on (see db-columns-and-datafixes-before-flag-on). The agentPrompts of those fields and of contacts customer/vendor are state-agnostic since ETP-5791 (the agent sends customer/vendor matching the category instead of relying on inheritance), so they are no longer part of this item.",
           "refs": [
-            "agent-prompts/business-partner-category/category.etgo-iscustomer.md",
-            "agent-prompts/business-partner-category/category.etgo-isvendor.md",
-            "agent-prompts/contacts/business-partner.customer.md",
-            "agent-prompts/contacts/business-partner.vendor.md"
+            "artifacts/business-partner-category/decisions.json"
           ]
         }
       ]

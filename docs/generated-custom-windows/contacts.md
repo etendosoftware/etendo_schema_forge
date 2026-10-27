@@ -1622,8 +1622,14 @@ defines nothing and is not inherited from.
 
 `businessPartner.vendor` and `businessPartner.customer` declare a field `agentPrompt`
 (`agent-prompts/contacts/business-partner.vendor.md` / `business-partner.customer.md`, persisted to
-`ETGO_SF_FIELD.AGENT_PROMPT`). `etendo_schema` returns it on both fields: omit the flag on create so
-it is inherited from the category, send it only to override, and at least one type must end up true.
+`ETGO_SF_FIELD.AGENT_PROMPT`). `etendo_schema` returns it on both fields. The prompt is
+flag-agnostic, because a static prompt cannot read the flag: on create the agent reads the category it
+sends (or the `default` category when it sends none) and sends `customer` / `vendor` matching its
+`etgoIscustomer` / `etgoIsvendor`, unless the user asked for a different type; on update, when it changes
+`businessPartnerCategory` it sends both flags matching the new category. Explicit values are honoured in
+both states, so with the flag on this gives the same result as inheritance, and with the flag off (no
+inheritance, AD defaults customer=Y / vendor=N) it still saves a vendor as a vendor. The prompt says a
+contact should end up with a type, without claiming the server always refuses one with neither.
 
 `etendo_schema view:"create"` lists `vendor` under `optional`. `IsVendor` is mandatory in AD with no
 AD default, so `McpSchemaFieldBuilder.addVisibility` would compute `userRequired: true`; the
