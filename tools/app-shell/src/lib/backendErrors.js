@@ -999,6 +999,21 @@ function matchReturnInvoiceWithoutAmount(msg) {
   return { products };
 }
 
+// OrderInvoiceDuplicateGuard.java (com.etendoerp.go — ETP-5714), `error.code = draftInvoiceExists`:
+// "This order already has a draft invoice (D1, D2)." — the draft document numbers are one opaque
+// {docs} param, located by the fixed prefix and suffix (never by a regex). The screen hides the
+// button while a draft exists, so this is only ever read from a bulk action or a race.
+const DRAFT_INVOICE_EXISTS_PREFIX = 'This order already has a draft invoice (';
+const DRAFT_INVOICE_EXISTS_SUFFIX = ').';
+
+function matchDraftInvoiceExists(msg) {
+  if (!msg.startsWith(DRAFT_INVOICE_EXISTS_PREFIX) || !msg.endsWith(DRAFT_INVOICE_EXISTS_SUFFIX)) {
+    return null;
+  }
+  const docs = msg.slice(DRAFT_INVOICE_EXISTS_PREFIX.length, -DRAFT_INVOICE_EXISTS_SUFFIX.length);
+  return docs ? { docs } : null;
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -1442,6 +1457,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchReturnLineNotInDocument, 'backendError.returnLineNotInDocument'],
   [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
   [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
+  [matchDraftInvoiceExists, 'backendError.draftInvoiceExists'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],

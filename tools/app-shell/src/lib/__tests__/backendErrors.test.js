@@ -3876,3 +3876,42 @@ describe('translateBackendError — payment-term refusals', () => {
     }
   });
 });
+
+// OrderInvoiceDuplicateGuard.java (com.etendoerp.go — ETP-5714): `error.code = draftInvoiceExists`.
+// The bulk order menus read it from the 409 body; the draft numbers are one opaque {docs} param.
+describe('translateBackendError — draft invoice already exists (ETP-5714)', () => {
+  const es = fakeUiTranslator({
+    'backendError.draftInvoiceExists': 'El pedido ya tiene una factura en borrador ({docs}). Confírmala o elimínala antes de generar otra.',
+  });
+
+  it('translates the 409 sentence keeping the draft numbers', () => {
+    assert.equal(
+      translateBackendError('This order already has a draft invoice (INV-1, INV-2).', es),
+      'El pedido ya tiene una factura en borrador (INV-1, INV-2). Confírmala o elimínala antes de generar otra.',
+    );
+  });
+
+  it('reads the message from the { error: { code, message } } body the bulk menus receive', () => {
+    const body = { error: { status: 409, code: 'draftInvoiceExists', message: 'This order already has a draft invoice (INV-9).' } };
+    assert.equal(
+      translateBackendErrorBody(body, es, 'Error (409)'),
+      'El pedido ya tiene una factura en borrador (INV-9). Confírmala o elimínala antes de generar otra.',
+    );
+  });
+
+  it('leaves a sentence with no draft numbers untouched', () => {
+    assert.equal(
+      translateBackendError('This order already has a draft invoice ().', es),
+      'This order already has a draft invoice ().',
+    );
+  });
+
+  it('ships backendError.draftInvoiceExists with {docs} in en_US, es_ES and es_AR (es_AR in voseo)', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.draftInvoiceExists":\s*"[^"]*\{docs\}/), `${loc} lost {docs}`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
+  });
+});
