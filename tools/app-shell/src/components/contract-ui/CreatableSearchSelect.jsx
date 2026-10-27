@@ -1,10 +1,14 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Loader2 } from 'lucide-react';
+import { ChevronDown, Loader2, Check } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
+import {
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue,
+} from './selectorSelection.js';
+import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
@@ -169,6 +173,10 @@ function useNoopLookup() { return NOOP_LOOKUP_RESULT; }
 // scroll-triggered "load more"). Matches SelectorInput.jsx's SELECTOR_PAGE so both
 // selector styles page at the same granularity (ETP-4975).
 const SERVER_SEARCH_PAGE = 50;
+// ETP-5903 — page size of the ONE request that resolves the committed value when the walk could
+// not reach it (see `fetchCurrentSelection`). A lookup by label, filtered by id: the backend's `q`
+// is a substring match, so the exact id may sit behind a look-alike — same as InlineSearchCombo.
+const CURRENT_SELECTION_SEARCH_LIMIT = 20;
 
 /** Builds the query params for a server-search request: base `selectorContext`, the
  * dependsOn filter (when configured), `q` only once the typed term is long enough to be
@@ -266,7 +274,7 @@ function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) 
 function SearchSelectOptionsPanel({
   field, ui, query, showEmptyOption, emptyOptionLabel, onSelectEmpty,
   createLabel, onCreateRequest, onCreate, loading, filteredOptions, onSelect,
-  activeIndex, onHoverOption, serverSearch, hasMore, renderOption,
+  activeIndex, selectedIndex, onHoverOption, serverSearch, hasMore, renderOption,
 }) {
   return (
     // min-w-full + w-max: sizes this inner content wrapper to the widest option's natural
@@ -301,23 +309,37 @@ function SearchSelectOptionsPanel({
       {loading && (
         <div className="px-3 py-2 text-xs text-muted-foreground">{ui('loading')}</div>
       )}
-      {!loading && filteredOptions.map((opt, index) => (
-        <button
-          key={opt.id}
-          id={`${field.key}-option-${opt.id}`}
-          type="button"
-          role="option"
-          aria-selected={index === activeIndex}
-          data-option-index={index}
-          data-testid={`option-${field.key}-${opt.id}`}
-          // block required alongside w-full — see the CreateAction className comment above.
-          className={`w-full block text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap${index === activeIndex ? ' bg-accent text-accent-foreground' : ''}`}
-          onMouseDown={(e) => { e.preventDefault(); onSelect(opt); }}
-          onMouseEnter={() => onHoverOption?.(index)}
-        >
-          {renderOption ? renderOption(opt) : opt.name}
-        </button>
-      ))}
+      {!loading && filteredOptions.map((opt, index) => {
+        // ETP-5903 — two independent per-row states, as in InlineSearchCombo (ETP-5846):
+        // `aria-selected` + check icon + bold label = the COMMITTED value; `data-highlighted` +
+        // accent background = keyboard/hover focus (exposed through `aria-activedescendant`).
+        const isSelected = index === selectedIndex;
+        const isHighlighted = index === activeIndex;
+        return (
+          <button
+            key={opt.id}
+            id={`${field.key}-option-${opt.id}`}
+            type="button"
+            role="option"
+            aria-selected={isSelected}
+            {...(isHighlighted ? { 'data-highlighted': 'true' } : {})}
+            data-option-index={index}
+            data-testid={`option-${field.key}-${opt.id}`}
+            // block required alongside w-full — see the CreateAction className comment above.
+            className={`w-full block text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap${isHighlighted ? ' bg-accent text-accent-foreground' : ''}${isSelected ? ' font-medium' : ''}`}
+            onMouseDown={(e) => { e.preventDefault(); onSelect(opt); }}
+            onMouseEnter={() => onHoverOption?.(index)}
+          >
+            {isSelected && (
+              <Check
+                aria-hidden="true"
+                className="inline-block h-4 w-4 mr-2 align-text-bottom text-primary"
+                data-testid={`option-${field.key}-${opt.id}-selected-indicator`} />
+            )}
+            {renderOption ? renderOption(opt) : opt.name}
+          </button>
+        );
+      })}
       {!loading && filteredOptions.length === 0 && query.trim() && (
         <div className="px-3 py-2 text-xs text-muted-foreground">
           {ui('noResultsFor')} &ldquo;{query}&rdquo;
@@ -436,6 +458,24 @@ export function CreatableSearchSelect({
   // Keyboard navigation index over `filteredOptions` (ETP-4600 Gap A). -1 = nothing
   // highlighted (mouse-only interaction so far).
   const [activeIndex, setActiveIndex] = useState(-1);
+  // ETP-5903 — the committed value's row when the walk below could not reach it (the catalog is
+  // longer than LOCATE_SELECTION_MAX_PAGES pages): resolved once per open and pinned on top, as in
+  // InlineSearchCombo (ETP-5846). Cleared when the value, the query or the open state changes.
+  const [pinnedOptions, setPinnedOptions] = useState([]);
+  // ETP-5903 — bumped every time a server page fetch has fully settled. The walk for the committed
+  // value keys on it: `fetchInFlightRef` is cleared in the fetch's `finally`, AFTER the page was
+  // applied, so an effect keyed on the rows alone can be turned away by the in-flight guard and
+  // never run again. A counter (not an in-flight boolean, which React may batch into "no change")
+  // guarantees one more run once the guard is down.
+  const [settledFetches, setSettledFetches] = useState(0);
+  // ETP-5903 — the walk for the committed value ended; the pin waits for it.
+  const [locateDone, setLocateDone] = useState(false);
+  // ETP-5903 — the user typed or pressed a key during this open: no more walking, no re-centring.
+  const interactedRef = useRef(false);
+  // ETP-5903 — `{ id, generation }` of the pin lookup in flight, and the id already looked up during
+  // this open (one lookup per open, whatever pages land afterwards). Mirrors InlineSearchCombo.
+  const pinRequestRef = useRef(null);
+  const pinAttemptedRef = useRef(null);
   // serverSearch mode only: the server's current result page (all pages loaded so far,
   // concatenated). `null` means "not loaded yet" (distinct from `[]` = "loaded, no matches")
   // so the on-focus initial load only fires once per reset (ETP-4600 Phase 2a).
@@ -706,6 +746,7 @@ export function CreatableSearchSelect({
       .finally(() => {
         fetchInFlightRef.current = false;
         setPageLoading({ offset, showLoading, setLoading, setLoadingMore }, false);
+        setSettledFetches(n => n + 1);
       });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -740,11 +781,76 @@ export function CreatableSearchSelect({
   const filteredOptions = useMemo(() => {
     let shown;
     if (lookupMode) shown = lookupResults;
-    else if (serverSearch) shown = serverOptions ?? [];
+    else if (serverSearch) shown = prependCurrentSelection(serverOptions ?? [], pinnedOptions, value);
     else shown = filterOptionsByQuery(options, query, filterFn);
     return sortOptions ? [...shown].sort(sortOptions) : shown;
-  }, [lookupMode, lookupResults, serverSearch, serverOptions, options, query, filterFn, sortOptions]);
+  }, [lookupMode, lookupResults, serverSearch, serverOptions, pinnedOptions, value, options, query, filterFn, sortOptions]);
   const panelLoading = lookupMode ? lookupLoading : loading;
+  // ETP-5846/5903 — derived from `value` alone, never from the keyboard state.
+  const selectedIndex = resolveSelectedIndex(filteredOptions, value);
+  // ETP-5903 — arrows start from the committed option while no search is typed (AC2); with a query
+  // the list is that search's results, navigated from the top (AC4).
+  const arrowStartIndex = arrowStartIndexFor(query, selectedIndex);
+  const hasValue = hasCommittedValue(value);
+
+  // ETP-5903 — resolves the committed row when the walk could not bring it into view: asks the
+  // SAME selector, with the SAME context, for the value's label and keeps only the id-equal row (an
+  // id the context forbids never comes back, so nothing new becomes pickable). A lookup, not a
+  // page: offset/hasMore are left alone. Ported from InlineSearchCombo (ETP-5846).
+  const fetchCurrentSelection = useCallback(() => {
+    const id = value == null ? '' : String(value);
+    const label = String(displayValue || resolvedDisplay || '').trim();
+    if (!selectorUrl || !id || !label) return;
+    if (pinAttemptedRef.current === id) return;
+    pinAttemptedRef.current = id;
+    const generation = searchGenerationRef.current;
+    pinRequestRef.current = { id, generation };
+    fetchServerOptions({
+      apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
+      query: label, offset: 0, limit: CURRENT_SELECTION_SEARCH_LIMIT,
+    })
+      .then(({ items }) => {
+        const request = pinRequestRef.current;
+        // Abandoned: the value changed, a new search started, or this answer is late.
+        if (!request || request.id !== id || request.generation !== generation) return;
+        if (searchGenerationRef.current !== generation) return;
+        setPinnedOptions(items.filter(it => String(it.id) === id));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (pinRequestRef.current?.id === id && pinRequestRef.current?.generation === generation) {
+          pinRequestRef.current = null;
+        }
+      });
+  // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectorUrl, value, displayValue, resolvedDisplay, parentKey, parentValue, filterKey, apiFetch]);
+
+  // ETP-5903 — a resolved row belongs to ONE value, ONE search and ONE open.
+  useEffect(() => {
+    setPinnedOptions([]);
+    pinRequestRef.current = null;
+    pinAttemptedRef.current = null;
+    setLocateDone(false);
+  }, [value, query, open]);
+
+  // ETP-5903 — locate the committed value in place (walk), then centre it; see the hook. The walk
+  // is serverSearch-only and waits while a page is loading: until the first one lands,
+  // `serverOptions` may still hold the previous open's list.
+  useLocateCommittedValue({
+    open, query, value, dropdownRef, interactedRef,
+    paged: serverSearch, selectorUrl, rows: serverOptions, loading, panelLoading,
+    hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
+    fetchPage: triggerServerSearch, offsetRef,
+    selectedIndex, renderedCount: filteredOptions.length, layoutKey: dropdownStyle,
+  });
+
+  // ETP-5903 — the walk ended without the value on screen: pin it on top (one lookup per open).
+  useEffect(() => {
+    if (!serverSearch || !open || !locateDone || !hasValue || loading || query.trim() !== '') return;
+    if (serverOptions == null || resolveSelectedIndex(serverOptions, value) !== -1) return;
+    fetchCurrentSelection();
+  }, [serverSearch, open, locateDone, hasValue, loading, query, serverOptions, value, fetchCurrentSelection]);
 
   // Reset keyboard highlight whenever the dropdown opens/closes or the search text changes —
   // a stale index from a previous open/query would highlight the wrong row (ETP-4600 Gap A).
@@ -863,6 +969,9 @@ export function CreatableSearchSelect({
   // highlight, Enter selects it, Esc closes without changing the selection, Home/End jump
   // to the ends of the list.
   const handleInputKeyDown = (e) => {
+    // ETP-5903 — any key the user presses stops the walk and the centring. Opening with an arrow
+    // key resets it again (see the effect on `open`): opening is not taking over the list.
+    interactedRef.current = true;
     if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       e.preventDefault();
       openAndLoad();
@@ -871,11 +980,11 @@ export function CreatableSearchSelect({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setActiveIndex((i) => Math.min(i + 1, filteredOptions.length - 1));
+        setActiveIndex((i) => nextActiveIndex(i, arrowStartIndex, 1, filteredOptions.length));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
+        setActiveIndex((i) => nextActiveIndex(i, arrowStartIndex, -1, filteredOptions.length));
         break;
       case 'Home':
         if (filteredOptions.length > 0) { e.preventDefault(); setActiveIndex(0); }
@@ -1099,6 +1208,7 @@ export function CreatableSearchSelect({
           className="flex-1 min-w-0 h-full bg-transparent border-0 outline-none py-2 text-sm placeholder:text-[hsl(var(--muted-foreground))] disabled:cursor-not-allowed"
           onChange={(e) => {
             isEditingRef.current = true;
+            interactedRef.current = true;
             const newQuery = e.target.value;
             setQuery(newQuery);
             if (!open) setOpen(true);
@@ -1225,6 +1335,7 @@ export function CreatableSearchSelect({
             filteredOptions={filteredOptions}
             onSelect={handleSelect}
             activeIndex={activeIndex}
+            selectedIndex={selectedIndex}
             onHoverOption={setActiveIndex}
             serverSearch={serverSearch}
             hasMore={hasMore}
