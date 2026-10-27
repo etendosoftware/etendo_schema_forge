@@ -17081,6 +17081,7 @@
     "backendError.returnLineNotInDocument": "Line {lineId} is not a line of this document.",
     "backendError.returnReasonTooLong": "The reason is too long: it can have at most {max} characters (it has {length}).",
     "backendError.returnInvoiceWithoutAmount": "The corrective invoice (factura rectificativa) cannot be created: no price source was found for {products} (not on the invoice being rectified, nor on its order line, nor in the price list), so it would be confirmed with a zero amount. Give those products a price in the price list, or rectify an invoice that has them.",
+    "backendError.draftInvoiceExists": "This order already has a draft invoice ({docs}). Complete or delete it before creating another one.",
     "backendError.costingNoProduct": "A cost line must belong to a product.",
     "backendError.costingCostRequired": "The cost is required.",
     "backendError.costingCostNegative": "The cost cannot be negative.",
