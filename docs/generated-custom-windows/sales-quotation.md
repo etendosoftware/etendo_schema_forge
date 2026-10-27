@@ -229,7 +229,7 @@ replaces the standard `SelectorInput` and:
   on load, whenever the quotation date changes and when the dropdown opens (ETP-5840). The entity path `'quotation'` is passed via
   the `entityPath` prop, so the URL differs from the sales-order equivalent
   (`header/{id}/action/currencyOptions`).
-- Lists every selectable currency; one without a conversion range on the date
+- Lists every selectable currency (one with a conversion range to or from the org currency on any date); one without a conversion range on the date
   shows «—» and selecting it leaves the rate empty for the user to type.
 - Shows a pencil icon (`data-testid="currency-rate-pencil"`) on new and saved
   quotations unless the selected option is the org currency (`isOrgCurrency`). Clicking it enters inline-edit mode with a numeric input

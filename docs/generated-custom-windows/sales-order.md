@@ -267,7 +267,7 @@ The `currency` field on the header form is **always editable on draft orders**, 
 The former real-time validation (`validate-exchange-rate` on currency change, revert of the
 dropdown plus the «Cambio de moneda cancelado» toast `noConversionRateError`) is **gone**. Now:
 
-- The currency dropdown lists every selectable currency with its rate on the `orderDate`
+- The currency dropdown lists every selectable currency (one with a conversion range to or from the org currency on any date) with its rate on the `orderDate`
   currently in the form (`currencyOptions?date=`); a currency with no conversion range shows
   «—» and can be selected — the rate is left empty for the user to type with the pencil.
 - Any change of `orderDate` or `currency` recalculates `eTGOCurrencyRate` through the header
