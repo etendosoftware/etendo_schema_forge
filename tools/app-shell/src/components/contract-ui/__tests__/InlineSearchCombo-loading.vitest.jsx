@@ -44,7 +44,7 @@ function makePage(startId, count) {
 function setScrollGeometry(panel, { scrollHeight, clientHeight, scrollTop }) {
   Object.defineProperty(panel, 'scrollHeight', { value: scrollHeight, configurable: true });
   Object.defineProperty(panel, 'clientHeight', { value: clientHeight, configurable: true });
-  Object.defineProperty(panel, 'scrollTop', { value: scrollTop, configurable: true });
+  Object.defineProperty(panel, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
 }
 
 function renderCombo(overrides = {}) {

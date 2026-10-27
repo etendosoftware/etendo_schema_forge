@@ -453,11 +453,11 @@ describe('InlineSearchCombo — ETP-5846 current selection is identified on reop
     await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    // The highlight moved to row 1...
-    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('data-highlighted', 'true');
+    // The highlight moved to the row after the committed one (ETP-5903)...
+    expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('data-highlighted', 'true');
     // ...while the committed value stays selected. Two independent states.
     expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveAttribute('aria-selected', 'true');
-    expect(input).toHaveAttribute('aria-activedescendant', 'tax-inline-option-iva10');
+    expect(input).toHaveAttribute('aria-activedescendant', 'tax-inline-option-exento');
   });
 });
 

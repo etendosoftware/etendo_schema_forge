@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateInvoiceConfirmModal.jsx
 // Mocks BEFORE imports
 // ETP-5022 — the component's requests now come from `useApiFetch`, which reads the bearer
 // token from the session instead of from the `token` prop.
@@ -106,6 +107,19 @@ describe('CreateInvoiceConfirmModal', () => {
 
   it('renders the modal title key', () => {
     renderModal();
+    expect(screen.getByText('soManageDocsTitle')).toBeInTheDocument();
+  });
+
+  // ETP-5688 — a caller whose action is not a plain invoice (the return windows' rectificative
+  // invoice) passes its own title; every other consumer keeps the default above.
+  it('renders a custom title instead of the default when the title prop is given', () => {
+    renderModal({ title: 'Generate rectificative invoice' });
+    expect(screen.getByText('Generate rectificative invoice')).toBeInTheDocument();
+    expect(screen.queryByText('soManageDocsTitle')).not.toBeInTheDocument();
+  });
+
+  it('keeps the default title when the title prop is undefined', () => {
+    renderModal({ title: undefined });
     expect(screen.getByText('soManageDocsTitle')).toBeInTheDocument();
   });
 

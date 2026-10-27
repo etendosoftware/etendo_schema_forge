@@ -20,7 +20,10 @@ for (const [resource, entity] of Object.entries(entities)) {
   if (!entity.parent.foreignKey) errors.push(`${resource}: parent foreignKey is missing`);
   if (!entity.parent.pathSegment) errors.push(`${resource}: parent pathSegment is missing`);
 
-  const required = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  // A child is either read-only (GET, LIST) or fully writable through its master.
+  const writes = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  const writable = writes.some((operation) => entity.operations.includes(operation));
+  const required = ['GET', 'LIST', ...(writable ? writes : [])];
   for (const operation of required) {
     if (!entity.operations.includes(operation)) {
       errors.push(`${resource}: child is missing ${operation}`);

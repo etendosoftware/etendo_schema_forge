@@ -267,7 +267,7 @@ The `currency` field on the header form is **always editable on draft orders**, 
 The former real-time validation (`validate-exchange-rate` on currency change, revert of the
 dropdown plus the «Cambio de moneda cancelado» toast `noConversionRateError`) is **gone**. Now:
 
-- The currency dropdown lists every selectable currency with its rate on the `orderDate`
+- The currency dropdown lists every selectable currency (one with a conversion range to or from the org currency on any date) with its rate on the `orderDate`
   currently in the form (`currencyOptions?date=`); a currency with no conversion range shows
   «—» and can be selected — the rate is left empty for the user to type with the pencil.
 - Any change of `orderDate` or `currency` recalculates `eTGOCurrencyRate` through the header
@@ -733,3 +733,11 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 - **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
 
 **Manual verification:** open a draft sales order; confirm `Unidad` sits after Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change and the saved line holds the new `C_UOM_ID`); a line with no product shows no pill.
+
+## Header validations over MCP `etendo_update` — ETP-5726
+
+Same three rules as the purchase order (the first one applies to every window): a required field cannot be cleared (422), a draft's currency
+cannot differ from its price list's (422), and the order date is also the accounting date. See
+`purchase-order.md` ("Header validations over MCP `etendo_update`") and
+`modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41. The sales-order header calls the same
+`OrderCurrencyPriceListGuard` from its `handle()`.
