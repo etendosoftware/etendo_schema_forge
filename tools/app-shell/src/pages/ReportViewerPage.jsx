@@ -432,6 +432,9 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
           title={label || 'Product'}
           keepOpenOnSelect={multi}
           selectedIds={selectedItems.map(s => s.id)}
+          // Multi-select marks its picks through selectedIds; single opens on the chosen product.
+          value={multi ? null : (value || null)}
+          valueLabel={multi ? '' : (displayValue || '')}
           data-testid="ProductSearchDrawer__3c998a" />
       </div>
     );
