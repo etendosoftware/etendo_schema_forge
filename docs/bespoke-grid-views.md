@@ -169,9 +169,7 @@ migration changes only the hand-written implementations they import.
 
 ## Focused coverage and delivery evidence
 
-Repository: `etendo_schema_forge` at
-`/Users/sebastianbarrozo/Documents/work/epic/etendo-ai/worktrees/ETP-5835/schema-forge`.
-Branch: `feature/ETP-5835`. The original bespoke-family delivery covers nine production files;
+Repository: `etendo_schema_forge`. Branch: `feature/ETP-5835`. The original bespoke-family delivery covers nine production files;
 the separately authorized financial-account follow-up adds `ReconciliationSplitPanel`.
 Pre-existing changes elsewhere are not delivery evidence for these tasks.
 
