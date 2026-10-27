@@ -1,13 +1,31 @@
 // @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
 // @covers tools/app-shell/src/windows/custom/contacts/contactsFkResolvers.js
-import { describe, it, vi, afterEach } from 'vitest';
+// @covers tools/app-shell/src/lib/importFlagGates.js
+import { describe, it, vi, afterEach, beforeEach } from 'vitest';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// The descriptor reads the `contact-category-type` flag per row through `readFeatureFlag`. Every
+// case below runs with the flag ON (the category decides the contact type) unless its describe
+// says otherwise; the `flag OFF` describe pins the pre-category-type import.
+const flagState = vi.hoisted(() => ({ values: {} }));
+vi.mock('@/lib/flags/useFeatureFlag.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readFeatureFlag: (key) => flagState.values[key] ?? false,
+}));
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { runImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
 import { runImport, SEND_STATUS } from '@etendosoftware/app-shell-core/lib/import/importEngine.js';
 import { resetImportRun } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
 import '../contactsFkResolvers.js'; // registers the 'contacts-country' resolver the send path looks up
 import '../contactsImportDescriptor.js';
+import { CONTACT_CATEGORY_TYPE } from '@/lib/flags/flag-keys.js';
+import { applyImportFlagGates } from '@/lib/importFlagGates.js';
+
+const setCategoryTypeFlag = (on) => { flagState.values = { [CONTACT_CATEGORY_TYPE]: on }; };
+beforeEach(() => setCategoryTypeFlag(true));
 
 const baseRow = {
   name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com',
@@ -276,7 +294,7 @@ describe('contacts import descriptor', () => {
   // (key presence counts as an explicit choice). So the import never sends them — not even
   // from a file built on the older template that still had Cliente / Proveedor columns, whose
   // cells are neither sent nor validated any more.
-  describe('contact type is inherited from the category', () => {
+  describe('flag ON: contact type is inherited from the category', () => {
     const config = { spec: 'contacts', descriptorName: 'contacts', token: 't' };
 
     it.each([
@@ -452,7 +470,7 @@ describe('contacts import descriptor', () => {
     assert.equal(op.body.searchKey, 'Acme Iberia');
   });
 
-  describe('contact category resolution (existing categories only)', () => {
+  describe('flag ON: contact category resolution (existing categories only)', () => {
     const existingCategories = [
       { id: 'BPG-CLIENTS', searchKey: 'CLIENTS', name: 'Clientes' },
       { id: 'BPG-SUPPLIERS', searchKey: 'SUPPLIERS', name: 'Proveedores' },
@@ -536,6 +554,64 @@ describe('contacts import descriptor', () => {
       );
       assert.equal('businessPartnerCategory' in ops[0].body, false);
     });
+  });
+});
+
+// Flag OFF — the import as it was before the category decided the contact type: the Cliente /
+// Proveedor columns are in the template and set the roles, and an unknown category is created.
+describe('contacts import descriptor — flag OFF (Cliente/Proveedor columns, category auto-create)', () => {
+  const config = (token, overrides = {}) => ({ spec: 'contacts', descriptorName: 'contacts', token, ...overrides });
+
+  beforeEach(() => setCategoryTypeFlag(false));
+
+  // Both blank keeps the historical default (customer only); once one cell is stated, a blank
+  // one means 'N'.
+  it.each([
+    ['no Cliente/Proveedor cells', {}, { customer: 'Y', vendor: 'N' }],
+    ['only Proveedor = Sí', { vendor: 'Sí' }, { customer: 'N', vendor: 'Y' }],
+    ['both Sí', { customer: 'Sí', vendor: 'Sí' }, { customer: 'Y', vendor: 'Y' }],
+    ['both No', { customer: 'No', vendor: 'No' }, { customer: 'N', vendor: 'N' }],
+  ])('%s: sends the roles the cells state', async (_label, cells, expected) => {
+    const row = { name: 'Acme Corp', ...cells };
+    const [bp] = await buildOperations(row, config('contacts-off-roles'));
+    assert.deepEqual({ customer: bp.body.customer, vendor: bp.body.vendor }, expected);
+    assert.deepEqual(runImportRowValidator('contacts', row), []);
+  });
+
+  it('flags an unrecognized Cliente/Proveedor cell in review and fails the row on send', async () => {
+    const row = { name: 'Acme Corp', customer: 'Quizás', vendor: 'Quizás' };
+    assert.deepEqual(runImportRowValidator('contacts', row).map((e) => e.target), ['customer', 'vendor']);
+    await assert.rejects(() => buildOperations(row, config('contacts-off-invalid')), /Quizás/);
+  });
+
+  it('creates an unknown category and points the contact at the new one', async () => {
+    const createCategoryFn = vi.fn(async ({ searchKey, name }) => ({ id: 'BPG-NEW', searchKey, name }));
+    const [bp] = await buildOperations(
+      { name: 'Acme Corp', category: 'Distribución Especial' },
+      config('contacts-off-autocreate', {
+        existingCategories: [{ id: 'BPG-CLIENTS', searchKey: 'CLIENTS', name: 'Clientes' }],
+        createCategoryFn,
+      }),
+    );
+    assert.equal(createCategoryFn.mock.calls.length, 1);
+    assert.equal(bp.body.businessPartnerCategory, 'BPG-NEW');
+  });
+});
+
+// The import columns follow the same flag through `hiddenWhenFlag` in the shipped decisions.json:
+// with the flag ON the Cliente / Proveedor columns leave the template, the mapping and the export.
+describe('contacts import columns per contact-category-type flag', () => {
+  const artifactsDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', '..', '..', 'artifacts');
+  const importConfig = JSON.parse(readFileSync(join(artifactsDir, 'contacts', 'decisions.json'), 'utf8')).window.import;
+
+  it.each([
+    ['OFF', false, true],
+    ['ON', true, false],
+  ])('flag %s: Cliente/Proveedor columns present = %s', (_state, on, present) => {
+    const targets = applyImportFlagGates(importConfig, { [CONTACT_CATEGORY_TYPE]: on }).fields.map((f) => f.target);
+    assert.equal(targets.includes('customer'), present);
+    assert.equal(targets.includes('vendor'), present);
+    assert.ok(targets.includes('category'), 'the category column stays in both states');
   });
 });
 

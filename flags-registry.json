@@ -1108,25 +1108,21 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/index.vitest.jsx",
-            "expected": true,
             "note": "Window wrapper: flag OFF excludes etgoIscustomer (and its gate) and keeps the generated Accounting table; ON passes CustomLines={BpCategoryAccountingPanel} with DetailTable={null}."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/BpCategoryTable.vitest.jsx",
-            "expected": true,
             "note": "List columns per flag state (OFF: searchKey, name; ON: name, etgoIscustomer, etgoIsvendor, default)."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/components/contract-ui/__tests__/useContactCreateTypeGate.vitest.jsx",
-            "expected": true,
             "note": "Both create popups: OFF seeds customer/vendor and drops createOmitUntouched/validateBeforeCreate/requirement; ON the reverse."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/lib/__tests__/importFlagGates.vitest.js",
-            "expected": true,
             "note": "Generic hiddenWhenFlag filter, used here to hide the contacts Cliente/Proveedor columns."
           },
           {
