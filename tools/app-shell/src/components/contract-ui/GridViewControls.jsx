@@ -37,8 +37,8 @@ function ColumnToggleItem({ column, gridView, t }) {
 
 function SaveIcon({ saving }) {
   return saving
-    ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" data-testid="Loader2__3b8cf2" />
-    : <Save className="mr-1.5 h-4 w-4" data-testid="Save__3b8cf2" />;
+    ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__3b8cf2" />
+    : <Save className="h-4 w-4" data-testid="Save__3b8cf2" />;
 }
 
 export function GridViewControls({ gridView, gridColumns, ui, t }) {
@@ -51,10 +51,12 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
             variant="outline"
             size="sm"
             disabled={!gridView.active}
+            className="px-2"
+            title={ui('gridViewColumns')}
             aria-label={ui('gridViewColumns')}
             data-testid="grid-view-columns-trigger">
-            <Columns3 className="mr-1.5 h-4 w-4" data-testid="Columns3__3b8cf2" />
-            {ui('gridViewColumns')}
+            <Columns3 className="h-4 w-4" data-testid="Columns3__3b8cf2" />
+            <span className="sr-only">{ui('gridViewColumns')}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -77,11 +79,13 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
         type="button"
         variant="outline"
         size="sm"
+        className="px-2"
+        title={gridView.saveState === 'saving' ? ui('gridViewSaving') : ui('gridViewSave')}
         disabled={!gridView.active || !gridView.dirty || gridView.saveState === 'saving'}
         onClick={() => gridView.save()}
         data-testid="grid-view-save">
         <SaveIcon saving={gridView.saveState === 'saving'} data-testid="SaveIcon__3b8cf2" />
-        {gridView.saveState === 'saving' ? ui('gridViewSaving') : ui('gridViewSave')}
+        <span className="sr-only">{gridView.saveState === 'saving' ? ui('gridViewSaving') : ui('gridViewSave')}</span>
       </Button>
       <span role={gridView.loadError || gridView.saveState === 'error' ? 'alert' : 'status'} className="sr-only" data-testid="grid-view-status">
         {statusKey(gridView) ? ui(statusKey(gridView)) : ''}
