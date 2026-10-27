@@ -202,7 +202,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const runFetch = () => {
       fetchInFlightRef.current = true;
       apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-        .then(r => r.ok ? r.json() : null)
+        .then(r => {
+          if (!r.ok) throw new Error(`Selector request failed: ${r.status}`);
+          return r.json();
+        })
         .then(data => {
           if (!data?.items) return;
           if (searchGenerationRef.current !== requestGeneration) return;
@@ -213,7 +216,13 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           hasMoreRef.current = more;
           setHasMore(more);
         })
-        .catch(() => {})
+        .catch(() => {
+          // ETP-5948 — a failed "load more" ends the paging, as in CreatableSearchSelect: left
+          // `true`, the ETP-5903 walk re-requested the same page after every failure, forever.
+          if (offset === 0 || searchGenerationRef.current !== requestGeneration) return;
+          hasMoreRef.current = false;
+          setHasMore(false);
+        })
         .finally(() => {
           fetchInFlightRef.current = false;
           setSettledFetches(n => n + 1);

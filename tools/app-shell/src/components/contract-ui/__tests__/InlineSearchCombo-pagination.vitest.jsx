@@ -398,6 +398,24 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     expect(screen.getAllByTestId('inline-add-option-tax-tax-77')).toHaveLength(1);
   });
 
+  it('stops walking when a page fails, instead of re-requesting it, and then pins the value', async () => {
+    const failing = routedFetch({ totalRows: 1000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }] });
+    global.fetch = vi.fn((url) => {
+      const params = new URL(String(url), 'http://test').searchParams;
+      if (!params.has('q') && Number(params.get('offset')) === 50) {
+        return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+      }
+      return failing(url);
+    });
+
+    await committedCombo();
+    await openViaChip();
+
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 50]);
+    expect(lookupCalls()).toHaveLength(1);
+  });
+
   it('does not re-resolve the current selection when the lookup found nothing', async () => {
     // The lookup resolved NOTHING (the selector context forbids the id). The attempt still counts:
     // re-firing it on every page append would be pure waste.
