@@ -48,3 +48,10 @@ export function apiFetchHookMock(getApiFetchMock) {
       getApiFetchMock()(`${options.baseUrl ?? baseUrl}${path}`, options), [baseUrl]),
   };
 }
+
+/** jsdom lacks the pointer-capture API the Radix menus use; call from `beforeAll`. */
+export function installPointerCaptureStubs() {
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+}

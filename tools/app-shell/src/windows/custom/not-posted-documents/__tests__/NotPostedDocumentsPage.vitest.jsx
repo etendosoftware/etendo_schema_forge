@@ -8,12 +8,9 @@ import { toast } from 'sonner';
 import userEvent from '@testing-library/user-event';
 
 import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
+import { installPointerCaptureStubs } from '@/test/gridViewTestDoubles.jsx';
 
-beforeAll(() => {
-  Element.prototype.hasPointerCapture = vi.fn(() => false);
-  Element.prototype.setPointerCapture = vi.fn();
-  Element.prototype.releasePointerCapture = vi.fn();
-});
+beforeAll(installPointerCaptureStubs);
 
 let apiFetchMock = vi.fn();
 let gridColumnViewsEnabled = false;

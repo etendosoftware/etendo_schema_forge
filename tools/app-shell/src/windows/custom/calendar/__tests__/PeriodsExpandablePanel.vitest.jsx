@@ -11,11 +11,7 @@ import userEvent from '@testing-library/user-event';
 import enUS from '../../../../locales/en_US.json';
 import esES from '../../../../locales/es_ES.json';
 
-beforeAll(() => {
-  Element.prototype.hasPointerCapture = vi.fn(() => false);
-  Element.prototype.setPointerCapture = vi.fn();
-  Element.prototype.releasePointerCapture = vi.fn();
-});
+beforeAll(installPointerCaptureStubs);
 
 let apiFetchMock = vi.fn();
 let gridColumnViewsEnabled = false;
@@ -66,6 +62,7 @@ vi.mock('@/components/ui/button', () => ({
 }));
 import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
+import { installPointerCaptureStubs } from '@/test/gridViewTestDoubles.jsx';
 
 const PERIOD = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'O', 'status$_identifier': 'All Opened', periodNo: 1 };
 

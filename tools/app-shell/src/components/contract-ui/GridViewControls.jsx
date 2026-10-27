@@ -41,7 +41,10 @@ function SaveIcon({ saving }) {
     : <Save className="h-4 w-4" data-testid="Save__3b8cf2" />;
 }
 
-export function GridViewControls({ gridView, gridColumns, ui, t }) {
+// Column labels are already translated on the grid columns; `t` only overrides that lookup.
+const labelOf = (gridColumns) => (key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key;
+
+export function GridViewControls({ gridView, gridColumns, ui, t = labelOf(gridColumns) }) {
   return (
     <div className="flex items-center gap-1" data-testid="grid-view-controls">
       <DropdownMenu data-testid="DropdownMenu__3b8cf2">

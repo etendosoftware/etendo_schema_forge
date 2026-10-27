@@ -1,8 +1,8 @@
 import { useGridView } from '@/hooks/useGridView.js';
 import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
-import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
-import { Children, cloneElement, useEffect, useState, useCallback, useMemo } from 'react';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight, Trash2 } from 'lucide-react';
 import { useUI } from '@/i18n';
@@ -59,34 +59,14 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   });
   // Structural cells stay outside the personal view; existing editors and actions
   // retain their handlers and React keys when data cells move.
-  const renderGridCells = (fragment) => {
-    if (!gridColumnViews || !gridSpec) return fragment;
-    const cells = Children.toArray(fragment.props.children);
-    const visibleColumns = gridView.active ? gridView.columns : gridColumns;
-    const count = visibleColumns.length + 1;
-    if (cells.length === 1 && cells[0].props.colSpan) {
-      return cloneElement(cells[0], { colSpan: count });
-    }
-    const dataCells = visibleColumns.map((column) => {
-      const cell = cells[column.sourceIndex];
-      if (!gridView.active) return cloneElement(cell, { key: column.key });
-      const header = cell.type === 'th';
-      const width = column.gridUserWidthPx;
-      return cloneElement(cell, {
-        key: column.key,
-        'data-grid-column': column.key,
-        style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
-        ...(header ? gridHeaderProps(column, gridView) : {}),
-      }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
-    });
-    return [...cells.slice(0, 1), ...dataCells];
-  };
+  const renderGridCells = (fragment) => (gridColumnViews && gridSpec
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 1 })
+    : fragment);
   const gridControls = gridColumnViews && gridSpec ? (
     <GridViewControls
       gridView={gridView}
       gridColumns={gridColumns}
       ui={ui}
-      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key}
       data-testid="GridViewControls__34159c" />
   ) : null;
 

@@ -1,8 +1,8 @@
 import { useGridView } from '@/hooks/useGridView.js';
 import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
-import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
-import React, { Children, cloneElement, useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -684,30 +684,6 @@ function ExpandedForm({
   );
 }
 
-// Structural cells stay outside the personal view; existing editors and actions
-// retain their handlers and React keys when data cells move.
-function renderGridCellsFor(fragment, gridView, gridColumns, ui) {
-  const cells = Children.toArray(fragment.props.children);
-  const visibleColumns = gridView.active ? gridView.columns : gridColumns;
-  const count = visibleColumns.length + 2;
-  if (cells.length === 1 && cells[0].props.colSpan) {
-    return cloneElement(cells[0], { colSpan: count });
-  }
-  const dataCells = visibleColumns.map((column) => {
-    const cell = cells[column.sourceIndex];
-    if (!gridView.active) return cloneElement(cell, { key: column.key });
-    const header = cell.type === 'th';
-    const width = column.gridUserWidthPx;
-    return cloneElement(cell, {
-      key: column.key,
-      'data-grid-column': column.key,
-      style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
-      ...(header ? gridHeaderProps(column, gridView) : {}),
-    }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
-  });
-  return [...cells.slice(0, 1), ...dataCells, ...cells.slice(-1)];
-}
-
 /** The invoice spec whose reversed-invoices grid view is stored, or null outside the two supported specs. */
 function reversedInvoicesGridSpec(apiBaseUrl) {
   return apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
@@ -753,14 +729,13 @@ export default function ReversedInvoicesPanel({
     enabled: gridEnabled, apiBaseUrl,
   });
   const renderGridCells = (fragment) => (gridEnabled
-    ? renderGridCellsFor(fragment, gridView, gridColumns, ui)
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 1, trailing: 1 })
     : fragment);
   const gridControls = gridEnabled ? (
     <GridViewControls
       gridView={gridView}
       gridColumns={gridColumns}
       ui={ui}
-      t={(key) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === key)?.label ?? key}
       data-testid="GridViewControls__4395d6" />
   ) : null;
 

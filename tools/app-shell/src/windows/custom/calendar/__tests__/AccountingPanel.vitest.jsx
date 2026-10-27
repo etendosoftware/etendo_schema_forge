@@ -3,11 +3,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-beforeAll(() => {
-  Element.prototype.hasPointerCapture = vi.fn(() => false);
-  Element.prototype.setPointerCapture = vi.fn();
-  Element.prototype.releasePointerCapture = vi.fn();
-});
+beforeAll(installPointerCaptureStubs);
 
 let apiFetchMock = vi.fn();
 let gridColumnViewsEnabled = false;
@@ -15,6 +11,7 @@ vi.mock('@/auth/useApiFetch.js', async () => (await import('@/test/gridViewTestD
 vi.mock('@/lib/flags', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridFlagsMock(() => gridColumnViewsEnabled));
 
 import AccountingPanel from '../AccountingPanel.jsx';
+import { installPointerCaptureStubs } from '@/test/gridViewTestDoubles.jsx';
 
 const ROW = {
   id: 'f1', account: '20000000', accountName: 'Profit and loss', debit: 1234.5, credit: 0,

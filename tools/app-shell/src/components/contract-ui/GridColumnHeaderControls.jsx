@@ -1,3 +1,4 @@
+import { Children, cloneElement } from 'react';
 import { GripVertical } from 'lucide-react';
 
 export function gridHeaderProps(col, gridView) {
@@ -74,4 +75,31 @@ export function gridResizeHandle(col, gridView, label, ui) {
       <span aria-hidden="true" className="h-6 w-0.5 rounded-full bg-border transition-colors group-hover:bg-muted-foreground group-focus-visible:bg-primary" />
     </div>
   );
+}
+
+/**
+ * Re-projects the cells of one table row (or the header row) for a personal grid view.
+ * `fragment` holds one cell per source column; `sourceIndex` on each grid column points at
+ * its cell. The `leading` / `trailing` structural cells (selection, actions) stay outside the
+ * personal view, keeping their handlers and React keys when data cells move.
+ */
+export function renderGridViewCells(fragment, { gridView, gridColumns, ui, leading = 0, trailing = 0 }) {
+  const cells = Children.toArray(fragment.props.children);
+  const visibleColumns = gridView.active ? gridView.columns : gridColumns;
+  if (cells.length === 1 && cells[0].props.colSpan) {
+    return cloneElement(cells[0], { colSpan: visibleColumns.length + leading + trailing });
+  }
+  const dataCells = visibleColumns.map((column) => {
+    const cell = cells[column.sourceIndex];
+    if (!gridView.active) return cloneElement(cell, { key: column.key });
+    const header = cell.type === 'th';
+    const width = column.gridUserWidthPx;
+    return cloneElement(cell, {
+      key: column.key,
+      'data-grid-column': column.key,
+      style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
+      ...(header ? gridHeaderProps(column, gridView) : {}),
+    }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
+  });
+  return [...cells.slice(0, leading), ...dataCells, ...(trailing ? cells.slice(-trailing) : [])];
 }
