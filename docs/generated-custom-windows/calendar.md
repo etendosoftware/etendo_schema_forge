@@ -267,7 +267,8 @@ ever changes, this needs revisiting.
   is a frontend-only visibility gate on top of it, not a change to the process itself.
 - **Row actions: Abrir / Cerrar / Cerrar permanentemente…** (`periodControl.openClose`, on `open-close-period-control`) call AD
    Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
-   (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
+   (bound by `@NeoExtension(spec = "open-close-period-control", entity = "periodControl")` since
+   ETP-5588; it used `JAVA_QUALIFIER = 'period-openclose'` before) — the exact same handler and URL base
    (`/sws/neo/open-close-period-control/...`) this window has always used; nothing about this action
    changed for ETP-4478. This process opens/closes **every** `C_PeriodControl` row for the period
    in one transaction — already the global mechanism — so `PeriodsExpandablePanel.jsx` only needs

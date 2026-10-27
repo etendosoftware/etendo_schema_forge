@@ -134,7 +134,10 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
 cd /Users/futit/Workspace/etendo_develop
 local-env worktree ETP-XXXX --module com.etendoerp.go=feature/ETP-XXXX   # add --base=origin/develop for a new branch
 cd ../.worktrees/ETP-XXXX
-local-env up > /tmp/ETP-XXXX-up.log 2>&1 &                                # after the user approves
+local-env up                                                               # after the user approves
+# Returns once Etendo answers (Tomcat keeps running in the background) and prints the URLs and
+# the Tomcat log path; `local-env log` follows it. `up --foreground` keeps Tomcat on the terminal.
+# An older local-env (before ETP-5588) still runs Tomcat in the foreground: background it there.
 ```
 
 Ports are printed at creation; `local-env worktree ls` lists them later. Expect on this
@@ -161,8 +164,8 @@ Its config already points at the environment's DB.
 ## Stop and remove
 
 ```bash
-pkill -f -- "-Dcatalina.base=<env>/"        # Tomcat
-cd <env> && local-env stop                  # SPA + PostgreSQL
+cd <env> && local-env stop                  # Tomcat + SPA + PostgreSQL
+# (an older local-env stops only SPA + PostgreSQL: pkill -f -- "-Dcatalina.base=<env>/" first)
 cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # branches are kept
 ```
 

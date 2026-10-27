@@ -8,7 +8,8 @@
 #   manifest         `seed GOClient v1` (part of the DB fingerprint)
 #   db-seed          the gradle invocations that load the GO sample client
 #   worktree-create  reserves SPA_PORT / BFF_PORT for the new environment, allows that SPA
-#                    origin and points the MCP / OAuth public URLs at it
+#                    origin, points the MCP / OAuth public URLs at it and the app-shell's
+#                    .env.local ETENDO_URL at its Tomcat
 #   up               `make dev-local-core` in the background, pointed at its Tomcat
 #   status           SPA URL, running or stopped
 #   stop|off|worktree-rm  stops that environment's SPA + BFF
@@ -146,6 +147,28 @@ align_public_urls() {
   [[ -n "$ALIGNED" ]]
 }
 
+# A worktree's tools/app-shell/.env.local is copied from the main checkout, so its ETENDO_URL
+# is the main Tomcat's. `up` overrides it on make's command line, but a `make dev` run by hand
+# in the environment (e.g. after this plugin skipped the SPA) proxied to the main checkout's
+# Tomcat without a word (2026-10-26). Rewritten in worktrees only (a main checkout may point it
+# anywhere on purpose), only for a localhost value, and only in a schema_forge that physically
+# lives in the environment: an adopted worktree or the plugin's own checkout is someone else's.
+# align_app_shell_url: exit 0 when it changed the file, 1 otherwise.
+align_app_shell_url() {
+  local f="$SF/tools/app-shell/.env.local" sf root tmp
+  [[ -n "${LOCALENV_WORKTREE:-}" && -f "$f" ]] || return 1
+  sf="$(cd "$SF" && pwd -P)"; root="$(cd "$ETENDO_ROOT" && pwd -P)"
+  [[ "$sf" == "$root"/* ]] || return 1
+  tmp="$(mktemp)"
+  awk -v url="$LOCALENV_URL" '
+    /^ETENDO_URL=http:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?(\/[^ \t\r]*)?[ \t\r]*$/ {
+      print "ETENDO_URL=" url (($0 ~ /\r$/) ? "\r" : ""); next
+    }
+    { print }' "$f" > "$tmp"
+  if cmp -s "$tmp" "$f"; then rm -f "$tmp"; return 1; fi
+  cat "$tmp" > "$f"; rm -f "$tmp"
+}
+
 # needs_install DIR STAMP: node_modules missing, or the lockfile changed since the last
 # install. local-env clones a repo's node_modules into a new worktree from the source
 # checkout, so they can lag the branch's own lockfile: the same check covers that.
@@ -188,8 +211,11 @@ case "$hook" in
     if align_public_urls "$spa"; then
       echo ">> Pointed etgo.mcp.public.url / etgo.oauth2.public.url at :$spa in $ALIGNED"
     fi
+    if align_app_shell_url; then echo ">> Pointed ETENDO_URL of $SF/tools/app-shell/.env.local at $LOCALENV_URL"; fi
     ;;
   up)
+    # environments created before worktree-create did it; before any skip, for a `make dev` by hand
+    if align_app_shell_url; then echo ">> Pointed ETENDO_URL of $SF/tools/app-shell/.env.local at $LOCALENV_URL"; fi
     if [[ "${ETENDO_GO_SPA:-1}" == 0 ]]; then echo ">> ETENDO_GO_SPA=0: Etendo GO SPA not started"; exit 0; fi
     if [[ ! -d "$GO_MODULE" ]]; then echo ">> modules/com.etendoerp.go not in this checkout: Etendo GO SPA not started"; exit 0; fi
     if [[ ! -d "$CORE/packages/app-shell-core/src" ]]; then
