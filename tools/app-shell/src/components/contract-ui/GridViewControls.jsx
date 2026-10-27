@@ -64,7 +64,12 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
           <DropdownMenuLabel data-testid="DropdownMenuLabel__3b8cf2">{ui('gridViewColumns')}</DropdownMenuLabel>
           <DropdownMenuSeparator data-testid="DropdownMenuSeparator__3b8cf2" />
           {gridColumns.map((column) => (
-            <ColumnToggleItem key={gridViewColumnId(column)} column={column} gridView={gridView} t={t} />
+            <ColumnToggleItem
+              key={gridViewColumnId(column)}
+              column={column}
+              gridView={gridView}
+              t={t}
+              data-testid="ColumnToggleItem__3b8cf2" />
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -75,7 +80,7 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
         disabled={!gridView.active || !gridView.dirty || gridView.saveState === 'saving'}
         onClick={() => gridView.save()}
         data-testid="grid-view-save">
-        <SaveIcon saving={gridView.saveState === 'saving'} />
+        <SaveIcon saving={gridView.saveState === 'saving'} data-testid="SaveIcon__3b8cf2" />
         {gridView.saveState === 'saving' ? ui('gridViewSaving') : ui('gridViewSave')}
       </Button>
       <span role={gridView.loadError || gridView.saveState === 'error' ? 'alert' : 'status'} className="sr-only" data-testid="grid-view-status">
