@@ -7,7 +7,6 @@ import { useFlagGatedImportConfig } from '@/lib/importFlagGates.js';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
@@ -657,7 +656,6 @@ export function ListView({
     setShowImportDialog(open);
     if (!open) setImportInitialFile(null);
   }, []);
-  const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
   // `multiField` columns are opaque to the advanced filter: expand each into

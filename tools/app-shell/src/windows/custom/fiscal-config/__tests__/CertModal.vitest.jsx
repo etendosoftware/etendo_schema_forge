@@ -215,3 +215,31 @@ describe('CertModal — anti-autofill hardening (ETP-5338)', () => {
     }
   });
 });
+
+describe('CertModal — upload 422 handling', () => {
+  async function uploadRejectedWith(body) {
+    vi.useFakeTimers();
+    try {
+      stableApiFetch.mockResolvedValueOnce({ ok: false, status: 422, json: async () => body });
+      render(<CertModal {...baseProps} />);
+      const file = new File(['dummy'], 'cert.p12', { type: 'application/x-pkcs12' });
+      fireEvent.change(screen.getByTestId('cert-file-input'), { target: { files: [file] } });
+      fireEvent.change(document.getElementById('cert-passphrase'), { target: { value: 'pw' } });
+      fireEvent.click(screen.getByText('fiscal.cert.btn.verify').closest('button'));
+      await vi.advanceTimersByTimeAsync(2000);
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it('shows the NIF-mismatch message for a code-less 422', async () => {
+    await uploadRejectedWith({ error: { message: 'NIF differs', status: 422 } });
+    expect(screen.getByText('fiscal.cert.err.nifMismatch')).toBeInTheDocument();
+  });
+
+  it('shows the server message for a coded 422', async () => {
+    await uploadRejectedWith({ error: { message: 'Certificate rejected', status: 422, code: 'business_rule' } });
+    expect(screen.getByText('Certificate rejected')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.cert.err.nifMismatch')).not.toBeInTheDocument();
+  });
+});

@@ -16,6 +16,7 @@ import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext'
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 import TopBar from '@/components/layout/TopBar';
+import { BillingStatusBanner } from '@/components/billing/BillingStatusBanner.jsx';
 import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchContext.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
@@ -559,6 +560,8 @@ function AppLayoutInner({ menuGroups, embedded }) {
         className="flex h-screen flex-col transition-[margin-left] duration-200 ease-in-out bg-page-bg"
         style={{ marginLeft: embedded ? 0 : marginLeft }}
       >
+        {/* ETP-5049 — failed-payment warning during the grace period, above the whole chrome. */}
+        {!embedded && <BillingStatusBanner data-testid="BillingStatusBanner__488148" />}
         {!embedded && (
           <TopBar
             onBack={meta?.onBack}

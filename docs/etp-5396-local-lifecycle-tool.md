@@ -49,7 +49,8 @@ source of truth for the resulting `trialExpiresAt`, `trialDaysRemaining`, and `a
 2. Set the same demo start to a timestamp in the past. Confirm the owner and every tenant role are
    blocked while account billing remains available.
 3. Select a productive environment, set `PAST_DUE`, set a due timestamp, and use a short grace
-   period. Confirm access during grace and suspension after the deadline.
+   period. Confirm access during grace, with the failed-payment banner (`billing-status-banner`,
+   ETP-5049) above the top bar, and suspension after the deadline.
 4. Restart the backend and confirm the temporary day overrides are gone while persisted timestamps
    remain.
 5. Remove either local property and confirm `/sws/go/dev/lifecycle` returns 404. Build the frontend

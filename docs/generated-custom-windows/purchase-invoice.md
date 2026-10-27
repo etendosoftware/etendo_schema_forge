@@ -1382,8 +1382,9 @@ rectificative type and the legacy `APC` credit memo.
   for a different purpose (349 corrective-box reporting). The two are independent.
   - **New (ETP-4755): the tab's "Correctiva del 349" checkbox is now gated by the tenant's
     Fiscal Models catalog.** `ReversedInvoicesPanel.jsx` — shared, unchanged, by both
-    `sales-invoice` and `purchase-invoice` — fetches the cross-spec, generic
-    `GET /sws/neo/fiscal-models-catalog` endpoint (the same per-`AD_PREFERENCE` catalog the
+    `sales-invoice` and `purchase-invoice` — reads the cross-spec, generic
+    `GET /sws/neo/fiscal-models-catalog` endpoint through the shared
+    `fiscal-models/useFiscalModelsCatalog.js` hook (ETP-5831) (the same per-`AD_PREFERENCE` catalog the
     `fiscal-models` window itself uses to enable/disable tax forms; see
     `fiscal-models.md`'s "Downstream consumer" note for the full write-up) and only renders
     the checkbox (plus its dependent AEAT year/period/base-amount fields) when the catalog
@@ -1931,15 +1932,24 @@ document type gets it for free.
 Tests: `ocr/__tests__/hasExtractedData.test.js`, `useOcrExtraction.vitest.jsx`,
 `OcrInlineUploader.vitest.jsx`.
 
-## OCR reader — product matching never assigns a partial match silently
+## OCR reader — product matching assigns only exact or near-identical matches silently
 
 Line products are looked up with `simSearch` (Product, `minSimPercent: 50`, `qtyResults: 3`; raised from 30 in ETP-5654 to cut low-similarity noise from the suggestions).
 `classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line:
 
 - **Exactly one candidate whose name equals the line description** (trim, case-insensitive) →
   assigned automatically.
-- **Any other candidate** (partial similarity, or two products with the same exact name) → the
-  line goes to the "Asociar productos" popup, where the best candidate is only **suggested**
+- **Single highest near-identical candidate (ETP-5654, 4th QA pass):** when no exact name
+  applies, the candidate with the highest `similarityPercent` is assigned automatically if that
+  value is **>= 90** (inclusive; `PRODUCT_AUTO_MATCH_MIN_SIMILARITY`) and exactly **one**
+  candidate holds it — even if a runner-up is also >= 90 (96 beats 94). If two or more candidates
+  tie at the highest value (e.g. "talla L" and "talla M" both at 96.7) nothing is assigned and the
+  first candidate returned by the search is only suggested; a tie lower down (96, 94, 94) does not
+  block. A missing, blank or non-numeric similarity (`undefined`, `''`, `NaN`, `"96.7%"`) never
+  qualifies. Two products with the same exact name stay ambiguous. The Java OCR review
+  (`OcrProductMatch`, `auto_matched` state) applies the same rule.
+- **Any other candidate** (highest similarity below 90, a tie at the top, or two products with the same
+  exact name) → the line goes to the "Asociar productos" popup, where the best candidate is only **suggested**
   (ETP-5654): the row starts undecided and the suggestion shows as a one-click chip below the
   selector (`ocr-product-suggestion-{idx}`, "Suggested: <name>"). Nothing is selected until the user
   accepts the chip, picks another product, creates one, or skips the line. A **non-dismissible

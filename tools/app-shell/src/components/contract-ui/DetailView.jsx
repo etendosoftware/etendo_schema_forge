@@ -55,7 +55,6 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { buildChildRowDeleteFn } from '@/lib/batchDelete.js';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
-import { apiFetch } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 // ETP-5073 / DOC-08: switching to another line while one is being edited used to discard the

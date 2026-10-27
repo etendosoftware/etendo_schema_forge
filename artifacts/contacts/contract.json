@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.5.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-26T18:25:24.961Z",
-  "checksum": "bfb2756d92e45aa9",
+  "updatedAt": "2026-10-27T11:23:38.620Z",
+  "checksum": "31c2ecc5ba6a17e6",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -531,7 +531,8 @@
               "exposed": true,
               "name": "searchKey",
               "type": "passthrough",
-              "handlerId": null
+              "handlerId": null,
+              "readOnly": true
             }
           },
           {
@@ -4604,6 +4605,12 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "locationAddress",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4620,6 +4627,12 @@
             "section": "other",
             "validation": {
               "maxLength": 40
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "phone",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4635,6 +4648,12 @@
             "form": true,
             "validation": {
               "maxLength": 40
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "alternativePhone",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4662,6 +4681,12 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "name",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4677,6 +4702,12 @@
             "form": true,
             "validation": {
               "maxLength": 40
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "fax",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4704,6 +4735,12 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "shipToAddress",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4731,6 +4768,12 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "invoiceToAddress",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4753,6 +4796,12 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "active",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -4778,6 +4827,12 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_BPartnerLocation"
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "taxLocation",
+              "type": "passthrough",
+              "handlerId": null
             }
           }
         ],

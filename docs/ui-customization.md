@@ -3059,6 +3059,9 @@ the primary button on open (so Enter runs it) and returns to the opener on unmou
 inside (`useDialogFocusTrap`, shared with `ActionChoiceModal`); Esc closes only when it is this
 dialog's own (`isOwnEscape`); a navigable card is a native `<button>` (Enter / Space open it).
 Overlay `zIndex: 50` (the app's modal tier — see `docs/walkthrough-flows.md`).
+The primary button (the lone «Cerrar» with 2+ documents, «Ver …» with one) uses the design-system
+primary blue with the same classes as the shared default Button (`bg-primary`, `hover:bg-primary/90`,
+`shadow`), the same as the «Confirmar» of the order windows; the secondary «Cerrar» stays white with a border.
 
 **Stable selectors** (E2E and walkthroughs):
 

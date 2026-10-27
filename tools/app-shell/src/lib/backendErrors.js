@@ -245,10 +245,11 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
-  // ETP-5381: this duplicate guard was REMOVED on purpose (a return can legitimately have more
-  // than one rectificative invoice) and the backend no longer sends this sentence; ETP-5712 reports
-  // the existing ones in `previousReturnInvoices` instead. The entry stays only so a response from
-  // an older backend still reads in the user's language.
+  // ETP-5712: the backend answers 409 `returnInvoiceAlreadyExists` with exactly this sentence when
+  // the return already has a non-voided rectificative invoice and the request does not carry
+  // `allowDuplicate:true` (one per return, like the screen, which hides its button). ETP-5381 had
+  // removed the guard; ReturnShipmentUtils.MSG_RETURN_INVOICE_ALREADY_EXISTS is the source, keep
+  // both in step. Older backends sent it too, so the entry serves both.
   'A rectificative invoice already exists for this return document.':
     'backendError.returnInvoiceAlreadyExists',
   // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
@@ -981,12 +982,13 @@ function matchReturnReasonTooLong(msg) {
 }
 
 // ReturnShipmentUtils.refuseIfUnpriced (com.etendoerp.go — ETP-5712), `error.code = returnInvoiceWithoutAmount`:
-// "The corrective invoice (factura rectificativa) cannot be created: no price could be found for
-// {products}, so it would be confirmed with a zero amount. Set a price for ... and try again."
+// "The corrective invoice (factura rectificativa) cannot be created: no price source was found for
+// {products} (not on the invoice being rectified, nor on its order line, nor in the price list), so
+// it would be confirmed with a zero amount. Give those products a price ..."
 // The products are free text joined with ", " — one opaque {products} param (same shape as
 // matchInvoiceLinesWithoutAmount), located by the fixed prefix and suffix, never by a regex.
-const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
-const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price source was found for ';
+const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ' (not on the invoice being rectified, nor on its order line, nor in the price list), so it would be confirmed with a zero amount. Give those products a price in the price list, or rectify an invoice that has them.';
 
 function matchReturnInvoiceWithoutAmount(msg) {
   if (!msg.startsWith(RETURN_INVOICE_NO_AMOUNT_PREFIX) || !msg.endsWith(RETURN_INVOICE_NO_AMOUNT_SUFFIX)) {
@@ -1521,6 +1523,78 @@ function extractFirstResponseErrorsMessage(data) {
   return undefined;
 }
 
+/**
+ * Reads the machine-readable failure class of a NEO error body (ETP-5782), whatever shape it
+ * arrived in: nested `{error:{code}}` (thrown failures) or the flat IMP-5 `{error:"stale_record"}`
+ * (pre-checked). Returns `undefined` when the body carries none — a backend deployed before the
+ * classification, or a non-NEO envelope. Screens must branch on this, never on the bare status:
+ * a 409 can be a duplicate, a stale record, a record in use or a retryable conflict.
+ *
+ * @param {object|null|undefined} payload parsed JSON error body
+ * @returns {string|undefined} the code, e.g. `duplicate_key`, `stale_record`
+ */
+const FLAT_ERROR_CODES = new Set([
+  'stale_record', 'duplicate_key', 'record_in_use', 'retryable_conflict', 'unknown_reference',
+  'invalid_value', 'missing_required_value', 'business_rule', 'forbidden', 'service_unavailable',
+  'server_error', 'read_only_field',
+]);
+
+export function extractBackendErrorCode(payload) {
+  const nested = payload?.error?.code;
+  if (typeof nested === 'string' && nested) return nested;
+  const flat = payload?.error;
+  // Flat shape: allow-list only, so an arbitrary snake_case string (e.g. "conflict") is not a code.
+  if (typeof flat === 'string' && FLAT_ERROR_CODES.has(flat)) return flat;
+  return undefined;
+}
+
+// ETP-5782 — the generic English sentences NEO sends for a classified failure, keyed by the
+// failure code, with the i18n key that renders each. Only the EXACT generic text is replaced:
+// a specific, already-translated explanation under the same code (a business_rule, a record_in_use
+// raised by a trigger) is kept verbatim.
+// These sentences mirror the NeoErrorClassifier MSG_* constants in com.etendoerp.go; changing one
+// side silently disables the translation (it falls back to the server text).
+const GENERIC_CODE_MESSAGES = {
+  unknown_reference: ['A referenced record does not exist or is not accessible.', 'backendError.unknownReference'],
+  record_in_use: ['This record cannot be deleted because other records use it.', 'backendError.recordInUse'],
+  invalid_value: ['A value sent is not valid.', 'backendError.invalidValue'],
+  missing_required_value: ['A required value is missing.', 'backendError.missingRequiredValue'],
+  retryable_conflict: ['The record is being modified by another operation. Retry the request.', 'backendError.retryableConflict'],
+  forbidden: ['This action is not allowed for the current role.', 'backendError.forbidden'],
+};
+// service_unavailable carries a sanitized, non-fixed text, so it is translated by code alone.
+const CODE_ONLY_KEYS = { service_unavailable: 'backendError.serviceUnavailable' };
+
+function translateByCode(msg, t, code) {
+  if (!code) return null;
+  const only = CODE_ONLY_KEYS[code];
+  const generic = GENERIC_CODE_MESSAGES[code];
+  const key = only ?? (generic && msg?.trim() === generic[0] ? generic[1] : null);
+  if (!key) return null;
+  const translated = t(key);
+  return translated && translated !== key ? translated : null;
+}
+
+/**
+ * True when a refusal means "that value already exists" (ETP-5782). A 409 is also a stale record,
+ * a record in use and a retryable conflict, so the status alone no longer says it: only
+ * `duplicate_key` does. A 409 with no code at all is a hand-written refusal of an endpoint that
+ * predates the classification (a draft already exists, an account name is taken) and keeps its
+ * meaning.
+ *
+ * @param {number|undefined} status HTTP status of the refusal
+ * @param {string|null|undefined} code failure code, see `extractBackendErrorCode`
+ * @returns {boolean} whether to show the "already exists" message
+ */
+export function isDuplicateConflict(status, code) {
+  return status === 409 && (!code || code === 'duplicate_key');
+}
+
+function codeEntry(data) {
+  const code = extractBackendErrorCode(data);
+  return code ? { code } : {};
+}
+
 function pickBackendErrorText(data) {
   // NEO Headless top-level format: { error: { message, status } }
   if (data?.error?.message) return data.error.message;
@@ -1551,6 +1625,7 @@ export async function parseBackendError(res) {
     message: pickBackendErrorText(data),
     messageKeys: extractBackendMessageKeys(data),
     messageParams: extractBackendMessageParams(data),
+    ...codeEntry(data),
   };
 }
 
@@ -1569,8 +1644,8 @@ export async function parseBackendErrorMessage(res) {
  * @returns {Promise<string>} the translated message
  */
 export async function translateBackendErrorResponse(res, t) {
-  const { message, messageKeys, messageParams } = await parseBackendError(res);
-  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams });
+  const { message, messageKeys, messageParams, code } = await parseBackendError(res);
+  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams, code });
 }
 
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';
@@ -1643,6 +1718,9 @@ export function translateBackendError(msg, t, options = {}) {
 
   const single = translateSingleMessage(trimmed, t);
   if (single !== null) return single;
+
+  const byCode = translateByCode(msg, t, options.code);
+  if (byCode !== null) return byCode;
 
   // ETP-5109: the PSD2 sync path accumulates its result messages into ONE StringBuilder joined by
   // newlines — SaltEdgeAccountLinkHelper.fetchAccountTransactions appends the max-fetch-interval
