@@ -649,3 +649,23 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 - `hasLinkedDocuments`, `needsPrimaryDoc` and `needsInvoiceDoc` are declared response keys.
 
 Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
+
+## Header validations over MCP `etendo_update` — ETP-5726
+
+The MCP has to behave like the form, so three header rules apply to an agent editing an order
+through `etendo_update` (the sales order shares them; the first applies to every window):
+
+- **A required field cannot be cleared** (every window, not only orders). The form never lets a person empty a required input
+  (for example `scheduledDeliveryDate`); an update that sends `null` or `""` for one is refused with
+  `422 validation_error` and `missingFields[{name, column, type, label}]`, the label in the user's
+  language. A field that is left out of the update keeps its stored value. MCP only: REST single,
+  batch and the SPA are unchanged (parity is a declared follow-up).
+- **The currency must agree with the price list.** Changing the currency of a draft order to one
+  that differs from its price list's (the price list sent in the same update, else the stored one) is
+  refused with `422`, naming the currency and the price list; send a price list in the new currency in
+  the same call or keep the currency. MCP only: the form does not reset the price list and Etendo
+  core does not check it at completion.
+- **The order date is the accounting date** (ETP-4531, unified date): changing `orderDate` also
+  updates the accounting date. No separate field is published; the agent prompt says so.
+
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP-5726 rows of §4.12.9.
