@@ -287,8 +287,8 @@ describe('SendDocumentModal', () => {
   });
 
   // ETP-4315 — preview caching before send now uploads the blob as a real,
-  // marked Attachment (uploadAndMarkMainAttachment, multipart FormData) keyed
-  // by WINDOW_ATTACHMENT_TABLE['sales-invoice'] === 'C_Invoice', instead of
+  // marked Attachment (uploadAndMarkMainAttachment, multipart FormData) on the
+  // table of sales-invoice's primary entity (C_Invoice, from its contract), instead of
   // POSTing base64 JSON to the retired /preview-file endpoint.
   it('caches the generated preview before sending when preview caching is enabled by default', async () => {
     const user = userEvent.setup();
@@ -311,9 +311,12 @@ describe('SendDocumentModal', () => {
 
     await user.click(getSendButton());
 
+    // The attachment table is read from the window contract asynchronously, so wait for the
+    // whole send to finish rather than for its first request.
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('blob:test');
+      expect(toast.success).toHaveBeenCalledWith('sendModalSentSuccess:{"documentType":"Invoice"}');
     });
+    expect(global.fetch).toHaveBeenCalledWith('blob:test');
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:8080/etendo/neo/sales-invoice/sws/neo/attachments/C_Invoice/doc-1?markAsMain=true',
       expect.objectContaining({ method: 'POST' }),
@@ -322,7 +325,7 @@ describe('SendDocumentModal', () => {
       'http://localhost:8080/etendo/neo/email-contracts/sales-invoice-send/send',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(toast.success).toHaveBeenCalledWith('sendModalSentSuccess:{"documentType":"Invoice"}');
+    expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
   it('routes sales order sends to the sales-order email contract', async () => {

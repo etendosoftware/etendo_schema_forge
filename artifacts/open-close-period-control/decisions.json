@@ -70,7 +70,6 @@
   },
   "entities": {
     "periodControl": {
-      "javaQualifier": "period-openclose",
       "fields": {
         "status": {
           "grid": true,

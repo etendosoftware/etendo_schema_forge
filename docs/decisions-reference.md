@@ -825,7 +825,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `exclude` | boolean | `false` | Omit entire entity from schema **and close it in NEO** (`ETGO_SF_ENTITY.ISINCLUDED = 'N'` on the entity plus every one of its `ETGO_SF_FIELD` rows). See below. |
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
-| `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
+| `javaQualifier` | string | `null` | **Legacy** CDI qualifier for a custom NeoHandler. Do not add new ones: bind the class with `@NeoExtension(spec, entity)` instead (CI in com.etendoerp.go rejects a rising qualifier count). Echoed into the contract only; the runtime reads the `ETGO_SF_ENTITY` row. |
 | `namedFilters` | array | `null` | **Hand-authored named HQL filters** the NEO Headless MCP exposes as `{ "status": "<name>" }` list filters. See below. |
 | `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
@@ -840,7 +840,6 @@ in `afterHandle`; NEO will not derive it (no AD column → no OBDal property →
 
 ```json
 "account": {
-  "javaQualifier": "financialAccountHeaderHandler",
   "virtualFields": [
     { "name": "pendingCount", "column": "pendingCount", "label": "Pending",
       "type": "integer", "visibility": "readOnly", "form": false,
