@@ -1,9 +1,8 @@
-import { Children, cloneElement } from 'react';
 import { useGridView } from '@/hooks/useGridView.js';
 import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
-import { useMemo, useEffect } from 'react';
+import { Children, cloneElement, useMemo, useEffect } from 'react';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useWarehouseStock } from './useWarehouseStock';

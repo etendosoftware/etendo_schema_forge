@@ -10,6 +10,37 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 
+function statusKey(gridView) {
+  if (gridView.loading) return 'gridViewLoading';
+  if (gridView.loadError) return 'gridViewLoadFailed';
+  if (gridView.saveState === 'error') return 'gridViewSaveFailed';
+  if (gridView.dirty) return 'gridViewUnsaved';
+  if (gridView.saveState === 'saved') return 'gridViewSaved';
+  return null;
+}
+
+function ColumnToggleItem({ column, gridView, t }) {
+  const id = gridViewColumnId(column);
+  const labelKey = column.column ?? column.label ?? column.key;
+  const visible = gridView.columnVisibility[id] !== false;
+  const lastVisible = visible && gridView.visibleIds.length <= 1;
+  return (
+    <DropdownMenuCheckboxItem
+      checked={visible}
+      disabled={!gridView.active || !gridView.canHide(id) || lastVisible}
+      onCheckedChange={(checked) => gridView.setVisibility(id, checked)}
+      data-testid={`grid-view-column-${column.key}`}>
+      {t(labelKey) ?? column.label ?? column.key}
+    </DropdownMenuCheckboxItem>
+  );
+}
+
+function SaveIcon({ saving }) {
+  return saving
+    ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" data-testid="Loader2__3b8cf2" />
+    : <Save className="mr-1.5 h-4 w-4" data-testid="Save__3b8cf2" />;
+}
+
 export function GridViewControls({ gridView, gridColumns, ui, t }) {
   return (
     <div className="flex items-center gap-1" data-testid="grid-view-controls">
@@ -32,21 +63,9 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
           data-testid="DropdownMenuContent__3b8cf2">
           <DropdownMenuLabel data-testid="DropdownMenuLabel__3b8cf2">{ui('gridViewColumns')}</DropdownMenuLabel>
           <DropdownMenuSeparator data-testid="DropdownMenuSeparator__3b8cf2" />
-          {gridColumns.map((column) => {
-            const id = gridViewColumnId(column);
-            const labelKey = column.column ?? column.label ?? column.key;
-            const visible = gridView.columnVisibility[id] !== false;
-            return (
-              <DropdownMenuCheckboxItem
-                key={id}
-                checked={visible}
-                disabled={!gridView.active || !gridView.canHide(id) || (visible && gridView.visibleIds.length <= 1)}
-                onCheckedChange={(checked) => gridView.setVisibility(id, checked)}
-                data-testid={`grid-view-column-${column.key}`}>
-                {t(labelKey) ?? column.label ?? column.key}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
+          {gridColumns.map((column) => (
+            <ColumnToggleItem key={gridViewColumnId(column)} column={column} gridView={gridView} t={t} />
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
       <Button
@@ -54,19 +73,13 @@ export function GridViewControls({ gridView, gridColumns, ui, t }) {
         variant="outline"
         size="sm"
         disabled={!gridView.active || !gridView.dirty || gridView.saveState === 'saving'}
-        onClick={() => { void gridView.save(); }}
+        onClick={() => gridView.save()}
         data-testid="grid-view-save">
-        {gridView.saveState === 'saving'
-          ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" data-testid="Loader2__3b8cf2" />
-          : <Save className="mr-1.5 h-4 w-4" data-testid="Save__3b8cf2" />}
+        <SaveIcon saving={gridView.saveState === 'saving'} />
         {gridView.saveState === 'saving' ? ui('gridViewSaving') : ui('gridViewSave')}
       </Button>
       <span role={gridView.loadError || gridView.saveState === 'error' ? 'alert' : 'status'} className="sr-only" data-testid="grid-view-status">
-        {gridView.loading ? ui('gridViewLoading')
-          : gridView.loadError ? ui('gridViewLoadFailed')
-            : gridView.saveState === 'error' ? ui('gridViewSaveFailed')
-              : gridView.dirty ? ui('gridViewUnsaved')
-                : gridView.saveState === 'saved' ? ui('gridViewSaved') : ''}
+        {statusKey(gridView) ? ui(statusKey(gridView)) : ''}
       </span>
       {gridView.loadError && (
         <Button

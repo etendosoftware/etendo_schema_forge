@@ -1,9 +1,8 @@
-import { Children, cloneElement } from 'react';
 import { useGridView } from '@/hooks/useGridView.js';
 import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Children, cloneElement, useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight, Trash2 } from 'lucide-react';
 import { useUI } from '@/i18n';

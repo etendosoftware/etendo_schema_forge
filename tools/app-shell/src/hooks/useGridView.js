@@ -30,17 +30,37 @@ function canCustomizeWidth(column) {
     && column.cellClass == null;
 }
 
-function normalizeView(raw, columns) {
-  if (!raw || typeof raw !== 'object' || raw.version !== SCHEMA_VERSION || raw.surface !== 'list' || !Array.isArray(raw.columns)) {
-    return null;
-  }
+function isViewShape(raw) {
+  return raw && typeof raw === 'object' && raw.version === SCHEMA_VERSION
+    && raw.surface === 'list' && Array.isArray(raw.columns);
+}
 
-  const available = new Map(columns.map((column) => [gridViewColumnId(column), column]));
+function indexStoredColumns(raw, available) {
   const stored = new Map();
   for (const item of raw.columns) {
     if (!item || typeof item.id !== 'string' || !available.has(item.id) || stored.has(item.id)) continue;
     stored.set(item.id, item);
   }
+  return stored;
+}
+
+function canHideColumn(column) {
+  return column.gridConfigurable !== false && column.required !== true
+    && column.headClass == null && column.cellClass == null;
+}
+
+function applyStoredColumn(column, id, item, visibility, sizing) {
+  if (item.visible === false && canHideColumn(column)) visibility[id] = false;
+  const width = clampWidth(item.width);
+  if (width !== null && canCustomizeWidth(column)) sizing[id] = width;
+  return { id, order: Number.isFinite(item.order) ? item.order : Number.MAX_SAFE_INTEGER };
+}
+
+function normalizeView(raw, columns) {
+  if (!isViewShape(raw)) return null;
+
+  const available = new Map(columns.map((column) => [gridViewColumnId(column), column]));
+  const stored = indexStoredColumns(raw, available);
 
   const order = [];
   const visibility = {};
@@ -48,16 +68,7 @@ function normalizeView(raw, columns) {
   for (const column of columns) {
     const id = gridViewColumnId(column);
     const item = stored.get(id);
-    if (!item) {
-      order.push(id);
-      continue;
-    }
-    const canHide = column.gridConfigurable !== false && column.required !== true
-      && column.headClass == null && column.cellClass == null;
-    if (item.visible === false && canHide) visibility[id] = false;
-    const width = clampWidth(item.width);
-    if (width !== null && canCustomizeWidth(column)) sizing[id] = width;
-    order.push({ id, order: Number.isFinite(item.order) ? item.order : Number.MAX_SAFE_INTEGER });
+    order.push(item ? applyStoredColumn(column, id, item, visibility, sizing) : id);
   }
 
   const ordered = order
