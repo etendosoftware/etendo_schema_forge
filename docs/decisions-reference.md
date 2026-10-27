@@ -825,7 +825,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `exclude` | boolean | `false` | Omit entire entity from schema **and close it in NEO** (`ETGO_SF_ENTITY.ISINCLUDED = 'N'` on the entity plus every one of its `ETGO_SF_FIELD` rows). See below. |
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
-| `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
+| `javaQualifier` | string | `null` | **Legacy** CDI qualifier for a custom NeoHandler. Do not add new ones: bind the class with `@NeoExtension(spec, entity)` instead (CI in com.etendoerp.go rejects a rising qualifier count). Echoed into the contract only; the runtime reads the `ETGO_SF_ENTITY` row. |
 | `namedFilters` | array | `null` | **Hand-authored named HQL filters** the NEO Headless MCP exposes as `{ "status": "<name>" }` list filters. See below. |
 | `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
@@ -840,7 +840,6 @@ in `afterHandle`; NEO will not derive it (no AD column → no OBDal property →
 
 ```json
 "account": {
-  "javaQualifier": "financialAccountHeaderHandler",
   "virtualFields": [
     { "name": "pendingCount", "column": "pendingCount", "label": "Pending",
       "type": "integer", "visibility": "readOnly", "form": false,
@@ -1715,6 +1714,39 @@ that already has values stored with the scheme included.
 | `agentPrompt` | string | `null` | Per-field guidance for AI agents. Carried into the curated field and persisted to `ETGO_SF_FIELD.AGENT_PROMPT`, from where `etendo_schema` returns it inside each field object. Empty or whitespace-only values clear the persisted prompt and are omitted from the MCP response. |
 
 > **MCP-oriented field config:** `businessCritical`, `agentPrompt`, `visibility`, a per-field `defaultValue`, and an entity's `Java_Qualifier` are the per-field knobs the NEO Headless **MCP** surfaces to AI agents (via `etendo_schema` / `etendo_defaults`). They are decided **only here in `decisions.json`** — the MCP/NEO Java reads and surfaces them, never decides them. The flag→`ETGO_SF_FIELD` column→surfacing map and the `make regen … PUSH_TO_NEO=1` → `./gradlew export.database` fix recipe are in `docs/agentic-validation/mcp-field-flags-pipeline.md`. A request to change one of these is upstream-config, not an MCP code change.
+
+### Public API curation (`publicApi`)
+
+Per-field opt-in that declares a field as part of the **public** REST API served by the gateway
+under `/api/v1/*`. Curating a single field switches the whole entity to curated mode: the entity
+then publishes **only** its curated fields. An entity with no curated field publishes, by default,
+the fields its window form shows (`form` not `false`, visibility not `system` or `discarded`), so the
+`form` flag above does affect the public API of non-curated entities. Curate an entity to narrow or
+rename what it publishes.
+
+```json
+"searchKey": {
+  "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+}
+```
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `exposed` | boolean | Only the exact value `true` opts the field in. In a curated entity, absent or `false` = not public. |
+| `name` | string | Requested public field name. **Not necessarily the final name**: the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) rewrites it to snake_case (`searchKey` → `search_key`). |
+| `type` | `"passthrough"` \| `"custom"` | Mapping kind. The manifest generator always emits `passthrough`. |
+| `handlerId` | string \| null | Identifier of a custom handler. The manifest generator always writes `null`. |
+
+Mechanics: `resolve-curated.js` copies `publicApi` verbatim and `generate-contract.js` stamps it
+onto the field in `contract.json` (both in `schema_forge_core`). Fields with `visibility`
+`system` or `discarded`, and the fields listed in the manifest's `policy.excludedFields` (tenant,
+portal access, bank account and bulk-posting fields), are skipped by the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) even when `exposed: true`; the allowlist generator (`sf-generate-public-api-schema`) does not apply that filter. Real examples:
+`artifacts/contacts/decisions.json` and `artifacts/product/decisions.json` (6 fields each).
+
+Changing `publicApi` (or a window's form fields) has no effect on the public API until the public
+manifest (`public-api/base.v1.json`) is regenerated with `make generate-base-public-api-manifest`. The
+full chain, the two generators and the gateway contract are documented in
+[public-api.md](public-api.md) (sections 2 and 3).
 
 ### Explicit null
 

@@ -1,8 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "updatedAt": "2026-10-16T16:21:17.510Z",
-  "checksum": "8b9712f2f94eefc3",
+  "updatedAt": "2026-10-22T17:16:47.640Z",
+  "checksum": "2253f8ace18dcc99",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -905,8 +905,7 @@
               "source": "3"
             }
           }
-        ],
-        "javaQualifier": "financialAccountHeaderHandler"
+        ]
       },
       "transaction": {
         "tableName": "FIN_Finacc_Transaction",
@@ -3856,8 +3855,7 @@
             "visibility": "readOnly",
             "required": false
           }
-        ],
-        "javaQualifier": "financialAccountHeaderHandler"
+        ]
       },
       "transaction": {
         "tableName": "FIN_Finacc_Transaction",

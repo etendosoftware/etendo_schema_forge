@@ -9,6 +9,7 @@ import {
   extractBackendMessageKeys,
   extractBackendMessageParams,
   stripTrailingPeriods,
+  extractBackendErrorCode,
   translateBackendError,
   parseBackendErrorMessage,
   parseBackendError,
@@ -2307,6 +2308,41 @@ describe('translateBackendError — invoice lines without amount (ETP-5710)', ()
   });
 });
 
+// InvoiceLineAmountSupport.invalidDiscount() (com.etendoerp.go — ETP-5710): HTTP 422,
+// `error.code = invalidLineDiscount`, fixed English sentence. It reaches the user through
+// translateBackendError, so it must read in their language.
+describe('translateBackendError — invalid line discount (ETP-5710)', () => {
+  const KEY = 'backendError.invalidLineDiscount';
+  const RAW = 'The line discount must be between 0 and 100 (percent).';
+  const locale = (loc) => JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8'));
+
+  it('maps the exact server sentence to its key', () => {
+    assert.equal(translateBackendError(RAW, (k) => (k === KEY ? 'traducido' : k)), 'traducido');
+  });
+
+  it('does not match a near-miss sentence', () => {
+    const t = (k) => (k === KEY ? 'traducido' : k);
+    for (const other of [
+      'The line discount must be between 0 and 50 (percent).',
+      'The line discount must be between 0 and 100.',
+      'The header discount must be between 0 and 100 (percent).',
+    ]) {
+      assert.equal(translateBackendError(other, t), other);
+    }
+  });
+
+  it('round-trips through the real en_US, es_ES and es_AR locales', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const dict = locale(loc).genericLabels;
+      const t = (k) => dict[k] ?? k;
+      const out = translateBackendError(RAW, t);
+      assert.equal(out, dict[KEY], `${loc} did not translate the discount refusal`);
+      assert.ok(out && out !== KEY, `${loc} is missing ${KEY}`);
+    }
+    assert.notEqual(locale('es_ES').genericLabels[KEY], RAW);
+  });
+});
+
 // ReturnableQuantity.java / ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711). The
 // over-return refusal names the product and both quantities; the product is free text, so it is
 // located by the fixed delimiters.
@@ -2397,8 +2433,8 @@ describe('translateBackendError — return factura rectificativa (ETP-5712)', ()
     'backendError.returnInvoiceWithoutAmount': 'No se puede crear la factura rectificativa: no se ha encontrado precio para {products}, y quedaría confirmada con importe cero.',
     'backendError.rectifiedInvoiceRequired': 'Esta devolución no tiene factura que rectificar.',
   });
-  const PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
-  const SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+  const PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price source was found for ';
+  const SUFFIX = ' (not on the invoice being rectified, nor on its order line, nor in the price list), so it would be confirmed with a zero amount. Give those products a price in the price list, or rectify an invoice that has them.';
 
   it('translates the zero-amount refusal keeping the product names', () => {
     assert.equal(
@@ -2412,6 +2448,11 @@ describe('translateBackendError — return factura rectificativa (ETP-5712)', ()
       translateBackendError(`${PREFIX}Tornillo 4, 5 mm${SUFFIX}`, es),
       'No se puede crear la factura rectificativa: no se ha encontrado precio para Tornillo 4, 5 mm, y quedaría confirmada con importe cero.',
     );
+  });
+
+  it('no longer matches the pre-ETP-5712-point-7 sentence', () => {
+    const old = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for Agua, so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+    assert.equal(translateBackendError(old, es), old);
   });
 
   it('leaves a message with the prefix but no products untouched', () => {
@@ -3556,6 +3597,7 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
       message: fenceBody.error.message,
       messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
       messageParams: { fields: ['accountingDate'] },
+      code: fenceBody.error.code,
     });
   });
 
@@ -3636,6 +3678,52 @@ describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () 
 
   it('is not worded as "period not open"', () => {
     assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
+  });
+});
+
+
+describe('classified NEO failures', () => {
+  const es = JSON.parse(readFileSync(new URL('../../locales/es_ES.json', import.meta.url))).genericLabels;
+  const ui = (key) => es[key] ?? key;
+  it('keeps a nested discriminator with its AD identity', async () => {
+    const parsed = await parseBackendError({ json: async () => ({ error: {
+      code: 'record_in_use', message: 'Cannot remove this linked record.',
+      messageKeys: ['CustomConstraint'], messageParams: { name: 'Invoice' },
+    } }) });
+    assert.equal(parsed.code, 'record_in_use');
+    assert.deepEqual(parsed.messageKeys, ['CustomConstraint']);
+    assert.deepEqual(parsed.messageParams, { name: 'Invoice' });
+  });
+  it('translates generic refusals without replacing a specific business explanation', () => {
+    assert.equal(translateBackendError('A value sent is not valid.', ui, { code: 'invalid_value' }),
+      'Uno de los valores enviados no es válido.');
+    const specific = 'No se puede eliminar una cuenta con movimientos pendientes.';
+    assert.equal(translateBackendError(specific, ui, { code: 'record_in_use' }), specific);
+  });
+  it('retains a legacy flat discriminator', async () => {
+    const parsed = await parseBackendError({ json: async () => ({
+      error: 'stale_record', message: 'Record changed',
+    }) });
+    assert.equal(parsed.code, 'stale_record');
+  });
+});
+
+describe('extractBackendErrorCode (ETP-5782)', () => {
+  it('reads the nested and the flat discriminator', () => {
+    assert.equal(extractBackendErrorCode({ error: { code: 'duplicate_key', message: 'x' } }), 'duplicate_key');
+    assert.equal(extractBackendErrorCode({ error: 'stale_record' }), 'stale_record');
+  });
+  it('returns undefined for a body without a code or with a prose error', () => {
+    assert.equal(extractBackendErrorCode({ error: { message: 'x' } }), undefined);
+    assert.equal(extractBackendErrorCode({ error: 'Something went wrong.' }), undefined);
+    assert.equal(extractBackendErrorCode({ error: 'conflict' }), undefined);
+    assert.equal(extractBackendErrorCode(null), undefined);
+  });
+  it('translates service_unavailable by code and leaves an unknown code untouched', () => {
+    const es = JSON.parse(readFileSync(new URL('../../locales/es_ES.json', import.meta.url))).genericLabels;
+    const t = (key) => es[key] ?? key;
+    assert.match(translateBackendError('Internal error.', t, { code: 'service_unavailable' }), /no está disponible/);
+    assert.equal(translateBackendError('A value sent is not valid.', t, { code: 'weird' }), 'A value sent is not valid.');
   });
 });
 
@@ -3758,5 +3846,44 @@ describe('translateBackendError — payment-term refusals', () => {
       }
       assert.match(json.genericLabels['backendError.paymentTermDaysOutOfRange'], /\{min\}.*\{max\}.*\{value\}/, locale);
     }
+  });
+});
+
+// OrderInvoiceDuplicateGuard.java (com.etendoerp.go — ETP-5714): `error.code = draftInvoiceExists`.
+// The bulk order menus read it from the 409 body; the draft numbers are one opaque {docs} param.
+describe('translateBackendError — draft invoice already exists (ETP-5714)', () => {
+  const es = fakeUiTranslator({
+    'backendError.draftInvoiceExists': 'El pedido ya tiene una factura en borrador ({docs}). Confírmala o elimínala antes de generar otra.',
+  });
+
+  it('translates the 409 sentence keeping the draft numbers', () => {
+    assert.equal(
+      translateBackendError('This order already has a draft invoice (INV-1, INV-2).', es),
+      'El pedido ya tiene una factura en borrador (INV-1, INV-2). Confírmala o elimínala antes de generar otra.',
+    );
+  });
+
+  it('reads the message from the { error: { code, message } } body the bulk menus receive', () => {
+    const body = { error: { status: 409, code: 'draftInvoiceExists', message: 'This order already has a draft invoice (INV-9).' } };
+    assert.equal(
+      translateBackendErrorBody(body, es, 'Error (409)'),
+      'El pedido ya tiene una factura en borrador (INV-9). Confírmala o elimínala antes de generar otra.',
+    );
+  });
+
+  it('leaves a sentence with no draft numbers untouched', () => {
+    assert.equal(
+      translateBackendError('This order already has a draft invoice ().', es),
+      'This order already has a draft invoice ().',
+    );
+  });
+
+  it('ships backendError.draftInvoiceExists with {docs} in en_US, es_ES and es_AR (es_AR in voseo)', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.draftInvoiceExists":\s*"[^"]*\{docs\}/), `${loc} lost {docs}`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
   });
 });
