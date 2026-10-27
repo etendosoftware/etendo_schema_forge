@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 import { describe, it, expect } from 'vitest';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
@@ -56,5 +59,24 @@ describe('return-to-vendor-shipment — rectificativa wording (ETP-4737 edge cas
         expect(value).not.toMatch(pattern);
       }
     });
+  }
+});
+
+// ETP-5688 — the CO "create the rectificative invoice" popup has its own title key per return
+// window (it used to show the generic "Generar factura"). Both keys must ship in every locale.
+describe('return windows — rectificative invoice popup title keys', () => {
+  const locales = {
+    en_US: [enUS.genericLabels, 'Generate rectificative invoice'],
+    es_ES: [esES.genericLabels, 'Generar factura rectificativa'],
+    es_AR: [esAR.genericLabels, 'Generar factura rectificativa'],
+  };
+  const KEYS = ['returnReceipt.createRectificativeInvoiceTitle', 'returnToVendor.createCreditNoteTitle'];
+
+  for (const [locale, [labels, expected]] of Object.entries(locales)) {
+    for (const key of KEYS) {
+      it(`${locale}: ${key} is "${expected}"`, () => {
+        expect(labels[key]).toBe(expected);
+      });
+    }
   }
 });

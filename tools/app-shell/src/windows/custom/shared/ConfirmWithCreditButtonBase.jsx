@@ -33,6 +33,9 @@ export default function ConfirmWithCreditButtonBase({
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
+  // ETP-5688 — title of the post-confirm (CO) invoice popup; `cardTitle` below belongs to the DR
+  // ConfirmInOutModal and must not be reused for it.
+  createInvoiceModalTitle,
   cardTitle: cardTitleProp,
   cardDesc: cardDescProp,
   extraActions,
@@ -132,6 +135,7 @@ export default function ConfirmWithCreditButtonBase({
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
+          title={createInvoiceModalTitle}
           token={token}
           rectifiableInvoicesUrl={rectifiableInvoicesUrl}
           onConfirm={(_priceListId, originInvoices) => handleCreateReturnInvoice(originInvoices)}
