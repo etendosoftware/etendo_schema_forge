@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/RecordCreateModal.jsx
 /**
  * ETP-5254 — RecordCreateModal creates a record of ANOTHER spec using that spec's own
  * generated form, laid out to read like that spec's own window.
@@ -803,6 +804,60 @@ describe('RecordCreateModal', () => {
     expect(await screen.findByTestId('record-create-error')).toHaveTextContent('createProductError');
     expect(props.onCreated).not.toHaveBeenCalled();
   });
+
+  // A target may veto the create (Contacts: the category does not grant the contact type the
+  // calling document needs). The check is awaited BEFORE the POST: a refusal shows its message
+  // and sends nothing; a `null` answer that arrives later still lets the create through.
+  it.each([
+    ['a refusal message blocks the POST and is shown', 'categoria-no-proveedor', false],
+    ['a null answer (resolved late) lets the POST through', null, true],
+  ])('validateBeforeCreate: %s', async (_label, answer, posted) => {
+    let release;
+    const validateBeforeCreate = vi.fn(() => new Promise((resolve) => { release = () => resolve(answer); }));
+    const user = userEvent.setup();
+    const props = baseProps({ initialQuery: 'Agua', target: { ...TARGET, validateBeforeCreate } });
+    await renderModal(props);
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    await waitFor(() => expect(validateBeforeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Agua', searchKey: 'typed-searchKey' }),
+    ));
+    expect(postBody()).toBeNull();
+    release();
+
+    if (posted) {
+      await waitFor(() => expect(props.onCreated).toHaveBeenCalled());
+      expect(postBody()).toMatchObject({ name: 'Agua' });
+    } else {
+      expect(await screen.findByTestId('record-create-error')).toHaveTextContent('categoria-no-proveedor');
+      expect(postBody()).toBeNull();
+      await waitFor(() => expect(screen.getByTestId('record-create-submit')).toBeEnabled());
+    }
+  });
+
+  // Contacts' `customer` / `vendor`: `/defaults` always answers them, but their mere presence in
+  // the POST disables the backend's inheritance from the category. Only a user edit sends them.
+  it('omits createOmitUntouched keys that only came from /defaults, but sends them once the user edits them', async () => {
+    installApiFetch({ defaults: { stocked: 'Y', productCategory: 'cat-default' } });
+    const user = userEvent.setup();
+    const target = { ...TARGET, createOmitUntouched: ['stocked', 'productCategory'] };
+    const props = baseProps({ initialQuery: 'Agua', target });
+    await renderModal(props);
+    await waitFor(() => expect(screen.getByTestId('value-stocked')).toHaveTextContent('Y'));
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('fill-productCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    await waitFor(() => expect(props.onCreated).toHaveBeenCalled());
+    const body = postBody();
+    expect(body).not.toHaveProperty('stocked');
+    expect(body.productCategory).toBe('typed-productCategory');
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1327,6 +1382,14 @@ describe('buildRecordCreatePayload', () => {
 
   it.each([[null], [undefined], [{}]])('returns an empty object for %s', (input) => {
     expect(buildRecordCreatePayload(input)).toEqual({});
+  });
+
+  it.each([
+    ['drops an untouched listed key and keeps a touched one', new Set(['vendor']), { name: 'A', vendor: 'N' }],
+    ['drops every listed key when nothing was touched', null, { name: 'A' }],
+  ])('omitUntouched: %s, never touching unlisted keys', (_label, touched, expected) => {
+    const data = { name: 'A', customer: 'Y', vendor: 'N' };
+    expect(buildRecordCreatePayload(data, { omitUntouched: ['customer', 'vendor'], touched })).toEqual(expected);
   });
 });
 

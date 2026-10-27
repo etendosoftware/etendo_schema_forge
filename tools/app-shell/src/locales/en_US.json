@@ -1384,6 +1384,14 @@
       "label": "Warehouse Differences",
       "description": "Warehouse Differences Account"
     },
+    "EM_Etgo_Iscustomer": {
+      "label": "Customer",
+      "description": "New contacts of this category are customers."
+    },
+    "EM_Etgo_Isvendor": {
+      "label": "Vendor/Creditor",
+      "description": "New contacts of this category are vendors or creditors."
+    },
     "V_Liability_Acct": {
       "label": "Vendor Liability",
       "description": "An account number in the general ledger used to mark transactions with this business partner."
@@ -20796,6 +20804,21 @@
     "backendError.invoiceSiiSentReferenceLocked": "This purchase invoice has already been sent to the SII, so the supplier's invoice number can no longer be changed.",
     "backendError.invoiceReactivateFiscalRectified": "This invoice cannot be reactivated: it has already been accepted by {fiscalSystem} and is rectified by: {rectificativas}.",
     "backendError.documentAlreadyPosted": "This document is already posted. Refresh it to see its current status.",
+    "backendError.bpGroupContactTypeRequired": "At least one contact type must be checked: Customer or Vendor/Creditor",
+    "backendError.bpartnerContactTypeRequired": "The contact must have at least one type: Customer or Vendor/Creditor",
+    "bpCategoryContactType": "Contact type",
+    "bpCategoryContactTypeHint": "(inherited by new contacts only)",
+    "bpCategoryCustomersSection": "Customers",
+    "bpCategoryVendorsSection": "Vendor/Creditor",
+    "bpCategoryCustomersSectionSubtitle": "Accounts used to post the invoices and receipts of this category's customers.",
+    "bpCategoryVendorsSectionSubtitle": "Accounts used to post the invoices and payments of this category's vendors and creditors.",
+    "bpCategoryVendorLiability": "Vendor/Creditor Liability",
+    "bpCategoryVendorPrepayment": "Vendor/Creditor Prepayment",
+    "bpCategoryNoTypeAccounts": "Check Customer or Vendor/Creditor to set up its accounts.",
+    "bpCategoryAccountsSaveFirst": "Save the category to set up its accounts.",
+    "bpCategoryNoAccountingRow": "This category has no accounting configuration.",
+    "bpCategoryAccountsLoadError": "The category accounts could not be loaded. Try again.",
+    "bpCategorySavedWithContacts": "Category saved. It has associated contacts: the changes do not modify them and only apply to new contacts.",
     "backendError.glJournalPeriodMismatch": "This journal's period ({period}) does not contain its accounting date ({accountingDate}). Change the period or the date and complete it again.",
     "backendError.accountIsSummary": "The selected account is a summary account and cannot receive postings. Choose a posting account.",
     "backendError.accountIsInactive": "The selected account or its account combination is inactive. Choose an active account.",
@@ -20866,6 +20889,10 @@
     "taxIDField": "Tax ID",
     "bpGroupField": "Business partner group",
     "contactCategoryField": "Contact Category",
+    "contactVendorCreditor": "Vendor/Creditor",
+    "contactCategoryNotVendor": "The category \"{category}\" is not a vendor or creditor category. Choose one that is to create a contact from a purchase.",
+    "contactCategoryNotCustomer": "The category \"{category}\" is not a customer category. Choose one that is to create a contact from a sale.",
+    "importErrorContactCategoryNotFound": "The contact category \"{category}\" does not exist. Create it first in Contact Category or use an existing one.",
     "taxIdTypeField": "Tax ID country type",
     "contactPersonSubtable": "Contact person",
     "bankAccountSubtable": "Contact bank account",

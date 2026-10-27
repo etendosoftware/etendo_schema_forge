@@ -17,16 +17,18 @@ export function accountOptionLabel(option) {
 }
 
 /**
- * AccountSelect — an account picker over a static `{ id, code, name }` catalog. The field is a
- * button showing the selected `"code - name"`; clicking it opens the shared `SearchPopup`, the
- * same centered search modal the report filters use for "Desde la cuenta".
+ * AccountSelect — an account picker over a static `{ id, code, name }` catalog, or over a server
+ * selector when `loadPage` is given. The field is a button showing the selected `"code - name"`;
+ * clicking it opens the shared `SearchPopup`, the same centered search modal the report filters
+ * use for "Desde la cuenta".
  *
  * ETP-5681: it replaces `AccountBadgeSelect`, a hand-built popover as wide as its field that cut
  * long account names off ("Socios por desembols..."). The popup is wide, shows every name in full
  * and searches by code and name.
  *
- * Generic and window-agnostic: used by the Esquema contable (General Ledger Configuration) tabs
- * and the chart of accounts "parent account" field.
+ * Generic and window-agnostic: used by the Esquema contable (General Ledger Configuration) tabs,
+ * the chart of accounts "parent account" field and the contact category Accounting tab (ETP-5791,
+ * fed by the field's NEO selector through `useAccountSelectorPages`).
  *
  * @param {object} props
  * @param {string} [props.label]
@@ -36,7 +38,10 @@ export function accountOptionLabel(option) {
  * @param {string|null} [props.value] — selected option id
  * @param {string} [props.displayValue] — label shown when `value` is not in `options` (e.g. a
  *   stored account the catalog no longer offers).
- * @param {Array<{id:string,code?:string,name:string}>} props.options
+ * @param {Array<{id:string,code?:string,name:string}>} [props.options] — the static catalog.
+ * @param {(query:string, offset:number, signal?:AbortSignal)=>Promise<{items:object[],hasMore:boolean}>} [props.loadPage]
+ *   — a server page loader (e.g. `useAccountSelectorPages`) used instead of `options`; the
+ *   selected label then comes from `displayValue` (the stored `$_identifier`).
  * @param {(id:string|null, label?:string)=>void} [props.onChange] — the picked id and its label.
  * @param {string} [props.popupTitle] — popup title when the field label is rendered outside
  *   (defaults to `label`, then the placeholder).
@@ -53,6 +58,7 @@ export function AccountSelect({
   value = null,
   displayValue = '',
   options = [],
+  loadPage: serverLoadPage = null,
   onChange,
   readOnly = false,
   error = null,
@@ -66,7 +72,10 @@ export function AccountSelect({
     () => options.map((o) => ({ id: o.id, name: accountOptionLabel(o) })),
     [options],
   );
-  const loadPage = useMemo(() => staticPageLoader(selectOptions), [selectOptions]);
+  const loadPage = useMemo(
+    () => serverLoadPage ?? staticPageLoader(selectOptions),
+    [serverLoadPage, selectOptions],
+  );
   const selectedLabel = useMemo(
     () => selectOptions.find((o) => o.id === value)?.name ?? (value ? displayValue : ''),
     [selectOptions, value, displayValue],

@@ -150,9 +150,9 @@
       "fields": [
         { "target": "name", "aliases": ["nombre comercial", "nombre", "razon social", "razón social"], "label": "Commercial Name", "required": false, "example": "Distribuciones García S.L.", "exampleKey": "importExampleContactName" },
         { "target": "etgoIsperson", "aliases": ["tipo", "tipo de contacto", "persona o empresa", "tipo cliente", "type"], "label": "Contact Type (Person / Company)", "required": false, "example": "Empresa", "exampleKey": "importExampleContactType", "labelKey": "importHeaderType" },
-        { "target": "customer", "aliases": ["cliente", "es cliente", "customer"], "label": "Customer", "required": false, "example": "Sí", "exampleKey": "importExampleContactCustomer", "labelKey": "importHeaderCustomer" },
-        { "target": "vendor", "aliases": ["proveedor", "es proveedor", "vendor", "supplier"], "label": "Vendor", "required": false, "example": "No", "labelKey": "importHeaderVendor" },
-        { "target": "category", "aliases": ["categoria", "categoría", "categoria de contacto", "categoría de contacto", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Contact Category", "example": "Clientes", "exampleKey": "importExampleContactCategory", "column": "C_BP_Group_ID" },
+        { "target": "customer", "aliases": ["cliente", "es cliente", "customer"], "label": "Customer", "required": false, "example": "Sí", "exampleKey": "importExampleContactCustomer", "labelKey": "importHeaderCustomer", "hiddenWhenFlag": "contact-category-type" },
+        { "target": "vendor", "aliases": ["proveedor", "es proveedor", "vendor", "supplier"], "label": "Vendor", "required": false, "example": "No", "labelKey": "importHeaderVendor", "hiddenWhenFlag": "contact-category-type" },
+        { "target": "category", "aliases": ["categoria", "categoría", "categoria de contacto", "categoría de contacto", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Contact Category", "example": "Cliente", "exampleKey": "importExampleContactCategory", "column": "C_BP_Group_ID" },
         { "target": "etgoFirstname", "aliases": ["nombre de pila", "nombre persona"], "label": "First Name", "required": false, "example": "María", "labelKey": "importHeaderFirstName" },
         { "target": "etgoLastname", "aliases": ["apellido", "apellidos"], "label": "Last Name", "required": false, "example": "García" },
         { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"], "isEmail": true, "label": "Email", "example": "info@distribucionesgarcia.es" },
@@ -431,7 +431,8 @@
           "label": "Vendor",
           "grid": true,
           "form": false,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md"
         },
         "purchasePricelist": {
           "visibility": "editable",
@@ -477,7 +478,8 @@
           "label": "Customer",
           "grid": true,
           "form": false,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md"
         },
         "priceList": {
           "visibility": "editable",

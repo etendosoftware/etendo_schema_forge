@@ -26,7 +26,8 @@ const windowLoaders = {
   'product-category': () => import('@/windows/custom/product-category/index.jsx'),
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
   'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
-  'business-partner-category': () => import('@generated/business-partner-category/generated/web/business-partner-category/index.jsx'),
+  // ETP-5791 — wraps the generated page: toggle point of the `contact-category-type` flag.
+  'business-partner-category': () => import('@/windows/custom/business-partner-category/index.jsx'),
   // ETP-5806: AD Window 121 "Location" is inactive in the menu (no nav entry), but its NEO
   // Headless API stays live via MCP — registered so F3 (pipeline validator) passes and so a
   // direct navigation does not hit an unresolved lazy import.

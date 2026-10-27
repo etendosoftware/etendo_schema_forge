@@ -1,10 +1,20 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/NewAccountWizard.jsx
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Return a STABLE translator reference: NewAccountWizard's effect depends on
 // `ui`, so a fresh function each render would re-fire the effect and reset the
 // wizard back to the type-picker step.
-const translate = (key) => key;
+// By default it echoes the key. A test that must assert the text a real user reads sets
+// `activeLocale` to a locale's `genericLabels` (what useUI resolves against, resolveUI in core),
+// and the same stable function then resolves and interpolates `{param}` tokens like useUI does.
+let activeLocale = null;
+const translate = (key, params) => {
+  const text = activeLocale?.[key];
+  if (text == null) return key;
+  if (!params) return text;
+  return Object.entries(params).reduce((out, [k, v]) => out.replace(`{${k}}`, String(v)), text);
+};
 vi.mock('@/i18n', () => ({
   useUI: () => translate,
 }));
@@ -52,6 +62,9 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }));
 
 import { NewAccountWizard } from '../NewAccountWizard.jsx';
+import { throwHttpError } from '@/hooks/financialAccountHttp.js';
+import enUS from '../../../../locales/en_US.json';
+import esES from '../../../../locales/es_ES.json';
 
 // ES/IT mirror the two BANK_COUNTRIES codes exercised below; both carry real IBAN metadata so
 // the seeded-country path (BankPicker choice → AccountFormStep default) exercises real ids.
@@ -73,6 +86,7 @@ function renderWizard(props = {}) {
 
 describe('NewAccountWizard', () => {
   beforeEach(() => {
+    activeLocale = null;
     toastSuccess.mockClear();
     toastError.mockClear();
     createAccount.mockReset();
@@ -339,6 +353,91 @@ describe('NewAccountWizard', () => {
     await user.click(screen.getByTestId('account-form-submit'));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('server down'));
+  });
+
+  // ── Create-error toast: translated by message key, not by backend prose ────
+  // The country refusals of FinancialAccountHandler are written in the request language and carry
+  // `messageKeys`, so the wizard must map the key to the SPA's own text. The rejection is built by
+  // the real throwHttpError from a fake Response, so err.message / err.code / err.body have exactly
+  // the shape useAccountMutations hands the wizard.
+
+  const COUNTRY_REQUIRED_KEYED_BODY = {
+    error: { status: 400, message: 'El país es obligatorio.', messageKeys: ['ETGO_FinAccCountryRequired'] },
+  };
+
+  async function httpError(status, body) {
+    return throwHttpError({ status, json: async () => body }).catch((e) => e);
+  }
+
+  async function submitCashAccountExpectingToast() {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(screen.getByTestId('new-account-type-C'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.type(screen.getByTestId('account-form-name'), 'Caja');
+    await user.click(screen.getByTestId('account-form-submit'));
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    return toastError.mock.calls[0][0];
+  }
+
+  it.each([
+    ['es_ES', esES, 'El país es obligatorio'],
+    ['en_US', enUS, 'Country is required'],
+  ])('maps the ETGO_FinAccCountryRequired key to the %s countryRequired text', async (_, locale, expected) => {
+    activeLocale = locale.genericLabels;
+    expect(activeLocale['backendError.countryRequired']).toBe(expected);
+    createAccount.mockRejectedValueOnce(await httpError(400, COUNTRY_REQUIRED_KEYED_BODY));
+
+    const shown = await submitCashAccountExpectingToast();
+
+    expect(shown).toBe(expected);
+    // Never the backend's own sentence (note its trailing period): the key won, not the prose.
+    expect(shown).not.toBe('El país es obligatorio.');
+  });
+
+  it('resolves the key to backendError.countryRequired whatever language the prose is in', async () => {
+    // A key-echoing translator makes a mapped key indistinguishable from "no entry" for
+    // translateByMessageKey, so resolve only that key: whatever the prose says (here neither
+    // Spanish nor the legacy English literal), the toast must be the entry the key maps to.
+    activeLocale = { 'backendError.countryRequired': 'COUNTRY_REQUIRED_TEXT' };
+    createAccount.mockRejectedValueOnce(await httpError(400, {
+      error: { status: 400, message: 'O país é obrigatório.', messageKeys: ['ETGO_FinAccCountryRequired'] },
+    }));
+
+    expect(await submitCashAccountExpectingToast()).toBe('COUNTRY_REQUIRED_TEXT');
+  });
+
+  it.each([
+    ['es_ES', esES, 'El país es obligatorio'],
+    ['en_US', enUS, 'Country is required'],
+  ])('still translates the legacy keyless "Country is required" body by exact match (%s)', async (_, locale, expected) => {
+    activeLocale = locale.genericLabels;
+    createAccount.mockRejectedValueOnce(await httpError(400, {
+      error: { status: 400, message: 'Country is required' },
+    }));
+
+    expect(await submitCashAccountExpectingToast()).toBe(expected);
+  });
+
+  it.each([
+    ['es_ES', esES, 'No se pudo crear la cuenta'],
+    ['en_US', enUS, 'Could not create the account'],
+  ])('falls back to financeAccountsNewCreateError for an unrecognised, messageless error (%s)', async (_, locale, expected) => {
+    activeLocale = locale.genericLabels;
+    // An unknown key and no prose: nothing for translateBackendError to resolve or echo.
+    const err = new Error('');
+    err.status = 500;
+    err.code = null;
+    err.body = { error: { status: 500, message: '', messageKeys: ['ETGO_SomethingNobodyMapped'] } };
+    createAccount.mockRejectedValueOnce(err);
+
+    expect(await submitCashAccountExpectingToast()).toBe(expected);
+  });
+
+  it('falls back to the financeAccountsNewCreateError key when the error carries nothing at all', async () => {
+    createAccount.mockRejectedValueOnce(new Error(''));
+
+    expect(await submitCashAccountExpectingToast()).toBe('financeAccountsNewCreateError');
   });
   // ── ETP-5521: provider logo persisted from the offline bank picker ─────────
 
