@@ -3658,6 +3658,34 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
   });
 });
 
+// ── Contact-type refusals, translated by identity ──
+//
+// com.etendoerp.go refuses a contact category, or a contact, saved with neither Customer nor
+// Vendor/Creditor. Both are AD_MESSAGE records of a module with no es_ES translation pack, so the
+// SPA's map is where they become Spanish. Reads the REAL locale files so a missing entry fails.
+describe('translateBackendError — contact-type refusals by identity', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  // [messageKey, i18n key, the backend's English prose]
+  const CASES = [
+    ['ETGO_BPGroupContactTypeRequired', 'backendError.bpGroupContactTypeRequired',
+      'At least one contact type must be checked: Customer or Vendor/Creditor.'],
+    ['ETGO_BPartnerContactTypeRequired', 'backendError.bpartnerContactTypeRequired',
+      'The contact must have at least one type: Customer or Vendor/Creditor.'],
+  ];
+
+  for (const [messageKey, i18nKey, prose] of CASES) {
+    it(`renders ${messageKey} from its identity in es_ES and en_US, never the English prose`, () => {
+      const esText = translateBackendError(prose, es, { messageKeys: [messageKey] });
+      const enText = translateBackendError(prose, en, { messageKeys: [messageKey] });
+      assert.equal(esText, es(i18nKey));
+      assert.equal(enText, en(i18nKey));
+      assert.notEqual(esText, i18nKey, `es_ES.${i18nKey} is missing`);
+      assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
+    });
+  }
+});
+
 // ── ETP-5669: G/L journal period mismatch, translated by identity with its params ──
 describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () => {
   const es = localeTranslator('es_ES');

@@ -2720,6 +2720,14 @@
       "label": "Mostrar columna",
       "description": "Columna que se va a mostrar"
     },
+    "EM_Etgo_Iscustomer": {
+      "label": "Cliente",
+      "description": "Los contactos nuevos de esta categoría son clientes."
+    },
+    "EM_Etgo_Isvendor": {
+      "label": "Proveedor/Acreedor",
+      "description": "Los contactos nuevos de esta categoría son proveedores o acreedores."
+    },
     "V_Liability_Acct": {
       "label": "Pasivo del proveedor",
       "description": "Número de cuenta del Libro Mayor utilizado para anotar las transacciones con este tercero."
@@ -16852,7 +16860,7 @@
     "importExampleProductCategory": "Herramientas",
     "importExampleContactName": "Distribuciones García S.L.",
     "importExampleContactType": "Empresa",
-    "importExampleContactCategory": "Clientes",
+    "importExampleContactCategory": "Cliente",
     "importExampleContactPosition": "Responsable de compras",
     "importExampleContactAddress": "Calle Mayor 12",
     "importExampleContactCountry": "España",
@@ -21031,6 +21039,21 @@
     "backendError.invoiceSiiSentReferenceLocked": "Esta factura de compra ya se ha enviado al SII, por lo que no se puede modificar el número de factura del proveedor.",
     "backendError.invoiceReactivateFiscalRectified": "No se puede reactivar esta factura: ya ha sido aceptada por {fiscalSystem} y está rectificada por: {rectificativas}.",
     "backendError.documentAlreadyPosted": "Este documento ya está contabilizado. Actualízalo para ver su estado actual.",
+    "backendError.bpGroupContactTypeRequired": "Debe marcarse al menos un tipo de contacto: Cliente o Proveedor/Acreedor",
+    "backendError.bpartnerContactTypeRequired": "El contacto debe tener al menos un tipo: Cliente o Proveedor/Acreedor",
+    "bpCategoryContactType": "Tipo de contacto",
+    "bpCategoryContactTypeHint": "(lo heredan solo los contactos nuevos)",
+    "bpCategoryCustomersSection": "Clientes",
+    "bpCategoryVendorsSection": "Proveedor/Acreedor",
+    "bpCategoryCustomersSectionSubtitle": "Cuentas con las que se contabilizan las facturas y los cobros de los clientes de esta categoría.",
+    "bpCategoryVendorsSectionSubtitle": "Cuentas con las que se contabilizan las facturas y los pagos de los proveedores y acreedores de esta categoría.",
+    "bpCategoryVendorLiability": "Pasivo del proveedor/acreedor",
+    "bpCategoryVendorPrepayment": "Pagos por adelantado del proveedor/acreedor",
+    "bpCategoryNoTypeAccounts": "Marca Cliente o Proveedor/Acreedor para configurar sus cuentas contables.",
+    "bpCategoryAccountsSaveFirst": "Guarda la categoría para configurar sus cuentas contables.",
+    "bpCategoryNoAccountingRow": "Esta categoría no tiene configuración contable.",
+    "bpCategoryAccountsLoadError": "No se pudieron cargar las cuentas contables de la categoría. Vuelve a intentarlo.",
+    "bpCategorySavedWithContacts": "Categoría guardada. Tiene contactos asociados: los cambios no los modifican y solo se aplicarán a los contactos nuevos.",
     "backendError.glJournalPeriodMismatch": "El período del asiento ({period}) no contiene su fecha contable ({accountingDate}). Cambia el período o la fecha y vuelve a completarlo.",
     "backendError.accountIsSummary": "La cuenta seleccionada es de nivel (resumen) y no admite asientos. Elige una cuenta de movimiento.",
     "backendError.accountIsInactive": "La cuenta seleccionada o su combinación contable está inactiva. Elige una cuenta activa.",
@@ -21101,6 +21124,10 @@
     "taxIDField": "NIF",
     "bpGroupField": "Grupos de terceros",
     "contactCategoryField": "Categoría de contacto",
+    "contactVendorCreditor": "Proveedor/Acreedor",
+    "contactCategoryNotVendor": "La categoría \"{category}\" no es de proveedor ni de acreedor. Elige una que lo sea para crear un contacto desde una compra.",
+    "contactCategoryNotCustomer": "La categoría \"{category}\" no es de cliente. Elige una que lo sea para crear un contacto desde una venta.",
+    "importErrorContactCategoryNotFound": "La categoría de contacto \"{category}\" no existe. Créala primero en Categoría de contacto o usa una existente.",
     "taxIdTypeField": "Clave NIF país residencia",
     "contactPersonSubtable": "Persona de contacto",
     "bankAccountSubtable": "Cuenta bancaria del contacto",
