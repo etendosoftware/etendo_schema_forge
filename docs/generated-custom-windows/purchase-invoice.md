@@ -2022,6 +2022,16 @@ name (falling back to España when the invoice has none or it cannot be matched)
 prefilled and nothing is saved until the user presses Guardar. A second address, or editing one,
 opens without the seed. The former debt `ocr-contact-address-prefill` is closed.
 
+**ETP-5806 — the seeded free text no longer fills an editable field, while `structured-address-for-sepa` is on.** This backend-only flag (TTL 2026-11-15; see `contacts.md`'s "Structured address fields"
+note for the full gating contract) defaults to off pre-launch, in which case this section's
+pre-ETP-5806 behavior is unchanged: the seeded `address` fills the single editable Address line
+directly, same as before this ticket. **While the flag is on**, Address Line 1/2 stopped
+being user-editable in `LocationEditorModal`: the OCR-extracted `address` string seeds only the free-text reference shown by the
+legacy/unstructured-address warning banner (with its Copy button), not Street/Number. The user
+still has to break the OCR'd text down into Calle/Número (and City/Country, already prefilled) and
+Save stays disabled until they do — the prefill saves re-typing the raw text but no longer saves
+the structuring step.
+
 The country-label-to-option-id resolution this section used to describe (`matchOptionByLabel`
 against the country selector, with an `EntityCreationModal` `patchValues` prop merging in the
 value once the selector loaded) belonged entirely to the deleted fallback form and no longer
