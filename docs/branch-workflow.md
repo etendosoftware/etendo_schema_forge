@@ -46,7 +46,7 @@ main     (protected — production; PRs must be up to date)
 develop  (protected — staging and integration point; PRs need NOT be up to date)
   ▲ feature/ETP-AAAA  →  PR, mini pipeline
   ▲ feature/ETP-BBBB  →  PR, mini pipeline
-  ▲ main → develop    →  PR opened by an Action when main moves; merged before every cut
+  ▲ main → develop    →  PR opened by an Action when main moves; merges itself when green
 ```
 
 ### Hierarchy and merge rules
@@ -54,7 +54,7 @@ develop  (protected — staging and integration point; PRs need NOT be up to dat
 | Merge | Gate | Who merges |
 |-------|------|------------|
 | `feature → develop` | PR checks: mini pipeline (schema_forge: `Mocked E2E`; com.etendoerp.go: `goTest`, the Java tests without and with a database), `Tests`, `Sonar Build`, `verify`, review, code-owner gate | **Human**, in GitHub, merge commit |
-| `main → develop` | PR checks; `back-merge-main.yml` opens it when main moves | **Human**, right after anything enters main, and before every cut |
+| `main → develop` | PR checks; `back-merge-main.yml` opens it when main moves | **Auto-merge** once the checks pass; its assignee when it conflicts |
 | `mergeblock → main` (the cut) | Full Jenkins pipeline, integration included; every required check green; branch up to date with main | **Human only** |
 | `hotfix → main` | Full pipeline | **Human only**; comes back at once through `main → develop` |
 
@@ -84,7 +84,8 @@ version (§ schema_forge_core versions).
 ```
 
 1. **Bring main into develop, every time.** The `main → develop` PR, merged before cutting.
-   `back-merge-main.yml` opened it when main last moved, so it is normally already waiting. Hotfixes
+   `back-merge-main.yml` opened it when main last moved and it merges itself once green, so this step
+   normally finds it done; a PR still open is red or conflicting, and waits for its assignee. Hotfixes
    and the fixes made on a cut already come back right after they enter main (§ Back to develop);
    this step brings whatever is left, at least the previous cut's merge commit. Before step 2,
    `git log --oneline origin/develop..origin/main` (merge commits included) must print nothing. Doing it every time gives two things:
@@ -109,7 +110,7 @@ version (§ schema_forge_core versions).
 | | Create the PR | Approve | Merge |
 |---|---|---|---|
 | `feature → develop` | Clerk or the author | Team reviewers | **Human** |
-| `main → develop` | **`back-merge-main.yml`**, when main moves | Team reviewers | **Human only** |
+| `main → develop` | **`back-merge-main.yml`**, when main moves | None in schema_forge; `github-actions[bot]` in com.etendoerp.go | **Auto-merge** once green; its **assignee** when it conflicts |
 | `mergeblock → main` (the cut) | **Clerk** (on request) | Team reviewers | **Human only** |
 
 The cut and `main → develop` are the **only** PRs an agent may open towards `main` or out of it.
@@ -185,15 +186,23 @@ Nobody opens that PR by hand. `.github/workflows/back-merge-main.yml`, in both r
   "Merge main into develop". An open one follows `main` by itself, so there is never a second.
 - The body lists main's own commits (hotfixes, fixes made on the cut), or says it only carries merge
   commits, and lists the conflicting files when there are any.
-- It asks the author of the PR that moved `main` to review.
+- It assigns the PR to the GitHub user of main's last commit: after a cut or a hotfix, its merge
+  commit, so whoever merged it (falling back to `merged_by` of that commit's PR). Never etendobot.
+- Without conflicts it turns on auto-merge (merge commit), so GitHub merges it once the required
+  checks pass: that code was already reviewed and passed the full pipeline on its way into `main`.
+  com.etendoerp.go requires one approval on develop and GitHub never lets the PR's author approve
+  it, so there the workflow approves it with `GITHUB_TOKEN`, as `github-actions[bot]`.
+- With conflicts it does neither: the PR waits for its assignee.
+- An open PR gets whatever of that it lacks on the next run.
 - It uses `ETENDOBOT_TOKEN`: a PR opened with `GITHUB_TOKEN` triggers no workflow, so its required
   checks would never report.
 
 If the PR did not appear, run the workflow by hand: Actions → *Back-merge main into develop* → *Run
 workflow*.
 
-If that PR has conflicts, resolve them on a branch created from `develop` with `origin/main` merged
-in, and open that branch's PR to `develop`: `main` is protected and cannot take the resolution.
+If that PR has conflicts, its assignee resolves them on a branch created from `develop` with
+`origin/main` merged in, and opens that branch's PR to `develop`: `main` is protected and cannot take
+the resolution.
 
 ### schema_forge_core versions
 

@@ -540,6 +540,9 @@ is (`availableNow` says so for a given record). A `post` right after completing 
 `retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
 `Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
 
+An `unpost` on a shipment that is not posted answers **422** (`ETGO_GoodsUnpostNotPosted`), not a 200 with nothing removed. The shipment's `createDraftInvoice`
+reports `availableNow:false` when everything is already invoiced or a draft invoice already covers what is left.
+
 ## Create return — single step and repeat returns by quantity — ETP-5729
 
 **One step (QA CP-15).** The shared `CreateReturnWizard.jsx` used to have a read-only step 2

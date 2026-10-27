@@ -790,3 +790,6 @@ is (`availableNow` says so for a given record). A `post` right after completing 
 `retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
 `Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
 
+`unpost` of a receipt that is not posted is refused with **422** (`ETGO_GoodsUnpostNotPosted`) instead of a silent "0 entries removed".
+With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing is left to invoice or only a draft invoice covers the rest (the reason says which).
+

@@ -55,7 +55,6 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { buildChildRowDeleteFn } from '@/lib/batchDelete.js';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
-import { apiFetch } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 // ETP-5073 / DOC-08: switching to another line while one is being edited used to discard the
@@ -267,7 +266,7 @@ export function DetailView({
   tabsBarRight = null,
   tabsBarAfter = null,
   hideTopBar = false,
-  CustomLines = null,
+  CustomLines: rawCustomLines = null,
   customLinesLabel = 'Invoices',
   sidePanel = null,
   sidePanelStyle = null,
@@ -372,7 +371,7 @@ export function DetailView({
     [Form, gateExclusions]
   );
   const capabilities = useCapabilitiesSafe(); // ETP-4520/5648 — capability-gated pills, tabs and detail
-  const [detailEntity, DetailTable] = gateDetailTab(rawDetailEntity, rawDetailTable, detailVisibleWhenCapability, capabilities);
+  const [detailEntity, DetailTable, CustomLines] = gateDetailTab(rawDetailEntity, rawDetailTable, detailVisibleWhenCapability, capabilities, rawCustomLines);
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields, initialData });
   const apiFetch = useApiFetch(apiBaseUrl);
   // Session-level currency fallback. NEO Headless doesn't return

@@ -38,7 +38,7 @@ import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
-import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import { translateBackendErrorBody, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
@@ -110,7 +110,9 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
         // a multi-row summary can still name it (useBulkActionToast).
         const quotaText = translateQuotaRefusalBody(err, ui);
         if (quotaText) throw Object.assign(new Error(quotaText), { quotaRefusal: true });
-        throw new Error(err?.response?.message || `Error (${res.status})`);
+        // ETP-5714: read error.message too and translate it (the 409 draftInvoiceExists refusal
+        // arrives as { error: { code, message } } with the draft numbers in the sentence).
+        throw new Error(translateBackendErrorBody(err, ui, `Error (${res.status})`));
       }
       trackDocumentCreated(isInvoice ? 'sales-invoice' : 'goods-shipment');
       return row;
