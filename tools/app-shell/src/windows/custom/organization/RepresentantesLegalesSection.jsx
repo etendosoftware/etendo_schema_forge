@@ -1,5 +1,4 @@
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
-import { useGridView } from '@/hooks/useGridView.js';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { Fragment, useMemo, useState } from 'react';
@@ -162,9 +161,8 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
   const { rows, loading, error, refetch, createRow, updateRow, deleteRow } =
     useRepresentantesLegales(orgId, apiBaseUrl);
 
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const gridColumns = useMemo(() => GRID_COLUMN_DEFS.map(({ labelKey, ...column }) => ({ ...column, label: ui(labelKey) })), [ui]);
-  const gridView = useGridView({ spec: 'organization', entity: 'representanteLegal', columns: gridColumns, data: rows, enabled: gridColumnViews, apiBaseUrl });
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: 'organization', entity: 'representanteLegal', columns: gridColumns, data: rows, apiBaseUrl });
   const columns = gridView.active ? gridView.columns : gridColumns;
   const gridLabel = (key) => gridColumns.find(column => column.column === key)?.label ?? key;
 

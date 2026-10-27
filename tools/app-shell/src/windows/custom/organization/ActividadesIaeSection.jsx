@@ -1,5 +1,4 @@
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
-import { useGridView } from '@/hooks/useGridView.js';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { Fragment, useMemo, useState } from 'react';
@@ -44,6 +43,22 @@ function isDefaultTrue(value) {
 // this is the field the Modelo 303 report reads off the default row for the
 // last period of the fiscal year (see module docstring in useActividadesIae.js
 // and docs/generated-custom-windows/organization.md "Actividades del IAE").
+/** Selector cell shared by the data rows and the add row: `record` holds the value and its `$_identifier`. */
+function IaeSelector({ field, record, onSelect, resolvedLabel = '', selectorUrlFor, token, 'data-testid': testId }) {
+  return (
+    <CreatableSearchSelect
+      field={field}
+      value={record[field.key] ?? ''}
+      displayValue={record[`${field.key}$_identifier`] ?? ''}
+      onChange={(val, label) => onSelect(field, val, label)}
+      resolvedLabel={resolvedLabel}
+      selectorUrl={selectorUrlFor(field)}
+      token={token}
+      serverSearch
+      data-testid={testId} />
+  );
+}
+
 function CodeHint() {
   const ui = useUI();
   return (
@@ -100,9 +115,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
   const { rows, loading, error, refetch, createRow, updateRow, deleteRow, enforceSingleDefault } =
     useActividadesIae(orgId, apiBaseUrl);
 
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const gridColumns = useMemo(() => GRID_COLUMN_DEFS.map(({ labelKey, ...column }) => ({ ...column, label: ui(labelKey) })), [ui]);
-  const gridView = useGridView({ spec: 'organization', entity: 'actividadesDelIae', columns: gridColumns, data: rows, enabled: gridColumnViews, apiBaseUrl });
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: 'organization', entity: 'actividadesDelIae', columns: gridColumns, data: rows, apiBaseUrl });
   const columns = gridView.active ? gridView.columns : gridColumns;
   const gridLabel = (key) => gridColumns.find(column => column.column === key)?.label ?? key;
 
@@ -156,6 +170,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
       setDeletingId(null);
     }
   }
+
+  const selectNewRow = (field, val, label) => setNewRow(p => ({ ...p, [field.key]: val, [`${field.key}$_identifier`]: label ?? '' }));
 
   function cancelAddRow() {
     setAddingRow(false);
@@ -219,41 +235,32 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
       const rowSaving = savingId === row.id;
       const cells = {
         epgrafeIAE: (<td className="py-1.5 px-2 align-middle">
-            <CreatableSearchSelect
+            <IaeSelector
               field={EPGRAFE_FIELD}
-              value={row.epgrafeIAE ?? ''}
-              displayValue={row['epgrafeIAE$_identifier'] ?? ''}
-              onChange={(val, label) => handleSelectorChange(row, EPGRAFE_FIELD, val, label)}
-              resolvedLabel=""
-              selectorUrl={selectorUrlFor(EPGRAFE_FIELD)}
+              record={row}
+              onSelect={(field, val, label) => handleSelectorChange(row, field, val, label)}
+              selectorUrlFor={selectorUrlFor}
               token={token}
-              serverSearch
               data-testid="CreatableSearchSelect__iaeEpgrafe" />
           </td>),
         epiaeType: (<td className="py-1.5 px-2 align-middle">
-            <CreatableSearchSelect
+            <IaeSelector
               field={TYPE_FIELD}
-              value={row.epiaeType ?? ''}
-              displayValue={row['epiaeType$_identifier'] ?? ''}
-              onChange={(val, label) => handleSelectorChange(row, TYPE_FIELD, val, label)}
-              resolvedLabel=""
-              selectorUrl={selectorUrlFor(TYPE_FIELD)}
+              record={row}
+              onSelect={(field, val, label) => handleSelectorChange(row, field, val, label)}
+              selectorUrlFor={selectorUrlFor}
               token={token}
-              serverSearch
               data-testid="CreatableSearchSelect__iaeType" />
           </td>),
         epiaeCode: (<td className="py-1.5 px-2 align-middle">
             <div className="flex items-center gap-1.5">
               <div className="flex-1 min-w-0">
-                <CreatableSearchSelect
+                <IaeSelector
                   field={CODE_FIELD}
-                  value={row.epiaeCode ?? ''}
-                  displayValue={row['epiaeCode$_identifier'] ?? ''}
-                  onChange={(val, label) => handleSelectorChange(row, CODE_FIELD, val, label)}
-                  resolvedLabel=""
-                  selectorUrl={selectorUrlFor(CODE_FIELD)}
+                  record={row}
+                  onSelect={(field, val, label) => handleSelectorChange(row, field, val, label)}
+                  selectorUrlFor={selectorUrlFor}
                   token={token}
-                  serverSearch
                   data-testid="CreatableSearchSelect__iaeCode" />
               </div>
               {missingCode && (
@@ -345,39 +352,33 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
             {addingRow && (() => {
               const cells = {
                 epgrafeIAE: (<td className="py-1.5 px-2 align-middle">
-                  <CreatableSearchSelect
+                  <IaeSelector
                     field={EPGRAFE_FIELD}
-                    value={newRow.epgrafeIAE ?? ''}
-                    displayValue={newRow['epgrafeIAE$_identifier'] ?? ''}
-                    onChange={(val, label) => setNewRow(p => ({ ...p, epgrafeIAE: val, 'epgrafeIAE$_identifier': label ?? '' }))}
+                    record={newRow}
+                    onSelect={selectNewRow}
                     resolvedLabel={ui('orgIaeEpigraphLabel')}
-                    selectorUrl={selectorUrlFor(EPGRAFE_FIELD)}
+                    selectorUrlFor={selectorUrlFor}
                     token={token}
-                    serverSearch
                     data-testid="CreatableSearchSelect__iaeNewEpgrafe" />
                 </td>),
                 epiaeType: (<td className="py-1.5 px-2 align-middle">
-                  <CreatableSearchSelect
+                  <IaeSelector
                     field={TYPE_FIELD}
-                    value={newRow.epiaeType ?? ''}
-                    displayValue={newRow['epiaeType$_identifier'] ?? ''}
-                    onChange={(val, label) => setNewRow(p => ({ ...p, epiaeType: val, 'epiaeType$_identifier': label ?? '' }))}
+                    record={newRow}
+                    onSelect={selectNewRow}
                     resolvedLabel={ui('orgIaeTypeLabel')}
-                    selectorUrl={selectorUrlFor(TYPE_FIELD)}
+                    selectorUrlFor={selectorUrlFor}
                     token={token}
-                    serverSearch
                     data-testid="CreatableSearchSelect__iaeNewType" />
                 </td>),
                 epiaeCode: (<td className="py-1.5 px-2 align-middle">
-                  <CreatableSearchSelect
+                  <IaeSelector
                     field={CODE_FIELD}
-                    value={newRow.epiaeCode ?? ''}
-                    displayValue={newRow['epiaeCode$_identifier'] ?? ''}
-                    onChange={(val, label) => setNewRow(p => ({ ...p, epiaeCode: val, 'epiaeCode$_identifier': label ?? '' }))}
+                    record={newRow}
+                    onSelect={selectNewRow}
                     resolvedLabel={ui('orgIaeCodeLabel')}
-                    selectorUrl={selectorUrlFor(CODE_FIELD)}
+                    selectorUrlFor={selectorUrlFor}
                     token={token}
-                    serverSearch
                     data-testid="CreatableSearchSelect__iaeNewCode" />
                 </td>),
                 default: (<td className="py-1.5 px-2 align-middle">

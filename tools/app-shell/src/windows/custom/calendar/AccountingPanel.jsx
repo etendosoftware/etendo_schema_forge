@@ -1,6 +1,5 @@
-import { useGridView } from '@/hooks/useGridView.js';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { useEffect, useMemo, useState } from 'react';
 import { useUI, useLabel } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -9,7 +8,6 @@ import { DataTable } from '@/components/contract-ui';
 export default function AccountingPanel({ parentId, apiBaseUrl, onCount }) {
   const ui = useUI();
   const t = useLabel();
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array: `undefined` = loading (initial/in-flight),
   // `null` = a request failed (network error or non-2xx response), an array = loaded rows
@@ -55,12 +53,11 @@ export default function AccountingPanel({ parentId, apiBaseUrl, onCount }) {
   ], [ui]);
 
   // Use the backing NEO entity, independently of the surrounding route or parent record.
-  const gridView = useGridView({
+  const { gridView } = useFlaggedGridView({
     spec: 'end-year-close',
     entity: 'accounting',
     columns,
     data: rows ?? [],
-    enabled: gridColumnViews,
     apiBaseUrl,
   });
 

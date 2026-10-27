@@ -1,5 +1,4 @@
-import { useGridView } from '@/hooks/useGridView.js';
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useMemo, useEffect } from 'react';
@@ -87,7 +86,6 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
   const ui = useUI();
   const { loading, error, transactions } = useWarehouseStock(parentId, token, apiBaseUrl);
 
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const gridColumns = useMemo(() => [
     { key: 'movementDate', column: 'MovementDate', label: ui('warehouseDate'), sourceIndex: 0 },
     { key: 'movementType', column: 'MovementType', label: ui('warehouseType'), sourceIndex: 1 },
@@ -96,9 +94,9 @@ export default function WarehouseTransactionsTable({ parentId, token, apiBaseUrl
     { key: 'movementQuantity', column: 'MovementQty', label: ui('warehouseQty'), sourceIndex: 4 },
   ], [ui]);
   const gridSpec = 'warehouse';
-  const gridView = useGridView({
+  const { gridView, gridColumnViews } = useFlaggedGridView({
     spec: gridSpec, entity: 'productTransactions', columns: gridColumns, data: transactions ?? [],
-    enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
+    enabled: Boolean(gridSpec), apiBaseUrl,
   });
   // Structural cells stay outside the personal view; existing editors and actions
   // retain their handlers and React keys when data cells move.

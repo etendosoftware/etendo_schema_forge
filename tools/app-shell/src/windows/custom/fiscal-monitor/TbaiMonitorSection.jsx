@@ -1,5 +1,4 @@
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
-import { useGridView } from '@/hooks/useGridView.js';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { Fragment, useState, useEffect, useMemo } from 'react';
@@ -200,8 +199,7 @@ export default function TbaiMonitorSection({
   const [error, setError]         = useState(null);
   const { selectedIds, setSelectedIds, allSelected, someSelected, handleToggleAll, handleToggleRow } = useFmSelection(rows);
   const [exporting, setExporting] = useState(false);
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
-  const gridView = useGridView({ spec: TBAI_SPEC, entity: TBAI_ENTITY, columns: GRID_COLUMNS, data: rows, enabled: gridColumnViews, apiBaseUrl });
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: TBAI_SPEC, entity: TBAI_ENTITY, columns: GRID_COLUMNS, data: rows, apiBaseUrl });
   const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
 
 

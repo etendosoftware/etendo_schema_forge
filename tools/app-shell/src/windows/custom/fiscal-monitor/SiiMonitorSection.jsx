@@ -1,5 +1,4 @@
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
-import { useGridView } from '@/hooks/useGridView.js';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { Fragment, useState, useEffect } from 'react';
@@ -314,10 +313,9 @@ export default function SiiMonitorSection({
   }, [initialTab]);
 
   const entityKey = resolveEntityKey(tab, period);
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const partyLabelKey = tab === 'issued' ? 'fiscalMonitor.sii.party.cliente' : 'fiscalMonitor.sii.party.proveedor';
   const translateGridLabel = (key) => ui(key === 'fiscalMonitor.col.party' ? partyLabelKey : key);
-  const gridView = useGridView({ spec: SII_SPEC, entity: SUBTAB_ENTITIES[entityKey], columns: GRID_COLUMNS, data: rows, enabled: gridColumnViews, apiBaseUrl });
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: SII_SPEC, entity: SUBTAB_ENTITIES[entityKey], columns: GRID_COLUMNS, data: rows, apiBaseUrl });
   const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
 
 

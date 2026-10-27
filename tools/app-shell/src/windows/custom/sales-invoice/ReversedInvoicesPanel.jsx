@@ -1,5 +1,4 @@
-import { useGridView } from '@/hooks/useGridView.js';
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -714,7 +713,6 @@ export default function ReversedInvoicesPanel({
 
   const [lines, setLines] = useState([]);
 
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const gridColumns = useMemo(() => [
     { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', label: ui('rectColOriginalInvoice'), sourceIndex: 1, required: true },
     { key: 'invoiceDate', label: ui('rectColDate'), sourceIndex: 2 },
@@ -723,11 +721,11 @@ export default function ReversedInvoicesPanel({
     { key: 'grandTotalAmount', label: ui('rectColTotal'), sourceIndex: 5 },
   ], [ui]);
   const gridSpec = reversedInvoicesGridSpec(apiBaseUrl);
-  const gridEnabled = gridColumnViews && Boolean(gridSpec);
-  const gridView = useGridView({
+  const { gridView, gridColumnViews } = useFlaggedGridView({
     spec: gridSpec, entity: 'reversedInvoices', columns: gridColumns, data: lines,
-    enabled: gridEnabled, apiBaseUrl,
+    enabled: Boolean(gridSpec), apiBaseUrl,
   });
+  const gridEnabled = gridColumnViews && Boolean(gridSpec);
   const renderGridCells = (fragment) => (gridEnabled
     ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 1, trailing: 1 })
     : fragment);

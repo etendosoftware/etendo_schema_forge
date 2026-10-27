@@ -1,5 +1,4 @@
-import { useGridView } from '@/hooks/useGridView.js';
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useEffect, useState, useCallback, useMemo } from 'react';
@@ -45,7 +44,6 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const orgCurrency = useCurrency() ?? 'USD';
   const [lines, setLines] = useState([]);
 
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const gridColumns = useMemo(() => [
     { key: 'amortization', column: 'A_Amortization_ID', label: ui('assetsPeriod'), sourceIndex: 1, required: true },
     { key: 'amortizationPercentage', column: 'Amortization_Percentage', label: ui('assetsPercentage'), sourceIndex: 2 },
@@ -53,9 +51,9 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     { key: 'processed', label: ui('assetsStatus'), sourceIndex: 4 },
   ], [ui]);
   const gridSpec = 'assets';
-  const gridView = useGridView({
+  const { gridView, gridColumnViews } = useFlaggedGridView({
     spec: gridSpec, entity: 'amortizationLine', columns: gridColumns, data: lines,
-    enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
+    enabled: Boolean(gridSpec), apiBaseUrl,
   });
   // Structural cells stay outside the personal view; existing editors and actions
   // retain their handlers and React keys when data cells move.

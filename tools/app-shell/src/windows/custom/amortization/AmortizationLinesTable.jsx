@@ -1,5 +1,4 @@
-import { useGridView } from '@/hooks/useGridView.js';
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -106,16 +105,15 @@ export default function AmortizationLinesTable({
   const apiFetch = useApiFetch(apiBaseUrl);
   const [lines, setLines] = useState([]);
 
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const gridColumns = useMemo(() => [
     { key: 'asset', column: 'A_Asset_ID', label: t('A_Asset_ID'), sourceIndex: 2, required: true },
     { key: 'amortizationPercentage', column: 'Amortization_Percentage', label: t('Amortization_Percentage'), sourceIndex: 3 },
     { key: 'amortizationAmount', column: 'Amortizationamt', label: t('Amortizationamt'), sourceIndex: 4, required: true },
   ], [ui, t]);
   const gridSpec = 'amortization';
-  const gridView = useGridView({
+  const { gridView, gridColumnViews } = useFlaggedGridView({
     spec: gridSpec, entity: 'lines', columns: gridColumns, data: lines,
-    enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
+    enabled: Boolean(gridSpec), apiBaseUrl,
   });
   // Structural cells stay outside the personal view; existing editors and actions
   // retain their handlers and React keys when data cells move.

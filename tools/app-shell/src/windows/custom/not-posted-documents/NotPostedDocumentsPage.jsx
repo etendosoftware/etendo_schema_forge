@@ -1,6 +1,5 @@
-import { useGridView } from '@/hooks/useGridView.js';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
-import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -89,7 +88,6 @@ const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg
 export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
   const t = useLabel();
-  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
   const navigate = useNavigate();
   // apiBaseUrl already points to the spec (e.g. .../swebsf/not-posted-documents)
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -262,12 +260,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   ], [ui]);
 
   // Use the backing NEO entity, independently of the surrounding route or parent record.
-  const gridView = useGridView({
+  const { gridView } = useFlaggedGridView({
     spec: 'not-posted-documents',
     entity: 'header',
     columns,
     data: sorted,
-    enabled: gridColumnViews,
     apiBaseUrl,
   });
 
