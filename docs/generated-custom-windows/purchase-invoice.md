@@ -487,7 +487,7 @@ import-lines path left it empty.
 **Every order of a multi-order invoice is a related document (ETP-5828).** When the lines come from
 more than one order the header's `C_Order_ID` is blanked (rule above), so the order chip read from
 `salesOrder` alone vanished. Both invoice headers now inject `linkedOrders` on the detail GET
-(`AbstractInvoiceHeaderHandler#enrichLinkedOrders`): the distinct orders reached through the lines'
+(`InvoiceDetailEnrichment#enrichLinkedOrders`): the distinct orders reached through the lines'
 `C_OrderLine_ID`, `ETGO_DTO` line excluded, each `{id, documentNo, documentStatus, grandTotalAmount,
 currency$_identifier, orderDate, isQuotation}`. The related-documents `order` source
 (`purchaseRelatedDocs.js`, `invoiceOrdersFetch` in `relatedSources.js`) renders one chip per entry
