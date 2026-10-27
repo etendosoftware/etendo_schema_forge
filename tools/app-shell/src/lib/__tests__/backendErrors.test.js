@@ -1353,6 +1353,45 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
     const raw = 'Something else entirely went wrong';
     assert.equal(translateBackendError(raw, es), raw);
   });
+
+  // ETP-5473 QA reject: the three country refusals are now AD_MESSAGEs answered in the request
+  // language and published in `messageKeys`. The SPA maps them by identity, so the toast is right
+  // whatever language the prose arrived in — English, or the backend's own Spanish wording (which
+  // is the SPA's es_ES copy verbatim, so MCP and the UI say the same thing).
+  describe('keyed country refusals (ETGO_FinAcc*, ETP-5473)', () => {
+    const en = fakeUiTranslator({
+      'backendError.invalidCountry': 'Invalid country',
+      'backendError.countryRequired': 'Country is required',
+      'backendError.countryIban': 'Country needed in an IBAN account.',
+    });
+    const KEYED = [
+      ['ETGO_FinAccCountryRequired', 'El país es obligatorio', 'Country is required',
+        'El país es obligatorio', 'Country is required'],
+      ['ETGO_FinAccInvalidCountry', 'País no válido', 'Invalid country',
+        'País no válido', 'Invalid country'],
+      ['ETGO_FinAccIbanRequiresCountry', 'Se necesita el País para una cuenta IBAN.',
+        'A bank account with an IBAN must have a country.',
+        'Se necesita el País para una cuenta IBAN.', 'Country needed in an IBAN account.'],
+    ];
+
+    KEYED.forEach(([key, spanishProse, englishProse, expectedEs, expectedEn]) => {
+      it(`${key}: maps by key whatever language the prose is in`, () => {
+        const options = { messageKeys: [key] };
+        assert.equal(translateBackendError(spanishProse, es, options), expectedEs);
+        assert.equal(translateBackendError(englishProse, es, options), expectedEs);
+        assert.equal(translateBackendError(spanishProse, en, options), expectedEn);
+      });
+
+      it(`${key}: reads the key out of the NEO error body`, () => {
+        const body = { error: { status: 400, message: spanishProse, messageKeys: [key] } };
+        assert.equal(translateBackendErrorBody(body, es, 'fallback'), expectedEs);
+      });
+
+      it(`${key}: without the key, Spanish prose is shown as the backend wrote it`, () => {
+        assert.equal(translateBackendError(spanishProse, es), spanishProse);
+      });
+    });
+  });
 });
 
 // ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108
