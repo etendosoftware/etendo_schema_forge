@@ -675,7 +675,7 @@ describe('InlineSearchCombo — chip mode (ETP-4600)', () => {
 
 describe('InlineSearchCombo — ETP-5902 labelPrefix', () => {
   const PREFIXED = [
-    { id: 'iva21', name: 'IVA 21%', labelPrefix: '21 %' },
+    { id: 'iva21', name: 'IVA 21%', labelPrefix: '21%' },
     { id: 'exento', name: 'Exento' },
   ];
 
@@ -684,7 +684,7 @@ describe('InlineSearchCombo — ETP-5902 labelPrefix', () => {
     const { input } = renderCombo({ options: PREFIXED });
     await user.click(input);
     await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
-    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveTextContent('21 % - IVA 21%');
+    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveTextContent('21% - IVA 21%');
     expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveTextContent(/^Exento$/);
   });
 
@@ -694,6 +694,6 @@ describe('InlineSearchCombo — ETP-5902 labelPrefix', () => {
     await user.click(input);
     await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
     await user.pointer({ target: screen.getByTestId('inline-add-option-tax-iva21'), keys: '[MouseLeft>]' });
-    expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21 %' }));
+    expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21%' }));
   });
 });

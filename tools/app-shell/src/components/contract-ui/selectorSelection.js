@@ -129,7 +129,7 @@ const PIN_MAX_SEGMENTS = 3;
  * ETP-5948 — search terms for pinning a committed value by its label: the label itself, then each
  * segment between ` - ` (the AD identifier separator). Selector search matches each identifier
  * column on its own, so a `"<code> - <name>"` label like an account's finds nothing as a whole,
- * while one of its parts does — not always the first (a tax reads `"21 % - <name> - <category>"`
+ * while one of its parts does — not always the first (a tax reads `"21% - <name> - <category>"`
  * and only its name is searchable). Callers stop at the first term that returns the id.
  *
  * shortcut: segments past PIN_MAX_SEGMENTS are not tried; raise it if a longer identifier shows up.
