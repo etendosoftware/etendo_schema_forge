@@ -31,7 +31,7 @@ The canonical sources are:
 | How to record debt, and the protocols around it | `docs/technical-debt-playbook.md` |
 | The backend: server-side flags, paywall, plan marker | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` |
 | Moving an environment to the subscription model (`ETGO_SubscriptionModel` + R37) | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` §3, "The subscription-model switch"; short procedure in §3.8 below |
-| After the purchase: subscription lifecycle, grace, blocking, the 402 and its kill switch | `com.etendoerp.go` → `docs/open-and-notable-topics.md` §3.7–§3.11; operator page: "Operating environment-access enforcement" in `docs/feature-flags-and-tenant-upgrade.md` |
+| After the purchase: subscription lifecycle, grace, blocking, the 402 and its kill switch | `com.etendoerp.go` → `docs/open-and-notable-topics.md` §3.7 (the subscription row lifecycle), §3.10 and §3.11; the environment-access check, its 402 and kill switch: `docs/feature-flags-and-tenant-upgrade.md` §1, including the operator page "Operating environment-access enforcement" |
 
 ---
 
@@ -84,14 +84,25 @@ Two consequences follow, and neither is hypothetical:
 6. **Branch B — the account lookup failed.** The checkout is shown anyway. The backend is the
    authority on whether payment is required, so a failed lookup in the browser must not block
    a legitimate upgrade.
-7. **Branch C — the account already owns at least one environment.** The page presents the
-   Free and Productive plans. Selecting Productive opens the Add-ons step, which remains in the
-   flow for every origin. When the current authenticated environment is a demo, this step offers
+7. **Branch C — the account already owns at least one environment.** The page is a three-step
+   checkout — **Plan → Add-ons → Payment**. The **Plan** step shows the plan catalog
+   (`GET /sws/go/plans`, ETP-5046) as one selectable card per plan, each with the catalog's name,
+   description and price, so a plan added to `ETGO_PLAN` appears with no frontend change
+   (ETP-5049). A single plan is preselected; with several, the user picks one, and nothing is
+   preselected for them. While the catalog loads, fails (with a retry), is empty, or answers
+   401, the step says so and offers no way forward — there is no plan key to send; on a 401 it
+   offers **Sign in again** (`upgrade-plans-sign-in-again`), which signs out to the login view as
+   the account page does for an expired session. Choosing a
+   card opens the Add-ons step, which remains in the flow for every origin. When the current authenticated environment is a demo, this step offers
    product and contact transfer choices. When the current environment is already productive, it
    explains that the new environment starts without demo data and offers no transfer controls.
    Back from Add-ons returns to the plan step; Continue opens payment. Back from payment returns
    to Add-ons, preserving the current form and transfer selections.
-8. **The user enters the new environment name on the payment step.** A productive-origin
+8. **The user enters the new environment name on the payment step.** The payment step shows the
+   plan chosen on the Plan step as a read-only summary (`upgrade-plan-summary`: name and price) —
+   it has no second chooser — and the checkout sends that plan's `planKey`, never a price. If a
+   catalog re-read drops the chosen plan, the summary gives way to **Choose a plan**
+   (`upgrade-plan-summary-choose`), which returns to the Plan step. A productive-origin
    purchase starts with a blank name so the current environment is not mistaken for the target.
    A demo-origin purchase can select an exact source environment; the request carries its
    `demoClientId`, not a name-based lookup. The backend validates that this ID is a demo owned by
@@ -397,7 +408,8 @@ The paid flow has separate contracts for the commercial purchase and environment
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /sws/go/billing/offers` | Returns the current productive offer's `amountMinor`, `currency`, and recurring `interval`. The backend retrieves these from the configured Stripe Price. |
+| `GET /sws/go/plans` | Lists the purchasable plans of the plan catalog (`planKey`, `name`, `description`, `displayPrice`, `currency`, `billingInterval`) — never a provider price id. The upgrade page's only quote source (§3.3). |
+| `GET /sws/go/billing/offers` | Quotes the plan catalog's default plan: the grandfathered `legacy-productive` plan at the configured legacy price while the legacy price fallback is active, otherwise the cheapest purchasable plan of `GET /sws/go/plans` at its own Stripe Price. Returns that plan's `planKey`, `amountMinor`, `currency`, and recurring `interval` read live from the chargeable price, and no provider price id (removed in ETP-5049). **No frontend caller since ETP-5049** — the upgrade page quotes the plan catalog only. |
 | `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. A company name the account already uses for a productive environment is refused with 409 `CLIENT_NAME_IN_USE` before Stripe is contacted; any other match (another account, the account's demo) is allowed. A name shaped like a provisioning name (`PEND-` + 32 hex) is reserved (400). |
 | `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |
 | `GET /sws/go/billing/purchases/{purchaseId}` | Reads one account-scoped purchase, including its fixed demo source and created `clientId` when available. |
@@ -451,16 +463,25 @@ carries a price, the **legacy price fallback** lists and sells `legacy-productiv
 configured `etendo.go.checkout.price.id`; the first priced plan retires it with no redeploy (design:
 `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6–§6.2).
 
-`GET /sws/go/billing/offers` still projects the **configured** Price (`unit_amount`, `currency`,
-recurring interval), not the plan catalog. The upgrade page quotes the plan catalog and uses the
-offer only while that lookup is in flight or has failed. Both projections reject unavailable,
-inactive, non-recurring, or unsupported interval prices rather than displaying a locally
-maintained fallback that could disagree with checkout.
+The upgrade page quotes **only** the plan catalog (ETP-5049). Its Plan step renders one card per
+catalog plan with the catalog's `displayPrice` (a decimal string, so no float rounding in transit)
+formatted through `formatCurrency` and phrased by `billingInterval`; an interval the page does not
+know renders as the bare amount rather than a wrong cadence. While the catalog is loading, has
+failed, is empty or answers 401, no price is shown and the checkout cannot proceed — the page never
+falls back to a second quote source, so it cannot advertise one price and charge another.
+`GET /sws/go/billing/offers` quotes the catalog's **default plan** from the Stripe Price checkout
+charges for it: while the legacy price fallback is active, the grandfathered `legacy-productive`
+plan at the configured legacy price (what a checkout that names no plan charges); otherwise the
+cheapest purchasable plan, the first entry of `GET /sws/go/plans`, at its own price. The answer
+carries that plan's `planKey` and no provider price id (both ETP-5049). Before ETP-5049 the page used
+this endpoint as a price preview while the catalog lookup was in flight or had failed; the SPA no
+longer calls it. Both projections reject unavailable, inactive, non-recurring, or unsupported
+interval prices rather than displaying a locally maintained fallback that could disagree with
+checkout. Full contract: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, "The billing
+offer".
 
-The browser formats Stripe's integer `amountMinor` using the returned currency, including
-zero-decimal and compatibility currencies, then displays the returned interval. If the offer
-cannot be retrieved, the page does not invent a fallback amount. Card details are entered on
-Stripe's hosted page; the Etendo GO browser neither collects nor mints payment tokens. The
+Card details are entered on Stripe's hosted page; the Etendo GO browser neither collects nor mints
+payment tokens, and it never holds a provider price id — it sends the chosen plan's `planKey`. The
 checkout request ID is an internal correlation key, not proof of payment by itself.
 
 ## 3.4 The plan marker
@@ -560,7 +581,13 @@ line, so a report that looks empty for one property but not others is the sympto
 A paid tenant stays usable while its subscription is `active`. When a renewal payment fails, Stripe
 tells Etendo through a webhook and the subscription becomes `past_due`: the tenant keeps working
 for a **grace period** (`etendo.go.billing.grace.days`, default 15 days) counted from the end of
-the period the customer already paid for. After that — or at once when the subscription is
+the period the customer already paid for. During grace the environment says so: a banner above
+its top bar (`BillingStatusBanner`, ETP-5049) warns that the last payment failed and names the day
+the environment will be blocked, offers the owner *Update payment* (`/account`) and tells anyone
+else to contact the company's administrator; it turns red and cannot be closed in the last 3 days.
+(It names that day even when an operator has switched enforcement off for the tenant, which it
+cannot detect — an accepted limitation, `generated-custom-windows/app-shell-functional-flows.md`
+§3.2a.) After that — or at once when the subscription is
 canceled, or when a demo's trial runs out — the tenant is **blocked**.
 
 Blocked means every request into the tenant's data is refused with HTTP 402, whatever the door:
@@ -591,8 +618,8 @@ block on. Registry entry: `environment-access-enforcement-kill-switch` in `flags
 *A summary for orientation, not the procedure to execute. Follow the canonical operator page —
 "The subscription-model switch" in `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §3
 — which spells out the human gate that step 1 only names (re-verify that production Stripe
-checkout has not gone live, `open-and-notable-topics.md` §2.4, and settle the R37 edge cases of
-§3.11) and gives the full verification queries. Checklist and rationale: design doc §6.2–§6.3
+checkout has not gone live, recorded in R37's `@report`, and settle the R37 edge cases of
+`open-and-notable-topics.md` §3.11) and gives the full verification queries. Checklist and rationale: design doc §6.2–§6.3
 (`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md`).*
 
 **Right after installing, nothing changes in how purchases are recorded.** The system preference

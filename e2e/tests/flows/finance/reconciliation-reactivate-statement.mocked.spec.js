@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DistinctValuesList.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
@@ -560,7 +561,7 @@ async function selectStatusOption(page, index) {
 
   const popover = page.getByRole('dialog').last();
   await expect(popover).toBeVisible();
-  const options = popover.getByRole('button');
+  const options = popover.getByRole('option');
   // Guards the positional indexing: if a status code is ever added or removed, this fails loudly
   // here instead of silently clicking the wrong filter.
   await expect(options).toHaveCount(STATUS_OPTION_COUNT);

@@ -36,7 +36,7 @@ import { login } from '../../helpers/auth.js';
  *      total genuinely exceeds the available content width at 1280px also
  *      assert `scrollWidth > clientWidth` (`expectOverflow: true` below —
  *      purchase-invoice, sales-invoice, sales-quotation. goods-shipment/
- *      goods-receipt/simple-g-l-journal have fewer/no elastic columns and
+ *      goods-receipt/manual-journals have fewer/no elastic columns and
  *      legitimately fit without scrolling even at this width — the
  *      regression under test is the collapse/overlap, not forced scrolling).
  *   4. The grid never starts to the left of the sidebar's right edge (no
@@ -46,7 +46,7 @@ import { login } from '../../helpers/auth.js';
  * of the file cover the `number` tier on purchase-invoice and sales-invoice (`invoicedQuantity`,
  * `etgoDiscount`): fixed at 152px (never grows, even on a 3000px viewport where the elastic
  * columns do), header / saved-row / add-row column boxes aligned per key, and the horizontal
- * scroll still reaching the trailing column. The footer is checked on simple-g-l-journal, the
+ * scroll still reaching the trailing column. The footer is checked on manual-journals, the
  * only window with a real totals row (`balance-footer-row`, decisions `balanceFooter`): its
  * debit/credit cells align with their header columns. The invoice/quotation grids have NO
  * footer row (their totals live in the header), so there the trailing `grossAmount` /
@@ -81,7 +81,7 @@ const VIEWPORT = { width: 1280, height: 800 };
 //   - any column with an explicit `minWidth`           -> basis = minWidth
 // A selector/search column at idx > 0 (e.g. `tax`) is FIXED (`0 0 192px`),
 // not elastic, so it is deliberately excluded here — it was never shrinkable
-// and is not part of this regression. On simple-g-l-journal, ETP-5611 dropped
+// and is not part of this regression. On manual-journals, ETP-5611 dropped
 // `lineNo` from the grid, so `accountingCombination` now sits at idx 0 with
 // `columnWidth: 220` (`1 0 220px`) and IS checked.
 // ---------------------------------------------------------------------------
@@ -282,7 +282,7 @@ const WINDOWS = [
     ],
   },
   {
-    slug: 'simple-g-l-journal',
+    slug: 'manual-journals',
     headerEntity: 'gLJournal',
     lineEntity: 'gLJournalLine',
     headerId: 'mock-narrow-glj-001',
@@ -600,7 +600,7 @@ test.describe('Lines grid — number columns hold 152px (ETP-5833)', () => {
 });
 
 test.describe('Lines grid — totals footer aligns with its header columns (ETP-5833)', () => {
-  const win = WINDOWS.find((w) => w.slug === 'simple-g-l-journal');
+  const win = WINDOWS.find((w) => w.slug === 'manual-journals');
 
   test('balance footer debit/credit cells share the x/width of their header columns', async ({ page }) => {
     await openLinesTab(page, win);

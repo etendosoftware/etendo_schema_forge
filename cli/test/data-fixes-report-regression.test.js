@@ -196,6 +196,18 @@ const FIXES_WITH_REPORT = new Set([
   // @check keeps matching it on purpose) and any fact_acct row still on a foreign doctype or GL
   // category after @apply.
   '20261021T120000Z__R50-inout-foreign-return-doctype',
+  // Its @report names every predefined payment term NOT seeded because the anchor org already
+  // holds a term with that name but a different shape (lines, fixed due day, month offset).
+  '20261022T150000Z__R52-payment-terms-extended',
+  // R53 (ETP-5902) lists the (schema, rule account) groups not fully on target: columns left
+  // alone because customized, and rows skipped because the chart lacks the account.
+  '20261027T120000Z__R53-spanish-tax-accounts',
+  // R55 (ETP-5791) flags the four standard contact categories and adds "Cliente/Proveedor"; its
+  // @report lists the custom categories it left N/N (with contact counts) for R56 to flag.
+  '20261026T120000Z__R55-bp-category-customer-vendor-flags',
+  // R56 (ETP-5791) flags every custom N/N category from its contacts; its @report lists what each
+  // category received and why (rows this run wrote, selected by updated = now()).
+  '20261026T130000Z__R56-bp-category-custom-flags-from-contacts',
 ]);
 
 async function loadCatalogFiles() {

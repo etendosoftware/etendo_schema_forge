@@ -55,9 +55,12 @@ const captured = vi.hoisted(() => ({}));
 const trackMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/observability.js', () => ({ track: trackMock }));
 // ETP-5676: the global `import-batch-size` flag; every other flag stays off.
-const flagValue = vi.hoisted(() => ({ batchSize: 0 }));
+const flagValue = vi.hoisted(() => ({ batchSize: 0, allOff: Object.freeze({}) }));
 vi.mock('@/lib/flags/useFeatureFlag.js', () => ({
   useFeatureFlag: () => false,
+  // Flag-gated import columns (importFlagGates.js): no gate key is ON, so no field is dropped.
+  // A stable object keeps the gated config's memo identity across renders.
+  useFeatureFlags: () => flagValue.allOff,
   useNumberFlag: () => flagValue.batchSize,
 }));
 // ETP-5676: the batch poster the hook wraps; its body is guarded in useBatch.vitest.jsx.
@@ -202,6 +205,37 @@ describe('ListView — import postBatch asks for ids only', () => {
     await expect(postBatch(ops)).resolves.toBe(response);
 
     expect(runBatchMock).toHaveBeenCalledTimes(1);
-    expect(runBatchMock).toHaveBeenCalledWith(ops, { onlyReturnIds: true, skipRedundantCallouts: true });
+    // ETP-5677: the import runs as an async job and hands the engine's progress callback through.
+    expect(runBatchMock).toHaveBeenCalledWith(ops, expect.objectContaining({
+      onlyReturnIds: true, skipRedundantCallouts: true, async: true, onProgress: undefined,
+    }));
+    // The wait is abortable: the owner of the hook cancels it on unmount.
+    expect(runBatchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('ETP-5677: aborts a pending job wait when the owner of the import unmounts', async () => {
+    runBatchMock.mockClear();
+    const view = render(<ListView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('ListView__importButton'));
+    runBatchMock.mockResolvedValueOnce({ committed: true, operations: [] });
+    await captured.props.postBatch([{ id: 'product', spec: 'product', entity: 'product', body: {} }]);
+    const { signal } = runBatchMock.mock.calls[0][1];
+    expect(signal.aborted).toBe(false);
+
+    view.unmount();
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('ETP-5677: forwards the engine onProgress so the dialog bar follows the job polls', async () => {
+    runBatchMock.mockClear();
+    const { postBatch } = openImport();
+    const onProgress = vi.fn();
+    runBatchMock.mockResolvedValueOnce({ committed: true, operations: [] });
+
+    await postBatch([{ id: 'product', spec: 'product', entity: 'product', body: {} }], { onProgress });
+
+    expect(runBatchMock.mock.calls[0][1].onProgress).toBe(onProgress);
+    expect(runBatchMock.mock.calls[0][1].async).toBe(true);
   });
 });

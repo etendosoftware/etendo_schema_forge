@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/account/SubscriptionSection.jsx
+// @covers tools/app-shell/src/components/billing/BillingStatusBanner.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login, declareCookieSession } from '../../helpers/auth.js';
 
@@ -214,5 +216,88 @@ test.describe('Subscription lifecycle — /account, cookie session scheme', () =
 
     const legacyAfter = await page.evaluate(() => localStorage.getItem('sf_platform_token'));
     expect(legacyAfter).toBeNull();
+  });
+});
+
+/**
+ * The failed-payment banner (ETP-5049) — the in-environment side of the same PAST_DUE state.
+ *
+ * `BillingStatusBanner` reads the current environment off `GET /sws/go/environments` (matched by
+ * the session's `clientId`, `e2e-mock-client` in `login()`'s mock) and shows while `graceEndsAt`
+ * is ahead. The owner's CTA leads to `/account`, where the Subscription section above owns the
+ * payment portal, so the banner is not repeated there.
+ */
+test.describe('Subscription lifecycle — failed-payment banner', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  /** Two routes, not a brace pattern — see the route-glob gotcha in docs/e2e-testing-guide.md. */
+  async function installEnvironmentsMock(page, environment) {
+    const handler = async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ environments: [environment] }),
+      });
+    };
+    await page.route('**/sws/go/environments/**', handler);
+    await page.route('**/sws/go/environments**', handler);
+  }
+
+  function pastDueEnvironment({ daysLeft, ownedByAccount }) {
+    return {
+      clientId: 'e2e-mock-client',
+      clientName: 'Acme Productive',
+      plan: 'productive',
+      environmentType: 'PRODUCTIVE',
+      subscriptionStatus: 'PAST_DUE',
+      graceEndsAt: new Date(Date.now() + daysLeft * DAY_MS).toISOString(),
+      ownedByAccount,
+    };
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installAccountMock(page);
+    await installSubscriptionMock(page, PAST_DUE_SUBSCRIPTION);
+  });
+
+  test('the owner is warned, and Update payment leads to /account, where the banner is not repeated', async ({ page }) => {
+    await installEnvironmentsMock(page, pastDueEnvironment({ daysLeft: 10, ownedByAccount: true }));
+    await page.goto('/');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const banner = page.getByTestId('billing-status-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toHaveAttribute('data-variant', 'warning');
+    await expect(banner.getByTestId('billing-status-banner-dismiss')).toBeVisible();
+
+    await banner.getByTestId('billing-status-banner-cta').click();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByTestId('SubscriptionSection__account')).toBeVisible();
+    await expect(page.getByTestId('billing-status-banner')).toHaveCount(0);
+  });
+
+  test('a member is told to contact the administrator, with no CTA', async ({ page }) => {
+    await installEnvironmentsMock(page, pastDueEnvironment({ daysLeft: 10, ownedByAccount: false }));
+    await page.goto('/');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const banner = page.getByTestId('billing-status-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner.getByTestId('billing-status-banner-member-hint')).toBeVisible();
+    await expect(banner.getByTestId('billing-status-banner-cta')).toHaveCount(0);
+  });
+
+  test('in the last 3 days the banner is an alert that cannot be dismissed', async ({ page }) => {
+    await installEnvironmentsMock(page, pastDueEnvironment({ daysLeft: 2, ownedByAccount: true }));
+    await page.goto('/');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const banner = page.getByTestId('billing-status-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toHaveAttribute('role', 'alert');
+    await expect(banner).toHaveAttribute('data-variant', 'destructive');
+    await expect(banner.getByTestId('billing-status-banner-dismiss')).toHaveCount(0);
   });
 });

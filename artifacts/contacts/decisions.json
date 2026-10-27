@@ -150,9 +150,9 @@
       "fields": [
         { "target": "name", "aliases": ["nombre comercial", "nombre", "razon social", "razón social"], "label": "Commercial Name", "required": false, "example": "Distribuciones García S.L.", "exampleKey": "importExampleContactName" },
         { "target": "etgoIsperson", "aliases": ["tipo", "tipo de contacto", "persona o empresa", "tipo cliente", "type"], "label": "Contact Type (Person / Company)", "required": false, "example": "Empresa", "exampleKey": "importExampleContactType", "labelKey": "importHeaderType" },
-        { "target": "customer", "aliases": ["cliente", "es cliente", "customer"], "label": "Customer", "required": false, "example": "Sí", "exampleKey": "importExampleContactCustomer", "labelKey": "importHeaderCustomer" },
-        { "target": "vendor", "aliases": ["proveedor", "es proveedor", "vendor", "supplier"], "label": "Vendor", "required": false, "example": "No", "labelKey": "importHeaderVendor" },
-        { "target": "category", "aliases": ["categoria", "categoría", "categoria de contacto", "categoría de contacto", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Contact Category", "example": "Clientes", "exampleKey": "importExampleContactCategory", "column": "C_BP_Group_ID" },
+        { "target": "customer", "aliases": ["cliente", "es cliente", "customer"], "label": "Customer", "required": false, "example": "Sí", "exampleKey": "importExampleContactCustomer", "labelKey": "importHeaderCustomer", "hiddenWhenFlag": "contact-category-type" },
+        { "target": "vendor", "aliases": ["proveedor", "es proveedor", "vendor", "supplier"], "label": "Vendor", "required": false, "example": "No", "labelKey": "importHeaderVendor", "hiddenWhenFlag": "contact-category-type" },
+        { "target": "category", "aliases": ["categoria", "categoría", "categoria de contacto", "categoría de contacto", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Contact Category", "example": "Cliente", "exampleKey": "importExampleContactCategory", "column": "C_BP_Group_ID" },
         { "target": "etgoFirstname", "aliases": ["nombre de pila", "nombre persona"], "label": "First Name", "required": false, "example": "María", "labelKey": "importHeaderFirstName" },
         { "target": "etgoLastname", "aliases": ["apellido", "apellidos"], "label": "Last Name", "required": false, "example": "García" },
         { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"], "isEmail": true, "label": "Email", "example": "info@distribucionesgarcia.es" },
@@ -261,7 +261,7 @@
           "grid": false,
           "section": "principal",
           "order": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true }
         },
         "businessPartnerCategory": {
           "visibility": "editable",
@@ -431,7 +431,8 @@
           "label": "Vendor",
           "grid": true,
           "form": false,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md"
         },
         "purchasePricelist": {
           "visibility": "editable",
@@ -477,7 +478,8 @@
           "label": "Customer",
           "grid": true,
           "form": false,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md"
         },
         "priceList": {
           "visibility": "editable",
@@ -522,8 +524,19 @@
       "javaQualifier": "businessPartnerHandler"
     },
     "locationAddress": {
+      "publicApi": {
+        "inputFields": [
+          { "name": "address_line1", "internalPath": "addressLine1", "dataType": "string", "readable": true },
+          { "name": "address_line2", "internalPath": "addressLine2", "dataType": "string", "readable": true },
+          { "name": "city_name", "internalPath": "cityName", "dataType": "string", "readable": true },
+          { "name": "postal_code", "internalPath": "postalCode", "dataType": "string", "readable": true },
+          { "name": "country", "internalPath": "country", "dataType": "string", "readable": true },
+          { "name": "region_name", "internalPath": "regionName", "dataType": "string", "readable": true }
+        ]
+      },
       "fields": {
         "name": {
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": true,
           "searchable": true,
@@ -534,6 +547,7 @@
           "section": "principal"
         },
         "shipToAddress": {
+          "publicApi": { "exposed": true, "name": "shipToAddress", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -543,6 +557,7 @@
           }
         },
         "invoiceToAddress": {
+          "publicApi": { "exposed": true, "name": "invoiceToAddress", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -552,14 +567,28 @@
           }
         },
         "phone": {
+          "publicApi": { "exposed": true, "name": "phone", "type": "passthrough", "handlerId": null },
           "visibility": "editable",
           "grid": false,
           "section": "other"
         },
         "active": {
+          "publicApi": { "exposed": true, "name": "active", "type": "passthrough", "handlerId": null },
           "visibility": "readOnly",
           "grid": false,
           "section": "other"
+        },
+        "locationAddress": {
+          "publicApi": { "exposed": true, "name": "locationAddress", "type": "passthrough", "handlerId": null }
+        },
+        "alternativePhone": {
+          "publicApi": { "exposed": true, "name": "alternativePhone", "type": "passthrough", "handlerId": null }
+        },
+        "fax": {
+          "publicApi": { "exposed": true, "name": "fax", "type": "passthrough", "handlerId": null }
+        },
+        "taxLocation": {
+          "publicApi": { "exposed": true, "name": "taxLocation", "type": "passthrough", "handlerId": null }
         }
       },
       "javaQualifier": "contactsLocationAddressHandler"

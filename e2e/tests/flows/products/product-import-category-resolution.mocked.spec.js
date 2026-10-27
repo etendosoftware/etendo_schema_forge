@@ -1,8 +1,14 @@
+// @covers artifacts/product/decisions.json
 import { test, expect } from '../../helpers/test.js';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
+
+// The mapping summary denominator is the number of importable Product fields.
+const IMPORT_FIELD_COUNT = JSON.parse(
+  readFileSync(resolve(import.meta.dirname, '../../../../artifacts/product/decisions.json'), 'utf8'),
+).window.import.fields.length;
 
 /**
  * ETP-4905 — Product import creates and links a missing category.
@@ -77,8 +83,10 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
   // of all importable fields, not columns mapped out of columns present. ETP-5350 took
   // Product from 8 to 10 by adding `cost` and `costStartingDate` to
   // `artifacts/product/decisions.json` → `window.import.fields`, so the denominator tracks
-  // that list: add a field there and this number moves.
-  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('4/10');
+  // that list, and ETP-5730 took it to 13 (taxCategory, stocked, returnable). The spec
+  // reads the count from there, so adding a field no longer breaks this assertion.
+  await expect(page.getByTestId('ImportColumnMapping__summaryCount'))
+    .toContainText(`4/${IMPORT_FIELD_COUNT}`);
 
   // The two invalid rows fail at DIFFERENT stages, and ETP-4996 is what moved the first one.
   // BAD-PRICE-4905 is caught during REVIEW: `isNumeric` on the price column makes validateRow

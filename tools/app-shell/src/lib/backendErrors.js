@@ -1,3 +1,5 @@
+// ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
+import { formatCalendarDate } from './dateOnly.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -115,7 +117,9 @@ const BACKEND_ERROR_MAP = {
   'Invalid country': 'backendError.invalidCountry',
   // ETP-5473 (FinancialAccountHandler). Country is mandatory for every financial-account type on
   // create; the IBAN is never used to derive it. (Clearing it on update of a Bank account that
-  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.)
+  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.) These three
+  // now travel with `messageKeys` (ETGO_FinAcc*, see BACKEND_ERROR_KEY_MAP) and are written in the
+  // request language; the English literals are kept only as the fallback for a keyless backend.
   'Country is required': 'backendError.countryRequired',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
@@ -243,10 +247,11 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
-  // ETP-5381: this duplicate guard was REMOVED on purpose (a return can legitimately have more
-  // than one rectificative invoice) and the backend no longer sends this sentence; ETP-5712 reports
-  // the existing ones in `previousReturnInvoices` instead. The entry stays only so a response from
-  // an older backend still reads in the user's language.
+  // ETP-5712: the backend answers 409 `returnInvoiceAlreadyExists` with exactly this sentence when
+  // the return already has a non-voided rectificative invoice and the request does not carry
+  // `allowDuplicate:true` (one per return, like the screen, which hides its button). ETP-5381 had
+  // removed the guard; ReturnShipmentUtils.MSG_RETURN_INVOICE_ALREADY_EXISTS is the source, keep
+  // both in step. Older backends sent it too, so the entry serves both.
   'A rectificative invoice already exists for this return document.':
     'backendError.returnInvoiceAlreadyExists',
   // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
@@ -264,6 +269,11 @@ const BACKEND_ERROR_MAP = {
     'backendError.returnNothingLeft',
   'The document must be completed before goods can be returned from it.':
     'backendError.returnSourceNotCompleted',
+  // InvoiceLineAmountSupport.invalidDiscount() (com.etendoerp.go — ETP-5710), `error.code =
+  // invalidLineDiscount` — HTTP 422 for a line discount outside 0..100. The sentence is fixed (no
+  // parameters), so it is an exact-message entry like the ones above.
+  'The line discount must be between 0 and 100 (percent).':
+    'backendError.invalidLineDiscount',
   // ReturnableQuantity.refuseDirectCreate (com.etendoerp.go — ETP-5711): a return line is never
   // created by a plain POST of the line, only by the import / create-from-document actions. Two
   // exact strings (one per direction, they differ only in the action names), one translation.
@@ -464,6 +474,12 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5791 — the contact-type refusals of com.etendoerp.go (BusinessPartnerCategoryHandler /
+  // ContactTypeRules): a contact category, or a contact, saved with neither Customer nor
+  // Vendor/Creditor. AD_MESSAGE records of a module with no es_ES translation pack, so this map
+  // is where they become Spanish.
+  ETGO_BPGroupContactTypeRequired: 'backendError.bpGroupContactTypeRequired',
+  ETGO_BPartnerContactTypeRequired: 'backendError.bpartnerContactTypeRequired',
   // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
   // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
   // same case maps to "period not open", which sends the user to open a period they do not need.
@@ -477,6 +493,19 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_AccountIsInactive: 'backendError.accountIsInactive',
   ETGO_AccountWrongLedger: 'backendError.accountWrongLedger',
   ETGO_LedgerNotUpdatable: 'backendError.ledgerNotUpdatable',
+  // ETP-5826 — com.etendoerp.go PaymentTermHandler: the number of days of a payment term is missing,
+  // not a whole number, or outside the range. `messageParams` { field, min, max, value }. The
+  // duplicate refusals of the same handler need the active/inactive split, see
+  // translatePaymentTermConflict.
+  ETGO_PaymentTermDaysInvalid: 'backendError.paymentTermDaysInvalid',
+  ETGO_PaymentTermDaysOutOfRange: 'backendError.paymentTermDaysOutOfRange',
+  // ETP-5473 — com.etendoerp.go FinancialAccountHandler: the country refusals of a financial
+  // account. The backend now answers them in the request language (REST/MCP have no SPA to
+  // translate), so the text is no longer a stable English literal; these keys are. The English
+  // exact-match entries in BACKEND_ERROR_MAP stay as the fallback for a backend that predates them.
+  ETGO_FinAccCountryRequired: 'backendError.countryRequired',
+  ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
+  ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -579,6 +608,42 @@ function renderInvalidAccountEntity(t, messageKeys, params) {
   return null;
 }
 
+// ETP-5826 — com.etendoerp.go PaymentTermHandler refuses a payment term that duplicates another one
+// of the client, by number of days (ETGO_PaymentTermDaysDuplicate) or by name in the organization
+// (ETGO_PaymentTermNameDuplicate). `messageParams` names the existing term (`paymentTermName`) and
+// says whether it is active (`paymentTermActive`); an inactive one gets a reactivation hint, since
+// creating another term is exactly what the user must not do. Shared by the Payment Term window's
+// save and the "+ Crear condición de pago" modal. Without a name the sentence cannot be built, so the
+// caller falls back to the next route.
+const PAYMENT_TERM_CONFLICT_KEYS = Object.freeze({
+  ETGO_PaymentTermDaysDuplicate: Object.freeze({
+    active: 'backendError.paymentTermDaysDuplicate',
+    inactive: 'backendError.paymentTermDaysDuplicateInactive',
+  }),
+  ETGO_PaymentTermNameDuplicate: Object.freeze({
+    active: 'backendError.paymentTermNameDuplicate',
+    inactive: 'backendError.paymentTermNameDuplicateInactive',
+  }),
+});
+
+function isInactiveFlag(value) {
+  return value === false || value === 'false' || value === 'N';
+}
+
+function translatePaymentTermConflict(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys)) return null;
+  const name = nonEmptyString(messageParams?.paymentTermName);
+  if (!name) return null;
+  for (const raw of messageKeys) {
+    const keys = Object.hasOwn(PAYMENT_TERM_CONFLICT_KEYS, raw) ? PAYMENT_TERM_CONFLICT_KEYS[raw] : null;
+    if (!keys) continue;
+    const key = isInactiveFlag(messageParams.paymentTermActive) ? keys.inactive : keys.active;
+    const translated = resolveLocaleKey(t, key, { name });
+    if (translated) return translated;
+  }
+  return null;
+}
+
 function translateInvalidAccount(messageKeys, messageParams, t) {
   if (!Array.isArray(messageKeys) || !messageKeys.includes(INVALID_ACCOUNT_KEY)) return null;
   if (!messageParams || typeof messageParams !== 'object') return null;
@@ -590,6 +655,76 @@ function translateInvalidAccount(messageKeys, messageParams, t) {
     messageParams.missingProductAccounts);
   if (!base || !entity || groupAccounts === null || productAccounts === null) return null;
   return [base, entity, groupAccounts, productAccounts].filter(Boolean).join(' ');
+}
+
+// ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
+// A foreign-currency quotation/order/invoice with an empty `eTGOCurrencyRate` is refused with
+// HTTP 422 on every channel:
+//   - on save: messageKeys ["ETGO_ExchangeRateMissingOnSave", "ETGO_RateRefDate<Accounting|Order|
+//     Quotation>"], messageParams { orgCurrency, documentCurrency, date (yyyy-MM-dd), dateField,
+//     referenceDate (the same ETGO_RateRefDate* key) };
+//   - on complete: messageKeys ["ETGO_ExchangeRateMissingOnComplete"], messageParams
+//     { orgCurrency, documentCurrency }.
+// Same rules as translateInvalidAccount: runs only with params, fails as a whole (null → the
+// backend's own, already-translated prose), and none of these keys is in BACKEND_ERROR_KEY_MAP.
+const EXCHANGE_RATE_MISSING_ON_SAVE_KEY = 'ETGO_ExchangeRateMissingOnSave';
+const EXCHANGE_RATE_MISSING_ON_COMPLETE_KEY = 'ETGO_ExchangeRateMissingOnComplete';
+// The reference-date identity → the locale key naming that date field for the user.
+const RATE_REFERENCE_DATE_LABEL_KEYS = {
+  ETGO_RateRefDateAccounting: 'backendError.rateReferenceDate.accounting',
+  ETGO_RateRefDateOrder: 'backendError.rateReferenceDate.order',
+  ETGO_RateRefDateQuotation: 'backendError.rateReferenceDate.quotation',
+};
+
+function resolveRateReferenceDateLabel(t, messageKeys, params) {
+  const fromParams = nonEmptyString(params.referenceDate);
+  const refKey = fromParams && RATE_REFERENCE_DATE_LABEL_KEYS[fromParams]
+    ? fromParams
+    : messageKeys.find((k) => RATE_REFERENCE_DATE_LABEL_KEYS[k]);
+  return refKey ? resolveLocaleKey(t, RATE_REFERENCE_DATE_LABEL_KEYS[refKey]) : null;
+}
+
+function translateExchangeRateMissing(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageParams || typeof messageParams !== 'object') return null;
+  const orgCurrency = nonEmptyString(messageParams.orgCurrency);
+  const documentCurrency = nonEmptyString(messageParams.documentCurrency);
+  if (!orgCurrency || !documentCurrency) return null;
+  if (messageKeys.includes(EXCHANGE_RATE_MISSING_ON_SAVE_KEY)) {
+    // Date-only value: formatCalendarDate never shifts the day by the host's timezone; it
+    // answers '—' for an unparseable value, which must not reach the sentence.
+    const rawDate = nonEmptyString(messageParams.date);
+    const date = rawDate ? formatCalendarDate(rawDate) : null;
+    const field = resolveRateReferenceDateLabel(t, messageKeys, messageParams);
+    if (!date || date === '—' || !field) return null;
+    return resolveLocaleKey(t, 'backendError.exchangeRateMissingOnSave',
+      { orgCurrency, documentCurrency, date, field });
+  }
+  if (messageKeys.includes(EXCHANGE_RATE_MISSING_ON_COMPLETE_KEY)) {
+    return resolveLocaleKey(t, 'backendError.exchangeRateMissingOnComplete',
+      { orgCurrency, documentCurrency });
+  }
+  return null;
+}
+
+/**
+ * Translates a failed response body that the caller already parsed — message and identity
+ * (`messageKeys` / `messageParams`) together, for a call site that has to read the JSON itself
+ * (e.g. to inspect a legacy `@Token@` before translating). Looks for the message in the same
+ * envelopes the document-action modals always read (`error.message`, `response.message`,
+ * `response.error`, `message`), so swapping a hand-rolled `e?.error?.message || …` chain for this
+ * only ADDS the identity.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @param {string} fallback text used when the body carries no message
+ * @returns {string} the translated message
+ */
+export function translateBackendErrorBody(body, t, fallback) {
+  const message = body?.error?.message || body?.response?.message || pickBackendErrorText(body) || fallback;
+  return translateBackendError(message, t, {
+    messageKeys: extractBackendMessageKeys(body),
+    messageParams: extractBackendMessageParams(body),
+  });
 }
 
 // `t(key, params)` interpolates `{var}` tokens (single-brace — this codebase's real
@@ -856,12 +991,13 @@ function matchReturnReasonTooLong(msg) {
 }
 
 // ReturnShipmentUtils.refuseIfUnpriced (com.etendoerp.go — ETP-5712), `error.code = returnInvoiceWithoutAmount`:
-// "The corrective invoice (factura rectificativa) cannot be created: no price could be found for
-// {products}, so it would be confirmed with a zero amount. Set a price for ... and try again."
+// "The corrective invoice (factura rectificativa) cannot be created: no price source was found for
+// {products} (not on the invoice being rectified, nor on its order line, nor in the price list), so
+// it would be confirmed with a zero amount. Give those products a price ..."
 // The products are free text joined with ", " — one opaque {products} param (same shape as
 // matchInvoiceLinesWithoutAmount), located by the fixed prefix and suffix, never by a regex.
-const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
-const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price source was found for ';
+const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ' (not on the invoice being rectified, nor on its order line, nor in the price list), so it would be confirmed with a zero amount. Give those products a price in the price list, or rectify an invoice that has them.';
 
 function matchReturnInvoiceWithoutAmount(msg) {
   if (!msg.startsWith(RETURN_INVOICE_NO_AMOUNT_PREFIX) || !msg.endsWith(RETURN_INVOICE_NO_AMOUNT_SUFFIX)) {
@@ -870,6 +1006,21 @@ function matchReturnInvoiceWithoutAmount(msg) {
   const products = msg.slice(RETURN_INVOICE_NO_AMOUNT_PREFIX.length, -RETURN_INVOICE_NO_AMOUNT_SUFFIX.length);
   if (!products) return null;
   return { products };
+}
+
+// OrderInvoiceDuplicateGuard.java (com.etendoerp.go — ETP-5714), `error.code = draftInvoiceExists`:
+// "This order already has a draft invoice (D1, D2)." — the draft document numbers are one opaque
+// {docs} param, located by the fixed prefix and suffix (never by a regex). The screen hides the
+// button while a draft exists, so this is only ever read from a bulk action or a race.
+const DRAFT_INVOICE_EXISTS_PREFIX = 'This order already has a draft invoice (';
+const DRAFT_INVOICE_EXISTS_SUFFIX = ').';
+
+function matchDraftInvoiceExists(msg) {
+  if (!msg.startsWith(DRAFT_INVOICE_EXISTS_PREFIX) || !msg.endsWith(DRAFT_INVOICE_EXISTS_SUFFIX)) {
+    return null;
+  }
+  const docs = msg.slice(DRAFT_INVOICE_EXISTS_PREFIX.length, -DRAFT_INVOICE_EXISTS_SUFFIX.length);
+  return docs ? { docs } : null;
 }
 
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
@@ -1315,6 +1466,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchReturnLineNotInDocument, 'backendError.returnLineNotInDocument'],
   [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
   [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
+  [matchDraftInvoiceExists, 'backendError.draftInvoiceExists'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -1396,6 +1548,78 @@ function extractFirstResponseErrorsMessage(data) {
   return undefined;
 }
 
+/**
+ * Reads the machine-readable failure class of a NEO error body (ETP-5782), whatever shape it
+ * arrived in: nested `{error:{code}}` (thrown failures) or the flat IMP-5 `{error:"stale_record"}`
+ * (pre-checked). Returns `undefined` when the body carries none — a backend deployed before the
+ * classification, or a non-NEO envelope. Screens must branch on this, never on the bare status:
+ * a 409 can be a duplicate, a stale record, a record in use or a retryable conflict.
+ *
+ * @param {object|null|undefined} payload parsed JSON error body
+ * @returns {string|undefined} the code, e.g. `duplicate_key`, `stale_record`
+ */
+const FLAT_ERROR_CODES = new Set([
+  'stale_record', 'duplicate_key', 'record_in_use', 'retryable_conflict', 'unknown_reference',
+  'invalid_value', 'missing_required_value', 'business_rule', 'forbidden', 'service_unavailable',
+  'server_error', 'read_only_field',
+]);
+
+export function extractBackendErrorCode(payload) {
+  const nested = payload?.error?.code;
+  if (typeof nested === 'string' && nested) return nested;
+  const flat = payload?.error;
+  // Flat shape: allow-list only, so an arbitrary snake_case string (e.g. "conflict") is not a code.
+  if (typeof flat === 'string' && FLAT_ERROR_CODES.has(flat)) return flat;
+  return undefined;
+}
+
+// ETP-5782 — the generic English sentences NEO sends for a classified failure, keyed by the
+// failure code, with the i18n key that renders each. Only the EXACT generic text is replaced:
+// a specific, already-translated explanation under the same code (a business_rule, a record_in_use
+// raised by a trigger) is kept verbatim.
+// These sentences mirror the NeoErrorClassifier MSG_* constants in com.etendoerp.go; changing one
+// side silently disables the translation (it falls back to the server text).
+const GENERIC_CODE_MESSAGES = {
+  unknown_reference: ['A referenced record does not exist or is not accessible.', 'backendError.unknownReference'],
+  record_in_use: ['This record cannot be deleted because other records use it.', 'backendError.recordInUse'],
+  invalid_value: ['A value sent is not valid.', 'backendError.invalidValue'],
+  missing_required_value: ['A required value is missing.', 'backendError.missingRequiredValue'],
+  retryable_conflict: ['The record is being modified by another operation. Retry the request.', 'backendError.retryableConflict'],
+  forbidden: ['This action is not allowed for the current role.', 'backendError.forbidden'],
+};
+// service_unavailable carries a sanitized, non-fixed text, so it is translated by code alone.
+const CODE_ONLY_KEYS = { service_unavailable: 'backendError.serviceUnavailable' };
+
+function translateByCode(msg, t, code) {
+  if (!code) return null;
+  const only = CODE_ONLY_KEYS[code];
+  const generic = GENERIC_CODE_MESSAGES[code];
+  const key = only ?? (generic && msg?.trim() === generic[0] ? generic[1] : null);
+  if (!key) return null;
+  const translated = t(key);
+  return translated && translated !== key ? translated : null;
+}
+
+/**
+ * True when a refusal means "that value already exists" (ETP-5782). A 409 is also a stale record,
+ * a record in use and a retryable conflict, so the status alone no longer says it: only
+ * `duplicate_key` does. A 409 with no code at all is a hand-written refusal of an endpoint that
+ * predates the classification (a draft already exists, an account name is taken) and keeps its
+ * meaning.
+ *
+ * @param {number|undefined} status HTTP status of the refusal
+ * @param {string|null|undefined} code failure code, see `extractBackendErrorCode`
+ * @returns {boolean} whether to show the "already exists" message
+ */
+export function isDuplicateConflict(status, code) {
+  return status === 409 && (!code || code === 'duplicate_key');
+}
+
+function codeEntry(data) {
+  const code = extractBackendErrorCode(data);
+  return code ? { code } : {};
+}
+
 function pickBackendErrorText(data) {
   // NEO Headless top-level format: { error: { message, status } }
   if (data?.error?.message) return data.error.message;
@@ -1426,6 +1650,7 @@ export async function parseBackendError(res) {
     message: pickBackendErrorText(data),
     messageKeys: extractBackendMessageKeys(data),
     messageParams: extractBackendMessageParams(data),
+    ...codeEntry(data),
   };
 }
 
@@ -1444,8 +1669,8 @@ export async function parseBackendErrorMessage(res) {
  * @returns {Promise<string>} the translated message
  */
 export async function translateBackendErrorResponse(res, t) {
-  const { message, messageKeys, messageParams } = await parseBackendError(res);
-  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams });
+  const { message, messageKeys, messageParams, code } = await parseBackendError(res);
+  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams, code });
 }
 
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';
@@ -1499,6 +1724,13 @@ export function translateBackendError(msg, t, options = {}) {
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);
   if (invalidAccount !== null) return invalidAccount;
+  // ETP-5840: same position and rules as the Invalid-Account composer.
+  const rateMissing = translateExchangeRateMissing(options.messageKeys, options.messageParams, t);
+  if (rateMissing !== null) return rateMissing;
+
+  // ETP-5826: same reason — the duplicate refusals pick their sentence from a param.
+  const paymentTermConflict = translatePaymentTermConflict(options.messageKeys, options.messageParams, t);
+  if (paymentTermConflict !== null) return paymentTermConflict;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
@@ -1511,6 +1743,9 @@ export function translateBackendError(msg, t, options = {}) {
 
   const single = translateSingleMessage(trimmed, t);
   if (single !== null) return single;
+
+  const byCode = translateByCode(msg, t, options.code);
+  if (byCode !== null) return byCode;
 
   // ETP-5109: the PSD2 sync path accumulates its result messages into ONE StringBuilder joined by
   // newlines — SaltEdgeAccountLinkHelper.fetchAccountTransactions appends the max-fetch-interval

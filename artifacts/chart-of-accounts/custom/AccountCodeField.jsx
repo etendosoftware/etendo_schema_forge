@@ -15,6 +15,8 @@ const ACCOUNT_CODE_LENGTH = 8;
  *   placeholder — 4-digit suffix hint for the empty-suffix state (the next available
  *                 number under the selected prefix, i.e. highest existing sibling + 1).
  *                 Falls back to `codeSuffixPlaceholder` ("0000") when not supplied.
+ *   error       — optional error from the host form's own validation (e.g. on save). Shown in the
+ *                 same slot as the blur error, so the two never stack as duplicate messages.
  *
  * Render rules:
  *   - summaryLevel === 'Y' OR readOnly  → single read-only display  (data-testid="account-code-readonly")
@@ -23,10 +25,11 @@ const ACCOUNT_CODE_LENGTH = 8;
  *
  * Suffix input constraints:
  *   - maxLength=4, digits only (non-digit keys rejected on keydown)
- *   - On blur: validates total code length === 8; shows inline error if not
+ *   - On blur: validates total code length === 8; shows inline error if not. The `error` prop,
+ *     when set, takes precedence over the blur error; both render in one slot.
  *   - Error key: "codeExact8Digits" in genericLabels (both en_US.json and es_ES.json)
  */
-export default function AccountCodeField({ value = '', onChange, record, readOnly = false, placeholder }) {
+export default function AccountCodeField({ value = '', onChange, record, readOnly = false, placeholder, error: externalError }) {
   const ui = useUI();
   const isSummary = record?.summaryLevel === 'Y';
   const isReadOnlyDisplay = isSummary || readOnly;
@@ -42,10 +45,14 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
   const [suffix, setSuffix] = useState(derivedSuffix);
   const [error, setError] = useState('');
 
-  // Sync suffix when the value prop changes externally (e.g. record load)
+  // Sync suffix when the value prop changes externally (e.g. record load, parent change);
+  // a blur error about the previous suffix no longer applies.
   useEffect(() => {
     setSuffix(derivedSuffix);
+    setError('');
   }, [derivedSuffix]);
+
+  const shownError = externalError || error;
 
   if (isReadOnlyDisplay) {
     return (
@@ -111,13 +118,13 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
           className="min-w-0 flex-1 bg-transparent px-2 focus:outline-none"
         />
       </div>
-      {error && (
+      {shownError && (
         <p
           className="text-xs text-destructive mt-1"
           data-testid="account-code-error"
           role="alert"
         >
-          {error}
+          {shownError}
         </p>
       )}
     </div>

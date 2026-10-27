@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
@@ -61,10 +63,10 @@ const ORDER = {
 
 /**
  * Installs every route the sales-order detail page needs for this flow:
- * currency options + validate-exchange-rate + session (all three needed by
- * CurrencyRatePicker's currency-change flow, per
- * sales-order-currency-rate-picker.mocked.spec.js scenario E), plus the
- * header GET/PATCH and an empty lines list.
+ * currency options (fetched with a `?date=…&organization=…` query, hence the
+ * trailing `currencyOptions**` glob) + session, plus the header GET/PATCH and
+ * an empty lines list. A currency change no longer queries
+ * validate-exchange-rate, so that endpoint is not mocked.
  *
  * `patchDelayMs` holds the header PATCH open for that long — the same trick
  * `organization-save.mocked.spec.js` uses to make sequencing observable: a
@@ -76,21 +78,12 @@ const ORDER = {
 async function installOrderMocks(page, { patchDelayMs = 0 } = {}) {
   const journal = { patches: [] };
 
-  await page.route(`**/sws/neo/sales-order/header/${ORDER_ID}/action/currencyOptions`, async (route) => {
+  await page.route(`**/sws/neo/sales-order/header/${ORDER_ID}/action/currencyOptions**`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ response: { data: CURRENCY_OPTIONS } }),
-    });
-  });
-
-  await page.route(`**/sws/neo/validate-exchange-rate{/**,}**`, async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ hasRate: true, rate: CURRENCY_USD.rate }),
     });
   });
 

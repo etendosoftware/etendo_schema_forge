@@ -21,7 +21,7 @@ import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
-import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
+import { CurrencyRatePicker, resolveRateDateField } from './CurrencyRatePicker.jsx';
 import PrefixedInput from './PrefixedInput.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
@@ -703,7 +703,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *    container (a bare fragment), so the caller can splice them into another
  *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows, documentDateField }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -1508,8 +1508,27 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // require specialized input UIs that cannot be expressed through the standard field types
     // (e.g. a split prefix+suffix input for account codes).
     // The component receives: value, onChange(newValue), record (full form data), readOnly.
+    // ETP-5791 — plus `label`, `required`, `onFieldChange(key, value)` (writes a SIBLING field, e.g.
+    // a renderer that groups two checkboxes) and `onCommit()` (the checkbox immediate-save hook,
+    // see renderCheckboxField). A renderer with the static `ownsLabel = true` draws its own label.
     if (f.customRenderer) {
       const Renderer = f.customRenderer;
+      if (Renderer.ownsLabel) {
+        return (
+          <div key={f.key} className="space-y-1.5">
+            <Renderer
+              value={data?.[f.key] ?? ''}
+              onChange={(v) => onChange?.(f.key, v, f.column)}
+              onFieldChange={(key, v) => onChange?.(key, v, fields.find((x) => x.key === key)?.column)}
+              onCommit={() => setTimeout(() => onFieldBlur?.(f.key), 0)}
+              record={data}
+              readOnly={isReadOnly}
+              label={label}
+              required={!!(f.required || f.requiredVisual)}
+              data-testid="Renderer__a8d626" />
+          </div>
+        );
+      }
       return (
         <div key={f.key} className="space-y-1.5">
           <Label
@@ -1552,6 +1571,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             token={token}
             apiBaseUrl={apiBaseUrl}
             entityPath={entity}
+            rateDateField={resolveRateDateField(fields, documentDateField)}
             isReadOnly={isRateReadOnly}
             data-testid="CurrencyRatePicker__a8d626" />
         );

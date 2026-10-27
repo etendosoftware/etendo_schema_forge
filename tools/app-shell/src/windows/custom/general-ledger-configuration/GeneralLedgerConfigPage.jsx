@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import TabBar from './TabBar.jsx';
+import SegmentedTabs from '@/components/contract-ui/SegmentedTabs.jsx';
+import { getLinesToolbarClassName, getSaveBtnCls } from '@/components/contract-ui/toolbarClasses.js';
 import GeneralTab from './GeneralTab.jsx';
 import DefaultsTab from './DefaultsTab.jsx';
 import DimensionsTab from './DimensionsTab.jsx';
@@ -110,28 +111,29 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
     }
   }
 
-  const tabs = useMemo(() => ([
-    { label: ui('glc.tab.general') },
-    { label: ui('glc.tab.defaults') },
-    { label: ui('glc.tab.dimensions') },
-    { label: ui('glc.tab.generalAccounts') },
-  ]), [ui]);
+  const tabs = useMemo(() => (
+    ['general', 'defaults', 'dimensions', 'generalAccounts'].map((key, i) => ({
+      key,
+      label: ui(`glc.tab.${key}`),
+      testId: `glc-tab-${i}`,
+    }))
+  ), [ui]);
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden">
-      {/* Tab row: tabs left, dirty-state save button right */}
-      <div className="flex-shrink-0 flex items-center justify-between border-b border-[hsl(var(--border-subtle))] pr-6">
-        <TabBar
-          tabs={tabs}
+      {/* ETP-5736 — top bar follows the record toolbar (56px, shared classes): tabs left, dirty-state save right */}
+      <div className={`flex-shrink-0 ${getLinesToolbarClassName()}`} data-testid="glc-toolbar">
+        <SegmentedTabs
+          items={tabs}
           active={activeTab}
           onChange={setActiveTab}
-          data-testid="TabBar__79cd86" />
+          ariaLabel={ui('glc.title')}
+          data-testid="SegmentedTabs__79cd86" />
         <Button
           onClick={handleSave}
           disabled={!selectedOrg?.id || !isDirty || saving || loading}
-          // ETP-5601 — same size as the record toolbar's Save (getSaveBtnCls): 40px, 8px radius,
-          // text-sm/leading-6, 20px icon with an 8px gap.
-          className={`h-10 gap-2 rounded-lg leading-6 [&_svg]:size-5 ${savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}`}
+          // ETP-5601 — the record toolbar's Save size (40px, leading-6, 20px icon), 8px radius.
+          className={`${getSaveBtnCls()} rounded-lg ${savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}`}
           data-testid="glc-save"
         >
           <Check data-testid="Check__79cd86" />

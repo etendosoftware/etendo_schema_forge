@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
+import { useFlagGatedImportConfig } from '@/lib/importFlagGates.js';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
@@ -26,6 +26,7 @@ import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/I
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
 import { useListToolbarTabsFit } from './useListToolbarTabsFit.js';
+import SegmentedTabs from './SegmentedTabs.jsx';
 import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
@@ -156,6 +157,7 @@ function ListFilterBarSection(props) {
           onDeletePreset={props.windowName ? props.deletePreset : null}
           labelOverrides={props.labelOverrides}
           hideStatusFilter={props.hideStatusFilter}
+          buildDistinctQuery={props.hook.buildDistinctQuery}
           flowInParent
           data-testid="ListFilterBar__620cbc" />
       )}
@@ -297,24 +299,19 @@ export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, vie
  * `ViewToggle` is NOT part of it: it keeps its pre-ETP-5509 place after "Filtros".
  */
 function ListToolbarTabs({ subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
+  // Keyed by the raw label (not the translated one) so a tab that moves keeps its focus.
+  const items = subsetFilters.map((sf) => ({
+    key: sf.key || sf.label,
+    label: ui(sf.label),
+    testId: `filter-${sf.key || sf.label?.toLowerCase()}`,
+  }));
   return (
-    <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
-      {subsetFilters.map((sf, i) => (
-        <button
-          key={sf.key || sf.label}
-          onClick={() => onSelectSubset(i)}
-          data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
-          className={[
-            'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
-            activeSubsetIndex === i
-              ? 'bg-card shadow-sm'
-              : 'bg-[hsl(var(--muted))] hover:brightness-95',
-          ].join(' ')}
-        >
-          {ui(sf.label)}
-        </button>
-      ))}
-    </div>
+    <SegmentedTabs
+      items={items}
+      active={activeSubsetIndex}
+      onChange={onSelectSubset}
+      ariaLabel={ui('filters')}
+      data-testid="SegmentedTabs__620cbc" />
   );
 }
 
@@ -563,8 +560,11 @@ export function ListView({
   onExternalPreviewClose = null,
   hiddenColumns = [],
   listSortBy = null,
-  import: importConfig = null,
+  import: rawImportConfig = null,
 }) {
+  // `window.import.fields[].hiddenWhenFlag` — columns a feature flag retires, dropped here once so
+  // the dialog, the template, the export and the empty state all see the same field list.
+  const importConfig = useFlagGatedImportConfig(rawImportConfig);
   // ETP-4994 — the grid state saved the last time this window's list was left, restored on
   // every return path (breadcrumb, Cancel, browser back) because all three remount ListView.
   // Read ONCE per mount: a later read would fight the live state it is meant to seed.
@@ -656,7 +656,6 @@ export function ListView({
     setShowImportDialog(open);
     if (!open) setImportInitialFile(null);
   }, []);
-  const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
   // `multiField` columns are opaque to the advanced filter: expand each into

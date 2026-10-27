@@ -15,6 +15,16 @@ let mockFlowReturn = {
   clearResult: vi.fn(),
 };
 
+// The size limit comes from the attachments policy endpoint; pin it (mutable per test) so the
+// suite never hits the network.
+let mockMaxSizeMB = 10;
+vi.mock('@/components/attachments/useAttachmentPolicy', () => ({
+  useAttachmentPolicy: () => ({ maxSizeMB: mockMaxSizeMB }),
+}));
+
+const { mockToastError } = vi.hoisted(() => ({ mockToastError: vi.fn() }));
+vi.mock('sonner', () => ({ toast: { error: mockToastError, success: vi.fn() } }));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => {
     if (params) return `${key}:${JSON.stringify(params)}`;
@@ -36,12 +46,9 @@ vi.mock('../ocrDocTypes', () => ({
   getOcrDocType: (id) => id === 'purchase-invoice' ? {
     id: 'purchase-invoice',
     routePrefix: '/purchase-invoice/',
-    toolName: 'SimpleOcrTool',
     eventName: 'copilot:ocr-prefill:purchase-invoice',
-    question: 'Extract invoice fields',
     tabId: '290',
     tableName: 'C_Invoice',
-    structuredOutput: true,
   } : null,
 }));
 
@@ -54,16 +61,27 @@ vi.mock('../listAttachments', () => ({
   uploadAndMarkMainAttachment: vi.fn().mockResolvedValue({ id: 'att-1' }),
 }));
 
-vi.mock('../buildOcrSchema', () => ({
-  buildOcrSchema: () => ({ type: 'object', properties: {} }),
+// ETP-5715 — what the extraction asks the model is served by the server, once, and shared with
+// the MCP's document-reading tools; the uploader keeps no copy.
+let mockConfigReturn;
+const mockConfigCalls = [];
+vi.mock('../useOcrConfig', () => ({
+  useOcrConfig: (...args) => {
+    mockConfigCalls.push(args);
+    return mockConfigReturn;
+  },
 }));
 
+let lastExtractionArgs;
 vi.mock('../useOcrExtraction', () => ({
   OCR_NO_DATA_ERROR: 'ocr-no-data',
   OCR_TIMEOUT_ERROR: 'ocr-timeout',
   OCR_NETWORK_ERROR: 'ocr-network',
   OCR_SESSION_CHANGED_ERROR: 'ocr-session-changed',
-  useOcrExtraction: () => mockExtractionReturn,
+  useOcrExtraction: (args) => {
+    lastExtractionArgs = args;
+    return mockExtractionReturn;
+  },
 }));
 
 vi.mock('../useOcrFlow', () => ({
@@ -74,16 +92,27 @@ vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({
   default: () => <div data-testid="pdf-viewer">PDF</div>,
 }));
 
+// Stand-in for the lazily loaded viewer: exposes the file descriptor the uploader hands it, so
+// the tests can assert on the content type the uploader detected (not the one the file declared).
+vi.mock('@/windows/custom/shared/UploadedFileViewer.jsx', () => ({
+  default: ({ file }) => (
+    <div data-testid="uploaded-viewer" data-mime={file.mimeType} data-url={file.objectUrl} data-name={file.fileName} />
+  ),
+}));
+
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import OcrInlineUploader from '../OcrInlineUploader.jsx';
 import { uploadAndMarkMainAttachment } from '../listAttachments';
+import { OCR_ACCEPT_ATTR } from '../ocrFileTypes';
+import { MAGIC, makeFile, pdfFile, pngFile, jpegFile, webpFile } from './ocrFixtures.js';
 
-function createPdfFile(name = 'invoice.pdf', size = 2048) {
-  return new File([new ArrayBuffer(size)], name, { type: 'application/pdf' });
-}
+const createPdfFile = pdfFile;
 
-function createNonPdfFile() {
-  return new File([new ArrayBuffer(100)], 'image.png', { type: 'image/png' });
+/** Unsupported formats, declared with their own (non-OCR) MIME type. */
+const createUnsupportedFile = (name, bytes = MAGIC.text, type = 'text/plain') => makeFile(name, bytes, type, 100);
+
+function pick(container, file) {
+  fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
 }
 
 describe('OcrInlineUploader', () => {
@@ -97,6 +126,19 @@ describe('OcrInlineUploader', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMaxSizeMB = 10;
+    mockConfigCalls.length = 0;
+    lastExtractionArgs = undefined;
+    mockConfigReturn = {
+      status: 'ready',
+      config: {
+        docType: 'purchase-invoice',
+        toolName: 'ServerTool',
+        question: 'Server question',
+        schema: { type: 'object', properties: { vendor_name: {} } },
+      },
+      retry: vi.fn(),
+    };
     mockExtractionReturn = {
       extract: vi.fn(),
       status: 'idle',
@@ -116,6 +158,65 @@ describe('OcrInlineUploader', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('the server-side OCR configuration (ETP-5715)', () => {
+    it('hands the extraction the tool, the question and the schema the server serves', () => {
+      render(<OcrInlineUploader {...defaultProps} />);
+
+      expect(lastExtractionArgs.toolName).toBe('ServerTool');
+      expect(lastExtractionArgs.question).toBe('Server question');
+      expect(lastExtractionArgs.structuredOutputSchema).toEqual(mockConfigReturn.config.schema);
+    });
+
+    it('asks for the configuration of its doc type, and only for a new record', () => {
+      render(<OcrInlineUploader {...defaultProps} />);
+      expect(mockConfigCalls.at(-1)).toEqual(['purchase-invoice', true]);
+
+      mockConfigCalls.length = 0;
+      render(<OcrInlineUploader {...defaultProps} isNew={false} />);
+      expect(mockConfigCalls.at(-1)).toEqual(['purchase-invoice', false]);
+    });
+
+    it('does not ask anything for a doc type that has no OCR', () => {
+      render(<OcrInlineUploader {...defaultProps} docTypeId="nope" />);
+      expect(mockConfigCalls.at(-1)[0]).toBeNull();
+    });
+
+    it('keeps the extract button disabled while the configuration loads, without blocking the file', async () => {
+      mockConfigReturn = { status: 'loading', config: null, retry: vi.fn() };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, createPdfFile());
+
+      expect((await screen.findByText('ocrExtractFill')).closest('button')).toBeDisabled();
+      expect(screen.getByLabelText('cancel')).not.toBeDisabled();
+      expect(lastExtractionArgs.question).toBeUndefined();
+    });
+
+    it('never calls extract while the configuration is not ready', async () => {
+      mockConfigReturn = { status: 'loading', config: null, retry: vi.fn() };
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, createPdfFile());
+
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
+
+      expect(mockExtractionReturn.extract).not.toHaveBeenCalled();
+    });
+
+    it('says the configuration could not be loaded and retries on request', () => {
+      mockConfigReturn = { status: 'error', config: null, retry: vi.fn() };
+      render(<OcrInlineUploader {...defaultProps} />);
+
+      expect(screen.getByTestId('ocr-config-error')).toHaveTextContent('ocrConfigUnavailable');
+      fireEvent.click(screen.getByTestId('ocr-config-retry'));
+
+      expect(mockConfigReturn.retry).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows no configuration error when it loaded', () => {
+      render(<OcrInlineUploader {...defaultProps} />);
+      expect(screen.queryByTestId('ocr-config-error')).not.toBeInTheDocument();
+    });
   });
 
   it('renders without crashing', () => {
@@ -143,40 +244,178 @@ describe('OcrInlineUploader', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('has a hidden file input accepting PDF', () => {
+  it('has a hidden file input accepting PDF and the supported image formats', () => {
     const { container } = render(<OcrInlineUploader {...defaultProps} />);
     const fileInput = container.querySelector('input[type="file"]');
     expect(fileInput).toBeTruthy();
-    expect(fileInput.getAttribute('accept')).toBe('application/pdf');
+    expect(fileInput.getAttribute('accept')).toBe(OCR_ACCEPT_ATTR);
+    for (const token of ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', '.jpg', '.jpeg', '.png', '.webp']) {
+      expect(fileInput.getAttribute('accept').split(',')).toContain(token);
+    }
+    expect(fileInput.getAttribute('accept')).not.toMatch(/gif|svg|tiff|heic/);
   });
 
-  it('shows file name and size after selecting a PDF', () => {
+  it('shows file name and size after selecting a PDF', async () => {
     const { container } = render(<OcrInlineUploader {...defaultProps} />);
     const input = container.querySelector('input[type="file"]');
     const file = createPdfFile('test-invoice.pdf', 5120);
     fireEvent.change(input, { target: { files: [file] } });
 
-    expect(screen.getByText('test-invoice.pdf')).toBeInTheDocument();
+    expect(await screen.findByText('test-invoice.pdf')).toBeInTheDocument();
     expect(screen.getByText(/5\.0 KB/)).toBeInTheDocument();
   });
 
-  it('shows extract button after selecting a PDF', () => {
+  it('shows extract button after selecting a PDF', async () => {
     const { container } = render(<OcrInlineUploader {...defaultProps} />);
     const input = container.querySelector('input[type="file"]');
     fireEvent.change(input, { target: { files: [createPdfFile()] } });
 
-    expect(screen.getByText('ocrExtractFill')).toBeInTheDocument();
+    expect(await screen.findByText('ocrExtractFill')).toBeInTheDocument();
   });
 
-  it('shows error when non-PDF file is selected', () => {
-    const { container } = render(<OcrInlineUploader {...defaultProps} />);
-    const input = container.querySelector('input[type="file"]');
-    fireEvent.change(input, { target: { files: [createNonPdfFile()] } });
+  describe('accepted image formats and the real content type', () => {
+    it.each([
+      ['scan.jpg', jpegFile, 'image/jpeg'],
+      ['scan.jpeg', jpegFile, 'image/jpeg'],
+      ['scan.png', pngFile, 'image/png'],
+      ['scan.webp', webpFile, 'image/webp'],
+      ['invoice.pdf', pdfFile, 'application/pdf'],
+    ])('accepts %s by pick, hands the viewer its real mime and enables the extract button', async (name, make, mime) => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, make(name));
 
-    expect(screen.getByText('ocrInlinePdfOnly')).toBeInTheDocument();
+      expect(await screen.findByText(name)).toBeInTheDocument();
+      expect(await screen.findByTestId('uploaded-viewer')).toHaveAttribute('data-mime', mime);
+      expect(screen.getByText('ocrExtractFill').closest('button')).toBeEnabled();
+      expect(screen.queryByText('ocrInlineUnsupportedType')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['scan.jpg', jpegFile, 'image/jpeg'],
+      ['scan.png', pngFile, 'image/png'],
+      ['scan.webp', webpFile, 'image/webp'],
+    ])('accepts %s by drop', async (name, make, mime) => {
+      render(<OcrInlineUploader {...defaultProps} />);
+      const dropZone = screen.getByText('ocrSidePanelDropTitle').closest('button');
+      fireEvent.drop(dropZone, { dataTransfer: { files: [make(name)] } });
+
+      expect(await screen.findByText(name)).toBeInTheDocument();
+      expect(await screen.findByTestId('uploaded-viewer')).toHaveAttribute('data-mime', mime);
+      expect(screen.getByText('ocrExtractFill').closest('button')).toBeEnabled();
+    });
+
+    it.each([
+      ['scan.tiff', 'image/tiff'],
+      ['logo.svg', 'image/svg+xml'],
+      ['photo.heic', 'image/heic'],
+      ['notes.txt', 'text/plain'],
+      ['anim.gif', 'image/gif'],
+    ])('rejects %s before upload with ocrInlineUnsupportedType', async (name, type) => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, createUnsupportedFile(name, MAGIC.text, type));
+
+      expect(await screen.findByText('ocrInlineUnsupportedType')).toBeInTheDocument();
+      expect(screen.queryByTestId('uploaded-viewer')).not.toBeInTheDocument();
+      expect(screen.queryByText('ocrExtractFill')).not.toBeInTheDocument();
+      expect(mockExtractionReturn.extract).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unsupported format dropped on the zone', async () => {
+      render(<OcrInlineUploader {...defaultProps} />);
+      const dropZone = screen.getByText('ocrSidePanelDropTitle').closest('button');
+      fireEvent.drop(dropZone, { dataTransfer: { files: [createUnsupportedFile('logo.svg', MAGIC.text, 'image/svg+xml')] } });
+
+      expect(await screen.findByText('ocrInlineUnsupportedType')).toBeInTheDocument();
+    });
+
+    it('trusts the content, not the name: a PNG renamed .pdf reaches the viewer as image/png', async () => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, makeFile('fake.pdf', MAGIC.png, 'application/pdf'));
+
+      expect(await screen.findByText('fake.pdf')).toBeInTheDocument();
+      expect(await screen.findByTestId('uploaded-viewer')).toHaveAttribute('data-mime', 'image/png');
+    });
+
+    it('rejects HEIC bytes named .jpg: the extension passes, the content does not', async () => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, makeFile('photo.jpg', MAGIC.heic, 'image/jpeg'));
+
+      expect(await screen.findByText('ocrInlineUnsupportedType')).toBeInTheDocument();
+      expect(screen.queryByTestId('uploaded-viewer')).not.toBeInTheDocument();
+    });
+
+    it('rejects a zero-byte file named .pdf (no magic bytes)', async () => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, new File([], 'empty.pdf', { type: 'application/pdf' }));
+
+      expect(await screen.findByText('ocrInlineUnsupportedType')).toBeInTheDocument();
+    });
+
+    it('clears a previous valid file when a later pick is rejected', async () => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, createPdfFile('first.pdf'));
+      expect(await screen.findByText('first.pdf')).toBeInTheDocument();
+
+      pick(container, createUnsupportedFile('notes.txt'));
+      expect(await screen.findByText('ocrInlineUnsupportedType')).toBeInTheDocument();
+      expect(screen.queryByText('first.pdf')).not.toBeInTheDocument();
+    });
+
+    it('lets the second pick win when the first sniff is still pending', async () => {
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      const slow = createPdfFile('slow.pdf');
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      const realSlice = slow.slice.bind(slow);
+      // The first file's bytes only become readable after the second pick has landed.
+      slow.slice = (...args) => {
+        const blob = realSlice(...args);
+        return { arrayBuffer: async () => { await gate; return blob.arrayBuffer(); } };
+      };
+
+      pick(container, slow);
+      pick(container, pngFile('fast.png'));
+      expect(await screen.findByText('fast.png')).toBeInTheDocument();
+
+      release();
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      expect(screen.getByText('fast.png')).toBeInTheDocument();
+      expect(screen.queryByText('slow.pdf')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('uploaded-viewer')).toHaveAttribute('data-mime', 'image/png');
+    });
   });
 
-  it('handles file drop on the drop zone', () => {
+  describe('maximum file size', () => {
+    it('rejects a file over maxSizeMB with attachmentsFileTooLarge and never offers extraction', async () => {
+      mockMaxSizeMB = 1;
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, pdfFile('big.pdf', 1024 * 1024 + 1));
+
+      expect(await screen.findByText('attachmentsFileTooLarge:{"max":1}')).toBeInTheDocument();
+      expect(screen.queryByText('ocrExtractFill')).not.toBeInTheDocument();
+      expect(screen.queryByText('big.pdf')).not.toBeInTheDocument();
+      expect(mockExtractionReturn.extract).not.toHaveBeenCalled();
+    });
+
+    it('applies the same limit to images', async () => {
+      mockMaxSizeMB = 1;
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, pngFile('big.png', 2 * 1024 * 1024));
+
+      expect(await screen.findByText('attachmentsFileTooLarge:{"max":1}')).toBeInTheDocument();
+    });
+
+    it('accepts a file exactly at the limit', async () => {
+      mockMaxSizeMB = 1;
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, pdfFile('exact.pdf', 1024 * 1024));
+
+      expect(await screen.findByText('exact.pdf')).toBeInTheDocument();
+    });
+  });
+
+  it('handles file drop on the drop zone', async () => {
     render(<OcrInlineUploader {...defaultProps} />);
     const dropZone = screen.getByText('ocrSidePanelDropTitle').closest('button');
     const file = createPdfFile();
@@ -185,7 +424,7 @@ describe('OcrInlineUploader', () => {
       dataTransfer: { files: [file] },
     });
 
-    expect(screen.getByText('invoice.pdf')).toBeInTheDocument();
+    expect(await screen.findByText('invoice.pdf')).toBeInTheDocument();
   });
 
   it('handles dragOver on the drop zone', () => {
@@ -205,12 +444,12 @@ describe('OcrInlineUploader', () => {
     // Should not crash
   });
 
-  it('clear file button removes selected file and resets', () => {
+  it('clear file button removes selected file and resets', async () => {
     const { container } = render(<OcrInlineUploader {...defaultProps} />);
     const input = container.querySelector('input[type="file"]');
     fireEvent.change(input, { target: { files: [createPdfFile()] } });
 
-    expect(screen.getByText('invoice.pdf')).toBeInTheDocument();
+    expect(await screen.findByText('invoice.pdf')).toBeInTheDocument();
 
     const clearBtn = screen.getByLabelText('cancel');
     fireEvent.click(clearBtn);
@@ -219,7 +458,7 @@ describe('OcrInlineUploader', () => {
     expect(mockExtractionReturn.reset).toHaveBeenCalled();
   });
 
-  it('calls extract on button click when file is selected', () => {
+  it('calls extract on button click when file is selected', async () => {
     const extractFn = vi.fn().mockResolvedValue({ fields: {} });
     mockExtractionReturn.extract = extractFn;
 
@@ -228,7 +467,7 @@ describe('OcrInlineUploader', () => {
     const file = createPdfFile();
     fireEvent.change(input, { target: { files: [file] } });
 
-    const extractBtn = screen.getByText('ocrExtractFill');
+    const extractBtn = await screen.findByText('ocrExtractFill');
     fireEvent.click(extractBtn);
 
     expect(extractFn).toHaveBeenCalledWith(file);
@@ -243,7 +482,7 @@ describe('OcrInlineUploader', () => {
 
     const { container } = render(<OcrInlineUploader {...defaultProps} />);
     fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [createPdfFile()] } });
-    fireEvent.click(screen.getByText('ocrExtractFill'));
+    fireEvent.click(await screen.findByText('ocrExtractFill'));
 
     await waitFor(() => expect(mockExtractionReturn.extract).toHaveBeenCalled());
     expect(screen.getByText('ocrNoDataExtracted')).toBeInTheDocument();
@@ -265,11 +504,11 @@ describe('OcrInlineUploader', () => {
 
       const { container } = render(<OcrInlineUploader {...defaultProps} />);
       fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
-      expect(screen.getByText(messageKey)).toBeInTheDocument();
+      expect(await screen.findByText(messageKey)).toBeInTheDocument();
       // No automatic retry: nothing ran until the user acts.
       expect(mockExtractionReturn.extract).not.toHaveBeenCalled();
 
-      fireEvent.click(screen.getByTestId('ocr-retry'));
+      fireEvent.click(await screen.findByTestId('ocr-retry'));
       await waitFor(() => expect(mockExtractionReturn.extract).toHaveBeenCalledTimes(1));
       expect(mockExtractionReturn.extract).toHaveBeenCalledWith(file);
       expect(screen.getByTestId('ocr-retry')).toHaveTextContent('retry');
@@ -347,14 +586,15 @@ describe('OcrInlineUploader', () => {
     expect(screen.queryByText(/ocrDone/)).not.toBeInTheDocument();
   });
 
-  it('shows processing label when busy', () => {
+  it('shows processing label when busy', async () => {
     mockExtractionReturn.status = 'uploading';
 
     const { container } = render(<OcrInlineUploader {...defaultProps} />);
     const input = container.querySelector('input[type="file"]');
     fireEvent.change(input, { target: { files: [createPdfFile()] } });
 
-    expect(screen.getByText('ocrProcessing')).toBeInTheDocument();
+    expect(await screen.findByText('ocrProcessing')).toBeInTheDocument();
+    expect(screen.getByText('ocrUploading')).toBeInTheDocument();
   });
 
   it('shows browse label when no file selected', () => {
@@ -370,14 +610,16 @@ describe('OcrInlineUploader', () => {
   describe('blocking validation message (result.blocked)', () => {
     const BLOCKED = 'ocrReceiverTaxIdMismatch:{"receiver":"A99999999"}';
 
-    function selectPdf(container, name = 'invoice.pdf') {
-      fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [createPdfFile(name)] } });
+    // Resolves once the (async) pick has been accepted, i.e. the file name is on screen.
+    async function selectPdf(container, name = 'invoice.pdf') {
+      pick(container, createPdfFile(name));
+      await screen.findByText(name);
     }
 
-    it('renders the message inline with the alert icon and no retry button', () => {
+    it('renders the message inline with the alert icon and no retry button', async () => {
       mockFlowReturn.result = { committed: false, blocked: BLOCKED };
       const { container } = render(<OcrInlineUploader {...defaultProps} />);
-      selectPdf(container);
+      await selectPdf(container);
 
       const block = screen.getByTestId('ocr-blocked-message');
       expect(block).toHaveTextContent(BLOCKED);
@@ -387,10 +629,10 @@ describe('OcrInlineUploader', () => {
       expect(screen.queryByText('ocrDone')).toBeNull();
     });
 
-    it('does not render an inline message for a failure without `blocked`', () => {
+    it('does not render an inline message for a failure without `blocked`', async () => {
       mockFlowReturn.result = { committed: false, error: 'Empty batch' };
       const { container } = render(<OcrInlineUploader {...defaultProps} />);
-      selectPdf(container);
+      await selectPdf(container);
 
       expect(screen.queryByTestId('ocr-blocked-message')).toBeNull();
       expect(screen.queryByText('Empty batch')).toBeNull();
@@ -404,26 +646,27 @@ describe('OcrInlineUploader', () => {
       expect(screen.queryByTestId('ocr-blocked-message')).toBeNull();
     });
 
-    it('clears the flow result when another file is picked', () => {
+    it('clears the flow result when another file is picked', async () => {
       mockFlowReturn.result = { committed: false, blocked: BLOCKED };
       const { container } = render(<OcrInlineUploader {...defaultProps} />);
-      selectPdf(container);
+      await selectPdf(container);
       mockFlowReturn.clearResult.mockClear();
 
-      selectPdf(container, 'other.pdf');
+      await selectPdf(container, 'other.pdf');
       expect(mockFlowReturn.clearResult).toHaveBeenCalledTimes(1);
     });
 
-    it('clears the flow result when a non-PDF is picked', () => {
+    it('clears the flow result when an unsupported file is picked', async () => {
       const { container } = render(<OcrInlineUploader {...defaultProps} />);
-      fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [createNonPdfFile()] } });
+      pick(container, createUnsupportedFile('notes.txt'));
+      await screen.findByText('ocrInlineUnsupportedType');
       expect(mockFlowReturn.clearResult).toHaveBeenCalledTimes(1);
     });
 
-    it('clears the flow result when the file is removed', () => {
+    it('clears the flow result when the file is removed', async () => {
       mockFlowReturn.result = { committed: false, blocked: BLOCKED };
       const { container } = render(<OcrInlineUploader {...defaultProps} />);
-      selectPdf(container);
+      await selectPdf(container);
       mockFlowReturn.clearResult.mockClear();
 
       fireEvent.click(screen.getByLabelText('cancel'));
@@ -435,7 +678,7 @@ describe('OcrInlineUploader', () => {
       mockFlowReturn.clearResult = vi.fn(() => order.push('clear'));
       mockExtractionReturn.extract = vi.fn(async () => { order.push('extract'); return {}; });
       const { container } = render(<OcrInlineUploader {...defaultProps} />);
-      selectPdf(container);
+      await selectPdf(container);
       order.length = 0;
 
       fireEvent.click(screen.getByText('ocrExtractFill'));
@@ -468,18 +711,90 @@ describe('OcrInlineUploader', () => {
       const input = container.querySelector('input[type="file"]');
       const file = createPdfFile('invoice.pdf');
       fireEvent.change(input, { target: { files: [file] } });
-      fireEvent.click(screen.getByText('ocrExtractFill'));
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
 
       mockFlowReturn.result = { committed: true, recordId: 'new-123' };
       rerender(<OcrInlineUploader {...defaultProps} />);
 
       await waitFor(() => expect(uploadAndMarkMainAttachment).toHaveBeenCalledWith({
-        token: 'test-token', tableName: 'C_Invoice', recordId: 'new-123', file,
+        token: 'test-token', tableName: 'C_Invoice', recordId: 'new-123', file, fileName: 'invoice.pdf',
         apiBaseUrl: '/sws/neo/purchase-invoice',
       }));
       await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(
         '/purchase-invoice/new-123', { replace: true },
       ));
+    });
+
+    it('attaches an image source file after commit (the original, not a copy)', async () => {
+      const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
+      const file = pngFile('receipt.png');
+      pick(container, file);
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
+
+      mockFlowReturn.result = { committed: true, recordId: 'new-img' };
+      rerender(<OcrInlineUploader {...defaultProps} />);
+
+      await waitFor(() => expect(uploadAndMarkMainAttachment).toHaveBeenCalledTimes(1));
+      expect(uploadAndMarkMainAttachment.mock.calls[0][0].file).toBe(file);
+      expect(uploadAndMarkMainAttachment.mock.calls[0][0].recordId).toBe('new-img');
+    });
+
+    it('uploads a PNG named .pdf under a name whose extension matches its content (CP16)', async () => {
+      const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
+      const file = makeFile('fake.pdf', MAGIC.png, 'application/pdf');
+      pick(container, file);
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
+
+      mockFlowReturn.result = { committed: true, recordId: 'new-cp16' };
+      rerender(<OcrInlineUploader {...defaultProps} />);
+
+      await waitFor(() => expect(uploadAndMarkMainAttachment).toHaveBeenCalledTimes(1));
+      const args = uploadAndMarkMainAttachment.mock.calls[0][0];
+      expect(args.fileName).toBe('fake.png');
+      expect(args.file).toBe(file);
+    });
+
+    it('uses the type detected at extract time even if another file is picked afterwards', async () => {
+      const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
+      const first = makeFile('scan.pdf', MAGIC.png, 'application/pdf');
+      pick(container, first);
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
+      await waitFor(() => expect(mockExtractionReturn.extract).toHaveBeenCalled());
+
+      pick(container, pdfFile('other.pdf'));
+      await screen.findByText('other.pdf');
+
+      mockFlowReturn.result = { committed: true, recordId: 'new-snap' };
+      rerender(<OcrInlineUploader {...defaultProps} />);
+
+      await waitFor(() => expect(uploadAndMarkMainAttachment).toHaveBeenCalledTimes(1));
+      const args = uploadAndMarkMainAttachment.mock.calls[0][0];
+      expect(args.file).toBe(first);
+      expect(args.fileName).toBe('scan.png');
+    });
+
+    it('tells the user when the scanned document could not be attached, and still navigates', async () => {
+      uploadAndMarkMainAttachment.mockResolvedValueOnce(null);
+      const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, pdfFile());
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
+
+      mockFlowReturn.result = { committed: true, recordId: 'new-fail' };
+      rerender(<OcrInlineUploader {...defaultProps} />);
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('ocrAttachFailed'));
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/purchase-invoice/new-fail', { replace: true }));
+    });
+
+    it('shows no attach error when the upload succeeds', async () => {
+      const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
+      pick(container, pdfFile());
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
+      mockFlowReturn.result = { committed: true, recordId: 'new-ok' };
+      rerender(<OcrInlineUploader {...defaultProps} />);
+
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+      expect(mockToastError).not.toHaveBeenCalled();
     });
 
     it('still navigates to the new record (non-fatal) when the upload fails', async () => {
@@ -489,7 +804,7 @@ describe('OcrInlineUploader', () => {
       const input = container.querySelector('input[type="file"]');
       const file = createPdfFile('invoice.pdf');
       fireEvent.change(input, { target: { files: [file] } });
-      fireEvent.click(screen.getByText('ocrExtractFill'));
+      fireEvent.click(await screen.findByText('ocrExtractFill'));
 
       mockFlowReturn.result = { committed: true, recordId: 'new-456' };
       rerender(<OcrInlineUploader {...defaultProps} />);

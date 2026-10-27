@@ -155,6 +155,7 @@ windowLoaders[name] || customLoaders[name] || PlaceholderWindow
 | visible (no `hidden`) | shown | loads the window |
 | `hidden: true` | stripped | not registered: "Window not found" |
 | `hidden: true` + `"redirect": "/path"` | stripped | `<Navigate to="/path" replace />` (old bookmarks keep working) |
+| … + `"redirectKeepPath": true` (ETP-5720) | stripped | same, but `/<name>/<id>?q#h` goes to `/path/<id>?q#h`. Only for a renamed window (`simple-g-l-journal` → `manual-journals`); a redirect to a different window must not carry a foreign record ID |
 | `hidden: true` + `"routeOnly": true` | stripped | loads the window (use only when an in-app link needs it: overview page buttons, row actions) |
 
 Dedicated routes in `runtime-routes.jsx` (`/smart-scan`, `/hr`, `/report-viewer`...) win over `:windowName`, so hidden pages and reports are unaffected. A hidden window that has a `windowId` shared with a visible one (e.g. `business-partner` and `contacts`, 123) therefore no longer slips through role access: declare `redirect` to the window that replaced it. Do not add a link to a window that is hidden without one of the two flags.

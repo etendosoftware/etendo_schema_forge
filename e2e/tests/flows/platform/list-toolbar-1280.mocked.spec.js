@@ -412,11 +412,12 @@ test.describe('List toolbar — crowded main row at 1280×720 (ETP-5509)', () =>
     expectTabGroupPlacement(withDate, windowBySlug('sales-invoice'));
 
     // --- Status filter: pick the status with the longest label. Options carry
-    // no test id either; the first button is the "all statuses" entry.
+    // no test id either; they are role=option rows and the first one is the
+    // "all statuses" entry.
     await statusTrigger.click();
     const statusPopover = page.getByRole('dialog');
     await expect(statusPopover).toBeVisible();
-    const statusOptions = statusPopover.locator('button');
+    const statusOptions = statusPopover.getByRole('option');
     await expect(statusOptions).toHaveCount(ROWS.length + 1);
     const statusLabels = (await statusOptions.allInnerTexts()).map((t) => t.trim());
     const longestStatus = statusLabels.slice(1).reduce((a, b) => (b.length > a.length ? b : a));
@@ -541,4 +542,173 @@ test.describe('List toolbar — subset tab placement at 1280×720 (ETP-5509)', (
       expectMainRowFits(m);
     });
   }
+});
+
+// ─── The real `_distinct` request behind the status filter ─────────────────
+// Walks subset tab -> ListView -> useEntity (buildDistinctQuery) -> useDistinctValues
+// and asserts on the URL that actually leaves the browser: the status options must be
+// scoped to the current view (tab + date) and must not be narrowed by the status
+// filter they feed.
+test.describe('List toolbar — status filter distinct request', () => {
+  const SALES = windowBySlug('sales-invoice');
+
+  /**
+   * Opens the sales-invoice list with an optional override of the `_distinct` answer and,
+   * with `emptyList`, of the list rows too (the status menu also merges the codes of the
+   * rows already loaded, so an empty menu needs both sources empty).
+   */
+  async function openWithDistinctRecorder(page, { distinctData, emptyList = false } = {}) {
+    await login(page);
+    await installListMock(page, SALES);
+    const distinctUrls = [];
+    // Registered after installListMock, so it wins (reverse registration order).
+    const handler = async (route) => {
+      const req = route.request();
+      const url = new URL(req.url());
+      const isDistinct = req.method() === 'GET'
+        && url.searchParams.has('_distinct')
+        && !new RegExp(`/${SALES.entity}/[^/?]+`).test(url.pathname);
+      const isList = req.method() === 'GET' && !isDistinct
+        && !new RegExp(`/${SALES.entity}/[^/?]+`).test(url.pathname);
+      if (emptyList && isList) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+        });
+        return;
+      }
+      if (!isDistinct) {
+        await route.fallback();
+        return;
+      }
+      distinctUrls.push(url);
+      const field = url.searchParams.get('_distinct');
+      const data = distinctData ?? [...new Set(ROWS.map((r) => r[field]).filter((v) => v != null))];
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data, totalRows: data.length, hasMore: false } }),
+      });
+    };
+    await page.route(`**/sws/neo/${SALES.slug}/${SALES.entity}/**`, handler);
+    await page.route(`**/sws/neo/${SALES.slug}/${SALES.entity}**`, handler);
+    await page.addInitScript(() => {
+      try { localStorage.setItem('sidebar-expanded', 'true'); } catch { /* noop */ }
+    });
+    await page.setViewportSize(VIEWPORT_MIN);
+    await page.goto(`/${SALES.slug}`);
+    await expect(page.getByTestId('list-toolbar')).toBeVisible({ timeout: 15_000 });
+    await settle(page);
+    return distinctUrls;
+  }
+
+  /** Every criterion of a request, whatever the wrapper (array, AdvancedCriteria, nested). */
+  function criteriaOf(url) {
+    const out = [];
+    const walk = (node) => {
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node == null || typeof node !== 'object') return;
+      if (Array.isArray(node.criteria)) node.criteria.forEach(walk);
+      if (node.fieldName !== undefined) out.push(node);
+    };
+    for (const raw of url.searchParams.getAll('criteria')) {
+      let parsed = raw;
+      try { parsed = JSON.parse(raw); } catch { /* not JSON: ignore */ }
+      walk(parsed);
+    }
+    return out;
+  }
+  const fieldNames = (url) => criteriaOf(url).map((c) => c.fieldName);
+  const hasCriterion = (url, fieldName, predicate = () => true) =>
+    criteriaOf(url).some((c) => c.fieldName === fieldName && predicate(c));
+
+  const lastUrl = (urls) => urls[urls.length - 1];
+  const openStatus = async (page) => {
+    await page.getByTestId('list-toolbar-main-row').getByTestId('filter-status').click();
+    const popover = page.getByRole('dialog');
+    await expect(popover).toBeVisible();
+    return popover;
+  };
+
+  test('default view asks for the distinct statuses with page 1 and no search or sort', async ({ page }) => {
+    const urls = await openWithDistinctRecorder(page);
+    const popover = await openStatus(page);
+    await expect(popover.getByRole('option')).toHaveCount(ROWS.length + 1);
+    expect(urls.length).toBeGreaterThanOrEqual(1);
+    const p = lastUrl(urls).searchParams;
+    expect(p.get('_distinct')).toBe('documentStatus');
+    expect(p.get('_startRow')).toBe('0');
+    expect(p.has('_distinctSearch')).toBe(false);
+    expect(p.has('_sortBy')).toBe(false);
+  });
+
+  test('the rectificative subset tab scopes the distinct request', async ({ page }) => {
+    const urls = await openWithDistinctRecorder(page);
+    await page.getByTestId('list-toolbar-tabs').getByTestId('filter-rectificativeinvoicestab').click();
+    await settle(page);
+    const popover = await openStatus(page);
+    await expect(popover.getByRole('option').first()).toBeVisible();
+    const url = lastUrl(urls);
+    expect(url.searchParams.get('_distinct')).toBe('documentStatus');
+    expect(hasCriterion(url, 'transactionDocument$etsgIsRectificative', (c) => c.operator === 'equals' && c.value === true)).toBe(true);
+    expect(hasCriterion(url, 'transactionDocument$documentCategory', (c) => c.value === 'ARC')).toBe(true);
+    expect(hasCriterion(url, 'transactionDocument$documentCategory', (c) => c.value === 'ARI_RM')).toBe(true);
+  });
+
+  test('an applied date range scopes the distinct request', async ({ page }) => {
+    const urls = await openWithDistinctRecorder(page);
+    await page.getByTestId('list-toolbar-main-row').getByTestId('filter-date').click();
+    const datePopover = page.getByRole('dialog');
+    await expect(datePopover).toBeVisible();
+    // Preset buttons carry no test id; the first one is the narrowest preset (see the crowded-row test).
+    await datePopover.locator('button').filter({ hasNotText: /^\s*$/ }).first().click();
+    await expect(datePopover).toHaveCount(0);
+    await settle(page);
+    const popover = await openStatus(page);
+    await expect(popover.getByRole('option').first()).toBeVisible();
+    expect(hasCriterion(lastUrl(urls), 'invoiceDate')).toBe(true);
+  });
+
+  test('a selected status is excluded from its own distinct request, other layers stay', async ({ page }) => {
+    const listUrls = [];
+    page.on('request', (r) => {
+      const u = new URL(r.url());
+      if (r.method() === 'GET' && u.pathname.endsWith(`/${SALES.slug}/${SALES.entity}`) && !u.searchParams.has('_distinct')) listUrls.push(u);
+    });
+    const urls = await openWithDistinctRecorder(page);
+    await page.getByTestId('list-toolbar-tabs').getByTestId('filter-rectificativeinvoicestab').click();
+    await settle(page);
+    let popover = await openStatus(page);
+    await popover.getByRole('option').nth(1).click();
+    await expect(popover).toHaveCount(0);
+    await settle(page);
+    const before = urls.length;
+    popover = await openStatus(page);
+    await expect(popover.getByRole('option').first()).toBeVisible();
+    await expect.poll(() => urls.length).toBeGreaterThanOrEqual(before);
+    const url = lastUrl(urls);
+    // Guard against a vacuous pass: the status condition is really applied to the list itself.
+    await expect.poll(() => listUrls.length > 0 && fieldNames(lastUrl(listUrls)).includes('documentStatus')).toBe(true);
+    expect(fieldNames(url)).not.toContain('documentStatus');
+    expect(hasCriterion(url, 'transactionDocument$etsgIsRectificative')).toBe(true);
+  });
+
+  test('typing in the status search filters client-side with no new request', async ({ page }) => {
+    const urls = await openWithDistinctRecorder(page);
+    const popover = await openStatus(page);
+    await expect(popover.getByRole('option')).toHaveCount(ROWS.length + 1);
+    await settle(page);
+    const before = urls.length;
+    await popover.getByRole('combobox').fill('Borr');
+    await page.waitForTimeout(800); // longer than the hook's 250ms debounce
+    expect(urls.length).toBe(before);
+    expect(urls.every((u) => !u.searchParams.has('_distinctSearch'))).toBe(true);
+  });
+
+  test('an empty distinct answer leaves only the all-statuses entry', async ({ page }) => {
+    await openWithDistinctRecorder(page, { distinctData: [], emptyList: true });
+    const popover = await openStatus(page);
+    await expect(popover.getByRole('option')).toHaveCount(1);
+  });
 });

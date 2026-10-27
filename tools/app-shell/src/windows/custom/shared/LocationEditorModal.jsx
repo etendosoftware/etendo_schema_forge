@@ -1,10 +1,11 @@
 import {useState, useEffect, useMemo, useRef} from 'react';
 import {useUnsavedChangesGuard} from '@/hooks/useUnsavedChangesGuard.js';
 import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
-import {useUI, useLabel} from '@/i18n';
+import {useUI} from '@/i18n';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
 import RequiredMark from '@/components/ui/required-mark.jsx';
+import {CopyButton} from '@/components/ui/copy-button.jsx';
 import {
     DEFAULT_COUNTRY_LIMIT,
     DEFAULT_COUNTRY_QUERY,
@@ -13,9 +14,13 @@ import {
 import { matchOptionByLabel } from '@/lib/matchOptionLabel.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
+    streetName: '',
+    buildingNumber: '',
+    buildingName: '',
     postalCode: '',
     city: '',
     country: '',
@@ -26,6 +31,74 @@ const EMPTY_FORM = {
     invoiceToAddress: true
 };
 const SELECTOR_PAGE_SIZE = 120;
+
+// ETP-5806 — length of C_Location.Address1/Address2, NOT the 70 of EM_OBSEPA_StrtNm.
+const ADDRESS_LINE_MAX_LENGTH = 60;
+
+// ETP-5806 follow-up — DB column lengths of the 3 structured SEPA fields themselves
+// (org.openbravo.sepa.iso20022's AD_COLUMN.FIELDLENGTH for EM_OBSEPA_StrtNm/BldgNb/BldgNm).
+// Enforced here as `maxLength` so the user can never type past what the backend can store —
+// the backend (StructuredAddressComposer#fieldsExceedingMaxLength) is the real source of truth
+// and rejects an over-length value with a 400; without this client-side cap a value sent through
+// another path (e.g. paste) used to reach OBDal.flush() as a raw data-truncation SQL error (500).
+const STREET_NAME_MAX_LENGTH = 70;
+const BUILDING_NUMBER_MAX_LENGTH = 16;
+const BUILDING_NAME_MAX_LENGTH = 35;
+
+/** Concatenates two parts with `sep` only when BOTH are non-empty — mirrors Java's `append`. */
+function appendPart(base, sep, part) {
+    if (!base) return part;
+    if (!part) return base;
+    return `${base}${sep}${part}`;
+}
+
+/**
+ * Client-side PREVIEW of the composed Address1/Address2 (ETP-5806), shown as "Dirección
+ * resultante" so the user sees what will be saved before submitting. This is a UX convenience
+ * only — the backend (`StructuredAddressComposer.composeAddressLines`, ported from Classic's
+ * `LocationSEPA.java::fillAddressLines`) is the source of truth and recomputes the same thing
+ * server-side for every channel, REST and MCP alike. Keep this in exact lockstep with the Java
+ * algorithm: same separators (", " and " - "), same 60-char line length, same precedence of
+ * truncation cases.
+ */
+function composeAddressLines(streetName, buildingNumber, buildingName) {
+    const street = (streetName || '').trim();
+    const number = (buildingNumber || '').trim();
+    const name = (buildingName || '').trim();
+
+    const streetAndNumber = appendPart(street, ', ', number);
+    const wholeAddress = appendPart(streetAndNumber, ' - ', name);
+
+    if (wholeAddress.length <= ADDRESS_LINE_MAX_LENGTH) {
+        return {address1: wholeAddress, address2: ''};
+    }
+    if (streetAndNumber.length <= ADDRESS_LINE_MAX_LENGTH) {
+        return {address1: streetAndNumber, address2: name.slice(0, ADDRESS_LINE_MAX_LENGTH)};
+    }
+    return {
+        address1: street.slice(0, ADDRESS_LINE_MAX_LENGTH),
+        address2: appendPart(number, ' - ', name).slice(0, ADDRESS_LINE_MAX_LENGTH),
+    };
+}
+
+/**
+ * Whether a record has free-text Address1/Address2 but none of the 3 structured fields filled in.
+ *
+ * Two callers, same test (ETP-5806, widened by ETP-5654 round 2):
+ *   - EDIT mode: an EXISTING record loaded from the backend — "legacy" in the sense that it
+ *     predates the structured fields and was never migrated.
+ *   - CREATE mode: the seed patch applied by `applyInitialSeed` (e.g. OCR'd vendor address). A
+ *     seed never carries the 3 structured fields (see `pickSeedText`), so this is true exactly
+ *     when the seed carried free-text `address` — i.e. "unstructured", not "legacy", but the same
+ *     banner applies: the user must still fill Street/Number to be able to save.
+ *   A brand-new, UNSEEDED address has every field empty and must NOT trigger this — empty is not
+ *   unstructured, just unfilled yet.
+ */
+function isLegacyAddressRecord(loaded) {
+    const hasStructured = Boolean(loaded.streetName || loaded.buildingNumber || loaded.buildingName);
+    const hasLegacyText = Boolean(loaded.address || loaded.address2);
+    return !hasStructured && hasLegacyText;
+}
 
 // ETP-5103 — Spain is the default country for a NEW address. This modal's selector pages
 // 120 rows at a time ordered by the BASE name, so Spain sits ~200th and never lands in
@@ -152,13 +225,17 @@ function seedCountryName(initialValues) {
  *
  * Like `applyDefaultCountryOption` it writes the unsaved-changes baseline by the same delta
  * as the form — a prefill is not a user edit, so the ETP-5022 guard must stay quiet.
+ *
+ * @returns the applied patch (so the caller can decide whether it counts as "unstructured" —
+ *          see `isLegacyAddressRecord` below, ETP-5654 round 2), or `null` when nothing was seeded.
  */
 function applyInitialSeed({initialValues, rowId, setForm, baselineRef}) {
-    if (rowId) return;
+    if (rowId) return null;
     const patch = pickSeedText(initialValues);
-    if (Object.keys(patch).length === 0) return;
+    if (Object.keys(patch).length === 0) return null;
     setForm(prev => ({...prev, ...patch}));
     baselineRef.current = {...(baselineRef.current || EMPTY_FORM), ...patch};
+    return patch;
 }
 
 /**
@@ -186,15 +263,24 @@ async function resolveCountryOption({apiFetch, selectorBase, buildParams, prefer
 }
 
 /**
- * Save gating (ETP-5103): address line 1 and country are the mandatory fields, and a
- * save in flight or an in-progress initial load blocks too.
+ * Save gating (ETP-5103, widened by ETP-5806): Street, Number, City and Country are the
+ * mandatory fields (stricter than Classic, where the 3 SEPA fields are optional — a product
+ * decision), and a save in flight or an in-progress initial load blocks too.
  *
  * Module-level so the modal body stays flat — a chain of `||` inside the component
  * counts against its cognitive complexity, which is already at its budget.
  */
-function isSaveBlocked({saving, initialLoading, address, country}) {
+function isSaveBlocked({saving, initialLoading, structuredAddressEnabled, address, streetName, buildingNumber, city, country}) {
     if (saving || initialLoading) return true;
-    if (address.trim() === '') return true;
+    // ETP-5806 — `structured-address-for-sepa` (backend-only flag, TTL 2026-11-15) off: legacy mandatory
+    // fields are just the free-text address line and country, matching pre-ETP-5806 behavior.
+    if (!structuredAddressEnabled) {
+        if (address.trim() === '') return true;
+        return country === '';
+    }
+    if (streetName.trim() === '') return true;
+    if (buildingNumber.trim() === '') return true;
+    if (city.trim() === '') return true;
     return country === '';
 }
 
@@ -356,11 +442,20 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
 
 /**
  * LocationEditorModal — create or edit a C_BPartner_Location record with its
- * underlying C_Location fields (address lines, city, postal code, country, region).
+ * underlying C_Location fields (structured street/number/building name, city, postal code,
+ * country, region).
  *
  * All CRUD operations go through the contacts/locationAddress endpoint so that
  * the user only needs AD_Window_Access to the Contacts window (ID 123), replicating
  * Classic Etendo's child-tab permission model.
+ *
+ * ETP-5806: Address Line 1/2 are no longer user-editable. The user fills Street (mandatory),
+ * Number (mandatory) and Building Name (optional); Address1/Address2 are computed from those
+ * three (see `composeAddressLines` above, which mirrors the backend's
+ * `StructuredAddressComposer`/`LocationSEPA.fillAddressLines`) and shown read-only as a preview.
+ * An existing record that predates this feature (free-text Address1/Address2, no structured
+ * fields) shows a legacy-address warning banner with the old text as reference and a Copy button;
+ * Save stays disabled until Street, Number, City and Country are all filled in.
  *
  * Props:
  *   open            — boolean: controls visibility
@@ -398,8 +493,13 @@ export default function LocationEditorModal({
     // Entity segment of the NEO path: 'locationAddress' (BP-linked) or 'location' (plain C_Location).
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
-    const t = useLabel();
     const apiFetch = useApiFetch(contactsApiBase);
+    // ETP-5806 — backend-only `structured-address-for-sepa` flag (TTL 2026-11-15), surfaced via the
+    // `capabilities` map already populated on AuthContext at role-selection time
+    // (SFWindowAccessMap). When off, this modal renders the pre-ETP-5806 single-line address
+    // editor instead of Street/Number/Building Name.
+    const capabilities = useCapabilitiesSafe();
+    const structuredAddressEnabled = capabilities?.structuredAddressForSepa === true;
     const [form, setForm] = useState(EMPTY_FORM);
     // ETP-5022: this modal holds its own form state, so DetailView's isDirty does not see it.
     // Without registering here, a language change (which reloads) or an F5 threw the typed
@@ -425,6 +525,12 @@ export default function LocationEditorModal({
     const [regionsLoadFailed, setRegionsLoadFailed] = useState(false);
     const [initialLoading, setInitialLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    // ETP-5806 — inline "Este campo es obligatorio" messages only appear after a first save
+    // attempt, never on a freshly-opened (necessarily empty) create form.
+    const [attemptedSave, setAttemptedSave] = useState(false);
+    // ETP-5806 — true for an EXISTING record that has free-text Address1/Address2 but none of
+    // the 3 structured fields; drives the legacy-address warning banner.
+    const [isLegacyAddress, setIsLegacyAddress] = useState(false);
     const [countryPickerOpen, setCountryPickerOpen] = useState(false);
     const [countryQuery, setCountryQuery] = useState('');
     const [regionPickerOpen, setRegionPickerOpen] = useState(false);
@@ -502,9 +608,20 @@ export default function LocationEditorModal({
     const saveDisabled = isSaveBlocked({
         saving,
         initialLoading,
+        structuredAddressEnabled,
         address: form.address,
+        streetName: form.streetName,
+        buildingNumber: form.buildingNumber,
+        city: form.city,
         country: form.country,
     });
+
+    // ETP-5806 — client-side preview only; the backend recomputes this itself and is the
+    // source of truth (see composeAddressLines' own doc comment above).
+    const composedAddress = useMemo(
+        () => composeAddressLines(form.streetName, form.buildingNumber, form.buildingName),
+        [form.streetName, form.buildingNumber, form.buildingName]
+    );
 
     // Reset and load data on open
     useEffect(() => {
@@ -514,7 +631,17 @@ export default function LocationEditorModal({
 
         setForm(EMPTY_FORM);
         baselineRef.current = EMPTY_FORM;
-        applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
+        setAttemptedSave(false);
+        setIsLegacyAddress(false);
+        const seedPatch = applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
+        // ETP-5654 round 2 — a CREATE seeded with OCR free text (address) but no structured
+        // breakdown shows the same banner an EDIT of a legacy record does (see
+        // `isLegacyAddressRecord`'s updated doc comment above). Only meaningful while
+        // `structured-address-for-sepa` is on — with it off, the address line is directly editable again
+        // and there is no "legacy vs structured" distinction to warn about.
+        if (seedPatch && structuredAddressEnabled) {
+            setIsLegacyAddress(isLegacyAddressRecord(seedPatch));
+        }
         setRegions([]);
         setRegionSelectorBase('');
         setRegionOffset(0);
@@ -606,6 +733,10 @@ export default function LocationEditorModal({
                         const loaded = {
                             address: rec.address ?? rec.addressLine1 ?? '',
                             address2: rec.address2 ?? rec.addressLine2 ?? '',
+                            // ETP-5806 — structured SEPA address fields.
+                            streetName: rec.streetName ?? '',
+                            buildingNumber: rec.buildingNumber ?? '',
+                            buildingName: rec.buildingName ?? '',
                             postalCode: rec.postalCode ?? '',
                             city: rec.city ?? rec.cityName ?? '',
                             country: rec.country ?? '',
@@ -635,6 +766,9 @@ export default function LocationEditorModal({
                         };
                         setForm(loaded);
                         baselineRef.current = loaded;
+                        if (structuredAddressEnabled) {
+                            setIsLegacyAddress(isLegacyAddressRecord(loaded));
+                        }
                     }
                 })
                 .catch(() => {
@@ -937,7 +1071,101 @@ export default function LocationEditorModal({
         onParentRefresh?.();
     }
 
+    function buildSavePayload() {
+        // ETP-5806 — while `structured-address-for-sepa` is off, Address Line 1/2 are the directly
+        // editable `form.address`/`form.address2` (pre-ETP-5806 behavior); the composed
+        // preview and the 3 structured fields are not rendered, so they stay empty and are
+        // sent as null, which the backend's legacy branch already handles.
+        const addressLine1 = structuredAddressEnabled ? composedAddress.address1 : (form.address || '');
+        const addressLine2 = structuredAddressEnabled ? composedAddress.address2 : (form.address2 || '');
+        const name = [form.city, addressLine1].filter(Boolean).join(', ')
+            || [form.regionLabel || form.region, form.countryLabel || form.country].filter(Boolean).join(', ')
+            || 'Location';
+        const payload = {
+            name,
+            // ETP-5806 — the backend recomputes Address1/Address2 from the structured fields
+            // and ignores these when streetName is present (see StructuredAddressComposer);
+            // sent anyway so a caller reading the create/update response sees them immediately
+            // without waiting on a round trip, and as a harmless fallback for the handler's
+            // own legacy branch (streetName blank, which `saveDisabled` never lets through here).
+            addressLine1: addressLine1 || null,
+            addressLine2: addressLine2 || null,
+            streetName: structuredAddressEnabled ? (form.streetName || null) : null,
+            buildingNumber: structuredAddressEnabled ? (form.buildingNumber || null) : null,
+            buildingName: structuredAddressEnabled ? (form.buildingName || null) : null,
+            postalCode: form.postalCode || null,
+            cityName: form.city || null,
+            country: form.country || null,
+            region: form.region || null,
+        };
+        // Address-type flags only exist in 'bpartner' mode (C_BPartner_Location);
+        // omit them entirely when the checkboxes are hidden (e.g. Warehouse).
+        if (showAddressTypeCheckboxes) {
+            payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
+            payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
+        }
+        return {payload, name};
+    }
+
+    async function saveEdit(payload, name) {
+        // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
+        // 'location' updates the plain C_Location.
+        const res = await apiFetch(`/${entityPath}/${bplLinkId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            // ETP-5806 — a non-ok response used to be completely silent: no toast, no
+            // console output, modal just sat there with nothing visibly wrong. The user
+            // had no way to tell a failed save from a successful one that was merely slow,
+            // and (worse) nothing here ever re-synced the form with what the backend
+            // actually has, so a retry could look like a no-op too. Surface it loudly.
+            console.error('[LocationEditorModal] locationAddress PUT failed with status', res.status);
+            toast.error(ui('locationSaveError'));
+            return;
+        }
+        const data = await res.json().catch(() => null);
+        const rec = data?.response?.data?.[0] ?? null;
+        showBackendMessages(rec?.messages);
+        // Return id/name so a single-FK field (Warehouse) can refresh its display.
+        onSaved?.(rec?.id ?? bplLinkId, rec?.name ?? name);
+    }
+
+    async function saveCreate(payload, name) {
+        // CREATE:
+        //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
+        //   'location' → creates a plain C_Location, no business partner link
+        const createPath = saveMode === 'location'
+            ? `/${entityPath}`
+            : `/locationAddress?parentId=${bpId}`;
+        const createBody = saveMode === 'location'
+            ? payload
+            : {...payload, businessPartner: bpId};
+        const res = await apiFetch(createPath, {
+            method: 'POST',
+            body: JSON.stringify(createBody),
+        });
+
+        if (!res.ok) {
+            console.error('[LocationEditorModal] locationAddress POST failed with status', res.status);
+            toast.error(ui('locationSaveError'));
+            return;
+        }
+
+        const data = await res.json();
+        if ((data?.response?.status ?? 0) !== 0) {
+            console.error('[LocationEditorModal] locationAddress POST returned NEO error:', data?.response);
+            toast.error(ui('locationSaveError'));
+            return;
+        }
+
+        const newRecord = data?.response?.data?.[0] ?? data?.data?.[0] ?? null;
+        showBackendMessages(newRecord?.messages);
+        onSaved?.(newRecord?.id ?? null, newRecord?.name ?? name);
+    }
+
     async function handleSave() {
+        setAttemptedSave(true);
         if (saveDisabled) return;
         // Defence in depth: `saveDisabled` already covers an empty country since ETP-5103,
         // so the Save button can no longer reach this branch. It stays for a programmatic
@@ -949,69 +1177,12 @@ export default function LocationEditorModal({
         }
         setSaving(true);
         try {
-            const name = [form.city, form.address].filter(Boolean).join(', ')
-                || [form.regionLabel || form.region, form.countryLabel || form.country].filter(Boolean).join(', ')
-                || 'Location';
-            const payload = {
-                name,
-                addressLine1: form.address || null,
-                addressLine2: form.address2 || null,
-                postalCode: form.postalCode || null,
-                cityName: form.city || null,
-                country: form.country || null,
-                region: form.region || null,
-            };
-            // Address-type flags only exist in 'bpartner' mode (C_BPartner_Location);
-            // omit them entirely when the checkboxes are hidden (e.g. Warehouse).
-            if (showAddressTypeCheckboxes) {
-                payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
-                payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
-            }
+            const {payload, name} = buildSavePayload();
             if (bplLinkId) {
-                // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
-                // 'location' updates the plain C_Location.
-                const res = await apiFetch(`/${entityPath}/${bplLinkId}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(payload),
-                });
-                if (res.ok) {
-                    const data = await res.json().catch(() => null);
-                    const rec = data?.response?.data?.[0] ?? null;
-                    showBackendMessages(rec?.messages);
-                    // Return id/name so a single-FK field (Warehouse) can refresh its display.
-                    onSaved?.(rec?.id ?? bplLinkId, rec?.name ?? name);
-                }
-                return;
+                await saveEdit(payload, name);
+            } else {
+                await saveCreate(payload, name);
             }
-
-            // CREATE:
-            //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
-            //   'location' → creates a plain C_Location, no business partner link
-            const createPath = saveMode === 'location'
-                ? `/${entityPath}`
-                : `/locationAddress?parentId=${bpId}`;
-            const createBody = saveMode === 'location'
-                ? payload
-                : {...payload, businessPartner: bpId};
-            const res = await apiFetch(createPath, {
-                method: 'POST',
-                body: JSON.stringify(createBody),
-            });
-
-            if (!res.ok) {
-                console.error('[LocationEditorModal] locationAddress POST failed with status', res.status);
-                return;
-            }
-
-            const data = await res.json();
-            if ((data?.response?.status ?? 0) !== 0) {
-                console.error('[LocationEditorModal] locationAddress POST returned NEO error:', data?.response);
-                return;
-            }
-
-            const newRecord = data?.response?.data?.[0] ?? data?.data?.[0] ?? null;
-            showBackendMessages(newRecord?.messages);
-            onSaved?.(newRecord?.id ?? null, newRecord?.name ?? name);
         } finally {
             setSaving(false);
         }
@@ -1026,6 +1197,10 @@ export default function LocationEditorModal({
     };
 
     const FIELD_LABEL = { fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 };
+
+    // ETP-5806 — inline "Este campo es obligatorio" message, shown under a mandatory field
+    // once the user has attempted to save with it still empty.
+    const FIELD_ERROR = { fontSize: 12, color: 'hsl(var(--destructive))', marginTop: 4 };
 
     const PICKER_BTN = {
         ...INPUT, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1087,17 +1262,108 @@ export default function LocationEditorModal({
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-                            {/* Línea 1 */}
+                            {/* ETP-5806 — legacy-address banner: an EXISTING record with free-text
+                                Address1/Address2 but no structured breakdown. The old text is kept
+                                read-only as reference (never editable again) with a Copy button;
+                                Save stays disabled until Street and Number are filled in below. */}
+                            {structuredAddressEnabled && isLegacyAddress && (
+                                <div
+                                    data-testid="location-legacy-address-banner"
+                                    style={{
+                                        display: 'flex', flexDirection: 'column', gap: 8,
+                                        padding: '10px 12px', borderRadius: 8,
+                                        border: '1px solid hsl(var(--warning, 38 92% 50%) / .4)',
+                                        background: 'hsl(var(--warning, 38 92% 50%) / .08)',
+                                    }}
+                                >
+                                    <div style={{ fontSize: 13, color: 'hsl(var(--foreground))' }}>
+                                        {ui('legacyAddressWarning')}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }}>
+                                                {ui('legacyAddressOldTextLabel')}
+                                            </div>
+                                            <div style={{ fontSize: 13, color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {[form.address, form.address2].filter(Boolean).join(', ')}
+                                            </div>
+                                        </div>
+                                        <CopyButton
+                                            value={[form.address, form.address2].filter(Boolean).join(', ')}
+                                            data-testid="location-legacy-address-copy"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ETP-5806 — gated behind `capabilities.structuredAddressForSepa` (backend-only
+                                flag, TTL 2026-11-15). While off, the pre-ETP-5806 single-line
+                                Address Line 1/2 editor below renders instead. */}
+                            {structuredAddressEnabled ? (
+                            <>
+                            {/* Calle */}
+                            <div>
+                                <div style={FIELD_LABEL}>{ui('streetNameLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
+                                <input autoFocus type="text" maxLength={STREET_NAME_MAX_LENGTH} value={form.streetName} onChange={e => setField('streetName', e.target.value)} data-testid="location-field-streetName" style={INPUT} />
+                                {attemptedSave && form.streetName.trim() === '' && (
+                                    <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
+                                )}
+                            </div>
+
+                            {/* Número + Nombre del edificio en grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
+                                <div>
+                                    <div style={FIELD_LABEL}>{ui('buildingNumberLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
+                                    <input type="text" maxLength={BUILDING_NUMBER_MAX_LENGTH} value={form.buildingNumber} onChange={e => setField('buildingNumber', e.target.value)} data-testid="location-field-buildingNumber" style={INPUT} />
+                                    {attemptedSave && form.buildingNumber.trim() === '' && (
+                                        <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
+                                    )}
+                                </div>
+                                <div>
+                                    <div style={FIELD_LABEL}>{ui('buildingNameLabel')}</div>
+                                    <input type="text" maxLength={BUILDING_NAME_MAX_LENGTH} value={form.buildingName} onChange={e => setField('buildingName', e.target.value)} data-testid="location-field-buildingName" style={INPUT} />
+                                </div>
+                            </div>
+
+                            {/* ETP-5806 — Address Line 1/2 are no longer user-editable: they are
+                                computed from Street/Number/Building Name (same algorithm the
+                                backend applies on save) and shown here read-only as a preview.
+                                Both rows are ALWAYS visible (Primera línea / Segunda línea), each
+                                with its own sub-label, "—" when empty — matching the design's
+                                "alta vacía" state. Do not collapse this back into one line. */}
+                            <div>
+                                <div style={FIELD_LABEL}>{ui('resultingAddressLabel')}</div>
+                                <div
+                                    data-testid="location-resulting-address-preview"
+                                    style={{ ...INPUT, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: 'auto', minHeight: 40, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', gap: 6, paddingTop: 8, paddingBottom: 8 }}
+                                >
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <span style={{ fontSize: 12, minWidth: 100, flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}>{ui('addressLine1Label')}</span>
+                                        <span data-testid="location-resulting-address1">{composedAddress.address1 || '—'}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <span style={{ fontSize: 12, minWidth: 100, flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}>{ui('addressLine2Label')}</span>
+                                        <span data-testid="location-resulting-address2">{composedAddress.address2 || '—'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            </>
+                            ) : (
+                            <>
+                            {/* Pre-ETP-5806 legacy editor: Address Line 1/2 directly editable. */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('addressLine1')}<RequiredMark data-testid="RequiredMark__927831" /></div>
                                 <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} data-testid="location-field-address" style={INPUT} />
+                                {attemptedSave && form.address.trim() === '' && (
+                                    <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
+                                )}
                             </div>
-
-                            {/* Línea 2 */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('addressLine2')}</div>
                                 <input type="text" value={form.address2} onChange={e => setField('address2', e.target.value)} data-testid="location-field-address2" style={INPUT} />
                             </div>
+                            </>
+                            )}
 
                             {/* CP + Ciudad en grid */}
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
@@ -1106,66 +1372,76 @@ export default function LocationEditorModal({
                                     <input type="text" value={form.postalCode} onChange={e => setField('postalCode', e.target.value)} data-testid="location-field-postalCode" style={INPUT} />
                                 </div>
                                 <div>
-                                    <div style={FIELD_LABEL}>{ui('cityLabel')}</div>
+                                    <div style={FIELD_LABEL}>{ui('cityLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
                                     <input type="text" value={form.city} onChange={e => setField('city', e.target.value)} data-testid="location-field-city" style={INPUT} />
+                                    {attemptedSave && form.city.trim() === '' && (
+                                        <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* País */}
-                            <div>
-                                <div style={FIELD_LABEL}>{ui('countryLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
-                                <button
-                                    type="button"
-                                    onClick={() => setCountryPickerOpen(true)}
-                                    aria-haspopup="dialog"
-                                    aria-expanded={countryPickerOpen}
-                                    data-testid="location-field-country"
-                                    {...placeholderAttr(form.country)}
-                                    style={PICKER_BTN}
-                                >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.country) }}>
-                                        {selectedCountryLabel}
-                                    </span>
-                                    <ChevronDown
-                                        size={15}
-                                        style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
-                                        data-testid="ChevronDown__927831" />
-                                </button>
+                            {/* País + Región comparten fila (ETP-5806) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <div>
+                                    <div style={FIELD_LABEL}>{ui('countryLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCountryPickerOpen(true)}
+                                        aria-haspopup="dialog"
+                                        aria-expanded={countryPickerOpen}
+                                        data-testid="location-field-country"
+                                        {...placeholderAttr(form.country)}
+                                        style={PICKER_BTN}
+                                    >
+                                        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.country) }}>
+                                            {selectedCountryLabel}
+                                        </span>
+                                        <ChevronDown
+                                            size={15}
+                                            style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
+                                            data-testid="ChevronDown__927831" />
+                                    </button>
+                                    {attemptedSave && form.country === '' && (
+                                        <div style={FIELD_ERROR}>{ui('fieldRequiredMessage')}</div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <div style={FIELD_LABEL}>{ui('regionLabel')}</div>
+                                    <button
+                                        type="button"
+                                        onClick={() => { if (form.country) setRegionPickerOpen(true); }}
+                                        disabled={!form.country}
+                                        data-testid="location-field-region"
+                                        {...placeholderAttr(form.region)}
+                                        aria-haspopup="dialog"
+                                        aria-expanded={regionPickerOpen}
+                                        style={pickerButtonStyle(PICKER_BTN, !!form.country)}
+                                    >
+                                        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.region) }}>
+                                            {!form.country ? ui('selectCountryFirst') : selectedRegionLabel}
+                                        </span>
+                                        <ChevronDown
+                                            size={15}
+                                            style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
+                                            data-testid="ChevronDown__927831" />
+                                    </button>
+                                </div>
                             </div>
 
-                            {/* Región */}
-                            <div>
-                                <div style={FIELD_LABEL}>{ui('regionLabel')}</div>
-                                <button
-                                    type="button"
-                                    onClick={() => { if (form.country) setRegionPickerOpen(true); }}
-                                    disabled={!form.country}
-                                    data-testid="location-field-region"
-                                    {...placeholderAttr(form.region)}
-                                    aria-haspopup="dialog"
-                                    aria-expanded={regionPickerOpen}
-                                    style={pickerButtonStyle(PICKER_BTN, !!form.country)}
-                                >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.region) }}>
-                                        {!form.country ? ui('selectCountryFirst') : selectedRegionLabel}
-                                    </span>
-                                    <ChevronDown
-                                        size={15}
-                                        style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
-                                        data-testid="ChevronDown__927831" />
-                                </button>
-                            </div>
-
-                            {/* Checkboxes — only for BPartner locations (Contacts), not plain C_Location */}
+                            {/* Checkboxes — only for BPartner locations (Contacts), not plain C_Location.
+                                ETP-5806: renamed to "Envíos"/"Facturación" via local ui() keys rather than
+                                the AD's IsShipTo/IsBillTo labels, so the rename stays scoped to this modal
+                                instead of relabeling every other screen that reads those AD labels. */}
                             {showAddressTypeCheckboxes && (
                             <div style={{ display: 'flex', gap: 24, paddingTop: 4 }}>
                                 <SquareCheckbox
-                                    label={t('IsShipTo') || 'Shipping Address'}
+                                    label={ui('shippingAddressLabel')}
                                     checked={form.shipToAddress}
                                     onChange={val => setField('shipToAddress', val)}
                                     data-testid="SquareCheckbox__location-shipping" />
                                 <SquareCheckbox
-                                    label={t('IsBillTo') || 'Invoicing Address'}
+                                    label={ui('billingAddressLabel')}
                                     checked={form.invoiceToAddress}
                                     onChange={val => setField('invoiceToAddress', val)}
                                     data-testid="SquareCheckbox__location-invoicing" />
@@ -1188,7 +1464,14 @@ export default function LocationEditorModal({
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
                             onClick={handleSave}
-                            disabled={saveDisabled}
+                            // ETP-5806 follow-up — `aria-disabled`, NOT the native `disabled`
+                            // attribute: a natively-disabled button never fires `onClick`, so
+                            // `handleSave` (which sets `attemptedSave`) could never run while a
+                            // mandatory field was empty, and the "Este campo es obligatorio"
+                            // messages below were dead code. `handleSave` itself still refuses
+                            // to save while `saveDisabled` is true (see its own guard) — this
+                            // only lets the click register so the validation messages can show.
+                            aria-disabled={saveDisabled}
                             // Referenced by the `create-contact` walkthrough's closing step
                             // (tools/app-shell/src/walkthrough/flows/create-contact.json).
                             // Renaming it breaks a shipped tour.
