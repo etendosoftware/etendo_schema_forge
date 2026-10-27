@@ -144,6 +144,12 @@ describe('OcrSidePanel — OCR reader gating', () => {
     expect(screen.queryByTestId('ocr-uploader')).toBeNull();
     expect(screen.queryByText('ocrSidePanelTitle')).toBeNull();
   });
+
+  it('never mounts the OCR reader for a read-only role, even on a new record (ETP-5830)', () => {
+    render(<OcrSidePanel {...defaultProps} isNew readOnly />);
+    expect(screen.queryByTestId('ocr-uploader')).toBeNull();
+    expect(screen.queryByText('ocrSidePanelTitle')).toBeNull();
+  });
 });
 
 /**

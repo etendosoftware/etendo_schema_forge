@@ -268,17 +268,6 @@ export async function createPortalSession(baseUrl) {
   return data;
 }
 
-/** Reads the server-owned productive offer used to render purchase terms. */
-export async function getBillingOffer(baseUrl) {
-  const response = await apiFetch('/sws/go/billing/offers', { baseUrl, on401: 'ignore' });
-  const data = await readJsonSafely(response);
-  if (!response.ok) {
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
-  }
-  return data;
-}
-
 /** Reads one account-scoped purchase without exposing provider identifiers. */
 export async function getBillingPurchase(baseUrl, purchaseId) {
   const response = await apiFetch(

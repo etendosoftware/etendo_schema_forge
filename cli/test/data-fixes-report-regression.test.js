@@ -191,6 +191,14 @@ const FIXES_WITH_REPORT = new Set([
   // POSTED_MATCH or ORDER_LINE_OVER_INVOICED — same "flag, don't guess" pattern as R19.
   '20261016T185257Z__R50-rectificative-dup-tax-and-order-link',
   '20261019T141632Z__R50-gl-journal-foreign-doctype',
+  // R50 (ETP-5801) repoints return-to-vendor shipments created on another tenant's RTV doctype.
+  // Its @report lists a shipment left foreign because its tenant has no own RTV doctype (the
+  // @check keeps matching it on purpose) and any fact_acct row still on a foreign doctype or GL
+  // category after @apply.
+  '20261021T120000Z__R50-inout-foreign-return-doctype',
+  // Its @report names every predefined payment term NOT seeded because the anchor org already
+  // holds a term with that name but a different shape (lines, fixed due day, month offset).
+  '20261022T150000Z__R52-payment-terms-extended',
 ]);
 
 async function loadCatalogFiles() {

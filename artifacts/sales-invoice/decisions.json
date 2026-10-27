@@ -230,7 +230,13 @@
           "inputMode": "selector",
           "section": "principal",
           "seq": 60,
-          "reference": "PaymentTerm"
+          "reference": "PaymentTerm",
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "priceList": {
           "visibility": "editable",
@@ -949,6 +955,7 @@
       "exclude": true
     },
     "exchangeRates": {
+      "publicApi": { "readOnly": true },
       "fields": {
         "active": {
           "visibility": "system"

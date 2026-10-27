@@ -112,16 +112,21 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   precedent. The hook also re-checks after a successful `processNow` run (`neo:processSuccess`),
   so the button disappears without a manual page reload.
 - On a year's detail, switch between two secondary tabs:
-   - **Periods** (the first detail tab) — a list of the year's periods (aggregate status badge),
-    each row with a single **Abrir/Cerrar Periodo** action. Opening/closing a period is global —
+   - **Periods** (the first detail tab) — a list of the year's periods (aggregate status tag, see
+    "Period status labels and colours" below), each row with hover links **Abrir** / **Cerrar** /
+    **Cerrar permanentemente…** (ETP-5592). Opening/closing a period is global —
     it affects every document type at once (AD Process 167 opens/closes every `C_PeriodControl`
     row for the period in one transaction); there is no per-document-type breakdown or action in
     the UI (removed in ETP-4948 — see the `documents` entity note under Field reference).
     **Bulk open/close (ETP-5682):** each row has a checkbox (plus select-all in the header); a
     floating selection bar offers **Abrir** / **Cerrar** for every selected period at once — see
     "Bulk open/close periods" under Reactive behavior.
-   - **Accounting** (the second detail tab) — a read-only, year-scoped Fact_Acct grid (account, debit, credit,
-    description) for reviewing the year's accounting entries.
+   - **Accounting** (the second detail tab) — a read-only, year-scoped grid of the year-end closing
+    entries: account as "code - name", debit and credit formatted with the accounting schema's
+    currency, description (ETP-5592).
+   - Both tabs show their row count in the tab label ("Períodos 12"), like every other secondary tab.
+- The year's **Año cerrado / Año no cerrado** tag sits on the left of the detail toolbar, next to
+  **Cancelar**, where every document shows its status (`topbarExtra` slot, ETP-5592).
 - Trigger **Cerrar Año** (Close Year) from the kebab ("more") menu once every period is
   Closed or Permanently Closed, and **Deshacer Cierre de Año** (Undo Close Year) to reverse it.
 - **New productive tenants start with every period never-opened (ETP-5577).** Which periods to
@@ -140,8 +145,16 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   Completion still requires an open period — the core `*_POST` procedures check it; there is no
   bypass.
 - **Guided tour (ETP-5577).** `walkthrough/flows/accounting-calendar.json` ("Calendario contable")
-  walks through creating next year with **Nuevo**, opening a year, its **Periods** tab and the
-  **Abrir/Cerrar Periodo** action. The steps on the year list declare `route: "/calendar"`, so
+  walks through creating next year with **Nuevo**, opening a year, its **Periods** tab and how to
+  open/close a period. That last step points at the first period's status tag
+  (`[data-testid^="period-status-"]`): the row links are hover-only (`opacity-0`), so they cannot be
+  a tour target (ETP-5592). The "open a year" step targets the **current** fiscal year (the
+  one the review card shows, provided by `CalendarWindow` through `CurrentFiscalYearContext`), not
+  the first row: `YearTableWithCloseStatus` marks that row's Year cell (a block span filling the
+  cell) with `data-current-fiscal-year`, and the step advances only on a click inside that cell,
+  so ticking the row's selection checkbox does not advance it. If the current year is unknown or
+  not in the list, the first row's Year cell is marked instead. The steps on the year list declare
+  `route: "/calendar"`, so
   "Atrás" from inside a year goes back to the list; the tour never returns into a year after
   leaving it (that step could not name the year's URL). Productive tenants only (`PRODUCTIVE_ONLY_FLOW_IDS`): it is
   offered by the top-bar launcher and by the review row's **Ver guía**. See
@@ -238,20 +251,28 @@ ever changes, this needs revisiting.
   hand-duplicated copy of the same process definition (label, `FISCALYEARSTART`/`CREATEADJUSTMENT`
   params) otherwise. `decisions.json`'s `window.processOverrides.processNow` is unchanged — this
   is a frontend-only visibility gate on top of it, not a change to the process itself.
-- **Abrir/Cerrar Periodo** (`periodControl.openClose`, on `open-close-period-control`) calls AD
+- **Row actions: Abrir / Cerrar / Cerrar permanentemente…** (`periodControl.openClose`, on `open-close-period-control`) call AD
    Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
    (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
    (`/sws/neo/open-close-period-control/...`) this window has always used; nothing about this action
    changed for ETP-4478. This process opens/closes **every** `C_PeriodControl` row for the period
-   in one transaction — already the global mechanism — so `PeriodsExpandablePanel.jsx`'s
-   `handleDialogConfirm` only needs to refresh `loadPeriods()` (the aggregate badge) after a
-   successful action.
+   in one transaction — already the global mechanism — so `PeriodsExpandablePanel.jsx` only needs
+   to refresh `loadPeriods()` (the aggregate tag) after a successful action.
+   **ETP-5592:** the links live in `DataTable`'s hover quick-actions cell (`PeriodRowActions`, same
+   chrome as Not Posted Documents' row links) and only offer the transitions that change something:
+   **Abrir** unless the period is open, **Cerrar** unless it is closed, **Cerrar permanentemente…**
+   unless it already is; a permanently closed period has no links. Each link opens the same
+   `PeriodsBulkConfirmDialog` as the bulk bar with that one period, and runs through the same
+   `runPeriodsBulkOpenClose`, so a row and a bulk action confirm, toast and report errors the same
+   way. The permanent close shows an "it cannot be undone" warning and a destructive confirm button.
+   The 3-option `ProcessParamDialog` is gone. A row action keeps the bulk selection; a bulk run
+   clears it. Hidden for read-only roles (ETP-5830), which also get no checkboxes.
 - **Bulk open/close periods (ETP-5682).** Ticking periods (or select-all) shows the shared
    floating `SelectionToolbar` (`period-bulk-bar`) with **Abrir** and **Cerrar**. Permanently closed
-   periods cannot be selected, and permanent close is not offered in bulk: it is irreversible, so it
-   stays a per-period decision through **Abrir/Cerrar Periodo**. After a confirmation that names the
+   periods cannot be selected (`DataTable`'s `isRowSelectable`), and permanent close is not offered
+   in bulk: it is irreversible, so it stays a per-period decision through the row link. After a confirmation that names the
    selected periods, `runPeriodsBulkOpenClose` (`periodsBulkOpenClose.js`) posts the same
-   `/periodControl/{id}/action/openClose` as the row button, **one period at a time in start-date
+   `/periodControl/{id}/action/openClose` as the row links, **one period at a time in start-date
    order** (Process 167 touches every `C_PeriodControl` row of the period; parallel calls would only
    risk lock contention). A period already in the target state is not posted and is reported as
    "already open/closed". A failure never stops the run. If everything succeeded, a toast reports
@@ -266,11 +287,12 @@ ever changes, this needs revisiting.
   `C_PeriodControl_Process` via `PeriodControlDocOpenCloseHandler`) and its own accounting-
   relevant-only filtering (`AccountingDocumentTypeSupport`, shared with
   [Not Posted Documents](not-posted-documents.md#document-type-accounting-support)). It was
-  redundant with **Abrir/Cerrar Periodo** above (already global to every document type in one
+  redundant with the period-level open/close above (already global to every document type in one
   transaction) and was removed from `PeriodsExpandablePanel.jsx` — frontend-only removal (Option
   B1): the `documents` entity, `PeriodControlDocOpenCloseHandler`, and AD Process 168 remain in
   place server-side, unused but harmless. No `decisions.json`/contract change, no regen needed.
-- **Through MCP (ETP-5587).** An agent opens or closes a period the way the dialog does:
+- **Through MCP (ETP-5587).** An agent opens or closes a period the way the row links do (the
+  "dialog" below is the 3-option dialog the UI used before ETP-5592; the contract is unchanged):
   `etendo_action(spec:'open-close-period-control', entity:'periodControl', id:'<periodId>',
   action:'openClose', parameters:{openClose:'O'|'C'|'P'})`. `PeriodOpenCloseHandler` declares the
   button as a contract with exactly the dialog's parameter and options, so `etendo_schema` advertises
@@ -310,15 +332,36 @@ ever changes, this needs revisiting.
   `FinancialMgmtAccountingFactEndYearHQL` view text, which has no `year` property on its output at
   all (its `C_Year_Close_V_ID` output column is actually a `PeriodControl` id, not the Year's own
   id) and relies on Etendo's `@additional_filters@` template substitution, which isn't invocable
-  standalone. See the class javadoc in `YearAccountingHandler.java`.
+  standalone. See the class javadoc in `YearAccountingHandler.java`. Rows are grouped per
+  accounting schema too (ETP-5592): Fact_Acct amounts are in the schema's currency, so summing
+  across schemas would mix currencies. Each row carries `accountName` and the schema currency as
+  `currency$_identifier` (NEO's FK-identifier key), which `DataTable`'s `amount` cells read.
 - Period metadata fields (`periodNo`, `name`, `startingDate`, `endingDate`, `periodType`) are
   classified `readOnly` — the Periods tab is a status/confirmation view, not a metadata editor.
 
+## Period status labels and colours (ETP-5592)
+ETP-5592 renamed the labels (the old "Todos …" aggregate names were noise once the
+per-document-type breakdown was removed). The colours were deliberately kept as they were
+(decision 2026-10-23, option D of the analysis), even though red for a closed period departs from
+the app's "red = error" convention.
+
+| Code | Label (es / en) | Tag |
+|---|---|---|
+| N | Nunca abierto / Never opened | neutral |
+| O | Abierto / Open | green |
+| M | Mixto / Mixed | orange |
+| C | Cerrado / Closed | red |
+| P | Cerrado permanentemente / Permanently closed | red |
+
+The same mapping lives in `PeriodsExpandablePanel.jsx` (`PERIOD_STATUS_VARIANTS`) and in
+`artifacts/open-close-period-control/decisions.json → enumVariants` (both `status` and
+`periodStatus`). Keep them in sync.
+
 ## Loading, error, and double-submit UX (Periods/Accounting panels)
-The Periods tab uses the shared table and button primitives used by generated windows: a standard
-header row, table-cell spacing, and a compact outline action button per row. Since ETP-4948
-removed the per-document-type breakdown (see Reactive behavior above), each period row is a plain
-three-cell row (Period / Status / Actions) with no expand affordance.
+Both tabs render on the shared `DataTable` (ETP-5592): same header, row height, checkbox column,
+selected/hover colours, loading skeleton and empty state as every other list. Periods has two
+columns (Period / Status) plus the hover actions cell; there is no sorting (chronological order is
+the point) and no date columns.
 
 Persisted `C_Period.Name` values remain the canonical core abbreviations (for example, `Jan-27`).
 The Calendar UI renders a full localized month and two-digit year from `startingDate` instead:
@@ -340,16 +383,18 @@ unaffected. No data-shape change — `periodType` was already present on every r
 
 `AccountingPanel.jsx` and `PeriodsExpandablePanel.jsx` each track three distinct states for their
 fetched data — never just "empty vs loaded":
-- **Loading** (`rows`/`periods === undefined`, the initial/in-flight state) — a `{ui('loading')}`
-  placeholder (`data-testid="accounting-panel-loading"` / `"periods-expandable-panel-loading"`).
+- **Loading** (`rows`/`periods === undefined`, the initial/in-flight state) — `DataTable`'s loading
+  skeleton, inside a wrapper with `data-testid="accounting-panel-loading"` /
+  `"periods-expandable-panel-loading"`.
 - **Error** (`=== null`, set in the fetch's `.catch()` on a non-2xx response or network failure) —
   a destructive-styled message (`ui('accountingLoadError')` / `ui('periodsLoadError')`,
   `data-testid="accounting-panel-error"` / `"periods-expandable-panel-error"`). A failed fetch is
   never silently relabeled as "no rows" — conflating the two would hide real outages behind an
   innocuous-looking empty state.
-- **Loaded** — an array, rendered as the table/list even when empty (`AccountingPanel` shows a
-  distinct `accounting-panel-empty` state for a loaded-but-zero-rows year; `PeriodsExpandablePanel`
-  just renders no rows).
+- **Loaded** — an array, rendered as the table even when empty. An empty array shows
+  `DataTable`'s `emptyState`: "Aún no hay períodos" + a hint naming the **Crear períodos** button
+  (`periods-empty`), or "Aún no hay asientos de cierre" + "Aparecerán aquí al cerrar el año."
+  (`accounting-panel-empty`).
 
 **ETP-4948 Issue 4 (historical, pre-dates the per-document-type removal).** When the Periods tab
 still had an expandable row, the selected/expanded state was highlighted with
@@ -360,13 +405,10 @@ surrounding page background. That highlight and the expand state it applied to n
 history, since the fix itself (the token family choice) still applies wherever a selected-row
 treatment is needed elsewhere in the app.
 
-**Double-submit guard:** the **Abrir/Cerrar Periodo** button is disabled while its own action
-request is in flight, tracked in a `pendingActions` map keyed by `period-{id}` (so one period's
-pending action never disables a sibling's button). A failed action surfaces a `toast.error(...)`
-(message from the response error, falling back to `ui('networkError')`) rather than leaving the UI
-in a silent stuck state; the button re-enables in the `finally` block regardless of success or
-failure. `CloseYearConfirmModal` uses the same `submitting` boolean pattern to disable its own
-confirm button during the request.
+**Double-submit guard:** while an open/close run is in flight (row or bulk), every row link and
+both bulk buttons are disabled. A failure opens the result dialog with the translated backend error
+(never a silent stuck state); the links re-enable when the run ends. `CloseYearConfirmModal` uses a
+`submitting` boolean to disable its own confirm button during the request.
 
 ## Field reference
 
@@ -385,7 +427,7 @@ confirm button during the request.
 
 | Field | Type | Visibility | Grid | Form | Notes |
 |-------|------|------------|------|------|-------|
-| status | enum | readOnly | yes | yes | Aggregate badge: N/O/C/P/M |
+| status | enum | readOnly | yes | yes | Aggregate tag: N/O/C/P/M (see Period status labels and colours) |
 | calendar | foreignKey | readOnly | yes | yes | |
 | year | foreignKey | readOnly | yes | yes | |
 | name | string | readOnly | yes | yes | e.g. "Jan-2027" |
@@ -398,7 +440,7 @@ confirm button during the request.
 ### documents entity (`open-close-period-control` spec — C_PeriodControl) — **removed from UI (ETP-4948)**
 
 **Not rendered anywhere in this window anymore.** `PeriodsExpandablePanel.jsx` no longer fetches
-or displays per-document-type rows — **Abrir/Cerrar Periodo** (`periodControl.openClose` above) is
+or displays per-document-type rows — the period-level open/close (`periodControl.openClose` above) is
 already global to every document type in one transaction, so the per-document-type breakdown was
 redundant and was removed from the frontend (Option B1: frontend-only removal, see Reactive
 behavior above). The entity itself, its fields, `PeriodControlDocOpenCloseHandler`, and AD Process
@@ -505,17 +547,20 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
    retained rather than moved or duplicated. Do not change range on a populated year.
 8. Open a year's detail and confirm **Periods** is the first secondary tab (before **Accounting**,
    ETP-4948). Switch to it and confirm the period list renders chronologically by starting date
-   with aggregate status badges.
-9. Click **Abrir/Cerrar Periodo** on a period and confirm the process dialog / status update.
-   Confirm there is no expand affordance and no per-document-type breakdown anywhere in the row
-   (removed in ETP-4948 — Abrir/Cerrar Periodo is already global to every document type).
+   with aggregate status tags as in "Period status labels and colours", and a count on the tab.
+9. Hover a period and confirm only the meaningful links show (an open period offers **Cerrar** and
+   **Cerrar permanentemente…**, not **Abrir**). Click one, confirm the dialog names the period, accept
+   and check the status tag updates. **Cerrar permanentemente…** warns it cannot be undone. Confirm
+   there is no expand affordance and no per-document-type breakdown anywhere in the row (removed in
+   ETP-4948 — the period-level action is already global to every document type).
 9b. Bulk (ETP-5682): tick three closed periods out of date order and click **Abrir** in the floating
    bar. Confirm the dialog lists them in date order, confirm, and check the network tab: one POST
    per period, sequential, in date order. Include an already-open period: it is not posted and the
    toast says it already was. A permanently closed period's checkbox is disabled. Make one period
    fail (e.g. a closed year) and confirm the result dialog lists every period with its outcome.
-10. Switch to the **Accounting** tab and confirm the year's Fact_Acct rows render (account, debit,
-   credit, description).
+10. Switch to the **Accounting** tab and confirm the year's closing rows render (account as
+   "code - name", debit and credit formatted with the currency symbol, description). On a year
+   with no periods, the Periods tab shows the "Aún no hay períodos" empty state.
 11. Open the kebab menu with at least one period still Open and confirm **Cerrar Año** is present
    but its confirm button is disabled.
 12. Close/Permanently-close every period, reopen the kebab menu, confirm **Cerrar Año**'s confirm
@@ -525,9 +570,8 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
    confirm the Accounting tab shows the error message, not a blank panel or a false "no entries".
 14. Force the `periodControl` request to fail and confirm the Periods tab shows its own error
    message.
-15. Double-click **Abrir/Cerrar Periodo** (or throttle the network to make the click visibly
-   slow) and confirm the button disables immediately and re-enables only after the request
-   settles — a second click during the pending window must not fire a second request.
+15. Throttle the network, confirm a row action and confirm every row link disables until the
+   request settles — a second click during the pending window must not fire a second request.
 16. Confirm all three backing specs push cleanly and independently: `sf-push-neo fiscal-calendar`
     and `sf-push-neo end-year-close` should each succeed with 0 errors; `open-close-period-control`
     needs no re-push (unchanged by this feature).
@@ -627,8 +671,8 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   `CloseYearModal.jsx`/`UndoCloseYearModal.jsx` wrappers and Vitest suite) — moved here from the
   retired merged spec, since `menuActions[].component` resolution has no cross-spec-name option.
 - `e2e/tests/flows/calendar.mocked.spec.js` — mocked E2E coverage across all three spec URLs:
-  Finance menu shows only Calendar, Accounting/Periods tabs render, Abrir/Cerrar Periodo hits the
-  mocked action endpoint, Cerrar Año stays disabled until all periods are closed. The earlier
+  Finance menu shows only Calendar, Accounting/Periods tabs render, a period's hover **Cerrar**
+  link hits the mocked action endpoint after confirming, Cerrar Año stays disabled until all periods are closed. The earlier
   "expanding a period reveals its documents" test and its `installDocumentsMock` helper were
   removed (ETP-4948 — per-document-type breakdown retired from the UI).
   ETP-5682 adds a "bulk open periods" flow (select-all, one POST per period in date order, the
@@ -670,3 +714,7 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   button in every window without its own override key — filed as a separate follow-up ticket.
   ETP-5407 added the `April - March`/`October - September` entries to the same block in both
   files.
+
+## Read-only role tier: Períodos tab — ETP-5830
+
+With a `read-only` tier, `PeriodsExpandablePanel` (reached through `SecondaryPanelTab`, which now forwards `readOnly`) renders no checkboxes and no row links. The Accounting tab has no writes. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.

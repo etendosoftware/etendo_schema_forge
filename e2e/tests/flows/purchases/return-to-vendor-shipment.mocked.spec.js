@@ -506,7 +506,7 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
 
     // ETP-5674: a return-to-vendor invoice is announced as a purchase factura
     // rectificativa, and the result popup shows no amount (it used to render the total).
-    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa de compra creada|Purchase rectificative invoice created/);
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
     await expect(resultModal).not.toContainText('250,00');
 
     // ETP-5381: the preselected suggestion must travel on the createReturnInvoice POST —
@@ -585,9 +585,10 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // ── Case 5: create return invoice from CO ─────────────────────────────
     await createInvoiceBtn.click();
 
-    // CreateInvoiceConfirmModal — modal title is soManageDocsTitle ("Generar factura",
-    // ETP-5410 follow-up: was "Gestionar documentos")
-    await expect(page.getByText('Generar factura')).toBeVisible({ timeout: 8_000 });
+    // CreateInvoiceConfirmModal — the return window passes its own title
+    // (returnToVendor.createCreditNoteTitle), not the generic soManageDocsTitle ("Generar factura").
+    // ETP-5688
+    await expect(page.getByText('Generar factura rectificativa', { exact: true })).toBeVisible({ timeout: 8_000 });
 
     // Blue summary card shows BP name (small text) and documentNo (large text)
     await expect(page.getByText('Proveedor Test S.L.').first()).toBeVisible({ timeout: 8_000 });
@@ -661,7 +662,7 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
 
     // ETP-5674: same contract from the CO (already confirmed) detail flow —
     // useConfirmWithCredit.handleCreateReturnInvoice types it as a purchase rectificativa.
-    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa de compra creada|Purchase rectificative invoice created/);
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
     await expect(resultModal).not.toContainText('250,00');
 
     // ETP-5381: the user's choice must reach the backend —

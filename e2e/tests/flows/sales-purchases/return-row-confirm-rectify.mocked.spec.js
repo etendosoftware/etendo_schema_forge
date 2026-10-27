@@ -186,7 +186,7 @@ const WINDOWS = {
     pickInvoiceDocNo: 'FC-RTV-OLD-002',
     // See the sales-side note: the real endpoint returns the COMPLETED status.
     createdInvoice: { id: 'inv-new-001', documentNo: 'FC-RTV-NEW-001', grandTotalAmount: -250, documentStatus: 'CO' },
-    resultTitle: /^(Factura rectificativa de compra creada|Purchase rectificative invoice created)$/,
+    resultTitle: /^(Factura rectificativa creada|Rectificative invoice created)$/,
   },
 };
 

@@ -359,6 +359,23 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
 
   return (
     <>
+      {isCompleted && canCreateReturn && (
+        <button
+          type="button"
+          onClick={() => setWizardOpen(true)}
+          // ETP-5601 — record-toolbar secondary button: 40px, 8px radius, text-sm/leading-6 in
+          // #121217, 20px icon in #828FA3.
+          className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg border border-border bg-card text-[#121217] text-sm leading-6 font-medium hover:bg-muted/30 transition-colors"
+        >
+          <svg className="w-5 h-5 text-[#828FA3]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5" />
+            <path d="M12 15l-3 3 3 3" />
+            <path d="M9 18h8" />
+          </svg>
+          {ui('createReturn')}
+        </button>
+      )}
+
       {isCompleted && !isFullyInvoiced && (
         <button
           type="button"
@@ -376,23 +393,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
             <line x1="16" y1="17" x2="8" y2="17" />
           </svg>
           {ui('createInvoiceBtn')}
-        </button>
-      )}
-
-      {isCompleted && canCreateReturn && (
-        <button
-          type="button"
-          onClick={() => setWizardOpen(true)}
-          // ETP-5601 — record-toolbar secondary button: 40px, 8px radius, text-sm/leading-6 in
-          // #121217, 20px icon in #828FA3.
-          className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg border border-border bg-card text-[#121217] text-sm leading-6 font-medium hover:bg-muted/30 transition-colors"
-        >
-          <svg className="w-5 h-5 text-[#828FA3]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5" />
-            <path d="M12 15l-3 3 3 3" />
-            <path d="M9 18h8" />
-          </svg>
-          {ui('createReturn')}
         </button>
       )}
 

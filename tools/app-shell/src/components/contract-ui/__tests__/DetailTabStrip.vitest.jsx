@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailTabStrip.jsx
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -77,5 +77,22 @@ describe('DetailTabStrip', () => {
     renderStrip({ tabs: makeTabs(6) });
     expect(screen.queryAllByRole('tab')).toHaveLength(0);
     expect(screen.getByRole('button', { name: /Label1/ })).toBe(screen.getByTestId('tab-t1'));
+  });
+
+  // CP-3 (ETP-5515 QA): the strip is clipped, so it must never be left scrolled.
+  it('keeps the width probe inside its own clip box so it cannot inflate the strip scroll width', () => {
+    const { container } = renderStrip({ tabs: makeTabs(6) });
+    const probeRow = container.querySelector('[aria-hidden="true"] > div');
+    expect(probeRow).not.toBeNull();
+    expect(probeRow.parentElement).toHaveClass('overflow-hidden');
+    expect(probeRow.parentElement).not.toBe(screen.getByTestId('detail-tab-strip'));
+  });
+
+  it('undoes a programmatic scroll of the strip (focus / scrollIntoView)', () => {
+    renderStrip({ tabs: makeTabs(6) });
+    const strip = screen.getByTestId('detail-tab-strip');
+    strip.scrollLeft = 168;
+    fireEvent.scroll(strip);
+    expect(strip.scrollLeft).toBe(0);
   });
 });

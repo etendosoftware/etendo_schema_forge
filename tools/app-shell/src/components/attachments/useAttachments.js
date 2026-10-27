@@ -5,6 +5,7 @@ import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-
 import { newAttachmentsSource, notifyAttachmentsChanged, useAttachmentsChanged } from './attachmentsBus';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 // Re-exported so this module's public surface (and its tests) are unchanged; the
 // implementation moved to `lib/` so a caller that wants only the formatter does not
 // have to import a React hook module — and the `@/i18n` barrel — to get it.
@@ -390,7 +391,7 @@ export function useAttachments({
       if (err.name === 'AbortError') return;
       if (generation === stateGenerationRef.current) {
         setError(err);
-        toast.error(err.message || ui('attachmentsListError'));
+        toast.error(translateBackendError(err.message, ui) || ui('attachmentsListError'));
       }
     } finally {
       // Unconditional: this call is done (success, error, or superseded) either
@@ -531,7 +532,7 @@ export function useAttachments({
       announceChange();
       toast.success(ui('attachmentsUploadSuccess'));
     } catch (err) {
-      toast.error(err.message || ui('attachmentsUploadError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsUploadError'));
     } finally {
       setUploadingFiles((prev) => {
         const next = new Map(prev);
@@ -556,7 +557,7 @@ export function useAttachments({
       const blob = await res.blob();
       triggerBlobDownload(blob, attachment.name || attachment.fileName || `attachment-${attachment.id}`);
     } catch (err) {
-      toast.error(err.message || ui('attachmentsDownloadError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsDownloadError'));
     }
   }, [apiFetch, token, ui]);
 
@@ -587,7 +588,7 @@ export function useAttachments({
       const blob = await res.blob();
       triggerBlobDownload(blob, `attachments-${recordId}.zip`);
     } catch (err) {
-      toast.error(err.message || ui('attachmentsDownloadError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsDownloadError'));
     }
   }, [apiFetch, tableName, recordId, token, ui]);
 
@@ -617,7 +618,7 @@ export function useAttachments({
       toast.success(ui('attachmentsDeleteSuccess'));
     } catch (err) {
       replaceItems(key, snapshot);
-      toast.error(err.message || ui('attachmentsDeleteError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsDeleteError'));
     }
   }, [apiFetch, token, ui, invalidateList, refreshCountIfUnloaded, announceChange, currentKey, replaceItems]);
 
@@ -651,7 +652,7 @@ export function useAttachments({
       toast.success(ui(successKey, { count: ids.length }));
     } catch (err) {
       replaceItems(key, snapshot);
-      toast.error(err.message || ui(errorKey));
+      toast.error(translateBackendError(err.message, ui) || ui(errorKey));
     }
   }, [apiFetch, token, ui, invalidateList, refreshCountIfUnloaded, announceChange, currentKey, replaceItems]);
 
@@ -690,7 +691,7 @@ export function useAttachments({
       toast.success(ui('attachmentsUpdateSuccess'));
     } catch (err) {
       replaceItems(key, snapshot);
-      toast.error(err.message || ui('attachmentsUpdateError'));
+      toast.error(translateBackendError(err.message, ui) || ui('attachmentsUpdateError'));
     }
   }, [apiFetch, token, ui, invalidateList, currentKey, replaceItems]);
 

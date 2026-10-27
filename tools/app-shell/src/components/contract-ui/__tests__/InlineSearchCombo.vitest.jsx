@@ -1,9 +1,11 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+// @covers tools/app-shell/src/components/contract-ui/InlineSearchCombo.jsx
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('lucide-react', () => ({
   ChevronDown: () => <span data-testid="chevron" />,
   X: () => <span data-testid="x-icon" />,
+  Check: () => <span data-testid="check-icon" />,
 }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url, params) => {
@@ -17,7 +19,7 @@ vi.mock('@/i18n', () => ({
 
 // createPortal renders into document.body — keep as-is (JSDOM supports it).
 
-import InlineSearchCombo from '../InlineSearchCombo.jsx';
+import InlineSearchCombo, { resolveSelectedIndex } from '../InlineSearchCombo.jsx';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -352,6 +354,110 @@ describe('InlineSearchCombo — ETP-5005 committed label as placeholder while op
     await waitFor(() => {
       expect(screen.getByTestId('inline-add-field-tax-chip')).toHaveTextContent('IVA 10%');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6d. ETP-5846 — reopening identifies the CURRENT selection
+// ---------------------------------------------------------------------------
+//
+// The user report: in a line's tax selector, pick a value, reopen the dropdown — the list shows
+// and marks nothing as selected, so the current value is invisible in a list of 50+ rows.
+//
+// Before this, the only per-row state was `activeIndex` (keyboard/hover focus), which open
+// resets to -1, and `aria-selected` was derived from exactly that: nothing could ever mean
+// "this is the value you already chose".
+
+describe('InlineSearchCombo — ETP-5846 current selection is identified on reopen', () => {
+  // The pure helper behind every "is this the current option" decision in the component.
+  it('resolveSelectedIndex finds the committed id by value, and returns -1 when it is absent or there is no value', () => {
+    expect(resolveSelectedIndex(OPTIONS, 'iva21')).toBe(1);
+    expect(resolveSelectedIndex(OPTIONS, 'nope')).toBe(-1);
+    expect(resolveSelectedIndex(OPTIONS, '')).toBe(-1);
+    expect(resolveSelectedIndex(OPTIONS, null)).toBe(-1);
+    expect(resolveSelectedIndex(OPTIONS, undefined)).toBe(-1);
+    // Ids arrive from JSON as strings but a parent may hold a number (an AD id).
+    expect(resolveSelectedIndex([{ id: 42, name: 'x' }], '42')).toBe(0);
+  });
+
+  it('marks the committed option with aria-selected and a check icon, independent of any keyboard highlight', async () => {
+    const user = userEvent.setup();
+    renderCombo({ value: 'iva21', options: OPTIONS, clearOnType: false });
+
+    await user.click(screen.getByTestId('inline-add-field-tax-chip'));
+    await screen.findByTestId('inline-add-field-tax');
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+
+    // The committed row is selected...
+    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveAttribute('aria-selected', 'true');
+    // ...and every other row is explicitly NOT.
+    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('aria-selected', 'false');
+    // The marker is visible, not ARIA-only: the check icon is rendered INSIDE the
+    // committed row (the lucide mock stands in for the real `Check`).
+    await waitFor(() => {
+      expect(within(screen.getByTestId('inline-add-option-tax-iva21')).getByTestId('check-icon')).toBeInTheDocument();
+    });
+    // ...and only in that row.
+    expect(within(screen.getByTestId('inline-add-option-tax-iva10')).queryByTestId('check-icon')).toBeNull();
+    // Nothing was highlighted just by opening — selection and focus are different states.
+    expect(screen.getByTestId('inline-add-options-tax').querySelector('[data-highlighted="true"]')).toBeNull();
+    // Reopening changed nothing: the committed label is still the input's placeholder
+    // (ETP-5005) and no write was issued (asserted in the next case).
+    expect(screen.getByTestId('inline-add-field-tax')).toHaveAttribute('placeholder', 'IVA 21%');
+  });
+
+  it('does not write anything while the current selection is being resolved for display', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderCombo({ value: 'iva21', options: OPTIONS, clearOnType: false });
+
+    await user.click(screen.getByTestId('inline-add-field-tax-chip'));
+    await screen.findByTestId('inline-add-field-tax');
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+
+    // Just looking at the current value is not a change.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('drops the marker as soon as the committed value is cleared', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderCombo({ value: 'iva21', options: OPTIONS, clearOnType: false });
+
+    await user.click(screen.getByTestId('inline-add-field-tax-chip'));
+    await screen.findByTestId('inline-add-field-tax');
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveAttribute('aria-selected', 'true');
+
+    // A different committed value takes over the marker; the old one is not left marked.
+    rerender(<InlineSearchCombo field={FIELD} value="exento" options={OPTIONS} onChange={() => {}}
+      placeholder="Search tax" clearOnType={false} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('aria-selected', 'true');
+    });
+    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveAttribute('aria-selected', 'false');
+
+    // Cleared entirely -> nothing is marked (no stale pin from a previous selection).
+    rerender(<InlineSearchCombo field={FIELD} value="" options={OPTIONS} onChange={() => {}}
+      placeholder="Search tax" clearOnType={false} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-add-options-tax').querySelector('[aria-selected="true"]')).toBeNull();
+    });
+  });
+
+  it('keeps marking the current selection after the user navigates with the keyboard (highlight moves, selection stays)', async () => {
+    const user = userEvent.setup();
+    renderCombo({ value: 'iva21', options: OPTIONS, clearOnType: false });
+
+    await user.click(screen.getByTestId('inline-add-field-tax-chip'));
+    const input = await screen.findByTestId('inline-add-field-tax');
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    // The highlight moved to row 1...
+    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('data-highlighted', 'true');
+    // ...while the committed value stays selected. Two independent states.
+    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveAttribute('aria-selected', 'true');
+    expect(input).toHaveAttribute('aria-activedescendant', 'tax-inline-option-iva10');
   });
 });
 

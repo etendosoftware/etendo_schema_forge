@@ -11,11 +11,14 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key, vars) => (vars ? `${key}:${Object.values(vars).join(',')}` : key),
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfirmResultModal } from '../ConfirmResultModal.jsx';
 import { inlineFontFamiliesUpToBody } from './fontInheritance.js';
+import enUS from '../../../locales/en_US.json';
+import esES from '../../../locales/es_ES.json';
+import esAR from '../../../locales/es_AR.json';
 
 const RECEIPT = { type: 'entrada', num: 'GR-001', documentStatus: 'DR', route: '/goods-receipt/1' };
 const INVOICE = { type: 'facturaCompra', num: 'PI-002', documentStatus: 'CO', route: '/purchase-invoice/2' };
@@ -55,6 +58,19 @@ describe('ConfirmResultModal', () => {
       expect(card(0)).toHaveTextContent(`confirmResultModal.status.${statusKey}`);
       expect(screen.getByTestId('action-confirm-result-view')).toHaveTextContent(viewKey);
     });
+
+    // Product decision: the purchase rectifying invoice reads exactly like the sales one
+    // ("Factura rectificativa"); only the type (routing, view button) stays purchase-specific.
+    it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])(
+      '%s: the purchase rectifying invoice uses the same wording as the sales one',
+      (_locale, dict) => {
+        for (const part of ['title', 'docType']) {
+          const sales = dict.genericLabels[`confirmResultModal.${part}.facturaRectificativa`];
+          expect(sales).toBeTruthy();
+          expect(dict.genericLabels[`confirmResultModal.${part}.facturaRectificativaCompra`]).toBe(sales);
+        }
+      },
+    );
 
     it('one document: singular banner and hint, the number, Cerrar plus a primary Ver button', () => {
       renderModal({ docs: [RECEIPT] });
@@ -212,6 +228,76 @@ describe('ConfirmResultModal', () => {
       } finally {
         opener.remove();
       }
+    });
+  });
+
+  // ETP-5688: the primary buttons share the shared default Button's classes (no inline
+  // background/colour, so the hover class is not shadowed). jsdom evaluates neither :hover nor
+  // Tailwind, so the contract is asserted on classes and inline style.
+  describe('primary button colour', () => {
+    const view = () => screen.getByTestId('action-confirm-result-view');
+    const close = () => screen.getByTestId('action-confirm-result-close');
+    const PRIMARY_CLASSES = ['bg-primary', 'text-primary-foreground', 'hover:bg-primary/90'];
+
+    it('one navigable document: Ver is primary, Cerrar keeps the white secondary style', () => {
+      renderModal({ docs: [INVOICE] });
+
+      for (const cls of PRIMARY_CLASSES) expect(view().className).toContain(cls);
+      expect(close().className).not.toContain('bg-primary');
+      expect(close().style.background).toBe('hsl(var(--card))');
+      expect(close().style.color).toBe('hsl(var(--foreground))');
+    });
+
+    it.each([
+      ['several documents', { docs: [RECEIPT, INVOICE] }],
+      ['no documents', { docs: [] }],
+      ['one document without a route', { docs: [{ type: 'pedidoVenta', num: '?' }] }],
+    ])('%s: the lone Cerrar is primary', (_, props) => {
+      renderModal(props);
+
+      expect(screen.queryByTestId('action-confirm-result-view')).toBeNull();
+      for (const cls of PRIMARY_CLASSES) expect(close().className).toContain(cls);
+    });
+
+    it.each([
+      ['Ver', { docs: [INVOICE] }, () => view()],
+      ['the lone Cerrar', { docs: [RECEIPT, INVOICE] }, () => close()],
+      ['the lone Cerrar without documents', { docs: [] }, () => close()],
+    ])('%s hovers via the class and sets no inline colour that would shadow it', (_, props, pick) => {
+      renderModal(props);
+      const btn = pick();
+
+      expect(btn.className).toContain('hover:bg-primary/90');
+      expect(btn.style.background).toBe('');
+      expect(btn.style.backgroundColor).toBe('');
+      expect(btn.style.color).toBe('');
+    });
+
+    it.each([
+      ['Ver', { docs: [INVOICE] }, () => view()],
+      ['the lone Cerrar', { docs: [] }, () => close()],
+    ])('%s: Button-style focus ring (no outline ring) and inline pill shape', (_, props, pick) => {
+      renderModal(props);
+      const btn = pick();
+
+      expect(btn.className).toContain('focus-visible:ring-ring');
+      expect(btn.className).toContain('focus-visible:ring-offset-2');
+      expect(btn.className).not.toContain('focus-visible:outline-2');
+      expect(btn.style.height).toBe('40px');
+      expect(btn.style.borderRadius).toBe('360px');
+    });
+
+    it('Ver and the lone Cerrar carry the same class string', () => {
+      renderModal({ docs: [INVOICE] });
+      const viewClass = view().className;
+      cleanup();
+      renderModal({ docs: [] });
+      expect(close().className).toBe(viewClass);
+    });
+
+    it('the secondary Cerrar has no hover recolour class', () => {
+      renderModal({ docs: [INVOICE] });
+      expect(close().className).not.toContain('hover:bg-primary');
     });
   });
 

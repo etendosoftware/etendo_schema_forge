@@ -1,10 +1,13 @@
 import 'reflect-metadata';
 import { readFileSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import { AppModule } from './app.module.ts';
 import { buildPerEntityOpenApiPaths } from './openapi/build-per-entity-paths.ts';
+import { registerOpenApiRoutes } from './openapi/register-openapi-routes.ts';
+import { configureJsonApiBodyParser } from './public-api/json-api-http.ts';
 
 const gettingStartedDescription = `
 ## Getting started
@@ -54,29 +57,50 @@ curl https://app.etendo.ai/api/v1/product \\
 
 Use the operation list below to discover the available resources. Every response is filtered to the fields documented for that resource.
 
+Not every Etendo window is published in this version. Windows of the finance, accounting, configuration and setup categories are left out until their public contract is curated; projects (the Service Project window, a finance window) are among them and are not available yet.
+
 ### 4. Understand a resource
 
 Each resource corresponds to a business window in Etendo. The resource page explains what the window is used for, which operations are available, and which fields are public. The URL may use an internal entity name, but the documentation uses the functional name that users know.
 
 ### 5. Create and update records
 
-Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo.
+Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one; it answers \`204 No Content\` without a body. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo.
 
-Updates use optimistic concurrency. Include the \`updated\` value returned by a previous read when the resource requires it; a stale value returns \`409 Conflict\`.
+Send bodies as JSON:API: \`{"data": {"type": "<resource>", "attributes": {...}, "relationships": {"<name>": {"data": {"type": "<related-resource>", "id": "<id>"}}}}}\`. \`attributes\` and \`relationships\` are each optional, so a body may carry only relationships. A foreign key is always a relationship, never an attribute; \`{"data": null}\` clears it. A \`type\` or \`id\` that does not match the URL is refused with \`409\`. The \`Content-Type\` is \`application/vnd.api+json\` (or \`application/json\`); responses are \`application/vnd.api+json\`. A single-record response carries one resource object in \`data\`; a collection carries an array.
+
+Updates use optimistic concurrency with standard HTTP preconditions. Reading, creating or updating a single record returns its version in the \`ETag\` header; every resource also carries it as \`meta.etag\`, including the items of a list. Send that value back in the \`If-Match\` header of \`PUT\` or \`PATCH\` (\`If-Match: *\` is not accepted): without it the request is refused with \`428 Precondition Required\`; if the record changed since it was read, it is refused with \`412 Precondition Failed\` and nothing is saved. Read the record again, reapply the change and retry. Successful writes return the new \`ETag\`.
 
 ### 6. Create lines for a document
 
 Document lines are addressed through their master resource: \`/api/v1/{master}/{masterId}/{line-resource}\`. For example, create a sales-invoice line with \`POST /api/v1/sales-invoice/{masterId}/lines\`. The gateway derives the master foreign key from the URL and sends it to Etendo as \`parentId\`; clients must not override that relationship in the request body. The same nested path supports \`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, and \`DELETE\` when the document contract exposes those operations.
 
+### 7. Page, sort and filter lists
+
+Collections accept \`page[number]\` (from 1) and \`page[size]\` (default 50, maximum 100), \`sort\` and \`filter[<field>]\`. Use public field names only; any unknown parameter, field or operator, or an invalid value, answers \`400\` with \`source.parameter\` naming the culprit.
+
+- Pagination: \`GET /api/v1/contacts?page[number]=2&page[size]=25\`. The response carries \`meta.page\` (\`number\`, \`size\`, \`total\`) and \`links\` (\`self\`, \`first\`, \`prev\`, \`next\`, \`last\`) that keep your other query parameters.
+- Sorting: \`sort=name,-search_key\` (a leading \`-\` is descending).
+- Filtering: \`filter[name]=Acme\` (equals) or \`filter[<field>][<operator>]=<value>\` with \`eq\`, \`ne\`, \`gt\`, \`gte\`, \`lt\`, \`lte\`, \`contains\` (text only) and \`in\` (comma-separated list). Dates are \`yyyy-MM-dd\`; booleans are \`true\`/\`false\`. Up to 20 filters per request.
+
 ### Responses and errors
 
-- \`2xx\`: request completed successfully.
-- \`400\`: invalid input, unsupported field, or invalid operation payload.
-- \`401\`: missing, malformed, or invalid credentials.
+Every error is a JSON:API document: \`{"errors": [{"status": "404", "code": "...", "title": "Not Found", "detail": "<Etendo's message>", "meta": {"hint": "..."}}]}\`. \`detail\` carries Etendo's own message; \`code\` and \`meta.hint\` appear when Etendo provides them.
+
+- \`200\` / \`201\`: the request completed; \`204\`: a record was deleted (no body).
+- \`400\`: invalid input, unsupported field, invalid query parameter (see \`source.parameter\`), or invalid operation payload. A create or update missing mandatory fields answers one error per field, code \`missing_required_field\`, with \`source.pointer\` (\`/data/attributes/<name>\` or \`/data/relationships/<name>\`).
+- \`401\`: missing, malformed, or invalid credentials. Error code: \`unauthorized\`.
+- \`402\`: the tenant is blocked.
 - \`403\`: the credential does not have the required scope or organization access.
-- \`404\`: the resource or record does not exist.
-- \`409\`: the record changed since it was read.
-- \`502\`: Etendo could not complete the upstream request.
+- \`404\`: the resource or record does not exist. Error codes: \`not_found\`, \`unknown_action\`.
+- \`406\` / \`415\`: the \`Accept\` or \`Content-Type\` header is not JSON:API (or JSON).
+- \`409\`: the \`type\`/\`id\` does not match the URL, or the record is in use.
+- \`412\`: the record changed since it was read (\`If-Match\` does not match its current version). Error codes: \`stale_record\` (the record changed), \`precondition_failed\` (\`If-Match\` is not a valid ETag).
+- \`422\`: Etendo refused the request (validation).
+- \`428\`: the update did not send \`If-Match\`. Error code: \`precondition_required\`.
+- \`429\`: the API key exceeded its rate limit; wait \`Retry-After\` seconds.
+- \`502\`: Etendo failed or could not complete the upstream request (any 5xx); no internal details are returned. When \`meta.hint\` is present the write may already be saved: read the record before re-sending.
+- \`503\`: Etendo is temporarily unavailable; retry later.
 
 ### Versioning
 
@@ -84,14 +108,22 @@ The current contract is \`v1\` and is available under \`/api/v1\`. Additive fiel
 
 ### Rate limits
 
-The local gateway currently applies a default limit of 100 requests per 60 seconds per client process. Production limits may be configured independently and are part of the deployment contract.
+The gateway limits each API key to 100 requests per 60 seconds by default (the deployment may configure other values). Every response to an authenticated request carries \`X-RateLimit-Limit\` (requests allowed per window), \`X-RateLimit-Remaining\` (requests left in the current window) and \`X-RateLimit-Reset\` (seconds until the window resets). When the limit is exceeded the API answers \`429 Too Many Requests\` with a JSON:API error and a \`Retry-After\` header (seconds to wait). Requests rejected for a missing or invalid API key are not counted against any key.
 
 This guide is English-only for the first release. The documentation model is prepared for localized versions in the future.
 `;
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // The body parser is registered by hand so JSON:API bodies (application/vnd.api+json)
+  // are read like application/json. Anything else is refused with 415 by the
+  // public controller's negotiation guard before the body is used.
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  configureJsonApiBodyParser(app as unknown as NestExpressApplication);
   app.setGlobalPrefix('api/v1');
+  // Versions are announced only through the explicit ETag of a single record
+  // (see PublicApiController). Express would otherwise add its own weak ETags
+  // to every other response, which clients could mistake for one.
+  app.getHttpAdapter().getInstance().set('etag', false);
 
   const config = new DocumentBuilder()
     .setTitle('Etendo Public API')
@@ -129,13 +161,7 @@ async function bootstrap() {
       ].filter(Boolean).join('\n\n'),
     };
   }).filter((tag) => usedTags.has(tag.name));
-  app.getHttpAdapter().get('/api/v1/openapi.json', (_req, res) => {
-    // Scalar must not keep an older generated contract after a local
-    // regeneration; the schema is deployment content, not a cacheable API
-    // response during development.
-    res.setHeader('Cache-Control', 'no-store');
-    return res.json(document);
-  });
+  registerOpenApiRoutes(app.getHttpAdapter(), document);
 
   const docsPage = (_req: unknown, res: { type: (contentType: string) => { send: (body: string) => void } }) => {
     const logoDataUri = `data:image/png;base64,${readFileSync(new URL('../public/logo-etendo.png', import.meta.url)).toString('base64')}`;
@@ -173,7 +199,6 @@ async function bootstrap() {
   // API key through PublicApiKeyGuard.
   app.getHttpAdapter().get('/api', docsPage);
   app.getHttpAdapter().get('/docs', docsPage);
-  app.getHttpAdapter().get('/api/openapi.json', (_req, res) => res.json(document));
   app.getHttpAdapter().get('/healthz', (_req, res) => res.json({ status: 'ok' }));
 
   await app.listen(process.env.GATEWAY_PORT ?? 4300);
