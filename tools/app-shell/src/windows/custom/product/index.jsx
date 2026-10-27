@@ -9,7 +9,7 @@ import ProductCustomTable from './ProductCustomTable';
 // window the header grid is squeezed to a few dozen px and the checkboxes overlap. Give the content column
 // a minimum width: the column then scrolls horizontally (as the Price tab already does) instead of
 // compressing the form. Same classes DetailView applies by default for a window with a sidebar (px-2 pb-2).
-const PRODUCT_CONTENT_CLASS = 'px-2 pb-2 [&>*]:min-w-[820px]';
+const PRODUCT_CONTENT_CLASS = 'px-2 pb-2 [&>*]:min-w-[680px]';
 
 export default function ProductApp({ windowName, recordId, ...props }) {
   return (

@@ -34,7 +34,7 @@ describe('product window wrapper', () => {
   it('defaults sidebarFormScrollPaddingX to the min-width class while keeping px-2 and pb-2', () => {
     render(<ProductApp windowName="product" />);
     const tokens = lastProps().sidebarFormScrollPaddingX.split(/\s+/);
-    expect(tokens).toContain('[&>*]:min-w-[820px]');
+    expect(tokens).toContain('[&>*]:min-w-[680px]');
     expect(tokens).toContain('px-2');
     expect(tokens).toContain('pb-2');
   });
