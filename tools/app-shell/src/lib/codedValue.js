@@ -86,8 +86,11 @@ export function codeLabels(acceptedByCode) {
  * because otherwise the user only ever learns that a value was rejected, never which ones
  * would have worked.
  */
-function invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate }) {
-  const accepted = describeAcceptedValues(acceptedByCode);
+function invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate, acceptedKey, acceptedFallback }) {
+  // `acceptedKey` lets a column name what it accepts in the user's language ("Sí, No" / "Yes, No")
+  // instead of the code list, whose first synonyms are written in one language only.
+  let accepted = describeAcceptedValues(acceptedByCode);
+  if (acceptedKey) accepted = typeof translate === 'function' ? translate(acceptedKey) : acceptedFallback ?? accepted;
   const field = typeof translate === 'function' ? translate(fieldLabelKey) : fieldLabelFallback;
   return typeof translate === 'function'
     ? translate('importErrorInvalidCodedValue', { value: raw, field, accepted })
@@ -103,11 +106,11 @@ function invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFal
  *
  * @throws {Error} when the cell holds something the column cannot store.
  */
-export function resolveCodedCellOrThrow(raw, acceptedByCode, { defaultCode, fieldLabelKey, fieldLabelFallback, translate }) {
+export function resolveCodedCellOrThrow(raw, acceptedByCode, { defaultCode, fieldLabelKey, fieldLabelFallback, translate, acceptedKey, acceptedFallback }) {
   const resolution = resolveCodedValue(raw, acceptedByCode);
   if (resolution.status === 'blank') return defaultCode;
   if (resolution.status === 'resolved') return resolution.code;
-  throw new Error(invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate }));
+  throw new Error(invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate, acceptedKey, acceptedFallback }));
 }
 
 /**
@@ -124,7 +127,7 @@ export function resolveCodedCellOrThrow(raw, acceptedByCode, { defaultCode, fiel
  *
  * @returns {{target: string, message: string}|null} `null` when the cell is fine (blank included).
  */
-export function codedCellError(raw, acceptedByCode, { target, fieldLabelKey, fieldLabelFallback, translate }) {
+export function codedCellError(raw, acceptedByCode, { target, fieldLabelKey, fieldLabelFallback, translate, acceptedKey, acceptedFallback }) {
   if (resolveCodedValue(raw, acceptedByCode).status !== 'invalid') return null;
-  return { target, message: invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate }) };
+  return { target, message: invalidCodedMessage(raw, acceptedByCode, { fieldLabelKey, fieldLabelFallback, translate, acceptedKey, acceptedFallback }) };
 }
