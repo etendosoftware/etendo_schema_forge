@@ -596,7 +596,15 @@ describe('OnboardingPage', () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
     // server. Declaring the session here is what puts these cases past the login view.
-    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
+    // ETP-5806 — this test asserts against the structured Street/Number/Building Name fields,
+    // which only render when the backend-only `structured-address-for-sepa` flag is on. The
+    // flag is surfaced as `capabilities.structuredAddressForSepa` on the session response
+    // (OnboardingFlow.jsx reads `data.capabilities` and forwards it to CompanyStep).
+    fetchSession.mockResolvedValue({
+      csrfToken: 'csrf-test',
+      account: { name: 'Ada Lovelace' },
+      capabilities: { structuredAddressForSepa: true },
+    });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
 

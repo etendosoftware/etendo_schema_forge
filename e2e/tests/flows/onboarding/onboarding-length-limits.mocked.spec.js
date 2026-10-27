@@ -220,7 +220,39 @@ test.describe('ETP-4665 — Step 2 length limits', () => {
 test.describe('ETP-4665 — Step 3 length limits', () => {
 
   async function reachCompanyStep(page) {
-    await registerAndReachProfile(page, Date.now());
+    // ETP-5806 — CompanyStep's structured Street/Number/Building Name fields render only when
+    // `capabilities.structuredAddressForSepa` is true. OnboardingFlow.jsx reads `capabilities`
+    // exactly once, from the mount-time `GET /sws/go/session` response, and never re-reads it
+    // after registration (`handleRegisterSuccess` only calls `GET /sws/go/me`, which carries no
+    // capabilities) — confirmed by tracing the core package. A fresh register journey (the
+    // declareNoSession 401 `registerAndReachProfile` path) can therefore never see the flag on.
+    // Reaching Company step with it on requires landing through an authenticated session
+    // bootstrap instead, which skips the register/login screens entirely and lands straight on
+    // the Profile step — Profile's own required field (fullName) is filled in manually since
+    // there is no registration call to prefill it from.
+    await page.route('**/sws/go/session', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          csrfToken: 'csrf-test',
+          account: { name: 'QA User', email: 'qa-len@example.com' },
+          capabilities: { structuredAddressForSepa: true },
+        }),
+      });
+    });
+    await page.route('**/sws/go/me', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ name: 'QA User', email: 'qa-len@example.com' }),
+      })
+    );
+
+    await page.goto('/onboarding');
+    await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
+    await page.locator('#fullName').fill('QA User');
     await page.getByRole('button', { name: /continuar|continue/i }).click();
     await expect(page.getByText(/datos para empezar a facturar/i)).toBeVisible({ timeout: 5_000 });
   }
