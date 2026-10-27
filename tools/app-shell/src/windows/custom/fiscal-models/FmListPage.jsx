@@ -29,9 +29,10 @@ import { getIncidentSeverity, getIncidentIndicator } from './incidentSeverity.js
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 import { listModels, isKnownModel, getModel, getModelOrDefault, modelTitleKey } from './modelRegistry.js';
 import { getListBehavior } from './modelRegistryList.js';
+import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { apiFetch } from '@/auth/api.js';
+import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 
 // Every registered model, in registry order (ETP-5716). A module-level constant of fixed length:
 // `useDeclarationsAutoCompute` below calls one `useFiscalAutoCompute` per (bucket × model) in a
@@ -194,9 +195,8 @@ function periodLabel(period, t) {
 // ETP-5716 — `POST /declarations` refused because the exercise already has its single ordinary
 // declaration (FiscalDeclCrudHandler#rejectDuplicateOrdinary): `{ error: { code, existingId } }`.
 // Returns the existing declaration's id, or `null` for any other failure.
-async function duplicateOrdinaryId(res) {
-  if (res?.status !== 409) return null;
-  const body = await res.json().catch(() => null);
+function duplicateOrdinaryId(status, body) {
+  if (status !== 409) return null;
   const error = body?.error ?? body?.response?.error ?? body;
   return error?.code === 'DUPLICATE_ORDINARY' ? (error.existingId ?? null) : null;
 }
@@ -811,18 +811,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [declIdsKey, token, apiBaseUrl]);
 
-  const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
-
-  useEffect(() => {
-    if (!apiBaseUrl) return;
-    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    apiFetch(`${base}/fiscal-models-catalog`, { baseUrl: '' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setActiveModels(data ?? {}))
-      .catch(() => {})
-      .finally(() => setCatalogLoaded(true));
-  }, [token, apiBaseUrl, apiFetch]);
+  // Shared catalog reader (ETP-5831): same endpoint, same `{}` = no model active rule as the
+  // Organization window's fiscal sections. `setActiveModels` stays local for the drawer's save.
+  const {
+    activeModels, setActiveModels, loaded: catalogLoaded,
+  } = useFiscalModelsCatalog(apiBaseUrl, token);
 
   // "Resultado" auto-compute, one bucket set per registered model — see
   // `useDeclarationsAutoCompute` above for the draft / other / submitted split.
@@ -883,10 +876,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(async r => {
-          if (r.ok) return r.json();
+                    if (r.ok) return r.json();
           // ETP-5716 — a single-ordinary model (390) refuses a 2nd ordinary of the exercise
           // with 409 DUPLICATE_ORDINARY + the existing declaration's id: say so and offer it.
-          const existingId = await duplicateOrdinaryId(r);
+          // The body is read once and shared: a Response body cannot be consumed twice.
+          const body = r.status === 409 ? await r.json().catch(() => null) : undefined;
+          const existingId = duplicateOrdinaryId(r.status, body);
           if (existingId) {
             const toastId = toast.error(
               <span>
@@ -903,12 +898,22 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             );
             return null;
           }
-          return Promise.reject(r.status);
+          // ETP-5782: carry the backend error code along with the status.
+          const e = await parseBackendError(body === undefined ? r : {
+            json: async () => {
+              if (body === null) {
+                throw new Error('empty body');
+              }
+              return body;
+            },
+          });
+          return Promise.reject({ status: r.status, code: e.code });
         })
         .then(created => {
           if (created) setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]);
         })
-        .catch((status) => {
+        // The rejection is an object `{status, code}`, not a bare status number.
+        .catch(({ status, code } = {}) => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a
           // closed modal with no created row and no explanation. Mirrors the exact toast pattern
@@ -923,7 +928,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           // unambiguously identifies "a draft already exists for this period". Every other
           // failure (network error, 500, any other status) keeps the original generic toast.
           // (The ETP-5716 409 DUPLICATE_ORDINARY never reaches here: the first `.then` handles it.)
-          if (status === 409) {
+          // ETP-5782: the hand-written guard answers a code-less 409; a classified 409 (duplicate_key
+          // included) from elsewhere in the chain must not claim "draft exists" unless it is one.
+          if (isDuplicateConflict(status, code)) {
             toast.error(t('fm.list.new_decl_draft_exists')
               ?? 'No se puede crear la declaración. Ya existe una declaración en borrador para el periodo seleccionado.');
             return;

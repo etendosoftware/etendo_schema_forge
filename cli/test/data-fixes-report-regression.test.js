@@ -196,6 +196,12 @@ const FIXES_WITH_REPORT = new Set([
   // @check keeps matching it on purpose) and any fact_acct row still on a foreign doctype or GL
   // category after @apply.
   '20261021T120000Z__R50-inout-foreign-return-doctype',
+  // Its @report names every predefined payment term NOT seeded because the anchor org already
+  // holds a term with that name but a different shape (lines, fixed due day, month offset).
+  '20261022T150000Z__R52-payment-terms-extended',
+  // R53 (ETP-5902) lists the (schema, rule account) groups not fully on target: columns left
+  // alone because customized, and rows skipped because the chart lacks the account.
+  '20261027T120000Z__R53-spanish-tax-accounts',
 ]);
 
 async function loadCatalogFiles() {

@@ -150,7 +150,6 @@
   },
   "entities": {
     "header": {
-      "javaQualifier": "purchaseInvoiceHeaderHandler",
       "namedFilters": [
         {
           "name": "completed",
@@ -258,7 +257,13 @@
           "reference": "PaymentTerm",
           "inputMode": "selector",
           "readOnlyLogic": null,
-          "seq": 60
+          "seq": 60,
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "paymentMethod": {
           "section": "principal",
@@ -1112,6 +1117,7 @@
       }
     },
     "exchangeRates": {
+      "publicApi": { "readOnly": true },
       "fields": {
         "active": {
           "visibility": "system"

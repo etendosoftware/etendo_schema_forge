@@ -1,8 +1,8 @@
 {
-  "version": "0.92.0",
+  "version": "0.93.0",
   "generatedAt": "2026-10-19T17:29:21.531Z",
-  "updatedAt": "2026-10-22T10:48:08.892Z",
-  "checksum": "f9b413d174e4b498",
+  "updatedAt": "2026-10-23T14:32:16.304Z",
+  "checksum": "be28d2144fb883b3",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -405,6 +405,12 @@
             "sourceRequired": true,
             "reference": "PaymentTerm",
             "inputMode": "selector",
+            "allowCreate": true,
+            "createLabelKey": "paymentTermCreate",
+            "createTitleKey": "paymentTermCreateTitle",
+            "createNamePlaceholderKey": "paymentTermDaysPlaceholder",
+            "createSpec": "payment-term",
+            "createEntity": "header",
             "section": "principal",
             "seq": 60,
             "validation": {
@@ -1837,7 +1843,6 @@
             }
           }
         ],
-        "javaQualifier": "salesInvoiceHeaderHandler",
         "draftMode": {
           "enabled": true,
           "processField": "documentAction",
@@ -4341,7 +4346,6 @@
             "required": false
           }
         ],
-        "javaQualifier": "salesInvoiceHeaderHandler",
         "namedFilters": [
           {
             "name": "completed",

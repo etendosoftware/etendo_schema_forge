@@ -27,6 +27,10 @@ const windowLoaders = {
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
   'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
   'business-partner-category': () => import('@generated/business-partner-category/generated/web/business-partner-category/index.jsx'),
+  // ETP-5806: AD Window 121 "Location" is inactive in the menu (no nav entry), but its NEO
+  // Headless API stays live via MCP — registered so F3 (pipeline validator) passes and so a
+  // direct navigation does not hit an unresolved lazy import.
+  'bp-location': () => import('@generated/bp-location/generated/web/bp-location/index.jsx'),
   'user': () => import('@/windows/custom/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
@@ -59,7 +63,7 @@ const windowLoaders = {
   'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
-  'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
+  'manual-journals': () => import('@generated/manual-journals/generated/web/manual-journals/index.jsx'),
   'end-year-close': () => import('@generated/end-year-close/generated/web/end-year-close/index.jsx'),
 };
 
@@ -284,6 +288,8 @@ export const apiOnlyWindows = new Set([
   'monitor-verifactu',
   'tbai-facturas-enviadas',
   'conversion-rate-downloader-log',
+  // Reason 1: calendar's PeriodsExpandablePanel calls its periodControl.openClose action.
+  'open-close-period-control',
 ]);
 
 /**
@@ -358,7 +364,7 @@ export function buildWindowMap() {
       label: item.label,
       contract: null,
       loader: () => import('./RedirectWindow.jsx').then(
-        (mod) => ({ default: mod.makeRedirectWindow(item.redirect) }),
+        (mod) => ({ default: mod.makeRedirectWindow(item.redirect, item.redirectKeepPath) }),
       ),
     };
   };

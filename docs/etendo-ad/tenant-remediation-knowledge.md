@@ -3700,6 +3700,90 @@ CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-lin
   row the old version already repaired cannot undo it. `--dry-run` never executes `@apply`/`@report`
   (only `@check`): validate an edited `@apply` in a `BEGIN … ROLLBACK` session instead.
 
+## ETP-5806 — GOClient sampledata C_Location rows missing City (2026-10-21)
+
+- **Symptom:** ETP-5806 made City mandatory in the structured address editor
+  (`LocationEditorModal`). Testing the Warehouse address popup against the local GOClient tenant
+  showed its default warehouse's `C_Location` had `Address1`/`Country` populated but `City` empty —
+  a legacy row predating the new validation.
+- **Root cause confirmed in DB:** `referencedata/sampledata/GOClient/C_LOCATION.xml` ships several
+  rows with `ADDRESS1` set but no `CITY` at all: `5134850609604EC7889401AAE84EDE40` ("Victor Blanco
+  23", GOClient's own BP-location "home address") and `AF4C5646806C4F80A9397FA836296B30` ("Calle
+  Organización 76", `AD_ORGINFO.C_LOCATION_ID` for `GOOrg`, `AD_ORG_ID=61849243BE89460EB70866880A545D50`).
+  Both fixed in the XML by adding `<CITY>Madrid</CITY>` (no postal/region data exists anywhere in
+  this dataset to infer a more specific city from — Madrid matches the convention already used by
+  sibling rows in the same file, e.g. `1B79B1A05F384ABD85D2A31C5C1E01B7`).
+- **Two sampledata rows look like a City gap but are NOT, by the file's own content:**
+  `A72B4E2D0E5A4369B45219D3D83E4FDC` ("Almacen Principal" warehouse) and
+  `98F19CA220F648B7A9D47FEB41D90DA8` ("Almacén Secundario" warehouse) have **no `ADDRESS1` at all**
+  in the shipped XML (just `C_COUNTRY_ID`) — they are intentionally-blank placeholders meant to be
+  overwritten at onboarding time by `OnboardingWarehouseAddressService.alignWarehouseAddress()`,
+  which unconditionally copies the org's fiscal `Location` (incl. City) onto the default
+  warehouse's `Location` (see `src/com/etendoerp/go/onboarding/OnboardingWarehouseAddressService.java`).
+  **In the live local DB these two GOClient rows DO have `ADDRESS1` set** ("Avenida Siempreviva 44"
+  / "Pasaje Saenz 43") with no City — meaning the DB diverged from the checked-in XML (edited
+  directly in DB at some point, never re-exported). Fixed those two DB rows' `City='Madrid'` too
+  (matching the GOOrg fiscal address assigned above) but did **not** touch the XML for these two —
+  by the file's own content there is no "other address data loaded" to be consistent with, so
+  adding a City there would misrepresent the shipped template as having a real address when it
+  doesn't. If `export.database` is ever run from a GOClient-based env, re-check whether these two
+  rows' extra fields should be captured too (separate concern from this ETP-5806 City fix).
+- **IMPORTANT — do not confuse GOClient sampledata gaps with E2E test-run pollution.** The same
+  query pattern (City empty, Address1 non-empty) matches ~75 MORE rows across ~24 different
+  `ad_client_id` values named "E2E User 1 …" / "E2E User 2 …", with Address1 literally
+  `"Avenida Siempreviva 44"` (warehouses) or the BP-location's own name echoed as its address text
+  (`"E2E Vendor Fixture Address"`, `"E2E Address 178939…"`). These are **not sampledata** — no
+  occurrence of "Siempreviva" or the fixture-name strings exists anywhere in either repo's source,
+  so they were typed by hand or by Playwright UI automation through the real onboarding wizard
+  before City was mandatory, and accumulated in this local dev DB across many prior E2E runs. They
+  share the same visual symptom but have a different root (test-data accumulation, not a shipped
+  template gap) — left untouched per this task's scope (ETP-5806 asked only for the real
+  sampledata-origin GOClient records + the preventive file fix). If these need cleaning up it's a
+  separate local-env hygiene pass, not a tenant remediation data-fix (they are not real tenants).
+- **Useful discovery:** `OnboardingWarehouseAddressService` (already shipped, not part of this fix)
+  is itself the two-fronts answer for the warehouse-vs-fiscal-address gap going forward — now that
+  City is mandatory in the fiscal-address wizard step (ETP-5806), every NEW tenant's fiscal address
+  will carry a City, and this service propagates it to the default warehouse unconditionally. No
+  additional preventive code was needed for this particular gap.
+- **2026-10-22 — "live sample-data generator" hypothesis was wrong; it's the SAME static
+  `C_LOCATION.xml` as the City-missing fix above, just a different missing column.** User reported
+  that onboarding's "Incluir datos de prueba" checkbox creates contacts/warehouses with
+  unstructured addresses (no Street/Number/Building, "dirección sin desglosar" banner), and
+  hypothesized a separate live/code-driven address generator (reasoning: strings like "Pasaje Saenz
+  43", "Victor Blanco 23" looked chosen from a code list, not read from a static XML). They are in
+  fact literal `ADDRESS1` values inside
+  `modules/com.etendoerp.go/referencedata/sampledata/GOClient/C_LOCATION.xml` — there is no other
+  sample-address generator. Verified via `OnboardingSampleDataService`/`OnboardingSampleDataDefinition`
+  (`com.etendoerp.go/src/com/etendoerp/go/onboarding/`): the sample-data pass is a **second read of
+  the same `referencedata/sampledata/GOClient/*.xml` files** the base onboarding dataset already
+  reads (via `OnboardingDatasetNormalizer` with `OnboardingDatasetProfile.SAMPLE_DATA`), not a
+  separate dataset or runtime generator. `C_LOCATION` itself isn't even in
+  `OnboardingSampleDataDefinition.TRANSACTIONAL_TABLES`/`DEMO_MASTER_DATA_TABLES` — it's imported by
+  the BASE pass; only `C_BPARTNER_LOCATION` (and `M_WAREHOUSE`, from `AD_ORG_WAREHOUSE`/`M_WAREHOUSE`
+  demo rows) reference those location rows by FK.
+- **Confirmed: documents reference `C_Location`/`C_BPartner_Location` by FK, never duplicate the
+  address.** `C_ORDER`, `C_INVOICE`, `M_INOUT` in the GOClient sampledata only carry
+  `C_BPARTNER_LOCATION_ID` (FK) — no inline address columns. So fixing the 8 `C_LOCATION` rows in
+  `C_LOCATION.xml` is sufficient; no per-document duplication to chase.
+- **The fix:** added the 3 structured SEPA columns (`EM_OBSEPA_STRTNM`/`EM_OBSEPA_BLDGNB`/
+  `EM_OBSEPA_BLDGNM` — tags are ALWAYS fully uppercase in this XML regardless of the real DB column
+  casing, e.g. actual `AD_COLUMN.COLUMNNAME` is `EM_OBSEPA_StrtNm`; verified by querying `ad_column`)
+  to the 7 locations that had free-text `ADDRESS1` with no breakdown, parsing street/number (and
+  building name/floor for the one row that had one, "C/ EUSTASIO AMILIBIA 10, 7º 4ª" →
+  street="C/ Eustasio Amilibia", number="10", buildingName="7º 4ª"). Also filled `CITY=Madrid` for
+  `98F19CA220F648B7A9D47FEB41D90DA8` ("Pasaje Saenz 43", the Almacén Secundario location), which the
+  prior City-only fix (`e283418ad`) had missed. The 8th location (`A72B4E2D...`, blank, used by
+  Almacén Principal) was deliberately left untouched — it is always overwritten by
+  `OnboardingWarehouseAddressService.alignDefaultWarehouseAddress` with the org's own fiscal address
+  (which already carries the structured fields correctly, fixed in `bc54149b5`), so seeding it here
+  would be dead data. Commit: `6456ae64d` in `com.etendoerp.go`.
+- **DB repair scope for "the records the user just created this session":** with no explicit marker
+  for "this session's tenant" in the ledger, the reliable signal was `SELECT ad_client_id, created
+  FROM ad_client WHERE created > now() - interval '12 hours'` — exactly one hit in this shared local
+  dev DB (51 total tenants), `CF5730AB6DD0409CB272811E65AAD1F1` ("Pruebas Dirección SEPA", created
+  2026-10-22). Repaired only that client's 7 affected `C_LOCATION` rows, by exact `c_location_id`,
+  with `SET col = COALESCE(col, :new_value)` so a non-null existing value is never overwritten.
+
 ## ETP-5801 — R50: return shipments with another tenant's RTV doctype (2026-10-21)
 
 Fix: `20261021T120000Z__R50-inout-foreign-return-doctype.sql` (corrective-only; preventive is
@@ -3742,3 +3826,40 @@ ETP-5711 in com.etendoerp.go, CUT not bumped). Sibling of `R50-gl-journal-foreig
   and 1000000000 written; an own-doctype shipment 1000099 gives 1000100; a sequence preset to
   2000000000 is not rewound; the restricted `@report` is empty on the repaired GOClient rows, still
   fires for an RTV shipment with a foreign fact and stays silent for a non-RTV shipment.
+
+## ETP-5826 — Extended payment terms (G5 / R52, 2026-10-22)
+
+- **2026-10-22 — Onboarding-imported rows get NO `_TRL` rows from their table's translation
+  trigger.** `DataImportService.importDataFromXML` (core, used by `OnboardingDatasetImportService`)
+  calls `TriggerHandler.getInstance().disable()`, and `c_paymentterm_trg` (like every core `_TRL`
+  trigger) starts with `IF AD_isTriggerEnabled()='N' THEN RETURN`. So "translations come from the
+  trigger" is true for a data-fix or a Classic/NEO insert, NOT for the dataset import. Live: every
+  GO tenant's four seeded terms have exactly one `es_ES` `C_PaymentTerm_Trl` row, `createdby='0'`,
+  created hours/days after the term itself — a later core back-fill, not the import. A data-fix
+  insert, by contrast, gets one row per active system language at once (`en_US` + `es_ES` locally,
+  `IsTranslated='N'`, copy of the base name). **Apply:** don't promise `_TRL` rows at provisioning
+  time for a dataset-only seed; when the base `NAME` is already in the user language (Spanish GO
+  seeds) the gap is invisible, otherwise allowlist the `_TRL` table with real translations (N4).
+- **2026-10-22 — "Dataset-only adding needs no corrective" is about NEW tenants only.** The map's
+  ETP-4341 note read as if adding master data to the GOClient XML never needs a `.sql`. The dataset
+  is read only at provisioning, so existing tenants never see an added row. When the product wants
+  existing tenants to have it (ETP-5826: yes), ship a corrective; R52 is the precedent. Map §1 note
+  now says so.
+- **2026-10-22 — Duplicate rule for "simple" payment terms, shared with `PaymentTermHandler`:** a
+  term counts as "the N-day term" when it has no `C_PaymentTermLine`, `IsDueFixed='N'` and
+  `FixMonthOffset` 0/NULL — in ANY org of the client, active or not. R52's guard and the handler's
+  409 must keep this predicate in lockstep, or the fix seeds a term a user could never have created
+  (or vice versa). Separately, `c_paymentterm_name` is UNIQUE `(ad_client_id, ad_org_id, name)`,
+  so a same-named term of a different shape in the anchor org must be skipped (and reported), not
+  inserted.
+- **2026-10-22 — Anchor org for per-tenant master-data seeds = the org of an existing seeded row.**
+  GO tenants keep their seeded terms in the operative org (GOOrg for GOClient; the tenant org for
+  every other; a "PEND-…" pool-claimed client keeps its placeholder client name while its own org
+  already carries the company name, e.g. "Termos"). Using the org of the seeded `Inmediato`
+  (`Value='I'`, `NetDays=0`) instead of `:org_id` keeps new rows exactly where the existing ones
+  are visible, with no assumption about which org is "the" operative one.
+- **2026-10-22 — Label bookkeeping.** `R51` is already taken on an unmerged branch
+  (`20261021T120000Z__R51-etgo-survey-config-seed.sql`, found only via
+  `git ls-tree` over every `origin/*` ref), so this fix is `R52`. Gap series `G` (payment config)
+  continues with `G5`; the `G` gaps live only in `onboarding-and-datafixes-map.md` §4, not in
+  `onboarding-gaps.md`.

@@ -44,11 +44,7 @@ vi.mock('@/components/ui/tag', () => ({
   Tag: ({ label, variant }) => <span data-testid="tag" data-variant={variant}>{label}</span>,
 }));
 
-// PeriodsExpandablePanel renders the real (unmocked) ProcessParamDialog to collect the
-// required openClose choice — but Radix Select cannot run in JSDOM, so its underlying UI
-// primitives are mocked with plain HTML equivalents, exactly like ProcessParamDialog.vitest.jsx
-// does. process-param-* testids/values (not translated label text) drive the interaction below,
-// so these tests don't depend on a LocaleProvider being present.
+// The confirm/result dialogs render through plain HTML stand-ins (Radix portals are noise in JSDOM).
 vi.mock('@/components/ui/dialog.jsx', () => ({
   Dialog: ({ children, open }) => (open ? <div data-testid="dialog">{children}</div> : null),
   DialogContent: ({ children }) => <div>{children}</div>,
@@ -61,27 +57,8 @@ vi.mock('@/components/ui/button', () => ({
     <button onClick={onClick} disabled={disabled} {...props}>{children}</button>
   ),
 }));
-vi.mock('@/components/ui/label', () => ({
-  Label: ({ children, ...props }) => <label {...props}>{children}</label>,
-}));
-vi.mock('@/components/ui/select', () => ({
-  Select: ({ children, value, onValueChange }) => (
-    <select value={value ?? ''} onChange={(e) => onValueChange?.(e.target.value)} data-testid="select-control">
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children, ...props }) => <span {...props}>{children}</span>,
-  SelectValue: () => null,
-  SelectContent: ({ children }) => <>{children}</>,
-  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
-}));
-
 import { toast } from 'sonner';
 import PeriodsExpandablePanel from '../PeriodsExpandablePanel.jsx';
-
-function selectOpenCloseOption(value) {
-  fireEvent.change(screen.getByTestId('select-control'), { target: { value } });
-}
 
 const PERIOD = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'O', 'status$_identifier': 'All Opened', periodNo: 1 };
 
@@ -142,23 +119,28 @@ describe('PeriodsExpandablePanel', () => {
 
     const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
     expect(badge).toHaveAttribute('data-variant', 'green'); // status "O" -> green per enumVariants
-    expect(badge).toHaveTextContent('All Opened');
+    expect(badge).toHaveTextContent('Open');
     expect(screen.queryByText('O')).not.toBeInTheDocument();
   });
 
-  it('falls back to the raw code when the $_identifier field is absent (e.g. an older mock/handler)', async () => {
-    global.fetch = vi.fn((url) => {
-      if (url.includes('/periodControl')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [{ id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'M' }] } }) });
-      }
-      return Promise.reject(new Error('unexpected url ' + url));
-    });
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p13" />);
+  // ETP-5592 renamed the labels and kept the colours (same as decisions.json enumVariants).
+  it.each([
+    ['N', 'neutral', 'Never opened'],
+    ['O', 'green', 'Open'],
+    ['M', 'orange', 'Mixed'],
+    ['C', 'red', 'Closed'],
+    ['P', 'red', 'Permanently closed'],
+  ])('renders status %s as a %s tag labelled "%s"', async (status, variant, label) => {
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [{ ...PERIOD, status }] } }),
+    }));
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('January 27'));
 
     const badge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
-    expect(badge).toHaveAttribute('data-variant', 'orange'); // status "M" -> orange per enumVariants
-    expect(badge).toHaveTextContent('M');
+    expect(badge).toHaveAttribute('data-variant', variant);
+    expect(badge.textContent).toBe(label);
   });
 
   it('requests periods chronologically while retaining the classic criteria filter for the selected year', async () => {
@@ -191,98 +173,12 @@ describe('PeriodsExpandablePanel', () => {
     expect(createAdjustment.key).toBe('CREATEADJUSTMENT');
   });
 
-  it('hides Abrir/Cerrar Periodo and disables selection for a read-only role (ETP-5830)', async () => {
+  it('offers no row actions and no selection to a read-only role (ETP-5830)', async () => {
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" readOnly data-testid="p2" />);
     await waitFor(() => screen.getByText('January 27'));
 
-    expect(screen.queryByTestId('period-openclose-p1')).not.toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Select January 27' })).toBeDisabled();
-    expect(screen.getByTestId('period-select-all').querySelector('input')).toBeDisabled();
-  });
-
-  it('opens the ProcessParamDialog (not an immediate POST) when Abrir/Cerrar Periodo is clicked', async () => {
-    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p2" />);
-    await waitFor(() => screen.getByText('January 27'));
-    global.fetch = postSpy;
-
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-
-    expect(screen.getByTestId('dialog')).toBeInTheDocument();
-    expect(postSpy).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['O', 'Open'],
-    ['C', 'Closed'],
-    ['P', 'Permanently closed'],
-  ])('submits {"openClose": "%s"} for the period action when "%s" is selected and confirmed', async (value, _label) => {
-    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p2" />);
-    await waitFor(() => screen.getByText('January 27'));
-    global.fetch = postSpy;
-
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    selectOpenCloseOption(value);
-    fireEvent.click(screen.getByTestId('process-param-confirm'));
-
-    await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
-      'https://api.test/periodControl/p1/action/openClose',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ fieldValues: { openClose: value } }),
-      })
-    ));
-    // The dialog must close after a successful confirm, not linger on screen.
-    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
-  });
-
-  it('re-fetches the periods list (not a full page reload) after a period action succeeds, updating the status badge', async () => {
-    const UPDATED_PERIOD = { ...PERIOD, status: 'C', 'status$_identifier': 'All Closed' };
-    let periodControlCallCount = 0;
-    global.fetch = vi.fn((url, opts) => {
-      if (opts?.method === 'POST') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-      }
-      if (url.includes('/periodControl')) {
-        periodControlCallCount += 1;
-        const data = periodControlCallCount === 1 ? [PERIOD] : [UPDATED_PERIOD];
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data } }) });
-      }
-      return Promise.reject(new Error('unexpected url ' + url));
-    });
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p14" />);
-    await waitFor(() => screen.getByText('January 27'));
-    expect(periodControlCallCount).toBe(1);
-
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    selectOpenCloseOption('C');
-    fireEvent.click(screen.getByTestId('process-param-confirm'));
-
-    // The periods list is fetched again — never a full page reload (no window.location.reload,
-    // no full-panel loading flash) — and the badge reflects whatever the refetch returns.
-    await waitFor(() => expect(periodControlCallCount).toBe(2));
-    await waitFor(() => {
-      const badge = screen.getByTestId(`period-status-${PERIOD.id}`).querySelector('[data-testid="tag"]');
-      expect(badge).toHaveTextContent('All Closed');
-       expect(badge).toHaveAttribute('data-variant', 'red'); // status "C" -> red per enumVariants
-    });
-    // The panel itself must never have been torn down for a full reload — it stayed mounted
-    // and showed the (stale, then updated) row the whole time, no top-level loading state again.
-    expect(screen.queryByTestId('periods-expandable-panel-loading')).not.toBeInTheDocument();
-  });
-
-  it('cancelling the dialog does not submit any request', async () => {
-    const postSpy = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p3b" />);
-    await waitFor(() => screen.getByText('January 27'));
-    global.fetch = postSpy;
-
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    fireEvent.click(screen.getByTestId('process-param-cancel'));
-
-    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
-    expect(postSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('period-row-actions-p1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('periods-expandable-panel').querySelector('input[type="checkbox"]')).toBeNull();
   });
 
   it('shows a loading indicator while periodControl is still pending', () => {
@@ -298,81 +194,194 @@ describe('PeriodsExpandablePanel', () => {
     expect(screen.queryByTestId('periods-expandable-panel')).not.toBeInTheDocument();
   });
 
-  it('shows a toast and re-enables the button when Abrir/Cerrar Periodo fails', async () => {
-    global.fetch = vi.fn((url, opts) => {
-      if (opts?.method === 'POST') return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
-      return Promise.reject(new Error('unexpected'));
-    });
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p8" />);
-    await waitFor(() => screen.getByText('January 27'));
+  it('shows an empty state that points to "Create Periods" when the year has no periods (ETP-5592)', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) }));
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
 
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    selectOpenCloseOption('C');
-    fireEvent.click(screen.getByTestId('process-param-confirm'));
-
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).not.toBeDisabled());
+    const empty = await screen.findByTestId('periods-empty');
+    expect(empty).toHaveTextContent(enUS.genericLabels.periodsEmptyTitle);
+    expect(empty).toHaveTextContent(enUS.genericLabels.periodsEmptyDescription);
   });
 
-  it('disables Abrir/Cerrar Periodo while the request is in flight, guarding against double-submit', async () => {
-    global.fetch.mockImplementationOnce((url) => {
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
-      return Promise.reject(new Error('unexpected'));
+  it('reports the number of periods as the tab count (ETP-5592)', async () => {
+    const onCount = vi.fn();
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [PERIOD, { ...PERIOD, id: 'p2', startingDate: '2027-02-01' }] } }),
+    }));
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" onCount={onCount} />);
+
+    await waitFor(() => expect(onCount).toHaveBeenCalledWith(2));
+  });
+});
+
+describe('PeriodsExpandablePanel — row actions (ETP-5592)', () => {
+  let posts;
+  let listCalls;
+  let rows;
+  let failPost;
+  let holdPost;
+
+  beforeEach(() => {
+    currentTestLocale = 'en_US';
+    toast.success.mockClear();
+    posts = [];
+    listCalls = 0;
+    rows = [PERIOD];
+    failPost = false;
+    holdPost = null;
+    global.fetch = vi.fn((url, options = {}) => {
+      if (options.method === 'POST') {
+        posts.push({ url, body: JSON.parse(options.body), headers: options.headers });
+        if (holdPost) return holdPost;
+        if (failPost) {
+          return Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ status: 'error', message: 'Boom' }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'success' }) });
+      }
+      if (url.includes('/periodControl')) {
+        listCalls += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: rows } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
     });
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p9" />);
-    await waitFor(() => screen.getByText('January 27'));
-
-    // Only the POST is held pending by the test — the post-success periodControl refetch
-    // (a GET) must resolve immediately, or the pending flag (cleared only after that refetch
-    // settles) would hang forever and this test would never see the button re-enable.
-    let resolvePost;
-    const postSpy = vi.fn((url, opts) => {
-      if (opts?.method === 'POST') return new Promise((resolve) => { resolvePost = resolve; });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
-    });
-    global.fetch = postSpy;
-
-    const button = screen.getByTestId('period-openclose-p1');
-    fireEvent.click(button);
-    selectOpenCloseOption('C');
-    fireEvent.click(screen.getByTestId('process-param-confirm'));
-    await waitFor(() => expect(button).toBeDisabled());
-
-    // The dialog already closed on confirm — a disabled native <button> does not dispatch
-    // click handlers at all (jsdom mirrors real browser behavior), so these are no-ops.
-    fireEvent.click(button);
-    fireEvent.click(button);
-    expect(postSpy).toHaveBeenCalledTimes(1);
-
-    resolvePost({ ok: true, json: () => Promise.resolve({}) });
-    await waitFor(() => expect(button).not.toBeDisabled());
   });
 
-  it('confirming again while the previous request for the same row is still pending does not open a second dialog', async () => {
-    // Same as above: only the POST is held pending — the post-success refetch (GET) resolves
-    // immediately so it doesn't block the pending flag from ever clearing.
-    let resolvePost;
-    const postSpy = vi.fn((url, opts) => {
-      if (opts?.method === 'POST') return new Promise((resolve) => { resolvePost = resolve; });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD] } }) });
-    });
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="p9b" />);
+  async function renderPanel() {
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('January 27'));
-    global.fetch = postSpy;
+  }
 
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    selectOpenCloseOption('P');
-    fireEvent.click(screen.getByTestId('process-param-confirm'));
-    await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).toBeDisabled());
+  it.each([
+    ['N', ['open', 'close', 'close-permanent']],
+    ['O', ['close', 'close-permanent']],
+    ['M', ['open', 'close', 'close-permanent']],
+    ['C', ['open', 'close-permanent']],
+    ['P', []],
+  ])('offers only the transitions that change a %s period', async (status, links) => {
+    rows = [{ ...PERIOD, status }];
+    await renderPanel();
 
-    // The trigger button is disabled while pending, so re-clicking it must not reopen the dialog.
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
-    expect(postSpy).toHaveBeenCalledTimes(1);
+    const offered = ['open', 'close', 'close-permanent']
+      .filter((link) => screen.queryByTestId(`period-${link}-p1`));
+    expect(offered).toEqual(links);
+  });
 
-    resolvePost({ ok: true, json: () => Promise.resolve({}) });
-    await waitFor(() => expect(screen.getByTestId('period-openclose-p1')).not.toBeDisabled());
+  it('asks for confirmation first, naming the period, and posts nothing on cancel', async () => {
+    await renderPanel();
+
+    fireEvent.click(screen.getByTestId('period-close-p1'));
+
+    expect(screen.getByText(enUS.genericLabels.periodsBulkConfirmCloseTitleOne)).toBeInTheDocument();
+    expect(screen.getByTestId('periods-bulk-confirm-names')).toHaveTextContent('January 27');
+    // The "one at a time, in date order" note only makes sense for several periods.
+    expect(screen.queryByTestId('periods-bulk-confirm-body')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('periods-bulk-confirm-cancel'));
+    expect(screen.queryByTestId('periods-bulk-confirm-names')).not.toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
+
+  it.each([
+    ['N', 'open', 'O', 'periodsBulkOpenedToastOne'],
+    ['O', 'close', 'C', 'periodsBulkClosedToastOne'],
+    ['O', 'close-permanent', 'P', 'periodsBulkPermanentlyClosedToastOne'],
+  ])('a %s period\'s "%s" link posts {"openClose": "%s"} once confirmed', async (status, link, action, toastKey) => {
+    rows = [{ ...PERIOD, status }];
+    await renderPanel();
+
+    fireEvent.click(screen.getByTestId(`period-${link}-p1`));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(enUS.genericLabels[toastKey]));
+    expect(posts).toHaveLength(1);
+    expect(posts[0].url).toBe('https://api.test/periodControl/p1/action/openClose');
+    expect(posts[0].body).toEqual({ fieldValues: { openClose: action } });
+    // The panel itself sets no header; useApiFetch owns them.
+    expect(posts[0].headers).toBeUndefined();
+  });
+
+  it('warns that a permanent close cannot be undone, with a destructive confirm button', async () => {
+    await renderPanel();
+
+    fireEvent.click(screen.getByTestId('period-close-permanent-p1'));
+
+    expect(screen.getByTestId('periods-bulk-confirm-body')).toHaveTextContent(
+      enUS.genericLabels.periodsBulkConfirmPermanentBody,
+    );
+    expect(screen.getByTestId('periods-bulk-confirm-ok')).toHaveAttribute('variant', 'destructive');
+  });
+
+  it('re-fetches the periods list (not a full page reload) after a row action, updating the status tag', async () => {
+    await renderPanel();
+    expect(listCalls).toBe(1);
+    rows = [{ ...PERIOD, status: 'C' }];
+
+    fireEvent.click(screen.getByTestId('period-close-p1'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(listCalls).toBe(2));
+    await waitFor(() => {
+      const badge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
+      expect(badge).toHaveTextContent('Closed');
+      expect(badge).toHaveAttribute('data-variant', 'red');
+    });
+    // The panel stayed mounted: no top-level loading state again.
+    expect(screen.queryByTestId('periods-expandable-panel-loading')).not.toBeInTheDocument();
+  });
+
+  it('lists the translated backend error when a row action fails', async () => {
+    failPost = true;
+    await renderPanel();
+
+    fireEvent.click(screen.getByTestId('period-close-p1'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(screen.getByTestId('periods-bulk-result-p1')).toHaveAttribute('data-outcome', 'failed'));
+    expect(screen.getByTestId('periods-bulk-result-p1')).toHaveTextContent('Boom');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(screen.getByTestId('period-close-p1')).not.toBeDisabled();
+  });
+
+  it('disables every row link while a run is in flight, guarding against double-submit', async () => {
+    let resolvePost;
+    holdPost = new Promise((resolve) => { resolvePost = resolve; });
+    await renderPanel();
+
+    fireEvent.click(screen.getByTestId('period-close-p1'));
+    fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    await waitFor(() => expect(screen.getByTestId('period-close-p1')).toBeDisabled());
+    expect(screen.getByTestId('period-close-permanent-p1')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('period-close-p1'));
+    expect(screen.queryByTestId('periods-bulk-confirm-names')).not.toBeInTheDocument();
+    expect(posts).toHaveLength(1);
+
+    await act(async () => {
+      resolvePost({ ok: true, json: () => Promise.resolve({}) });
+    });
+    await waitFor(() => expect(screen.getByTestId('period-close-p1')).not.toBeDisabled());
+  });
+
+  it('keeps the bulk selection when a single row is acted on', async () => {
+    rows = [PERIOD, { ...PERIOD, id: 'p2', name: 'Feb-27', startingDate: '2027-02-01' }];
+    await renderPanel();
+    fireEvent.click(screen.getByTestId('row-p2').querySelector('input[type="checkbox"]'));
+    expect(screen.getByTestId('period-selection-count')).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByTestId('period-close-p1'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(screen.getByTestId('period-selection-count')).toHaveTextContent('1');
   });
 });
 
@@ -444,39 +453,17 @@ describe('PeriodsExpandablePanel — refresh on cross-component neo:processSucce
   });
 });
 
-describe('PeriodsExpandablePanel — shared table styling', () => {
-  const P1 = { id: 'p1', name: 'Jan-27', startingDate: '2027-01-01', status: 'O', 'status$_identifier': 'All Opened' };
-  const P2 = { id: 'p2', name: 'Feb-27', startingDate: '2027-02-01', status: 'O', 'status$_identifier': 'All Opened' };
-
-  beforeEach(() => {
-    global.fetch = vi.fn((url) => {
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [P1, P2] } }) });
-      return Promise.reject(new Error('unexpected url ' + url));
-    });
-  });
-
-  function periodRowFor(periodId) {
-    return screen.getByTestId(`period-name-${periodId}`).closest('tr');
-  }
-
-  // ETP-5682 added a leading selection column (bulk open/close), so the header row starts with
-  // the select-all checkbox (no text) and every period row has four cells.
-  it('renders the established table headers and cell layout for period rows', async () => {
+describe('PeriodsExpandablePanel — shared table', () => {
+  it('renders on the shared DataTable: Period and Status columns, no fixed Actions column', async () => {
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('February 27'));
+    await waitFor(() => screen.getByText('January 27'));
 
     const panel = screen.getByTestId('periods-expandable-panel');
     expect(panel.querySelector('table')).toBeInTheDocument();
-    expect(panel.querySelector('thead')).toBeInTheDocument();
-    expect(panel.querySelector('tbody')).toBeInTheDocument();
-    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
-      '',
-      'Period',
-      'Status',
-      'Actions',
-    ]);
-    expect(periodRowFor('p1').querySelectorAll(':scope > td')).toHaveLength(4);
-    expect(periodRowFor('p2').querySelectorAll(':scope > td')).toHaveLength(4);
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headers).toEqual(expect.arrayContaining(['Period', 'Status']));
+    expect(headers).not.toContain('Actions');
+    expect(screen.getByTestId('row-p1')).toBeInTheDocument();
   });
 });
 
@@ -530,34 +517,6 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
       expect.stringContaining('/periodControl'),
       {}
     );
-  });
-
-  it('no longer builds an Accept-Language header itself on the openClose POST action either', async () => {
-    localStorage.setItem('schema-forge-locale', 'es_ES');
-    const postSpy = vi.fn((url, opts) => {
-      if (opts?.method === 'POST') return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-      if (url.includes('/periodControl')) return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [PERIOD_ES] } }) });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
-    });
-    global.fetch = postSpy;
-    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
-    await waitFor(() => screen.getByText('Enero 27'));
-
-    fireEvent.click(screen.getByTestId('period-openclose-p1'));
-    selectOpenCloseOption('C');
-    fireEvent.click(screen.getByTestId('process-param-confirm'));
-
-    await waitFor(() => expect(postSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/action/openClose'),
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ fieldValues: { openClose: 'C' } }),
-      })
-    ));
-    // No `headers` key at all on the POST options — the component only sets method/body,
-    // never headers, matching postAction(apiFetch, path, fieldValues)'s implementation.
-    const [, postOptions] = postSpy.mock.calls.find(([url]) => url.includes('/action/openClose'));
-    expect(postOptions.headers).toBeUndefined();
   });
 
   it('does not need a stored locale to fetch (locale resolution is useApiFetch\'s concern, not this component\'s)', async () => {
@@ -662,12 +621,16 @@ describe('PeriodsExpandablePanel — bulk open/close (ETP-5682)', () => {
     });
   });
 
-  function tick(testId) {
-    fireEvent.click(screen.getByTestId(testId).querySelector('input[type="checkbox"]'));
+  // DataTable's own checkboxes: the header one selects all, each row has its own.
+  function checkbox(testId) {
+    if (testId === 'period-select-all') {
+      return screen.getByTestId('periods-expandable-panel').querySelector('thead input[type="checkbox"]');
+    }
+    return screen.getByTestId(testId.replace('period-select-', 'row-')).querySelector('input[type="checkbox"]');
   }
 
-  function checkbox(testId) {
-    return screen.getByTestId(testId).querySelector('input[type="checkbox"]');
+  function tick(testId) {
+    fireEvent.click(checkbox(testId));
   }
 
   async function renderPanel() {

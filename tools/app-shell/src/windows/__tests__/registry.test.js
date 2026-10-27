@@ -1,8 +1,14 @@
 // @covers tools/app-shell/src/windows/registry.js
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import menuConfig from '../../menu.json' with { type: 'json' };
 import { buildMenuGroups, buildWindowMap, getAllWindowNames } from '../registry.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const registrySrc = readFileSync(join(__dirname, '..', 'registry.js'), 'utf8');
 
 describe('buildMenuGroups', () => {
   it('returns groups from menu.json', () => {
@@ -38,6 +44,31 @@ describe('getAllWindowNames', () => {
   });
 });
 
+// ETP-5806 — `bp-location` is a wiring/registration contract, not a `buildWindowMap()`
+// behavior: AD Window 121 "Location" has no nav entry in menu.json (the inactive-in-menu
+// comment above its `windowLoaders` line says so), so `buildWindowMap()` — which only
+// iterates `menuConfig.menu` — never surfaces it, and there is no way to exercise this
+// registration by calling the module's exported functions. Reading `windowLoaders` as
+// source text is the only way to guard that the loader still exists; this is exactly the
+// "wiring contract" case test-reuse-policy.md carves out for source-reading (point 7).
+describe('windowLoaders registration — bp-location (ETP-5806, source contract)', () => {
+  it('registers a bp-location loader pointing at the generated bp-location window', () => {
+    assert.match(
+      registrySrc,
+      /'bp-location':\s*\(\)\s*=>\s*import\(['"]@generated\/bp-location\/generated\/web\/bp-location\/index\.jsx['"]\)/,
+    );
+  });
+
+  it('is not reachable through buildWindowMap() (no nav entry in menu.json), confirming the loader is a direct-navigation safety net, not a menu window', () => {
+    const map = buildWindowMap();
+    assert.equal(map['bp-location'], undefined);
+    assert.ok(
+      !menuConfig.menu.some(group => group.items.some(item => item.name === 'bp-location')),
+      'bp-location must have no menu.json nav entry — if one is ever added, extend this test to assert buildWindowMap() resolves it via windowLoaders',
+    );
+  });
+});
+
 describe('buildWindowMap', () => {
   const entries = menuConfig.menu.flatMap(group => group.items.map(item => ({ item, group })));
   const isHidden = ({ item, group }) => Boolean(item.hidden || group.hidden);
@@ -64,7 +95,7 @@ describe('buildWindowMap', () => {
 
   it('keeps a hidden redirect window registered', () => {
     const map = buildWindowMap();
-    for (const name of ['business-partner', 'fiscal-calendar', 'open-close-period-control']) {
+    for (const name of ['business-partner', 'fiscal-calendar', 'open-close-period-control', 'simple-g-l-journal']) {
       assert.ok(map[name], `${name} must stay registered to redirect`);
     }
   });
