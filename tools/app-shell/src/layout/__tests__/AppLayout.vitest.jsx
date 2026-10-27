@@ -1512,6 +1512,18 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     },
   );
 
+  it('names a support session by a human label, never by its internal email', async () => {
+    fetch.mockImplementation(async () => new Response(JSON.stringify({
+      account: { id: 'acc-S', email: 'soporte@etendo-go.invalid' }, csrfToken: 'csrf-S',
+    }), { status: 200 }));
+
+    render(<AppLayout {...defaultProps} />);
+
+    await vi.waitFor(() => expect(screen.getByTestId('session-conflict-continue')).toHaveTextContent(LABELS.sessionConflictSupportUser));
+    expect(screen.getByTestId('session-conflict-continue')).toHaveTextContent(LABELS.sessionConflictSupportUser);
+    expect(screen.queryByText(/etendo-go\.invalid/)).not.toBeInTheDocument();
+  });
+
   it('continues as the other account by reloading, and revokes nothing', async () => {
     const user = userEvent.setup();
     render(<AppLayout {...defaultProps} />);

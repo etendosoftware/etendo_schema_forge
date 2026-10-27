@@ -31,6 +31,8 @@ export const SUPPORT_HANDOFF_ENDPOINT = '/sws/go/session/support-handoff';
 export const ACCOUNT_ENDPOINT = '/sws/go/me';
 /** `#t=<ticket>` — the fragment parameter that carries the ticket. */
 export const SUPPORT_TICKET_PARAM = 't';
+/** The internal account email of the "Soporte Etendo" user (mirrors SupportAccessGuard.SUPPORT_ACCOUNT_EMAIL). */
+export const SUPPORT_ACCOUNT_EMAIL = 'soporte@etendo-go.invalid';
 export const SUPPORT_SESSION_STORAGE_KEY = 'sf_support_session';
 /**
  * How long the marker written right after a successful handoff keeps the browser in support mode

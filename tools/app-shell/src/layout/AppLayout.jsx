@@ -46,7 +46,7 @@ import { WALKTHROUGH_FLOWS, walkthroughFlowsForPlan } from '@/walkthrough/flows'
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
 import { SupportSessionBanner } from '@/components/layout/SupportSessionBanner.jsx';
 import { useSupportSession } from '@/hooks/useSupportSession.js';
-import { hideSupportRestrictedMenuItems } from '@/lib/supportSession.js';
+import { SUPPORT_ACCOUNT_EMAIL, hideSupportRestrictedMenuItems } from '@/lib/supportSession.js';
 import { periodRecoveryFor, setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { NEO_BASE } from '@/lib/neoWebhookClient.js';
@@ -471,8 +471,10 @@ function SessionConflictScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  const currentUser = auth?.account?.email || auth?.username || ui('sessionConflictThisAccount');
-  const otherUser = live?.account?.email || null;
+  // The support account's email is internal (.invalid): show a human label instead.
+  const named = (email) => (email === SUPPORT_ACCOUNT_EMAIL ? ui('sessionConflictSupportUser') : email);
+  const currentUser = named(auth?.account?.email) || auth?.username || ui('sessionConflictThisAccount');
+  const otherUser = named(live?.account?.email) || null;
   const withUsers = (text) => text.replace('{currentUser}', currentUser).replace('{otherUser}', otherUser);
 
   const continueAsOther = () => {
