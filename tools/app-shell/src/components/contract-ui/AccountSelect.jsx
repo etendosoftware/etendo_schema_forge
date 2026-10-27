@@ -138,6 +138,8 @@ export function AccountSelect({
         onClose={() => setOpen(false)}
         onSelect={(item) => { onChange?.(item.id, item.name); setOpen(false); }}
         loadPage={loadPage}
+        value={value}
+        valueLabel={selectedLabel}
         title={popupTitle || label || placeholderText}
         data-testid={`${fieldKey}-popup`}
       />

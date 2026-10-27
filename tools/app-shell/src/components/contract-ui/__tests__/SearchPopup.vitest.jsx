@@ -130,7 +130,12 @@ describe('SearchPopup', () => {
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowUp' });
-    expect(screen.getByTestId('search-popup-option-a')).toHaveAttribute('aria-selected', 'true');
+    // Rewritten for ETP-5948: the highlight is data-highlighted + aria-activedescendant;
+    // aria-selected belongs to the committed value only (ETP-5846).
+    const option = screen.getByTestId('search-popup-option-a');
+    expect(option).toHaveAttribute('data-highlighted', 'true');
+    expect(option).toHaveAttribute('aria-selected', 'false');
+    expect(input).toHaveAttribute('aria-activedescendant', option.id);
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSelect).toHaveBeenCalledWith(ITEMS[0]);
   });
@@ -159,5 +164,105 @@ describe('staticPageLoader', () => {
   it('matches the label case-insensitively', async () => {
     const { items } = await staticPageLoader(ITEMS)('BANCARIOS', 0);
     expect(items).toEqual([ITEMS[1]]);
+  });
+});
+
+// ETP-5948 — the ETP-5903 reopen behaviour on the popup: the committed value is marked, located in
+// place by walking pages (cap: 6), pinned on top otherwise, and the arrows start from it.
+describe('SearchPopup — committed value (ETP-5948)', () => {
+  const row = (n) => ({ id: `acc-${n}`, name: `Account ${String(n).padStart(4, '0')}` });
+  // A server-like loader: pages of SEARCH_POPUP_PAGE_SIZE; a query filters by label.
+  function pager(total, { failAt } = {}) {
+    const all = Array.from({ length: total }, (_, i) => row(i));
+    return vi.fn((q, offset) => {
+      if (offset === failAt) return Promise.reject(new Error('HTTP 500'));
+      const matches = q ? all.filter((o) => o.name.includes(q)) : all;
+      return Promise.resolve({
+        items: matches.slice(offset, offset + SEARCH_POPUP_PAGE_SIZE),
+        hasMore: offset + SEARCH_POPUP_PAGE_SIZE < matches.length,
+      });
+    });
+  }
+  const listOffsets = (loadPage) => loadPage.mock.calls.filter(([q]) => q === '').map(([, offset]) => offset);
+  const labelLookups = (loadPage) => loadPage.mock.calls.filter(([q]) => q !== '');
+
+  it('marks only the committed value with aria-selected and the check', async () => {
+    renderPopup({ value: 'b', valueLabel: '626 - Servicios bancarios' });
+    const committed = await screen.findByTestId('search-popup-option-b');
+    expect(committed).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('search-popup-option-a')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getAllByTestId('search-popup-check')).toHaveLength(1);
+  });
+
+  it('starts the first ArrowDown from the option after the committed one', async () => {
+    renderPopup({ value: 'a', valueLabel: '572 - Bancos c/c' });
+    await screen.findByTestId('search-popup-option-a');
+    fireEvent.keyDown(screen.getByTestId('search-popup-input'), { key: 'ArrowDown' });
+    expect(screen.getByTestId('search-popup-option-b')).toHaveAttribute('data-highlighted', 'true');
+  });
+
+  it('walks forward to the page holding the value and shows it in place, with no lookup', async () => {
+    const loadPage = pager(200);
+    renderPopup({ loadPage, value: 'acc-75', valueLabel: 'Account 0075' });
+
+    await waitFor(() => expect(screen.getByTestId('search-popup-option-acc-75')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets(loadPage)).toEqual([0, 30, 60]);
+    expect(labelLookups(loadPage)).toHaveLength(0);
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-0');
+  });
+
+  it('stops at the page cap, then pins the value on top through a label lookup', async () => {
+    const loadPage = pager(1000);
+    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+
+    await waitFor(() => expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'search-popup-option-acc-500'));
+    expect(screen.getByTestId('search-popup-option-acc-500')).toHaveAttribute('aria-selected', 'true');
+    expect(listOffsets(loadPage)).toEqual([0, 30, 60, 90, 120, 150]);
+    expect(labelLookups(loadPage)).toHaveLength(1);
+    expect(screen.getAllByRole('option')).toHaveLength(181);
+  });
+
+  it('stops walking when a page fails, without retrying it', async () => {
+    const loadPage = pager(1000, { failAt: 60 });
+    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+
+    await screen.findByTestId('search-popup-load-more-error');
+    await waitFor(() => expect(labelLookups(loadPage)).toHaveLength(1));
+    expect(listOffsets(loadPage)).toEqual([0, 30, 60]);
+  });
+
+  it('does not walk or pin while a search is typed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const loadPage = pager(1000);
+    renderPopup({ loadPage, value: 'acc-500', valueLabel: 'Account 0500' });
+    fireEvent.change(screen.getByTestId('search-popup-input'), { target: { value: 'Account 001' } });
+    await act(async () => { vi.advanceTimersByTime(300); });
+
+    await screen.findByTestId('search-popup-option-acc-10');
+    expect(screen.queryByTestId('search-popup-option-acc-500')).toBeNull();
+    expect(loadPage.mock.calls.every(([q, offset]) => q === 'Account 001' || offset === 0)).toBe(true);
+  });
+
+  it('never decides on the previous open rows when reopened', async () => {
+    const loadPage = pager(200);
+    const props = { onClose: vi.fn(), onSelect: vi.fn(), loadPage, title: 'Cuenta', value: 'acc-75', valueLabel: 'Account 0075' };
+    const { rerender } = render(<SearchPopup open {...props} />);
+    await waitFor(() => expect(screen.getByTestId('search-popup-option-acc-75')).toHaveAttribute('aria-selected', 'true'));
+
+    rerender(<SearchPopup open={false} {...props} />);
+    loadPage.mockClear();
+    rerender(<SearchPopup open {...props} />);
+
+    await waitFor(() => expect(screen.getByTestId('search-popup-option-acc-75')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets(loadPage)).toEqual([0, 30, 60]);
+    expect(labelLookups(loadPage)).toHaveLength(0);
+  });
+
+  it('behaves as before without a value: nothing marked, no walk', async () => {
+    const loadPage = pager(200);
+    renderPopup({ loadPage });
+    await screen.findByTestId('search-popup-option-acc-0');
+    expect(screen.queryAllByTestId('search-popup-check')).toHaveLength(0);
+    expect(listOffsets(loadPage)).toEqual([0]);
   });
 });

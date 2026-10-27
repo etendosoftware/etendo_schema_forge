@@ -190,7 +190,7 @@ function ReportCard({ report, onRun }) {
 
 // Single-select popup modal — used for fields with inputStyle: 'popup-single'. The modal itself
 // is the shared SearchPopup (ETP-5681 lifted it out of this page so the account pickers reuse it).
-function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams = {} }) {
+function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams = {}, value, valueLabel }) {
   const apiFetch = useApiFetch(ETENDO_BASE);
 
   const loadPage = useCallback((q, off, signal) => {
@@ -213,6 +213,8 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
       onClose={onClose}
       onSelect={(o) => { onSelect(o); onClose(); }}
       loadPage={loadPage}
+      value={value}
+      valueLabel={valueLabel}
       title={title}
       data-testid="report-selector-popup"
     />
@@ -993,6 +995,9 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           selector={popup.selector}
           title={popup.label}
           extraParams={popup.extraParams || {}}
+          // ETP-5948 — open on the filter's current value; the label fallback matches the field's.
+          value={params[popup.name] || null}
+          valueLabel={displayValues[popup.name] || params['_display_' + popup.name] || ''}
           onSelect={(item) => {
             handleChange(popup.name, item.id);
             handleChange('_display_' + popup.name, item.name);

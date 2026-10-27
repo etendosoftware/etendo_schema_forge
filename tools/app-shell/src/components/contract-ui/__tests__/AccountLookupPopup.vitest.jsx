@@ -46,6 +46,16 @@ describe('AccountLookupPopup', () => {
     expect(opts).toEqual(expect.objectContaining({ baseUrl: '' }));
   });
 
+  // ETP-5948 — the lookup field's committed value is forwarded and marked.
+  it('marks the field value forwarded by the lookup trigger', async () => {
+    mockApiFetch.mockReturnValue(jsonResponse({ items: ITEMS, hasMore: false }));
+    render(
+      <AccountLookupPopup open onClose={vi.fn()} onSelect={vi.fn()} selectorUrl={SELECTOR_URL}
+        title="Account" value="vc-2" valueLabel={ITEMS[1]._identifier} />,
+    );
+    expect(await screen.findByTestId('account-lookup-popup-option-vc-2')).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('hands the raw selector item to onSelect (the caller reads _identifier from it)', async () => {
     mockApiFetch.mockReturnValue(jsonResponse({ items: ITEMS, hasMore: false }));
     const onSelect = vi.fn();
