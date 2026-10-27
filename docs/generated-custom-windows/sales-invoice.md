@@ -2476,7 +2476,8 @@ Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show A
 
 An agent fills a DRAFT sales invoice from sales orders and from goods shipments, the way the window's "Create from ..." modals do, with
 six declared actions on `header` (`SalesInvoiceHeaderHandler`): `availableOrders` / `availableOrderLines` / `importOrderLines`
-(`{orderId, lines?:[{sourceLineId, quantity}]}`) and `availableShipments` / `availableShipmentLines` / `importShipmentLines` (`{shipmentId, lines?}`).
+(`{orderId, lines?:[{sourceLineId, quantity}]}` or, for several orders in one call and one transaction,
+`{orders:[{orderId, lines?}]}`, plus optional `carryGlobalDiscount`, default true — ETP-5828) and `availableShipments` / `availableShipmentLines` / `importShipmentLines` (`{shipmentId, lines?}`).
 The `id` of every call is the draft sales invoice. `lines` omitted imports everything still pending; given, exactly those lines.
 
 - **Cap = pending including drafts, applied server-side.** From an order: ordered - invoiced - the lines of every
@@ -2499,12 +2500,16 @@ The `id` of every call is the draft sales invoice. `lines` omitted imports every
 - **Preconditions (422):** draft target (`importTargetNotDraft`) with a price list (`importPriceListRequired`),
   completed source (`importSourceNotCompleted`) that is not a return, same business partner, currency and direction.
 - **Header.** The invoice's order reference is left by the native process: the order when every line comes from one
-  order, empty when several are mixed. From an order, the header `etgoTotalDiscount` takes the order's positive %
-  only when the invoice has no total discount AND had no product lines before the call (neither the `ETGO_DTO` discount
-  line nor an inactive line counts), or when it already holds that same %. Otherwise the header is kept as it is and the import still
-  succeeds. One order per call, so across several calls the first order imported decides. The «Añadir desde pedido»
-  popup applies the same rule (`resolveOrderGlobalDiscount`, ETP-5828) plus a user toggle; the MCP has no toggle and
-  always carries the % when allowed. The discount line is materialised when the invoice is completed.
+  order, empty when several are mixed. Global discount (ETP-5828), the «Añadir desde pedido» popup's rule
+  (`resolveOrderGlobalDiscount`) on the server: with `carryGlobalDiscount` true (default) the header `etgoTotalDiscount`
+  takes the orders' % when ALL selected orders share one positive % and, before the call, the invoice had that % or
+  had neither a total discount nor product lines (neither the `ETGO_DTO` discount line nor an inactive line counts).
+  No positive % among the orders: nothing to carry. Otherwise the call answers **422 `globalDiscountConflict`** and
+  creates nothing (`conflict`: `ordersDiffer` — 0 % counts as different —, `invoiceHasOtherDiscount`,
+  `invoiceHasLinesWithoutDiscount`; plus `orders:[{orderId, documentNo, globalDiscount}]`,
+  `invoice:{totalDiscount, hadLines}` and a `hint`): the popup's orange warning. The agent asks the user and, only on
+  their OK, resends with `carryGlobalDiscount:false` (the popup toggle off): lines imported, header untouched, line
+  discounts never changed. The discount line is materialised when the invoice is completed.
 - **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
 - The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
   through `MCP_CONFIG`. `createDraftInvoice` on the sales order or the goods shipment (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/sales-invoice/spec.md`)
