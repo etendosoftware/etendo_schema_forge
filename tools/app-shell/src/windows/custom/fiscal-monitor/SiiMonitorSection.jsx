@@ -145,6 +145,12 @@ async function fetchSubtab(apiFetch, entityKey, parentId, orgId, page, earliestC
   return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0, csvMap, motivoMap };
 }
 
+function headerClassName(columnKey) {
+  if (columnKey === 'grandTotalAmount') return 'num relative';
+  if (columnKey === 'invoiceDate') return 'sortable sorted relative';
+  return 'relative';
+}
+
 function SiiTableContent({
   ui, tab, period, rows, loading, error, totalRows, page, onLoadMore,
   onInvoiceOpen, onBpClick, csvMap = {}, motivoMap = {},
@@ -180,7 +186,7 @@ function SiiTableContent({
             {columns.map((column) => {
                   const label = column.key === 'businessPartner' ? partyHeader : ui(column.label);
                   return (
-                    <th key={column.key} className={column.key === 'grandTotalAmount' ? 'num relative' : column.key === 'invoiceDate' ? 'sortable sorted relative' : 'relative'}
+                    <th key={column.key} className={headerClassName(column.key)}
                       style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, whiteSpace: 'normal', overflowWrap: 'anywhere' } : undefined}
                       {...gridHeaderProps(column, gridView)}>
                       {label}
@@ -309,6 +315,8 @@ export default function SiiMonitorSection({
 
   const entityKey = resolveEntityKey(tab, period);
   const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const partyLabelKey = tab === 'issued' ? 'fiscalMonitor.sii.party.cliente' : 'fiscalMonitor.sii.party.proveedor';
+  const translateGridLabel = (key) => ui(key === 'fiscalMonitor.col.party' ? partyLabelKey : key);
   const gridView = useGridView({ spec: SII_SPEC, entity: SUBTAB_ENTITIES[entityKey], columns: GRID_COLUMNS, data: rows, enabled: gridColumnViews, apiBaseUrl });
   const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
 
@@ -447,7 +455,7 @@ export default function SiiMonitorSection({
           gridView={gridView}
           gridColumns={GRID_COLUMNS}
           ui={ui}
-          t={(key) => key === 'fiscalMonitor.col.party' ? ui(tab === 'issued' ? 'fiscalMonitor.sii.party.cliente' : 'fiscalMonitor.sii.party.proveedor') : ui(key)}
+          t={translateGridLabel}
           data-testid="GridViewControls__be1aa5" />}
         <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
           <ExportIcon data-testid="ExportIcon__be1aa5" /> {ui('fiscalMonitor.export')}

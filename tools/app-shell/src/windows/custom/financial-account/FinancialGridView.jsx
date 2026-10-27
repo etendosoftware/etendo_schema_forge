@@ -35,6 +35,12 @@ export function projectFinancialColumns(columns, gridView) {
   return result.length ? result : [columns[0]].filter(Boolean);
 }
 
+function resolveColumnLabel(column, ui) {
+  if (column.labelKey) return ui(column.labelKey);
+  if (STRUCTURAL_LABEL_KEYS[column.key]) return ui(STRUCTURAL_LABEL_KEYS[column.key]);
+  return column.label ?? column.key;
+}
+
 /** Only marked rows consume this context; nested dimensions/forms retain their own layout. */
 export function FinancialGridView({ spec, entity, columns, data, children }) {
   const ui = useUI();
@@ -43,17 +49,16 @@ export function FinancialGridView({ spec, entity, columns, data, children }) {
     ...column,
     gridDefaultWidthPx: column.gridDefaultWidthPx
       ?? (/^\d+(?:\.\d+)?px$/.test(column.gridTrack ?? '') ? Number.parseFloat(column.gridTrack) : 120),
-    label: column.labelKey ? ui(column.labelKey)
-      : STRUCTURAL_LABEL_KEYS[column.key] ? ui(STRUCTURAL_LABEL_KEYS[column.key])
-        : column.label ?? column.key,
+    label: resolveColumnLabel(column, ui),
     ...(column.gridConfigurable === false ? { gridReorderable: false } : {}),
   })), [columns, ui]);
   const gridView = useGridView({ spec, entity, columns: gridColumns, data, enabled });
-  const visible = projectFinancialColumns(gridColumns, gridView);
+  const visible = useMemo(() => projectFinancialColumns(gridColumns, gridView), [gridColumns, gridView]);
   // The controls resolve labels from these already translated local descriptors.
   const translate = (value) => gridColumns.find((column) => (column.column ?? column.label ?? column.key) === value)?.label ?? value;
+  const contextValue = useMemo(() => ({ columns: gridColumns, visible, gridView, ui }), [gridColumns, visible, gridView, ui]);
   return (
-    <GridContext.Provider value={{ columns: gridColumns, visible, gridView, ui }}>
+    <GridContext.Provider value={contextValue}>
       {enabled && <GridViewControls
         gridView={gridView}
         gridColumns={gridColumns}

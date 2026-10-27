@@ -33,6 +33,12 @@ import { TBAI_SPEC, TBAI_ENTITY, buildCutoverCriteria } from './useFiscalMonitor
 // on an unrequested, coincidental companion projection); the historical
 // `issotrx`/`invoice$issotrx` names are kept as a fallback only for any row
 // shape that might already carry them.
+function headerClassName(columnKey) {
+  if (columnKey === 'grandTotalAmount') return 'num relative';
+  if (columnKey === 'invoiceDate') return 'sortable sorted relative';
+  return 'relative';
+}
+
 function isSalesRow(row) {
   const v = row?.salesTransaction ?? row?.['invoice$salesTransaction']
     ?? row?.issotrx ?? row?.['invoice$issotrx'];
@@ -315,7 +321,7 @@ export default function TbaiMonitorSection({
                 {columns.map((column) => {
                   const label = ui(column.label);
                   return (
-                    <th key={column.key} className={column.key === 'grandTotalAmount' ? 'num relative' : column.key === 'invoiceDate' ? 'sortable sorted relative' : 'relative'}
+                    <th key={column.key} className={headerClassName(column.key)}
                       style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, whiteSpace: 'normal', overflowWrap: 'anywhere' } : undefined}
                       {...gridHeaderProps(column, gridView)}>
                       {label}

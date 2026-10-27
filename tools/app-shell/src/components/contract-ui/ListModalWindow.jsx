@@ -970,6 +970,7 @@ function ListModalGrid({
   onToggleSelect, onToggleSelectAll, gridView,
 }) {
   const actionsColClass = onClone ? 'w-28' : 'w-20';
+  const actionsColWidthPx = onClone ? 112 : 80;
   const isEmpty = !data || data.length === 0;
   const hasRowActions = Boolean(onEdit || onClone || onDelete);
   // columns + the leading checkbox + the trailing actions column, whichever are present.
@@ -983,7 +984,7 @@ function ListModalGrid({
         style={gridView?.active ? {
           tableLayout: 'fixed',
           width: columns.reduce((sum, col) => sum + (col.gridUserWidthPx ?? col.gridDefaultWidthPx ?? 160), 0)
-            + (selectable ? 40 : 0) + (hasRowActions ? (onClone ? 112 : 80) : 0),
+            + (selectable ? 40 : 0) + (hasRowActions ? actionsColWidthPx : 0),
         } : undefined}
         data-testid="Table__19eda5">
         <TableHeader data-testid="TableHeader__19eda5">

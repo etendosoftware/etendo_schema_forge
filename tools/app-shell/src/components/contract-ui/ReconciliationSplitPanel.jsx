@@ -92,27 +92,41 @@ const LINE_GRID_COLUMNS = [
   { key: 'amount', labelKey: 'financeReconcileColAmount', gridDefaultWidthPx: 139 },
 ];
 
+const TRANSACTION_SCOPE = { spec: 'financial-account', entity: 'transaction' };
+
+/** Scope for an empty candidate list, inferred from the reconciliation source. */
+function emptyCandidateScope(source, reconciledMode) {
+  if (reconciledMode || source === 'receipts' || source === 'payments') return TRANSACTION_SCOPE;
+  if (source === 'salesInvoices') return { spec: 'sales-invoice', entity: 'paymentPlan' };
+  if (source === 'purchaseInvoices') return { spec: 'purchase-invoice', entity: 'paymentPlan' };
+  return null;
+}
+
+/** Scope of one candidate row, or null when the row does not identify a known entity. */
+function candidateRowScope(row) {
+  if (typeof row.id !== 'string' || !row.id) return null;
+  if (row.kind === 'invoice') {
+    // ReconciliationHandler.buildInvoiceCandidates emits schedule identity and direction.
+    if (row.scheduleId !== row.id || typeof row.isReceipt !== 'boolean') return null;
+    return { spec: row.isReceipt ? 'sales-invoice' : 'purchase-invoice', entity: 'paymentPlan' };
+  }
+  // buildCandidates and CandidatesSupport.buildLinkedTransactions both emit movement IDs.
+  if (row.kind == null && row.scheduleId == null && row.invoiceId == null) return TRANSACTION_SCOPE;
+  return null;
+}
+
 /** The action API returns movements or invoice installments, never invoice headers. */
 export function resolveReconciliationCandidateScope(candidates, source, reconciledMode = false) {
   if (!candidates.length) {
-    if (reconciledMode || source === 'receipts' || source === 'payments') return { spec: 'financial-account', entity: 'transaction' };
-    if (source === 'salesInvoices' || source === 'purchaseInvoices') return { spec: source === 'salesInvoices' ? 'sales-invoice' : 'purchase-invoice', entity: 'paymentPlan' };
-    return null;
+    const scope = emptyCandidateScope(source, reconciledMode);
+    return scope && { ...scope };
   }
   let scope = null;
   for (const row of candidates) {
-    if (typeof row.id !== 'string' || !row.id) return null;
-    let current;
-    if (row.kind === 'invoice') {
-      // ReconciliationHandler.buildInvoiceCandidates emits schedule identity and direction.
-      if (row.scheduleId !== row.id || typeof row.isReceipt !== 'boolean') return null;
-      current = { spec: row.isReceipt ? 'sales-invoice' : 'purchase-invoice', entity: 'paymentPlan' };
-    } else if (row.kind == null && row.scheduleId == null && row.invoiceId == null) {
-      // buildCandidates and CandidatesSupport.buildLinkedTransactions both emit movement IDs.
-      current = { spec: 'financial-account', entity: 'transaction' };
-    } else return null;
+    const current = candidateRowScope(row);
+    if (!current) return null;
     if (scope && (scope.spec !== current.spec || scope.entity !== current.entity)) return null;
-    scope = current;
+    scope = { ...current };
   }
   return scope;
 }
@@ -137,21 +151,25 @@ function PersonalReconciliationGrid({ scope, columns, items, children }) {
     ...(column.gridConfigurable === false ? { gridReorderable: false } : {}),
   })), [columns, ui]);
   const gridView = useGridView({ spec: scope?.spec, entity: scope?.entity, columns: gridColumns, data: items, enabled: Boolean(flag && scope) });
-  const visible = [];
-  const rank = new Map(gridView.columns.map((column, index) => [column.key, index]));
-  let segment = [];
-  const flush = () => {
-    visible.push(...segment.filter((column) => gridView.columnVisibility[gridViewColumnId(column)] !== false)
-      .sort((a, b) => rank.get(a.key) - rank.get(b.key)));
-    segment = [];
-  };
-  for (const column of gridColumns) {
-    if (column.gridConfigurable === false) { flush(); visible.push(column); }
-    else segment.push(column);
-  }
-  flush();
+  const visible = useMemo(() => {
+    const result = [];
+    const rank = new Map(gridView.columns.map((column, index) => [column.key, index]));
+    let segment = [];
+    const flush = () => {
+      result.push(...segment.filter((column) => gridView.columnVisibility[gridViewColumnId(column)] !== false)
+        .sort((a, b) => rank.get(a.key) - rank.get(b.key)));
+      segment = [];
+    };
+    for (const column of gridColumns) {
+      if (column.gridConfigurable === false) { flush(); result.push(column); }
+      else segment.push(column);
+    }
+    flush();
+    return result;
+  }, [gridColumns, gridView]);
+  const contextValue = useMemo(() => ({ scope, columns: gridColumns, visible, gridView, ui }), [scope, gridColumns, visible, gridView, ui]);
   return (
-    <ReconciliationGridContext.Provider value={{ scope, columns: gridColumns, visible, gridView, ui }}>
+    <ReconciliationGridContext.Provider value={contextValue}>
       {children}
     </ReconciliationGridContext.Provider>
   );

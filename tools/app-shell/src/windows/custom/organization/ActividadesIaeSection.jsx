@@ -28,6 +28,14 @@ const GRID_COLUMNS = [
   { key: 'default', column: 'Isdefault', label: 'orgIaeDefaultLabel', required: true },
 ];
 
+const DEFAULT_COLUMN_WIDTHS = { default: 96, taxID: 112, powerDate: 112 };
+
+function headerCellStyle(column) {
+  if (column.gridUserWidthPx != null) return { width: column.gridUserWidthPx, overflowWrap: 'anywhere' };
+  const width = DEFAULT_COLUMN_WIDTHS[column.key];
+  return width == null ? undefined : { width };
+}
+
 function isDefaultTrue(value) {
   return value === true || value === 'Y';
 }
@@ -318,7 +326,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                 const label = ui(column.label);
                 return (
                   <th key={column.key} className="relative h-9 px-3 text-left align-middle text-xs font-semibold text-foreground"
-                    style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, overflowWrap: 'anywhere' } : column.key === 'default' ? { width: 96 } : column.key === 'taxID' || column.key === 'powerDate' ? { width: 112 } : undefined}
+                    style={headerCellStyle(column)}
                     {...gridHeaderProps(column, gridView)}>
                     {label}
                     {column.key === 'epgrafeIAE' && <EpigraphSearchLink data-testid="EpigraphSearchLink__93451b" />}

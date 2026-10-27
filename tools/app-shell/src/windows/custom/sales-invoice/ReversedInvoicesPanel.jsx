@@ -684,6 +684,30 @@ function ExpandedForm({
   );
 }
 
+// Structural cells stay outside the personal view; existing editors and actions
+// retain their handlers and React keys when data cells move.
+function renderGridCellsFor(fragment, gridView, gridColumns, ui) {
+  const cells = Children.toArray(fragment.props.children);
+  const visibleColumns = gridView.active ? gridView.columns : gridColumns;
+  const count = visibleColumns.length + 2;
+  if (cells.length === 1 && cells[0].props.colSpan) {
+    return cloneElement(cells[0], { colSpan: count });
+  }
+  const dataCells = visibleColumns.map((column) => {
+    const cell = cells[column.sourceIndex];
+    if (!gridView.active) return cloneElement(cell, { key: column.key });
+    const header = cell.type === 'th';
+    const width = column.gridUserWidthPx;
+    return cloneElement(cell, {
+      key: column.key,
+      'data-grid-column': column.key,
+      style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
+      ...(header ? gridHeaderProps(column, gridView) : {}),
+    }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
+  });
+  return [...cells.slice(0, 1), ...dataCells, ...cells.slice(-1)];
+}
+
 // ── ReversedInvoicesPanel ─────────────────────────────────────────────────────
 export default function ReversedInvoicesPanel({
   recordId: recordIdProp,
@@ -722,30 +746,9 @@ export default function ReversedInvoicesPanel({
     spec: gridSpec, entity: 'reversedInvoices', columns: gridColumns, data: lines,
     enabled: gridColumnViews && Boolean(gridSpec), apiBaseUrl,
   });
-  // Structural cells stay outside the personal view; existing editors and actions
-  // retain their handlers and React keys when data cells move.
-  const renderGridCells = (fragment) => {
-    if (!gridColumnViews || !gridSpec) return fragment;
-    const cells = Children.toArray(fragment.props.children);
-    const visibleColumns = gridView.active ? gridView.columns : gridColumns;
-    const count = visibleColumns.length + 2;
-    if (cells.length === 1 && cells[0].props.colSpan) {
-      return cloneElement(cells[0], { colSpan: count });
-    }
-    const dataCells = visibleColumns.map((column) => {
-      const cell = cells[column.sourceIndex];
-      if (!gridView.active) return cloneElement(cell, { key: column.key });
-      const header = cell.type === 'th';
-      const width = column.gridUserWidthPx;
-      return cloneElement(cell, {
-        key: column.key,
-        'data-grid-column': column.key,
-        style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
-        ...(header ? gridHeaderProps(column, gridView) : {}),
-      }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
-    });
-    return [...cells.slice(0, 1), ...dataCells, ...cells.slice(-1)];
-  };
+  const renderGridCells = (fragment) => (gridColumnViews && gridSpec
+    ? renderGridCellsFor(fragment, gridView, gridColumns, ui)
+    : fragment);
   const gridControls = gridColumnViews && gridSpec ? (
     <GridViewControls
       gridView={gridView}
