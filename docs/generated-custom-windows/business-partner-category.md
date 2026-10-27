@@ -123,7 +123,7 @@ by code or name and lists **posting accounts only** (`PostingAccountCombinationS
 
 **Behind the `contact-category-type` feature flag (default off).** This whole section describes the
 flag-on behaviour; with the flag off the window is the pre-ETP-5791 one (see the note at the top).
-The DB columns, the agent prompts (MCP) and the `C_BP_Group` data-fixes R53/R54 are not gated.
+The DB columns, the agent prompts (MCP) and the `C_BP_Group` data-fixes R55/R56 are not gated.
 
 A category now defines whether its contacts are **Customer**, **Vendor/Creditor** or both. Backend
 (`com.etendoerp.go`): columns `EM_Etgo_Iscustomer` / `EM_Etgo_Isvendor` on `C_BP_Group` (API

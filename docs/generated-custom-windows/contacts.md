@@ -1557,7 +1557,7 @@ Registry entry: `flags-registry.json` → `contact-category-type`.
 (REST single, `/batch`, MCP) the backend (`ContactTypeRules`, `com.etendoerp.go`) copies them into the
 new contact's `customer` / `vendor` **unless the request body carries the key** — key presence is
 what counts as explicit. A contact with neither type is refused
-(`ETGO_BPartnerContactTypeRequired`). A category with neither flag (legacy, before data-fix R53)
+(`ETGO_BPartnerContactTypeRequired`). A category with neither flag (legacy, before data-fix R55)
 defines nothing and is not inherited from.
 
 ### Import (block D)
@@ -1609,7 +1609,7 @@ defines nothing and is not inherited from.
   the seed could not be resolved) is checked too and, if it does not grant the type, cleared with
   the error under the field, so the required-field gate keeps Save disabled; that inline error is
   cleared as soon as a granting category is accepted. Unknown flags (the
-  category read was refused) and a category with neither flag (legacy, before R53 — it defines
+  category read was refused) and a category with neither flag (legacy, before R55 — it defines
   nothing, as on the backend) are let through; the backend still refuses a contact with no type.
   `RecordCreateModal` and `EmbeddedWindowRoute` are unaware of any of this: the context crosses the
   dialog portal and the embedded router on its own.

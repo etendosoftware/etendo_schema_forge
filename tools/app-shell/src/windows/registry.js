@@ -289,6 +289,8 @@ export const apiOnlyWindows = new Set([
   'monitor-verifactu',
   'tbai-facturas-enviadas',
   'conversion-rate-downloader-log',
+  // Reason 1: calendar's PeriodsExpandablePanel calls its periodControl.openClose action.
+  'open-close-period-control',
 ]);
 
 /**

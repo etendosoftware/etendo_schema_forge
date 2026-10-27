@@ -1,4 +1,4 @@
--- @id: R53-bp-category-customer-vendor-flags
+-- @id: R55-bp-category-customer-vendor-flags
 -- @gap: ETP-5791
 -- @risk: low
 -- @type: sql
@@ -57,7 +57,7 @@
 -- NOT TOUCHED:
 --   * C_BPartner (contacts): no contact changes category or any other column.
 --   * Categories with any other name (custom tenant categories, E2E test categories): left at the
---     column default N/N on purpose -- the next fix, R54-bp-category-custom-flags-from-contacts,
+--     column default N/N on purpose -- the next fix, R56-bp-category-custom-flags-from-contacts,
 --     flags them from their contacts. They are listed in the ledger detail (see @report).
 --
 -- Prerequisite: update.database has created EM_ETGO_ISCUSTOMER / EM_ETGO_ISVENDOR. Before that
@@ -242,7 +242,7 @@ WHERE g.ad_client_id = :client_id
 
 -- @report
 -- Custom categories (any other name) left at N/N, with how many contacts use them and how many of
--- those are customers/vendors -- the same inputs R54-bp-category-custom-flags-from-contacts uses
+-- those are customers/vendors -- the same inputs R56-bp-category-custom-flags-from-contacts uses
 -- to flag them.
 SELECT g.value AS category,
        g.isactive AS active,
