@@ -309,8 +309,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   dismissal key names the reported verdicts, so a new alert (another resource, or a WARN turning
   into a DENY) shows again. A banner with any DENY item has **no close button**, and a dismissal
   stored for the same verdicts does not hide it: it stays until the quota is no longer reached.
-  Martin's decision during ETP-5051 manual testing, after a dismissed WARN hid the later DENY until
-  the next login.
+  Martin's decision during ETP-5051 manual testing. The dismissal was not what hid a later DENY
+  there until the next login: the key already named the verdicts, so a WARN turning into a DENY
+  would have shown again. The banner still showed the environment list read at page load, which
+  nothing re-read while the app stayed open; the **Freshness** triggers above fix that.
 - **CTA:** the owner (`ownsEnvironmentSubscription`) gets **View plan usage** → `/account`; anyone
   else reads *"Contact your company's administrator."*. Hidden on `/account` and `/upgrade`, for the
   same reasons as the payment banner.
