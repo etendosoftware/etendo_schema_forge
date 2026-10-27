@@ -14,7 +14,11 @@
 #   npm            ← package.json, package-lock.json
 #   testid         ← tools/app-shell/src/**, the data-testid checker
 #   tests          ← app-shell src+test, cli/**, **/__tests__/**, sonar-project.properties,
-#                    package.json, package-lock.json (a dependency bump, e.g. the core's)
+#                    package.json, package-lock.json (a dependency bump, e.g. the core's),
+#                    and the repo tooling: scripts/**, .github/**, .claude/hooks/**. The tests
+#                    step selects the tests that cover them (scripts/select-tests.js, which runs
+#                    every unit group when its own infrastructure changes); CI validates the
+#                    workflows themselves.
 #   regen / xml    ← artifacts/**, cli/**, package-lock.json
 #   pw-mocked      ← app-shell/src (UI), *.mocked.spec.js, shared e2e infra, e2e/quarantine.json,
 #                    package.json, package-lock.json
@@ -23,20 +27,24 @@
 #
 #   relevance_mocked_specs : the changed *.mocked.spec.js files when they alone call for the mocked
 #                      suite, so the pre-push runs just those; nothing when the whole suite must run.
-#   RUN-ALL (.githooks/**, run-sonar.sh) or any UNRECOGNISED file → all of them.
-#   SAFE (docs, images, Makefile, .gitignore) → nothing.
+#   RUN-ALL (.githooks/**, run-sonar.sh, and the scripts that run the pre-push's Playwright
+#     suites or the whole hook: scripts/run-e2e-full.sh, scripts/run-remote-prepush.sh) or any
+#     UNRECOGNISED file → all of them.
+#   SAFE (docs, images, Makefile, .gitignore) and the agent configuration and its mirrors
+#     (.claude/ except hooks/, .codex/, .omp/, .opencode/, .agents/) → nothing.
 # Generated code lives under artifacts/<window>/generated/, so tools/app-shell/src
 # is hand-written source and does NOT trigger the regen/xml checks.
 
-RELEVANCE_RE_RUN_ALL='^\.githooks/|^run-sonar\.sh$'
+RELEVANCE_RE_RUN_ALL='^\.githooks/|^run-sonar\.sh$|^scripts/run-(e2e-full|remote-prepush)\.sh$'
 RELEVANCE_RE_SAFE='(^|/)[^/]*\.md$|^docs/|(^|/)LICENSE|^\.gitignore$|^\.gitattributes$|\.(png|jpe?g|gif|svg|ico|webp)$|^Makefile$'
 RELEVANCE_RE_NPM='^package\.json$|^package-lock\.json$'
 RELEVANCE_RE_TESTID='^tools/app-shell/src/|^scripts/check-add-data-testid\.sh$'
-RELEVANCE_RE_TESTS='^tools/app-shell/src/|^tools/app-shell/test/|^cli/|/__tests__/|^sonar-project\.properties$|^package\.json$|^package-lock\.json$'
+RELEVANCE_RE_TESTS='^tools/app-shell/src/|^tools/app-shell/test/|^cli/|/__tests__/|^sonar-project\.properties$|^package\.json$|^package-lock\.json$|^scripts/|^\.github/|^\.claude/hooks/'
 RELEVANCE_RE_REGEN='^artifacts/|^cli/|^package-lock\.json$'
 RELEVANCE_RE_XML='^artifacts/|^cli/|^package-lock\.json$'
 RELEVANCE_RE_E2E='^e2e/'
-RELEVANCE_RE_KNOWN="${RELEVANCE_RE_RUN_ALL}|${RELEVANCE_RE_SAFE}|${RELEVANCE_RE_NPM}|${RELEVANCE_RE_TESTID}|${RELEVANCE_RE_TESTS}|${RELEVANCE_RE_REGEN}|${RELEVANCE_RE_XML}|${RELEVANCE_RE_E2E}"
+RELEVANCE_RE_AGENTS='^\.(claude|codex|omp|opencode|agents)/'
+RELEVANCE_RE_KNOWN="${RELEVANCE_RE_RUN_ALL}|${RELEVANCE_RE_SAFE}|${RELEVANCE_RE_NPM}|${RELEVANCE_RE_TESTID}|${RELEVANCE_RE_TESTS}|${RELEVANCE_RE_REGEN}|${RELEVANCE_RE_XML}|${RELEVANCE_RE_E2E}|${RELEVANCE_RE_AGENTS}"
 
 # relevance_checks < changed-files-on-stdin  → prints the token subset.
 relevance_checks() {

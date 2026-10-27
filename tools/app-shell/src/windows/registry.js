@@ -28,6 +28,10 @@ const windowLoaders = {
   'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
   // ETP-5791 — wraps the generated page: toggle point of the `contact-category-type` flag.
   'business-partner-category': () => import('@/windows/custom/business-partner-category/index.jsx'),
+  // ETP-5806: AD Window 121 "Location" is inactive in the menu (no nav entry), but its NEO
+  // Headless API stays live via MCP — registered so F3 (pipeline validator) passes and so a
+  // direct navigation does not hit an unresolved lazy import.
+  'bp-location': () => import('@generated/bp-location/generated/web/bp-location/index.jsx'),
   'user': () => import('@/windows/custom/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),

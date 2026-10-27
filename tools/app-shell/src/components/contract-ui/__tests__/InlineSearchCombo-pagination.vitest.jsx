@@ -39,7 +39,7 @@ function jsonOk(items) {
 function setScrollGeometry(panel, { scrollHeight, clientHeight, scrollTop }) {
   Object.defineProperty(panel, 'scrollHeight', { value: scrollHeight, configurable: true });
   Object.defineProperty(panel, 'clientHeight', { value: clientHeight, configurable: true });
-  Object.defineProperty(panel, 'scrollTop', { value: scrollTop, configurable: true });
+  Object.defineProperty(panel, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
 }
 
 function renderCombo(overrides = {}) {
@@ -338,103 +338,128 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(3);
   });
 
-  it('does not disturb the list pagination, and resolves the current selection once per open even as pages land', async () => {
-    const page0 = makePage(0, 50); // full page -> hasMore stays true
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce(jsonOk(page0))
-      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]))
-      // Page 1 lands for real and still does not contain the committed id.
-      .mockResolvedValueOnce(jsonOk(makePage(50, 50)))
-      .mockResolvedValue(jsonOk([]));
+  // ETP-5903 — a full page 0 without the committed id first walks forward (up to 6 pages = 300
+  // rows) looking for it in place; the ETP-5846 label lookup only runs once that walk is over.
+  // `routedFetch` answers by URL (`offset`, or `q=` for the lookup) so the tests do not depend
+  // on the order the requests are issued in.
+  function routedFetch({ totalRows, lookup = [], hold = {} }) {
+    return vi.fn((url) => {
+      const params = new URL(String(url), 'http://test').searchParams;
+      if (params.has('q')) return jsonOk(lookup);
+      const offset = Number(params.get('offset') || 0);
+      if (hold[offset]) return hold[offset];
+      return jsonOk(makePage(offset, Math.max(0, Math.min(50, totalRows - offset))));
+    });
+  }
+  const listOffsets = () => global.fetch.mock.calls
+    .map(([url]) => new URL(String(url), 'http://test').searchParams)
+    .filter((p) => !p.has('q'))
+    .map((p) => Number(p.get('offset')));
+  const lookupCalls = () => global.fetch.mock.calls.filter(([url]) => String(url).includes('q='));
 
-    await committedCombo();
+  it('walks forward to the page that holds the committed value and shows it in place, with no lookup', async () => {
+    global.fetch = routedFetch({ totalRows: 150 });
+
+    await committedCombo({ value: '120', displayLabel: 'Item-120' });
     await openViaChip();
 
-    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
-
-    // The panel now holds page 0 (50) plus the resolved row.
-    expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(51);
-
-    const panel = screen.getByTestId('inline-add-options-tax');
-    setScrollGeometry(panel, { scrollHeight: 1000, clientHeight: 500, scrollTop: 950 });
-    fireEvent.scroll(panel);
-
-    // "Load more" still asks for offset=50 — the resolved row did not shift the offset.
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
-    expect(global.fetch.mock.calls[2][0]).toContain('offset=50');
-
-    // Page 1 is appended; the resolved row stays pinned and marked, and the label lookup is NOT
-    // repeated just because `serverResults` changed.
-    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(101));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true');
-    const lookups = global.fetch.mock.calls.filter(([url]) => url.includes('q='));
-    expect(lookups).toHaveLength(1);
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-120')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 50, 100]);
+    expect(lookupCalls()).toHaveLength(0);
+    // In place: its neighbours are rendered and it is not pinned on top.
+    expect(screen.getByTestId('inline-add-option-tax-119')).toBeInTheDocument();
+    expect(screen.getByTestId('inline-add-option-tax-121')).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^inline-add-option-tax-/)[0]).toHaveAttribute('data-testid', 'inline-add-option-tax-0');
   });
 
-  // The lookup is a LOOKUP, not a page: it must happen ONCE per open, no matter how many pages
-  // the user scrolls through afterwards. Every "load more" changes `serverResults`, so without an
-  // explicit guard the `q=<label>` request re-fires on each page append (and again when the
-  // lookup resolved nothing) — extra traffic on every scroll, contradicting the documented
-  // "one lookup per open" contract.
-  it('resolves the current selection ONCE per open, no matter how many pages are appended', async () => {
-    const page0 = makePage(0, 50); // full page -> hasMore stays true
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce(jsonOk(page0))                                       // page 0 on open
-      .mockResolvedValueOnce(jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]))          // the resolution
-      .mockResolvedValueOnce(jsonOk(makePage(50, 50)))                             // "load more" page 1
-      .mockResolvedValueOnce(jsonOk(makePage(100, 50)));                          // "load more" page 2
+  it('stops walking at the page cap, then pins the value through the label lookup — once per open', async () => {
+    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }] });
 
     await committedCombo();
     await openViaChip();
 
-    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 50, 100, 150, 200, 250]);
+    expect(lookupCalls()).toHaveLength(1);
+    // 300 walked rows plus the pinned one, on top.
+    expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(301);
+    expect(screen.getAllByTestId(/^inline-add-option-tax-/)[0]).toHaveAttribute('data-testid', 'inline-add-option-tax-tax-77');
 
+    // User scrolling keeps paging from where the walk stopped; the lookup is not repeated.
     const panel = screen.getByTestId('inline-add-options-tax');
-
-    // Scroll twice, letting each page actually LAND.
     setScrollGeometry(panel, { scrollHeight: 1000, clientHeight: 500, scrollTop: 950 });
     fireEvent.scroll(panel);
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(351));
     setScrollGeometry(panel, { scrollHeight: 2000, clientHeight: 500, scrollTop: 1950 });
     fireEvent.scroll(panel);
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
-
-    // Exactly ONE resolution request, despite two page appends.
-    const resolutionCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('q=IVA+4%25'));
-    expect(resolutionCalls).toHaveLength(1);
-
-    // The other three calls are the list's own pages (offset 0, 50 and 100).
-    const listCalls = global.fetch.mock.calls.filter(([url]) => !String(url).includes('q='));
-    expect(listCalls).toHaveLength(3);
-    expect(listCalls[1][0]).toContain('offset=50');
-    expect(listCalls[2][0]).toContain('offset=100');
-
-    // The resolved row is still marked, and still appears exactly once.
-    expect(screen.getByTestId('inline-add-option-tax-tax-77')).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(401));
+    expect(listOffsets().slice(-2)).toEqual([300, 350]);
+    expect(lookupCalls()).toHaveLength(1);
     expect(screen.getAllByTestId('inline-add-option-tax-tax-77')).toHaveLength(1);
   });
 
   it('does not re-resolve the current selection when the lookup found nothing', async () => {
     // The lookup resolved NOTHING (the selector context forbids the id). The attempt still counts:
     // re-firing it on every page append would be pure waste.
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce(jsonOk(makePage(0, 50)))     // page 0 on open (no tax-77)
-      .mockResolvedValueOnce(jsonOk(makePage(900, 2)))    // the resolution: nothing matches
-      .mockResolvedValueOnce(jsonOk(makePage(50, 50)));    // "load more" page 1
+    global.fetch = routedFetch({ totalRows: 1000, lookup: makePage(900, 2) });
 
     await committedCombo();
     await openViaChip();
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-
+    await waitFor(() => expect(lookupCalls()).toHaveLength(1));
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(300));
     const panel = screen.getByTestId('inline-add-options-tax');
     setScrollGeometry(panel, { scrollHeight: 1000, clientHeight: 500, scrollTop: 950 });
     fireEvent.scroll(panel);
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.getAllByTestId(/^inline-add-option-tax-/)).toHaveLength(350));
 
-    const resolutionCalls = global.fetch.mock.calls.filter(([url]) => String(url).includes('q=IVA+4%25'));
-    expect(resolutionCalls).toHaveLength(1);
+    expect(lookupCalls()).toHaveLength(1);
+    expect(screen.queryByTestId('inline-add-options-tax').querySelector('[aria-selected="true"]')).toBeNull();
+  });
+
+  it('stops walking as soon as the user presses a key, and only then pins the value', async () => {
+    let releasePage1;
+    const page1 = new Promise((resolve) => { releasePage1 = resolve; });
+    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'tax-77', name: 'IVA 4%' }], hold: { 50: page1 } });
+
+    await committedCombo();
+    const input = await openViaChip();
+    await waitFor(() => expect(listOffsets()).toEqual([0, 50]));
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    releasePage1(await jsonOk(makePage(50, 50)));
+
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-77')).toBeInTheDocument());
+    expect(listOffsets()).toEqual([0, 50]);
+    expect(lookupCalls()).toHaveLength(1);
+  });
+
+  it('does not walk once the user typed a search', async () => {
+    global.fetch = routedFetch({ totalRows: 1000 });
+
+    await committedCombo();
+    const input = await openViaChip();
+    fireEvent.change(input, { target: { value: 'Item' } });
+
+    await waitFor(() => expect(global.fetch.mock.calls.some(([url]) => String(url).includes('q=Item'))).toBe(true), { timeout: 2000 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const typedCall = global.fetch.mock.calls.findIndex(([url]) => String(url).includes('q=Item'));
+    // Nothing paged after the typed search went out.
+    expect(global.fetch.mock.calls.slice(typedCall + 1)).toHaveLength(0);
+  });
+
+  it('scrolls the panel back to the top when the user types (AC4)', async () => {
+    global.fetch = routedFetch({ totalRows: 5 });
+
+    await committedCombo();
+    const input = await openViaChip();
+    const panel = await screen.findByTestId('inline-add-options-tax');
+    panel.scrollTop = 120;
+
+    fireEvent.change(input, { target: { value: 'Item' } });
+    expect(panel.scrollTop).toBe(0);
+    // Let the debounced search go out, so its timer cannot fire into the next test's fetch mock.
+    await waitFor(() => expect(global.fetch.mock.calls.some(([url]) => String(url).includes('q=Item'))).toBe(true), { timeout: 2000 });
   });
 
   it('resolves the current selection again after the combo was closed and reopened', async () => {
@@ -472,10 +497,13 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
 
     await committedCombo();
     const input = await openViaChip();
+    // The resolution is in flight (ETP-5903: it is issued once the walk for the value has ended).
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
 
     // User types before the resolution lands -> new search generation.
     fireEvent.change(input, { target: { value: 'Recargo' } });
-    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-recargo')).toBeInTheDocument());
+    // The typed search waits out the 1s debounce (ETP-5005).
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-tax-recargo')).toBeInTheDocument(), { timeout: 2000 });
 
     // The abandoned resolution finally answers. It must not resurface the previous selection.
     resolveCurrent(await jsonOk([{ id: 'tax-77', name: 'IVA 4%' }]));
