@@ -1150,10 +1150,10 @@
         {
           "id": "db-columns-and-datafixes-before-flag-on",
           "kind": "precondition",
-          "note": "Not gated: the C_BP_Group columns EM_Etgo_Iscustomer / EM_Etgo_Isvendor exist (default N) and data-fixes R50/R51 flag the categories regardless of the flag. Categories created while the flag is OFF are saved N/N (the type group is hidden and the backend does not refuse them), and with the flag ON an N/N category defines no type and cannot be saved again without choosing one. Therefore R50/R51 must be re-run (or a follow-up fix repeating R51's rule) right before the flag is turned on in each environment.",
+          "note": "Not gated: the C_BP_Group columns EM_Etgo_Iscustomer / EM_Etgo_Isvendor exist (default N) and data-fixes R53/R54 flag the categories regardless of the flag. Categories created while the flag is OFF are saved N/N (the type group is hidden and the backend does not refuse them), and with the flag ON an N/N category defines no type and cannot be saved again without choosing one. Therefore R53/R54 must be re-run (or a follow-up fix repeating R54's rule) right before the flag is turned on in each environment.",
           "refs": [
-            "cli/src/data-fixes/sql/20261019T120000Z__R50-bp-category-customer-vendor-flags.sql",
-            "cli/src/data-fixes/sql/20261020T120000Z__R51-bp-category-custom-flags-from-contacts.sql",
+            "cli/src/data-fixes/sql/20261026T120000Z__R53-bp-category-customer-vendor-flags.sql",
+            "cli/src/data-fixes/sql/20261026T130000Z__R54-bp-category-custom-flags-from-contacts.sql",
             "docs/etendo-ad/onboarding-gaps.md — 'U1 — Contact categories without customer/vendor type'"
           ]
         },

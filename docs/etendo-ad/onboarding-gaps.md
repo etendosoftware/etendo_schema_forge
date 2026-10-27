@@ -3123,7 +3123,7 @@ explicitly, so the `DocumentNo_C_BP_Group` sequence is not involved.
 `ONBOARDING_PROVISIONED_THROUGH` is not bumped: a newborn tenant already matches the target state,
 so the corrective `@check` returns 0 rows for it.
 
-**Corrective fix:** `20261019T120000Z__R50-bp-category-customer-vendor-flags.sql` — per client:
+**Corrective fix:** `20261026T120000Z__R53-bp-category-customer-vendor-flags.sql` — per client:
 creates `Cliente/Proveedor` (Y/Y, `ISDEFAULT='N'`) when missing; mirrors its `C_BP_Group_Acct`
 from the tenant's `Cliente` row (customer side and shared columns) and `Proveedor` row (vendor side:
 `V_Liability`, `V_Liability_Services`, `V_Prepayment`, `NotInvoicedReceipts`, `PayDiscount_Rev`),
@@ -3138,22 +3138,22 @@ schema); 2 legacy Classic demo tenants (`QA Testing`, `F&B International Group`)
 96 categories with other names across 86 tenants: 85 `E2E Contact Category <n>` (84 E2E tenants,
 2 contacts each, 1 tenant with 2 empty ones) and 11 in the two demo tenants.
 
-**Custom categories (decided 2026-10-20, option (a)):** R50 leaves every non-standard category
-N/N; a second fix, `20261020T120000Z__R51-bp-category-custom-flags-from-contacts.sql`, dated after
-R50 so the fail-fast chain runs it only once R50 is processed, flags each non-standard category
+**Custom categories (decided 2026-10-20, option (a)):** R53 leaves every non-standard category
+N/N; a second fix, `20261026T130000Z__R54-bp-category-custom-flags-from-contacts.sql`, dated after
+R53 so the fail-fast chain runs it only once R53 is processed, flags each non-standard category
 still N/N from its contacts: customer = Y if any contact is a customer, vendor = Y if any is a
 vendor, Y/Y when it has no contacts or none of them is either (e.g. employees only). Inactive
 contacts count. Contacts are not touched; a category with any flag already `Y` is never touched.
-This also covers a standard category a tenant renamed (its name no longer matches R50's four).
+This also covers a standard category a tenant renamed (its name no longer matches R53's four).
 No preventive twin: a new tenant has only the four standard, already-flagged categories, and the
 UI requires a flag on any category created later. `@report` lists what each category received.
 Read-only preview on the local DB: 96 categories in 86 tenants — 85 E2E (83 → Y/N, 2 empty → Y/Y)
 and 11 in the two demo tenants (4 → Y/N, 3 → N/Y, 4 → Y/Y).
 
-**Tenant pool (decided 2026-10-20):** pooled tenants built before this deploy get R50 and keep
+**Tenant pool (decided 2026-10-20):** pooled tenants built before this deploy get R53 and keep
 `Cliente` as their default — accepted.
 
-**Status:** both fronts written (R50 2026-10-19, R51 2026-10-20). Not run: the flag columns do not
+**Status:** both fronts written (R53 2026-10-19, R54 2026-10-20). Not run: the flag columns do not
 exist yet in the local DB; the statements were plan-checked (`EXPLAIN`, no execution) with the
 flags shadowed.
 

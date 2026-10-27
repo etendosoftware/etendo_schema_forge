@@ -1,4 +1,4 @@
--- @id: R51-bp-category-custom-flags-from-contacts
+-- @id: R54-bp-category-custom-flags-from-contacts
 -- @gap: ETP-5791
 -- @risk: low
 -- @type: sql
@@ -7,7 +7,7 @@
 -- Background
 -- ----------
 -- ETP-5791 added EM_ETGO_ISCUSTOMER / EM_ETGO_ISVENDOR to C_BP_Group (NOT NULL, default 'N'). A
--- category flagged N/N cannot be saved afterwards. R50-bp-category-customer-vendor-flags sets the
+-- category flagged N/N cannot be saved afterwards. R53-bp-category-customer-vendor-flags sets the
 -- flags on the four standard categories (Cliente, Proveedor, Acreedor, Cliente/Proveedor) and
 -- deliberately left every other category N/N pending a product decision. This fix applies that
 -- decision (option (a), 2026-10-20):
@@ -22,17 +22,17 @@
 -- category is for.
 --
 -- TARGET: categories whose NAME is not one of the four standard names AND that are still N/N. That
--- includes a standard category a tenant renamed (its name no longer matches, so R50 left it N/N).
--- A category that already carries any flag set to 'Y' -- by R50, by a user, or by a previous run
+-- includes a standard category a tenant renamed (its name no longer matches, so R53 left it N/N).
+-- A category that already carries any flag set to 'Y' -- by R53, by a user, or by a previous run
 -- of this fix -- is never touched.
 --
--- ORDER: dated after R50 on purpose. Under the runner's fail-fast chain this fix runs for a tenant
--- only once R50 has been processed there, so the standard categories already carry their flags.
+-- ORDER: dated after R53 on purpose. Under the runner's fail-fast chain this fix runs for a tenant
+-- only once R53 has been processed there, so the standard categories already carry their flags.
 --
 -- NO PREVENTIVE TWIN: a new tenant is born with only the four standard categories, already
 -- flagged by the onboarding dataset (C_BP_GROUP.xml), so @check returns 0 rows for it
 -- (SKIPPED_NOT_NEEDED). Categories a tenant creates later are saved through the UI, which requires
--- at least one flag. ONBOARDING_PROVISIONED_THROUGH is not bumped (same reasoning as R50).
+-- at least one flag. ONBOARDING_PROVISIONED_THROUGH is not bumped (same reasoning as R53).
 --
 -- NOT TOUCHED: C_BPartner (contacts), ISDEFAULT, and every other C_BP_Group column.
 --
