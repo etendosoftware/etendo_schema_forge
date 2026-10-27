@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/importExportColumns.js
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';

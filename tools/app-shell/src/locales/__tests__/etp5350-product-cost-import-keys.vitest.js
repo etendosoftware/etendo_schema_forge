@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
+// @covers tools/app-shell/src/lib/importDateCell.js
 import { describe, expect, it } from 'vitest';
 import enUS from '../en_US.json';
 import esAR from '../es_AR.json';
