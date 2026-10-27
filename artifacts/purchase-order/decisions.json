@@ -365,7 +365,8 @@
         },
         "etgoTotalDiscount": {
           "visibility": "editable",
-          "form": false
+          "form": false,
+          "agentPrompt": "Whole-document discount, in percent. It applies to the grand total with tax: grandTotalAmount = line totals with tax x (1 - etgoTotalDiscount / 100). While the document is a draft the discount shows only on grandTotalAmount (also in the etendo_update answer); summedLineAmount and the lines do not change. On Complete it becomes one negative discount line per tax group, proportional to that group's net amount."
         },
         "eTGOCurrencyRate": {
           "visibility": "editable",
