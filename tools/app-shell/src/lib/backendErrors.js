@@ -472,6 +472,12 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5791 — the contact-type refusals of com.etendoerp.go (BusinessPartnerCategoryHandler /
+  // ContactTypeRules): a contact category, or a contact, saved with neither Customer nor
+  // Vendor/Creditor. AD_MESSAGE records of a module with no es_ES translation pack, so this map
+  // is where they become Spanish.
+  ETGO_BPGroupContactTypeRequired: 'backendError.bpGroupContactTypeRequired',
+  ETGO_BPartnerContactTypeRequired: 'backendError.bpartnerContactTypeRequired',
   // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
   // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
   // same case maps to "period not open", which sends the user to open a period they do not need.

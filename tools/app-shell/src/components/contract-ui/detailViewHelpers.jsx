@@ -1318,8 +1318,10 @@ export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities) {
 
 // ETP-5648: `window.detailVisibleWhenCapability` drops the detail (lines) tab entirely for a
 // role without the capability: no tab, no children fetch, no evaluate-display, no callouts.
-export function gateDetailTab(detailEntity, DetailTable, capabilityKey, capabilities) {
-  return isCapabilityVisible(capabilities, capabilityKey) ? [detailEntity, DetailTable] : [null, null];
+// ETP-5791: a `CustomLines` component (window.customLinesComponent) REPLACES that same detail tab,
+// so it is gated by the same capability — otherwise a role without it would still see the tab.
+export function gateDetailTab(detailEntity, DetailTable, capabilityKey, capabilities, CustomLines = null) {
+  return isCapabilityVisible(capabilities, capabilityKey) ? [detailEntity, DetailTable, CustomLines] : [null, null, null];
 }
 
 // ETP-5205: `readOnly` here is DetailView's `windowReadOnly` (static decisions.json

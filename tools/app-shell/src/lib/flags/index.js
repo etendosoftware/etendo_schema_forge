@@ -8,9 +8,10 @@ export {
   IMPORT_BATCH_SIZE,
   MY_COMPANIES_PAGE,
   GRID_COLUMN_VIEWS,
+  CONTACT_CATEGORY_TYPE,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from './flag-keys.js';
 export { initFeatureFlags, setFeatureFlagContext, refreshAccountIdentity } from './bootstrap.js';
-export { useFeatureFlag, useNumberFlag } from './useFeatureFlag.js';
+export { useFeatureFlag, useNumberFlag, useFeatureFlags, readFeatureFlag } from './useFeatureFlag.js';
 export { useAccountIdentity } from './useAccountIdentity.js';
