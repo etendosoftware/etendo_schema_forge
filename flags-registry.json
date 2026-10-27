@@ -1134,7 +1134,7 @@
           {
             "root": "frontend",
             "path": "e2e/tests/flows/contacts/contacts-import-category-resolution.mocked.spec.js",
-            "note": "Pins the flag-ON import (lookup-only category); needs the flag set through VITE_FEATURE_FLAGS for the run."
+            "note": "Runs in both flag states, chosen by the dev server: OFF (plain server, what CI runs) covers category auto-create plus the Cliente/Proveedor columns; ON (VITE_FEATURE_FLAGS='{\"contact-category-type\":true}' plus E2E_CONTACT_CATEGORY_TYPE_FLAG=on) covers lookup-only resolution. The test of the other state skips itself."
           },
           {
             "root": "frontend",

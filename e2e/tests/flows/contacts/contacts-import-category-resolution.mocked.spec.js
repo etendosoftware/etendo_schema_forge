@@ -12,11 +12,35 @@ import { captureScreenshot } from '../../helpers/captureScreenshot.js';
  * The page, import dialog, descriptor, and resolver are real. Only the NEO
  * catalog, category CRUD, and batch endpoints are mocked at the network edge.
  *
- * ETP-5791: a category the file names but the catalogue does not have is never created
- * (it would carry no contact type): the row fails with "create it first".
+ * The category rule follows the `contact-category-type` feature flag, read by the descriptor:
+ *
+ *  - ON  (ETP-5791): a category the file names but the catalogue does not have is never created
+ *        (it would carry no contact type): the row fails with "create it first".
+ *  - OFF (pre-ETP-5791, ETP-4905): an unknown category is auto-created and the contact points at
+ *        it; the Cliente / Proveedor columns (ETP-5544) set the contact's roles.
+ *
+ * The flag is fixed when Vite starts (`VITE_FEATURE_FLAGS`, no runtime override), so the
+ * flag-dependent tests skip themselves rather than failing when the server was started the other
+ * way (same pattern as `accounting/acct-process-monitor.mocked.spec.js`). The rest run in both:
+ *
+ *   # flag OFF (default, what CI runs) — the OFF test runs, the ON test skips
+ *   cd tools/app-shell && npx vite --port 3105
+ *   cd e2e && E2E_USE_MOCK=1 BASE_URL=http://localhost:3105 \
+ *     npx playwright test tests/flows/contacts/contacts-import-category-resolution.mocked.spec.js --project=mocked
+ *
+ *   # flag ON — the ON test runs, the OFF test skips
+ *   cd tools/app-shell && VITE_FEATURE_FLAGS='{"contact-category-type":true}' npx vite --port 3106
+ *   cd e2e && E2E_USE_MOCK=1 BASE_URL=http://localhost:3106 E2E_CONTACT_CATEGORY_TYPE_FLAG=on \
+ *     npx playwright test tests/flows/contacts/contacts-import-category-resolution.mocked.spec.js --project=mocked
+ *
+ * Run against plain `npx vite`/`make dev`, never `make dev-mock` — `VITE_MOCK=true` replaces
+ * `window.fetch` in-page and silently bypasses every `page.route()` here.
  */
 
+const FLAG_ON = process.env.E2E_CONTACT_CATEGORY_TYPE_FLAG === 'on';
+
 test('keeps valid contact rows and surfaces ambiguous or unknown category rows', async ({ page }) => {
+  test.skip(!FLAG_ON, 'Lookup-only category resolution needs contact-category-type ON (E2E_CONTACT_CATEGORY_TYPE_FLAG=on)');
   const evidenceDir = resolve(import.meta.dirname, '../../../../artifacts/delivery-evidence/ETP-4905');
   mkdirSync(evidenceDir, { recursive: true });
   const state = { batchBodies: [], categoryPosts: 0 };
@@ -82,6 +106,70 @@ test('keeps valid contact rows and surfaces ambiguous or unknown category rows',
   expect(state.batchBodies).toHaveLength(1);
   expect(state.batchBodies[0].operations[0].body.businessPartnerCategory).toBe('bpg-valid');
   expect(state.categoryPosts).toBe(0);
+});
+
+test('auto-creates an unknown category and applies the Cliente / Proveedor columns', async ({ page }) => {
+  test.skip(FLAG_ON, 'Category auto-create and the Cliente / Proveedor columns only exist with contact-category-type OFF');
+  const state = { batchBodies: [], categoryPosts: [] };
+
+  await login(page);
+  await page.route('**/sws/neo/business-partner-category/businessPartnerCategory{/**,}**', async (route) => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ id: 'bpg-valid', searchKey: 'VALID', name: 'Clientes' }] } }),
+      });
+    }
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      state.categoryPosts.push(body);
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ id: 'bpg-created', ...body }] } }),
+      });
+    }
+    return route.fallback();
+  });
+  await page.route('**/sws/neo/contacts/businessPartner{/**,}**', async (route) => {
+    if (route.request().method() === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [] } }) });
+    }
+    return route.fallback();
+  });
+  await page.route('**/sws/neo/batch', async (route) => {
+    state.batchBodies.push(route.request().postDataJSON());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ committed: true, operations: [{ id: 'bp', recordId: 'vendor-4905' }] }) });
+  });
+
+  await page.goto('/contacts');
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await page.getByTestId('action-new-more').click();
+  await page.getByTestId('action-new-import').click();
+  await expect(page.getByRole('dialog').getByTestId('ImportDropzone__zone')).toBeVisible();
+  await page.getByRole('dialog').getByTestId('ImportDropzone__fileInput').setInputFiles({
+    name: 'contacts-unknown-category-auto-create.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from([
+      'nombre comercial,categoria,cif/nif,cliente,proveedor',
+      'Proveedor nuevo,Nueva Categoría,B20000022,No,Sí',
+    ].join('\n')),
+  });
+
+  await expect(page.getByTestId('ImportDialog__importButton')).toContainText('Importar 1');
+  await page.getByTestId('ImportDialog__importButton').click();
+  await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
+  await page.getByTestId('ImportConfirmStep__confirm').click();
+
+  await expect.poll(() => state.batchBodies.length).toBe(1);
+  expect(state.categoryPosts).toHaveLength(1);
+  expect(state.categoryPosts[0].name).toBe('Nueva Categoría');
+  const bpBody = state.batchBodies[0].operations.find((operation) => operation.entity === 'businessPartner').body;
+  expect(bpBody.name).toBe('Proveedor nuevo');
+  expect(bpBody.businessPartnerCategory).toBe('bpg-created');
+  expect(bpBody.customer).toBe('N');
+  expect(bpBody.vendor).toBe('Y');
 });
 
 test('skips an in-file duplicate tax id before sending the batch', async ({ page }) => {
