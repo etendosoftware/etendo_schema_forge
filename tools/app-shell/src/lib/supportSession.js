@@ -23,7 +23,7 @@
  * Plain module (no JSX): imports `apiFetch` from the core subpath, never the `@/auth/api.js`
  * barrel, so `node --test` can load it (see docs/request-policy.md).
  */
-import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
+import { apiFetch, createApiFetch } from '@etendosoftware/app-shell-core/auth/api';
 
 /** The router path Classic opens. Relative to the router base, like every other route. */
 export const SUPPORT_ACCESS_PATH = '/support-access';
@@ -244,12 +244,27 @@ function readErrorCode(payload) {
 }
 
 /**
+ * The request the handoff goes through: a client OUTSIDE the ambient session scope
+ * (`createApiFetch`'s 4th argument `null` opts out).
+ *
+ * The handoff page loads with AuthProvider restoring the session in parallel (`GET
+ * /sws/go/session`), and that restore ends by replacing the session identity — `logout()` on the
+ * usual 401, or adopting the restored session on a 200 — which advances the controller's
+ * generation. The ambient `apiFetch` captures the identity when the POST is dispatched and
+ * checks it again when the answer arrives; if the restore settled in between, it threw
+ * `staleSessionError` for a handoff the backend HAD accepted: the ticket was spent, no session
+ * was shown, and the page read "no se pudo abrir el acceso" (reason `failed`). The handoff
+ * belongs to no session by definition — it is what creates one — so it has no identity to lose.
+ */
+const handoffFetch = (path, options) => createApiFetch(undefined, () => null, null, null)(path, options);
+
+/**
  * Redeems a ticket. Resolves `{ok: true, data}` with the handoff answer (same shape as
  * `POST /sws/go/session/environment`) or `{ok: false, reason, code?}`; never rejects.
  *
  * `on401: 'ignore'`: a 401 here is the backend refusing the ticket, not a session that expired.
  */
-export async function redeemSupportTicket(ticket, { request = apiFetch } = {}) {
+export async function redeemSupportTicket(ticket, { request = handoffFetch } = {}) {
   if (!ticket) return { ok: false, reason: SUPPORT_HANDOFF_FAILURES.missing };
   let response;
   try {
@@ -328,6 +343,8 @@ export async function completeSupportHandoff(data, {
  */
 export async function fetchSupportSession({ request = apiFetch } = {}) {
   const response = await request(ACCOUNT_ENDPOINT, { on401: 'ignore' });
+  // The session is gone: a marker left behind would start the next load in support mode.
+  if (response.status === 401) forgetSupportSessionMarker();
   if (!response.ok) throw new Error(`GET ${ACCOUNT_ENDPOINT} answered ${response.status}`);
   const payload = await readJson(response);
   return normalizeSupportSession(payload?.supportSession);

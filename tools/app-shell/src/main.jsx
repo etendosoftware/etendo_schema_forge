@@ -5,7 +5,8 @@ import { initFeatureFlags } from './lib/flags/index.js';
 import { bootSupportSession } from './lib/supportSession.js';
 import { detectBasePath } from './lib/neoBaseUrl.js';
 
-// ETP-5351 — first, before anything can read or report the URL: takes a support ticket out of the
+// ETP-5351 — runs before initFeatureFlags / initBrowserObservability (static imports are evaluated
+// earlier, but none of them reports the URL): takes a support ticket out of the
 // address bar and decides whether this load is a support session, which keeps product analytics
 // from being initialized at all (see lib/supportSession.js).
 bootSupportSession({ routerBase: detectBasePath().routerBase });

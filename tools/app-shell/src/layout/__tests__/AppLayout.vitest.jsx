@@ -1396,6 +1396,10 @@ describe('AppLayout — support session', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks keeps implementations: the ETP-5742 block above leaves the gate on
+    // SUBSCRIPTION_REQUIRED and an empty menu, which would render the blocked screen here.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
     localStorage.clear();
     applySupportSessionFromServer(
       { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },

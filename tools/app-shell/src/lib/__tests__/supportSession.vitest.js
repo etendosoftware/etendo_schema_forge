@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/lib/supportSession.js
 // @covers tools/app-shell/src/lib/observability.js
 import { declareCookieSession } from '@/test/sessionContract.js';
+import { registerApiSession, resetApiSessionForTests } from '@etendosoftware/app-shell-core/auth/api';
 import { isAnalyticsSuppressed } from '../observability.js';
 import {
   ACCOUNT_ENDPOINT,
@@ -199,6 +200,23 @@ describe('redeeming the ticket', () => {
     expect(result).toEqual({ ok: false, reason: SUPPORT_HANDOFF_FAILURES.rejected, code });
   });
 
+  it('is not abandoned when the session restore replaces the identity while the POST is in flight', async () => {
+    // The handoff page loads with AuthProvider restoring the session (GET /session → 401 →
+    // logout()) in parallel. That replaces the session identity under the ambient scope; the
+    // handoff, which belongs to no session, must still deliver the answer the backend gave.
+    const scope = { capture: () => ({}), isSameIdentity: () => false, isCurrent: () => false };
+    registerApiSession({ getToken: () => null, onUnauthorized: () => {}, scope });
+    try {
+      const answer = { status: 'success', environment: { clientId: 'CLIENT-ACME' } };
+      globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse(answer));
+
+      expect(await redeemSupportTicket('abc123')).toEqual({ ok: true, data: answer });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      resetApiSessionForTests();
+    }
+  });
+
   it('reports a missing ticket without calling the backend', async () => {
     globalThis.fetch = vi.fn();
     expect(await redeemSupportTicket(null)).toEqual({ ok: false, reason: SUPPORT_HANDOFF_FAILURES.missing });
@@ -286,6 +304,13 @@ describe('the support session reported by /me', () => {
   it('rejects when /me cannot be read, so the caller keeps the mode it has', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse({}, { status: 500 }));
     await expect(fetchSupportSession()).rejects.toThrow();
+  });
+
+  it('forgets the persisted marker when /me answers 401, and still rejects', async () => {
+    localStorage.setItem(SUPPORT_SESSION_STORAGE_KEY, JSON.stringify(SUPPORT_SESSION));
+    globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse({}, { status: 401 }));
+    await expect(fetchSupportSession()).rejects.toThrow();
+    expect(localStorage.getItem(SUPPORT_SESSION_STORAGE_KEY)).toBeNull();
   });
 
   it('drops malformed values', () => {
