@@ -203,6 +203,15 @@ describe('OcrSidePanel — the document slot', () => {
     expect(screen.queryByTestId('pdf-viewer')).toBeNull();
   });
 
+  it('renders a WEBP slot file as an image, not through the PDF viewer (ETP-5735)', async () => {
+    hookState = withFile({ attachmentId: 'att-3', fileName: 'scan.webp', mimeType: 'image/webp', objectUrl: 'blob:webp' });
+    render(<OcrSidePanel {...defaultProps} />);
+
+    const img = await screen.findByAltText('scan.webp');
+    expect(img.getAttribute('src')).toBe('blob:webp');
+    expect(screen.queryByTestId('pdf-viewer')).toBeNull();
+  });
+
   it('stores a picked PDF via storeFile', () => {
     const { container } = render(<OcrSidePanel {...defaultProps} />);
     const file = pdfFile();
@@ -219,7 +228,7 @@ describe('OcrSidePanel — the document slot', () => {
     fireEvent.change(fileInput(container), { target: { files: [odd] } });
 
     expect(storeFile).not.toHaveBeenCalled();
-    expect(screen.getByText('ocrInlinePdfOnly')).toBeInTheDocument();
+    expect(screen.getByText('attachmentsInvalidType')).toBeInTheDocument();
   });
 
   it('surfaces a failed store instead of pretending it worked', () => {
@@ -256,7 +265,7 @@ describe('OcrSidePanel — drag and drop', () => {
     fireEvent.drop(dropZone(container), { dataTransfer: { files: [odd] } });
 
     expect(storeFile).not.toHaveBeenCalled();
-    expect(screen.getByText('ocrInlinePdfOnly')).toBeInTheDocument();
+    expect(screen.getByText('attachmentsInvalidType')).toBeInTheDocument();
   });
 
   it('stores a dropped file in the filled state too', () => {

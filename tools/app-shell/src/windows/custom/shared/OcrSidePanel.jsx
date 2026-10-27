@@ -79,7 +79,7 @@ function buildPickedFileHandler({ isBusy, canAttach, storeFile, setPickError, ui
   return (picked) => {
     if (!picked || isBusy || !canAttach) return;
     if (!ACCEPTED_TYPES[picked.type]) {
-      setPickError(ui('ocrInlinePdfOnly'));
+      setPickError(ui('attachmentsInvalidType'));
       return;
     }
     setPickError(null);
