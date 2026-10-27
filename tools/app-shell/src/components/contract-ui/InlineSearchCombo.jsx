@@ -6,9 +6,9 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, shouldKeepLocating,
-  centerOptionInPanel,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
 } from './selectorSelection.js';
+import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // Page size for the server-side search's paginated fetches (initial load, search, and
@@ -156,8 +156,6 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // ETP-5903 — the user typed or pressed a key during this open: the walk stops and the list is not
   // re-centred under them. Reset on every open.
   const interactedRef = useRef(false);
-  // ETP-5903 — the committed option was already centred during this open.
-  const centeredRef = useRef(false);
 
   // Resets pagination state before a fresh search (new typed query, or reopening with an
   // empty query) — mirrors the resets CreatableSearchSelect.jsx performs at each of its
@@ -443,37 +441,14 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setLocateDone(false);
   }, [value, query, open]);
 
-  // ETP-5903 — every open starts untouched and not yet centred.
-  useEffect(() => {
-    interactedRef.current = false;
-    centeredRef.current = false;
-  }, [open]);
-
-  // ETP-5903 AC4 — a typed search shows its results from the top. Once the list has been centred on
-  // the committed value, the panel would otherwise stay scrolled mid-list while the new results land.
-  useEffect(() => {
-    if (query.trim() !== '' && dropdownRef.current) dropdownRef.current.scrollTop = 0;
-  }, [query]);
-
-  // ETP-5903 — reopening with a committed value that is not on the loaded pages walks forward,
-  // one page at a time, until the value shows up IN PLACE (with its neighbours around it), the list
-  // ends, or LOCATE_SELECTION_MAX_PAGES is reached. Only then does the ETP-5846 pin get its turn
-  // (`locateDone`). One step per settled page: `settledFetches` re-runs this once each fetch has
-  // fully finished, so the in-flight guard in `fetchServerResults` can never swallow a step (a run
-  // while a page is still in flight is a no-op there).
-  useEffect(() => {
-    if (!open || locateDone || !hasSelection) return;
-    if (!selectorUrl || serverResults == null || query.trim() !== '') return;
-    const keepGoing = shouldKeepLocating({
-      found: resolveSelectedIndex(serverResults, value) !== -1 || (excludeId != null && value === excludeId),
-      hasMore,
-      loadedRows: serverResults.length,
-      pageSize: SERVER_SEARCH_PAGE,
-      interacted: interactedRef.current,
-    });
-    if (keepGoing) fetchServerResults('', offsetRef.current);
-    else setLocateDone(true);
-  }, [open, locateDone, hasSelection, selectorUrl, serverResults, query, settledFetches, value, excludeId, hasMore, fetchServerResults]);
+  // ETP-5903 — locate the committed value in place (walk), then centre it; see the hook.
+  const selectedIndex = resolveSelectedIndex(filtered, value);
+  useLocateCommittedValue({
+    open, query, value, excludeId, dropdownRef, interactedRef, selectorUrl, rows: serverResults,
+    hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
+    fetchPage: fetchServerResults, offsetRef,
+    selectedIndex, renderedCount: filtered.length, layoutKey: dropdownStyle,
+  });
 
   // ETP-5846 — when the combo OPENS with a committed value that is nowhere in what it can already
   // show, resolve its row. "Nowhere" covers BOTH catalogs, because the option list is fed by
@@ -511,21 +486,6 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const el = dropdownRef.current?.querySelector(`[data-option-index="${activeIndex}"]`);
     el?.scrollIntoView?.({ block: 'nearest' });
   }, [activeIndex]);
-
-  // ETP-5846 — "clearly identified" also means VISIBLE. ETP-5903 — and centred, with the options
-  // around it in view: done ONCE per open, when the committed option first appears (on page 0 or
-  // after the walk), and never after the user typed or pressed a key, so a page landing later can
-  // never yank the list away from where they are. Focus and keyboard highlight are left alone.
-  // An option among the last loaded rows cannot be centred yet: retried when the next page lands.
-  const selectedIndex = resolveSelectedIndex(filtered, value);
-  useEffect(() => {
-    if (!open || selectedIndex < 0 || centeredRef.current || interactedRef.current) return;
-    if (query.trim() !== '') return;
-    const panel = dropdownRef.current;
-    const el = panel?.querySelector(`[data-option-index="${selectedIndex}"]`);
-    if (!el) return;
-    centeredRef.current = centerOptionInPanel(panel, el) || !hasMore;
-  }, [open, selectedIndex, query, dropdownStyle, filtered.length, hasMore]);
 
   // ETP-5903 — arrows start from the committed option while no search is typed; with a query the
   // list is that search's results, from the top (AC4).

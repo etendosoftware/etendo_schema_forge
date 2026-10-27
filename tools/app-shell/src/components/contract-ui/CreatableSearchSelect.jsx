@@ -6,9 +6,9 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, shouldKeepLocating,
-  centerOptionInPanel, hasCommittedValue,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue,
 } from './selectorSelection.js';
+import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
@@ -472,8 +472,6 @@ export function CreatableSearchSelect({
   const [locateDone, setLocateDone] = useState(false);
   // ETP-5903 — the user typed or pressed a key during this open: no more walking, no re-centring.
   const interactedRef = useRef(false);
-  // ETP-5903 — the committed option was already centred during this open.
-  const centeredRef = useRef(false);
   // ETP-5903 — `{ id, generation }` of the pin lookup in flight, and the id already looked up during
   // this open (one lookup per open, whatever pages land afterwards). Mirrors InlineSearchCombo.
   const pinRequestRef = useRef(null);
@@ -836,37 +834,16 @@ export function CreatableSearchSelect({
     setLocateDone(false);
   }, [value, query, open]);
 
-  // ETP-5903 — every open starts untouched and not yet centred.
-  useEffect(() => {
-    interactedRef.current = false;
-    centeredRef.current = false;
-  }, [open]);
-
-  // ETP-5903 AC4 — a typed search shows its results from the top, even after the list was centred.
-  useEffect(() => {
-    if (query.trim() !== '' && dropdownRef.current) dropdownRef.current.scrollTop = 0;
-  }, [query]);
-
-  // ETP-5903 — serverSearch mode: reopening with a committed value that is not on the loaded pages
-  // walks forward one page at a time until it shows up IN PLACE, the list ends, or
-  // LOCATE_SELECTION_MAX_PAGES is reached; only then may the pin run (`locateDone`). One step per
-  // settled fetch (`settledFetches`); a run while a page is in flight is a no-op in
-  // `triggerServerSearch`. Waits while the first page is loading: until it lands, `serverOptions`
-  // may still hold the previous open's list. A background revalidation that replaces page 0
-  // mid-walk just makes the walk resume from there.
-  useEffect(() => {
-    if (!serverSearch || !open || locateDone || !hasValue) return;
-    if (!selectorUrl || serverOptions == null || loading || query.trim() !== '') return;
-    const keepGoing = shouldKeepLocating({
-      found: resolveSelectedIndex(serverOptions, value) !== -1,
-      hasMore,
-      loadedRows: serverOptions.length,
-      pageSize: SERVER_SEARCH_PAGE,
-      interacted: interactedRef.current,
-    });
-    if (keepGoing) triggerServerSearch('', offsetRef.current);
-    else setLocateDone(true);
-  }, [serverSearch, open, locateDone, hasValue, selectorUrl, serverOptions, loading, query, settledFetches, value, hasMore, triggerServerSearch]);
+  // ETP-5903 — locate the committed value in place (walk), then centre it; see the hook. The walk
+  // is serverSearch-only and waits while a page is loading: until the first one lands,
+  // `serverOptions` may still hold the previous open's list.
+  useLocateCommittedValue({
+    open, query, value, dropdownRef, interactedRef,
+    paged: serverSearch, selectorUrl, rows: serverOptions, loading, panelLoading,
+    hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
+    fetchPage: triggerServerSearch, offsetRef,
+    selectedIndex, renderedCount: filteredOptions.length, layoutKey: dropdownStyle,
+  });
 
   // ETP-5903 — the walk ended without the value on screen: pin it on top (one lookup per open).
   useEffect(() => {
@@ -887,18 +864,6 @@ export function CreatableSearchSelect({
     const el = dropdownRef.current?.querySelector(`[data-option-index="${activeIndex}"]`);
     el?.scrollIntoView?.({ block: 'nearest' });
   }, [activeIndex]);
-
-  // ETP-5903 — centre the committed option ONCE per open, when it first appears (page 0, after the
-  // walk, or in a fetch-once/lookup list), never under a user who already typed or pressed a key.
-  // An option among the last loaded rows cannot be centred yet: retried when the next page lands.
-  useEffect(() => {
-    if (!open || selectedIndex < 0 || centeredRef.current || interactedRef.current) return;
-    if (query.trim() !== '' || panelLoading) return;
-    const panel = dropdownRef.current;
-    const el = panel?.querySelector(`[data-option-index="${selectedIndex}"]`);
-    if (!el) return;
-    centeredRef.current = centerOptionInPanel(panel, el) || !hasMore;
-  }, [open, selectedIndex, query, panelLoading, dropdownStyle, filteredOptions.length, hasMore]);
 
   // Derived visibility/state flags for the trigger and dropdown — computed together
   // since they all depend on the same selection/parent/query inputs.
