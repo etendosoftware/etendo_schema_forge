@@ -416,6 +416,25 @@ describe('InlineSearchCombo — current-selection resolution off the loaded page
     expect(lookupCalls()).toHaveLength(1);
   });
 
+  // ETP-5948 — the backend matches each identifier column on its own, so a "<code> - <name>"
+  // label finds nothing as a whole; the lookup retries with the code segment.
+  it('retries the label lookup with the code when the full "code - name" label finds nothing', async () => {
+    const paged = routedFetch({ totalRows: 1000 });
+    global.fetch = vi.fn((url) => {
+      const q = new URL(String(url), 'http://test').searchParams.get('q');
+      if (q === '57200000') return jsonOk([{ id: 'acc-572', name: '57200000 - Bancos' }]);
+      if (q != null) return jsonOk([]);
+      return paged(url);
+    });
+
+    await committedCombo({ value: 'acc-572', displayLabel: '57200000 - Bancos' });
+    await openViaChip();
+
+    await waitFor(() => expect(screen.getByTestId('inline-add-option-tax-acc-572')).toHaveAttribute('aria-selected', 'true'));
+    expect(lookupCalls().map(([url]) => new URL(String(url), 'http://test').searchParams.get('q')))
+      .toEqual(['57200000 - Bancos', '57200000']);
+  });
+
   it('does not re-resolve the current selection when the lookup found nothing', async () => {
     // The lookup resolved NOTHING (the selector context forbids the id). The attempt still counts:
     // re-firing it on every page append would be pure waste.

@@ -122,17 +122,23 @@ export function committedItemFromRow(field, row, value) {
   return item;
 }
 
+/** Most label segments a pin lookup tries after the full label (one request each, on a miss). */
+const PIN_MAX_SEGMENTS = 3;
+
 /**
- * ETP-5948 — search terms for pinning a committed value by its label: the label itself, then the
- * segment before the first ` - ` (the AD identifier separator). Selector search matches each
- * identifier column on its own, so a `"<code> - <name>"` label like an account's finds nothing
- * as a whole, while its code does.
+ * ETP-5948 — search terms for pinning a committed value by its label: the label itself, then each
+ * segment between ` - ` (the AD identifier separator). Selector search matches each identifier
+ * column on its own, so a `"<code> - <name>"` label like an account's finds nothing as a whole,
+ * while one of its parts does — not always the first (a tax reads `"21 % - <name> - <category>"`
+ * and only its name is searchable). Callers stop at the first term that returns the id.
+ *
+ * shortcut: segments past PIN_MAX_SEGMENTS are not tried; raise it if a longer identifier shows up.
  *
  * @param {string} label The committed value's display label.
- * @returns {string[]} One or two distinct, non-empty terms, in the order to try them.
+ * @returns {string[]} Distinct, non-empty terms, in the order to try them.
  */
 export function pinSearchTerms(label) {
   const full = String(label ?? '').trim();
-  const head = full.split(' - ')[0].trim();
-  return [...new Set([full, head])].filter(Boolean);
+  const segments = full.split(' - ').map((s) => s.trim()).slice(0, PIN_MAX_SEGMENTS);
+  return [...new Set([full, ...segments])].filter(Boolean);
 }

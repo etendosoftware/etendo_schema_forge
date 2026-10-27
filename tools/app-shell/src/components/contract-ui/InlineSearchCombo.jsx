@@ -6,7 +6,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, pinSearchTerms,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
@@ -267,18 +267,24 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     pinAttemptedRef.current = id;
     const generation = searchGenerationRef.current;
     pinRequestRef.current = { id, generation };
-    const queryParams = { ...selectorContext, q: label, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
-    apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
+    // ETP-5948 — a "<code> - <name>" label finds nothing as a whole; the code retry does.
+    const lookup = async () => {
+      for (const term of pinSearchTerms(label)) {
+        const queryParams = { ...selectorContext, q: term, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
+        const r = await apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' });
+        const data = r.ok ? await r.json() : null;
+        const match = (data?.items ?? []).filter(it => String(it.id) === id);
+        if (match.length) return match;
+      }
+      return [];
+    };
+    lookup()
+      .then(match => {
         const request = pinRequestRef.current;
         // Abandoned: the value changed, a new search started, or this answer is late.
         if (!request || request.id !== id || request.generation !== generation) return;
         if (searchGenerationRef.current !== generation) return;
-        const items = (data?.items ?? [])
-          .filter(it => String(it.id) === id)
-          .map(it => ({ id: it.id, name: it.label || it.name, ...it }));
-        setPinnedOptions(items);
+        setPinnedOptions(match.map(it => ({ id: it.id, name: it.label || it.name, ...it })));
       })
       .catch(() => {})
       .finally(() => {

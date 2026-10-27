@@ -703,6 +703,21 @@ describe('ProductDrawerShell — committed value (ETP-5948)', () => {
     expect(screen.queryByTestId('opt-p-9000')).toBeNull();
   });
 
+  it('retries the pin with the code segment when the full "code - name" label finds nothing', async () => {
+    routedFetch({ total: 1000 });
+    const paged = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation((url) => {
+      const q = url.includes('/selectors/') ? new URL(url).searchParams.get('q') : null;
+      if (q === 'P900') return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [{ id: 'p-900', label: 'P900 - Product 900' }] }) });
+      if (q != null) return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+      return paged(url);
+    });
+    renderShell({ value: 'p-900', valueLabel: 'P900 - Product 900' });
+
+    await waitFor(() => expect(screen.getByTestId('opt-p-900')).toHaveAttribute('aria-selected', 'true'));
+    expect(lookups().map((u) => new URL(u).searchParams.get('q'))).toEqual(['P900 - Product 900', 'P900']);
+  });
+
   it('counts raw rows for the cap when the transform drops duplicates', async () => {
     routedFetch({ total: 1000 });
     // Keeps 1 row in 3: six raw pages show only 60 rows, but cost no more than six requests.

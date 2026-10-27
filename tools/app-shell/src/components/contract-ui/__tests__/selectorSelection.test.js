@@ -127,9 +127,12 @@ test('committedItemFromRow is null without a committed value', () => {
   assert.equal(committedItemFromRow({ onSelectMappings: [] }, {}, null), null);
 });
 
-test('pinSearchTerms tries the full label, then the segment before the first " - "', () => {
-  assert.deepEqual(pinSearchTerms('60000000 - Compras de mercaderías'), ['60000000 - Compras de mercaderías', '60000000']);
-  assert.deepEqual(pinSearchTerms('A - B - C'), ['A - B - C', 'A']);
+test('pinSearchTerms tries the full label, then each " - " segment, capped', () => {
+  assert.deepEqual(pinSearchTerms('60000000 - Compras de mercaderías'),
+    ['60000000 - Compras de mercaderías', '60000000', 'Compras de mercaderías']);
+  assert.deepEqual(pinSearchTerms('21 % - Entregas IVA 21% - IVA Normal'),
+    ['21 % - Entregas IVA 21% - IVA Normal', '21 %', 'Entregas IVA 21%', 'IVA Normal']);
+  assert.deepEqual(pinSearchTerms('A - B - C - D'), ['A - B - C - D', 'A', 'B', 'C']);
   assert.deepEqual(pinSearchTerms('TestProduct'), ['TestProduct']);
   assert.deepEqual(pinSearchTerms(''), []);
   assert.deepEqual(pinSearchTerms(null), []);

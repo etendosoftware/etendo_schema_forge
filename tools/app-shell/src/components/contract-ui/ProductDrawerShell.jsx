@@ -11,7 +11,7 @@ import {
   useProductSelectorFetch,
   PRODUCT_SELECTOR_PAGE_SIZE,
 } from './productSelectorDrawerShared.jsx';
-import { hasCommittedValue, prependCurrentSelection, resolveSelectedIndex } from './selectorSelection.js';
+import { hasCommittedValue, pinSearchTerms, prependCurrentSelection, resolveSelectedIndex } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
 // Stable no-op so swapping it in for `onClose` does not churn the hook's ref effect.
@@ -221,7 +221,15 @@ export default function ProductDrawerShell({
     if (pinAttemptRef.current || resolveSelectedIndex(results, value) !== -1) return;
     const attempt = {};
     pinAttemptRef.current = attempt;
-    lookupRows(valueLabel, value).then((rows) => {
+    // A "<code> - <name>" label finds nothing as a whole; retry with the code (pinSearchTerms).
+    const lookup = async () => {
+      for (const term of pinSearchTerms(valueLabel)) {
+        const rows = await lookupRows(term, value);
+        if (rows.length || pinAttemptRef.current !== attempt) return rows;
+      }
+      return [];
+    };
+    lookup().then((rows) => {
       if (pinAttemptRef.current === attempt) setPinned(fetchConfig.transform ? fetchConfig.transform(rows) : rows);
     });
   }, [open, locateDone, searching, value, valueLabel, results, lookupRows, fetchConfig]);
