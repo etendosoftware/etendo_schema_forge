@@ -72,7 +72,7 @@ export default function ContactsWindow(props) {
            // ETP-5758 — bulk delete is ListView's generic "Delete selected" action
            // (useBulkRowDelete): its confirm dialog stays open and read-only until the
            // batch settles, so the window no longer renders a delete of its own and must
-           // not set `hideBulkDelete`. NOTE: this whole object REPLACES — not merges with — the
+           // not set `hideBulkDelete` (except in support mode, ETP-5351). NOTE: this whole object REPLACES — not merges with — the
            // generated page's own `listViewOptions={{hidePrint,hideCounter,hideLink}}`
            // (same last-prop-wins JSX precedence SUBSET_FILTERS above relies on), so it must
            // keep repeating those flags — keep this in sync if BusinessPartnerPage's
@@ -81,7 +81,7 @@ export default function ContactsWindow(props) {
            hideCreate={isSupportMode}
            hideDeleteButton={isSupportMode}
            rowQuickActions={{ hideDeleteButton: isSupportMode }}
-           // The import dialog creates contacts too; spread so the generated config survives outside support.
+           // The import dialog creates contacts too; outside support mode the spread leaves the generated config untouched; in support mode `import: { enabled: false }` REPLACES it.
            {...(isSupportMode && { import: { enabled: false } })}
            enableSecondaryRowDelete={!isSupportMode}
            headerContent={chromeless ? undefined : renderContactsHeaderSummary}
