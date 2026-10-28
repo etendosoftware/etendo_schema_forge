@@ -12,7 +12,9 @@ name: E2E Coverage Map
 
 on:
   push:
-    branches: [develop]
+    # TEMPORARY (ETP-5891): feature/ETP-5891 runs it once so the published artifact can be checked
+    # before the workflow reaches develop. Remove before merging.
+    branches: [develop, feature/ETP-5891]
   workflow_dispatch:
 
 permissions:
