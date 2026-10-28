@@ -102,7 +102,7 @@ export function showBulkActionToast(ui, result) {
  * row-specific detail (ETP-5710), so it is never promoted to the summary.
  */
 function sharedFailureReason(failed, ui) {
-  if (failed.length < 2 || !(failed[0].messageKeys?.length > 0)) return null;
+  if (failed.length < 2 || !failed[0].messageKeys?.length) return null;
   const identity = (f) => JSON.stringify([f.messageKeys ?? [], f.messageParams ?? {}]);
   const first = identity(failed[0]);
   if (!failed.every((f) => identity(f) === first)) return null;
