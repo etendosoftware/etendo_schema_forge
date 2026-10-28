@@ -4,10 +4,13 @@
 // every mocked spec: this only narrows the local pre-push.
 //
 // Usage:
-//   node scripts/select-mocked-specs.js --map <map.json> --base <ref> [--head <ref>] [--out <file>] [--json]
+//   node scripts/select-mocked-specs.js --base <ref> [--head <ref>] [--map <map.json>] [--develop <ref>]
+//                                       [--out <file>] [--json]
 //
 // The map (scripts/e2e-coverage-map.mjs) lists, for each app source file, the mocked specs whose
-// tests executed it. A mocked spec is selected when:
+// tests executed it. Without --map it is the one CI published for where this branch left develop
+// (--develop, origin/develop by default; scripts/lib/e2e-coverage-map-lookup.js). A mocked spec
+// is selected when:
 //   - it changed, or its screenshot baselines did;
 //   - it executed a changed file, according to the map;
 //   - it imports a changed e2e file (a helper, a mock), reads it or declares `@covers` it, directly
@@ -32,11 +35,13 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sanitizedGitEnv } from './lib/git-env.js';
+import { findCoverageMap } from './lib/e2e-coverage-map-lookup.js';
 import { isEntryPoint } from './find-tests.js';
 import { buildImporters, changedPaths, textReaders } from './select-tests.js';
 
 const SF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const ALWAYS_RUN_FILE = 'e2e/mocked-always-run.json';
+const MAP_CACHE_DIR = join(SF_ROOT, 'tmp', 'e2e-coverage-map');
 
 const MOCKED_SPEC_RE = /^e2e\/.+\.mocked\.spec\.js$/;
 const SPEC_RE = /^e2e\/.+\.spec\.js$/;
@@ -245,6 +250,24 @@ function git(args) {
   return execFileSync('git', args, { cwd: SF_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: sanitizedGitEnv() });
 }
 
+// A pre-push must not hang on the network: one minute covers a 50 KB download.
+function gh(args) {
+  return execFileSync('gh', args, {
+    cwd: SF_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 60_000,
+    stdio: ['ignore', 'pipe', 'pipe'], env: { ...sanitizedGitEnv(), GH_PROMPT_DISABLED: '1' },
+  });
+}
+
+/** `--map` as given, or the one CI published for develop: { path, label } or { error }. */
+export function resolveMap({ mapArg, developRef, find = findCoverageMap }) {
+  if (mapArg) return { path: mapArg, label: mapArg };
+  const found = find({ git, gh, cacheDir: MAP_CACHE_DIR, developRef });
+  if (found.error) return found;
+  const age = found.distance === 0 ? 'where this branch left develop' : `${found.distance} merge(s) before where this branch left develop`;
+  const label = `develop ${found.sha.slice(0, 9)}, ${age}, ${found.source}`;
+  return { path: found.path, label, note: found.note };
+}
+
 function readOrNull(path) {
   try {
     return readFileSync(path, 'utf8');
@@ -258,21 +281,26 @@ export function main(argv) {
     const i = argv.indexOf(name);
     return i >= 0 ? argv[i + 1] : undefined;
   };
-  const mapPath = arg('--map');
   const base = arg('--base');
-  if (!mapPath || !base) {
-    console.error('usage: select-mocked-specs.js --map <map.json> --base <ref> [--head <ref>] [--out <file>] [--json]');
+  if (!base) {
+    console.error('usage: select-mocked-specs.js --base <ref> [--head <ref>] [--map <map.json>] [--develop <ref>] [--out <file>] [--json]');
     return 2;
   }
   const out = arg('--out');
-  const text = readOrNull(mapPath);
-  const map = text == null ? new Error(`cannot read ${mapPath}`) : parseMap(text);
-  if (map instanceof Error) {
-    // Without a usable map nothing can be narrowed: run everything, never less.
-    console.log(`select-mocked-specs: the whole suite (map unusable: ${map.message})`);
+  // Without a usable map nothing can be narrowed: run everything, never less.
+  const whole = (why) => {
+    console.log(`select-mocked-specs: the whole suite (${why})`);
     if (out) writeFileSync(out, '*\n');
     return 0;
-  }
+  };
+  const found = resolveMap({ mapArg: arg('--map'), developRef: arg('--develop') ?? 'origin/develop' });
+  if (found.error) return whole(`no map: ${found.error}`);
+  const text = readOrNull(found.path);
+  const map = text == null ? new Error(`cannot read ${found.path}`) : parseMap(text);
+  if (map instanceof Error) return whole(`map unusable: ${map.message}`);
+  const info = argv.includes('--json') ? console.error : console.log;
+  if (found.note) info(`select-mocked-specs: ${found.note}`);
+  info(`select-mocked-specs: map of ${found.label}`);
   const head = arg('--head') ?? 'HEAD';
   const changed = changedPaths(git(['diff', '--name-status', '-M', `${base}...${head}`]));
   const files = git(['ls-files']).split('\n').filter(Boolean);

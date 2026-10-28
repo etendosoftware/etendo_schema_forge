@@ -9,6 +9,7 @@ import {
   parseAlwaysRun,
   parseMap,
   planLines,
+  resolveMap,
   selectMockedSpecs,
   shortPath,
   summary,
@@ -261,15 +262,36 @@ describe('main', () => {
     }
   });
 
-  it('exits 2 without --map or --base', () => {
+  it('exits 2 without --base', () => {
     const error = console.error;
     console.error = () => {};
     try {
-      assert.equal(main(['--base', 'origin/develop']), 2);
       assert.equal(main(['--map', 'map.json']), 2);
     } finally {
       console.error = error;
     }
+  });
+});
+
+describe('resolveMap', () => {
+  it('uses --map as given, without looking for one', () => {
+    const find = () => assert.fail('must not look for a map');
+    assert.deepEqual(resolveMap({ mapArg: 'local.json', find }), { path: 'local.json', label: 'local.json' });
+  });
+
+  it('labels the map it found with its develop commit, how far back it is and where it came from', () => {
+    const find = ({ developRef }) => ({ path: '/c/abc/map.json', sha: '0123456789abcdef', distance: 3, source: 'kept', note: `n ${developRef}` });
+    assert.deepEqual(resolveMap({ developRef: 'origin/develop', find }), {
+      path: '/c/abc/map.json',
+      label: 'develop 012345678, 3 merge(s) before where this branch left develop, kept',
+      note: 'n origin/develop',
+    });
+    const latest = resolveMap({ find: () => ({ path: 'p', sha: 'fedcba9876543210', distance: 0, source: 'downloaded' }) });
+    assert.equal(latest.label, 'develop fedcba987, where this branch left develop, downloaded');
+  });
+
+  it('passes the lookup error through, so main runs the whole suite', () => {
+    assert.deepEqual(resolveMap({ find: () => ({ error: 'no map' }) }), { error: 'no map' });
   });
 });
 
