@@ -1686,6 +1686,78 @@ With a `read-only` tier on Contactos:
 
 Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
 
+## ETP-5824 — Missing postal code and TicketBAI: completion block + address warning
+
+**Problem.** For a contact **not** flagged as *Factura simplificada* (`tbaiIssimplifiedinv = N`,
+the default for contacts created from GO), TicketBAI requires a postal code and address line 1 on
+the invoice partner address, and a tax ID on the contact. The check only ran while the TicketBAI XML was being built, after
+the invoice had already been completed. The invoice was completed but never sent, the error only
+went to the TicketBAI sync log (and Datadog, `tbai-tercero-sin-codigo-postal`), and the user got
+no feedback.
+
+**Backend (com.smf.ticketbai) — completion is blocked.** `ProcessInvoiceTbaiHook.preProcess` now
+runs the same rules (`XMLUtils.findRecipientDataError`) before an invoice is completed (`CO`). It
+returns an error, so the document stays in draft and the user sees `TBAI_EmptyPostalCode` /
+`TBAI_EmptyDir` / `TBAI_EmptyNifCode` (checked in that order; only the first failure is
+reported). A value made only of spaces counts as missing (a postal code `' '` used to slip
+through), and an invoice with no partner address at all is reported as a missing postal code.
+These three messages exist only in Spanish (the module's base language is `es_ES`), so a user on
+an English UI sees them in Spanish; an English translation needs a translation module and is out
+of scope for ETP-5824. The check applies when all of these hold:
+- it is a sales invoice;
+- the invoice organization resolves a TicketBAI configuration up the organization tree;
+- the invoice date is not earlier than the TicketBAI system date.
+
+The hook also runs the check on a void (`RC`), but that only matters in Classic: GO offers no void
+for TicketBAI invoices, by design. In Classic, this means an invoice that this bug left completed but never
+sent cannot be voided until the partner address is fixed: the reversal invoice is sent to
+TicketBAI and needs the recipient block.
+
+It does **not** depend on *auto-send*: an invoice sent later, with the send button or by the
+background process, fails just the same. Auto-send still decides only whether postProcess sends
+the invoice right away; that decision now also resolves the configuration by the invoice's
+organization, not the client. The same check still runs while the XML is built, as a last line of
+defence.
+
+**Address modal — non-blocking warning.** `LocationEditorModal` in `'bpartner'` mode (its
+default) shows the note wherever it is opened with a business partner: the Contactos *Dirección*
+tab, the invoice "+ Añadir dirección" picker (`PartnerAddressPicker`, sales and purchase invoice),
+and the fiscal monitor's contact detail (`ContactDetailModal`). The note is shown only for
+**customers**, because only sales invoices are blocked: a supplier-only contact (for example, an
+address added from the purchase invoice picker) never sees it, and a contact that is both customer
+and supplier does. The modal shows an inline note under *Código postal*
+(`data-testid="location-postalCode-tbai-warning"`, key `tbaiPostalCodeMissingWarning`) when all of
+these hold:
+- the contact is a customer (`/contacts/businessPartner/{bpId}` → `customer`, AD `IsCustomer`);
+- the contact is not simplified invoice (same record → `tbaiIssimplifiedinv`);
+- TicketBAI is in use: at least one ACTIVE `tbai-config/header` row is readable by the user;
+- the postal code is empty or only spaces.
+
+Why "TicketBAI is in use" and not the contact's organization: neither spec gives the browser an
+organization to match on. The contacts record has no organization field, and the `tbai-config`
+list ignores an `organization` parameter. A GO tenant normally has a single legal organization, so
+the simple criterion is right in practice. The note is advisory; the hard guarantee is the
+completion block above, which resolves the invoice's organization up the tree.
+
+The note disappears as soon as a postal code is typed. **It never blocks the save**: the postal code
+is not part of the save gate (address line 1 + country with the `structured-address-for-sepa` flag
+off, ETP-5103; street, number, city + country with it on, ETP-5806). The `'location'` mode (Warehouse) has no business
+partner and never asks for this data. A contact that is not a customer, or is simplified, never
+triggers the configuration lookup. If a lookup fails, or the record does not carry the customer or
+simplified flag, the note stays hidden. Logic:
+`tools/app-shell/src/windows/custom/shared/tbaiPostalCodeWarning.js`.
+
+**Manual check.**
+1. In a tenant with TicketBAI configured, open a customer contact with *Factura simplificada* off.
+   Add an address without a postal code (or with only spaces): the note appears, and Guardar still
+   works.
+2. Type a postal code: the note disappears.
+3. Create a sales invoice for that contact using the address without a postal code (or with a
+   postal code of only spaces), and complete it. Completion is refused with the postal code
+   message, and the invoice stays in draft.
+4. From a purchase invoice, use "+ Añadir dirección" on a supplier-only contact (not a customer)
+   and leave the postal code empty: no note appears.
+
 ## Contact searchKey over MCP — ETP-5852
 
 As in the app (whose form does not show it), a contact's `searchKey` is its number (`etgoIdentifier`). `etendo_schema(view:"create")` lists it as optional, `serverDefaulted` (`BusinessPartnerHandler#serverResolvedCreateFields`), and the placeholder the save needs is put before MCP's mandatory pre-check (`resolveServerCreateFields`), so a create without it is no longer refused. A value the agent sends is still replaced by the number, and the answer says so in `searchKeyNote`. Field `agentPrompt` tells agents not to send it. Feedback M-107.

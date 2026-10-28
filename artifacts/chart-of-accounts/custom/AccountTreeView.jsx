@@ -1,3 +1,8 @@
+import { Children, cloneElement } from 'react';
+import { useGridView } from '@/hooks/useGridView.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Lock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -371,7 +376,7 @@ const ROW_CONTROL_SELECTOR = 'button, input, [role="switch"]';
  * link-styled button), a double-click on the row, or Enter on the focused row. Space
  * selects.
  */
-function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, onOpen, ui, activeChecked, activeDisabled, onActiveToggle }) {
+function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, onOpen, ui, activeChecked, activeDisabled, onActiveToggle, renderGridCells }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
   const isProtected = isProtectedLeafCode(item);
@@ -407,7 +412,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, on
       onClick={() => onRowClick(item)}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
-    >
+    >{renderGridCells(<>
       {/* Code — indent spacer (grows with depth), expand toggle, code in Space Mono */}
       <TableCell data-testid="TableCell__c9cb6e">
         <span className="flex items-center gap-2">
@@ -491,7 +496,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, on
           />
         )}
       </TableCell>
-    </TableRow>
+    </>)}</TableRow>
   );
 }
 
@@ -545,6 +550,7 @@ export default function AccountTreeView({
   windowReadOnly = false,
   // Accepted but intentionally unused — ListView always passes them
   entity: _entity,
+  gridView: _parentGridView,
   specName: _specName,
   meta: _meta,
   navigate: _navigate,
@@ -577,6 +583,35 @@ export default function AccountTreeView({
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
   const treeColumns = useMemo(() => buildTreeColumns(ui), [ui]);
+
+  const gridColumnViews = useFeatureFlag(GRID_COLUMN_VIEWS);
+  // Code carries the tree indentation and expansion controls: it is structural.
+  const gridColumns = useMemo(() => treeColumns.slice(1).map((column, index) => ({
+    ...column, column: ['Name', 'ElementLevel', 'AccountType', 'IsActive'][index],
+    sourceIndex: index + 1, required: false,
+  })), [treeColumns]);
+  const gridView = useGridView({
+    spec: 'chart-of-accounts', entity: 'elementValue', columns: gridColumns, data,
+    enabled: gridColumnViews, apiBaseUrl,
+  });
+  const renderGridCells = (fragment) => {
+    if (!gridColumnViews) return fragment;
+    const cells = Children.toArray(fragment.props.children);
+    const visibleColumns = gridView.active ? gridView.columns : gridColumns;
+    return [cells[0], ...visibleColumns.map((column) => {
+      const cell = cells[column.sourceIndex];
+      if (!gridView.active) return cloneElement(cell, { key: column.key });
+      const header = cell.type === TableHead;
+      const width = column.gridUserWidthPx;
+      return cloneElement(cell, {
+        key: column.key,
+        'data-grid-column': column.key,
+        style: { ...cell.props.style, ...(width != null ? { width, maxWidth: width, overflow: 'hidden' } : {}), ...(header ? { position: 'relative' } : {}) },
+        ...(header ? gridHeaderProps(column, gridView) : {}),
+      }, header ? <>{cell.props.children}{gridReorderHandle(column, gridView, column.label, ui)}{gridResizeHandle(column, gridView, column.label, ui)}</> : cell.props.children);
+    })];
+  };
+
 
   // Self-fetch: the full leaf-account list, loaded directly (bypassing ListView's
   // one-page `data` prop) whenever `apiBaseUrl` is available. See the component
@@ -814,21 +849,26 @@ export default function AccountTreeView({
   } else {
     treeBody = (
       <Table className="table-fixed" data-testid="account-tree-table">
-        <colgroup>
-          <col className="w-[16rem]" />
-          <col />
-          <col className="w-40" />
-          <col className="w-44" />
-          <col className="w-24" />
-        </colgroup>
+        {gridView.active ? (
+          <colgroup>
+            <col className="w-[16rem]" />
+            {gridView.columns.map((column) => <col key={column.key}
+              className={column.gridUserWidthPx != null ? undefined : [null, null, 'w-40', 'w-44', 'w-24'][column.sourceIndex]}
+              style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx } : undefined} />)}
+          </colgroup>
+        ) : (
+          <colgroup>
+            <col className="w-[16rem]" /><col /><col className="w-40" /><col className="w-44" /><col className="w-24" />
+          </colgroup>
+        )}
         <TableHeader data-testid="TableHeader__c9cb6e">
-          <TableRow className="hover:bg-transparent" data-testid="TableRow__c9cb6e">
+          <TableRow className="hover:bg-transparent" data-testid="TableRow__c9cb6e">{renderGridCells(<>
             <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeCode')}</TableHead>
             <TableHead data-testid="TableHead__c9cb6e">{ui('name')}</TableHead>
             <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeFilterElementLevel')}</TableHead>
             <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeFilterType')}</TableHead>
             <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeFilterActive')}</TableHead>
-          </TableRow>
+          </>)}</TableRow>
         </TableHeader>
         <TableBody data-testid="TableBody__c9cb6e">
           {visibleRows.map((item) => {
@@ -840,6 +880,7 @@ export default function AccountTreeView({
               <AccountTreeRow
                 key={item.id}
                 item={item}
+                renderGridCells={renderGridCells}
                 isExpanded={expanded.has(item.id)}
                 isSelected={item.id === selectedId}
                 onToggle={handleToggle}
@@ -862,6 +903,8 @@ export default function AccountTreeView({
     // which would otherwise replace this window's own stable id.
     <div {...rest} data-testid="account-tree">
       {showProgressBar && <ListProgressBar testId="account-tree-progress" data-testid="ListProgressBar__c9cb6e" />}
+      {gridColumnViews && <GridViewControls gridView={gridView} gridColumns={gridColumns} ui={ui}
+        t={(key) => gridColumns.find((column) => column.column === key)?.label ?? key} />}
       {treeBody}
     </div>
   );
