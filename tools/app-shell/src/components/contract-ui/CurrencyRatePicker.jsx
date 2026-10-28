@@ -91,6 +91,12 @@ function resolveDisplayRate(formRate, selectedOption, isOrgCurrency) {
   return useOptionRate ? selectedOption?.rate ?? null : null;
 }
 
+/** The committed currency as a pinned row, only while the full list (no search) is settled. */
+function pinnedCurrencyRows({ search, value, loading, displayValue }) {
+  if (search || !value || loading) return [];
+  return [{ id: value, isoCode: displayValue || value }];
+}
+
 /**
  * CurrencyRatePicker — searchable currency selector for document header fields.
  *
@@ -219,7 +225,7 @@ export function CurrencyRatePicker({
   );
   // ETP-5948 — a stored currency the list no longer offers (no rate range at all, or inactive) is
   // pinned on top with the ISO the form already holds, so reopening still shows what is selected.
-  const pinned = !search && value && !loading ? [{ id: value, isoCode: displayValue || value }] : [];
+  const pinned = pinnedCurrencyRows({ search, value, loading, displayValue });
   const rows = prependCurrentSelection(filtered, pinned, value);
   const selectedIndex = resolveSelectedIndex(rows, value);
   const optionId = (opt) => `${field.key}-currency-option-${opt.id}`;
@@ -466,7 +472,7 @@ export function CurrencyRatePicker({
               value={search}
               onChange={(e) => { interactedRef.current = true; setSearch(e.target.value); }}
               onKeyDown={handleSearchKeyDown}
-              aria-activedescendant={activeIdx >= 0 && rows[activeIdx] ? optionId(rows[activeIdx]) : undefined}
+              aria-activedescendant={rows[activeIdx] ? optionId(rows[activeIdx]) : undefined}
             />
           </div>
           {rateDate && (
