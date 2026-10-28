@@ -34,6 +34,14 @@ export const SUPPORT_TICKET_PARAM = 't';
 /** The internal account email of the "Soporte Etendo" user (mirrors SupportAccessGuard.SUPPORT_ACCOUNT_EMAIL). */
 export const SUPPORT_ACCOUNT_EMAIL = 'soporte@etendo-go.invalid';
 export const SUPPORT_SESSION_STORAGE_KEY = 'sf_support_session';
+
+// Plain string scan instead of a regex: an end-anchored "one or more slashes" pattern
+// backtracks super-linearly on long slash runs (Sonar S5852).
+function stripTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end -= 1;
+  return value.slice(0, end);
+}
 /**
  * How long the marker written right after a successful handoff keeps the browser in support mode
  * before `/me` has confirmed it. The handoff answer does not carry the expiry (it has the shape of
@@ -137,9 +145,9 @@ export function parseSupportTicket(hash) {
  */
 export function isSupportAccessPath(pathname, routerBase = '/') {
   if (typeof pathname !== 'string') return false;
-  const base = typeof routerBase === 'string' ? routerBase.replace(/\/+$/, '') : '';
+  const base = typeof routerBase === 'string' ? stripTrailingSlashes(routerBase) : '';
   if (base && pathname !== base && !pathname.startsWith(`${base}/`)) return false;
-  const routed = pathname.slice(base.length).replace(/\/+$/, '');
+  const routed = stripTrailingSlashes(pathname.slice(base.length));
   return routed === SUPPORT_ACCESS_PATH;
 }
 
@@ -302,7 +310,7 @@ export function redeemPendingSupportTicket(options) {
 
 /** Joins a router base and an app path into an href (`/` + `/dashboard` → `/dashboard`). */
 export function buildAppHref(routerBase, path) {
-  const base = typeof routerBase === 'string' ? routerBase.replace(/\/+$/, '') : '';
+  const base = typeof routerBase === 'string' ? stripTrailingSlashes(routerBase) : '';
   return `${base}${path}`;
 }
 
