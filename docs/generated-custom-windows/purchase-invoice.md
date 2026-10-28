@@ -22,7 +22,11 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 
 **Reactivate refusal when fiscally accepted and rectified (ETP-5745):** "Reactivar" — from the detail kebab, the row-hover kebab, and the list bulk bar — now refuses with a 422 when the invoice is BOTH (a) accepted by a fiscal system — SII (`aeatsiiEstado` = `CO` or `AE`), or TicketBAI (`eTGOTbaiStatus` = `Recibido`; Verifactu is sales-only and never applies here) — AND (b) already has at least one COMPLETED rectificativa linked via `C_Invoice_Reverse`. The error names the fiscal system and the rectificativa document number(s) (`backendError.invoiceReactivateFiscalRectified`, keys `fiscalSystem` / `rectificativas`). Every other case — not sent, rejected or pending at the fiscal system, a draft (not-yet-completed) rectificativa, or no rectificativa at all — keeps reactivating exactly as before; this is explicitly a no-regression requirement, not a new restriction on the general case.
 
-The guard also changes what "Reactivar" does mechanically when it already knows the row will be refused: a read-only `reactivationBlocked` signal (plus `reactivationBlockedFiscalSystem` / `reactivationBlockedRectificativas`), enriched on GET by `InvoiceReactivationGuard#enrichReactivationBlock` in `com.etendoerp.go`, lets both the detail kebab (`DetailMoreActionsMenu.jsx`) and the list bulk bar (`makeInvoiceReactivateRowFilter` in `tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`, shared with sales-invoice) short-circuit before the pre-unpost step and show the error with no side effect. Previously (ETP-5302's two-step flow: un-post, then reactivate) a doomed reactivation still left the invoice un-posted — this ETP-5745 refusal reason no longer does. **This fix is scoped to the ETP-5745 refusal reason only**: a reactivation that fails for any OTHER reason still un-posts the invoice first and then fails, leaving it un-posted — that pre-existing side effect is a separate, already-flagged, out-of-scope issue left for a future ticket.
+The guard also changes what "Reactivar" does mechanically when it already knows the row will be refused: a read-only `reactivationBlocked` signal (plus `reactivationBlockedFiscalSystem` / `reactivationBlockedRectificativas`), enriched on GET by `InvoiceReactivationGuard#enrichReactivationBlock` in `com.etendoerp.go`, lets both the detail kebab (`DetailMoreActionsMenu.jsx`) and the list bulk bar (`makeInvoiceReactivateRowFilter` in `tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`, shared with sales-invoice) short-circuit before the pre-unpost step and show the error with no side effect. Previously (ETP-5302's two-step flow: un-post, then reactivate) a doomed reactivation still left the invoice un-posted — this ETP-5745 refusal reason no longer does. **This fix is scoped to the ETP-5745 refusal reason only**: a reactivation that fails for any OTHER reason still un-posts the invoice first and then fails, leaving it un-posted — that pre-existing side effect is a separate, already-flagged, out-of-scope issue left for a future ticket. As of CP-9, the error names EVERY fiscal system that accepted the invoice, joined with a locale-aware conjunction ("SII y TicketBAI" / "SII and TicketBAI") rather than a plain comma — full detail in `sales-invoice.md`, which this guard shares byte-for-byte.
+
+**Over-rectification is refused on completion, and the original shows its own rectifications (ETP-5745 CP-9/CP-12):** both fixes are shared with sales-invoice (`RectificationTotalGuard`, `AbstractInvoiceHeaderHandler#enrichRectifyingInvoices`) — see `sales-invoice.md` for the full description. Applies identically here.
+
+**A purchase rectification invoice failed to confirm from the UI — root cause was a silent auto-set, not a missing reference value (ETP-5745 CP-10):** the actual bug was `useSifFieldPatcher.js`'s ETP-4783 "auto-set SII type to R on a rectificative document" effect firing on PURCHASE invoices too. `PURCHASE_CLAVE_TIPO_FC_OPTIONS` (the dropdown actually shown for `aeatsiiClaveTipoFc`) never offers `R` as a choice, yet the effect silently force-set the field to `R` anyway as soon as the document type was "Factura rectificativa" — a value the user never picked and the UI never shows as selectable. That then failed the (correct) classic reference-list validation on Confirm with *"value (R) is not allowed... F1, F5, F6, LC"*. MCP's direct-DAL write path skips this client-side effect entirely (and skips the reference-list validation), so it never hit the failure — hence the UI-vs-MCP discrepancy QA observed. **Fix:** the auto-set effect is now gated to sales only (`isPurchaseInvoice` guard in `useSifFieldPatcher.js`); a purchase rectification invoice's `aeatsiiClaveTipoFc` is left exactly as the user set it (defaulting to `'F1'`, the field's own `@SQL=` default) and the dropdown behaves normally. **This is intentional, not a regression:** purchase-side corrective-invoice support (rectification-reason handling, the AEAT XML payload for a purchase corrective) is not implemented yet, so a purchase rectificativa is sent to SII as `F1` for now, out of scope for this ticket. Sales invoices are unaffected — the sales `R` auto-set (and `aeatsiiTipoRectif`'s CP-11 auto-default, see `sales-invoice.md`) keeps working exactly as before.
 
 ## Interaction model
 
@@ -1814,6 +1818,49 @@ surfaces the error instead of proceeding with stale data. **ETP-5700:** the topb
 carried `onSave`/`isDirty` was removed; the form kebab entry's host does not receive them, so the
 kebab entry is disabled while the header is dirty instead (see "Unsaved header edits block the form
 send" in the ETP-5700 section).
+
+**Vendor-reference validation message fully replaced with a bilingual GO sentence (ETP-5745, 5th
+fix) — this is the authoritative note, verified live against this window.** Classic's purchase-only
+pre-send check (`SIIUtils.invoicePreviousValidations`, `org.openbravo.module.sii`, untouched) names
+the field `POReference` by its classic label, "Referencia del proveedor", in a Spanish-only
+sentence — this window renders a DIFFERENT label for that same column. `SiiSendHandler
+.remapDriftedFieldLabels` (`com.etendoerp.go`) detects the classic sentence (by its Spanish text,
+unchanged — classic never localizes it) and replaces the WHOLE message, not just the field name,
+with a GO-authored sentence in the SPA's own current locale:
+- **es_ES:** "La factura de compra debe contener información en el campo Nº documento."
+- **en_US:** "The purchase invoice must contain information in the Document No. field."
+- **Language source:** `NeoLanguage.currentCode()` — the GO locale `NeoAuthenticator` already
+  applies to the request from its `Accept-Language` header, which every `apiFetch` call sends with
+  the SPA's current locale. This is independent of (and more reliable than) `AD_User.AD_Language`:
+  the SPA's language switcher is a pure client-side toggle that never writes back to the backend.
+  **Must be captured BEFORE `executeObuiappClass`, not after** — a live-verified regression found
+  the classic `MultiEnvioFactura`/`MultiInvoiceSIIModification` bridge call itself overwrites
+  `OBContext`'s language back to the user's stored Spanish before this handler ever reads it, if
+  read afterwards (exact clobbering line not pinpointed; see `com.etendoerp.go`'s
+  `docs/neo-headless.md` §5th fix for the full investigation). `executeAction` now reads the
+  language first and threads it down explicitly.
+- **Text source:** the `NeoHints` catalog (`messages/neo_hints_es.properties` /
+  `neo_hints_en.properties`, `com.etendoerp.go`) — the same hand-authored-bilingual-text mechanism
+  already used for other backend-only messages (e.g. `FinancialAccountBankConnectionSupport`'s
+  PSD2 fetch-interval notice), not this module's `ETGO_*` `AD_Message` catalog: those exist as
+  stable identity tokens the SPA re-translates client-side, and their `AD_Message_Trl` rows are
+  mechanically copied from the English base rather than hand-translated — resolving one
+  server-side would render English regardless of locale, which is no fix at all for a user in
+  English who still saw a Spanish sentence. `SifSendingModal.jsx` (the only consumer of this
+  handler's response) reads `response.message` directly with no further translation step, so the
+  text has to already be correct when it leaves the handler.
+- **Verified GO field label source:** this window's own `LABEL_OVERRIDES.es_ES.POReference` /
+  `LABEL_OVERRIDES.en_US.POReference` in `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`
+  (mirroring `artifacts/purchase-invoice/decisions.json → window.labelOverrides`) — this is what
+  actually renders on screen for the field, confirmed by filling it in and re-sending to SII
+  successfully.
+- **Two wrong guesses this correction supersedes**, both plausible-looking and both wrong — kept
+  here so nobody re-introduces either: (1) `genericLabels.receivedDocumentnoOrderReference` ("Nº
+  Documento Proveedor") — that key belongs to the Fiscal Monitor's "received" table column, a
+  different screen entirely; (2) the raw `AD_Element` translation for `POReference` ("Nº de
+  referencia", `tools/app-shell/src/locales/es_ES.json → fields.POReference.label`) — that is the
+  GENERIC AD field label before this window's own override is applied, and this window always
+  applies the override.
 
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `etendo_action` executes the entity's `NeoHandler` hooks

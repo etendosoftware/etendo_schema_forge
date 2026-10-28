@@ -328,6 +328,33 @@ describe('DetailMoreActionsMenu — reactivation blocked by a fiscal-accepted re
     expect(toast.success).not.toHaveBeenCalled();
   });
 
+  // ETP-5745: reactivationBlockedFiscalSystem is a real array now (GET enrichment, matching the
+  // live 422's own messageParams.fiscalSystem shape) — this pre-unpost check must run it through
+  // the same joinWithConjunction the live action failure uses, not pass the raw array through
+  // (which would stringify as "SII,TicketBAI" with no spacing, or render literally as an array).
+  it('joins an array reactivationBlockedFiscalSystem via joinWithConjunction before interpolating', async () => {
+    vi.mocked(toast.error).mockClear();
+    await renderBlockedMenu({
+      data: {
+        id: 'rec-1',
+        reactivationBlocked: true,
+        reactivationBlockedFiscalSystem: ['SII', 'TicketBAI'],
+        reactivationBlockedRectificativas: ['REC-1000022'],
+      },
+    });
+
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    // paramUi has no real translations, so joinWithConjunction's `t('listConjunctionAnd')` call
+    // resolves to the bare key — proving the join ran (an untouched array would stringify
+    // differently, e.g. "SII,TicketBAI" with no spacing).
+    expect(toast.error).toHaveBeenCalledWith(
+      'backendError.invoiceReactivateFiscalRectified:'
+      + JSON.stringify({ fiscalSystem: 'SII listConjunctionAnd TicketBAI', rectificativas: 'REC-1000022' }),
+    );
+  });
+
   it('passes a bare (non-array) rectificativas value through unchanged', async () => {
     vi.mocked(toast.error).mockClear();
     await renderBlockedMenu({

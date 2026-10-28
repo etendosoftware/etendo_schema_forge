@@ -469,6 +469,12 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_InvoiceFieldsLockedStatus: 'backendError.invoiceStatusDimensionsLocked',
   ETGO_InvoiceFieldsLockedSiiSent: 'backendError.invoiceSiiSentReferenceLocked',
   ETGO_InvoiceReactivateFiscalRectified: 'backendError.invoiceReactivateFiscalRectified',
+  // ETP-5745 CP-9 — com.etendoerp.go RectificationTotalGuard: completing a rectificativa whose
+  // total, added to every other COMPLETED rectificativa of the same origin, would exceed the
+  // origin invoice's own total. `messageParams.originTotal`/`rectifiedTotal` are dropped here —
+  // same rationale as the CashCloseSupport matchers below: a raw BigDecimal string pasted into
+  // Spanish copy renders the wrong decimal separator and no currency symbol.
+  ETGO_InvoiceRectificationExceedsOriginal: 'backendError.invoiceRectificationExceedsOriginal',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
@@ -655,6 +661,52 @@ function translateInvalidAccount(messageKeys, messageParams, t) {
     messageParams.missingProductAccounts);
   if (!base || !entity || groupAccounts === null || productAccounts === null) return null;
   return [base, entity, groupAccounts, productAccounts].filter(Boolean).join(' ');
+}
+
+const INVOICE_REACTIVATE_FISCAL_KEY = 'ETGO_InvoiceReactivateFiscalRectified';
+
+/**
+ * Joins a list with a locale-aware conjunction before the last item ("A y B" / "A and B",
+ * "A, B y C" / "A, B and C" for 3+) — ETP-5745. The generic `toInterpolationParams` comma-join
+ * (used by every other array-valued messageParam, including this SAME message's `rectificativas`)
+ * must stay untouched: it is correct for a document-number list, but reads awkwardly for a list of
+ * fiscal system names ("SII, TicketBAI y está rectificada..." → "SII y TicketBAI y está..."). The
+ * conjunction word itself comes from `t()`, not a hardcoded "y", so it never leaks into en_US.
+ *
+ * Exported so the two GET-enrichment-driven previews of this SAME message —
+ * `DetailMoreActionsMenu.jsx`'s pre-unpost check and `useInvoiceWindow.js`'s bulk-bar row
+ * preview, both reading `reactivationBlockedFiscalSystem` directly via `ui()` rather than
+ * through `translateBackendError` — can render identically to the live 422 instead of falling
+ * back to a flat comma join.
+ */
+export function joinWithConjunction(items, t) {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  if (items.length === 1) return String(items[0]);
+  const and = t('listConjunctionAnd');
+  if (items.length === 2) return `${items[0]} ${and} ${items[1]}`;
+  // No Oxford comma before the conjunction ("A, B y C" / "A, B and C") — matches the ticket's
+  // own worked example for the es_ES wording, mirrored in en_US for a single shared algorithm.
+  return `${items.slice(0, -1).join(', ')} ${and} ${items[items.length - 1]}`;
+}
+
+/**
+ * `ETGO_InvoiceReactivateFiscalRectified` (InvoiceReactivationGuard, ETP-5745): special-cased
+ * ahead of the generic {@link translateByMessageKey} route because this ONE message needs TWO
+ * different join behaviors on its two array messageParams — `fiscalSystem` (conjunction) and
+ * `rectificativas` (plain comma, unchanged). `messageParams.fiscalSystem` is a real `JSONArray`
+ * from the backend (no longer pre-joined into a string there), matching `rectificativas`' own
+ * shape.
+ */
+function translateInvoiceReactivateFiscalRectified(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageKeys.includes(INVOICE_REACTIVATE_FISCAL_KEY)) return null;
+  if (!messageParams || typeof messageParams !== 'object') return null;
+  const fiscalSystem = Array.isArray(messageParams.fiscalSystem)
+    ? joinWithConjunction(messageParams.fiscalSystem, t)
+    : messageParams.fiscalSystem;
+  const rectificativas = Array.isArray(messageParams.rectificativas)
+    ? messageParams.rectificativas.join(', ')
+    : messageParams.rectificativas;
+  return resolveLocaleKey(t, 'backendError.invoiceReactivateFiscalRectified', { fiscalSystem, rectificativas });
 }
 
 // ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
@@ -1731,6 +1783,12 @@ export function translateBackendError(msg, t, options = {}) {
   // ETP-5826: same reason — the duplicate refusals pick their sentence from a param.
   const paymentTermConflict = translatePaymentTermConflict(options.messageKeys, options.messageParams, t);
   if (paymentTermConflict !== null) return paymentTermConflict;
+
+  // ETP-5745: before the key route too — see translateInvoiceReactivateFiscalRectified for why
+  // this one message needs a join behavior the generic key route's toInterpolationParams can't give it.
+  const reactivateFiscal = translateInvoiceReactivateFiscalRectified(
+    options.messageKeys, options.messageParams, t);
+  if (reactivateFiscal !== null) return reactivateFiscal;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

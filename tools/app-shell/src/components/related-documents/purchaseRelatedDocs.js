@@ -19,6 +19,7 @@ import {
   invoiceOrdersDepsKey,
   movementDefinition,
   returnDefinition,
+  idsOf,
 } from './relatedSources.js';
 
 /** The header order of a purchase invoice (`salesOrder`, C_Order_ID), read from the order itself. */
@@ -43,7 +44,11 @@ export const PURCHASE_RELATED_DOCS = {
     spec: 'purchase-invoice',
     entity: 'header',
     refreshEvent: 'purchase-invoice:document-created',
-    depsKey: record => [invoiceOrdersDepsKey(record), originInvoicesDepsKey(record)].join('|'),
+    depsKey: record => [
+      invoiceOrdersDepsKey(record),
+      originInvoicesDepsKey(record),
+      idsOf(record?.rectifyingInvoices),
+    ].join('|'),
     sources: [
       {
         // ETP-5828: every order the invoice's lines come from (`linkedOrders`), plus the
@@ -54,6 +59,9 @@ export const PURCHASE_RELATED_DOCS = {
       },
       selectSource('receipts', doc => (doc.isReturn === true ? 'return-to-vendor' : 'goods-receipt'), 'linkedReceipts'),
       originInvoicesSource('purchase-invoice'),
+      // The mirror of originInvoicesSource: the rectificativa(s) that rectify THIS invoice
+      // (PurchaseInvoiceHeaderHandler#enrichRectifyingInvoices, ETP-5745 CP-12).
+      selectSource('rectifyingInvoices', 'purchase-invoice', 'rectifyingInvoices'),
     ],
   },
 
