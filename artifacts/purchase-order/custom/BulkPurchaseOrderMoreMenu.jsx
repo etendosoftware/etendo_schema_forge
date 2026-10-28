@@ -34,6 +34,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
+import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
@@ -107,7 +108,9 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.error?.message || err?.response?.message || `Error (${res.status})`);
+        // ETP-5714: translate it — a draft invoice linked only through the order lines passes
+        // the pre-check above and is refused by the backend with 409 draftInvoiceExists.
+        throw new Error(translateBackendErrorBody(err, ui, `Error (${res.status})`));
       }
       trackDocumentCreated(isInvoice ? 'purchase-invoice' : 'goods-receipt');
       return row;

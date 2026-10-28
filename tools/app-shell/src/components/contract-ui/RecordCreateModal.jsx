@@ -268,10 +268,21 @@ export default function RecordCreateModal({
     setSaving(true);
     setError(null);
     try {
+      // Optional per-target veto (ETP-5791: Contacts' type-vs-category check, see
+      // `buildContactTypeCreateCheck`). A message means "do not create", shown like any error.
+      const refusal = await target.validateBeforeCreate?.(data);
+      if (refusal) {
+        setError(refusal);
+        setSaving(false);
+        return;
+      }
       const res = await apiFetch(`/${target.entity}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildRecordCreatePayload(data)),
+        body: JSON.stringify(buildRecordCreatePayload(data, {
+          omitUntouched: target.createOmitUntouched,
+          touched: userChangedKeysRef.current,
+        })),
       });
       const body = res.ok ? await res.json().catch(() => null) : await readErrorBody(res);
       if (!res.ok) {
@@ -671,11 +682,21 @@ function isBlank(value) {
 /**
  * Strips what must never reach a create payload: the id (a POST assigns it) and the
  * `<key>$_identifier` display siblings EntityForm writes alongside every FK value.
+ *
+ * `omitUntouched` (optional, from the target's `createOmitUntouched`) lists keys whose mere
+ * PRESENCE the backend reads as a decision, so a value that only came from `/defaults` must not
+ * be sent unless the user set it. Contacts' `customer` / `vendor` are the case (ETP-5791): the
+ * backend inherits them from the contact category only when the create body omits them, and
+ * `/defaults` always answers `customer: 'Y'`.
+ *
+ * @param {object} data
+ * @param {{ omitUntouched?: string[], touched?: Set<string> }} [options]
  */
-export function buildRecordCreatePayload(data) {
+export function buildRecordCreatePayload(data, { omitUntouched = [], touched = null } = {}) {
   const payload = {};
   for (const [key, value] of Object.entries(data ?? {})) {
     if (key === 'id' || key.endsWith('$_identifier')) continue;
+    if (omitUntouched?.includes(key) && !touched?.has(key)) continue;
     payload[key] = value;
   }
   return payload;

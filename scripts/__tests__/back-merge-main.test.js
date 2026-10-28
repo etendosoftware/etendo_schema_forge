@@ -12,9 +12,12 @@ import { isolatedGitEnv } from './isolatedGitEnv.js';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'back-merge-main.sh');
 const PR_URL = 'https://github.com/etendosoftware/repo/pull/7';
+const OPEN_URL = 'https://github.com/etendosoftware/repo/pull/3';
 
 const FAKE_GH = `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$GH_STUB_LOG"
+json=""; prev=""
+for arg in "$@"; do [ "$prev" = --json ] && json="$arg"; prev="$arg"; done
 case "$1 $2" in
   "pr list") printf '%s\\n' "\${GH_STUB_OPEN_PR:-}" ;;
   "pr create")
@@ -23,16 +26,35 @@ case "$1 $2" in
       shift
     done
     echo "${PR_URL}" ;;
+  "pr view")
+    case "$json" in
+      assignees) printf '%s\\n' "\${GH_STUB_ASSIGNEES:-0}" ;;
+      reviewDecision) printf '%s\\n' "\${GH_STUB_REVIEW:-REVIEW_REQUIRED}" ;;
+      autoMergeRequest) printf '%s\\n' "\${GH_STUB_AUTO_MERGE:-false}" ;;
+      mergedBy) printf '%s\\n' "\${GH_STUB_MERGED_BY:-}" ;;
+    esac ;;
   "pr edit") exit "\${GH_STUB_EDIT_RC:-0}" ;;
-  api*) printf '%s\\n' "\${GH_STUB_MERGED_PR:-}" ;;
+  "pr review") printf 'review-token=%s\\n' "$GH_TOKEN" >> "$GH_STUB_LOG" ;;
+  "pr merge") exit "\${GH_STUB_MERGE_RC:-0}" ;;
+  "api user") printf '%s\\n' "\${GH_STUB_BOT:-etendobot}" ;;
+  api*)
+    case "$2" in
+      */pulls) printf '%s\\n' "\${GH_STUB_MERGED_NUMBER:-}" ;;
+      *) printf '%s\\n' "\${GH_STUB_COMMIT_AUTHOR:-}" ;;
+    esac ;;
 esac
 `;
 
 let tmp;
 let repo;
 
-/** No GIT_* variables and none of the user's git config, so fixture commits stay in the fixture. */
-const gitEnv = (extra = {}) => isolatedGitEnv({ GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', ...extra });
+/** No GIT_* variables, none of the user's git config and no inherited GitHub tokens. */
+function gitEnv(extra = {}) {
+  const env = isolatedGitEnv({ GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1', ...extra });
+  if (!('GH_TOKEN' in extra)) delete env.GH_TOKEN;
+  if (!('APPROVE_TOKEN' in extra)) delete env.APPROVE_TOKEN;
+  return env;
+}
 
 function git(...args) {
   const out = spawnSync('git', args, { cwd: repo, encoding: 'utf8', env: gitEnv() });
@@ -56,18 +78,30 @@ function runScript(stub = {}) {
       PATH: `${join(tmp, 'bin')}${delimiter}${process.env.PATH}`,
       GH_STUB_LOG: join(tmp, 'gh.log'),
       GH_STUB_BODY: join(tmp, 'body.md'),
-      MERGED_SHA: 'abc123',
+      GH_TOKEN: 'bot-token',
       ...stub,
     }),
   });
 }
 
-const ghCalls = () => (existsSync(join(tmp, 'gh.log')) ? readFileSync(join(tmp, 'gh.log'), 'utf8').trim().split('\n') : []);
+function ghCalls(prefix = '') {
+  if (!existsSync(join(tmp, 'gh.log'))) return [];
+  return readFileSync(join(tmp, 'gh.log'), 'utf8').trim().split('\n').filter((call) => call.startsWith(prefix));
+}
+
 const prBody = () => readFileSync(join(tmp, 'body.md'), 'utf8');
 
 function hotfix() {
   git('checkout', '-q', 'main');
   commit('b.txt', 'fix\n', 'Issue #42: Fix the totals on main');
+  push();
+}
+
+function conflict() {
+  git('checkout', '-q', 'develop');
+  commit('a.txt', 'one on develop\n', 'Feature ETP-1234: Change the first file');
+  git('checkout', '-q', 'main');
+  commit('a.txt', 'one on main\n', 'Issue #42: Fix the first file on main');
   push();
 }
 
@@ -98,17 +132,43 @@ describe('back-merge-main.sh', () => {
     assert.deepEqual(ghCalls(), []);
   });
 
-  it('opens the PR with the hotfix and asks its author to review', () => {
+  it('opens the PR, assigns whoever moved main and turns on auto-merge', () => {
     hotfix();
-    const out = runScript({ GH_STUB_MERGED_PR: '41 alice' });
+    const out = runScript({ GH_STUB_COMMIT_AUTHOR: 'alice', GH_STUB_MERGED_NUMBER: '41' });
     assert.equal(out.status, 0, out.stderr);
-    const create = ghCalls().filter((call) => call.startsWith('pr create'));
+    const create = ghCalls('pr create');
     assert.equal(create.length, 1);
     assert.match(create[0], /--base develop --head main --title Merge main into develop/);
     assert.match(prBody(), /Issue #42: Fix the totals on main/);
     assert.match(prBody(), /`main` moved with #41\./);
-    assert.doesNotMatch(prBody(), /### Conflicts/);
-    assert.ok(ghCalls().includes(`pr edit ${PR_URL} --add-reviewer alice`));
+    assert.match(prBody(), /It merges itself once the required checks pass/);
+    assert.deepEqual(ghCalls('pr edit'), [`pr edit ${PR_URL} --add-assignee alice`]);
+    assert.deepEqual(ghCalls('pr merge'), [`pr merge ${PR_URL} --auto --merge`]);
+    assert.deepEqual(ghCalls('pr review'), []);
+  });
+
+  it('approves with the second token when develop needs a review', () => {
+    hotfix();
+    const out = runScript({ GH_STUB_COMMIT_AUTHOR: 'alice', APPROVE_TOKEN: 'approver-token' });
+    assert.equal(out.status, 0, out.stderr);
+    assert.equal(ghCalls(`pr review ${PR_URL} --approve`).length, 1);
+    assert.deepEqual(ghCalls('review-token='), ['review-token=approver-token']);
+  });
+
+  it("falls back to whoever merged the PR of main's last commit", () => {
+    hotfix();
+    const out = runScript({ GH_STUB_MERGED_NUMBER: '41', GH_STUB_MERGED_BY: 'bob' });
+    assert.equal(out.status, 0, out.stderr);
+    assert.deepEqual(ghCalls('pr view 41'), ['pr view 41 --json mergedBy --jq .mergedBy.login // empty']);
+    assert.deepEqual(ghCalls('pr edit'), [`pr edit ${PR_URL} --add-assignee bob`]);
+  });
+
+  it('never assigns the bot that opens the PR', () => {
+    hotfix();
+    const out = runScript({ GH_STUB_COMMIT_AUTHOR: 'etendobot', GH_STUB_BOT: 'etendobot' });
+    assert.equal(out.status, 0, out.stderr);
+    assert.deepEqual(ghCalls('pr edit'), []);
+    assert.equal(ghCalls('pr merge').length, 1);
   });
 
   it('brings only the merge commit of a clean cut', () => {
@@ -123,32 +183,46 @@ describe('back-merge-main.sh', () => {
     assert.doesNotMatch(prBody(), /Add a feature/);
   });
 
-  it('does not open a second PR', () => {
+  it('completes an open PR instead of opening a second one', () => {
     hotfix();
-    const out = runScript({ GH_STUB_OPEN_PR: 'https://github.com/etendosoftware/repo/pull/3' });
+    const out = runScript({ GH_STUB_OPEN_PR: OPEN_URL, GH_STUB_COMMIT_AUTHOR: 'alice', APPROVE_TOKEN: 'approver-token' });
     assert.equal(out.status, 0, out.stderr);
     assert.match(out.stdout, /Already open/);
-    assert.ok(!ghCalls().some((call) => call.startsWith('pr create')));
+    assert.deepEqual(ghCalls('pr create'), []);
+    assert.deepEqual(ghCalls('pr edit'), [`pr edit ${OPEN_URL} --add-assignee alice`]);
+    assert.equal(ghCalls(`pr review ${OPEN_URL} --approve`).length, 1);
+    assert.deepEqual(ghCalls('pr merge'), [`pr merge ${OPEN_URL} --auto --merge`]);
   });
 
-  it('lists the conflicts and how to resolve them', () => {
-    git('checkout', '-q', 'develop');
-    commit('a.txt', 'one on develop\n', 'Feature ETP-1234: Change the first file');
-    git('checkout', '-q', 'main');
-    commit('a.txt', 'one on main\n', 'Issue #42: Fix the first file on main');
-    push();
-    const out = runScript();
+  it('leaves alone an open PR that has everything already', () => {
+    hotfix();
+    const out = runScript({
+      GH_STUB_OPEN_PR: OPEN_URL, GH_STUB_COMMIT_AUTHOR: 'alice', GH_STUB_ASSIGNEES: '1',
+      GH_STUB_REVIEW: 'APPROVED', GH_STUB_AUTO_MERGE: 'true', APPROVE_TOKEN: 'approver-token',
+    });
+    assert.equal(out.status, 0, out.stderr);
+    assert.deepEqual([...ghCalls('pr edit'), ...ghCalls('pr review'), ...ghCalls('pr merge')], []);
+  });
+
+  it('gives a conflict its assignee but no approval or auto-merge', () => {
+    conflict();
+    const out = runScript({ GH_STUB_COMMIT_AUTHOR: 'alice', APPROVE_TOKEN: 'approver-token' });
     assert.equal(out.status, 0, out.stderr);
     assert.match(prBody(), /### Conflicts/);
     assert.match(prBody(), /^- a\.txt$/m);
     assert.match(prBody(), /git merge origin\/main/);
+    assert.doesNotMatch(prBody(), /It merges itself/);
+    assert.deepEqual(ghCalls('pr edit'), [`pr edit ${PR_URL} --add-assignee alice`]);
+    assert.deepEqual([...ghCalls('pr review'), ...ghCalls('pr merge')], []);
+    assert.match(out.stdout, /it waits for alice/);
   });
 
-  it('leaves the PR open when the review request is refused', () => {
+  it('leaves the PR open when the assignment or auto-merge is refused', () => {
     hotfix();
-    const out = runScript({ GH_STUB_MERGED_PR: '41 etendobot', GH_STUB_EDIT_RC: '1' });
+    const out = runScript({ GH_STUB_COMMIT_AUTHOR: 'alice', GH_STUB_EDIT_RC: '1', GH_STUB_MERGE_RC: '1' });
     assert.equal(out.status, 0, out.stderr);
     assert.match(out.stdout, new RegExp(`Opened ${PR_URL}`));
-    assert.match(out.stdout, /::warning::Could not request a review from etendobot/);
+    assert.match(out.stdout, /::warning::Could not assign/);
+    assert.match(out.stdout, /::warning::Could not enable auto-merge/);
   });
 });

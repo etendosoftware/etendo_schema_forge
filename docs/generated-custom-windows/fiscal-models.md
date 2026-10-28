@@ -4769,9 +4769,9 @@ taller than its sibling.
 
 `activeModels` is not purely in-memory state anymore — it round-trips through NEO Headless and survives reloads:
 
-- **On mount**, if `token` and `apiBaseUrl` are both present, `FmListPage` issues `GET {base}/fiscal-models-catalog` with an `Authorization: Bearer` header and seeds `activeModels` from the JSON response (`{"303": true, "349": false}`-shaped). A tenant with nothing saved yet gets back `{}` from the backend — i.e. **no model is active by default**; there is no hardcoded "both models active" starting point. When `token`/`apiBaseUrl` are absent (e.g. tests, storybook-like contexts), the fetch is skipped entirely and `activeModels` simply stays at its initial value, `{}`.
-- **On save**, `FmCatalogPage`'s `onSave` callback updates `FmListPage`'s `activeModels` state immediately (so the UI reflects the change without waiting on the network) and closes the drawer, then — only when `token`/`apiBaseUrl` are present — fire-and-forgets a `PUT {base}/fiscal-models-catalog` with the new map as the JSON body. A failed `PUT` is silently swallowed (`.catch(() => {})`), the same convention `FavoritesContext.jsx`'s `syncToServer` uses — the UI does not roll back or surface an error; the next successful `GET` (e.g. after a reload) is the source of truth.
-- **`catalogLoaded`** gates rendering while the initial `GET` is in flight. It starts `true` only when `token`/`apiBaseUrl` are missing; otherwise it starts `false` and flips to `true` in the `GET`'s `.finally()`, regardless of whether the request succeeded or failed. While `catalogLoaded` is `false`: the table region shows a "Cargando…" `EmptyState` instead of either the real table or the "no active models" empty state, and the "+ Nueva declaración" toolbar button does not render at all — its guard is `catalogLoaded && activeCount > 0`, not just `activeCount > 0` (see "No active models" below). This avoids flashing an incorrect CTA/empty-state before the real catalog value is known.
+- **On mount**, when `apiBaseUrl` is present, `FmListPage` reads `GET {base}/fiscal-models-catalog` through the shared `useFiscalModelsCatalog(apiBaseUrl, token)` hook (ETP-5831, see "Shared catalog reader" below; the request goes through `useApiFetch`, which adds the session headers, and `token` only acts as a refresh key) and seeds `activeModels` from the JSON response (`{"303": true, "349": false}`-shaped). A tenant with nothing saved yet gets back `{}` from the backend — i.e. **no model is active by default**; there is no hardcoded "both models active" starting point. When `apiBaseUrl` is absent (e.g. tests, storybook-like contexts), the fetch is skipped entirely and `activeModels` simply stays at its initial value, `{}`.
+- **On save**, `FmCatalogPage`'s `onSave` callback updates `FmListPage`'s `activeModels` state immediately through the hook's `setActiveModels` (so the UI reflects the change without waiting on the network) and closes the drawer, then — only when `apiBaseUrl` is present — fire-and-forgets a `PUT {base}/fiscal-models-catalog` with the new map as the JSON body. A failed `PUT` is silently swallowed (`.catch(() => {})`), the same convention `FavoritesContext.jsx`'s `syncToServer` uses — the UI does not roll back or surface an error; the next successful `GET` (e.g. after a reload) is the source of truth.
+- **`catalogLoaded`** (the hook's `loaded`) gates rendering while the initial `GET` is in flight. It starts `true` only when `apiBaseUrl` is missing; otherwise it starts `false` and flips to `true` in the `GET`'s `.finally()`, regardless of whether the request succeeded or failed. While `catalogLoaded` is `false`: the table region shows a "Cargando…" `EmptyState` instead of either the real table or the "no active models" empty state, and the "+ Nueva declaración" toolbar button does not render at all — its guard is `catalogLoaded && activeCount > 0`, not just `activeCount > 0` (see "No active models" below). This avoids flashing an incorrect CTA/empty-state before the real catalog value is known.
 - **Scope: per-Client, not per-org or per-user.** The backend service (`NeoFiscalModelsCatalogService`, `com.etendoerp.go`) stores the map in `AD_PREFERENCE` under key `ETGO_FiscalModelsCatalog`, scoped only to `OBContext.getOBContext().getCurrentClient()` — organization, user and role are all passed as `null` to `Preferences`. Every user of the same client, in any organization, with any role, reads and writes the same catalog state.
 
 ### IAE-activity activation reminder (ETP-5187, adjacent scope)
@@ -4883,16 +4883,28 @@ The full precedence in the table region is: `!catalogLoaded` (the "Cargando…" 
 
 Practical effect: deactivating a model in the catalog immediately hides all of its existing declarations from the list and KPI cards, and removes it from the model filter — nothing is deleted, and reactivating the model in the catalog makes its declarations reappear.
 
+### Shared catalog reader (ETP-5831)
+
+`FmListPage` reads the catalog through `useFiscalModelsCatalog(apiBaseUrl, token)`
+(`fiscal-models/useFiscalModelsCatalog.js`) — `{ activeModels, setActiveModels, loaded, error }`,
+same request as before (`GET <neo base>/fiscal-models-catalog`). The Organization window's fiscal
+section visibility uses the same hook (see `organization.md`, "Fiscal section visibility"), and so
+does `ReversedInvoicesPanel.jsx`'s "Correctiva del 349" gate (below). One rule for every reader: a
+never-saved catalog (`{}`) or a failed read means **no model active**; `defaultActive` is not
+applied. Readers test a model with `isModelActive(activeModels, id)` (`=== true`). Tests:
+`fiscal-models/__tests__/useFiscalModelsCatalog.vitest.jsx` (`isModelActive`, `{}` kept as is,
+non-ok / rejected reads, no `apiBaseUrl`, refresh on `refreshKey`, stale-response and unmount guards).
+
 ### Downstream consumer outside this window: the sales/purchase-invoice "Correctiva del 349" gate (ETP-4755)
 
 `GET /fiscal-models-catalog` (see "Persistence" above) is a generic, per-client endpoint — not
 scoped to the `fiscal-models` spec — so it is reachable cross-spec.
 `tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx` — the shared component
-behind both `sales-invoice`'s and `purchase-invoice`'s "Rectificaciones" tab — now calls this same
-endpoint (mirroring how its own `YearPickerSelect` already calls the cross-spec
-`/fiscal-calendar/year`) and only shows its "Correctiva del 349" checkbox panel (plus the dependent
-AEAT year/period/base-amount fields) when a local `model349Active` flag — derived from the fetch,
-mirroring `FmListPage`'s own `activeModels`/`catalogLoaded` shape — confirms `349: true`.
+behind both `sales-invoice`'s and `purchase-invoice`'s "Rectificaciones" tab — reads this same
+endpoint through the shared `useFiscalModelsCatalog(apiBaseUrl, token)` hook (ETP-5831, see
+"Shared catalog reader" above; it re-reads on `token` change) and only shows its "Correctiva del
+349" checkbox panel (plus the dependent AEAT year/period/base-amount fields) when
+`model349Active = loaded && isModelActive(activeModels, '349')` holds.
 
 **Fail-closed in every failure mode**, mirroring `NewDeclModal`'s own convention: hidden while the
 fetch is loading, on a non-200 response, on a network error, and on a malformed/missing-key JSON
@@ -5022,7 +5034,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'`, exposed as `decl.type` — see "Tipo column derivation (ETP-5338)" below for why the list's "Tipo" column no longer reads this field directly). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) **ETP-5272 pt.5:** now answers `409 Conflict` instead, BEFORE reaching `resolveNextDeclSeq`, when a `draft` declaration already exists for the exact same `(client, org, model, year, period)` key — see "Draft periods ARE disabled again" above for the full rationale; a non-draft existing declaration is unaffected and still succeeds via `resolveNextDeclSeq` exactly as described here. |
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
 | `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
-| `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client); also consumed cross-spec by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above |
+| `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client), via `useFiscalModelsCatalog`; also consumed cross-spec, through the same hook, by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above — and by the Organization window to show its fiscal sections (ETP-5831, `organization.md`) |
 | `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client) |
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
