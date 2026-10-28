@@ -365,13 +365,14 @@ test('a write body lists only writable fields, marks the declared required ones 
       product: {
         publicApi: true,
         specName: 'product',
-        operations: ['GET', 'LIST', 'POST', 'PATCH'],
+        operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH'],
         fields: {
           search_key: { publicApi: true, direction: 'inout', required: true, internalPath: 'searchKey', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
           name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
           sale_price: { publicApi: true, direction: 'out', internalPath: 'salePrice', type: 'passthrough', dataType: { type: 'number' }, handlerId: null },
           secret_input: { publicApi: true, direction: 'in', internalPath: 'secretInput', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
           category: { publicApi: true, direction: 'out', internalPath: 'productCategory', type: 'passthrough', dataType: { type: 'string' }, handlerId: null, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'category' } },
+          brand: { publicApi: true, direction: 'inout', required: true, internalPath: 'brand', type: 'passthrough', dataType: { type: 'string' }, handlerId: null, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'brand' } },
         },
       },
     },
@@ -380,9 +381,14 @@ test('a write body lists only writable fields, marks the declared required ones 
   const body = paths['/api/v1/product'].post.requestBody!.content['application/json'].schema.properties!.data as any;
   assert.deepEqual(Object.keys(body.properties.attributes.properties).sort(), ['name', 'search_key', 'secret_input']);
   assert.deepEqual(body.properties.attributes.required, ['search_key']);
-  assert.equal(body.properties.relationships, undefined, 'a read-only relationship is not offered on write');
+  assert.deepEqual(Object.keys(body.properties.relationships.properties), ['brand'], 'a read-only relationship is not offered on write');
+  assert.deepEqual(body.properties.relationships.required, ['brand'], 'a required writable relationship is listed on POST');
+  const put = paths['/api/v1/product/{id}'].put.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.deepEqual(put.properties.attributes.required, ['search_key'], 'a full update lists the required fields too');
+  assert.deepEqual(put.properties.relationships.required, ['brand']);
   const patch = paths['/api/v1/product/{id}'].patch.requestBody!.content['application/json'].schema.properties!.data as any;
   assert.equal(patch.properties.attributes.required, undefined, 'a partial update requires nothing');
+  assert.equal(patch.properties.relationships.required, undefined);
 
   const read = paths['/api/v1/product/{id}'].get.responses['200'].content!['application/json'].schema.properties!.data as any;
   assert.deepEqual(Object.keys(read.properties.attributes.properties).sort(), ['name', 'sale_price', 'search_key']);

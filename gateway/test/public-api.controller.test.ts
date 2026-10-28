@@ -943,6 +943,31 @@ test('child list validates its own query, keeps parentId and builds links on the
   assert.equal(urls.length, 1);
 });
 
+test('a child record links to its nested URL, a top-level record to its own resource path', async () => {
+  const { controller } = listing({ startRow: 0, endRow: 1, totalRows: 2, data: [{ id: 'k 1', phone: '1' }, { id: 'k-2', phone: '2' }] });
+  const list = await controller.listChild('contacts', 'bp 1', 'contacts', request) as any;
+  assert.deepEqual(list.data.map((resource: any) => resource.links.self), [
+    '/api/v1/contacts/bp%201/contacts/k%201',
+    '/api/v1/contacts/bp%201/contacts/k-2',
+  ]);
+
+  const single = listing({ data: [{ id: 'k-1', phone: '1' }] }).controller;
+  const child = await single.getChild('contacts', 'bp-1', 'contacts', 'k-1', request) as any;
+  assert.equal(child.data.links.self, '/api/v1/contacts/bp-1/contacts/k-1');
+
+  const top = await listing({ startRow: 0, endRow: 0, totalRows: 1, data: rows(1) }).controller.list('contacts', request) as any;
+  assert.equal(top.data[0].links.self, '/api/v1/contacts/c-1');
+});
+
+test('creating a child answers with the nested self link', async () => {
+  const childSchema = structuredClone(listSchema) as any;
+  childSchema.entities['contacts-contact'].operations = ['GET', 'LIST', 'POST'];
+  const fakeFetch = async () => new Response(JSON.stringify({ response: { data: { id: 'k-9', phone: '5' } } }), { status: 200 });
+  const controller = new PublicApiController(childSchema, 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const created = await controller.createChild('contacts', 'bp-1', 'contacts', { phone: '5' }, request) as any;
+  assert.equal(created.data.links.self, '/api/v1/contacts/bp-1/contacts/k-9');
+});
+
 test('a single-record read is not a list and carries no pagination', async () => {
   const { controller } = listing({ data: [rows(1)[0]] });
   const single = await controller.get('contacts', 'c-1', request) as any;
