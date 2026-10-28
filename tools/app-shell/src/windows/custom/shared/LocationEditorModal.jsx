@@ -13,6 +13,7 @@ import {
 import { matchOptionByLabel } from '@/lib/matchOptionLabel.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useTbaiPostalCodeContext, shouldWarnMissingTbaiPostalCode } from './tbaiPostalCodeWarning.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
@@ -505,6 +506,10 @@ export default function LocationEditorModal({
         address: form.address,
         country: form.country,
     });
+
+    // ETP-5824: advisory only — never part of saveDisabled. See tbaiPostalCodeWarning.js.
+    const tbaiContext = useTbaiPostalCodeContext({open, saveMode, bpId, apiBase: contactsApiBase});
+    const showTbaiPostalCodeWarning = shouldWarnMissingTbaiPostalCode({...tbaiContext, postalCode: form.postalCode});
 
     // Reset and load data on open
     useEffect(() => {
@@ -1110,6 +1115,11 @@ export default function LocationEditorModal({
                                     <input type="text" value={form.city} onChange={e => setField('city', e.target.value)} data-testid="location-field-city" style={INPUT} />
                                 </div>
                             </div>
+                            {showTbaiPostalCodeWarning && (
+                                <div role="note" data-testid="location-postalCode-tbai-warning" className="text-amber-700 dark:text-amber-400" style={{ fontSize: 12, lineHeight: 1.4, marginTop: -6 }}>
+                                    {ui('tbaiPostalCodeMissingWarning')}
+                                </div>
+                            )}
 
                             {/* País */}
                             <div>
