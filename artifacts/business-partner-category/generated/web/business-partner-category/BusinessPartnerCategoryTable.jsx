@@ -5,6 +5,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true, maxLength: 40 },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
+  { key: 'etgoIscustomer', column: 'EM_Etgo_Iscustomer', type: 'boolean', label: 'Customer', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, badgeVariants: {"true":"green","false":"neutral"}, required: true },
+  { key: 'etgoIsvendor', column: 'EM_Etgo_Isvendor', type: 'boolean', label: 'Vendor/Creditor', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, badgeVariants: {"true":"green","false":"neutral"}, required: true },
+  { key: 'default', column: 'IsDefault', type: 'boolean', label: 'Default', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, badgeVariants: {"true":"green","false":"neutral"}, required: true },
 ];
 // @sf-generated-end columns:businessPartnerCategory
 

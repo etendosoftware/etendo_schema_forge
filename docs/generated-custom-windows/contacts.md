@@ -70,6 +70,7 @@ The Contacts window should let users maintain a shared business-partner master r
   - customer and vendor blocking are rendered as a `PillToggle` switch labelled **"Bloquear"** (label to the right of the switch), placed right after Condiciones de pago, not as checkboxes or radios (ETP-5519, see below);
   - the billing fields per side (Price List, Payment Method, Account, Condiciones de pago and the Bloquear switch — on both the customer and the vendor side) are rendered by ONE EntityForm in its default 3-column grid, Bloquear being the grid's `trailing` cell, so all five controls share the same column width and stay aligned (ETP-5519). The third selector in the top row uses `FIN_Financial_Account_ID` for customer and `PO_Financial_Account_ID` for vendor. Both are labelled **"Cuenta" / "Account"** (ETP-5328 reverted ETP-4017's vendor-side rename to "Cuenta contable de gastos" / "Expense Account"). The two labels are declared independently in `decisions.json → window.labelOverrides` and happen to share copy — they are still two different AD columns, so changing one does not change the other.
 - Before the header is saved, the financial panel suppresses effective billing-preference editing and clears prefilled billing values from the unsaved draft so those values are not posted too early.
+- The two type checkboxes of the financial panel read **Cliente** and **Proveedor** — with the `contact-category-type` flag on, **Cliente** and **Proveedor/Acreedor** (`contactVendorCreditor`, ETP-5791; the generic `vendor` key stays "Proveedor" for every other use), and on a saved contact changing the Contact Category overwrites both with the new category's flags — see *ETP-5791* below.
 - The discount selector (native `<select>`) is only visible after the header exists **and** there is at least one available discount option in the catalog. If the catalog returns no options the selector is not rendered, so the "Ninguno" empty state never appears without meaningful choices.
 - Customer-side and vendor-side account selectors are filtered by the selected payment method, mirroring Etendo Classic. The `selectorContext` passes `Fin_Paymentmethod_ID` (for customer) and `PO_Paymentmethod_ID` (for vendor) to the selector request, so the eligible financial account list is filtered in real time as the payment method changes. The filter is applied in NEO Headless by a dedicated selector policy (`FinancialAccountPaymentMethodSelectorPolicy` in `com.etendoerp.go`), which emits an HQL `EXISTS` over the `FinancialMgmtFinAccPaymentMethod` link table — the generic SQL→HQL validation-rule fallback cannot translate the Classic subquery rule, so it is handled by the policy instead.
 - Changing the payment method clears the account selection on that side (customer/vendor). `BillingPreferencesForm` wraps `EntityForm`'s `onChange` so that editing `paymentMethod`/`pOPaymentMethod` resets `account`/`pOFinancialAccount` (and its `$_identifier`), preventing a stale account that is no longer compatible with the new method. The wrapper fires only on user edits, so a compatible saved pair is preserved on initial load.
@@ -81,7 +82,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - **Known gap, accepted as technical debt:** `LocationEditorModal.jsx`'s `composeAddressLines` is currently a private, duplicated copy of the canonical implementation published from `schema_forge_core` (`@etendosoftware/app-shell-core/lib/locationAddress.js`). The duplication exists because this repo still consumes `app-shell-core` as a published package (see `docs/repo-topology.md`) and no new version carrying `locationAddress.js` had shipped as of this change. Resolve by importing the published helper once `schema_forge_core` is merged and a new `app-shell-core` version is released and bumped here — do not "fix" this by editing only one copy.
 - No optimistic-locking/concurrent-edit protection exists on this modal's save path (`ContactsLocationAddressHandler`): two users editing the same address at the same time can silently overwrite each other's change. Accepted limitation of this ticket, not addressed here.
 - The structured address fields (`streetName`/`buildingNumber`/`buildingName`) are injected into the GET response from Java (`ContactsLocationAddressHandler`) and are **not** published in `etendo_schema` for this entity — an MCP agent exploring the schema "blind" will not discover them; it must already know the field names (see `com.etendoerp.go/docs/neo-headless.md`'s entity-level `AGENT_PROMPT` note on `contacts/locationAddress`). This is independent of the flag: with `structured-address-for-sepa` off, the 3 fields are additionally omitted from the GET response and from `etendo_schema`/`etendo_selectors` entirely (`AddressVirtualSelectorPolicy`), not merely undiscoverable.
-- The OCR "Crear nuevo contacto" popup also seeds the Contact Category from the document type (`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE` in `lookupCreateTargets.js`: purchase -> "Proveedor", sale -> "Cliente"). Limitation: the lookup matches the category by its exact name (the onboarding convention where `Name == Value`). A tenant that renamed or localized those groups gets no seed, and the form default applies.
+- The OCR "Crear nuevo contacto" popup also seeds the Contact Category from the document type (`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE` in `lookupCreateTargets.js`: purchase -> "Proveedor", sale -> "Cliente"). The popup also seeds `vendor: true` (purchase) / `customer: true` (sale). With the `contact-category-type` flag on (ETP-5791) it seeds no `customer`/`vendor`: the seeded category is what makes the new contact a vendor or a customer, and the popup refuses a category that does not grant the document's type — see *ETP-5791* below. Limitation: the lookup matches the category by its exact name (the onboarding convention where `Name == Value`). A tenant that renamed or localized those groups gets no seed, and the form default applies.
 - The same `LocationEditorModal` is also reused by the shared partner-address picker for inline "+ Add address" flows in other windows. That reuse is proved in code/tests, but it is not a distinct extra screen inside `/contacts` itself.
 - The Location tab's own add-line button reads **"+ Añadir dirección"** (ETP-5021) — `secondaryTabs.locationAddress.addLineLabelKey: "addAddress"` in `decisions.json` swaps in the same standardized text used by the header-level partner-address picker mentioned above, instead of the generic tab-name-derived "Añadir Dirección". See `docs/decisions-reference.md`'s `addLineLabelKey` row for the mechanism.
 - Bank account defaults are partially visible in current evidence: country defaults from configuration and bank format defaults to `GENERIC`. A bank-account format field exists, but current evidence does not prove how the form reacts between generic, IBAN, SWIFT, and Spanish modes.
@@ -245,6 +246,8 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 **Row-level dedupe.** ⚠️ **Superseded by ETP-4995:** the key is now `["taxID"]`, not `["etgoEmail"]` — email is optional, and `dedupeRows` skips deduplication entirely when any key part is blank. `window.import.dedupe` was `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice. The first row remains importable; the later row is not sent to `/batch`. Backend unique-constraint rejections use the same skipped-row treatment. The importer does not merge or overwrite an already persisted contact without an explicit upsert policy.
 
 ## ETP-4905 — Contact category resolution during import
+
+⚠️ **With the `contact-category-type` flag on (ETP-5791) auto-creation is off:** an unknown category fails its row (`importErrorContactCategoryNotFound`); only existing categories are resolved. With the flag off (default) this section applies unchanged. See *ETP-5791* below.
 
 The Contacts CSV import supports the same dependent-category behavior as the Product import. ⚠️ **Superseded by ETP-4995:** the three columns described here (`categoryCode`, `categoryName`, `category`) collapsed into a single `category` column, whose cell is matched as an exact `C_BP_Group.Value` first and as an accent/case/whitespace-insensitive `C_BP_Group.Name` otherwise. The resolution and auto-creation semantics below are unchanged. The descriptor resolves an existing `businessPartnerCategory` and writes its ID into the `businessPartner` operation before the composite batch is sent.
 
@@ -1339,6 +1342,11 @@ ETP-5205 commit history for the fix and its test).
 
 ## ETP-5544 — Import: Customer / Vendor columns
 
+⚠️ **Hidden by the `contact-category-type` flag (ETP-5791):** with the flag on both columns leave the
+template, the review validator, the row resolution and the export (`"hiddenWhenFlag":
+"contact-category-type"` on the two `window.import.fields` entries), and the contact's type comes
+from its category. With the flag off (default) this section applies unchanged.
+
 **The bug.** The import template had no column for the business partner's role, and the
 descriptor never wrote `customer` / `vendor`. Every imported row therefore landed on the AD
 defaults (`IsCustomer='Y'`, `IsVendor='N'`), so a supplier list imported via CSV silently became a
@@ -1477,6 +1485,7 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 ## ETP-5758 — Bulk delete uses ListView's generic action
 
@@ -1530,6 +1539,123 @@ with and without the sidebar variants.
 At narrower widths (browser zoom, side panel open) fewer than 4 tabs may fit; the strip then moves
 the extra tabs into "Más" and never overlaps the side panel. Manual check: zoom the browser in
 until a tab would not fit and confirm "Más" count grows and nothing overlaps.
+
+## ETP-5791 — The contact category defines the contact type
+
+**Behind the `contact-category-type` feature flag (default off).** Everything in this section is
+the flag-on behaviour. With the flag **off** Contacts behaves as before ETP-5791: the vendor
+checkbox reads "Proveedor"; changing the category does not touch the type checkboxes and no
+category is refused; the create popups (document Contacto selector, OCR) seed `customer` / `vendor`
+from the document's nature, POST every key and run no category check; the import keeps its Cliente /
+Proveedor columns (ETP-5544) and auto-creates an unknown category (ETP-4905). The backend evaluates
+the same key independently. Toggle points: `ContactsBusinessPartnerForm` (category sync),
+`BillingPreferencesForm` (label), `useContactCreateTypeGate` (both create popups),
+`contactsImportDescriptor.js` (`contactCategoryTypeEnabled`) and the `hiddenWhenFlag` import fields.
+Registry entry: `flags-registry.json` → `contact-category-type`.
+
+`C_BP_Group` carries two new flags, `EM_Etgo_Iscustomer` / `EM_Etgo_Isvendor` (NEO properties
+`etgoIscustomer` / `etgoIsvendor` on the `business-partner-category` spec). On contact **create**
+(REST single, `/batch`, MCP) the backend (`ContactTypeRules`, `com.etendoerp.go`) copies them into the
+new contact's `customer` / `vendor` **unless the request body carries the key** — key presence is
+what counts as explicit. A contact with neither type is refused
+(`ETGO_BPartnerContactTypeRequired`). A category with neither flag (legacy, before data-fix R55)
+defines nothing and is not inherited from.
+
+### Import (block D)
+
+- The **Cliente / Proveedor columns are hidden** (`hiddenWhenFlag: "contact-category-type"` on
+  `decisions.json → window.import.fields`, filtered at runtime by `lib/importFlagGates.js`), and the
+  review validator and the row resolution skip them. The descriptor never puts `customer` /
+  `vendor` in the `businessPartner` body, so every imported contact inherits its type from its
+  category. A template downloaded before ETP-5791 that still has those columns imports fine: the
+  headers map to no field and are ignored.
+- **Category resolution is lookup-only.** `allowCreate: false`, no `createFn`: the cell is matched
+  against the existing categories (exact code first, then accent/case-insensitive name — unchanged),
+  and an unknown category fails its row with `importErrorContactCategoryNotFound` ("La categoría de
+  contacto "X" no existe. Créala primero en Categoría de contacto o usa una existente."). An
+  auto-created category would carry neither flag, so every row pointing at it would be refused by the
+  backend anyway. An **empty** category cell still sends no category, so the backend default applies.
+- The template's category example is now **Cliente** (`importExampleContactCategory`), the name of
+  the category onboarding creates — "Clientes" would fail the template's own example row now that
+  categories are not created.
+
+### Contact form (block E)
+
+- **Label.** The vendor checkbox in Financiero reads **Proveedor/Acreedor** (`contactVendorCreditor`).
+- **Create payload.** On a new contact the type checkboxes are not on screen (billing preferences
+  show "Guarda el contacto…"), and `useEntity`'s create rule 1 drops a key no mounted form registers
+  unless it is user-authored — so the `/defaults` value `customer: 'Y'` never reaches the POST. The
+  leak was the create-from-document SEED: `buildContactSeed` put `vendor: true` / `customer: true` in
+  `initialData`, `useEntity.handleNew` marks seeded keys user-changed, and they always rode into the
+  POST, disabling inheritance. The seed now carries only the name (and the category from
+  `useContactCategorySeed`). The dormant fallback form of `RecordCreateModal` (used only when the
+  window module fails to load) posts everything `/defaults` returned; the contact target declares
+  `createOmitUntouched: ['customer', 'vendor']` so those two keys are sent only if the user set them.
+- **Category change on a saved contact** (`useContactCategoryTypeSync.js`, run by
+  `ContactsBusinessPartnerForm` for the `principal` section only): the new category's flags are read
+  with `GET /sws/neo/business-partner-category/businessPartnerCategory/{id}`
+  (`contactCategoryFlags.js`) and written onto `customer` / `vendor` with ordinary `onChange` calls,
+  without a prompt. The user can still flip either box before saving, and Save sends what is on
+  screen. A category with neither flag, or one whose flags cannot be read, leaves the boxes alone.
+  Unticking a type only hides its billing block; Tarifa, Método de pago, Cuenta and Condiciones de
+  pago stay in the record (nothing in the window clears them).
+- **Create from a document** (`useCreateContactModal`, OCR `CreateContactModalAdapter`): the flow
+  wraps `RecordCreateModal` in `ContactTypeRequirementContext` (`contactTypeRequirement.js`) —
+  purchase → `vendor`, sale → `customer`. Inside it, the Contacts header form **holds** a category
+  selection until its flags are known and applies it only when it grants the type; otherwise it
+  shows `contactCategoryNotVendor` / `contactCategoryNotCustomer` as a **toast only** and the field
+  keeps its previous value. No error is put under the field in that case: the value on screen is
+  still valid, and an inline error there outlived the successful save that followed, so the user
+  read it as a failed create. A category that arrived another way (the `/defaults` default when
+  the seed could not be resolved) is checked too and, if it does not grant the type, cleared with
+  the error under the field, so the required-field gate keeps Save disabled; that inline error is
+  cleared as soon as a granting category is accepted. Unknown flags (the
+  category read was refused) and a category with neither flag (legacy, before R55 — it defines
+  nothing, as on the backend) are let through; the backend still refuses a contact with no type.
+  `RecordCreateModal` and `EmbeddedWindowRoute` are unaware of any of this: the context crosses the
+  dialog portal and the embedded router on its own.
+- **Fallback form.** `RecordCreateModal` falls back to the generated `BusinessPartnerForm` whenever
+  the dynamic import of the Contacts window rejects (a stale chunk after a deploy, a network cut), so
+  the path is reachable. That form never runs `useContactCategoryTypeSync`, and its category is the
+  `/defaults` one (usually "Cliente"). The flow therefore also sets the target's
+  `validateBeforeCreate` (`buildContactTypeCreateCheck` in `contactTypeRequirement.js`): on Crear it
+  reads the chosen category's flags and, if they do not grant the type, shows the same
+  `contactCategoryNotVendor` / `contactCategoryNotCustomer` message and does not POST. Same rules:
+  unknown flags and a category with neither flag pass.
+
+### MCP schema hints
+
+`businessPartner.vendor` and `businessPartner.customer` declare a field `agentPrompt`
+(`agent-prompts/contacts/business-partner.vendor.md` / `business-partner.customer.md`, persisted to
+`ETGO_SF_FIELD.AGENT_PROMPT`). `etendo_schema` returns it on both fields. The prompt is
+flag-agnostic, because a static prompt cannot read the flag: on create the agent reads the category it
+sends (or the `default` category when it sends none) and sends `customer` / `vendor` matching its
+`etgoIscustomer` / `etgoIsvendor`, unless the user asked for a different type; on update, when it changes
+`businessPartnerCategory` it sends both flags matching the new category. Explicit values are honoured in
+both states, so with the flag on this gives the same result as inheritance, and with the flag off (no
+inheritance, AD defaults customer=Y / vendor=N) it still saves a vendor as a vendor. The prompt says a
+contact should end up with a type, without claiming the server always refuses one with neither.
+
+`etendo_schema view:"create"` lists `vendor` under `optional`. `IsVendor` is mandatory in AD with no
+AD default, so `McpSchemaFieldBuilder.addVisibility` would compute `userRequired: true`; the
+`ETGO_SF_FIELD` row of `contacts/businessPartner.vendor` carries
+`MCP_CONFIG = {"fields":{"userRequired":false,"reason":…}}` (com.etendoerp.go sourcedata), the generic
+override described in `neo-headless.md` §4.12.6. `customer` is optional with `serverDefaulted: true`
+because of its AD default `'Y'`. The raw `required` key (AD NOT NULL) is unchanged on both.
+
+### Category change through the API / MCP (parity with the form)
+
+An update of `businessPartner` that changes `businessPartnerCategory` to a different category and
+carries **neither** `customer` nor `vendor` gets **both** flags from the new category on the
+backend (`ContactTypeRules.inheritOnCategoryChangeAndValidateUpdate`), on REST PATCH/PUT and MCP
+`etendo_update` alike. A category with neither flag leaves them as they are. A request that carries
+either flag decides the type itself and nothing is inherited — the two travel together. The form is
+unaffected: `useContactCategoryTypeSync` already writes the differing flags with `onChange`, so its
+PATCH (a diff against the saved record) carries at least one flag whenever the category changes the
+type; a flag the user restores by hand to its saved value is dropped from the diff, and the
+"either flag" rule is what keeps the backend from overwriting it. The one case the backend cannot
+tell apart: the user changes the category and then restores **both** boxes by hand to their saved
+values — the PATCH then carries only the category and the backend applies the new category's flags.
 
 ## ETP-5795 — "+ New Contact" on the Contacts overview points to /contacts
 

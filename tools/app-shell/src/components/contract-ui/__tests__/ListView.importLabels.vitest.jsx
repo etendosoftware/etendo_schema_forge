@@ -55,9 +55,12 @@ const captured = vi.hoisted(() => ({}));
 const trackMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/observability.js', () => ({ track: trackMock }));
 // ETP-5676: the global `import-batch-size` flag; every other flag stays off.
-const flagValue = vi.hoisted(() => ({ batchSize: 0 }));
+const flagValue = vi.hoisted(() => ({ batchSize: 0, allOff: Object.freeze({}) }));
 vi.mock('@/lib/flags/useFeatureFlag.js', () => ({
   useFeatureFlag: () => false,
+  // Flag-gated import columns (importFlagGates.js): no gate key is ON, so no field is dropped.
+  // A stable object keeps the gated config's memo identity across renders.
+  useFeatureFlags: () => flagValue.allOff,
   useNumberFlag: () => flagValue.batchSize,
 }));
 // ETP-5676: the batch poster the hook wraps; its body is guarded in useBatch.vitest.jsx.

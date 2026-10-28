@@ -315,6 +315,15 @@ A computed column that reads a table from **another module** needs that module d
 - **xlsx / Excel exports are deliberately EXEMPT.** A workbook string cell is inert (a formula is a different cell type), so an apostrophe there is visible garbage, not a defence. See `NeoXlsxExportWriter.java` and `buildTemplateXlsx.js`.
 - The policy, the trigger set and the expected output for every input are normative: `{etendo_root}/modules/com.etendoerp.go/docs/security/csv-neutralization-fixtures.md` (contract) and `{etendo_root}/modules/com.etendoerp.go/docs/adr/0004-csv-formula-neutralization.md` (rationale). Add a trigger to the table FIRST, then to all three implementations (Java, `csvSerializer.js`, the jsreport source text). Before writing anything that emits CSV, **grep for `csvField` first**.
 
+## Pickers Open on the Committed Value
+
+**Every selector, drawer or popup that offers options MUST open on the value the field already holds**: marked with a check and `aria-selected`, centred, and with the arrow keys starting from it (ETP-5846/5903/5948). The behaviour lives in shared pieces that each picker has to wire in: `contract-ui/selectorSelection.js` and `useLocateCommittedValue`. Each caller also has to pass `value` / `valueLabel` (and `committedItem` for the stock drawer). Leaving either out fails silently: the picker just opens at the top. Both gaps found live during ETP-5948 were exactly that.
+
+- Building a new picker: reuse an existing one (`InlineSearchCombo`, `CreatableSearchSelect`, `SearchPopup`, a `ProductDrawerShell` variant) before writing one, and copy the wiring from a sibling.
+- Guardrail: `tools/app-shell/test/committed-selection-policy.test.js` fails the build on a `role="option"` file that does not use `selectorSelection`, and on a shared picker tag without `value=`. Opt-out: a `committed-selection-ok: <reason>` comment, only for lists with no single committed value or short lists that already set `aria-selected` from their value.
+
+Full reference: `docs/ui-customization.md` (inline edit → "The same reopen contract…").
+
 ## Authenticated Requests (MANDATORY)
 
 **Every request to the backend MUST go through the shared helper — never a bare `fetch`.** A raw `fetch` re-decides the headers, the base URL, `credentials`, the `FormData` boundary and what an expired session does, and getting the headers wrong is SILENT: a missing `Accept-Language` makes the backend resolve reference data (`*_Trl` names: countries, UoMs, `AD_Ref_List`) in the user's AD language instead of the UI locale, with no error anywhere. That shipped three times (ETP-4685, then ETP-5022 across País / UOM / UOM for Weight) before ETP-5022 migrated all 293 raw calls across 121 files.
@@ -583,7 +592,7 @@ Auto-memory (NOT committed) only for: GitHub usernames, local paths, personal pr
 
 **Two binding mechanisms, but only one is for new code.**
 - **`@NeoExtension(spec = "<spec>", entity = "<entity>")`** on the customization class, resolved by `NeoExtensionIndex`. **Use this for anything new.** Proxy-safe, annotation-first, the binding is visible in the file, splitting a handler needs no data change, and it covers every surface (CRUD, DEFAULTS, ACTION, SELECTOR, CALLOUT, READ) on every channel.
-- **`ETGO_SF_ENTITY.Java_Qualifier` + `@Named`** — the original binding. **On its way out.** Still resolved as the fallback, so existing handlers keep working and migrate opportunistically (when someone opens the file anyway), but **do not add a new one**. Full comparison and the migration rule: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3.a.
+- **`ETGO_SF_ENTITY.Java_Qualifier` + `@Named`** — the original binding. **On its way out.** Still resolved as the fallback, so existing handlers keep working, but **do not add a new one**, and **if you touch a qualifier-bound handler for any reason, migrate its pair to `@NeoExtension` in the same PR** (ETP-5588: "migrate when convenient" let the legacy keep growing, because every fix lands on the binding that exists). Recipe, reader inventory, audit catalog and traps: the `neo-extension-migration` skill. CI enforces it in com.etendoerp.go (`.github/workflows/extension-guardrails.yml`: `make extension-parity` ratchet + `scripts/check-extension-guardrails.py`). Code that needs an entity's customization outside a hook dispatch uses `NeoHandlerLookup.forEntity` / `hasCustomization`, never `SFEntity.getJavaQualifier()`. Full rule: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3.a.
 
 **How the qualifier binding works:**
 1. Set `Java_Qualifier` on the `ETGO_SF_ENTITY` record (e.g. `"internal-consumption-line"`).

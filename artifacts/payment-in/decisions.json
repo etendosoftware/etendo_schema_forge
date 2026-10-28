@@ -74,7 +74,6 @@
     "header": {
       "name": "finPayment",
       "formCols": 3,
-      "javaQualifier": "payment-reactivate",
       "fields": {
         "documentNo": {
           "visibility": "readOnly",

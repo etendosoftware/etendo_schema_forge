@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, joinWithConjunction } from '@/lib/backendErrors.js';
 import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
@@ -104,8 +104,13 @@ export function DetailMoreActionsMenu({
     // exact same condition the backend 422 enforces — so this is a prediction of that same
     // refusal, not a separate rule.
     if (action.documentAction === 'RE' && data?.reactivationBlocked) {
+      // ETP-5745: reactivationBlockedFiscalSystem is a real array (like the live 422's own
+      // messageParams.fiscalSystem) — joined with the same locale-aware conjunction so this
+      // preview reads identically to the action's own refusal ("SII y TicketBAI", not a comma).
       toast.error(ui('backendError.invoiceReactivateFiscalRectified', {
-        fiscalSystem: data.reactivationBlockedFiscalSystem,
+        fiscalSystem: Array.isArray(data.reactivationBlockedFiscalSystem)
+          ? joinWithConjunction(data.reactivationBlockedFiscalSystem, ui)
+          : data.reactivationBlockedFiscalSystem,
         rectificativas: Array.isArray(data.reactivationBlockedRectificativas)
           ? data.reactivationBlockedRectificativas.join(', ')
           : data.reactivationBlockedRectificativas,

@@ -1353,6 +1353,45 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
     const raw = 'Something else entirely went wrong';
     assert.equal(translateBackendError(raw, es), raw);
   });
+
+  // ETP-5473 QA reject: the three country refusals are now AD_MESSAGEs answered in the request
+  // language and published in `messageKeys`. The SPA maps them by identity, so the toast is right
+  // whatever language the prose arrived in — English, or the backend's own Spanish wording (which
+  // is the SPA's es_ES copy verbatim, so MCP and the UI say the same thing).
+  describe('keyed country refusals (ETGO_FinAcc*, ETP-5473)', () => {
+    const en = fakeUiTranslator({
+      'backendError.invalidCountry': 'Invalid country',
+      'backendError.countryRequired': 'Country is required',
+      'backendError.countryIban': 'Country needed in an IBAN account.',
+    });
+    const KEYED = [
+      ['ETGO_FinAccCountryRequired', 'El país es obligatorio', 'Country is required',
+        'El país es obligatorio', 'Country is required'],
+      ['ETGO_FinAccInvalidCountry', 'País no válido', 'Invalid country',
+        'País no válido', 'Invalid country'],
+      ['ETGO_FinAccIbanRequiresCountry', 'Se necesita el País para una cuenta IBAN.',
+        'A bank account with an IBAN must have a country.',
+        'Se necesita el País para una cuenta IBAN.', 'Country needed in an IBAN account.'],
+    ];
+
+    KEYED.forEach(([key, spanishProse, englishProse, expectedEs, expectedEn]) => {
+      it(`${key}: maps by key whatever language the prose is in`, () => {
+        const options = { messageKeys: [key] };
+        assert.equal(translateBackendError(spanishProse, es, options), expectedEs);
+        assert.equal(translateBackendError(englishProse, es, options), expectedEs);
+        assert.equal(translateBackendError(spanishProse, en, options), expectedEn);
+      });
+
+      it(`${key}: reads the key out of the NEO error body`, () => {
+        const body = { error: { status: 400, message: spanishProse, messageKeys: [key] } };
+        assert.equal(translateBackendErrorBody(body, es, 'fallback'), expectedEs);
+      });
+
+      it(`${key}: without the key, Spanish prose is shown as the backend wrote it`, () => {
+        assert.equal(translateBackendError(spanishProse, es), spanishProse);
+      });
+    });
+  });
 });
 
 // ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108
@@ -3546,6 +3585,50 @@ describe('translateBackendError — invoice reactivate fiscal-rectified refusal 
       messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
     }), prose);
   });
+
+  // ── fiscalSystem as a real array (ETP-5745 correction) — the live-verified production shape.
+  // `messageParams.fiscalSystem` used to be pre-joined into a comma string on the backend
+  // (InvoiceReactivationGuard#reject); it is now a real JSONArray, exactly like `rectificativas`
+  // already was — but unlike `rectificativas`, it must render with a LOCALE-AWARE CONJUNCTION
+  // ("SII y TicketBAI" / "SII and TicketBAI"), not the generic comma join every other
+  // array-valued messageParam gets. Reads the REAL locale files, pinning the exact wording a
+  // real MCP `etendo_action` 422 produces for a 2-fiscal-system case (confirmed live, 2026-10).
+  it('joins a 2-element fiscalSystem array with the real es_ES/en_US conjunction, not a comma', () => {
+    const params = { fiscalSystem: ['SII', 'TicketBAI'], rectificativas: ['REC-1000022'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+
+    assert.equal(esText,
+      'No se puede reactivar esta factura: ya ha sido aceptada por SII y TicketBAI y está '
+      + 'rectificada por: REC-1000022.');
+    assert.equal(enText,
+      'This invoice cannot be reactivated: it has already been accepted by SII and TicketBAI '
+      + 'and is rectified by: REC-1000022.');
+    assert.doesNotMatch(esText, /SII, TicketBAI/);
+  });
+
+  it('joins a 3-element fiscalSystem array with no Oxford comma before the conjunction', () => {
+    const params = { fiscalSystem: ['SII', 'Verifactu', 'TicketBAI'], rectificativas: ['REC-1', 'REC-2'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+
+    assert.match(esText, /SII, Verifactu y TicketBAI/);
+    assert.match(enText, /SII, Verifactu and TicketBAI/);
+    assert.doesNotMatch(esText, /Verifactu, y TicketBAI/);
+    assert.doesNotMatch(enText, /Verifactu, and TicketBAI/);
+    // rectificativas keeps the plain comma join, untouched by the conjunction fix.
+    assert.match(esText, /REC-1, REC-2/);
+  });
+
+  it('a single-element fiscalSystem array renders the same as the legacy bare string', () => {
+    const arrayText = translateBackendError('ignored', es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: ['SII'], rectificativas: ['REC-1'] },
+    });
+    const bareText = translateBackendError('ignored', es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'SII', rectificativas: ['REC-1'] },
+    });
+    assert.equal(arrayText, bareText);
+  });
 });
 
 // ── translateByMessageKey messageParams forwarding — no regression on param-less keys ──
@@ -3656,6 +3739,34 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
   it('keeps parseBackendErrorMessage returning only the message', async () => {
     assert.equal(await parseBackendErrorMessage(jsonResponse(fenceBody)), fenceBody.error.message);
   });
+});
+
+// ── Contact-type refusals, translated by identity ──
+//
+// com.etendoerp.go refuses a contact category, or a contact, saved with neither Customer nor
+// Vendor/Creditor. Both are AD_MESSAGE records of a module with no es_ES translation pack, so the
+// SPA's map is where they become Spanish. Reads the REAL locale files so a missing entry fails.
+describe('translateBackendError — contact-type refusals by identity', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  // [messageKey, i18n key, the backend's English prose]
+  const CASES = [
+    ['ETGO_BPGroupContactTypeRequired', 'backendError.bpGroupContactTypeRequired',
+      'At least one contact type must be checked: Customer or Vendor/Creditor.'],
+    ['ETGO_BPartnerContactTypeRequired', 'backendError.bpartnerContactTypeRequired',
+      'The contact must have at least one type: Customer or Vendor/Creditor.'],
+  ];
+
+  for (const [messageKey, i18nKey, prose] of CASES) {
+    it(`renders ${messageKey} from its identity in es_ES and en_US, never the English prose`, () => {
+      const esText = translateBackendError(prose, es, { messageKeys: [messageKey] });
+      const enText = translateBackendError(prose, en, { messageKeys: [messageKey] });
+      assert.equal(esText, es(i18nKey));
+      assert.equal(enText, en(i18nKey));
+      assert.notEqual(esText, i18nKey, `es_ES.${i18nKey} is missing`);
+      assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
+    });
+  }
 });
 
 // ── ETP-5669: G/L journal period mismatch, translated by identity with its params ──
@@ -3846,5 +3957,44 @@ describe('translateBackendError — payment-term refusals', () => {
       }
       assert.match(json.genericLabels['backendError.paymentTermDaysOutOfRange'], /\{min\}.*\{max\}.*\{value\}/, locale);
     }
+  });
+});
+
+// OrderInvoiceDuplicateGuard.java (com.etendoerp.go — ETP-5714): `error.code = draftInvoiceExists`.
+// The bulk order menus read it from the 409 body; the draft numbers are one opaque {docs} param.
+describe('translateBackendError — draft invoice already exists (ETP-5714)', () => {
+  const es = fakeUiTranslator({
+    'backendError.draftInvoiceExists': 'El pedido ya tiene una factura en borrador ({docs}). Confírmala o elimínala antes de generar otra.',
+  });
+
+  it('translates the 409 sentence keeping the draft numbers', () => {
+    assert.equal(
+      translateBackendError('This order already has a draft invoice (INV-1, INV-2).', es),
+      'El pedido ya tiene una factura en borrador (INV-1, INV-2). Confírmala o elimínala antes de generar otra.',
+    );
+  });
+
+  it('reads the message from the { error: { code, message } } body the bulk menus receive', () => {
+    const body = { error: { status: 409, code: 'draftInvoiceExists', message: 'This order already has a draft invoice (INV-9).' } };
+    assert.equal(
+      translateBackendErrorBody(body, es, 'Error (409)'),
+      'El pedido ya tiene una factura en borrador (INV-9). Confírmala o elimínala antes de generar otra.',
+    );
+  });
+
+  it('leaves a sentence with no draft numbers untouched', () => {
+    assert.equal(
+      translateBackendError('This order already has a draft invoice ().', es),
+      'This order already has a draft invoice ().',
+    );
+  });
+
+  it('ships backendError.draftInvoiceExists with {docs} in en_US, es_ES and es_AR (es_AR in voseo)', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.draftInvoiceExists":\s*"[^"]*\{docs\}/), `${loc} lost {docs}`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
   });
 });

@@ -1,0 +1,1 @@
+Whether contacts of this category are customers. Contacts created in this category are expected to take it as their customer flag, so set it on every category whose contacts are customers. At least one of etgoIscustomer and etgoIsvendor should be true: both default to false, so on create set the one(s) that match the category instead of omitting both.
