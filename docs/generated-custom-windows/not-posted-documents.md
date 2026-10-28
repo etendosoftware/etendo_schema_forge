@@ -171,12 +171,14 @@ plus the **"Todos los errores"** shortcut. The request sends search keys (`N`, `
 
 The badges are `StatusTag`s whose tone is NOT declared by the page: `STATUS_DEFS` takes it from
 `postedStatusTone()` in `lib/postedStatus.js`, the one colour source for posting statuses, so a
-status reads the same colour here as in the lists and the detail view (ETP-5647).
+status reads the same colour here as in the lists and the detail view (ETP-5647). "Período
+cerrado" is the `caution` tone (orange, core `TONE_STYLES`, ETP-5591 QA): it needs action, but on
+the calendar, not on the document.
 
 | UI label (es_ES / i18n key) | Tone | Search key(s) | `ad_ref_list_id` | Notes |
 |---|---|---|---|---|
 | No contabilizado (`notPostedStatusUnposted`) | warning (yellow) | `N` | `D16B6411F4CB4708AE05E7F6E109920E` | |
-| Periodo cerrado (`postedStatusPeriodClosed`) | destructive (red) | `p` | `D1EAA8BCC3E649C398D4E544282E5292` | Orange until ETP-5647, now red like everywhere else |
+| Período cerrado (`postedStatusPeriodClosed`) | caution (orange) | `p` | `D1EAA8BCC3E649C398D4E544282E5292` | Red under ETP-5647; orange again, on every surface, since ETP-5591 QA |
 | Cuenta no válida (`notPostedStatusInvalidAccount`) | destructive (red) | `i` | `A12420CC6D4144768EEC57143859EFD6` | |
 | Coste no calculado (`postedStatusCostNotCalculated`) | destructive (red) | `NC` | `EF3E057A84CD4BE88A9EF57BE9598DA3` | Added by ETP-5591 (see below) |
 | Error (`notPostedStatusError`) | destructive (red) | `E`, `C` | `420D49CD77304D32BE49582002C315BE`, `4AE29BF062D4484E976B1BEEF34A7913` | Unified: Error + Error-No-Cost |
@@ -188,7 +190,7 @@ the page meant to surface exactly that. It is now a curated option and part of
 `DEFAULT_ACCOUNTING_STATUS_KEYS` (`N, E, C, i, p, NC`).
 
 **"Todos los errores" shortcut.** First row of the dropdown (after "Todos los estados"). Ticking it
-selects every status that means a posting attempt **failed** — Periodo cerrado, Cuenta no válida,
+selects every status that means a posting attempt **failed** — Período cerrado, Cuenta no válida,
 Coste no calculado, Error (`ERROR_TOKENS`, i.e. all but "No contabilizado") — and unticking it
 clears them. It is not a status of its own: it is ticked exactly when all of them are, the trigger
 then reads "Todos los errores", and it is never written to the URL (`applyStatusSelection` in
@@ -413,7 +415,7 @@ Two layers now:
 
 - Breadcrumb: `Finanzas / Documentos no contabilizados` (`` `${ui('finance')} / ${ui('notPostedDocuments')}` ``, passed to `useSetPageMeta`). Previously this window passed no `breadcrumb` key at all — `TopBar` renders nothing when `breadcrumb` is falsy.
 - The record-count badge is republished whenever the row count changes (`useSetPageMeta(meta, [rows.length, accessDenied])`). Before ETP-5591 it was published once, so it kept showing the count at mount (usually 0).
-- Document-type names: the row's `documentTypeCode` is looked up in the already-translated `{value, label}` pairs `filter-options` returns (`documentTypeLabels`); a code whose GO window was renamed (`DOC_TYPE_LABEL_KEYS`: `MI` → "Relación albarán-factura") uses our own key instead. A row without a code keeps the raw datasource label. The filter dropdown and the rows go through the same `docTypeLabel()`.
+- Document-type names: `DOC_TYPE_LABEL_KEYS` names **all 23 codes** with our own i18n keys (`docType<Name>`, sentence case: "Factura (cliente)", "Cobro", "Asiento manual", "Conciliación", "Costes de importación", `MI` → "Relación albarán-factura"…), because core's `AD_Ref_List_Trl` labels are inconsistent ("Factura (Cliente)" next to "Albarán (cliente)", "Landed Cost" untranslated) — ETP-5591 QA CP-1b. A code the map lacks falls back to the translated `{value, label}` pairs `filter-options` returns; a row without a code keeps the raw datasource label. The filter dropdown and the rows go through the same `docTypeLabel()`. A guard test fails when the map and core's 23 codes diverge.
 
 ### Layout (ETP-5591)
 
@@ -425,12 +427,12 @@ paged NEO entity grid, and this handler serves a custom, unpaged contract):
 |---|---|---|
 | Tipo de documento | core `DistinctValuesFilter` (single, `heading`, search) | Options sorted A→Z by translated name; "Todos los documentos" |
 | Estado | core `DistinctValuesFilter` (`multiple`, `heading`, `searchable={false}`, `renderLabel` → `Tag`) | See "Accounting status filter" |
-| Fecha | `DateRangePopover` | Default **Últimos 12 meses** (`last12m`) |
+| Fecha | `DateRangePopover` | Default **Últimos 12 meses** (`last12m`). Picking "Todo el tiempo" leaves the trigger reading "Todo el tiempo" (ETP-5591: it read "Cualquier fecha") |
 | Limpiar filtros | `Button` | Only when filters differ from the defaults; resets to them (date back to 12 months) |
 | Share (link icon) | — | Copies `window.location.href` (filters are in the URL); `linkCopied` / `copyFailed` toasts. Uses the shared `useCopyPageLink()` hook (`hooks/useCopyLinkAction.js`), the same one behind `ListView`'s Share (ETP-5593) |
 | Ordenar | `ListSortPopover` + `useClientSort` | Client-side: the handler returns every row at once. Sorts the displayed (translated) values |
 | Actualizar | `RefreshButton` | Refetches with the same filters |
-| Table | `DataTable` | Columns: Tipo de documento (bold), Estado (`Tag`), Descripción, Fecha contable (`date`, `dot: false`), Organización |
+| Table | `DataTable` | Columns: Tipo de documento (bold, 208px), Estado (`Tag`, 184px), Descripción (`grow`: takes the rest, 320px floor), Fecha contable (`date`, `dot: false`, 136px), Organización (176px). With the 260px row actions the table needs 1324px, so it fits a 1440px screen without a horizontal scrollbar (ETP-5591 QA; it needed 1468px). Narrower screens still scroll |
 | Row hover | `rowQuickActions.render` → `NotPostedRowActions` | "Abrir documento" + "Contabilizar" text links (`Button variant="link"`), hover-revealed like `RowQuickActions` |
 | Selection | `SelectionToolbar` | "{n} Seleccionados" · Contabilizar · ✕ |
 | Empty | `DataTable` `emptyState` | Default filters: "No hay documentos sin contabilizar". Other filters: "No encontramos documentos" + description + Limpiar filtros. Load error: translated message |
@@ -465,7 +467,8 @@ code, or a missing id, shows no link. It opens in the same tab; Back restores th
    after the user changed a filter never brings back the old results.
 4. **Contabilizar (selection)** — `POST /header/0/action/bulk-post` (`timeout: 0`); outcome via
    the shared `showBulkActionToast` (same toast as every other list's bulk "Contabilizar"; a single
-   failed row shows its real backend error). Selected rows without `tableId` are never sent and are
+   failed row shows its real backend error; when several failures share the same identity —
+   `messageKeys` + `messageParams` — that reason is shown once as the toast description, ETP-5591). Selected rows without `tableId` are never sent and are
    reported in the toast's **omitted** count (ETP-5209 bucket), not silently dropped. Then:
    selection cleared, reload. Leaving the page aborts an in-flight rows request.
 
@@ -499,6 +502,25 @@ text came back in English) is in `com.etendoerp.go` `docs/neo-headless.md` (ETP-
 Only `en_US` and `es_ES` have the copy; an `es_AR` user gets core's English text.
 
 ---
+
+### Disabled-for-accounting posting error (ETP-5591)
+
+Core answers `STATUS_DocumentDisabled` when a document generates no accounting, for a reason that
+depends on the document class. The toast used to show core's text in the classic session language
+("Document disabled for accounting" in a Spanish UI). `DocumentPostingService` now names the reason
+in `messageKeys`, and `backendErrors.js` renders it in the UI locale. A reason is named only when
+`DocumentDisabledReason` can re-check it:
+
+| Case | `messageKeys` | es_ES |
+|---|---|---|
+| Transaction without payment, deposit (`BPD`), its financial account has no deposit account | `ETGO_PostingDisabledNoDepositAccount` (+ `financialAccount`) | "La cuenta financiera {cuenta} no tiene cuenta de depósito…" |
+| Same for withdrawal / bank fee (`BPW`, `BF`) and the withdrawal account | `ETGO_PostingDisabledNoWithdrawalAccount` | "…no tiene cuenta de retirada…" |
+| Invoice whose total, lines and taxes are all zero | `TotalGrossIsZero` | "El total de la factura es cero…" |
+| Anything else (payment-linked transaction, payment, other tables) | `DocumentDisabled` | "Este documento está deshabilitado para contabilidad…" |
+
+After that failed post core leaves the row `posted = 'D'`, which is not one of the page's statuses,
+so it disappears from the list on reload. That is deliberate: `D` means "this document has no
+accounting", not "pending".
 
 ## Manual verification
 
