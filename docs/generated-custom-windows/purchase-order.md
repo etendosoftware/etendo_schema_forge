@@ -1,6 +1,8 @@
+# Purchase Order
 
+## Intent
 
-## Agent prompts on order date and line tax — ETP-5852
+This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.
 
 ## Theme roles
 
@@ -675,4 +677,7 @@ Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP
 ## Manage-documents popup title follows the pending action — ETP-5688
 
 `CreateDocsModal` (`artifacts/purchase-order/custom/PurchaseOrderActions.jsx`) used to title itself with the fixed `soManageDocsTitle` ("Generar factura") even when only the receipt was pending. The title now comes from the same `poManageDocsLabel(ui, needsReceipt, needsInvoice)` helper that labels the detail-view button: `poManageReceiptAndInvoice` ("Gestionar recepción y factura") when both are pending, `poManageInvoice` ("Gestionar factura") for invoice only, `poManageReceipt` ("Gestionar recepción") for receipt only, falling back to `soManageDocsTitle` only if the modal opens with nothing pending. It follows what is **pending** (`derived.needsReceipt` / `derived.needsInvoice`), not what the user ticked, and applies to both openers (the detail button and `ManageDocsLauncher`, used by the list-row kebab). Mirrors the Sales Order change in ETP-5525.
+
+## Agent prompts on order date and line tax — ETP-5852
+
 `orderDate` (M-31) and `lines.tax` (M-35). Over MCP a line price sent alone on update is the line's Precio and the net follows the discount, as on create (M-103).

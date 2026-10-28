@@ -1,6 +1,9 @@
+# Product
 
+## Intent
+Product lets a user maintain the commercial and inventory identity of an item, then continue into the product-specific surfaces that matter after the master record exists: pricing, stock visibility, transaction history, and the contract-backed child datasets attached to the selected product.
 
-## Agent prompt on duplicate names — ETP-5852
+The visible product page is a generated route with custom surfaces embedded into it: a gallery list, a pricing tab, and a product-specific inventory sidebar.
 
 ## Theme roles
 
@@ -1689,4 +1692,7 @@ The import no longer waits for `/sws/neo/batch` to answer: `useWindowImportDialo
 ## Read-only role tier: price tab — ETP-5830
 
 With a `read-only` tier, `ProductPriceBar` shows every tariff and its prices but hides "+ Añadir tarifa" and the delete button, and disables the price steppers (`accessReadOnly`, passed by `DetailView` from the role tier). Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Agent prompt on duplicate names — ETP-5852
+
 `entities.product.agentPrompt` tells agents a product name is not unique: identify by `searchKey` or id, ask the user when several match, and only suggest (for confirmation) the one in the contact's latest order. Feedback M-6.

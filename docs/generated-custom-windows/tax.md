@@ -1,6 +1,9 @@
+# Tax
 
+## Intent
+Define reusable tax-rate records that describe the percentage to apply, whether the tax is meant for sales, purchases, or both, and which amount should be treated as the taxable base.
 
-## Agent prompt on the catalogue — ETP-5852
+On `origin/develop`, the merged tax regeneration keeps this as a simple standalone maintenance window, but the list now has clearer visual semantics: the rate is rendered as a colored percentage tag (green for positive rates, neutral/gray for zero, red for negative rates such as withholdings) and the sales/purchase scope is rendered as colored tags instead of raw database codes.
 
 ## What this window should allow
 Users should be able to review and update tax definitions by setting a tax name, a rate, an applicability scope, an effective date, and the base semantics used later by transactional documents. Creating a new tax rate record from the list view is disabled (`window.hideCreate: true`) — new tax rates are provisioned outside this window.
@@ -233,4 +236,7 @@ Reopening the popup on a field that already holds an account opens on that accou
 ## ETP-5693 — Posting accounts only, on write
 
 Saving an account field of the Accounting tab (Tax Due / Tax Credit) now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `TaxAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## Agent prompt on the catalogue — ETP-5852
+
 `entities.tax.agentPrompt` says this is the full catalogue (inactive, future and category-specific rates included) and that a line's tax is resolved by the server or listed by `etendo_selectors` on the line's `tax`. Feedback M-35.

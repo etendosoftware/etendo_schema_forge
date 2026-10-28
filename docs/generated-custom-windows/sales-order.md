@@ -1,6 +1,12 @@
+# Sales Order
 
+The official grid **Print** action uses the server-rendered `print-sales-order`
+document report. Its header uses the shared document-branding contract, so the
+organization's configured document image is included when available. See
+`docs/reports/document-report-branding.md` for the extension point used by
+future document templates.
 
-## Agent prompts on order date and line tax — ETP-5852
+## Intent
 
 This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.
 
@@ -748,4 +754,7 @@ cannot differ from its price list's (422), and the order date is also the accoun
 `purchase-order.md` ("Header validations over MCP `etendo_update`") and
 `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41. The sales-order header calls the same
 `OrderCurrencyPriceListGuard` from its `handle()`.
+
+## Agent prompts on order date and line tax — ETP-5852
+
 `orderDate` (server proposes today; send the user's date, M-31) and `lines.tax` (resolved from product and customer tax categories, options through `etendo_selectors`, M-35/M-79).

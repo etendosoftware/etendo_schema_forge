@@ -1,6 +1,8 @@
+# Purchase Invoice
 
+## Intent
 
-## Agent prompts on dates, line tax and installments — ETP-5852
+Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.
 
 Global semantic search opts this window in through `go.purchase-invoice`. It indexes only `C_Invoice` records where `IsSOTrx = N`, using `DocumentNo` as content; selecting a result opens this window's editable record route.
 
@@ -3038,4 +3040,7 @@ The "Subir factura" panel on `/purchase-invoice/new` (`OcrInlineUploader`) accep
 - **Stored WEBP data type (ETP-5735 follow-up):** the core detects MIME types with Tika 0.9, which stores a WEBP as `application/octet-stream`, so the saved-record viewer sent it to `PdfViewer` ("Invalid PDF structure"). Backend: `NeoAttachmentStore` now corrects a blank/octet-stream data type after upload using `NeoAttachmentPolicy.resolveMimeType`. Frontend: `useMainAttachment` routes the viewer through `resolveAttachmentMime(dataType, fileName)` (`windows/custom/shared/attachmentFileTypes.js`), which falls back to the file extension for blank/octet-stream types, so attachments stored before the backend fix also render.
 - **Renamed files are attached under their real extension (ETP-5735, CP16):** the attachments API rejects a file whose content does not match its extension (`NeoAttachmentPolicy.validateContent`), so a PNG named `.pdf` was created as an invoice but never attached, and the failure was only a `console.warn`. `OcrInlineUploader` now uploads under `nameForOcrMime(name, sniffedMime)` (`ocrFileTypes.js`; the original name is kept when its extension already matches), using the MIME captured at extract time. If the attach still fails, a toast (`ocrAttachFailed`) tells the user to attach the document from the Attachments tab; navigation to the new invoice stays non-fatal.
 - **MCP parity (ETP-5735):** the MCP tools `etendo_request_document_extraction_upload` / `etendo_extract_invoice_document` accept the same formats (PDF, JPG/JPEG, PNG, WEBP) as the panel. The allow-list is the `ocr`-flagged entries of `NeoAttachmentPolicy` (`isOcrDocument`), the content must match the extension's signature, and an image staged document attaches as the main attachment like a PDF.
+
+## Agent prompts on dates, line tax and installments — ETP-5852
+
 `invoiceDate` (the supplier document's date) and `accountingDate` (M-31); `lines.tax` resolved from product and supplier tax categories, options through `etendo_selectors` (M-35); `paymentPlan` allows `etendo_list(allParents:true)` to find installments by due date across invoices (M-50). Over MCP a line price sent alone on update is the line's Precio and the net follows the discount, as on create (M-103).

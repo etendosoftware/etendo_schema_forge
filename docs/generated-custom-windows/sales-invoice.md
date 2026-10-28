@@ -1,6 +1,8 @@
+# Sales Invoice
 
+## Intent
 
-## Agent prompts on dates, line tax and installments — ETP-5852
+This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.
 
 Global semantic search opts this window in through the `sales-invoice` target. A shared invoice source indexes `C_Invoice` using `DocumentNo` as content and `IsSOTrx` as metadata; the target filters to `IsSOTrx = Y`. Opening the command palette here initially scopes it with a removable Sales Invoice pill, and selecting a result opens this window's editable record route.
 
@@ -2609,4 +2611,7 @@ full value on hover, no horizontal scroll.
 ## Read-only role tier: SIF tab and rectified invoices — ETP-5830
 
 With a `read-only` tier the SIF tab locks its fields (`useSifFieldPatcher` `locked`, same path as a processed invoice) and `ReversedInvoicesPanel` is read-only. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Agent prompts on dates, line tax and installments — ETP-5852
+
 `invoiceDate`/`accountingDate` explain the server proposes today and the user's own date must be sent (M-31); `lines.tax` says the server resolves the tax from product and customer tax categories, Recargo de Equivalencia included, and points to `etendo_selectors` for the line's options instead of the tax catalogue (M-35, M-79). `paymentPlan` allows `etendo_list(allParents:true)` (MCP_CONFIG.parent.allParents) to find installments by `dueDate`/`daysOverdue` across invoices (M-50).
