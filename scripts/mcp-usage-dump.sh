@@ -147,7 +147,12 @@ ROW_JSON="json_build_object(
     'resp_bytes', u.resp_bytes,
     'client_name', u.client_name,
     'client_version', u.client_version,
-    'payload', u.payload
+    'payload', u.payload,
+    'triage_cell', u.triage_cell,
+    'triage_assignee', u.triage_assignee,
+    'triage_issue', u.triage_issue,
+    'triage_task', u.triage_task,
+    'triaged', to_char(u.triaged, 'YYYY-MM-DD\"T\"HH24:MI:SS.MS')
   )"
 
 if [[ $COUNT_ONLY -eq 1 ]]; then

@@ -4,6 +4,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import ProductDrawerShell from './ProductDrawerShell.jsx';
 import { ProductAvatar, resolveImageId } from './productSelectorDrawerShared.jsx';
+import { resolveSelectedIndex, nextActiveIndex, arrowStartIndexFor } from './selectorSelection.js';
 
 /**
  * Deduplicates selector results by searchKey — prefer warehouse-specific rows (with
@@ -47,8 +48,11 @@ function useDefaultVariant(ctx) {
 
   const {
     open, results, activeIdx, setActiveIdx, activeItemRef, inputRef,
-    select, onSelect, selectedIds, selectorContext, imageMap, neoBaseUrl, token,
+    select, onSelect, selectedIds, selectorContext, imageMap, neoBaseUrl, token, value, query,
   } = ctx;
+  // ETP-5948 — the committed value's row (check + aria-selected); -1 without a value.
+  const selectedIndex = resolveSelectedIndex(results, value);
+  const optionId = (item) => `product-search-opt-${item.id}`;
 
   const currency = selectorContext?.priceCurrency ?? selectorContext?.currency ?? sessionCurrency ?? 'USD';
 
@@ -102,25 +106,37 @@ function useDefaultVariant(ctx) {
   };
 
   const onNavKeyDown = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.min(prev + 1, results.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.max(prev - 1, 0)); }
-    else if (e.key === 'Enter' && activeIdx >= 0 && results[activeIdx]) { e.preventDefault(); handleSelect(results[activeIdx]); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      inputRef.current?.focus();
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      setActiveIdx(prev => nextActiveIndex(prev, arrowStartIndexFor(query, selectedIndex), delta, results.length));
+    } else if (e.key === 'Enter' && activeIdx >= 0 && results[activeIdx]) { e.preventDefault(); handleSelect(results[activeIdx]); }
   };
 
   const body = (
-    <ul className="py-1">
+    <ul className="py-1" role="listbox">
       {results.map((item, i) => {
         const name = getName(item);
         const code = getCode(item);
         const price = getPrice(item);
         const convertedPrice = getConvertedPrice(item);
         const isActive = i === activeIdx;
-        const isSelected = selectedId === item.id || selectedIds.includes(item.id);
+        // ETP-5948 (D1) — the check and aria-selected mark what IS chosen: the committed value, or
+        // the multi-select picks. The single-pick click in flight (120 ms before the drawer closes)
+        // keeps only its border and background.
+        const isChecked = i === selectedIndex || selectedIds.includes(item.id);
+        const isSelected = selectedId === item.id || isChecked;
 
         return (
           <li key={item.id} ref={isActive ? activeItemRef : null}>
             <button
               type="button"
+              id={optionId(item)}
+              role="option"
+              aria-selected={isChecked}
+              data-option-index={i}
+              {...(isActive ? { 'data-highlighted': 'true' } : {})}
               data-testid={`product-search-option-${item.id}`}
               onClick={() => handleSelect(item)}
               className={`w-full text-left px-4 py-2 transition-colors cursor-pointer flex items-center gap-3 border-l-2 ${
@@ -149,7 +165,7 @@ function useDefaultVariant(ctx) {
                   )}
                 </span>
               )}
-              {isSelected && (
+              {isChecked && (
                 <Check className="h-4 w-4 text-primary shrink-0" data-testid="Check__pds" />
               )}
             </button>
@@ -167,6 +183,8 @@ function useDefaultVariant(ctx) {
     footerCount: results.length,
     hasResults: results.length > 0,
     onNavKeyDown,
+    selectedIndex,
+    activeDescendant: activeIdx >= 0 && results[activeIdx] ? optionId(results[activeIdx]) : null,
   };
 }
 
@@ -180,6 +198,8 @@ export default function ProductSearchDrawer({
   keepOpenOnSelect = false,
   selectedIds = [],
   selectorContext = {},
+  value = null,
+  valueLabel = '',
 }) {
   return (
     <ProductDrawerShell
@@ -192,6 +212,8 @@ export default function ProductSearchDrawer({
       selectorContext={selectorContext}
       keepOpenOnSelect={keepOpenOnSelect}
       selectedIds={selectedIds}
+      value={value}
+      valueLabel={valueLabel}
       fetchConfig={FETCH_CONFIG}
       useVariant={useDefaultVariant}
       maxHeight="65vh"
