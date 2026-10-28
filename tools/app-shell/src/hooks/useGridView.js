@@ -3,7 +3,9 @@ import { getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const SCHEMA_VERSION = 1;
-const MIN_COLUMN_WIDTH = 0;
+// Header cells already spend 24px on padding, so a narrower column would show nothing and
+// would disagree with the body cell; stored or dragged widths below this are raised to it.
+const MIN_COLUMN_WIDTH = 48;
 const MAX_COLUMN_WIDTH = 1200;
 
 export function gridViewColumnId(column) {
@@ -21,7 +23,7 @@ function clampWidth(value) {
   if (value == null || typeof value === 'boolean') return null;
   const width = Number(value);
   if (!Number.isFinite(width) || width < 0) return null;
-  return Math.round(Math.min(MAX_COLUMN_WIDTH, width));
+  return Math.round(Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, width)));
 }
 
 function canCustomizeWidth(column) {

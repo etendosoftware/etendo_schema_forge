@@ -241,6 +241,12 @@ request is made. Saved views are not deleted by turning the flag off; they live 
 user's preferences and apply again when it is turned on. A stored view whose schema does not
 match the current columns is normalized or ignored, never shown as saved.
 
+**Column width bounds.** A personal width is clamped to 48-1200 px, both when the user
+resizes and when a stored view is read back: the 24 px of header padding means a narrower
+column would show nothing and would disagree with its body cells. A stored width below 48
+is raised to 48; a negative or non-numeric one is ignored and the default width applies.
+A narrow window keeps horizontal scroll instead of squeezing columns below that floor.
+
 ListView entry points qualify only when the registry identifies a generated page
 or an audited forwarding wrapper, and the loaded contract declares the standard
 (default or absent) layout (or the explicitly audited product gallery/list layout) with either no custom

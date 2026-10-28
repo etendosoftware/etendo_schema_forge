@@ -53,7 +53,7 @@ describe('useGridView', () => {
 
     expect(result.current.columnOrder).toEqual([locked, name, first, explicit]);
     expect(result.current.columnVisibility).toEqual({ [name]: false });
-    expect(result.current.columnSizing).toEqual({ [name]: 0, [first]: 1200, [explicit]: 400 });
+    expect(result.current.columnSizing).toEqual({ [name]: 48, [first]: 1200, [explicit]: 400 });
     expect(result.current.columns.map((column) => column.key)).toEqual(['status', 'documentNo', 'total']);
     expect(result.current.columns.find((column) => column.key === 'total').gridUserWidthPx).toBe(400);
   });
@@ -67,10 +67,10 @@ describe('useGridView', () => {
 
     expect(result.current.columnSizing).toEqual({});
     expect(result.current.isResizable(explicitId)).toBe(true);
-    expect(result.current.widthBounds(nameId)).toEqual({ min: 0, max: 1200 });
+    expect(result.current.widthBounds(nameId)).toEqual({ min: 48, max: 1200 });
     act(() => result.current.resizeBy(nameId, -500));
     act(() => result.current.resizeBy(explicitId, -500));
-    expect(result.current.columnSizing).toEqual({ [nameId]: 0, [explicitId]: 0 });
+    expect(result.current.columnSizing).toEqual({ [nameId]: 48, [explicitId]: 48 });
     expect(result.current.dirty).toBe(true);
   });
   it('allows resizing required columns without allowing them to be hidden', async () => {
@@ -94,12 +94,12 @@ describe('useGridView', () => {
     const id = gridViewColumnId(requiredColumn);
     expect(result.current.isResizable(id)).toBe(true);
     expect(result.current.canHide(id)).toBe(false);
-    expect(result.current.widthBounds(id)).toEqual({ min: 0, max: 1200 });
+    expect(result.current.widthBounds(id)).toEqual({ min: 48, max: 1200 });
 
     act(() => result.current.resizeBy(id, -1000));
-    expect(result.current.columnSizing).toEqual({ [id]: 0 });
+    expect(result.current.columnSizing).toEqual({ [id]: 48 });
     act(() => result.current.resizeBy(id, 24));
-    expect(result.current.columnSizing).toEqual({ [id]: 24 });
+    expect(result.current.columnSizing).toEqual({ [id]: 72 });
     expect(result.current.canHide(id)).toBe(false);
   });
 
@@ -145,7 +145,7 @@ describe('useGridView', () => {
     expect(result.current.saveState).toBe('error');
     expect(result.current.dirty).toBe(true);
   });
-  it('saves and restores zero-width columns without resetting them from the server response', async () => {
+  it('saves and restores a column held at its minimum width without resetting it from the server response', async () => {
     mockApiFetch.mockImplementation((url, options) => {
       if (options?.method === 'PUT') return Promise.resolve(response(JSON.parse(options.body)));
       return Promise.resolve(response(null, 204));
@@ -155,11 +155,11 @@ describe('useGridView', () => {
     const nameId = gridViewColumnId(columns[1]);
 
     act(() => result.current.resizeBy(nameId, -1000));
-    expect(result.current.columnSizing[nameId]).toBe(0);
+    expect(result.current.columnSizing[nameId]).toBe(48);
     await act(async () => { expect(await result.current.save()).toBe(true); });
 
-    expect(JSON.parse(mockApiFetch.mock.calls[1][1].body).columns.find((column) => column.id === nameId).width).toBe(0);
-    expect(result.current.columnSizing[nameId]).toBe(0);
+    expect(JSON.parse(mockApiFetch.mock.calls[1][1].body).columns.find((column) => column.id === nameId).width).toBe(48);
+    expect(result.current.columnSizing[nameId]).toBe(48);
     expect(result.current.dirty).toBe(false);
   });
 
