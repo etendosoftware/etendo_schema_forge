@@ -35,6 +35,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
+import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
@@ -105,7 +106,9 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || `Error (${res.status})`);
+        // ETP-5714: read error.message too and translate it (the 409 draftInvoiceExists refusal
+        // arrives as { error: { code, message } } with the draft numbers in the sentence).
+        throw new Error(translateBackendErrorBody(err, ui, `Error (${res.status})`));
       }
       trackDocumentCreated(isInvoice ? 'sales-invoice' : 'goods-shipment');
       return row;

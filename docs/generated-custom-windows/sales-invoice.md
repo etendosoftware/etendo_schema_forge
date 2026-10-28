@@ -2530,12 +2530,14 @@ Agents (MCP) no longer have to learn what a sales invoice allows from refusals:
   and `unavailableReason`; `documentAction` carries `availableValuesNow` and, for a value ruled out, `unavailableValues`.
   Unavailable actions stay listed. **Advice only**: it never blocks a call.
 - `documentAction` on the record is the next default action (what the Process button would run); `--` means none.
-- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RC` (void by reversal) or
-  `RE` (reactivate). `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
+- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RE` (reactivate) only: the
+  window offers nothing else, and an issued invoice is corrected by reactivating it or with a factura rectificativa made in the app. `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
   rectified by a completed rectificativa).
 - `post` applies to a completed invoice that is not posted yet, `unpost` to a completed one that is; the import actions (`importOrderLines`, `importShipmentLines` and their `available*` lists) apply to a draft.
 - Posting can answer **409 `costNotCalculated`** (`retryAfterSeconds: 30`) when cost is still being calculated: wait and repeat.
 - Refusals keyed 20501 ("Documento ya procesado") carry a hint about reactivation and the actions view.
+
+- Fixed (QA): the `documentAction` guidance no longer says a draft invoice can be voided (`VO`) nor that `CL` closes a completed one; a draft takes `CO` only (the window offers delete and Confirm) and a completed one `RE` only; any other `docAction` is refused with 422 listing the allowed values (`CO`, `RE`).
 
 Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
 

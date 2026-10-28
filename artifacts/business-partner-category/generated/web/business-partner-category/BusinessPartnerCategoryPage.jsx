@@ -2,7 +2,7 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import BusinessPartnerCategoryTable from './BusinessPartnerCategoryTable';
+import BusinessPartnerCategoryTable from '../../../custom/BpCategoryTable';
 import BusinessPartnerCategoryForm from './BusinessPartnerCategoryForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
@@ -38,7 +38,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:businessPartnerCategory
 
 // @sf-generated-start requiredHeaderFields:businessPartnerCategory
-const requiredHeaderFields = ['searchKey', 'name', 'default'];
+const requiredHeaderFields = ['searchKey', 'name', 'default', 'etgoIscustomer'];
 // @sf-generated-end requiredHeaderFields:businessPartnerCategory
 
 // @sf-generated-start addLineFields:accounting

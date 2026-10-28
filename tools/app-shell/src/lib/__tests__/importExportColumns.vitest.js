@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/lib/importExportColumns.js
+// @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -195,6 +196,8 @@ const ACCEPTED_BY_TARGET = {
     7: ['No Censado'],
   },
   // ETP-5544 — Cliente / Proveedor (C_BPartner.IsCustomer / IsVendor), both on the same table.
+  // Exported only while `contact-category-type` is OFF (decisions.json `hiddenWhenFlag`), but the
+  // descriptor registers their labels unconditionally, so they must keep re-importing.
   customer: {
     Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
     N: ['No', 'False', '0'],

@@ -1990,8 +1990,10 @@ Four links, each of which has to carry the data:
 
 `createPrefilledFrom` still lists all eight keys — `name`, `taxID`, `address`, `postalCode`,
 `city`, `country`, `etgoEmail`, `etgoPhone` — matching what the vision model extracts, but
-`buildOcrContactSeed` only forwards `name` (via `buildContactSeed`, which also sets `customer`/
-`vendor` from the invoice's purchase direction), `taxID`, `etgoEmail` and `etgoPhone`. Adding a
+`buildOcrContactSeed` only forwards `name` (via `buildContactSeed`), `taxID`, `etgoEmail` and
+`etgoPhone`. Since ETP-5791 it no longer sets `customer`/`vendor`: the contact's type comes from the
+category seeded from the invoice's direction, and the popup refuses a category that is not a vendor
+category (see `contacts.md` → *ETP-5791*). Adding a
 new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
 `buildOcrContactSeed`; a genuinely new extraction field is one property in the module's `ocr-config.json` (schema, `required` list and description), not an entry in the SPA — the MCP's document-reading tools read the same file.
 
@@ -2924,12 +2926,14 @@ Agents (MCP) no longer have to learn what a purchase invoice allows from refusal
   and `unavailableReason`; `documentAction` carries `availableValuesNow` and, for a value ruled out, `unavailableValues`.
   Unavailable actions stay listed. **Advice only**: it never blocks a call.
 - `documentAction` on the record is the next default action (what the Process button would run); `--` means none.
-- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RC` (void by reversal) or
-  `RE` (reactivate). `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
+- `documentAction` follows core's real transitions: a draft takes `CO`; a completed invoice takes `RE` (reactivate) only: the
+  window offers nothing else, and an issued invoice is corrected by reactivating it or with a factura rectificativa made in the app. `RE` is reported unavailable when the reactivation guard would refuse it (fiscally accepted and already
   rectified by a completed rectificativa).
 - `post` applies to a completed invoice that is not posted yet, `unpost` to a completed one that is; the import actions (`importOrderLines`, `importReceiptLines` and their `available*` lists) apply to a draft.
 - Posting can answer **409 `costNotCalculated`** (`retryAfterSeconds: 30`) when cost is still being calculated: wait and repeat.
 - Refusals keyed 20501 ("Documento ya procesado") carry a hint about reactivation and the actions view.
+
+- Fixed (QA): the purchase invoice's `documentAction` guidance matches the window: a draft takes `CO` only (delete it to discard it) and a completed invoice `RE` only; any other `docAction` is refused with 422 listing the allowed values (`CO`, `RE`).
 
 Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
 
@@ -2958,3 +2962,17 @@ described once in [`sales-invoice.md` — A favor topbar chip, ETP-5729](sales-i
 ## Read-only role tier: no OCR uploader on /new — ETP-5830
 
 `OcrSidePanel` mounts the OCR uploader only when `isNew && !readOnly`. A read-only role reaching `/purchase-invoice/new` by URL is redirected to the list anyway; this guard keeps the uploader out of the embedded `?embedded=1` path too. On a saved invoice the side panel already used `ReadOnlyOcrSidePanel` (ETP-5205). The SIF tab and `ReversedInvoicesPanel` are locked for a read-only role exactly as in sales-invoice. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## OCR reader — image formats (ETP-5735)
+
+The "Subir factura" panel on `/purchase-invoice/new` (`OcrInlineUploader`) accepts **PDF, JPG/JPEG, PNG and WEBP** (it used to be PDF only). The Copilot OCR tool, the upload transport, the main-attachment upload and `UploadedFileViewer` were already format-agnostic; only the frontend validation, the hardcoded viewer MIME and the copy blocked images.
+
+- **Single source of file-type knowledge:** `FILE_TYPE_TABLE` in `tools/app-shell/src/windows/custom/shared/attachmentFileTypes.js` (MIME, group, extensions, and an `ocr` flag). The generic `ACCEPTED_TYPES`, the extension-to-MIME lookup (`resolveAttachmentMime`) and the OCR allow-list are all derived from it. `components/copilot/ocr/ocrFileTypes.js` (`OCR_ALLOWED_MIME_TYPES`, `OCR_ALLOWED_EXTENSIONS`, `OCR_ACCEPT_ATTR`, `isOcrFileAllowed`, `sniffOcrMimeType`, `nameForOcrMime`) takes only the `ocr` entries, so GIF/SVG, which the OCR tool cannot read, stay out of the OCR list.
+- **Magic-byte sniff:** the browser derives `File.type` from the extension, so a PNG renamed `.pdf` would have been sent to `PdfViewer`. After the declared-type check, the first 12 bytes decide the real MIME (`%PDF`, PNG, JPEG, `RIFF…WEBP`); that MIME is what the viewer receives. A file that passes the extension check but matches no signature (e.g. a HEIC named `.jpg`) is rejected before upload. A newer pick supersedes a pending sniff.
+- **Size pre-check:** files above the attachments policy limit (`useAttachmentPolicy().maxSizeMB`, fallback 10 MB) are rejected up front with `attachmentsFileTooLarge`, instead of failing silently when attaching the scan to the created invoice.
+- **Errors:** unsupported or unreadable types show `ocrInlineUnsupportedType` ("Formato no admitido. Formatos aceptados: PDF, JPG, PNG, WEBP."); the old `ocrInlinePdfOnly` key is gone. `ocrUploading` now reads "Subiendo documento...".
+- **Saved-record slot unchanged:** `OcrSidePanel` on an existing invoice keeps the generic `ACCEPTED_TYPES` (PDF, JPG, PNG, GIF, WEBP, SVG); only its rejection message changed to the generic `attachmentsInvalidType`.
+- **Out of scope:** EXIF re-orientation (no re-encoding) and HEIC/TIFF (need Copilot work).
+- **Stored WEBP data type (ETP-5735 follow-up):** the core detects MIME types with Tika 0.9, which stores a WEBP as `application/octet-stream`, so the saved-record viewer sent it to `PdfViewer` ("Invalid PDF structure"). Backend: `NeoAttachmentStore` now corrects a blank/octet-stream data type after upload using `NeoAttachmentPolicy.resolveMimeType`. Frontend: `useMainAttachment` routes the viewer through `resolveAttachmentMime(dataType, fileName)` (`windows/custom/shared/attachmentFileTypes.js`), which falls back to the file extension for blank/octet-stream types, so attachments stored before the backend fix also render.
+- **Renamed files are attached under their real extension (ETP-5735, CP16):** the attachments API rejects a file whose content does not match its extension (`NeoAttachmentPolicy.validateContent`), so a PNG named `.pdf` was created as an invoice but never attached, and the failure was only a `console.warn`. `OcrInlineUploader` now uploads under `nameForOcrMime(name, sniffedMime)` (`ocrFileTypes.js`; the original name is kept when its extension already matches), using the MIME captured at extract time. If the attach still fails, a toast (`ocrAttachFailed`) tells the user to attach the document from the Attachments tab; navigation to the new invoice stays non-fatal.
+- **MCP parity (ETP-5735):** the MCP tools `etendo_request_document_extraction_upload` / `etendo_extract_invoice_document` accept the same formats (PDF, JPG/JPEG, PNG, WEBP) as the panel. The allow-list is the `ocr`-flagged entries of `NeoAttachmentPolicy` (`isOcrDocument`), the content must match the extension's signature, and an image staged document attaches as the main attachment like a PDF.

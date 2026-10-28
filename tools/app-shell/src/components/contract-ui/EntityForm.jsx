@@ -1516,8 +1516,27 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // require specialized input UIs that cannot be expressed through the standard field types
     // (e.g. a split prefix+suffix input for account codes).
     // The component receives: value, onChange(newValue), record (full form data), readOnly.
+    // ETP-5791 — plus `label`, `required`, `onFieldChange(key, value)` (writes a SIBLING field, e.g.
+    // a renderer that groups two checkboxes) and `onCommit()` (the checkbox immediate-save hook,
+    // see renderCheckboxField). A renderer with the static `ownsLabel = true` draws its own label.
     if (f.customRenderer) {
       const Renderer = f.customRenderer;
+      if (Renderer.ownsLabel) {
+        return (
+          <div key={f.key} className="space-y-1.5">
+            <Renderer
+              value={data?.[f.key] ?? ''}
+              onChange={(v) => onChange?.(f.key, v, f.column)}
+              onFieldChange={(key, v) => onChange?.(key, v, fields.find((x) => x.key === key)?.column)}
+              onCommit={() => setTimeout(() => onFieldBlur?.(f.key), 0)}
+              record={data}
+              readOnly={isReadOnly}
+              label={label}
+              required={!!(f.required || f.requiredVisual)}
+              data-testid="Renderer__a8d626" />
+          </div>
+        );
+      }
       return (
         <div key={f.key} className="space-y-1.5">
           <Label

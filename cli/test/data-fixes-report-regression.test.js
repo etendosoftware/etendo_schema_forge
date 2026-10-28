@@ -202,6 +202,12 @@ const FIXES_WITH_REPORT = new Set([
   // R53 (ETP-5902) lists the (schema, rule account) groups not fully on target: columns left
   // alone because customized, and rows skipped because the chart lacks the account.
   '20261027T120000Z__R53-spanish-tax-accounts',
+  // R55 (ETP-5791) flags the four standard contact categories and adds "Cliente/Proveedor"; its
+  // @report lists the custom categories it left N/N (with contact counts) for R56 to flag.
+  '20261026T120000Z__R55-bp-category-customer-vendor-flags',
+  // R56 (ETP-5791) flags every custom N/N category from its contacts; its @report lists what each
+  // category received and why (rows this run wrote, selected by updated = now()).
+  '20261026T130000Z__R56-bp-category-custom-flags-from-contacts',
 ]);
 
 async function loadCatalogFiles() {
