@@ -1691,3 +1691,11 @@ The import no longer waits for `/sws/neo/batch` to answer: `useWindowImportDialo
 ## Read-only role tier: price tab — ETP-5830
 
 With a `read-only` tier, `ProductPriceBar` shows every tariff and its prices but hides "+ Añadir tarifa" and the delete button, and disables the price steppers (`accessReadOnly`, passed by `DetailView` from the role tier). Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Agent prompts on prices, cost and stock — ETP-5852
+
+`decisions.json` carries an `agentPrompt` on the fields agents misread (feedback M-30, M-90, M-92, M-246):
+
+- `product`: `eTGOCost` (current standard/average cost from `product/costing`, company-wide, own currency; null = no cost, not 0), `eTGOStock` (on hand over every bin, no reservations or orders subtracted), `eTGOSalePrice` / `eTGOPurchasePrice` (standard price on the default sales/purchase tariff; a new product is seeded at 0 on both default tariffs unless `_skipPricesSeed` says otherwise, so 0 = not priced yet).
+- `price`: `standardPrice` (the price lines take), `listPrice` (catalog price; below it shows as discount), `priceLimit`, `cost` (informational, not the valuation cost).
+- `stock`: `quantityOnHand` (physical, not free to sell; committed quantity comes from `sales-order/lines` with `allParents:true`), `reservedQty` (explicit reservations only — orders do not reserve), `allocatedQuantity` (the part of reservedQty tied to the bin).

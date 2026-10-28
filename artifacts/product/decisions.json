@@ -209,26 +209,30 @@
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null },
+          "agentPrompt": "The product's sale price: its standard price on the default sales tariff (current version first). Net of tax unless the tariff includes tax. A new product is given a 0 price on the default sales and purchase tariffs (see _skipPricesSeed on etendo_create), so 0 means 'not priced yet'."
         },
         "eTGOPurchasePrice": {
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "agentPrompt": "The product's purchase price: its standard price on the default purchase tariff (current version first). A new product is given a 0 price on the default sales and purchase tariffs (see _skipPricesSeed on etendo_create), so 0 means 'not priced yet'."
         },
         "eTGOCost": {
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "agentPrompt": "The product's current unit cost as the costing engine records it (the standard or average cost in force today, from product/costing), in that cost's own currency, for the whole company (not per warehouse). Empty (null) means no cost has been recorded yet; it is not a cost of 0."
         },
         "eTGOStock": {
           "visibility": "readOnly",
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null },
+          "agentPrompt": "Total quantity on hand of the product, summed over every warehouse and storage bin, in the product's unit of measure. It does not subtract reservations nor open sales orders: product/stock gives it per bin with reservedQty and allocatedQuantity."
         },
         "stocked": {
           "section": "principal",
@@ -378,7 +382,8 @@
         "cost": {
           "visibility": "editable",
           "form": false,
-          "grid": false
+          "grid": false,
+          "agentPrompt": "Informational cost noted on this tariff row; not the product's cost for valuation, which is eTGOCost (product/costing)."
         },
         "priceListVersion": {
           "visibility": "editable",
@@ -386,10 +391,15 @@
           "reference": "PriceListVersion"
         },
         "standardPrice": {
-          "grid": true
+          "grid": true,
+          "agentPrompt": "The price this tariff version applies: the unit price a new order or invoice line takes for the product (net of tax unless the tariff includes tax). The figure to use as 'the price'."
         },
         "listPrice": {
-          "grid": true
+          "grid": true,
+          "agentPrompt": "The catalog (list) price, shown as the line's list price; a line priced below it shows the difference as a discount. Usually equal to standardPrice."
+        },
+        "priceLimit": {
+          "agentPrompt": "The lowest price allowed for the product on this tariff when price limits are enforced. Maintained by the server."
         }
       }
     },
@@ -459,15 +469,18 @@
         },
         "quantityOnHand": {
           "visibility": "readOnly",
-          "grid": true
+          "grid": true,
+          "agentPrompt": "Physical quantity in this storage bin now. Not the quantity free to sell: it does not subtract reservedQty nor open sales orders. Quantity committed to orders = sales-order/lines with allParents:true and a product filter, orderedQuantity - deliveredQuantity of completed orders."
         },
         "reservedQty": {
           "visibility": "readOnly",
-          "grid": true
+          "grid": true,
+          "agentPrompt": "Quantity of this bin held by explicit stock reservations. Open sales orders do NOT reserve stock by themselves, so it is usually 0 even with orders pending delivery."
         },
         "allocatedQuantity": {
           "visibility": "readOnly",
-          "grid": true
+          "grid": true,
+          "agentPrompt": "The part of reservedQty already allocated to this exact bin (reserved and tied to this stock), so it is never more than reservedQty."
         },
         "attributeSetValue": {
           "visibility": "readOnly",

@@ -196,7 +196,8 @@
           "reference": "DocumentType",
           "inputMode": "selector",
           "readOnlyLogicJs": null,
-          "readOnlyLogic": "@Processed@='Y'"
+          "readOnlyLogic": "@Processed@='Y'",
+          "agentPrompt": "The kind of purchase invoice: 'Factura de compra' for an ordinary supplier invoice, 'Factura Rectificativa (compras)' for a supplier credit note (negative amounts). For goods returned to the supplier, do not build the credit note by hand: complete the return-to-vendor shipment and run its createReturnInvoice action, which creates it linked to the return. etendo_selectors lists the types of this tenant."
         },
         "invoiceDate": {
           "grid": true,
@@ -289,7 +290,8 @@
           "form": true,
           "searchable": true,
           "readOnlyLogic": null,
-          "seq": 20
+          "seq": 20,
+          "agentPrompt": "The supplier's own number for this invoice (the number printed on the supplier's document), not an order number. Put it here when registering a supplier invoice."
         },
         "taxDate": {
           "visibility": "discarded"
@@ -616,6 +618,9 @@
           "visibility": "readOnly",
           "form": false,
           "grid": false
+        },
+        "etblkpAccountingstatus": {
+          "agentPrompt": "Whether the invoice is posted to the general ledger: Y posted, N not posted yet. Any other value is why posting failed or is pending (p period closed, i invalid account, b not balanced, c no conversion rate, l pending refresh...); options lists them all."
         }
       }
     },
