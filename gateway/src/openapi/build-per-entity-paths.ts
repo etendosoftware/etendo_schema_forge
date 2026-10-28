@@ -210,7 +210,7 @@ function resourceSchema(
   entityName: string,
   entity: PublicApiEntity,
   properties: Record<string, FieldSchema>,
-  { request = false }: { request?: boolean } = {},
+  { request = false, partial = false }: { request?: boolean; partial?: boolean } = {},
 ): JsonSchema {
   const relationshipProperties: Record<string, FieldSchema> = {};
   const published = request ? isWritable : isReadable;
@@ -235,7 +235,8 @@ function resourceSchema(
       },
     };
   }
-  const requiredOf = (names: string[]) => request
+  // A PATCH sends only what changes, so nothing is required there.
+  const requiredOf = (names: string[]) => request && !partial
     ? names.filter((fieldName) => (entity.fields[fieldName] as { required?: boolean }).required === true)
     : [];
   const requiredAttributes = requiredOf(Object.keys(attributeProperties));
@@ -319,7 +320,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
         operationId: `${method.toLowerCase()}_${entityName}`, summary: `${method === 'PATCH' ? 'Partially update' : 'Update'} ${title}`,
         tags: [tag], description,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        requestBody: jsonApiRequestBody(resourceSchema(entityName, entity, properties, { request: true })),
+        requestBody: jsonApiRequestBody(resourceSchema(entityName, entity, properties, { request: true, partial: method === 'PATCH' })),
         responses: response(`${title} record updated`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }),
         security: [{ bearerAuth: [] }],
       };

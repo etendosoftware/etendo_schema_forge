@@ -46,7 +46,7 @@ Entity: only `GET`/`LIST`, every field `out`:
 
 ## 2b. Mark a writable field as required
 
-Declare it on the field; the OpenAPI write body then lists it under `required`:
+Declare it on the field; the OpenAPI POST and PUT bodies then list it under `required` (a PATCH requires nothing):
 
 ```json
 "searchKey": { "visibility": "editable", "publicApi": { "exposed": true, "required": true } }

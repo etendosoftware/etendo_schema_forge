@@ -358,7 +358,7 @@ test('every operation documents 429 with its rate-limit headers; list operations
   assert.match(paths['/api/v1/product'].get.responses['400'].description, /source\.parameter/);
 });
 
-test('a write body lists only writable fields, marks the declared required ones, and a response lists only readable fields', () => {
+test('a write body lists only writable fields, marks the declared required ones (not on PATCH), and a response lists only readable fields', () => {
   const writable: PublicApiSchema = {
     apiVersion: 'v1',
     entities: {
@@ -381,6 +381,8 @@ test('a write body lists only writable fields, marks the declared required ones,
   assert.deepEqual(Object.keys(body.properties.attributes.properties).sort(), ['name', 'search_key', 'secret_input']);
   assert.deepEqual(body.properties.attributes.required, ['search_key']);
   assert.equal(body.properties.relationships, undefined, 'a read-only relationship is not offered on write');
+  const patch = paths['/api/v1/product/{id}'].patch.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.equal(patch.properties.attributes.required, undefined, 'a partial update requires nothing');
 
   const read = paths['/api/v1/product/{id}'].get.responses['200'].content!['application/json'].schema.properties!.data as any;
   assert.deepEqual(Object.keys(read.properties.attributes.properties).sort(), ['name', 'sale_price', 'search_key']);
