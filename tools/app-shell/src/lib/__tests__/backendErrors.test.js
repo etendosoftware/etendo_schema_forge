@@ -3516,6 +3516,12 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
       /Caja.*cuenta de retirada/);
   });
 
+  it('keeps the backend text when the caller dropped the params a translation needs (ETP-5591)', () => {
+    const prose = 'La cuenta financiera Caja no tiene cuenta de depósito en su contabilidad.';
+    assert.equal(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoDepositAccount'] }), prose);
+  });
+
   it('speaks the accountants’ Spanish: Descontabilizar / contabilizada / asientos', () => {
     assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
     assert.match(es('backendError.invoicePostedExchangeRateLocked'), /contabilizada.*Descontabil/);

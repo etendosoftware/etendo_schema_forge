@@ -518,9 +518,12 @@ in `messageKeys`, and `backendErrors.js` renders it in the UI locale. A reason i
 | Invoice whose total, lines and taxes are all zero | `TotalGrossIsZero` | "El total de la factura es cero…" |
 | Anything else (payment-linked transaction, payment, other tables) | `DocumentDisabled` | "Este documento está deshabilitado para contabilidad…" |
 
-After that failed post core leaves the row `posted = 'D'`, which is not one of the page's statuses,
-so it disappears from the list on reload. That is deliberate: `D` means "this document has no
-accounting", not "pending".
+After that failed post core leaves the row `posted = 'D'`, which is not one of the page's statuses.
+A missing deposit or withdrawal account is a configuration error, not a document without
+accounting, so for those two reasons `DocumentDisabledReason.markInvalidAccount` turns the `D` into
+`i`: the row stays in the list as **Cuenta no válida** (red, under "Todos los errores") and posts
+once the account is configured. The other reasons keep `D` and leave the list on reload — `D`
+means "this document has no accounting", not "pending".
 
 ## Manual verification
 

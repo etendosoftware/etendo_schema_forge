@@ -811,10 +811,14 @@ function translateByMessageKey(messageKeys, t, messageParams) {
     const key = BACKEND_ERROR_KEY_MAP[raw];
     if (!key) continue;
     const translated = t(key, params);
-    if (translated && translated !== key) return translated;
+    // ETP-5591: a caller that drops `messageParams` would show a raw `{financialAccount}`; the
+    // backend's own text is already localized and complete, so let it through instead.
+    if (translated && translated !== key && !UNFILLED_PARAM.test(translated)) return translated;
   }
   return null;
 }
+
+const UNFILLED_PARAM = /\{\w+\}/;
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
 // Business Partner name) instead of being a single fixed exact string, so they can't
