@@ -19,6 +19,7 @@ import { resolveFkNavigation } from './fkNavigation.js';
 import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { resolveLookupDrawer } from './lookupDrawers.js';
+import { committedItemFromRow } from './selectorSelection.js';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker, resolveRateDateField } from './CurrencyRatePicker.jsx';
@@ -133,6 +134,8 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
+        value={value}
+        valueLabel={displayValue}
         title={label}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -292,7 +295,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
  * Form field that opens the field's lookup drawer (`field.lookupDrawer`, resolved through the
  * shared registry — the product search drawer by default) for lookup-enabled search fields.
  */
-function LookupFormField({ field, value, displayValue, selectorUrl, selectorContext, token, resolvedLabel, onChange }) {
+function LookupFormField({ field, value, displayValue, row, selectorUrl, selectorContext, token, resolvedLabel, onChange }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const Drawer = resolveLookupDrawer(field.lookupDrawer);
@@ -324,6 +327,10 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
+        // ETP-5948 — open marked and positioned on the field's committed value.
+        value={value}
+        valueLabel={displayValue}
+        committedItem={committedItemFromRow(field, row, value)}
         title={resolvedLabel}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -1049,6 +1056,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             field={f}
             value={data?.[f.key] ?? ''}
             displayValue={data?.[f.key + '$_identifier']}
+            row={data}
             selectorUrl={selectorUrl}
             selectorContext={effectiveSelectorContext}
             token={token}
@@ -1508,8 +1516,27 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // require specialized input UIs that cannot be expressed through the standard field types
     // (e.g. a split prefix+suffix input for account codes).
     // The component receives: value, onChange(newValue), record (full form data), readOnly.
+    // ETP-5791 — plus `label`, `required`, `onFieldChange(key, value)` (writes a SIBLING field, e.g.
+    // a renderer that groups two checkboxes) and `onCommit()` (the checkbox immediate-save hook,
+    // see renderCheckboxField). A renderer with the static `ownsLabel = true` draws its own label.
     if (f.customRenderer) {
       const Renderer = f.customRenderer;
+      if (Renderer.ownsLabel) {
+        return (
+          <div key={f.key} className="space-y-1.5">
+            <Renderer
+              value={data?.[f.key] ?? ''}
+              onChange={(v) => onChange?.(f.key, v, f.column)}
+              onFieldChange={(key, v) => onChange?.(key, v, fields.find((x) => x.key === key)?.column)}
+              onCommit={() => setTimeout(() => onFieldBlur?.(f.key), 0)}
+              record={data}
+              readOnly={isReadOnly}
+              label={label}
+              required={!!(f.required || f.requiredVisual)}
+              data-testid="Renderer__a8d626" />
+          </div>
+        );
+      }
       return (
         <div key={f.key} className="space-y-1.5">
           <Label

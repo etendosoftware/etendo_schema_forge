@@ -2,15 +2,15 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:bpLocation
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', required: true, section: 'principal' },
-  { key: 'address', column: 'Address1', type: 'text', section: 'principal' },
-  { key: 'city', column: 'City', type: 'text', section: 'principal' },
-  { key: 'postalCode', column: 'Postal', type: 'text', section: 'principal' },
-  { key: 'country', column: 'C_Country_ID', type: 'text', section: 'other' },
-  { key: 'phone', column: 'Phone', type: 'text', section: 'other' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', required: true, section: 'other', reference: 'BusinessPartner', inputMode: 'search' },
-  { key: 'region', column: 'C_Region_ID', type: 'text', section: 'other' },
-  { key: 'address2', column: 'Address2', type: 'text', section: 'other' },
+  { key: 'oBSEPAStreetName', column: 'EM_OBSEPA_StrtNm', type: 'text', label: 'EM_OBSEPA_StrtNm', required: true, section: 'principal', maxLength: 70 },
+  { key: 'oBSEPABuildingNumber', column: 'EM_OBSEPA_BldgNb', type: 'text', label: 'EM_OBSEPA_BldgNb', required: true, section: 'principal', maxLength: 16 },
+  { key: 'oBSEPABuildingName', column: 'EM_OBSEPA_BldgNm', type: 'text', label: 'EM_OBSEPA_BldgNm', section: 'principal', maxLength: 35 },
+  { key: 'addressLine1', column: 'Address1', type: 'text', label: 'Address Line 1', readOnly: true, section: 'principal', maxLength: 60 },
+  { key: 'addressLine2', column: 'Address2', type: 'text', label: 'Address Line 2', readOnly: true, section: 'principal', maxLength: 60 },
+  { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', required: true, section: 'principal', reference: 'Country', inputMode: 'selector' },
+  { key: 'cityName', column: 'City', type: 'text', label: 'City Name', section: 'principal', maxLength: 60 },
+  { key: 'postalCode', column: 'Postal', type: 'text', label: 'Postal Code', section: 'principal', maxLength: 10 },
+  { key: 'region', column: 'C_Region_ID', type: 'selector', label: 'Region', section: 'principal', reference: 'Region', inputMode: 'selector' },
 ];
 // @sf-generated-end fields:bpLocation
 
@@ -18,5 +18,6 @@ const fields = [
 export default function BpLocationForm(props) {
   return <EntityForm fields={fields} {...props} />;
 }
-BpLocationForm.hasCollapsedFields = false;
+BpLocationForm.fields = fields;
+
 // @sf-generated-end component:BpLocationForm

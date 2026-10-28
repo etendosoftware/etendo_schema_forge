@@ -1,8 +1,8 @@
 {
   "version": "0.15.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-16T15:28:49.201Z",
-  "checksum": "4c5050b1da02c549",
+  "updatedAt": "2026-10-22T12:49:24.246Z",
+  "checksum": "f978347774a8cb3b",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -174,6 +174,7 @@
             ],
             "label": "Unit of Measure",
             "matchEntity": "UOM",
+            "matchMode": "strict",
             "required": false,
             "example": "Unidad",
             "exampleKey": "importExampleProductUom",
@@ -263,6 +264,56 @@
             "example": "Herramientas",
             "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "grupo de impuesto",
+              "grupo de impuestos",
+              "categoria de impuesto",
+              "categoría de impuesto",
+              "impuesto",
+              "tax category"
+            ],
+            "label": "Tax Category",
+            "matchEntity": "FinancialMgmtTaxCategory",
+            "matchMode": "strict",
+            "required": false,
+            "example": "IVA Normal",
+            "exampleKey": "importExampleProductTaxCategory",
+            "labelKey": "importHeaderTaxCategory",
+            "column": "C_TaxCategory_ID",
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          },
+          {
+            "target": "stocked",
+            "aliases": [
+              "almacenable",
+              "stocked",
+              "is stocked"
+            ],
+            "label": "Stocked",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderStocked",
+            "column": "IsStocked",
+            "type": "boolean"
+          },
+          {
+            "target": "returnable",
+            "aliases": [
+              "retornable",
+              "returnable"
+            ],
+            "label": "Returnable",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderReturnable",
+            "column": "Returnable",
+            "type": "boolean"
           }
         ]
       },
@@ -2678,6 +2729,7 @@
             ],
             "label": "Unit of Measure",
             "matchEntity": "UOM",
+            "matchMode": "strict",
             "required": false,
             "example": "Unidad",
             "exampleKey": "importExampleProductUom",
@@ -2767,6 +2819,56 @@
             "example": "Herramientas",
             "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "grupo de impuesto",
+              "grupo de impuestos",
+              "categoria de impuesto",
+              "categoría de impuesto",
+              "impuesto",
+              "tax category"
+            ],
+            "label": "Tax Category",
+            "matchEntity": "FinancialMgmtTaxCategory",
+            "matchMode": "strict",
+            "required": false,
+            "example": "IVA Normal",
+            "exampleKey": "importExampleProductTaxCategory",
+            "labelKey": "importHeaderTaxCategory",
+            "column": "C_TaxCategory_ID",
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          },
+          {
+            "target": "stocked",
+            "aliases": [
+              "almacenable",
+              "stocked",
+              "is stocked"
+            ],
+            "label": "Stocked",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderStocked",
+            "column": "IsStocked",
+            "type": "boolean"
+          },
+          {
+            "target": "returnable",
+            "aliases": [
+              "retornable",
+              "returnable"
+            ],
+            "label": "Returnable",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderReturnable",
+            "column": "Returnable",
+            "type": "boolean"
           }
         ]
       },

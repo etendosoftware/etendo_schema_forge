@@ -668,3 +668,32 @@ describe('InlineSearchCombo — chip mode (ETP-4600)', () => {
     expect(chip.querySelector('[aria-label="clear"]')).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// ETP-5902 — labelPrefix is rendered before the name, never saved
+// ---------------------------------------------------------------------------
+
+describe('InlineSearchCombo — ETP-5902 labelPrefix', () => {
+  const PREFIXED = [
+    { id: 'iva21', name: 'IVA 21%', labelPrefix: '21%' },
+    { id: 'exento', name: 'Exento' },
+  ];
+
+  it('shows "<labelPrefix> - <name>" only for options that carry a prefix', async () => {
+    const user = userEvent.setup();
+    const { input } = renderCombo({ options: PREFIXED });
+    await user.click(input);
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveTextContent('21% - IVA 21%');
+    expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveTextContent(/^Exento$/);
+  });
+
+  it('passes the plain name (without the prefix) to onChange', async () => {
+    const user = userEvent.setup();
+    const { input, onChange } = renderCombo({ options: PREFIXED });
+    await user.click(input);
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+    await user.pointer({ target: screen.getByTestId('inline-add-option-tax-iva21'), keys: '[MouseLeft>]' });
+    expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21%' }));
+  });
+});

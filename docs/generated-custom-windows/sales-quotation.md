@@ -229,7 +229,7 @@ replaces the standard `SelectorInput` and:
   on load, whenever the quotation date changes and when the dropdown opens (ETP-5840). The entity path `'quotation'` is passed via
   the `entityPath` prop, so the URL differs from the sales-order equivalent
   (`header/{id}/action/currencyOptions`).
-- Lists every selectable currency; one without a conversion range on the date
+- Lists every selectable currency (one with a conversion range to or from the org currency on any date); one without a conversion range on the date
   shows «—» and selecting it leaves the rate empty for the user to type.
 - Shows a pencil icon (`data-testid="currency-rate-pencil"`) on new and saved
   quotations unless the selected option is the org currency (`isOrgCurrency`). Clicking it enters inline-edit mode with a numeric input
@@ -258,6 +258,8 @@ implemented in `CurrencyOptionsHandler.java` (`com.etendoerp.go`). It filters
 by client and org and, since ETP-5840, returns every selectable currency for the
 `date` it receives (`rate: null` when no range covers it) with an `isOrgCurrency`
 flag. Full reference: `docs/ui-customization.md` §22.
+
+Reopening the picker on a saved currency marks that currency with a check and centres it, and arrows start from it; picking it again just closes the panel (ETP-5948, see `docs/ui-customization.md`).
 
 ### Convertquotation — preserved prices
 
@@ -608,3 +610,9 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 - **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
 
 **Manual verification:** open a draft quotation; confirm `Unidad` sits after Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## Classic buttons hidden from agents over MCP — ETP-5714
+
+The quotation tab still carries the classic *Create Lines From*, *Pick from Receipt* and *Cancel and Replace* (with its confirm step) buttons, which this window never renders. The MCP
+configuration (`quotation` entity) withholds them with a reason, and `etendo_schema(view:"actions")` lists them under `withheldActions`; see
+`sales-order.md` for the behavior.

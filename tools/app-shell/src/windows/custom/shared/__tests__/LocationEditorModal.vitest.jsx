@@ -18,31 +18,62 @@ vi.mock('@/i18n', () => ({
   useLabel: () => (key) => key,
 }));
 
+// ETP-5806 follow-up: the legacy-address banner renders a shared `CopyButton`
+// (`@/components/ui/copy-button.jsx`), which imports `Copy` from lucide-react in
+// addition to `Check`. The pre-ETP-5806 mock only listed the 5 icons this modal
+// imports directly and crashed the moment the banner mounted ("No 'Copy' export
+// is defined on the 'lucide-react' mock") — found while extending this suite for
+// ETP-5806 (uncaught exception on every test that reached `isLegacyAddress`).
 vi.mock('lucide-react', () => ({
   X: (props) => <span data-testid="icon-x" {...props} />,
   Loader2: (props) => <span data-testid="loader" {...props} />,
   Search: (props) => <span data-testid="icon-search" {...props} />,
   ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,
   Check: (props) => <span data-testid="icon-check" {...props} />,
+  Copy: (props) => <span data-testid="icon-copy" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
+// ETP-5806 — `useCapabilitiesSafe()` reads `capabilities` off `useAuth()`. This whole suite
+// predates the `structured-address-for-sepa` flag and exercises the structured Street/Number/
+// Building Name fields unconditionally, so the default here keeps the flag ON — matching every
+// existing test below. The flag-OFF behavior (legacy address lines, legacy save-gating) is
+// covered by its own describe block further down, which overrides this mock locally.
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token', logout: () => {} }),
+  useAuth: vi.fn(() => ({
+    token: 'test-token',
+    logout: () => {},
+    capabilities: { structuredAddressForSepa: true },
+  })),
 }));
 
 // --- Import under test ----------------------------------------------------
 
 import LocationEditorModal from '../LocationEditorModal.jsx';
 import { toast } from 'sonner';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
 import {
   readPartnerCustomer,
   shouldWarnMissingTbaiPostalCode,
 } from '../tbaiPostalCodeWarning.js';
+
+/** Restores the default (flag ON) `useAuth()` mock used by every pre-existing test. */
+function useCapabilitiesOn() {
+  useAuth.mockReturnValue({
+    token: 'test-token',
+    logout: () => {},
+    capabilities: { structuredAddressForSepa: true },
+  });
+}
+
+/** Switches `useAuth()` to report the `structured-address-for-sepa` flag as off/absent. */
+function useCapabilitiesOff(capabilities = {}) {
+  useAuth.mockReturnValue({ token: 'test-token', logout: () => {}, capabilities });
+}
 
 // --- Helpers --------------------------------------------------------------
 
@@ -64,44 +95,81 @@ function renderModal(overrides = {}) {
 // resolves to nothing and the country stays empty unless a test opts in by mocking
 // a selector response that contains Spain.
 const SPAIN_OPTION = { id: 'ES', label: 'Spain' };
-const ADDRESS_LINE_VALUE = '123 Main Street';
+const STREET_VALUE = 'Avenida Principal';
+const NUMBER_VALUE = '100';
+const CITY_VALUE = 'Madrid';
 const DEFAULT_COUNTRY_QUERY_PARAM = 'q=Spain';
 
 /**
- * Whether a field label carries the ETP-5103 mandatory asterisk. RequiredMark renders
- * it as a sibling <span> inside the label element; Testing Library's text queries read
- * only an element's DIRECT text nodes, so the label is still located by its plain key.
+ * Whether a field label carries the ETP-5103/ETP-5806 mandatory asterisk. RequiredMark
+ * renders it as a sibling <span> inside the label element; Testing Library's text queries
+ * read only an element's DIRECT text nodes, so the label is still located by its plain key.
  */
 function hasRequiredMark(labelKey) {
   const label = screen.getByText(labelKey);
   return Array.from(label.querySelectorAll('span')).some(s => s.textContent === '*');
 }
 
-/** The Save button. The modal labels it with the `save` UI key. */
+/** The Save button — stable `data-testid`, independent of its i18n label. */
 function saveButton() {
-  return screen.getByText('save').closest('button');
+  return screen.getByTestId('location-save');
 }
 
-/** Address line 1 input — the first textbox of the form (it carries autoFocus). */
-function addressLineInput() {
-  return screen.getAllByRole('textbox')[0];
+// ETP-5806 follow-up — the Save button is gated with `aria-disabled`, NOT the
+// native `disabled` attribute (see the component's own comment on the button):
+// a natively-disabled button never fires `onClick`, which made `attemptedSave`
+// — and therefore every "Este campo es obligatorio" message — unreachable.
+// `toBeDisabled()`/`toBeEnabled()` only look at the native attribute, so the
+// save-gating assertions below read `aria-disabled` directly instead.
+function expectSaveBlocked() {
+  expect(saveButton()).toHaveAttribute('aria-disabled', 'true');
+}
+function expectSaveAllowed() {
+  expect(saveButton()).toHaveAttribute('aria-disabled', 'false');
 }
 
-/**
- * Fill address line 1, the field ETP-5103 made mandatory. Every save path needs it
- * now, so the flows that exercise POST/PUT go through this helper.
- */
-function typeAddressLine(value = ADDRESS_LINE_VALUE) {
-  fireEvent.change(addressLineInput(), { target: { value } });
+/** The Cancel button in the footer. */
+function cancelButton() {
+  return screen.getByTestId('location-cancel');
+}
+
+// ETP-5806 — the free-text Address Line 1/2 inputs were replaced by 3 structured
+// fields (Street/Number/Building name); Address1/Address2 are now a read-only,
+// computed preview. These helpers target the new fields by their stable testids.
+const streetNameInput = () => screen.getByTestId('location-field-streetName');
+const buildingNumberInput = () => screen.getByTestId('location-field-buildingNumber');
+const buildingNameInput = () => screen.getByTestId('location-field-buildingName');
+const postalCodeInput = () => screen.getByTestId('location-field-postalCode');
+const cityInput = () => screen.getByTestId('location-field-city');
+const countryButton = () => screen.getByTestId('location-field-country');
+const regionButton = () => screen.getByTestId('location-field-region');
+
+function typeStreetName(value = STREET_VALUE) {
+  fireEvent.change(streetNameInput(), { target: { value } });
+}
+function typeBuildingNumber(value = NUMBER_VALUE) {
+  fireEvent.change(buildingNumberInput(), { target: { value } });
+}
+function typeCity(value = CITY_VALUE) {
+  fireEvent.change(cityInput(), { target: { value } });
 }
 
 /** Open the country picker and choose Spain. Requires a selector mock returning it. */
 async function selectSpain() {
-  const countryBtn = screen
-    .getAllByRole('button')
-    .find(b => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled);
-  fireEvent.click(countryBtn);
+  fireEvent.click(countryButton());
   fireEvent.click(await screen.findByText(SPAIN_OPTION.label));
+}
+
+/**
+ * Fills the 4 fields `isSaveBlocked` requires (ETP-5806): Street, Number, City and
+ * Country. Every save-path test needs all four now, so the flows exercising POST/PUT
+ * go through this helper instead of repeating the sequence.
+ */
+async function fillMandatoryFields({ street = STREET_VALUE, number = NUMBER_VALUE, city = CITY_VALUE } = {}) {
+  typeStreetName(street);
+  typeBuildingNumber(number);
+  typeCity(city);
+  await selectSpain();
 }
 
 /** URLs of every selector page requested so far, for prefill assertions. */
@@ -110,6 +178,12 @@ function fetchedUrls() {
 }
 
 // --- Tests ----------------------------------------------------------------
+
+// ETP-5806 — a global safety net: whichever describe block last overrode `useAuth()` (the
+// flag-OFF block below), every other test in this file must still see the flag ON.
+afterEach(() => {
+  useCapabilitiesOn();
+});
 
 describe('LocationEditorModal', () => {
   beforeEach(() => {
@@ -144,35 +218,35 @@ describe('LocationEditorModal', () => {
     expect(screen.getByText('locationSelectorTitle')).toBeInTheDocument();
   });
 
-  it('renders address form fields', () => {
+  it('renders address form fields, including the structured Street/Number/Building name fields (ETP-5806)', () => {
     renderModal();
-    expect(screen.getByText('addressLine1')).toBeInTheDocument();
+    expect(screen.getByText('streetNameLabel')).toBeInTheDocument();
+    expect(screen.getByText('buildingNumberLabel')).toBeInTheDocument();
+    expect(screen.getByText('buildingNameLabel')).toBeInTheDocument();
     expect(screen.getByText('postalCodeLabel')).toBeInTheDocument();
     expect(screen.getByText('cityLabel')).toBeInTheDocument();
     expect(screen.getByText('countryLabel')).toBeInTheDocument();
     expect(screen.getByText('regionLabel')).toBeInTheDocument();
+    expect(screen.getByText('resultingAddressLabel')).toBeInTheDocument();
   });
 
   it('renders save and cancel buttons', () => {
     renderModal();
-    expect(screen.getByText('save')).toBeInTheDocument();
-    // There are multiple cancel elements — the close X button and the cancel button
-    expect(screen.getAllByText('cancel').length).toBeGreaterThanOrEqual(1);
+    expect(saveButton()).toBeInTheDocument();
+    expect(cancelButton()).toBeInTheDocument();
   });
 
   it('calls onClose when cancel button is clicked', () => {
     const { props } = renderModal();
-    const cancelButtons = screen.getAllByText('cancel');
-    // The text "cancel" button in the footer
-    fireEvent.click(cancelButtons[cancelButtons.length - 1]);
+    fireEvent.click(cancelButton());
     expect(props.onClose).toHaveBeenCalled();
   });
 
   it('renders shipping and invoicing checkboxes', () => {
     renderModal();
-    // useLabel returns the key itself
-    expect(screen.getByText('IsShipTo')).toBeInTheDocument();
-    expect(screen.getByText('IsBillTo')).toBeInTheDocument();
+    // useLabel/useUI both return the key itself in this suite.
+    expect(screen.getByText('shippingAddressLabel')).toBeInTheDocument();
+    expect(screen.getByText('billingAddressLabel')).toBeInTheDocument();
   });
 
   it('renders the shipping/invoicing checkboxes as the shared SquareCheckbox', () => {
@@ -208,11 +282,10 @@ describe('LocationEditorModal', () => {
     expect(screen.queryByText('removeLocation')).not.toBeInTheDocument();
   });
 
-  it('renders all text input fields for address entry', () => {
+  it('renders exactly 5 text input fields: street, number, building name, postal code, city', () => {
     renderModal();
     const inputs = screen.getAllByRole('textbox');
-    // address, address2, postalCode, city = 4 text inputs
-    expect(inputs.length).toBeGreaterThanOrEqual(4);
+    expect(inputs).toHaveLength(5);
   });
 
   it('renders checkboxes for shipping and invoicing', () => {
@@ -226,17 +299,14 @@ describe('LocationEditorModal', () => {
 
   it('renders country and region selector buttons with aria-haspopup', () => {
     renderModal();
-    const buttons = screen.getAllByRole('button');
-    const haspopupBtns = buttons.filter(b => b.getAttribute('aria-haspopup') === 'dialog');
-    expect(haspopupBtns.length).toBe(2); // country + region
+    expect(countryButton()).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(regionButton()).toHaveAttribute('aria-haspopup', 'dialog');
   });
 
   it('region selector is disabled when no country is selected', () => {
     renderModal();
-    const buttons = screen.getAllByRole('button');
-    const disabledBtns = buttons.filter(b => b.disabled);
-    // The region button should be disabled since no country is set
-    expect(disabledBtns.length).toBeGreaterThanOrEqual(1);
+    expect(regionButton()).toBeDisabled();
+    expect(countryButton()).not.toBeDisabled();
   });
 
   it('shows selectCountryFirst text in region button when no country selected', () => {
@@ -252,36 +322,29 @@ describe('LocationEditorModal', () => {
     expect(props.onClose).toHaveBeenCalled();
   });
 
-  it('calls fetch with correct URL for stock data when editing', async () => {
+  it('fetches the existing record and the selector catalogs when editing', async () => {
     global.fetch = vi.fn(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ response: { data: [{ id: 'loc-1', address: '123 Main St', country: 'ES', 'country$_identifier': 'Spain' }] }, items: [], hasMore: false }),
+        json: () => Promise.resolve({ response: { data: [{ id: 'loc-1', streetName: 'Gran Via', buildingNumber: '1', city: 'Madrid', country: 'ES', 'country$_identifier': 'Spain' }] }, items: [], hasMore: false }),
       }),
     );
 
     renderModal({ rowId: 'loc-1' });
 
-    // Should fetch the record details + selectors
     await screen.findByText('locationSelectorTitle');
     expect(global.fetch).toHaveBeenCalled();
   });
 
-  // ETP-5103 reframed this case: a brand-new record starts with address line 1 AND
-  // country empty, so Save is now gated instead of clickable. What used to be asserted
-  // here (Save is reachable on a new record) is covered by the CP-4 case below, which
-  // fills the mandatory fields first.
   it('renders save button disabled for new records with empty mandatory fields', () => {
     renderModal();
-    expect(saveButton()).toBeDisabled();
+    expectSaveBlocked();
   });
 
-  it('allows typing in address fields', async () => {
+  it('allows typing in the street name field', () => {
     renderModal();
-    const inputs = screen.getAllByRole('textbox');
-    // First textbox is the address field (autoFocus)
-    fireEvent.change(inputs[0], { target: { value: '123 Main Street' } });
-    expect(inputs[0].value).toBe('123 Main Street');
+    typeStreetName('Calle Mayor');
+    expect(streetNameInput()).toHaveValue('Calle Mayor');
   });
 
   it('allows toggling shipping checkbox off', () => {
@@ -302,9 +365,7 @@ describe('LocationEditorModal', () => {
 
   it('opens country picker when country button is clicked', () => {
     renderModal();
-    const buttons = screen.getAllByRole('button');
-    const countryBtn = buttons.find(b => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled);
-    fireEvent.click(countryBtn);
+    fireEvent.click(countryButton());
     // Country picker shows a search input with placeholder
     expect(screen.getByPlaceholderText('countrySearchPlaceholder')).toBeInTheDocument();
   });
@@ -331,9 +392,7 @@ describe('LocationEditorModal', () => {
 
     renderModal();
 
-    // Both mandatory fields first: address line 1 (ETP-5103) and country.
-    typeAddressLine();
-    await selectSpain();
+    await fillMandatoryFields();
 
     fireEvent.click(saveButton());
 
@@ -347,21 +406,23 @@ describe('LocationEditorModal', () => {
   });
 
   /**
-   * ETP-5103 reframed this case. Country was already mandatory — handleSave refused to
-   * save without it and showed the `locationCountryRequired` toast — but the refusal only
-   * happened after the click. Now `saveDisabled` covers an empty country, so the button
+   * ETP-5103 reframed this case, ETP-5806 widened the mandatory set. Country was
+   * already mandatory — handleSave refused to save without it and showed the
+   * `locationCountryRequired` toast — but the refusal only happened after the click.
+   * Now `saveDisabled` covers an empty country (and Street/Number/City), so the button
    * is unreachable and the toast never fires. What still matters, and is asserted here,
    * is the invariant the old test protected: no save request leaves without a country.
-   * The toast guard remains in handleSave as defence in depth.
    */
   it('keeps save disabled and issues no request when the country is empty', async () => {
     const { toast } = await import('sonner');
     vi.mocked(toast.error).mockClear();
     renderModal();
 
-    // Address line 1 filled, country still empty (the default mock returns no options).
-    typeAddressLine();
-    expect(saveButton()).toBeDisabled();
+    // Street/Number/City filled, country still empty (the default mock returns no options).
+    typeStreetName();
+    typeBuildingNumber();
+    typeCity();
+    expectSaveBlocked();
 
     fireEvent.click(saveButton());
 
@@ -378,8 +439,59 @@ describe('LocationEditorModal', () => {
 
     renderModal({ rowId: 'loc-123' });
 
-    const saveBtn = screen.getByText('save').closest('button');
-    expect(saveBtn).toBeDisabled();
+    expectSaveBlocked();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Save failure (ETP-5806) — a non-ok response used to be completely silent
+  // ---------------------------------------------------------------------------
+
+  describe('save failure surfaces a toast (ETP-5806)', () => {
+    it('shows locationSaveError when the CREATE (POST) request fails', async () => {
+      vi.mocked(toast.error).mockClear();
+      global.fetch = vi.fn((url, opts) => {
+        if (url.includes('/locationAddress') && !url.includes('selectors') && opts?.method === 'POST') {
+          return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+      });
+
+      const onSaved = vi.fn();
+      renderModal({ onSaved });
+      await fillMandatoryFields();
+      fireEvent.click(saveButton());
+
+      await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith('locationSaveError'));
+      expect(onSaved).not.toHaveBeenCalled();
+    });
+
+    it('shows locationSaveError when the EDIT (PUT) request fails', async () => {
+      vi.mocked(toast.error).mockClear();
+      const rowId = 'loc-fail';
+      global.fetch = vi.fn((url, opts) => {
+        if (url.includes(`/locationAddress/${rowId}`) && (!opts?.method || opts.method === 'GET')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: { data: [{ id: rowId, streetName: 'Gran Via', buildingNumber: '1', city: 'Madrid', country: 'ES', 'country$_identifier': 'Spain' }] },
+            }),
+          });
+        }
+        if (url.includes(`/locationAddress/${rowId}`) && opts?.method === 'PUT') {
+          return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+      });
+
+      const onSaved = vi.fn();
+      renderModal({ rowId, onSaved });
+
+      await vi.waitFor(() => expectSaveAllowed());
+      fireEvent.click(saveButton());
+
+      await vi.waitFor(() => expect(toast.error).toHaveBeenCalledWith('locationSaveError'));
+      expect(onSaved).not.toHaveBeenCalled();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -388,9 +500,9 @@ describe('LocationEditorModal', () => {
 
   describe('showBackendMessages — PUT (edit existing record)', () => {
     /**
-     * Render an edit modal with a pre-loaded record that includes country='ES'.
-     * The GET response populates the form so the Save button is immediately enabled.
-     * The PUT response carries the messages we want to test.
+     * Render an edit modal with a pre-loaded record whose Street/Number/City/Country
+     * are already filled (so the Save button is immediately enabled under the
+     * ETP-5806 mandatory set). The PUT response carries the messages under test.
      */
     async function renderAndSaveExisting(rowId, putMessages, onParentRefresh) {
       const { toast } = await import('sonner');
@@ -402,7 +514,7 @@ describe('LocationEditorModal', () => {
       const onSaved = vi.fn();
 
       global.fetch = vi.fn((url, opts) => {
-        // Initial GET of the existing record — populate form with country so save is enabled
+        // Initial GET of the existing record — populate form so save is enabled
         if (url.includes(`/locationAddress/${rowId}`) && (!opts?.method || opts.method === 'GET')) {
           return Promise.resolve({
             ok: true,
@@ -410,7 +522,9 @@ describe('LocationEditorModal', () => {
               response: {
                 data: [{
                   id: rowId,
-                  address: '123 Main St',
+                  streetName: 'Gran Via',
+                  buildingNumber: '1',
+                  city: 'Madrid',
                   country: 'ES',
                   'country$_identifier': 'Spain',
                 }],
@@ -436,16 +550,10 @@ describe('LocationEditorModal', () => {
 
       renderModal({ rowId, onSaved, onParentRefresh });
 
-      // Wait for initialLoading to finish (the spinner disappears and form fields appear)
-      await screen.findByText('save', {}, { timeout: 3000 });
-      // Wait until the country button is enabled (country='ES' was loaded)
-      await vi.waitFor(() => {
-        const btns = screen.getAllByRole('button');
-        const countryBtn = btns.find(b => b.getAttribute('aria-haspopup') === 'dialog');
-        expect(countryBtn).not.toBeDisabled();
-      });
+      // Wait until the record finished loading and save is enabled.
+      await vi.waitFor(() => expectSaveAllowed());
 
-      fireEvent.click(screen.getByText('save'));
+      fireEvent.click(saveButton());
 
       // Wait for the save to complete (onSaved is called after PUT finishes)
       await vi.waitFor(() => {
@@ -520,7 +628,7 @@ describe('LocationEditorModal', () => {
     });
 
     /**
-     * Render a create modal, select Spain as country, click save, and wait for POST.
+     * Render a create modal, fill the mandatory fields, click save, and wait for POST.
      */
     async function renderAndSaveNew(postResponseData, onSaved, onParentRefresh) {
       global.fetch = vi.fn((url, opts) => {
@@ -540,8 +648,7 @@ describe('LocationEditorModal', () => {
 
       renderModal({ onSaved, onParentRefresh });
 
-      typeAddressLine();
-      await selectSpain();
+      await fillMandatoryFields();
       fireEvent.click(saveButton());
 
       await vi.waitFor(() => {
@@ -557,7 +664,7 @@ describe('LocationEditorModal', () => {
       const onParentRefresh = vi.fn();
 
       await renderAndSaveNew(
-        { id: 'new-loc-99', name: 'Madrid, Calle Mayor', messages: [{ type: 'success', title: 'ok' }] },
+        { id: 'new-loc-99', name: 'Madrid, Avenida Principal', messages: [{ type: 'success', title: 'ok' }] },
         onSaved,
         onParentRefresh,
       );
@@ -565,7 +672,7 @@ describe('LocationEditorModal', () => {
       await vi.waitFor(() => {
         expect(toast.success).toHaveBeenCalledWith('ok', { description: undefined });
       });
-      expect(onSaved).toHaveBeenCalledWith('new-loc-99', 'Madrid, Calle Mayor');
+      expect(onSaved).toHaveBeenCalledWith('new-loc-99', 'Madrid, Avenida Principal');
       expect(onParentRefresh).toHaveBeenCalled();
     });
 
@@ -590,23 +697,232 @@ describe('LocationEditorModal', () => {
 
   it('allows typing in postal code and city fields', () => {
     renderModal();
-    const inputs = screen.getAllByRole('textbox');
-    // address=inputs[0], address2=inputs[1], postalCode=inputs[2], city=inputs[3]
-    fireEvent.change(inputs[2], { target: { value: '28001' } });
-    expect(inputs[2].value).toBe('28001');
-    fireEvent.change(inputs[3], { target: { value: 'Madrid' } });
-    expect(inputs[3].value).toBe('Madrid');
+    fireEvent.change(postalCodeInput(), { target: { value: '28001' } });
+    expect(postalCodeInput()).toHaveValue('28001');
+    fireEvent.change(cityInput(), { target: { value: 'Madrid' } });
+    expect(cityInput()).toHaveValue('Madrid');
   });
 
-  it('calls onClose when backdrop overlay is clicked', () => {
-    const { props, container } = renderModal();
-    // The modal's outermost div is the backdrop
-    const backdrop = container.firstChild;
-    // The backdrop click should not close because the inner div stops propagation;
-    // but clicking the close X should
+  it('caps Street/Number/Building name inputs at their DB column lengths', () => {
+    renderModal();
+    expect(streetNameInput()).toHaveAttribute('maxLength', '70');
+    expect(buildingNumberInput()).toHaveAttribute('maxLength', '16');
+    expect(buildingNameInput()).toHaveAttribute('maxLength', '35');
+  });
+
+  it('calls onClose when the close (X) button is clicked', () => {
+    const { props } = renderModal();
     const closeBtn = screen.getByLabelText('close');
     fireEvent.click(closeBtn);
     expect(props.onClose).toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // "Dirección resultante" preview (ETP-5806) — composeAddressLines
+  // ---------------------------------------------------------------------------
+
+  describe('resulting-address preview (ETP-5806)', () => {
+    const address1 = () => screen.getByTestId('location-resulting-address1');
+    const address2 = () => screen.getByTestId('location-resulting-address2');
+
+    it('shows "—" on both lines when nothing has been typed yet', () => {
+      renderModal();
+      expect(address1()).toHaveTextContent('—');
+      expect(address2()).toHaveTextContent('—');
+    });
+
+    it('shows everything on line 1 and "—" on line 2 when it all fits', () => {
+      renderModal();
+      typeStreetName('Calle Mayor');
+      typeBuildingNumber('5');
+      expect(address1()).toHaveTextContent('Calle Mayor, 5');
+      expect(address2()).toHaveTextContent('—');
+    });
+
+    it('splits into line 2 the building name that would overflow line 1 (60 chars)', () => {
+      renderModal();
+      const street = 'Avenida Principal Industrial';
+      const number = '100';
+      const buildingName = 'Nave Numero Cuarenta y Dos Fondo';
+      typeStreetName(street);
+      typeBuildingNumber(number);
+      fireEvent.change(buildingNameInput(), { target: { value: buildingName } });
+
+      expect(address1()).toHaveTextContent(`${street}, ${number}`);
+      expect(address2()).toHaveTextContent(buildingName);
+    });
+
+    it('truncates the street itself to 60 chars when even Street+Number overflows', () => {
+      renderModal();
+      const street = 'CCCCC Calle de Nombre Extremadamente Largo Para Forzar Truncado Total';
+      typeStreetName(street);
+      typeBuildingNumber('1');
+      fireEvent.change(buildingNameInput(), { target: { value: 'B' } });
+
+      expect(address1()).toHaveTextContent(street.slice(0, 60));
+      expect(address2()).toHaveTextContent('1 - B');
+    });
+
+    it('accepts free-text building numbers such as "s/n"', () => {
+      renderModal();
+      typeStreetName('Calle Mayor');
+      typeBuildingNumber('s/n');
+      expect(address1()).toHaveTextContent('Calle Mayor, s/n');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Legacy-address banner (ETP-5806)
+  // ---------------------------------------------------------------------------
+
+  describe('legacy-address banner (ETP-5806)', () => {
+    it('does not show the banner on a brand-new, unseeded create form', () => {
+      renderModal();
+      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+    });
+
+    it('shows the banner when editing a record with free-text address but no structured fields', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-legacy', address: 'Old Street 12, 3B', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-legacy' });
+
+      const banner = await screen.findByTestId('location-legacy-address-banner');
+      expect(banner).toHaveTextContent('Old Street 12, 3B');
+    });
+
+    it('does not show the banner when editing a record that already has structured fields', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-modern', streetName: 'Gran Via', buildingNumber: '1', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-modern' });
+
+      await screen.findByText('locationSelectorTitle');
+      await vi.waitFor(() => expect(streetNameInput()).toHaveValue('Gran Via'));
+      expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+    });
+
+    it('shows the banner on CREATE when seeded with unstructured OCR text (ETP-5654 round 2)', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) }),
+      );
+
+      renderModal({ initialValues: { address: 'Calle OCR 99', countryName: 'Spain' } });
+
+      const banner = await screen.findByTestId('location-legacy-address-banner');
+      expect(banner).toHaveTextContent('Calle OCR 99');
+    });
+
+    it('renders a Copy button inside the banner that copies the old text and toasts success', async () => {
+      vi.mocked(toast.success).mockClear();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText }, configurable: true, writable: true,
+      });
+
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-legacy', address: 'Old Street 12', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-legacy' });
+
+      const copyBtn = await screen.findByTestId('location-legacy-address-copy');
+      fireEvent.click(copyBtn);
+
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('Old Street 12'));
+      expect(toast.success).toHaveBeenCalledWith('copied');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Mandatory-field validation (ETP-5806) — Street, Number, City, Country
+  // ---------------------------------------------------------------------------
+
+  describe('mandatory-field validation (ETP-5806)', () => {
+    it('shows no inline errors before a save attempt, even with every mandatory field empty', () => {
+      renderModal();
+      expect(screen.queryByText('fieldRequiredMessage')).not.toBeInTheDocument();
+    });
+
+    // ETP-5806 follow-up — repro for the bug reported above (test-reuse-policy.md
+    // point 6 exception: the developer commits the repro together with the fix).
+    // The Save button used to be natively `disabled={saveDisabled}`, so clicking it
+    // while a mandatory field was empty never dispatched `click` at all and
+    // `attemptedSave` could never become true — the inline message was unreachable.
+    // The button is now gated with `aria-disabled` instead (see its own comment),
+    // so the click DOES register, `handleSave` sets `attemptedSave` and still
+    // refuses to save (`saveDisabled` guard), and the message becomes visible.
+    it('shows fieldRequiredMessage under every empty mandatory field after clicking Save', () => {
+      renderModal();
+      expect(screen.queryByText('fieldRequiredMessage')).not.toBeInTheDocument();
+
+      fireEvent.click(saveButton());
+
+      // One message per empty mandatory field: Street, Number, City, Country.
+      expect(screen.getAllByText('fieldRequiredMessage')).toHaveLength(4);
+    });
+
+    it('marks Street, Number, City and Country as mandatory, and no other field', () => {
+      renderModal();
+      expect(hasRequiredMark('streetNameLabel')).toBe(true);
+      expect(hasRequiredMark('buildingNumberLabel')).toBe(true);
+      expect(hasRequiredMark('cityLabel')).toBe(true);
+      expect(hasRequiredMark('countryLabel')).toBe(true);
+      for (const label of ['buildingNameLabel', 'postalCodeLabel', 'regionLabel']) {
+        expect(hasRequiredMark(label)).toBe(false);
+      }
+    });
+
+    it('keeps save disabled while Street/Number/City are not all filled, even with a country picked', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) }),
+      );
+      renderModal();
+      await selectSpain();
+      expectSaveBlocked();
+
+      typeStreetName();
+      typeBuildingNumber();
+      expectSaveBlocked();
+
+      typeCity();
+      expectSaveAllowed();
+    });
+
+    it('treats a whitespace-only Street as empty', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) }),
+      );
+      renderModal();
+      await fillMandatoryFields();
+      expectSaveAllowed();
+
+      typeStreetName('   ');
+      expectSaveBlocked();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -631,7 +947,7 @@ describe('LocationEditorModal', () => {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve({
-              response: { status: 0, data: [{ id: 'new-c-loc-1', name: 'Madrid, Calle Mayor' }] },
+              response: { status: 0, data: [{ id: 'new-c-loc-1', name: 'Madrid, Avenida Principal' }] },
             }),
           });
         }
@@ -650,9 +966,7 @@ describe('LocationEditorModal', () => {
         onSaved,
       });
 
-      // Fill both mandatory fields: address line 1 (ETP-5103) and country.
-      typeAddressLine();
-      await selectSpain();
+      await fillMandatoryFields();
 
       fireEvent.click(saveButton());
 
@@ -676,9 +990,11 @@ describe('LocationEditorModal', () => {
       expect(body).not.toHaveProperty('shipToAddress');
       expect(body).not.toHaveProperty('invoiceToAddress');
       expect(body.country).toBe('ES');
+      expect(body.streetName).toBe(STREET_VALUE);
+      expect(body.buildingNumber).toBe(NUMBER_VALUE);
 
       await vi.waitFor(() => {
-        expect(onSaved).toHaveBeenCalledWith('new-c-loc-1', 'Madrid, Calle Mayor');
+        expect(onSaved).toHaveBeenCalledWith('new-c-loc-1', 'Madrid, Avenida Principal');
       });
     });
 
@@ -693,7 +1009,9 @@ describe('LocationEditorModal', () => {
               response: {
                 data: [{
                   id: rowId,
-                  address: '123 Main St',
+                  streetName: 'Gran Via',
+                  buildingNumber: '1',
+                  city: 'Madrid',
                   country: 'ES',
                   'country$_identifier': 'Spain',
                 }],
@@ -726,14 +1044,9 @@ describe('LocationEditorModal', () => {
         onSaved,
       });
 
-      await screen.findByText('save', {}, { timeout: 3000 });
-      await vi.waitFor(() => {
-        const btns = screen.getAllByRole('button');
-        const countryBtn = btns.find((b) => b.getAttribute('aria-haspopup') === 'dialog');
-        expect(countryBtn).not.toBeDisabled();
-      });
+      await vi.waitFor(() => expectSaveAllowed());
 
-      fireEvent.click(screen.getByText('save'));
+      fireEvent.click(saveButton());
 
       let putCall;
       await vi.waitFor(() => {
@@ -759,10 +1072,10 @@ describe('LocationEditorModal', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // ETP-5103 — Spain preselected on create, address line 1 mandatory
+  // ETP-5103 — Spain preselected on create
   // ---------------------------------------------------------------------------
 
-  describe('ETP-5103 — default country and mandatory fields', () => {
+  describe('ETP-5103 — default country prefill', () => {
     // The prefill asks the selector for Spain by name; the response carries the
     // TRANSLATED label, which is what the picker button ends up showing.
     const SPAIN_PREFILL_OPTION = { id: '106', label: 'España' };
@@ -795,13 +1108,6 @@ describe('LocationEditorModal', () => {
         const items = String(url).includes(DEFAULT_COUNTRY_QUERY_PARAM) ? prefill : catalog;
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ items, hasMore: false }) });
       });
-    }
-
-    /** The country picker trigger — the first button with aria-haspopup in the form. */
-    function countryButton() {
-      return screen
-        .getAllByRole('button')
-        .find(b => b.getAttribute('aria-haspopup') === 'dialog');
     }
 
     /** Wait until the country trigger displays `label`. */
@@ -838,57 +1144,40 @@ describe('LocationEditorModal', () => {
     });
 
     /** CP-3 */
-    it('keeps save disabled while address line 1 is empty, even with Spain preselected', async () => {
+    it('keeps save disabled while Street/Number/City are empty, even with Spain preselected', async () => {
       mockSelectors();
       renderModal();
 
       await waitForCountry(SPAIN_PREFILL_OPTION.label);
-      expect(saveButton()).toBeDisabled();
+      expectSaveBlocked();
     });
 
     /** CP-4 */
-    it('enables save as soon as address line 1 has one character', async () => {
+    it('enables save once Street, Number and City are filled', async () => {
       mockSelectors();
       renderModal();
 
       await waitForCountry(SPAIN_PREFILL_OPTION.label);
-      typeAddressLine('C');
+      typeStreetName();
+      typeBuildingNumber();
+      typeCity();
 
-      expect(saveButton()).toBeEnabled();
+      expectSaveAllowed();
     });
 
     /** CP-5 */
-    it('disables save again when address line 1 is cleared', async () => {
+    it('disables save again when Street is cleared', async () => {
       mockSelectors();
       renderModal();
 
       await waitForCountry(SPAIN_PREFILL_OPTION.label);
-      typeAddressLine();
-      expect(saveButton()).toBeEnabled();
+      typeStreetName();
+      typeBuildingNumber();
+      typeCity();
+      expectSaveAllowed();
 
-      typeAddressLine('');
-      expect(saveButton()).toBeDisabled();
-    });
-
-    /** CP-6 */
-    it('marks address line 1 and country as mandatory, and no other field', () => {
-      renderModal();
-
-      expect(hasRequiredMark('addressLine1')).toBe(true);
-      expect(hasRequiredMark('countryLabel')).toBe(true);
-      for (const label of ['addressLine2', 'postalCodeLabel', 'cityLabel', 'regionLabel']) {
-        expect(hasRequiredMark(label)).toBe(false);
-      }
-    });
-
-    it('treats whitespace-only address line 1 as empty', async () => {
-      mockSelectors();
-      renderModal();
-
-      await waitForCountry(SPAIN_PREFILL_OPTION.label);
-      typeAddressLine('   ');
-
-      expect(saveButton()).toBeDisabled();
+      typeStreetName('');
+      expectSaveBlocked();
     });
 
     it('keeps save disabled without a country, and enables it once one is picked', async () => {
@@ -896,13 +1185,15 @@ describe('LocationEditorModal', () => {
       mockSelectors({ prefill: [], catalog: [FRANCE_OPTION] });
       renderModal();
 
-      typeAddressLine();
-      expect(saveButton()).toBeDisabled();
+      typeStreetName();
+      typeBuildingNumber();
+      typeCity();
+      expectSaveBlocked();
 
       fireEvent.click(countryButton());
       fireEvent.click(await screen.findByText(FRANCE_OPTION.label));
 
-      expect(saveButton()).toBeEnabled();
+      expectSaveAllowed();
     });
 
     it('leaves the country empty when the default cannot be resolved', async () => {
@@ -925,7 +1216,7 @@ describe('LocationEditorModal', () => {
       await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
       expect(fetchedUrls().some(url => url.includes(DEFAULT_COUNTRY_QUERY_PARAM))).toBe(false);
       expect(countryButton()).toHaveTextContent('—');
-      expect(saveButton()).toBeDisabled();
+      expectSaveBlocked();
     });
 
     it('does not prefill when editing, and keeps the loaded country', async () => {
@@ -938,7 +1229,9 @@ describe('LocationEditorModal', () => {
               response: {
                 data: [{
                   id: rowId,
-                  address: '10 Rue de Rivoli',
+                  streetName: '10 Rue de Rivoli',
+                  buildingNumber: '10',
+                  city: 'Paris',
                   country: FRANCE_OPTION.id,
                   'country$_identifier': FRANCE_OPTION.label,
                 }],
@@ -958,7 +1251,7 @@ describe('LocationEditorModal', () => {
       // The prefill request must never be issued in edit mode, so the record's own
       // country can never be overwritten by the default.
       expect(fetchedUrls().some(url => url.includes(DEFAULT_COUNTRY_QUERY_PARAM))).toBe(false);
-      expect(saveButton()).toBeEnabled();
+      expectSaveAllowed();
     });
 
     it('keeps save disabled while a save is in flight', async () => {
@@ -973,10 +1266,12 @@ describe('LocationEditorModal', () => {
       renderModal();
 
       await waitForCountry(SPAIN_PREFILL_OPTION.label);
-      typeAddressLine();
+      typeStreetName();
+      typeBuildingNumber();
+      typeCity();
       fireEvent.click(saveButton());
 
-      await vi.waitFor(() => expect(saveButton()).toBeDisabled());
+      await vi.waitFor(() => expectSaveBlocked());
 
       resolveSave({ ok: true, json: () => Promise.resolve({ response: { status: 0, data: [] } }) });
     });
@@ -984,10 +1279,11 @@ describe('LocationEditorModal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ETP-5654 — `initialValues` seed for a NEW address (OCR vendor address)
+// ETP-5654 — `initialValues` seed for a NEW address (OCR vendor address),
+// reconciled with ETP-5806's structured fields.
 // ---------------------------------------------------------------------------
 
-describe('LocationEditorModal — initialValues seed (ETP-5654)', () => {
+describe('LocationEditorModal — initialValues seed (ETP-5654 x ETP-5806)', () => {
   const SPAIN = { id: '106', label: 'España' };
   const ARGENTINA = { id: 'AR', label: 'Argentina' };
   const SEED = { address: ' Gran Vía 45 ', postalCode: '28013', city: 'Madrid', countryName: 'Argentina' };
@@ -1001,22 +1297,24 @@ describe('LocationEditorModal — initialValues seed (ETP-5654)', () => {
     });
   }
 
-  const countryButton = () =>
-    screen.getAllByRole('button').find(b => b.getAttribute('aria-haspopup') === 'dialog');
+  const countryButton = () => screen.getByTestId('location-field-country');
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('applies the seed text, resolves the country from its name and is not dirty', async () => {
+  it('applies the free-text seed (postalCode/city), resolves the country, shows the legacy banner for the unstructured text, and is not dirty', async () => {
     mockSelectors({ Argentina: [ARGENTINA], Spain: [SPAIN] });
     renderModal({ initialValues: SEED });
 
     await vi.waitFor(() => expect(countryButton()).toHaveTextContent('Argentina'));
-    const inputs = screen.getAllByRole('textbox');
-    expect(inputs[0]).toHaveValue('Gran Vía 45');
-    expect(screen.getByDisplayValue('28013')).toBeTruthy();
-    expect(screen.getByDisplayValue('Madrid')).toBeTruthy();
+    // `address` is NOT bound to an editable field any more (ETP-5806): it only
+    // ever surfaces inside the legacy-address banner, never pre-fills Street.
+    const banner = screen.getByTestId('location-legacy-address-banner');
+    expect(banner).toHaveTextContent('Gran Vía 45');
+    expect(screen.getByTestId('location-field-streetName')).toHaveValue('');
+    expect(screen.getByTestId('location-field-postalCode')).toHaveValue('28013');
+    expect(screen.getByTestId('location-field-city')).toHaveValue('Madrid');
     expect(hasUnsavedChanges()).toBe(false);
   });
 
@@ -1034,29 +1332,30 @@ describe('LocationEditorModal — initialValues seed (ETP-5654)', () => {
     await vi.waitFor(() => expect(countryButton()).toHaveTextContent('España'));
   });
 
-  it('ignores the seed in edit mode', async () => {
+  it('ignores the seed in edit mode (no banner text from the seed, no seeded city)', async () => {
     global.fetch = vi.fn((url, opts) => {
       if (String(url).includes('/locationAddress/loc-1') && !opts?.method) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ response: { data: [{ id: 'loc-1', address: 'Real Street 1', country: 'FR', 'country$_identifier': 'Francia' }] } }),
+          json: () => Promise.resolve({ response: { data: [{ id: 'loc-1', streetName: 'Real Street', buildingNumber: '1', country: 'FR', 'country$_identifier': 'Francia' }] } }),
         });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [ARGENTINA], hasMore: false }) });
     });
     renderModal({ rowId: 'loc-1', initialValues: SEED });
 
-    await vi.waitFor(() => expect(screen.getByDisplayValue('Real Street 1')).toBeTruthy());
-    expect(screen.queryByDisplayValue('Gran Vía 45')).toBeNull();
-    expect(screen.queryByDisplayValue('Madrid')).toBeNull();
+    await vi.waitFor(() => expect(screen.getByTestId('location-field-streetName')).toHaveValue('Real Street'));
+    expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+    expect(screen.getByTestId('location-field-city')).toHaveValue('');
   });
 
-  it('behaves as before without initialValues', async () => {
+  it('behaves as before without initialValues: no banner, empty fields, Spain default', async () => {
     mockSelectors({ Spain: [SPAIN] });
     renderModal();
 
     await vi.waitFor(() => expect(countryButton()).toHaveTextContent('España'));
-    expect(screen.getAllByRole('textbox')[0]).toHaveValue('');
+    expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+    expect(screen.getByTestId('location-field-streetName')).toHaveValue('');
     expect(hasUnsavedChanges()).toBe(false);
   });
 });
@@ -1065,8 +1364,8 @@ describe('LocationEditorModal — initialValues seed (ETP-5654)', () => {
  * ETP-5824 — a non-simplified CUSTOMER business partner with no postal code cannot have its sales
  * invoices completed in an organization with TicketBAI (com.smf.ticketbai blocks the completion;
  * purchase invoices are never blocked, so a supplier-only partner is not warned). The modal warns
- * about it next to the postal code, but never blocks the save: the save gate stays address line
- * 1 + country (ETP-5103).
+ * about it next to the postal code, but never blocks the save: the postal code is not part of the
+ * save gate (ETP-5103/ETP-5806).
  */
 describe('LocationEditorModal — TicketBAI postal code warning (ETP-5824)', () => {
   const WARNING_TESTID = 'location-postalCode-tbai-warning';
@@ -1137,10 +1436,13 @@ describe('LocationEditorModal — TicketBAI postal code warning (ETP-5824)', () 
     await screen.findByTestId(WARNING_TESTID);
 
     // Every selector page answers Spain, so the ETP-5103 default-country prefill fills the
-    // country; with address line 1 typed, both mandatory fields are set.
-    typeAddressLine();
+    // country; with the ETP-5806 structured fields typed (street, number, city), every mandatory
+    // field is set.
+    typeStreetName();
+    typeBuildingNumber();
+    typeCity();
 
-    await vi.waitFor(() => expect(saveButton()).toBeEnabled());
+    await vi.waitFor(() => expectSaveAllowed());
     expect(screen.getByTestId(WARNING_TESTID)).toBeInTheDocument();
   });
 
@@ -1257,5 +1559,115 @@ describe('tbaiPostalCodeWarning — pure rules (ETP-5824)', () => {
       expect(readPartnerCustomer({ id: 'bp-1' })).toBeNull();
       expect(readPartnerCustomer(undefined)).toBeNull();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// structured-address-for-sepa flag OFF (ETP-5806 backend-only flag, default/pre-launch state)
+// ---------------------------------------------------------------------------
+
+describe('LocationEditorModal — structured-address-for-sepa flag OFF', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], hasMore: false }) }),
+    );
+    useCapabilitiesOff();
+  });
+
+  afterEach(() => {
+    useCapabilitiesOn();
+  });
+
+  it('renders the legacy Address Line 1/2 inputs, not the structured Street/Number/Building Name fields', () => {
+    renderModal();
+
+    expect(screen.getByTestId('location-field-address')).toBeInTheDocument();
+    expect(screen.getByTestId('location-field-address2')).toBeInTheDocument();
+    expect(screen.queryByTestId('location-field-streetName')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('location-field-buildingNumber')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('location-field-buildingName')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('location-resulting-address-preview')).not.toBeInTheDocument();
+  });
+
+  it('never shows the legacy-address banner, even for a record with only free-text address', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          response: { data: [{ id: 'loc-legacy', address: 'Old Street 12, 3B', country: 'ES', 'country$_identifier': 'Spain' }] },
+          items: [],
+          hasMore: false,
+        }),
+      }),
+    );
+
+    renderModal({ rowId: 'loc-legacy' });
+
+    await screen.findByText('locationSelectorTitle');
+    await vi.waitFor(() => expect(screen.getByTestId('location-field-address')).toHaveValue('Old Street 12, 3B'));
+    // ETP-5806 — the banner, and `isLegacyAddressRecord`, are only evaluated when the flag is on.
+    expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
+  });
+
+  it('keeps the pre-ETP-5806 save-gating rule: address text + country, nothing else', () => {
+    renderModal();
+    expectSaveBlocked();
+
+    fireEvent.change(screen.getByTestId('location-field-address'), { target: { value: 'Calle Mayor 1' } });
+    // Street/Number/City don't exist in this mode, so address + country alone must unblock Save.
+    expectSaveBlocked();
+  });
+
+  it('allows saving once legacy address and country are filled, with Street/Number/City never required', async () => {
+    global.fetch = vi.fn((url) => {
+      if (String(url).includes('/locationAddress') && !String(url).includes('selectors')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { status: 0, data: [{ id: 'new-loc-legacy', name: 'Legacy Location' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+    });
+
+    renderModal();
+    fireEvent.change(screen.getByTestId('location-field-address'), { target: { value: 'Calle Mayor 1' } });
+    await selectSpain();
+
+    expectSaveAllowed();
+    fireEvent.click(saveButton());
+
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/locationAddress'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  it('sends the raw legacy address lines, and null structured fields, in the save payload', async () => {
+    let capturedBody;
+    global.fetch = vi.fn((url, opts) => {
+      if (String(url).includes('/locationAddress') && !String(url).includes('selectors') && opts?.method === 'POST') {
+        capturedBody = JSON.parse(opts.body);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { status: 0, data: [{ id: 'new-loc-legacy', name: 'Legacy Location' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }) });
+    });
+
+    renderModal();
+    fireEvent.change(screen.getByTestId('location-field-address'), { target: { value: 'Calle Mayor 1' } });
+    fireEvent.change(screen.getByTestId('location-field-address2'), { target: { value: 'Piso 2' } });
+    await selectSpain();
+    fireEvent.click(saveButton());
+
+    await vi.waitFor(() => expect(capturedBody).toBeDefined());
+    expect(capturedBody.addressLine1).toBe('Calle Mayor 1');
+    expect(capturedBody.addressLine2).toBe('Piso 2');
+    expect(capturedBody.streetName).toBeNull();
+    expect(capturedBody.buildingNumber).toBeNull();
+    expect(capturedBody.buildingName).toBeNull();
   });
 });

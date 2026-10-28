@@ -4,8 +4,8 @@
 // partner is NOT flagged as simplified invoice (`tbaiIssimplifiedinv = N`) and the invoice
 // partner address has no postal code (`TBAI_EmptyPostalCode`, ProcessInvoiceTbaiHook.preProcess).
 // The address modal warns about it while the address is being typed, so the user can fix it
-// before an invoice is ever blocked. The warning never blocks the save: the save gate stays
-// address line 1 + country (ETP-5103).
+// before an invoice is ever blocked. The warning never blocks the save: it is not part of the
+// modal's save gate (`isSaveBlocked`, ETP-5103/ETP-5806), which never requires a postal code.
 //
 // Customer scope: the completion block only runs on SALES invoices, so only a partner flagged
 // as customer (`customer = Y`) can ever hit it. The modal is also opened from the purchase

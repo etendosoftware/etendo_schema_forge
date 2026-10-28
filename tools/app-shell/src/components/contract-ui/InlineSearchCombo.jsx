@@ -6,7 +6,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, pinSearchTerms,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
@@ -202,7 +202,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const runFetch = () => {
       fetchInFlightRef.current = true;
       apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-        .then(r => r.ok ? r.json() : null)
+        .then(r => {
+          if (!r.ok) throw new Error(`Selector request failed: ${r.status}`);
+          return r.json();
+        })
         .then(data => {
           if (!data?.items) return;
           if (searchGenerationRef.current !== requestGeneration) return;
@@ -213,7 +216,13 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           hasMoreRef.current = more;
           setHasMore(more);
         })
-        .catch(() => {})
+        .catch(() => {
+          // ETP-5948 — a failed "load more" ends the paging, as in CreatableSearchSelect: left
+          // `true`, the ETP-5903 walk re-requested the same page after every failure, forever.
+          if (offset === 0 || searchGenerationRef.current !== requestGeneration) return;
+          hasMoreRef.current = false;
+          setHasMore(false);
+        })
         .finally(() => {
           fetchInFlightRef.current = false;
           setSettledFetches(n => n + 1);
@@ -258,18 +267,24 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     pinAttemptedRef.current = id;
     const generation = searchGenerationRef.current;
     pinRequestRef.current = { id, generation };
-    const queryParams = { ...selectorContext, q: label, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
-    apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
+    // ETP-5948 — a "<code> - <name>" label finds nothing as a whole; the code retry does.
+    const lookup = async () => {
+      for (const term of pinSearchTerms(label)) {
+        const queryParams = { ...selectorContext, q: term, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
+        const r = await apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' });
+        const data = r.ok ? await r.json() : null;
+        const match = (data?.items ?? []).filter(it => String(it.id) === id);
+        if (match.length) return match;
+      }
+      return [];
+    };
+    lookup()
+      .then(match => {
         const request = pinRequestRef.current;
         // Abandoned: the value changed, a new search started, or this answer is late.
         if (!request || request.id !== id || request.generation !== generation) return;
         if (searchGenerationRef.current !== generation) return;
-        const items = (data?.items ?? [])
-          .filter(it => String(it.id) === id)
-          .map(it => ({ id: it.id, name: it.label || it.name, ...it }));
-        setPinnedOptions(items);
+        setPinnedOptions(match.map(it => ({ id: it.id, name: it.label || it.name, ...it })));
       })
       .catch(() => {})
       .finally(() => {
@@ -774,7 +789,11 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                       className="h-4 w-4 shrink-0 text-primary"
                       data-testid={`inline-add-option-${field.key}-${opt.id}-selected-indicator`} />
                   )}
-                  <span className="whitespace-nowrap">{opt.name || opt.label || opt._identifier || opt.id}</span>
+                  <span className="whitespace-nowrap">
+                    {/* ETP-5902: render-only prefix (e.g. the tax rate); never part of the saved name */}
+                    {opt.labelPrefix ? `${opt.labelPrefix} - ` : ''}
+                    {opt.name || opt.label || opt._identifier || opt.id}
+                  </span>
                 </button>
               );
             })}

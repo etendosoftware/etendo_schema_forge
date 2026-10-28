@@ -6,7 +6,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import {
-  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue,
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue, pinSearchTerms,
 } from './selectorSelection.js';
 import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
@@ -336,7 +336,8 @@ function SearchSelectOptionsPanel({
                 className="inline-block h-4 w-4 mr-2 align-text-bottom text-primary"
                 data-testid={`option-${field.key}-${opt.id}-selected-indicator`} />
             )}
-            {renderOption ? renderOption(opt) : opt.name}
+            {/* ETP-5902: render-only prefix (e.g. the tax rate); never part of the saved name */}
+            {renderOption ? renderOption(opt) : <>{opt.labelPrefix && `${opt.labelPrefix} - `}{opt.name}</>}
           </button>
         );
       })}
@@ -805,16 +806,25 @@ export function CreatableSearchSelect({
     pinAttemptedRef.current = id;
     const generation = searchGenerationRef.current;
     pinRequestRef.current = { id, generation };
-    fetchServerOptions({
-      apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
-      query: label, offset: 0, limit: CURRENT_SELECTION_SEARCH_LIMIT,
-    })
-      .then(({ items }) => {
+    // ETP-5948 — a "<code> - <name>" label finds nothing as a whole; the code retry does.
+    const lookup = async () => {
+      for (const term of pinSearchTerms(label)) {
+        const { items } = await fetchServerOptions({
+          apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
+          query: term, offset: 0, limit: CURRENT_SELECTION_SEARCH_LIMIT,
+        });
+        const match = items.filter(it => String(it.id) === id);
+        if (match.length) return match;
+      }
+      return [];
+    };
+    lookup()
+      .then(match => {
         const request = pinRequestRef.current;
         // Abandoned: the value changed, a new search started, or this answer is late.
         if (!request || request.id !== id || request.generation !== generation) return;
         if (searchGenerationRef.current !== generation) return;
-        setPinnedOptions(items.filter(it => String(it.id) === id));
+        setPinnedOptions(match);
       })
       .catch(() => {})
       .finally(() => {
