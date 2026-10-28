@@ -458,6 +458,7 @@
     "stock": {
       "readOnly": true,
       "javaQualifier": "productStockWarehouseHandler",
+      "agentPrompt": "Stock per product, warehouse and storage bin. Lots, serial numbers and expiry dates are not handled in Etendo GO, so a row says nothing about them and no product is lot-tracked here.",
       "fields": {
         "storageBin": {
           "visibility": "readOnly",

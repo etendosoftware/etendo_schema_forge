@@ -1765,3 +1765,7 @@ As in the app (whose form does not show it), a contact's `searchKey` is its numb
 ## Contact address name over MCP — ETP-5852
 
 An address created over MCP without `name` gets the name the address editor gives (city and address line, else region and country, else "Location"), not the AD default ".". Feedback M-168.
+
+## Agent prompts on accounting accounts — ETP-5852
+
+The account fields of `customerAccounting` and `vendorAccounting` tell agents they take an accounting combination id, found with `etendo_selectors` by account number, not a chart-of-accounts `elementValue` id. Feedback M-129.

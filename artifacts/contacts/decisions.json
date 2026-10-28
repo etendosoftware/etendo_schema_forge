@@ -753,7 +753,8 @@
           "labels": {
             "en_US": "Receivables Account",
             "es_ES": "Cuenta a Cobrar"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         },
         "customerPrepayment": {
           "lookup": true,
@@ -764,7 +765,8 @@
           "labels": {
             "en_US": "Prepayment Account",
             "es_ES": "Cuenta de Anticipos"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         }
       }
     },
@@ -783,7 +785,8 @@
           "labels": {
             "en_US": "Liability Account",
             "es_ES": "Cuenta a Pagar"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         },
         "vendorPrepayment": {
           "lookup": true,
@@ -794,7 +797,8 @@
           "labels": {
             "en_US": "Prepayment Account",
             "es_ES": "Cuenta de Anticipos"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         }
       }
     },

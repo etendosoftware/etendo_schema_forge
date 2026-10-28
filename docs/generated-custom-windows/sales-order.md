@@ -762,3 +762,7 @@ cannot differ from its price list's (422), and the order date is also the accoun
 ## Order date and accounting date — ETP-5852
 
 `orderDate.agentPrompt` also says the accounting date always follows the order date (`mirrorAccountingDate`, ETP-4531), so an agent changing it expects both to move. Feedback M-183.
+
+## Voided order lines — ETP-5852
+
+`lines.lineGrossAmount.agentPrompt`: on a voided order the line keeps its gross amount while quantity and net drop to 0 (checked live), so agents read the header status before adding lines up. Feedback M-240.

@@ -449,7 +449,8 @@
           "form": true,
           "section": "principal",
           "order": 7,
-          "gridOrder": 8
+          "gridOrder": 8,
+          "agentPrompt": "Line total with tax. On a voided order (header documentStatus VO) it keeps the original amount while orderedQuantity and lineNetAmount drop to 0: the line no longer counts, so read the header's documentStatus before adding lines up."
         },
         "tax": {
           "grid": true,
