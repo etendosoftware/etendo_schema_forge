@@ -1282,6 +1282,47 @@
           }
         ]
       }
+    },
+    {
+      "id": "doc-template-selection",
+      "description": "Lets an organization choose the printed template of the commercial documents (sales invoice, sales order, purchase order, quotation): variant classic/compact/modern, logo and footer, read from GET /sws/neo/doctemplateconfig. Visual gating only: the endpoint authorizes every read and write on its own. Off, the current shared template is rendered unchanged and no request is made. MVP for validation; the editing UI is a separate task.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5988",
+      "created": "2026-10-28",
+      "flag": {
+        "key": "doc-template-selection",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER: MVP validation window; the owner decides the real removal date once the editing UI (T5) ships.",
+        "symbols": [
+          "doc-template-selection",
+          "DOC_TEMPLATE_SELECTION",
+          "loadDocTemplateConfig",
+          "isDocTemplateSelectionEnabled",
+          "resolveDocumentTemplate",
+          "doctemplateconfig"
+        ]
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/shared/docTemplateConfig.js",
+          "tools/app-shell/src/windows/custom/shared/documentTemplateVariants.js"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. documentPdf.js, documentPdfRegistry.js, the four use*Pdf hooks and flag-keys.js are shared toggle points. The backend endpoint (NeoDocTemplateConfigEndpoint in com.etendoerp.go) is not gated by this flag.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/documentTemplateVariants.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/docTemplateConfig.vitest.js"
+          }
+        ]
+      }
     }
   ]
 }

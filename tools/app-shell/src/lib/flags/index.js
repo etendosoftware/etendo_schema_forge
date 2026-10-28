@@ -8,6 +8,7 @@ export {
   IMPORT_BATCH_SIZE,
   MY_COMPANIES_PAGE,
   CONTACT_CATEGORY_TYPE,
+  DOC_TEMPLATE_SELECTION,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from './flag-keys.js';

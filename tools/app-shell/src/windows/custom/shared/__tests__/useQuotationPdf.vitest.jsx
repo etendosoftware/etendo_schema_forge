@@ -36,6 +36,7 @@ describe('useQuotationPdf', () => {
       expect.any(Function),
       expect.any(Object),
       null,
+      'sales-quotation',
     );
   });
 
@@ -81,6 +82,7 @@ describe('useQuotationPdf', () => {
       expect.any(Function),
       expect.any(Object),
       null,
+      'sales-quotation',
     );
   });
 });

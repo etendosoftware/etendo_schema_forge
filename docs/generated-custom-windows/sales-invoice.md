@@ -2584,3 +2584,7 @@ full value on hover, no horizontal scroll.
 ## Read-only role tier: SIF tab and rectified invoices — ETP-5830
 
 With a `read-only` tier the SIF tab locks its fields (`useSifFieldPatcher` `locked`, same path as a processed invoice) and `ReversedInvoicesPanel` is read-only. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Template selection per organization — ETP-5988
+
+Behind the `doc-template-selection` feature flag (default off) the printed invoice can use the organization's saved template (variant, logo, footer) through the shared commercial template; with the flag off the document is unchanged. See `docs/document-printables.md` (D26) and `neo-headless.md` §4.13 in com.etendoerp.go.

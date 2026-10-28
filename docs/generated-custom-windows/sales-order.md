@@ -754,3 +754,7 @@ cannot differ from its price list's (422), and the order date is also the accoun
 `purchase-order.md` ("Header validations over MCP `etendo_update`") and
 `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41. The sales-order header calls the same
 `OrderCurrencyPriceListGuard` from its `handle()`.
+
+## Template selection per organization — ETP-5988
+
+Behind the `doc-template-selection` feature flag (default off) the printed order can use the organization's saved template (variant, logo, footer) through the shared commercial template; with the flag off the document is unchanged. See `docs/document-printables.md` (D26) and `neo-headless.md` §4.13 in com.etendoerp.go.

@@ -128,5 +128,5 @@ export function buildInvoicePdfLabels(ui) {
 export function useInvoicePdf(invoiceId, apiBaseUrl, token, cacheConfig = null) {
   const ui = useUI();
   const labels = buildInvoicePdfLabels(ui);
-  return useDocumentPdf(invoiceId, apiBaseUrl, token, buildInvoiceData, labels, cacheConfig);
+  return useDocumentPdf(invoiceId, apiBaseUrl, token, buildInvoiceData, labels, cacheConfig, 'sales-invoice');
 }
