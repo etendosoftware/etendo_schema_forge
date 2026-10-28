@@ -261,7 +261,8 @@
           "grid": false,
           "section": "principal",
           "order": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true }
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true },
+          "agentPrompt": "The contact's number, assigned automatically on create as in the app (the same value as etgoIdentifier). Do not send it when creating a contact: a value you send is replaced by the number and the answer says so in searchKeyNote. To find a contact, filter by name or taxID."
         },
         "businessPartnerCategory": {
           "visibility": "editable",

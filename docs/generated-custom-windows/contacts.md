@@ -1685,3 +1685,7 @@ With a `read-only` tier on Contactos:
 - **`/contacts/new` by URL** redirects to the list.
 
 Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Contact searchKey over MCP — ETP-5852
+
+As in the app (whose form does not show it), a contact's `searchKey` is its number (`etgoIdentifier`). `etendo_schema(view:"create")` lists it as optional, `serverDefaulted` (`BusinessPartnerHandler#serverResolvedCreateFields`), and the placeholder the save needs is put before MCP's mandatory pre-check (`resolveServerCreateFields`), so a create without it is no longer refused. A value the agent sends is still replaced by the number, and the answer says so in `searchKeyNote`. Field `agentPrompt` tells agents not to send it. Feedback M-107.
