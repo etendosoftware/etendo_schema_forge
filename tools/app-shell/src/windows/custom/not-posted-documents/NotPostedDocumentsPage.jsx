@@ -58,11 +58,35 @@ import { NotPostedRowActions } from './NotPostedRowActions';
  * Same pattern `windows/custom/calendar/PeriodsExpandablePanel.jsx` already uses for
  * document *categories* (its `MXI: 'calendarDocCategoryMatchInvoice'` entry).
  *
- * Add an entry only when a GO window's name genuinely diverges from core's translation —
- * anything absent here keeps the backend's label untouched.
+ * ETP-5591 (QA CP-1b): every code is listed now. Core's translations are inconsistent ("Factura
+ * (Cliente)" next to "Albarán (cliente)", "Cobros" next to "Pago", "Landed Cost" untranslated),
+ * so the page names all 23 types in the design's sentence case. A code core adds later and
+ * this map lacks keeps the backend's label.
  */
-const DOC_TYPE_LABEL_KEYS = {
+export const DOC_TYPE_LABEL_KEYS = {
+  A: 'docTypeAmortization',
+  BMP: 'docTypeBomProduction',
+  BS: 'docTypeBankStatement',
+  CA: 'docTypeCostAdjustment',
+  DD: 'docTypeDoubtfulDebt',
+  GLJ: 'docTypeGlJournal',
+  GR: 'docTypeGoodsReceipt',
+  GS: 'docTypeGoodsShipment',
+  IC: 'docTypeInternalConsumption',
+  INV: 'docTypeInventory',
+  LC: 'docTypeLandedCost',
+  LCC: 'docTypeLandedCostCost',
+  M: 'docTypeMovements',
   MI: 'docTypeMatchedInvoices',
+  PI: 'docTypePurchaseInvoice',
+  PIN: 'docTypePaymentIn',
+  POT: 'docTypePaymentOut',
+  R: 'docTypeReconciliation',
+  RMR: 'docTypeReturnMaterialReceipt',
+  RVS: 'docTypeReturnToVendorShipment',
+  SI: 'docTypeSalesInvoice',
+  T: 'docTypeTransaction',
+  WE: 'docTypeWorkEffort',
 };
 
 /**
@@ -233,17 +257,22 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     sorted, sortKey, sortDirection, toggleSort, selectSort, clearSort, isDefaultSort,
   } = useClientSort(displayRows);
 
+  // ETP-5591 (QA): sized to fit a 1440px screen with the 260px row actions — the description
+  // takes what is left (`grow`, 320px floor) and the rest hold their longest value. With the
+  // default type widths the table needed 1468px and scrolled sideways on a 1440px screen.
   const columns = useMemo(() => [
     {
       key: 'documentTypeLabel',
       label: ui('documentType'),
       type: 'string',
+      minWidth: 208,
       render: (row) => <span className="font-semibold text-foreground">{row.documentTypeLabel}</span>,
     },
     {
       key: 'accountingStatusLabel',
       label: ui('statusLabel'),
       type: 'string',
+      minWidth: 184,
       render: (row) => (row.statusTone
         ? (
           <span data-testid={`npd-status-${row.documentId}`}>
@@ -252,11 +281,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         )
         : null),
     },
-    { key: 'description', label: ui('description'), type: 'string' },
+    { key: 'description', label: ui('description'), type: 'string', grow: true },
     // `dot: false` — the date cell's due-date dot (red when past) means nothing for an
     // accounting date.
-    { key: 'accountingDate', label: ui('accountingDate'), type: 'date', dot: false },
-    { key: 'organization', label: ui('organization'), type: 'string' },
+    { key: 'accountingDate', label: ui('accountingDate'), type: 'date', dot: false, minWidth: 136 },
+    { key: 'organization', label: ui('organization'), type: 'string', minWidth: 176 },
   ], [ui]);
 
   // Use the backing NEO entity, independently of the surrounding route or parent record.
@@ -468,7 +497,6 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           <DateRangePopover
             value={filters.date}
             onChange={(date) => updateFilters({ date })}
-            placeholder={ui('dateRangeAnyTime')}
             data-testid="DateRangePopover__npd" />
         </span>
         {!filtersAreDefault && (

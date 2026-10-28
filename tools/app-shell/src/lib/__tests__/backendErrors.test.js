@@ -3486,6 +3486,10 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
       'Cost calculation looks stalled: transactions have been waiting for their cost for a long time, so repeating the post will not help. An administrator must check the Costing Background process and the pending transactions.'],
     ['NotCalculatedCost', 'backendError.costNotCalculated',
       'Cost has not yet been calculated for all products in the document.'],
+    // ETP-5591: a disabled document, generic or with its certain reason.
+    ['DocumentDisabled', 'backendError.documentDisabledForAccounting', 'Document disabled for accounting'],
+    ['TotalGrossIsZero', 'backendError.invoiceTotalIsZero',
+      'Total Gross Amount of the invoice is zero. Invoice is disabled for accounting.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {
@@ -3500,6 +3504,23 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
       assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
     });
   }
+
+  it('names the financial account missing its deposit or withdrawal account (ETP-5591)', () => {
+    const prose = 'The financial account Caja has no deposit account in its accounting.';
+    const params = { financialAccount: 'Caja' };
+    assert.equal(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoDepositAccount'], messageParams: params }),
+      es('backendError.finAccNoDepositAccount', params));
+    assert.match(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoWithdrawalAccount'], messageParams: params }),
+      /Caja.*cuenta de retirada/);
+  });
+
+  it('keeps the backend text when the caller dropped the params a translation needs (ETP-5591)', () => {
+    const prose = 'La cuenta financiera Caja no tiene cuenta de depósito en su contabilidad.';
+    assert.equal(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoDepositAccount'] }), prose);
+  });
 
   it('speaks the accountants’ Spanish: Descontabilizar / contabilizada / asientos', () => {
     assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
