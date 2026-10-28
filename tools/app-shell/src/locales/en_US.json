@@ -18300,7 +18300,9 @@
     "processReactivate": "Reactivate",
     "statusColumnLabel": "Status",
     "cobrosNoun": "collections",
+    "cobroNoun": "collection",
     "pagosNoun": "payments",
+    "pagoNoun": "payment",
     "cobroReactivadoOk": "Collection reactivated successfully",
     "pagoReactivadoOk": "Payment reactivated successfully",
     "cobroReactivadoError": "Error reactivating the collection",
@@ -22939,6 +22941,9 @@
     "matchRuleTypeNamePlaceholder": "e.g. Bank fee",
     "paymentTermCreate": "+ Create payment term",
     "paymentTermCreateTitle": "Create payment term",
+    "paymentTermNewTitle": "New payment term",
+    "paymentTermEditTitle": "Edit payment term",
+    "paymentTermNew": "New payment term",
     "paymentTermDaysLabel": "Days until due",
     "paymentTermDaysPlaceholder": "e.g. 12",
     "paymentTermDaysSuffix": "days",
@@ -25867,7 +25872,9 @@
     "currencyRateSelectPlaceholder": "Select {label}...",
     "currencyRateEdit": "Edit exchange rate",
     "currencyRateNotAvailable": "No exchange rate for this date. You can type one.",
-    "currencyRatesAtDate": "Rates as of {date}"
+    "currencyRatesAtDate": "Rates as of {date}",
+    "stepperDecrease": "Decrease",
+    "stepperIncrease": "Increase"
   },
   "menus": {
     "Currency": {

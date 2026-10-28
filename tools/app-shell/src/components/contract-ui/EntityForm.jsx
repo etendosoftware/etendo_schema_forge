@@ -23,6 +23,7 @@ import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker, resolveRateDateField } from './CurrencyRatePicker.jsx';
 import PrefixedInput from './PrefixedInput.jsx';
+import { NumberStepperInput } from './NumberStepperInput.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
 import { InlineCreateSelector } from './InlineCreateSelector.jsx';
@@ -92,7 +93,30 @@ function resolveUiKey(ui, key) {
  * (override via `cols`, horizontal header form, vertical line form) have
  * distinct visual contracts and should read as independent statements.
  */
-function resolveGridClass(cols, layout) {
+function resolveGridClass(cols, layout, compact = false) {
+  // Compact: 8px between a label and its input (LABEL_GAP is 4px) and 24px label lines. Only the
+  // stacked label-over-input wrappers: a checkbox / toggle row is a flex ROW (`.flex`), where a
+  // space-y margin would push its label below the box.
+  const base = resolveBaseGridClass(cols, layout);
+  return compact ? `${base} [&>div:not(.flex)]:space-y-2 [&_label]:leading-6` : base;
+}
+
+/**
+ * Inline grid template: an explicit `cols` (gap `gap`, default 16) wins over the measured column
+ * count of a responsive header grid; neither → undefined (the Tailwind classes apply).
+ */
+function resolveGridStyle(cols, measuredCols, gap) {
+  // minmax(0, 1fr) (not bare `1fr`) — a plain `1fr` track's implicit minimum is `auto` (the
+  // item's min-content size), so a long unbreakable value (e.g. a long contact name in a
+  // CreatableSearchSelect chip) would grow the column past its fair share instead of letting
+  // `truncate` clip it (ETP-4600 Gap D). Tailwind's own `grid-cols-N` utility (the
+  // `resolveGridClass` default path) already bakes this in; this inline path needs it explicitly.
+  if (cols) return { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: gap ?? 16 };
+  if (measuredCols) return { gridTemplateColumns: `repeat(${measuredCols}, minmax(0, 1fr))` };
+  return undefined;
+}
+
+function resolveBaseGridClass(cols, layout) {
   if (cols) return 'grid';
   if (layout === 'horizontal') return `grid grid-cols-2 gap-x-5 ${ROW_GAP_Y} md:grid-cols-4`;
   return 'grid grid-cols-2 gap-3 md:grid-cols-3';
@@ -389,6 +413,65 @@ function getCheckboxStateClass(checked) {
       ? 'bg-primary text-primary-foreground'
       : 'bg-transparent';
 }
+
+// `variant: 'compact'` (opt-in, e.g. the list-modal compact popup) — the Figma popup checkbox:
+// a 24px row with a 16px box, 1.5px control border, filled with the primary colour when checked,
+// a regular-weight label 12px to its right, and no `pt-6` (which only exists to line a checkbox
+// up with the inputs of a multi-column row).
+const CHECKBOX_CHROME = {
+  default: {
+    row: 'flex items-center gap-2 pt-6',
+    button: 'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow flex items-center justify-center',
+    label: 'text-sm text-foreground font-medium cursor-pointer',
+  },
+  compact: {
+    row: 'flex items-center gap-3',
+    button: 'peer h-6 w-6 shrink-0 flex items-center justify-center rounded',
+    label: 'text-sm font-normal leading-6 text-foreground cursor-pointer',
+  },
+};
+
+function checkboxChrome(variant) {
+  return CHECKBOX_CHROME[variant] ?? CHECKBOX_CHROME.default;
+}
+
+// Inner 16px box of the compact checkbox (the outer 24px button is the hit area).
+function compactCheckboxBoxClass(checked) {
+  return checked
+    ? 'flex h-4 w-4 items-center justify-center rounded border-[1.5px] border-primary bg-primary text-primary-foreground'
+    : 'flex h-4 w-4 items-center justify-center rounded border-[1.5px] border-border-control bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.05)]';
+}
+
+function CheckMark({ className }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+// Messages under an integer stepper when a keystroke is refused. Format (a separator, a sign):
+// the field's own `stepperRejectedKey` (payment-term: `paymentTermDaysNotInteger`, the selector's
+// create-modal wording), else the generic integer message the save gate uses. Range (more digits
+// than `max` has): the generic "maximum allowed is {max}", as the selector says "out of range".
+function stepperMessages(ui, f) {
+  return {
+    rejectedMessage: ui(f.stepperRejectedKey ?? 'fieldIntegerError'),
+    rangeMessage: f.max == null ? undefined : ui('qtyMaxAllowed', { max: f.max }),
+  };
+}
+
+// Compact inputs are 40px tall with the Figma xs shadow (the default density is 36px, ETP-4321).
+const COMPACT_INPUT_CLASS = ' h-10 shadow-[0_1px_2px_hsl(var(--foreground)/0.05)]';
 
 // Callers of this helper (PopupSearchField's sibling paths, DependentFkField,
 // the lookup/search label) are only reached along the editable branch of their
@@ -703,8 +786,17 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *  - renderAsFragment: when true, emit the field cell(s) WITHOUT the wrapping grid
  *    container (a bare fragment), so the caller can splice them into another
  *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
+ *  - variant: 'default' | 'compact'. `compact` (opt-in, the list-modal compact popup) renders
+ *    40px text/number inputs, an 8px label-to-input gap and the Figma popup checkbox (no
+ *    row-alignment top padding). Every other field type renders as in `default`.
+ *  - gap: grid gap in px, only with `cols` (default 16).
+ *
+ * Field-level: `stepper: true` on a number field renders NumberStepperInput (− / + inside the
+ * box, bounded by the field's `min` / `max`). Not combined with `calloutOn: 'blur'`, whose
+ * deferred input wins.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows, documentDateField }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows, documentDateField, variant = 'default', gap }) {
+  const compact = variant === 'compact';
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -780,16 +872,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
 
   if (displayFields.length === 0) return null;
 
-  const gridClass = resolveGridClass(cols, layout);
-  // minmax(0, 1fr) (not bare `1fr`) — a plain `1fr` track's implicit minimum is
-  // `auto` (the item's min-content size), so a long unbreakable value (e.g. a
-  // long contact name in a CreatableSearchSelect chip) would grow the column
-  // past its fair share instead of letting `truncate` clip it (ETP-4600 Gap D).
-  // Tailwind's own `grid-cols-N` utility (the `resolveGridClass` default path)
-  // already bakes this in; this inline-style override path needs it explicitly.
-  let gridStyle;
-  if (cols) gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 16 };
-  else if (measuredCols) gridStyle = { gridTemplateColumns: `repeat(${measuredCols}, minmax(0, 1fr))` };
+  const gridClass = resolveGridClass(cols, layout, compact);
+  const gridStyle = resolveGridStyle(cols, measuredCols, gap);
 
   // If there's an image field (not inline), pin it to the right — rest of fields render in a 3-col grid on the left
   const imageField = displayFields.find(f => f.type === 'image' && !f.inline);
@@ -1219,6 +1303,33 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     }
   };
 
+  // `stepper: true` number field. A typed value is clamped to `max` silently and checked against
+  // `min`/`integer` on blur, exactly like the plain numeric input; a click is already in range.
+  // A click has no blur, so it fires onFieldBlur deferred — the same immediate-save hook the
+  // checkbox uses (see renderCheckboxField, ETP-4670).
+  const renderStepperInput = (f) => (
+    <NumberStepperInput
+      id={f.key}
+      name={f.key}
+      data-testid={`field-${f.key}`}
+      value={data?.[f.key] ?? ''}
+      min={f.min}
+      max={f.max}
+      integer={f.integer === true}
+      {...stepperMessages(ui, f)}
+      onChange={(clean) => onChange?.(f.key, clean, f.column)}
+      onCommit={(clean) => {
+        const clamped = clampNumericFieldMax(f, clean);
+        if (clamped !== clean) onChange?.(f.key, clamped, f.column);
+        validateNumericOnBlur(f, clamped);
+      }}
+      onStep={() => setTimeout(() => onFieldBlur?.(f.key), 0)}
+      onBlur={() => onFieldBlur?.(f.key)}
+      placeholder={resolveUiKey(ui, f.placeholderKey)}
+      required={f.required}
+      disabled={savingField === f.key} />
+  );
+
   const renderInputField = (f, label, isReadOnly, displayValue) => {
     const calloutOnBlur = f.calloutOn === 'blur';
     // ETP-4749: a fixed, non-editable chip (e.g. "https://") shown immediately before
@@ -1240,7 +1351,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // class here on purpose so it stops drawing its own (mismatched-radius) border/
     // focus ring, but it should still LOOK like every other input otherwise.
     const inputClassName = getInputStateClass(isReadOnly)
-      + (hasPrefix ? ' border-0 rounded-none focus-visible:ring-0 focus-visible:outline-none prefixed-input-control' : '');
+      + (hasPrefix ? ' border-0 rounded-none focus-visible:ring-0 focus-visible:outline-none prefixed-input-control' : '')
+      + (compact ? COMPACT_INPUT_CLASS : '');
     // if/else rather than a nested ternary: Sonar S3358, and the same shape ETP-5210 used
     // when it rewrote the other chains in this file.
     let inputEl;
@@ -1261,6 +1373,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         maxLength={f.maxLength}
         data-testid="DeferredInput__a8d626" />
       );
+    } else if (f.stepper && !isReadOnly) {
+      inputEl = renderStepperInput(f);
     } else if (isNumericField(f) && !isReadOnly) {
       inputEl = (
       // Numeric, no blur-callout: same reason as DeferredInput above — a native number input
@@ -1396,8 +1510,9 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   // false/'N'/'false'/null/undefined (unchecked) — plain `!!value` is wrong (`!!'N'` is true).
   const renderCheckboxField = (f, label, isReadOnly) => {
     const checked = data?.[f.key] === true || data?.[f.key] === 'Y' || data?.[f.key] === 'true';
+    const chrome = checkboxChrome(variant);
     return (
-      <div key={f.key} className="flex items-center gap-2 pt-6">
+      <div key={f.key} className={chrome.row}>
         <button
           type="button"
           role="checkbox"
@@ -1430,31 +1545,23 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             setTimeout(() => onFieldBlur?.(f.key), 0);
           }}
           className={[
-            'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow',
-            'flex items-center justify-center',
+            chrome.button,
             'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             'disabled:cursor-not-allowed disabled:opacity-50',
-            getCheckboxStateClass(checked),
+            compact ? '' : getCheckboxStateClass(checked),
           ].join(' ')}
         >
-          {checked && (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4 w-4"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+          {compact ? (
+            <span className={compactCheckboxBoxClass(checked)} aria-hidden="true">
+              {checked && <CheckMark className="h-3 w-3" data-testid="CheckMark__a8d626" />}
+            </span>
+          ) : (
+            checked && <CheckMark className="h-4 w-4" data-testid="CheckMark__a8d626" />
           )}
         </button>
         <Label
           htmlFor={f.key}
-          className="text-sm text-foreground font-medium cursor-pointer"
+          className={chrome.label}
           data-testid="Label__a8d626">
           {label}
         </Label>

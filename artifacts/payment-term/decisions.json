@@ -5,20 +5,18 @@
     "category": "settings",
     "name": "Payment Term",
     "detailEntity": null,
-    "attachments": false,
-    "formCardPadding": "p-2",
-    "toolbarPaddingX": "px-2",
-    "tabsBarPaddingX": "px-2",
-    "formScrollPaddingX": "px-2",
-    "noHeaderBorder": true,
-    "toolbarBorderBottom": true,
-    "whiteFormBackground": true,
-    "autoSaveOnBlur": true,
-    "hidePrint": true,
-    "hideLink": true,
-    "hideMoreMenu": true,
-    "listbarPaddingX": "px-2",
-    "tablePaddingX": "px-2",
+    "layoutType": "list-modal",
+    "templateConfig": {
+      "titleKey": "paymentTermNewTitle",
+      "editTitleKey": "paymentTermEditTitle",
+      "newLabelKey": "paymentTermNew",
+      "modalVariant": "compact",
+      "hideBackButton": true,
+      "hideSearch": true,
+      "newButtonVariant": "primary",
+      "rowClickEdit": true,
+      "listVariant": "compact"
+    },
     "labelOverrides": {
       "es_ES": {
         "Value": "Clave",
@@ -44,25 +42,32 @@
         "name": {
           "grid": true,
           "gridOrder": 1,
-          "grow": true,
+          "columnWidth": 164,
+          "columnMaxWidth": 240,
           "searchable": true,
           "section": "principal",
           "seq": 1,
-          "span": 2
+          "cellType": "boldText"
         },
         "overduePaymentDaysRule": {
           "grid": true,
           "gridOrder": 2,
+          "columnWidth": 124,
+          "columnMaxWidth": 148,
           "section": "principal",
           "seq": 2,
-          "span": 2
+          "stepper": true,
+          "min": 0,
+          "max": 365,
+          "integer": true,
+          "stepperRejectedKey": "paymentTermDaysNotInteger"
         },
         "default": {
           "grid": true,
           "gridOrder": 4,
+          "columnWidth": 158,
           "section": "principal",
           "seq": 3,
-          "span": 2,
           "badge": true,
           "labels": {
             "es_ES": "Por defecto",
@@ -87,11 +92,12 @@
           "visibility": "editable",
           "grid": true,
           "gridOrder": 3,
+          "columnWidth": 158,
           "section": "principal",
           "seq": 4,
-          "span": 2,
           "defaultExpr": "Y",
-          "reason": "New-record form starts ticked so it matches what PaymentTermHandler.enrichCreate derives for days != 0 (QA BUG-2, ETP-5978). The UI now always sends it, so a 0-day term keeps the user's choice instead of the derived false.",
+          "defaultValue": "Y",
+          "reason": "New-record popup starts ticked so it matches what PaymentTermHandler.enrichCreate derives for days != 0 (QA BUG-2, ETP-5978). defaultValue seeds the list-modal create popup (it does not call /defaults); defaultExpr keeps the server-side default (ETGO_SF_FIELD.DefaultValue) for the API. The UI always sends it, so a 0-day term keeps the user's choice instead of the derived false.",
           "labels": {
             "es_ES": "Siguiente día hábil",
             "en_US": "Next Business Day"

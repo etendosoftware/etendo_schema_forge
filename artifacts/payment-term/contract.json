@@ -1,17 +1,25 @@
 {
-  "version": "0.9.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-10-28T12:43:14.206Z",
-  "checksum": "8ec01d73c8b1277f",
+  "updatedAt": "2026-10-28T17:20:09.310Z",
+  "checksum": "c5128897a4012612",
   "frontendContract": {
     "window": {
       "id": "141",
       "name": "Payment Term",
       "primaryEntity": "header",
       "category": "settings",
-      "hidePrint": true,
-      "hideMoreMenu": true,
-      "hideLink": true,
+      "templateConfig": {
+        "titleKey": "paymentTermNewTitle",
+        "editTitleKey": "paymentTermEditTitle",
+        "newLabelKey": "paymentTermNew",
+        "modalVariant": "compact",
+        "hideBackButton": true,
+        "hideSearch": true,
+        "newButtonVariant": "primary",
+        "rowClickEdit": true,
+        "listVariant": "compact"
+      },
       "detailEntity": null,
       "labelOverrides": {
         "es_ES": {
@@ -31,18 +39,7 @@
           "IsNextBusinessDay": "Next Business Day"
         }
       },
-      "noHeaderBorder": true,
-      "toolbarBorderBottom": true,
-      "whiteFormBackground": true,
-      "formCardPadding": "p-2",
-      "formScrollPaddingX": "px-2",
-      "tabsBarPaddingX": "px-2",
-      "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
-      "tablePaddingX": "px-2",
-      "attachments": false,
-      "layoutType": "default",
-      "autoSaveOnBlur": true
+      "layoutType": "list-modal"
     },
     "entities": {
       "header": {
@@ -65,9 +62,10 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 1,
-            "span": 2,
+            "cellType": "boldText",
             "gridOrder": 1,
-            "grow": true,
+            "columnWidth": 164,
+            "columnMaxWidth": 240,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -85,13 +83,21 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "stepper": true,
+            "stepperRejectedKey": "paymentTermDaysNotInteger",
             "section": "principal",
             "seq": 2,
-            "span": 2,
             "gridOrder": 2,
+            "columnWidth": 124,
+            "columnMaxWidth": 148,
+            "min": 0,
+            "max": 365,
+            "integer": true,
             "validation": {
               "required": true,
-              "maxLength": 10
+              "maxLength": 10,
+              "minimum": 0,
+              "maximum": 365
             }
           },
           {
@@ -107,7 +113,6 @@
             "form": true,
             "section": "principal",
             "seq": 3,
-            "span": 2,
             "badge": true,
             "badgeLabels": {
               "true": {
@@ -128,6 +133,7 @@
               "en_US": "Default"
             },
             "gridOrder": 4,
+            "columnWidth": 158,
             "validation": {
               "maxLength": 1
             }
@@ -143,9 +149,9 @@
             "required": false,
             "grid": true,
             "form": true,
+            "defaultValue": "Y",
             "section": "principal",
             "seq": 4,
-            "span": 2,
             "badge": true,
             "badgeLabels": {
               "true": {
@@ -166,6 +172,7 @@
               "en_US": "Next Business Day"
             },
             "gridOrder": 3,
+            "columnWidth": 158,
             "validation": {
               "maxLength": 1
             }
@@ -184,9 +191,17 @@
       "name": "Payment Term",
       "primaryEntity": "header",
       "category": "settings",
-      "hidePrint": true,
-      "hideMoreMenu": true,
-      "hideLink": true,
+      "templateConfig": {
+        "titleKey": "paymentTermNewTitle",
+        "editTitleKey": "paymentTermEditTitle",
+        "newLabelKey": "paymentTermNew",
+        "modalVariant": "compact",
+        "hideBackButton": true,
+        "hideSearch": true,
+        "newButtonVariant": "primary",
+        "rowClickEdit": true,
+        "listVariant": "compact"
+      },
       "detailEntity": null,
       "labelOverrides": {
         "es_ES": {
@@ -206,17 +221,7 @@
           "IsNextBusinessDay": "Next Business Day"
         }
       },
-      "noHeaderBorder": true,
-      "toolbarBorderBottom": true,
-      "whiteFormBackground": true,
-      "formCardPadding": "p-2",
-      "formScrollPaddingX": "px-2",
-      "tabsBarPaddingX": "px-2",
-      "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
-      "tablePaddingX": "px-2",
-      "attachments": false,
-      "autoSaveOnBlur": true
+      "layoutType": "list-modal"
     },
     "entities": {
       "header": {
@@ -502,6 +507,14 @@
         "entity": "header",
         "runner": "node",
         "description": "CRUD flags for 'header' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-header-nextBusinessDay",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Default value for 'nextBusinessDay' in header should be a string"
       },
       {
         "id": "t-field-presence-header-default",
@@ -791,9 +804,10 @@
       }
     ],
     "summary": {
-      "total": 38,
+      "total": 39,
       "byCategory": {
         "crud-flags": 1,
+        "default-value-type": 1,
         "field-presence": 4,
         "field-type": 4,
         "rule-declared": 9,
@@ -802,7 +816,7 @@
         "visibility": 1
       },
       "byRunner": {
-        "node": 38,
+        "node": 39,
         "junit": 0
       }
     }

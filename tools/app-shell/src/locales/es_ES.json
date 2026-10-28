@@ -18527,7 +18527,9 @@
     "processReactivate": "Reactivar",
     "statusColumnLabel": "Estado",
     "cobrosNoun": "cobros",
+    "cobroNoun": "cobro",
     "pagosNoun": "pagos",
+    "pagoNoun": "pago",
     "cobroReactivadoOk": "Cobro reactivado correctamente",
     "pagoReactivadoOk": "Pago reactivado correctamente",
     "cobroReactivadoError": "Error al reactivar el cobro",
@@ -23177,6 +23179,9 @@
     "matchRuleTypeNamePlaceholder": "ej. Comisión bancaria",
     "paymentTermCreate": "+ Crear condición de pago",
     "paymentTermCreateTitle": "Crear condición de pago",
+    "paymentTermNewTitle": "Nueva condición de pago",
+    "paymentTermEditTitle": "Editar condición de pago",
+    "paymentTermNew": "Nueva condición de pago",
     "paymentTermDaysLabel": "Días hasta el vencimiento",
     "paymentTermDaysPlaceholder": "ej. 12",
     "paymentTermDaysSuffix": "días",
@@ -26105,7 +26110,9 @@
     "currencyRateSelectPlaceholder": "Seleccionar {label}...",
     "currencyRateEdit": "Editar tipo de cambio",
     "currencyRateNotAvailable": "No hay tipo de cambio para esta fecha. Puedes indicarlo manualmente.",
-    "currencyRatesAtDate": "Tipos al {date}"
+    "currencyRatesAtDate": "Tipos al {date}",
+    "stepperDecrease": "Disminuir",
+    "stepperIncrease": "Aumentar"
   },
   "menus": {
     "Goods Movement": {

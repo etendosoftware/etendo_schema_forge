@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-10-28T12:26:46.739Z",
-  "contractChecksum": "8ec01d73c8b1277f",
+  "updatedAt": "2026-10-28T16:02:50.951Z",
+  "contractChecksum": "c5128897a4012612",
   "apiPrediction": {
     "specName": "payment-term",
     "baseUrl": "/sws/neo/payment-term",
@@ -69,7 +69,9 @@
             "required": true
           },
           "default": {},
-          "nextBusinessDay": {}
+          "nextBusinessDay": {
+            "defaultValue": "Y"
+          }
         }
       }
     },
@@ -108,5 +110,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "04123f60471e0a29"
+  "checksum": "35609c709ae230dc"
 }
