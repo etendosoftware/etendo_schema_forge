@@ -20551,6 +20551,7 @@
     "addressLine1": "Primera línea",
     "addressLine2": "Segunda línea",
     "postalCodeLabel": "Código postal",
+    "tbaiPostalCodeMissingWarning": "Este contacto no está marcado como factura simplificada. Sin código postal, sus facturas no se podrán completar porque TicketBAI lo exige.",
     "cityLabel": "Ciudad",
     "countryLabel": "País",
     "countrySearchPlaceholder": "Buscar país...",

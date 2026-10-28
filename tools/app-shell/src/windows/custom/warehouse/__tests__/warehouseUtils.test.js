@@ -136,10 +136,10 @@ describe('aggregateProducts', () => {
       assert.equal(result[0].qty, 0);
     });
 
-    it('treats non-numeric etgoValuation as 0', () => {
+    it('treats non-numeric etgoValuation as null (no valuation), not 0', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 5, etgoValuation: 'n/a' }];
       const result = aggregateProducts(rows);
-      assert.equal(result[0].valuation, 0);
+      assert.equal(result[0].valuation, null);
     });
 
     it('coerces numeric string quantityOnHand', () => {
@@ -206,14 +206,14 @@ describe('aggregateProducts', () => {
       assert.equal(result[0].cost, 10);
     });
 
-    it('treats missing etgoCost as 0', () => {
+    it('treats missing etgoCost as null (no cost line), not 0', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5 }];
-      assert.equal(aggregateProducts(rows)[0].cost, 0);
+      assert.equal(aggregateProducts(rows)[0].cost, null);
     });
 
-    it('treats non-numeric etgoCost as 0', () => {
+    it('treats non-numeric etgoCost as null, not 0', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5, etgoCost: 'n/a' }];
-      assert.equal(aggregateProducts(rows)[0].cost, 0);
+      assert.equal(aggregateProducts(rows)[0].cost, null);
     });
 
     it('coerces numeric string etgoCost', () => {
@@ -224,15 +224,26 @@ describe('aggregateProducts', () => {
   describe('no-cost products (etgoCost / etgoValuation are JSON null)', () => {
     const base = { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 4 };
 
-    for (const empty of [null, undefined, '']) {
-      it(`treats etgoCost and etgoValuation ${JSON.stringify(empty)} as 0 without NaN`, () => {
+    for (const empty of [null, undefined, '', 'n/a', NaN]) {
+      it(`keeps etgoCost and etgoValuation ${String(JSON.stringify(empty))} as null (not 0) and still sums qty`, () => {
         const [p] = aggregateProducts([{ ...base, etgoCost: empty, etgoValuation: empty }]);
-        assert.equal(p.cost, 0);
-        assert.equal(p.valuation, 0);
-        assert.equal(Number.isNaN(p.valuation), false);
+        assert.equal(p.cost, null);
+        assert.equal(p.valuation, null);
         assert.equal(p.qty, 4);
       });
     }
+
+    it('keeps a real 0 cost and 0 valuation as 0 (distinct from no cost)', () => {
+      const [p] = aggregateProducts([{ ...base, etgoCost: 0, etgoValuation: 0 }]);
+      assert.equal(p.cost, 0);
+      assert.equal(p.valuation, 0);
+    });
+
+    it('keeps a real 0 given as a numeric string as 0', () => {
+      const [p] = aggregateProducts([{ ...base, etgoCost: '0', etgoValuation: '0' }]);
+      assert.equal(p.cost, 0);
+      assert.equal(p.valuation, 0);
+    });
 
     it('sums only the numeric valuations when some rows of the same product have none', () => {
       const rows = [
@@ -243,17 +254,51 @@ describe('aggregateProducts', () => {
       const [p] = aggregateProducts(rows);
       assert.equal(p.valuation, 60);
       assert.equal(p.qty, 12);
-      assert.equal(Number.isNaN(p.valuation), false);
     });
 
-    it('stays 0 when a first no-cost row is followed by another no-cost row', () => {
+    it('starts from a null first row and sums the later numeric valuations', () => {
+      const rows = [
+        { ...base, etgoValuation: null },
+        { ...base, etgoValuation: 25 },
+      ];
+      assert.equal(aggregateProducts(rows)[0].valuation, 25);
+    });
+
+    it('stays null when every row of the product has no cost and no valuation', () => {
       const rows = [
         { ...base, etgoCost: null, etgoValuation: null },
         { ...base, etgoCost: null, etgoValuation: null },
       ];
       const [p] = aggregateProducts(rows);
-      assert.equal(p.valuation, 0);
-      assert.equal(p.cost, 0);
+      assert.equal(p.valuation, null);
+      assert.equal(p.cost, null);
+    });
+
+    it('uses a later row cost when the first row cost is null', () => {
+      const rows = [
+        { ...base, etgoCost: null, etgoValuation: null },
+        { ...base, etgoCost: 25, etgoValuation: 100 },
+      ];
+      const [p] = aggregateProducts(rows);
+      assert.equal(p.cost, 25);
+      assert.equal(p.valuation, 100);
+    });
+
+    it('keeps the first non-null cost over later different costs', () => {
+      const rows = [
+        { ...base, etgoCost: null },
+        { ...base, etgoCost: 25 },
+        { ...base, etgoCost: 99 },
+      ];
+      assert.equal(aggregateProducts(rows)[0].cost, 25);
+    });
+
+    it('keeps a first real 0 cost over a later non-zero cost', () => {
+      const rows = [
+        { ...base, etgoCost: 0 },
+        { ...base, etgoCost: 7 },
+      ];
+      assert.equal(aggregateProducts(rows)[0].cost, 0);
     });
 
     it('sums negative qty with negative valuation correctly', () => {
