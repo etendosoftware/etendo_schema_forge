@@ -1,0 +1,420 @@
+name: Deploy Public API gateway
+
+# Builds the public API gateway image (gateway/, ETP-5345) and deploys it to
+# production on every merge to main that touches it.
+#
+# WHY THIS EXISTS
+# Until 2026-10-28 this service was deployed by hand from a developer machine
+# following docs/ops/public-api-gateway-deploy.md (ETP-5862). This workflow is
+# that runbook, automated: same build, same tag convention, same smoke checks,
+# plus rollback when something fails.
+#
+# THE CORE IS TAKEN FROM THE PIN, NOT FROM ITS main
+# The Dockerfile builds whatever sits in .schema_forge_core. This repo already
+# pins schema_forge_core in package.json (@etendosoftware/schema-forge-core,
+# bumped by bump-core-on-release.yml), and every core release is a git tag with
+# that version. So the core is checked out at the tag of the pinned version:
+# a core change reaches production only when its bump PR reaches main, and the
+# image is reproducible from this repo's commit alone.
+#
+# PRODUCTION ONLY
+# There is a single service, etendo-public-api-service in etendo-production.
+# A merge to main reaches it directly. That is deliberate and was asked for;
+# to put a human in front of it, attach a GitHub Environment with required
+# reviewers to the job (that also changes the OIDC sub — update the role).
+#
+# CREDENTIALS
+# AWS via OIDC role etendo-public-api-deploy (infra repo, 14-security.yaml).
+# No static AWS keys. The role can only push to ECR etendo/public-api-gateway
+# and update this one service. schema_forge_core is read with the read-only
+# deploy key CORE_DEPLOY_KEY.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gateway/**'
+      - 'public-api/**'
+      # The schema_forge_core pin lives here.
+      - 'package.json'
+      - '.github/workflows/deploy-public-api.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'gateway/**'
+      - 'public-api/**'
+      - 'package.json'
+      - '.github/workflows/deploy-public-api.yml'
+  workflow_dispatch:
+    inputs:
+      redeploy_tag:
+        description: 'Existing ECR tag to redeploy (blank = build from this branch). Use this to roll back.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Serialised so a manual rollback can never race a push-triggered deploy of the
+# same service. cancel-in-progress stays false: cancelling mid-`update-service`
+# would leave the service half-deployed with nothing watching it.
+concurrency:
+  group: public-api-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-3
+  AWS_ACCOUNT: '278186107973'
+  ECR_REPOSITORY: etendo/public-api-gateway
+  ECS_CLUSTER: etendo-production
+  ECS_SERVICE: etendo-public-api-service
+  CONTAINER: public-api-gateway
+  PUBLIC_HOST: https://app.etendo.ai
+  DEPLOY_ROLE: arn:aws:iam::278186107973:role/etendo-public-api-deploy
+
+jobs:
+  deploy:
+    name: Build, verify & deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # OIDC — this is what replaces a static AWS key
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve what this run does
+        id: plan
+        run: |
+          set -euo pipefail
+          REDEPLOY_TAG="${{ inputs.redeploy_tag }}"
+
+          if [ -n "$REDEPLOY_TAG" ]; then
+            BUILD=false; DEPLOY=true
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # A PR proves the image still builds and boots. It never publishes
+            # and never deploys.
+            BUILD=true; DEPLOY=false
+          else
+            BUILD=true; DEPLOY=true
+          fi
+
+          CORE_VERSION=$(jq -r '.dependencies["@etendosoftware/schema-forge-core"] // .devDependencies["@etendosoftware/schema-forge-core"] // empty' package.json)
+          # The pin is an exact version, which is also the core's git tag. A
+          # range (^, ~) has no single tag to check out — refuse to guess.
+          printf '%s' "$CORE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::schema-forge-core pin in package.json is '$CORE_VERSION', expected an exact x.y.z"; exit 1; }
+
+          {
+            echo "build=$BUILD"
+            echo "deploy=$DEPLOY"
+            echo "redeploy_tag=$REDEPLOY_TAG"
+            echo "core_version=$CORE_VERSION"
+            echo "sf_sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD deploy=$DEPLOY core=$CORE_VERSION redeploy=${REDEPLOY_TAG:-none}"
+
+      - name: Checkout schema_forge_core at the pinned version
+        if: steps.plan.outputs.build == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: etendosoftware/schema_forge_core
+          ref: refs/tags/${{ steps.plan.outputs.core_version }}
+          ssh-key: ${{ secrets.CORE_DEPLOY_KEY }}
+          path: .schema_forge_core
+          persist-credentials: false
+
+      - name: Compute image tag
+        id: tag
+        if: steps.plan.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          # Runbook convention: sf-<sf short sha>-core-<core short sha>.
+          TAG="sf-$(git rev-parse --short=7 HEAD)-core-$(git -C .schema_forge_core rev-parse --short=7 HEAD)"
+          {
+            echo "image_tag=$TAG"
+            echo "core_sha=$(git -C .schema_forge_core rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"
+          grep '"version"' .schema_forge_core/packages/api-gateway-core/package.json
+
+      - name: Build image
+        if: steps.plan.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 -f gateway/Dockerfile \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "com.etendo.schema-forge-core.version=${{ steps.plan.outputs.core_version }}" \
+            -t "public-api-gateway:${{ steps.tag.outputs.image_tag }}" .
+
+      # Boots the real image with no configuration. NEO_BASE_URL has a default,
+      # so the gateway starts offline and serves its docs; a data request with
+      # no key is rejected by the key guard before NEO is ever called. This is
+      # what would catch a broken build or a schema that no longer loads before
+      # it reaches production.
+      - name: Smoke test the image
+        if: steps.plan.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          IMAGE="public-api-gateway:${{ steps.tag.outputs.image_tag }}"
+
+          CID=$(docker run -d -p 4300:4300 "$IMAGE")
+          trap 'docker logs "$CID" 2>&1 | tail -60; docker rm -f "$CID" >/dev/null 2>&1 || true' EXIT
+
+          UP=false
+          for i in $(seq 1 30); do
+            if curl -sf -m 5 -o /dev/null http://localhost:4300/healthz; then UP=true; break; fi
+            sleep 2
+          done
+          [ "$UP" = "true" ] || { echo "::error::image never answered /healthz within 60s"; exit 1; }
+          echo "ok  /healthz"
+
+          check() { # path expected_status
+            CODE=$(curl -s -m 10 -o body.txt -w '%{http_code}' "http://localhost:4300$1")
+            [ "$CODE" = "$2" ] || { echo "::error::$1 -> $CODE (expected $2)"; head -c 300 body.txt; exit 1; }
+            echo "ok  $1 -> $CODE"
+          }
+          check /api 200
+          check /api/openapi.json 200
+          grep -q '"openapi"' body.txt || { echo "::error::/api/openapi.json is not an OpenAPI document"; exit 1; }
+          check /api/v1/products 401
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.plan.outputs.deploy == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE }}
+          role-session-name: gha-public-api-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm the assumed identity
+        if: steps.plan.outputs.deploy == 'true'
+        run: aws sts get-caller-identity --output table
+
+      - name: Push to ECR
+        if: steps.plan.outputs.deploy == 'true' && steps.plan.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          REGISTRY="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          TAG="${{ steps.tag.outputs.image_tag }}"
+
+          # The tag is derived from both commits, so it already exists only when
+          # this exact source was published before (a re-run). That image passed
+          # this same smoke test; reuse it rather than move a tag that a running
+          # task definition may point at — the repository is MUTABLE.
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+               --image-ids imageTag="$TAG" --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "::warning::tag $TAG already in $ECR_REPOSITORY — reusing it, not pushing"
+            exit 0
+          fi
+
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$REGISTRY"
+
+          docker tag "public-api-gateway:${TAG}" "${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+          docker push "${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+          echo "pushed ${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+
+      - name: Resolve image reference
+        id: image
+        if: steps.plan.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          REGISTRY="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          TAG="${{ steps.plan.outputs.redeploy_tag }}"
+          [ -n "$TAG" ] || TAG="${{ steps.tag.outputs.image_tag }}"
+
+          DIGEST=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$TAG" --region "$AWS_REGION" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ] \
+            || { echo "::error::tag $TAG not found in $ECR_REPOSITORY"; exit 1; }
+
+          # Deploy by digest, never by tag: what ECS pulls is then exactly what
+          # this run verified, even if someone later moves the tag.
+          {
+            echo "tag=$TAG"
+            echo "digest=$DIGEST"
+            echo "ref=${REGISTRY}/${ECR_REPOSITORY}@${DIGEST}"
+          } >> "$GITHUB_OUTPUT"
+          echo "deploying $TAG ($DIGEST)"
+
+      - name: Register task definition
+        id: register
+        if: steps.plan.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+
+          # Cloned from the revision the service is ACTUALLY running, not from
+          # the latest revision in the family: a revision registered by hand
+          # would otherwise leak its overrides into the next deploy.
+          CURRENT_TD=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --region "$AWS_REGION" --query 'services[0].taskDefinition' --output text)
+          case "$CURRENT_TD" in
+            arn:aws:ecs:*:task-definition/*) : ;;
+            *) echo "::error::could not read the running task definition of $ECS_SERVICE (got '$CURRENT_TD')"; exit 1 ;;
+          esac
+
+          # Captured before anything changes and used verbatim on rollback.
+          echo "previous_td=$CURRENT_TD" >> "$GITHUB_OUTPUT"
+
+          aws ecs describe-task-definition --task-definition "$CURRENT_TD" \
+            --region "$AWS_REGION" --query 'taskDefinition' > current-td.json
+
+          FOUND=$(jq --arg c "$CONTAINER" '[.containerDefinitions[] | select(.name == $c)] | length' current-td.json)
+          [ "$FOUND" = "1" ] || { echo "::error::expected one container named $CONTAINER, found $FOUND — refusing to guess"; exit 1; }
+
+          jq --arg img "${{ steps.image.outputs.ref }}" --arg c "$CONTAINER" '
+            (.containerDefinitions[] | select(.name == $c) | .image) = $img
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+          ' current-td.json > new-td.json
+
+          NEW_TD=$(aws ecs register-task-definition --cli-input-json file://new-td.json \
+            --region "$AWS_REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
+          # The task definition may carry environment values; do not leave it
+          # around for later steps to upload or print.
+          rm -f current-td.json new-td.json
+
+          echo "new_td=$NEW_TD" >> "$GITHUB_OUTPUT"
+          echo "previous=${CURRENT_TD##*/}  new=${NEW_TD##*/}"
+
+      - name: Update service and wait
+        if: steps.plan.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+            --task-definition "${{ steps.register.outputs.new_td }}" \
+            --region "$AWS_REGION" --query 'service.taskDefinition' --output text
+
+          # The waiter can return before ECS marks the rollout, so poll the
+          # PRIMARY deployment's rolloutState with a bound. An empty or
+          # unreadable value is NOT a verdict: this step decides whether the
+          # rollback runs, so "could not read" must never look like "failed".
+          STATE=""
+          for i in $(seq 1 40); do
+            STATE=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+              --region "$AWS_REGION" \
+              --query 'services[0].deployments[?status==`PRIMARY`] | [0].rolloutState' --output text) \
+              || STATE="UNREADABLE"
+            echo "[$i] rolloutState=$STATE"
+            case "$STATE" in
+              COMPLETED) break ;;
+              FAILED) echo "::error::ECS reported rolloutState=FAILED"; exit 1 ;;
+            esac
+            sleep 15
+          done
+
+          case "$STATE" in
+            COMPLETED) : ;;
+            IN_PROGRESS) echo "::error::rollout still IN_PROGRESS after 10 min"; exit 1 ;;
+            *) echo "::error::could not read rolloutState (last value '$STATE') — not concluding anything; check the service by hand"; exit 1 ;;
+          esac
+
+          RUNNING_TD=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --region "$AWS_REGION" --query 'services[0].taskDefinition' --output text)
+          echo "rolloutState=$STATE runningTaskDefinition=${RUNNING_TD##*/}"
+          [ "$RUNNING_TD" = "${{ steps.register.outputs.new_td }}" ] \
+            || { echo "::error::service is not running the task definition we registered"; exit 1; }
+
+      # Asserts against the TASKS THAT ARE ACTUALLY RUNNING, not the service
+      # record: a service can read stable while a task from the previous
+      # revision is still the one serving. Digest equality cannot lie.
+      - name: Verify the running task is the image we deployed
+        if: steps.plan.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          EXPECTED="${{ steps.image.outputs.ref }}"
+
+          TASKS=$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" \
+            --desired-status RUNNING --region "$AWS_REGION" --query 'taskArns' --output text)
+          [ -n "$TASKS" ] && [ "$TASKS" != "None" ] || { echo "::error::no RUNNING tasks after rollout"; exit 1; }
+
+          FAILED=0
+          for T in $TASKS; do
+            INFO=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$T" --region "$AWS_REGION" \
+              --query "tasks[0].[taskDefinitionArn,healthStatus,containers[?name=='${CONTAINER}'] | [0].imageDigest]" \
+              --output text)
+            TD=$(printf '%s' "$INFO" | cut -f1)
+            HEALTH=$(printf '%s' "$INFO" | cut -f2)
+            DIG=$(printf '%s' "$INFO" | cut -f3)
+            echo "task ${T##*/}: td=${TD##*/} health=$HEALTH digest=$DIG"
+
+            [ "$TD" = "${{ steps.register.outputs.new_td }}" ] \
+              || { echo "::error::task ${T##*/} still runs ${TD##*/}"; FAILED=1; }
+            # HEALTHY = the task definition's own check, a fetch of
+            # localhost:4300/healthz inside the container.
+            [ "$HEALTH" = "HEALTHY" ] \
+              || { echo "::error::task ${T##*/} health is $HEALTH"; FAILED=1; }
+            case "$EXPECTED" in
+              *"@$DIG") : ;;
+              *) echo "::error::task ${T##*/} runs digest $DIG, expected ${EXPECTED##*@}"; FAILED=1 ;;
+            esac
+          done
+          [ "$FAILED" = "0" ] || exit 1
+          echo "ok  every running task is the deployed image and healthy"
+
+      # Runbook section 6, through CloudFront and the ALB. /healthz is not
+      # routed on the public host (it returns the SPA), so it is not used here.
+      # Bodies go to a file: piping curl into `head` makes curl exit 23 and,
+      # under pipefail, fails a deploy that is fine.
+      - name: Smoke test through the public host
+        if: steps.plan.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          check() { # path expected_status
+            CODE=$(curl -s -m 20 -o body.txt -w '%{http_code}' "$PUBLIC_HOST$1")
+            [ "$CODE" = "$2" ] || { echo "::error::$PUBLIC_HOST$1 -> $CODE (expected $2)"; head -c 300 body.txt; exit 1; }
+            echo "ok  $1 -> $CODE"
+          }
+          check /api 200
+          check /api/openapi.json 200
+          grep -q '"openapi"' body.txt || { echo "::error::/api/openapi.json is not an OpenAPI document"; exit 1; }
+          # 401 with a JSON body from the gateway, not a CloudFront/ALB error page.
+          check /api/v1/products 401
+          jq -e . body.txt >/dev/null || { echo "::error::/api/v1/products 401 body is not JSON — not the gateway answering"; exit 1; }
+
+      # Belt and braces: the service's ECS circuit breaker is disabled, so this
+      # is the only automatic way back.
+      - name: Roll back
+        if: failure() && steps.plan.outputs.deploy == 'true' && steps.register.outputs.previous_td != ''
+        run: |
+          set -euo pipefail
+          PREV="${{ steps.register.outputs.previous_td }}"
+
+          echo "::warning::rolling $ECS_SERVICE in $ECS_CLUSTER back to ${PREV##*/}"
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+            --task-definition "$PREV" --region "$AWS_REGION" >/dev/null
+
+          if aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --region "$AWS_REGION"; then
+            echo "rollback complete — running ${PREV##*/}"
+          else
+            echo "::error::rollback did not stabilise. Manual step: aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition $PREV --region $AWS_REGION"
+            exit 1
+          fi
+
+      # The run summary is the deployment record (runbook section 8): it carries
+      # both full SHAs, the tag and the rollback target.
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Public API gateway deploy"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| etendo_schema_forge | \`${{ steps.plan.outputs.sf_sha }}\` |"
+            echo "| schema_forge_core | \`${{ steps.plan.outputs.core_version }}\` \`${{ steps.tag.outputs.core_sha }}\` |"
+            echo "| built | \`${{ steps.plan.outputs.build }}\` |"
+            echo "| deployed | \`${{ steps.plan.outputs.deploy }}\` |"
+            echo "| tag | \`${{ steps.image.outputs.tag || steps.tag.outputs.image_tag }}\` |"
+            echo "| digest | \`${{ steps.image.outputs.digest }}\` |"
+            echo "| task definition | \`${{ steps.register.outputs.new_td }}\` |"
+            echo "| previous (rollback target) | \`${{ steps.register.outputs.previous_td }}\` |"
+            if [ "${{ steps.plan.outputs.deploy }}" != "true" ]; then
+              echo
+              echo "Pull request: image built and smoke-tested, nothing published or deployed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
