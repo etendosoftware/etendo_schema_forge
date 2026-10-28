@@ -270,10 +270,10 @@ describe('NotPostedDocumentsPage — rows', () => {
     expect(screen.queryByTestId('npd-status-doc-4')).not.toBeInTheDocument();
   });
 
-  it('colours the status badge from the shared posting registry: Periodo cerrado is red (ETP-5647)', async () => {
+  it('colours the status badge from the shared posting registry: Período cerrado is orange (ETP-5647, ETP-5591)', async () => {
     renderPage();
     await waitFor(() => rowOf('doc-3'));
-    expect(screen.getByTestId('npd-status-doc-3').querySelector('.status-tag--destructive')).not.toBeNull();
+    expect(screen.getByTestId('npd-status-doc-3').querySelector('.status-tag--caution')).not.toBeNull();
     expect(screen.getByTestId('npd-status-doc-1').querySelector('.status-tag--destructive')).not.toBeNull();
   });
 

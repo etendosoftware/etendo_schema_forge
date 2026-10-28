@@ -12,6 +12,7 @@ const DOT_COLOR = {
   success: 'var(--status-success-fg)',
   warning: 'var(--status-warning-fg)',
   destructive: 'hsl(var(--destructive))',
+  caution: 'var(--status-caution-fg)',
   neutral: 'hsl(var(--muted-foreground))',
 };
 

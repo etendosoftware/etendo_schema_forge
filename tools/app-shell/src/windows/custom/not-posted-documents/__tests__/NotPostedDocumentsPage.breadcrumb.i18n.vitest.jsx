@@ -129,7 +129,7 @@ describe('NotPostedDocumentsPage — toolbar and status copy against the real lo
     expect(screen.getByTestId('npd-filter-document-type')).toHaveTextContent('Todos los documentos');
     expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('Todos los estados');
     expect(screen.getByTestId('npd-filter-date-range')).toHaveTextContent('Últimos 12 meses');
-    expect(screen.getByTestId('npd-status-doc-1')).toHaveTextContent('Periodo cerrado');
+    expect(screen.getByTestId('npd-status-doc-1')).toHaveTextContent('Período cerrado');
     expect(screen.getByTestId('npd-status-doc-2')).toHaveTextContent('No contabilizado');
     expect(screen.getByTestId('npd-post-row-doc-1')).toHaveTextContent('Contabilizar');
     expect(screen.getByTestId('npd-open-row-doc-1')).toHaveTextContent('Abrir documento');
