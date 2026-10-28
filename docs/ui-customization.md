@@ -518,7 +518,7 @@ For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`,
 
 Payments (cobros) are deliberately **not** related documents: no sales or purchase order/invoice lists its payments as chips (functional decision, ETP-5527 / ETP-5539). Do not add a payments source to a definition.
 
-The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
+The definition always reads the **detail** record: `linkedShipments`, `originInvoices`, `rectifyingInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 
 `RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
 

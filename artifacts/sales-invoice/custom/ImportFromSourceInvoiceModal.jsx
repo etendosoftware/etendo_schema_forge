@@ -32,15 +32,15 @@ import { apiFetch as moduleApiFetch } from '@/auth/api.js';
  * choice in the popup by design — if a positive correction is intended, the
  * user edits the line by hand after import.
  *
- * After import, this modal PATCHes the header's `originInvoices` virtual
- * field (`AbstractInvoiceHeaderHandler#persistOriginInvoice`) with the FULL
- * set of ids imported in this run, so the rectificativa stays linked to
- * EVERY source invoice it was imported from — not just the last one
- * (ETP-4919: importing from a second source invoice used to silently drop
- * the link to the first, both because of the `size !== 1` guard removed
- * below and because the backend used to delete-then-single-create). Same
- * mechanism as purchase-invoice, surfaced back on GET via
- * `enrichOriginInvoice`/`originInvoices`.
+ * Origin link (ETP-6002): this modal no longer PATCHes the header. Each line
+ * POST carries `sourceInvoiceLineId`, and the backend (`SalesInvoiceLineHandler`
+ * → `SalesRectificativeLineLinkSupport`) writes the `C_Invoice_Reverse` row to
+ * that line's invoice in the same transaction as the line, deduplicated, so the
+ * rectificativa ends up linked to EVERY source invoice it was imported from
+ * (ETP-4919). The old header PATCH always failed with 409 `stale_record`
+ * (creating the lines moves the header's `updated`) and its result was ignored.
+ * Surfaced back on GET via `enrichOriginInvoice`/`originInvoices`.
+ * purchase-invoice still links through its header PATCH.
  *
  * Duplicate detection: each imported line carries `sourceInvoiceLineId` (the source
  * C_InvoiceLine id) in its POST body, persisted by `InvoiceLineHandler#persistSourceInvoiceLine`
@@ -142,20 +142,11 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
   };
 };
 
-const afterImport = async ({ importedDocIds, base, invoiceId }) => {
-  // ETP-4919: importing from a second (or third...) source invoice must not lose the link to
-  // the ones already imported — send the FULL set, not just guard on exactly one.
-  if (importedDocIds.size === 0) return;
-  try {
-    await moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
-      method: 'PATCH',
-      
-      body: JSON.stringify({ originInvoices: [...importedDocIds] }),
-    });
-  } catch {
-    // best-effort — the lines are already imported regardless of this link.
-  }
-};
+// No afterImport: the rectificative's C_Invoice_Reverse link to the source invoice is written by
+// the backend when each line is created with sourceInvoiceLineId (ETP-6002,
+// SalesRectificativeLineLinkSupport in com.etendoerp.go). The header PATCH that used to do it
+// carried the `updated` token read before the import; creating the lines recalculates the header
+// totals, so it always came back 409 stale_record and the link was never written.
 
 export default function ImportFromSourceInvoiceModal(props) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
@@ -178,7 +169,6 @@ export default function ImportFromSourceInvoiceModal(props) {
       fetchLines={fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
-      afterImport={afterImport}
     />
   );
 }
