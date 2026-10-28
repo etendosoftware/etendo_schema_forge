@@ -357,3 +357,33 @@ test('every operation documents 429 with its rate-limit headers; list operations
   }
   assert.match(paths['/api/v1/product'].get.responses['400'].description, /source\.parameter/);
 });
+
+test('a write body lists only writable fields, marks the declared required ones, and a response lists only readable fields', () => {
+  const writable: PublicApiSchema = {
+    apiVersion: 'v1',
+    entities: {
+      product: {
+        publicApi: true,
+        specName: 'product',
+        operations: ['GET', 'LIST', 'POST', 'PATCH'],
+        fields: {
+          search_key: { publicApi: true, direction: 'inout', required: true, internalPath: 'searchKey', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+          name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+          sale_price: { publicApi: true, direction: 'out', internalPath: 'salePrice', type: 'passthrough', dataType: { type: 'number' }, handlerId: null },
+          secret_input: { publicApi: true, direction: 'in', internalPath: 'secretInput', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+          category: { publicApi: true, direction: 'out', internalPath: 'productCategory', type: 'passthrough', dataType: { type: 'string' }, handlerId: null, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'category' } },
+        },
+      },
+    },
+  } as unknown as PublicApiSchema;
+  const paths = buildPerEntityOpenApiPaths(writable);
+  const body = paths['/api/v1/product'].post.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.deepEqual(Object.keys(body.properties.attributes.properties).sort(), ['name', 'search_key', 'secret_input']);
+  assert.deepEqual(body.properties.attributes.required, ['search_key']);
+  assert.equal(body.properties.relationships, undefined, 'a read-only relationship is not offered on write');
+
+  const read = paths['/api/v1/product/{id}'].get.responses['200'].content!['application/json'].schema.properties!.data as any;
+  assert.deepEqual(Object.keys(read.properties.attributes.properties).sort(), ['name', 'sale_price', 'search_key']);
+  assert.equal(read.properties.attributes.required, undefined);
+  assert.ok(read.properties.relationships.properties.category);
+});

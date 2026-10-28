@@ -2,6 +2,7 @@ import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import {
   DEFAULT_PAGE_SIZE, MAX_FILTERS, MAX_PAGE_SIZE, MAX_SORT_FIELDS, filterOperatorsFor, isReadable, isSortable, kindOf,
 } from '../public-api/json-api-query.ts';
+import { isWritable } from '../public-api/json-api-request.ts';
 
 type JsonSchema = {
   type: 'array' | 'object' | 'string';
@@ -10,7 +11,7 @@ type JsonSchema = {
   required?: string[];
 };
 
-type FieldSchema = { type: string; format?: string; enum?: string[]; description?: string; properties?: Record<string, FieldSchema>; items?: FieldSchema };
+type FieldSchema = { type: string; format?: string; enum?: string[]; description?: string; properties?: Record<string, FieldSchema>; items?: FieldSchema; required?: string[] };
 
 export interface OpenApiParameter {
   name: string;
@@ -203,6 +204,8 @@ function listQueryParameters(entity: PublicApiEntity): OpenApiParameter[] {
 }
 
 // `meta.etag` is response-only: the version travels in If-Match, never in a body.
+// A request body lists only what the gateway accepts on write (and marks the fields
+// declared `required`); a response lists only what it returns.
 function resourceSchema(
   entityName: string,
   entity: PublicApiEntity,
@@ -210,10 +213,14 @@ function resourceSchema(
   { request = false }: { request?: boolean } = {},
 ): JsonSchema {
   const relationshipProperties: Record<string, FieldSchema> = {};
-  const attributeProperties = { ...properties };
+  const published = request ? isWritable : isReadable;
+  const attributeProperties = Object.fromEntries(
+    Object.entries(properties).filter(([fieldName]) => published(entity.fields[fieldName] as any)),
+  );
   for (const [fieldName, field] of Object.entries(entity.fields) as Array<[string, typeof entity.fields[string] & { relationship?: { resource: string; foreignKey?: string } }]>) {
     if (!field.relationship) continue;
     delete attributeProperties[fieldName];
+    if (!published(field as any)) continue;
     relationshipProperties[fieldName] = {
       type: 'object',
       description: `Relationship to ${field.relationship.resource}. Foreign key: ${field.relationship.foreignKey ?? fieldName}.`,
@@ -228,14 +235,19 @@ function resourceSchema(
       },
     };
   }
+  const requiredOf = (names: string[]) => request
+    ? names.filter((fieldName) => (entity.fields[fieldName] as { required?: boolean }).required === true)
+    : [];
+  const requiredAttributes = requiredOf(Object.keys(attributeProperties));
+  const requiredRelationships = requiredOf(Object.keys(relationshipProperties));
   return {
     type: 'object',
     properties: {
       type: { type: 'string', enum: [entityName], description: `Resource type: ${entityName}.` },
       id: { type: 'string' },
-      attributes: { type: 'object', properties: attributeProperties },
+      attributes: { type: 'object', properties: attributeProperties, ...(requiredAttributes.length ? { required: requiredAttributes } : {}) },
       ...(Object.keys(relationshipProperties).length
-        ? { relationships: { type: 'object', properties: relationshipProperties } }
+        ? { relationships: { type: 'object', properties: relationshipProperties, ...(requiredRelationships.length ? { required: requiredRelationships } : {}) } }
         : {}),
       ...(isVersioned(entity) && !request
         ? { meta: { type: 'object', properties: { etag: { type: 'string', description: 'Same value as the ETag header; send it in If-Match to update this record.' } } } }

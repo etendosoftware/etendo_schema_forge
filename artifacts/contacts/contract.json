@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-27T11:23:38.620Z",
-  "checksum": "31c2ecc5ba6a17e6",
+  "updatedAt": "2026-10-28T16:07:37.256Z",
+  "checksum": "7cf6564b25ae29a5",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -556,7 +556,8 @@
               "exposed": true,
               "name": "name",
               "type": "passthrough",
-              "handlerId": null
+              "handlerId": null,
+              "required": true
             }
           },
           {

@@ -374,7 +374,7 @@ test('a code-less single "Missing required field" message is coded missing_requi
   const mapped = await statusAndErrors(controllerAnswering(400, { error: { message: 'Missing required field: name' } }).create('product', { name: 'x' }, request));
   assert.equal(mapped.errors?.[0].source?.pointer, '/data/attributes/name');
   const other = await statusAndErrors(controllerAnswering(400, { error: { message: 'Something else' } }).create('product', { name: 'x' }, request));
-  assert.equal(other.errors?.[0].code, undefined);
+  assert.equal(other.errors?.[0].code, 'bad_request', 'any other refusal still carries the code of its status');
 });
 
 test('every plain 4xx exception carries a code', () => {
@@ -569,7 +569,7 @@ test('carries Etendo structured error details (nested and flat shapes) into the 
   const nested = await statusAndErrors(
     controllerAnswering(400, { error: { message: 'Name is required', status: 400 } }).create('product', { name: 'x' }, request),
   );
-  assert.deepEqual(nested, { status: 400, errors: [{ status: '400', title: 'Bad Request', detail: 'Name is required' }] });
+  assert.deepEqual(nested, { status: 400, errors: [{ status: '400', code: 'bad_request', title: 'Bad Request', detail: 'Name is required' }] });
 
   const flat = await statusAndErrors(controllerAnswering(409, {
     status: 409, error: 'stale_record', message: 'Record changed', detail: 'Modified by someone else.', hint: 'Read it again.',
@@ -609,7 +609,7 @@ test('falls back to a generic detail when Etendo answers an error without a JSON
   const result = await statusAndErrors(controllerAnswering(404, null).get('product', 'p-1', request));
   assert.deepEqual(result, {
     status: 404,
-    errors: [{ status: '404', title: 'Not Found', detail: 'Etendo refused the request with status 404.' }],
+    errors: [{ status: '404', code: 'not_found', title: 'Not Found', detail: 'Etendo refused the request with status 404.' }],
   });
 });
 

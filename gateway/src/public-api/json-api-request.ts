@@ -8,7 +8,7 @@ import { isRecord } from './json-api-http.ts';
 
 type WritableField = PublicApiField & { direction?: string; relationship?: { resource: string } };
 
-const isWritable = (field: WritableField | undefined): field is WritableField =>
+export const isWritable = (field: WritableField | undefined): field is WritableField =>
   Boolean(field) && ['in', 'inout'].includes(field?.direction ?? '');
 
 /** The `attributes` and `relationships` a body carries; both are optional in a JSON:API body. */

@@ -44,6 +44,18 @@ Entity: only `GET`/`LIST`, every field `out`:
 "costing": { "publicApi": { "readOnly": true }, "fields": { } }
 ```
 
+## 2b. Mark a writable field as required
+
+Declare it on the field; the OpenAPI write body then lists it under `required`:
+
+```json
+"searchKey": { "visibility": "editable", "publicApi": { "exposed": true, "required": true } }
+```
+
+Declare only fields the API really refuses to create without. The contract's own `required`
+is not used: it also covers fields NEO fills by itself (an order's address, price list or
+payment terms). A read-only field is never marked required.
+
 ## 3. Add input-only fields
 
 Values the API accepts that are not contract fields. `readable: true` also returns them on GET

@@ -251,6 +251,9 @@ export function inputFieldsOf(decisions, entityName) {
 // - `entities.<entity>.publicApi.readOnly: true`: GET/LIST only, every field `out`.
 // - `entities.<entity>.fields.<field>.publicApi.readOnly: true` (or the entity-level list
 //   `entities.<entity>.publicApi.readOnlyFields: ["field"]`): the field is `out`.
+// - `entities.<entity>.fields.<field>.publicApi.required: true`: a writable field the API
+//   refuses to create without. Declared, not derived: the contract's `required` also covers
+//   fields NEO fills by itself (e.g. an order's address or price list).
 // Field names are the internal (contract) names. Platform guardrails
 // (`neverExposedFields`, fiscal monitors) are applied by the generator and win over this.
 export function exposurePolicyOf(decisions, entityName) {
@@ -261,16 +264,20 @@ export function exposurePolicyOf(decisions, entityName) {
   for (const [name, field] of Object.entries(entity?.fields ?? {})) {
     if (field?.publicApi?.readOnly === true) readOnlyFields.add(name);
   }
+  const requiredFields = new Set(
+    Object.entries(entity?.fields ?? {}).filter(([, field]) => field?.publicApi?.required === true).map(([name]) => name),
+  );
   return {
     actions: Array.isArray(actions) ? actions : [],
     readOnly: entity?.publicApi?.readOnly === true,
     readOnlyFields,
+    requiredFields,
   };
 }
 
 export function buildEntity({
   specName, entityName, contract, functional, parent, rawEntity, inputFields = [],
-  policy = { actions: [], readOnly: false, readOnlyFields: new Set() },
+  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set() },
 }) {
   const source = contract.frontendContract.entities[entityName];
   const backend = contract.backendContract ?? {};
@@ -304,14 +311,16 @@ export function buildEntity({
     if (fields[apiName]) {
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
     }
+    const direction = writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out';
     fields[apiName] = {
       sourceVisibility: field.visibility,
-      direction: writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out',
+      direction,
       internalPath: field.name,
       type: 'passthrough',
       dataType: openApiType(field.type),
       reference: field.reference ?? null,
       handlerId: null,
+      ...(direction === 'inout' && policy.requiredFields?.has(field.name) ? { required: true } : {}),
     };
   }
 
@@ -465,6 +474,10 @@ export async function generateManifest({
       const isPrimary = entityName === primaryEntityName;
       let parent = null;
       if (!isPrimary && excludedChildTabs.some((pattern) => pattern.test(source.tabName ?? ''))) continue;
+      // A tab under a child tab (`subline`, AD level 2) is filtered by that child's record, but the
+      // gateway nests one level only and would pass it the window's id: it always read empty
+      // (ETP-6012, purchase-order line-tax). Not published until nested children are supported.
+      if (!isPrimary && rawEntity?.level === 'subline') continue;
       if (!isPrimary && rawEntity && rawEntity.tableName !== primaryTable && primaryTable && primaryIdField) {
         const parentField = (rawEntity.fields ?? []).find((field) =>
           field.visibility === 'system' &&
