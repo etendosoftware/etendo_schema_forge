@@ -20293,6 +20293,7 @@
     "addressLine1": "1st line",
     "addressLine2": "2nd line",
     "postalCodeLabel": "Postal code",
+    "tbaiPostalCodeMissingWarning": "This contact is not flagged as simplified invoice. Without a postal code, its invoices cannot be completed because TicketBAI requires it.",
     "cityLabel": "City",
     "countryLabel": "Country",
     "countrySearchPlaceholder": "Search country...",

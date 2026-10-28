@@ -386,8 +386,9 @@ already recorded ("Rechazado") is not duplicated. Runtime details:
 7. An invoice dated before the org's adoption date still offers nothing and shows "—".
 8. Open a completed invoice in the preview: Estado SII / TicketBAI / VERI\*FACTU render as coloured
    chips matching the grid; a system that does not apply to the invoice shows "—".
-9. With TicketBAI active, remove the postal code from the customer's invoice address and send: the
-   error message has no `OBException:` prefix, and the TicketBAI chip shows "Error" in the preview and
+9. With TicketBAI active, complete the invoice first, then remove the postal code from the customer's
+   invoice address and send (since ETP-5824 a non-simplified customer with no postal code can no
+   longer be completed, see the ETP-5824 section below): the error message has no `OBException:` prefix, and the TicketBAI chip shows "Error" in the preview and
    the grid. Fix the postal code and send again: the chip leaves "Error".
 
 ## Known issues / Open bugs
@@ -2611,3 +2612,23 @@ full value on hover, no horizontal scroll.
 ## Read-only role tier: SIF tab and rectified invoices — ETP-5830
 
 With a `read-only` tier the SIF tab locks its fields (`useSifFieldPatcher` `locked`, same path as a processed invoice) and `ReversedInvoicesPanel` is read-only. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Completion refused for missing TicketBAI recipient data — ETP-5824
+
+Completing a sales invoice can now be refused by `com.smf.ticketbai` before the document leaves
+draft. When the invoice organization resolves a TicketBAI configuration (walking up the
+organization tree), the invoice date is not earlier than the TicketBAI system date, and the
+customer is **not** flagged as *Factura simplificada*, `ProcessInvoiceTbaiHook.preProcess`
+requires a postal code and address line 1 on the invoice partner address and a tax ID on the
+customer. A blank or spaces-only value counts as missing. The user sees `TBAI_EmptyPostalCode`,
+`TBAI_EmptyDir` or `TBAI_EmptyNifCode` (Spanish only: the module has no English translation yet)
+and the invoice stays in draft. This applies whether or not the configuration auto-sends invoices.
+Before ETP-5824 the invoice was completed and the TicketBAI send failed afterwards, with the error
+recorded only in the TicketBAI sync log.
+
+Purchase invoices are not affected. Voiding (`RC`) runs the same check, but GO offers no void for
+TicketBAI invoices, so that part only matters in Classic.
+
+The Contacts address modal warns about a missing postal code while the address is typed. Full
+rules, the warning's conditions and the manual check:
+[`contacts.md`](contacts.md) → *ETP-5824 — Missing postal code and TicketBAI*.
