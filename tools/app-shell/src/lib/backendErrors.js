@@ -451,6 +451,13 @@ const BACKEND_ERROR_KEY_MAP = {
   // ETP-5577 — core `PeriodNotValid`: the same refusal raised by GL_JOURNAL_CHK_RESTRICT_TRG when a
   // journal is saved with a date whose period is not open.
   PeriodNotValid: 'backendError.periodNotAvailable',
+  // ETP-5591 — DocumentPostingService/DocumentDisabledReason: core STATUS_DocumentDisabled, named
+  // by its certain reason or the generic DocumentDisabled. `messageParams.financialAccount` names
+  // the account of the two ETGO_ keys (English-only AD messages).
+  DocumentDisabled: 'backendError.documentDisabledForAccounting',
+  TotalGrossIsZero: 'backendError.invoiceTotalIsZero',
+  ETGO_PostingDisabledNoDepositAccount: 'backendError.finAccNoDepositAccount',
+  ETGO_PostingDisabledNoWithdrawalAccount: 'backendError.finAccNoWithdrawalAccount',
   // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
   // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
   // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so
