@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAuthOptional, notifyAmbientUnauthorized } from '@etendosoftware/app-shell-core/auth';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { reset } from '../lib/observability.js';
+import { forgetSupportSessionMarker } from '../lib/supportSession.js';
 import { setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 
 /**
@@ -33,6 +34,11 @@ export function useLogout() {
     // login in this same browser (see providers/mixpanel.js). Fire-and-forget
     // so a slow/failed provider never blocks the actual logout.
     void reset(); // NOSONAR -- intentional fire-and-forget, same pattern as health-events.js's void track()/group() calls.
+    // ETP-5351 — a support session's marker must not outlive an explicit logout, or the next load
+    // of this browser would start in support mode until /me said otherwise. Only the persisted
+    // marker: this tab stays in support mode (analytics included) until a new session's /me
+    // confirms it is not one.
+    forgetSupportSessionMarker();
     return (logout || notifyAmbientUnauthorized)();
   }, [logout]);
 }

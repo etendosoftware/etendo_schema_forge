@@ -8,7 +8,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
-const PAGE_SIZE = 30;
+export const PRODUCT_SELECTOR_PAGE_SIZE = 30;
+const PAGE_SIZE = PRODUCT_SELECTOR_PAGE_SIZE;
 
 export const COLORS = [
   'bg-blue-100 text-blue-700',
@@ -199,6 +200,17 @@ export function useProductSelectorFetch({
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [error, setError] = useState(null);
+  // ETP-5948 — the query whose first page is on screen (null while none is, and while closed, so a
+  // reopen never trusts the last open's results), and a counter bumped as each fetch settles: the
+  // two inputs the ETP-5903 locate walk needs.
+  const [pageQuery, setPageQuery] = useState(null);
+  const [settledFetches, setSettledFetches] = useState(0);
+  // ETP-5948 — every fresh (offset 0) fetch starts a generation; an append resolving for an older
+  // one is dropped instead of being appended onto the newer search's results.
+  const generationRef = useRef(0);
+  // One "load more" at a time: scroll paging and the locate walk can both ask for the next page
+  // before the `loadingMore` state of the first request has rendered.
+  const appendInFlightRef = useRef(false);
 
   const inputRef = useRef(null);
   const listRef = useRef(null);
@@ -229,10 +241,18 @@ export function useProductSelectorFetch({
       clearTimeout(fetchTimer.current);
       if (abortRef.current) abortRef.current.abort();
       rawOffsetRef.current = 0;
+      generationRef.current += 1;
+      appendInFlightRef.current = false;
+      setPageQuery(null);
+      setLoadingMore(false);
+    } else if (appendInFlightRef.current) {
+      return;
     }
+    const generation = generationRef.current;
+    const isStale = () => generationRef.current !== generation;
     setError(null);
     if (!selectorUrl) { setResults([]); setLoading(false); return; }
-    if (append) setLoadingMore(true);
+    if (append) { appendInFlightRef.current = true; setLoadingMore(true); }
     else setLoading(true);
 
     const delay = q && !append ? 300 : 0;
@@ -250,6 +270,7 @@ export function useProductSelectorFetch({
           return r.json();
         })
         .then(data => {
+          if (isStale()) return;
           const raw = data?.items || [];
           rawOffsetRef.current = offset + raw.length;
           let visible;
@@ -261,6 +282,7 @@ export function useProductSelectorFetch({
           } else {
             visible = transform(raw);
             setResults(visible);
+            setPageQuery((q || '').trim());
             onFreshResultsRef.current?.(visible);
           }
           const stillHasMore = data?.hasMore ?? false;
@@ -274,19 +296,24 @@ export function useProductSelectorFetch({
           }
         })
         .catch(err => {
-          if (err.name !== 'AbortError') {
+          if (err.name !== 'AbortError' && !isStale()) {
             if (!append) setResults([]);
             setError(err);
             setLoading(false);
             setLoadingMore(false);
           }
+        })
+        .finally(() => {
+          if (isStale()) return;
+          if (append) appendInFlightRef.current = false;
+          setSettledFetches(n => n + 1);
         });
     }, delay);
   }, [selectorUrl, token, transform, autoWaterfallMin, apiFetch]);
 
   // Reset all transient state and fire the initial fetch when the drawer opens.
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setPageQuery(null); return; }
     setQuery('');
     setResults([]);
     setLoading(false);
@@ -331,7 +358,7 @@ export function useProductSelectorFetch({
   return {
     query, setQuery,
     results, setResults,
-    loading, loadingMore, hasMore, totalCount, error,
+    loading, loadingMore, hasMore, totalCount, error, pageQuery, settledFetches,
     inputRef, listRef, activeItemRef,
     fetchTimer, abortRef, rawOffsetRef,
     doFetch, handleScroll,

@@ -5,6 +5,7 @@ import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { requestTransition, suppressNextUnloadPrompt } from '@/lib/unsavedChanges.js';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
+import { useSupportSession } from './useSupportSession.js';
 
 export const ENVIRONMENT_LIST_REFRESH_EVENT = 'etendo:refresh-environments';
 
@@ -49,6 +50,10 @@ export function useEnvironmentSwitch({
   const isAuthenticated = (auth?.isAuthenticated ?? false) || Boolean(credential);
   const csrfToken = auth?.csrfToken ?? threadedCsrf;
   const clientId = auth?.clientId ?? null;
+  // ETP-5351 — a support session is pinned to the tenant it was opened for: changing company means
+  // a new ticket from Classic, with its own audit row. So it lists the current company alone and
+  // never switches, whatever the backend answers (it refuses /session/environment anyway).
+  const { isSupportMode } = useSupportSession();
   const [environments, setEnvironments] = useState([]);
   const [switching, setSwitching] = useState(null);
   // ETP-5190 — additive. `environments` alone cannot tell "still fetching" from "cannot know"
@@ -143,7 +148,7 @@ export function useEnvironmentSwitch({
    * Resolves false when the switch is refused or the user cancels the prompt.
    */
   const switchTo = useCallback((env) => {
-    if (!isAuthenticated || !env?.adminUserId) return Promise.resolve(false);
+    if (!isAuthenticated || isSupportMode || !env?.adminUserId) return Promise.resolve(false);
     return new Promise((resolve) => {
       requestTransition(() => { enterEnvironment(env).then(resolve); }, {
         onCancel: () => {
@@ -152,7 +157,7 @@ export function useEnvironmentSwitch({
         },
       });
     });
-  }, [isAuthenticated, enterEnvironment]);
+  }, [isAuthenticated, isSupportMode, enterEnvironment]);
 
   /**
    * Enters an environment identified by name, re-reading the list first.
@@ -183,7 +188,7 @@ export function useEnvironmentSwitch({
   }, [isAuthenticated, switchTo]);
 
   return {
-    environments,
+    environments: isSupportMode ? environments.filter((env) => env.clientId === clientId) : environments,
     loading,
     switchTo,
     enterByClientName,

@@ -2,6 +2,10 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Check, Loader2, Search } from 'lucide-react';
 import { useUI } from '@etendosoftware/app-shell-core';
 
+// committed-selection-ok: a list-filter dropdown, not a field picker. It already marks the active
+// filter (aria-selected from activeCode), but does not walk to it or centre it when that value is
+// past the first page — a known gap, out of ETP-5948 scope (field pickers).
+
 /**
  * Shared dropdown list used by filters that pick one value out of the set of
  * distinct values for a field (status selector, advanced-filter value picker).

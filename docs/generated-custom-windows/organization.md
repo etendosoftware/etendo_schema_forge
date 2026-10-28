@@ -617,3 +617,9 @@ All of the above are now covered by automated tests — the "pending Tester" gap
     top, with no error. With 390 hidden and incomplete 390 identity data, "Guardar cambios" still
     saves, and reactivating 390 shows the data unchanged. In the IAE grid, "Buscar epígrafe" opens the
     AEAT search in a new tab. The full manual test plan is in the ETP-5831 Jira comment.
+
+## Bespoke grid personal views
+
+The bespoke IAE and legal-representative grids use the existing personal-view contract for `organization` / `actividadesDelIae` and `organization` / `representanteLegal`. IAE selectors and the new inline row follow data-column preferences; the required main-activity column and fixed action cells remain available. Representative line/390 markers and edit/delete cells stay fixed; record order and the separate edit form are unchanged.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

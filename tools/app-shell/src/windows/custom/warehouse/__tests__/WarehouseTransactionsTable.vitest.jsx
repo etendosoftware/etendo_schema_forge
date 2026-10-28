@@ -1,3 +1,12 @@
+// @covers tools/app-shell/src/windows/custom/warehouse/WarehouseTransactionsTable.jsx
+const gridBoundary = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => gridBoundary.apiFetch }));
+beforeEach(() => {
+  gridBoundary.enabled = false;
+  gridBoundary.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 204 });
+});
+
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
@@ -10,7 +19,8 @@ vi.mock('../useWarehouseStock', () => ({
   useWarehouseStock: vi.fn(),
 }));
 
-vi.mock('lucide-react', () => ({
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...await importOriginal(),
   Loader2: (props) => <span data-testid="loader" {...props} />,
   ArrowUpDown: (props) => <span data-testid="icon-sort" {...props} />,
   ArrowUp: (props) => <span data-testid="icon-up" {...props} />,
@@ -20,7 +30,7 @@ vi.mock('lucide-react', () => ({
 
 // --- Import under test ---
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -767,5 +777,94 @@ describe('WarehouseTransactionsTable — sorting (ETP-5083)', () => {
 
     fireEvent.click(documentHeader); // descending: real labels reverse, blank should STAY last
     expect(documentOrder()).toEqual(['D-030', 'D-020', '—']);
+  });
+});
+
+describe('WarehouseTransactionsTable personal columns', () => {
+  const rows = [
+    { id: 't1', movementDate: '2026-01-10', 'product$_identifier': 'Zinc', movementType: 'V+',
+      etgoDocLabel: 'DOC-1', etgoDocWindow: 'goods-receipt', etgoDocHeaderId: 'header-1', movementQuantity: 5 },
+    { id: 't2', movementDate: '2026-01-11', 'product$_identifier': 'Aluminum', movementType: 'V+',
+      etgoDocLabel: 'DOC-2', etgoDocWindow: 'goods-receipt', etgoDocHeaderId: 'header-2', movementQuantity: 8 },
+  ];
+  beforeEach(() => {
+    useWarehouseStock.mockReturnValue({ loading: false, error: null, transactions: rows });
+  });
+
+  it('does not request preferences or change the five default columns with the flag off', () => {
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    expect(screen.getAllByRole('columnheader')).toHaveLength(5);
+    expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    expect(gridBoundary.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('restores hidden columns, order and width while keeping sorting and document navigation', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: 'list:ad:MovementDate:field:movementDate', visible: false, order: 3 },
+        { id: 'list:ad:MovementType:field:movementType', visible: false, order: 4 },
+        { id: 'list:field:etgoDocLabel', visible: true, order: 1 },
+        { id: 'list:ad:M_Product_ID:field:product', visible: true, order: 0, width: 220 },
+        { id: 'list:ad:MovementQty:field:movementQuantity', visible: true, order: 2 },
+      ],
+    }) });
+    const { container } = render(<WarehouseTransactionsTable {...defaultProps} />);
+    await waitFor(() => expect(screen.queryByTestId('column-header-sort-date')).not.toBeInTheDocument());
+    expect(gridBoundary.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/warehouse/productTransactions', { baseUrl: '' });
+    const header = container.querySelector('thead tr');
+    expect([...header.children].map(cell => cell.dataset.gridColumn)).toEqual(['product', 'etgoDocLabel', 'movementQuantity']);
+    expect(header.firstElementChild).toHaveStyle({ width: '220px' });
+    for (const row of container.querySelectorAll('tbody tr')) {
+      expect([...row.children].map(cell => cell.dataset.gridColumn)).toEqual(['product', 'etgoDocLabel', 'movementQuantity']);
+    }
+    fireEvent.click(screen.getByTestId('column-header-sort-product'));
+    expect([...container.querySelectorAll('tbody tr')].map(row => row.querySelector('[data-grid-column="product"]').textContent))
+      .toEqual(['Aluminum', 'Zinc']);
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    fireEvent.click(screen.getByText('DOC-1'));
+    expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('/goods-receipt/header-1'), '_blank', 'noopener,noreferrer');
+    openSpy.mockRestore();
+
+    const productColumn = header.querySelector('[data-grid-column="product"]');
+    fireEvent.keyDown(within(productColumn).getByRole('separator'), { key: 'ArrowRight' });
+    expect(productColumn).toHaveStyle({ width: '230px' });
+    expect(screen.getByTestId('grid-view-save')).toBeEnabled();
+    expect(gridBoundary.apiFetch).toHaveBeenCalledTimes(1);
+    gridBoundary.apiFetch.mockResolvedValueOnce({ ok: true, status: 204 });
+    fireEvent.click(screen.getByTestId('grid-view-save'));
+    await waitFor(() => expect(gridBoundary.apiFetch).toHaveBeenCalledTimes(2));
+    const [url, request] = gridBoundary.apiFetch.mock.calls[1];
+    expect(url).toBe('/sws/neo/grid-views/warehouse/productTransactions');
+    expect(request.method).toBe('PUT');
+    expect(JSON.parse(request.body).columns).toContainEqual({ id: 'list:ad:M_Product_ID:field:product', visible: true, order: 0, width: 230 });
+  });
+
+  it('keeps original rows, headers and sort interactions when the preference load fails', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.apiFetch.mockRejectedValue(new Error('unavailable'));
+    render(<WarehouseTransactionsTable {...defaultProps} />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-status')).toHaveTextContent('gridViewLoadFailed'));
+    expect(screen.getAllByRole('columnheader')).toHaveLength(5);
+    expect(screen.getByTestId('grid-view-columns-trigger')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('column-header-sort-product'));
+    const tableRows = screen.getAllByRole('row').slice(1);
+    expect(tableRows[0]).toHaveTextContent('Aluminum');
+    expect(screen.getByText('DOC-1')).toBeInTheDocument();
+  });
+});
+
+
+describe('WarehouseTransactionsTable unsized personal view', () => {
+  it('retains the original column width classes when no saved widths exist', async () => {
+    gridBoundary.enabled = true;
+    useWarehouseStock.mockReturnValue({ loading: false, error: null, transactions: [{ id: 't1', movementDate: '2026-01-10', movementQuantity: 5 }] });
+    const { container } = render(<WarehouseTransactionsTable {...defaultProps} />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    const headers = container.querySelectorAll('thead th');
+    expect(headers[0]).toHaveClass('w-[180px]');
+    expect(headers[1]).toHaveClass('w-[200px]');
+    expect([...headers].every(header => header.style.width === '')).toBe(true);
+    expect(container.querySelector('table').style.tableLayout).toBe('');
   });
 });

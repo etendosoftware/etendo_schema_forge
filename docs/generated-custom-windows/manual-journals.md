@@ -388,6 +388,7 @@ they also apply to every other window with the same selectors):
   the line form. Like every account selector, it lists **posting accounts only** — summary
   (heading) accounts are hidden by `PostingAccountCombinationSelectorPolicy` in
   `com.etendoerp.go`. Saving a summary account through the API/MCP is not rejected yet (ETP-5693).
+  Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 Manual check: open a draft journal, click the header Cost Center → the list appears without
 typing; deactivate a cost center in its window, come back, open a line's dimensions → it is gone;
