@@ -61,8 +61,10 @@ const MAP = {
   },
 };
 
-function select(changed, { tree = TREE, map = MAP, alwaysRun = [] } = {}) {
-  return selectMockedSpecs({ changed, files: Object.keys(tree), readText: (rel) => tree[rel] ?? null, map, alwaysRun });
+function select(changed, { tree = TREE, base = {}, map = MAP, alwaysRun = [] } = {}) {
+  return selectMockedSpecs({
+    changed, files: Object.keys(tree), readText: (rel) => tree[rel] ?? null, readBaseText: (rel) => base[rel] ?? null, map, alwaysRun,
+  });
 }
 
 const specs = (selection) => [...selection.specs].sort();
@@ -193,6 +195,34 @@ describe('selectMockedSpecs: what it cannot narrow and what it leaves out', () =
     assert.equal(selection.whole, false);
     assert.deepEqual(specs(selection), []);
     assert.deepEqual(selection.ignored, ['tools/app-shell/src/components/__tests__/ListView.test.js', INTEGRATION, 'cli/generate.js']);
+  });
+});
+
+describe('selectMockedSpecs: locale files', () => {
+  const LOCALE = 'tools/app-shell/src/locales/es_ES.json';
+  const before = JSON.stringify({ genericLabels: { save: 'Guardar', cancel: 'Cancelar' }, fields: { orders: { date: 'Fecha' } } });
+  const after = (labels) => ({ ...TREE, [LOCALE]: JSON.stringify(labels) });
+
+  it('adds nothing for a locale file that only adds keys, and says so', () => {
+    const tree = after({ genericLabels: { save: 'Guardar', cancel: 'Cancelar', retry: 'Reintentar' }, fields: { orders: { date: 'Fecha', total: 'Total' } } });
+    const selection = select([LOCALE, 'tools/app-shell/src/components/DetailView.jsx'], { tree, base: { [LOCALE]: before } });
+    assert.equal(selection.whole, false);
+    assert.deepEqual(specs(selection), [SPEC_B]);
+    assert.deepEqual(selection.reasons[0], '@/locales/es_ES.json → only adds keys: nothing to run for them');
+  });
+
+  it('runs the whole suite when a key changes or goes, naming the keys', () => {
+    const changedText = select([LOCALE], { tree: after({ genericLabels: { save: 'Guardar cambios', cancel: 'Cancelar' }, fields: { orders: { date: 'Fecha' } } }), base: { [LOCALE]: before } });
+    assert.equal(changedText.whole, true);
+    assert.deepEqual(changedText.reasons, ['@/locales/es_ES.json → changes or removes 1 key(s), which code reads by name (genericLabels.save)']);
+    const removed = select([LOCALE], { tree: after({ genericLabels: {} }), base: { [LOCALE]: before } });
+    assert.match(removed.reasons[0], /changes or removes 3 key\(s\), which code reads by name \(genericLabels\.save, genericLabels\.cancel, fields\.orders\.date\)$/);
+  });
+
+  it('treats a new locale file as only adding keys, and a removed or broken one as the whole suite', () => {
+    assert.equal(select([LOCALE], { tree: after({ genericLabels: { save: 'Guardar' } }) }).whole, false);
+    assert.deepEqual(select([LOCALE], { base: { [LOCALE]: before } }).reasons, ['@/locales/es_ES.json → removed']);
+    assert.match(select([LOCALE], { tree: { ...TREE, [LOCALE]: '{ broken' }, base: { [LOCALE]: before } }).reasons[0], /not valid JSON/);
   });
 });
 

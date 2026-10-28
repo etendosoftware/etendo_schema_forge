@@ -23,7 +23,10 @@
 //     only has part of its coverage (one of its tests did not pass when the map was built).
 // It runs the whole suite when it cannot follow a change: dependencies, the Vite or Playwright
 // configuration, the quarantine list, or app or e2e code that reaches nothing mapped (a dynamic
-// import, a registry). A window file (artifacts/) that reaches nothing mapped adds nothing, as
+// import, a registry). The locale files (tools/app-shell/src/locales/<locale>.json) are not
+// imported but sliced by a Vite plugin, and code reads their keys by name: one that only adds keys
+// adds nothing (only code in the same change can use a new key), one that changes or removes a
+// key runs the whole suite. A window file (artifacts/) that reaches nothing mapped adds nothing, as
 // when only windows change: they do not call for the mocked suite (.githooks/lib/relevance.sh).
 // Files outside the mocked run (docs, unit tests, cli/, scripts/) are left out; an unknown file
 // already makes relevance.sh run every check before this script is asked.
@@ -56,6 +59,33 @@ const SELECTION_CONFIG = new Set([ALWAYS_RUN_FILE]);
 
 const APP_PREFIX = 'tools/app-shell/src/';
 const WINDOW_RE = /^artifacts\/[^/]+\//;
+const LOCALE_RE = /^tools\/app-shell\/src\/locales\/[^/]+\.json$/;
+
+/** Every leaf of a locale dictionary as `a.b.c` → its JSON value. */
+function leaves(node, prefix = '', out = new Map()) {
+  for (const [key, value] of Object.entries(node ?? {})) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) leaves(value, path, out);
+    else out.set(path, JSON.stringify(value));
+  }
+  return out;
+}
+
+/**
+ * The keys of a locale file that `head` changes or removes against `base` (texts, or null for a
+ * missing file): { changed: [key] }, or { error } when a side is not valid JSON.
+ */
+export function changedLocaleKeys(base, head) {
+  let before;
+  let after;
+  try {
+    before = leaves(base == null ? {} : JSON.parse(base));
+    after = leaves(JSON.parse(head));
+  } catch (err) {
+    return { error: `not valid JSON (${err.message})` };
+  }
+  return { changed: [...before].filter(([key, value]) => after.get(key) !== value).map(([key]) => key) };
+}
 
 /** A path as people read it: the app and window aliases, specs relative to e2e/. */
 export function shortPath(file) {
@@ -130,9 +160,10 @@ function reachUp(file, readers, { importers, mapped, within }) {
 /**
  * The selection for a change set: { whole: boolean, specs: Set<file>, reasons: string[],
  * ignored: string[], total }. `files` is every tracked file, `readText(rel)` its text or null,
- * `map` what parseMap returned and `alwaysRun` the specs of e2e/mocked-always-run.json.
+ * `readBaseText(rel)` its text where the change starts (null when it did not exist), `map` what
+ * parseMap returned and `alwaysRun` the specs of e2e/mocked-always-run.json.
  */
-export function selectMockedSpecs({ changed, files, readText, map, alwaysRun = [] }) {
+export function selectMockedSpecs({ changed, files, readText, readBaseText = () => null, map, alwaysRun = [] }) {
   const fileSet = new Set(files);
   const existingSpecs = files.filter((f) => MOCKED_SPEC_RE.test(f));
   const total = existingSpecs.length;
@@ -172,6 +203,18 @@ export function selectMockedSpecs({ changed, files, readText, map, alwaysRun = [
     }
     if (SPEC_RE.test(file) || UNIT_TEST_RE.test(file)) {
       ignored.push(file);
+      continue;
+    }
+    if (LOCALE_RE.test(file)) {
+      const keys = fileSet.has(file) ? changedLocaleKeys(readBaseText(file), readText(file)) : { error: 'removed' };
+      if (keys.error) {
+        wholeReasons.push(`${shortPath(file)} → ${keys.error}`);
+      } else if (keys.changed.length) {
+        const shown = keys.changed.slice(0, 3).join(', ') + (keys.changed.length > 3 ? ` +${keys.changed.length - 3} more` : '');
+        wholeReasons.push(`${shortPath(file)} → changes or removes ${keys.changed.length} key(s), which code reads by name (${shown})`);
+      } else {
+        reasons.push(`${shortPath(file)} → only adds keys: nothing to run for them`);
+      }
       continue;
     }
     const isApp = file.startsWith(APP_PREFIX);
@@ -316,7 +359,18 @@ export function main(argv) {
     return cache.get(rel);
   };
   const alwaysRun = parseAlwaysRun(readText(ALWAYS_RUN_FILE));
-  const selection = selectMockedSpecs({ changed, files, readText, map, alwaysRun });
+  // The diff is three-dot, so a file's "before" is its text at the merge-base.
+  const start = git(['merge-base', base, head]).trim();
+  const readBaseText = (rel) => {
+    try {
+      return execFileSync('git', ['show', `${start}:${rel}`], {
+        cwd: SF_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], env: sanitizedGitEnv(),
+      });
+    } catch {
+      return null;
+    }
+  };
+  const selection = selectMockedSpecs({ changed, files, readText, readBaseText, map, alwaysRun });
   if (out) writeFileSync(out, planLines(selection).map((l) => `${l}\n`).join(''));
   if (argv.includes('--json')) {
     console.log(JSON.stringify({
