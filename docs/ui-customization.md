@@ -1984,6 +1984,7 @@ Customer/Vendor Accounting, etc.).
    ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
    `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
    `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   Data-driven visibility is declared with `visibleWhenLogic` (ETP-5986): an AD logic string compiled into `visibleWhen(record, ctx)` on the tab entry, evaluated against the live header record and a session context (`OrgCurrencyId`/`OrgCurrencyCode`), fail-closed while loading, AND-ed with `visibleWhenCapability` — used by `sales-invoice`/`purchase-invoice` to show Exchange rates only for a foreign-currency invoice; see `docs/decisions-reference.md`.
    A capability-hidden tab is also never fetched in the background (ETP-5648). When the
    accounting tab is the window's *detail* tab (`detailEntity`, as in `product-category` and
    `business-partner-category`), gate it with `window.detailVisibleWhenCapability` instead.
