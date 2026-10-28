@@ -485,7 +485,6 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           <DateRangePopover
             value={filters.date}
             onChange={(date) => updateFilters({ date })}
-            placeholder={ui('dateRangeAnyTime')}
             data-testid="DateRangePopover__npd" />
         </span>
         {!filtersAreDefault && (

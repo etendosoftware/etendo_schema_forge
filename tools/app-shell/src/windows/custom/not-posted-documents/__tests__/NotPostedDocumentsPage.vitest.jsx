@@ -214,6 +214,8 @@ describe('NotPostedDocumentsPage — toolbar', () => {
     expect(query.get('accountingStatus')).toBe('N');
     expect(query.has('dateFrom')).toBe(false);
     expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('notPostedStatusUnposted');
+    // ETP-5591: the button reads the picked preset's name, not "Cualquier fecha".
+    expect(screen.getByTestId('npd-filter-date-range')).toHaveTextContent('dateRangeAllTime');
   });
 
   it('"Limpiar filtros" returns to the defaults, including the 12-month window', async () => {
