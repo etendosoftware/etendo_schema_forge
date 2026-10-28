@@ -2912,19 +2912,11 @@ The `id` of every call is the draft purchase invoice. `lines` omitted imports ev
 - **Preconditions (422):** draft target (`importTargetNotDraft`) with a price list (`importPriceListRequired`),
   completed source (`importSourceNotCompleted`) that is not a return, same business partner, currency and direction.
 - **Header.** The invoice's order reference is left by the native process: the order when every line comes from one
-  order, empty when several are mixed. Global discount (ETP-5828), the «Añadir desde pedido» popup's rule
-  (`resolveOrderGlobalDiscount`) mirrored step by step on the server (`discountConflict`, same % normalisation): with
-  `carryGlobalDiscount` true (default) the header `etgoTotalDiscount` takes the orders' % when ALL selected orders
-  share one positive % and, before the call, the invoice had that % or had neither a total discount nor lines. A line
-  is any active line other than the `ETGO_DTO` total-discount line (a line without product counts), which is what the
-  popup sees, since the GET hides the discount line. Orders AND invoice without a %: nothing to carry, with or
-  without lines. Otherwise the call answers **422 `globalDiscountConflict`** and creates nothing (`conflict`:
-  `ordersDiffer` — 0 % counts as different —, `invoiceHasOtherDiscount` — also when the orders have no % and the
-  invoice has one, the popup's `invoiceMismatch` —, `invoiceHasLinesWithoutDiscount`; plus
-  `orders:[{orderId, documentNo, globalDiscount}]`,
-  `invoice:{totalDiscount, hadLines}` and a `hint`): the popup's orange warning. The agent asks the user and, only on
-  their OK, resends with `carryGlobalDiscount:false` (the popup toggle off): lines imported, header untouched, line
-  discounts never changed. The discount line is materialised when the invoice is completed.
+  order, empty when several are mixed. Global discount (ETP-5828): when every selected purchase order shares one
+  positive %, it goes to the header `etgoTotalDiscount`, as the «Añadir desde pedido» popup does; when it cannot
+  (orders differ, the invoice has another %, or lines without one) the call answers 422 `globalDiscountConflict`,
+  creates nothing, and the agent resends with `carryGlobalDiscount:false` only after the user agrees. Step-by-step
+  rule: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34, *Header link*.
 - **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
 - The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
   through `MCP_CONFIG`. `createPurchaseInvoice` on the purchase order or the goods receipt (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/purchase-invoice/spec.md`)
