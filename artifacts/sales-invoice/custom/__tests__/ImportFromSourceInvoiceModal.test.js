@@ -195,50 +195,20 @@ describe('ImportFromSourceInvoiceModal — buildLineBody (always negative, ETP-4
   });
 });
 
-describe('ImportFromSourceInvoiceModal — buildLineBody order line FK (ETP-5381)', () => {
-  // ETP-5381 REGRESSION GUARD — the FK must travel under the spec's key.
-  // Under the old `cOrderlineId`, NeoFieldFilter dropped it silently (HTTP 200,
-  // line created, C_OrderLine_ID NULL), which kept M_MATCHSO empty and skipped
-  // `UPDATE C_ORDERLINE SET QtyInvoiced`, leaving the order invoiceable forever.
-  it('propagates the source line order line under the spec API key for C_OrderLine_ID', async () => {
+// ETP-6002 (as ETP-5729 for the return path): a rectificative line never carries the source line's
+// order line — C_INVOICE_POST would lower the order's invoiced quantity and match the rectificative
+// to the order's shipment. Neither the spec key nor the legacy cOrderlineId may be sent.
+describe('ImportFromSourceInvoiceModal — buildLineBody sends no order line (ETP-6002)', () => {
+  it('drops the source line order line', async () => {
     const body = await buildLineBody({
-      line: { id: 'source-line-1', product: 'p1', unitPrice: 10, [ORDER_LINE_FK]: 'ol1' },
+      line: { id: 'source-line-1', product: 'p1', unitPrice: 10, [ORDER_LINE_FK]: 'ol1', cOrderlineId: 'ol9' },
       qty: 3,
       invoiceId: 'inv1',
       lineNo: 10,
     });
-    assert.equal(body[ORDER_LINE_FK], 'ol1');
-  });
-
-  it('does not send the order line under a key the NEO spec would silently drop', async () => {
-    const body = await buildLineBody({
-      line: { id: 'source-line-1', product: 'p1', unitPrice: 10, [ORDER_LINE_FK]: 'ol1' },
-      qty: 3,
-      invoiceId: 'inv1',
-      lineNo: 10,
-    });
+    assert.equal(Object.hasOwn(body, ORDER_LINE_FK), false);
     assert.equal(Object.hasOwn(body, 'cOrderlineId'), false);
-  });
-
-  it('reads the source line FK from the spec key, not from the legacy cOrderlineId', async () => {
-    const body = await buildLineBody({
-      line: { id: 'source-line-1', product: 'p1', unitPrice: 10, cOrderlineId: 'ol9' },
-      qty: 3,
-      invoiceId: 'inv1',
-      lineNo: 10,
-    });
-    assert.equal(body[ORDER_LINE_FK], null);
-  });
-
-  it('sends an explicit null when the source line has no linked order line', async () => {
-    const body = await buildLineBody({
-      line: { id: 'source-line-1', product: 'p1', unitPrice: 10 },
-      qty: 3,
-      invoiceId: 'inv1',
-      lineNo: 10,
-    });
-    assert.equal(Object.hasOwn(body, ORDER_LINE_FK), true);
-    assert.equal(body[ORDER_LINE_FK], null);
+    assert.equal(body.sourceInvoiceLineId, 'source-line-1');
   });
 });
 

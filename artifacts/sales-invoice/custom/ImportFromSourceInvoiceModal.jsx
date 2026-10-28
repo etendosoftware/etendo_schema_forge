@@ -133,11 +133,13 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
-    // ETP-5381: the key MUST be the spec's java_qualifier for C_OrderLine_ID. NeoFieldFilter
-    // drops any key absent from the spec silently (200, line created, FK NULL), and without
-    // C_OrderLine_ID the invoice never reaches C_INVOICE_POST's MatchSO block (no M_MATCHSO row)
-    // nor its `UPDATE C_ORDERLINE SET QtyInvoiced` — so the order stays invoiceable forever.
-    salesOrderLine: line.salesOrderLine || null,
+    // ETP-6002 (as ETP-5729 for the return path): NO salesOrderLine. The source line's order line
+    // is where the SOURCE invoice came from, not this rectificative. On the negative line,
+    // C_INVOICE_POST would subtract it from C_OrderLine.QtyInvoiced (the returned quantity turns
+    // invoiceable again) and match the rectificative to the order's shipment (M_MatchSI), a
+    // transitive relation. The rectificative is tied to the invoice it rectifies by
+    // C_Invoice_Reverse, through sourceInvoiceLineId. The server also drops it on every channel
+    // (SalesRectificativeLineLinkSupport#dropOrderLineOnRectificativeCopy).
     sourceInvoiceLineId: line.id,
   };
 };

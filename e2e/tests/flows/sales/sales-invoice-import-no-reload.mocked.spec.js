@@ -416,9 +416,8 @@ const SOURCE_LINE_1_IMPORTED = {
 };
 
 // Not yet imported — selectable, and used to assert the negative quantity stepper.
-// ETP-5381: it carries the originating order-line FK under `salesOrderLine` (the key NEO
-// actually returns), so the test can assert the rectificativa's own line re-posts it under
-// the same key instead of the dead `cOrderlineId`.
+// It carries the originating order-line FK under `salesOrderLine` (the key NEO actually
+// returns), so the test can assert the rectificativa's own line does NOT re-post it (ETP-6002).
 const SOURCE_LINE_2_AVAILABLE = {
   id: SRC_LINE_2_ID,
   product: 'prod-b',
@@ -599,11 +598,11 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     await expect.poll(() => state.postBodies.length, { timeout: 5_000 }).toBeGreaterThan(0);
     expect(Number(state.postBodies[0].invoicedQuantity)).toBeLessThan(0);
 
-    // ETP-5381: the source line's order-line FK must be carried over under `salesOrderLine`
-    // (the spec's java_qualifier for C_INVOICELINE.C_OrderLine_ID), never the pre-fix
-    // `cOrderlineId` — a key that exists in no NEO spec and is dropped silently by
-    // NeoFieldFilter (200, line created, FK NULL). See invoice-import-order-line-fk.mocked.spec.js.
-    expect(state.postBodies[0].salesOrderLine).toBe(ORDER_LINE_ID);
+    // ETP-6002 (as ETP-5729 for the return path): the rectificativa line must NOT carry the
+    // source line's order line, under any key. C_INVOICE_POST would subtract the negative
+    // quantity from C_OrderLine.QtyInvoiced (the returned quantity turns invoiceable again) and
+    // match the rectificativa to the order's shipment (M_MatchSI), a transitive relation.
+    expect(Object.hasOwn(state.postBodies[0], 'salesOrderLine')).toBe(false);
     expect(Object.hasOwn(state.postBodies[0], 'cOrderlineId')).toBe(false);
 
     // ETP-6002: the source-invoice link is carried by the line itself — each line POST
