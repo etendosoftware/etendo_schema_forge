@@ -254,17 +254,22 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     sorted, sortKey, sortDirection, toggleSort, selectSort, clearSort, isDefaultSort,
   } = useClientSort(displayRows);
 
+  // ETP-5591 (QA): sized to fit a 1440px screen with the 260px row actions — the description
+  // takes what is left (`grow`, 320px floor) and the rest hold their longest value. With the
+  // default type widths the table needed 1468px and scrolled sideways on a 1440px screen.
   const columns = useMemo(() => [
     {
       key: 'documentTypeLabel',
       label: ui('documentType'),
       type: 'string',
+      minWidth: 208,
       render: (row) => <span className="font-semibold text-foreground">{row.documentTypeLabel}</span>,
     },
     {
       key: 'accountingStatusLabel',
       label: ui('statusLabel'),
       type: 'string',
+      minWidth: 184,
       render: (row) => (row.statusTone
         ? (
           <span data-testid={`npd-status-${row.documentId}`}>
@@ -273,11 +278,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         )
         : null),
     },
-    { key: 'description', label: ui('description'), type: 'string' },
+    { key: 'description', label: ui('description'), type: 'string', grow: true },
     // `dot: false` — the date cell's due-date dot (red when past) means nothing for an
     // accounting date.
-    { key: 'accountingDate', label: ui('accountingDate'), type: 'date', dot: false },
-    { key: 'organization', label: ui('organization'), type: 'string' },
+    { key: 'accountingDate', label: ui('accountingDate'), type: 'date', dot: false, minWidth: 136 },
+    { key: 'organization', label: ui('organization'), type: 'string', minWidth: 176 },
   ], [ui]);
 
   // ── Posting ───────────────────────────────────────────────────────────────────
