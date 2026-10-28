@@ -1336,8 +1336,7 @@
           {
             "root": "frontend",
             "path": "e2e/tests/flows/platform/grid-column-views.mocked.spec.js",
-            "expected": true,
-            "note": "Being written. The flag-off half runs on the plain server (what CI runs) and proves the grids are inert; the flag-on half skips itself unless E2E_GRID_COLUMN_VIEWS_FLAG=on and the server was started with VITE_FEATURE_FLAGS."
+            "note": "The flag-off half runs on the plain server (what CI runs) and proves the grids are inert; the flag-on half skips itself unless E2E_GRID_COLUMN_VIEWS_FLAG=on and the server was started with VITE_FEATURE_FLAGS."
           }
         ]
       },
