@@ -78,21 +78,38 @@ export function showBulkActionToast(ui, result) {
   // ETP-5316 QA rejection — a mass/multi-record action must NEVER surface a
   // per-row backend error as toast `description`: it doesn't scale past a
   // handful of rows and the raw messages (e.g. line-number references) aren't
-  // locatable in the document from a toast anyway. Only the exact single-record
-  // fast path above may show a real backend error; every multi/mixed case below
-  // stays the plain generic count summary, no description.
+  // locatable in the document from a toast anyway. ETP-5591: the one exception is a
+  // reason every failure shares — said once, it scales, and it is the whole answer.
+  const reason = sharedFailureReason(failed, ui);
+  const notify = (show) => (reason ? show(msg, { description: reason }) : show(msg));
   if (failed.length === 0 && omitted.length === 0) {
     toast.success(msg);
   } else if (failed.length > 0 && ok === 0 && omitted.length === 0) {
     // Nothing was skipped and nothing succeeded — every attempted row genuinely
     // errored. Same "hard failure" case the original 2-number logic covered.
-    toast.error(msg);
+    notify(toast.error);
   } else {
     // Everything else is a mix: some ok/omitted/failed combination that is neither
     // a clean full success nor a hard full failure — including the "0 ok, some
     // omitted, 0 failed" case (nothing eligible, but nothing genuinely errored).
-    toast.warning(msg);
+    notify(toast.warning);
   }
+}
+
+/**
+ * The translated reason when every failure has the same identity (`messageKeys` +
+ * `messageParams`), else `null`. Identity, not text: an unkeyed backend message can carry
+ * row-specific detail (ETP-5710), so it is never promoted to the summary.
+ */
+function sharedFailureReason(failed, ui) {
+  if (failed.length < 2 || !(failed[0].messageKeys?.length > 0)) return null;
+  const identity = (f) => JSON.stringify([f.messageKeys ?? [], f.messageParams ?? {}]);
+  const first = identity(failed[0]);
+  if (!failed.every((f) => identity(f) === first)) return null;
+  return translateBackendError(failed[0].message, ui, {
+    messageKeys: failed[0].messageKeys,
+    messageParams: failed[0].messageParams,
+  }) || null;
 }
 
 export function persistBulkActionResult(result) {
