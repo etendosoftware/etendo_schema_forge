@@ -34,6 +34,8 @@ import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 
+// committed-selection-ok: short, fully rendered lists that already set aria-selected from their value; nothing to page or centre.
+
 // Every registered model, in registry order (ETP-5716). A module-level constant of fixed length:
 // `useDeclarationsAutoCompute` below calls one `useFiscalAutoCompute` per (bucket × model) in a
 // loop over it, which is only legal because the number and order of those calls never changes
