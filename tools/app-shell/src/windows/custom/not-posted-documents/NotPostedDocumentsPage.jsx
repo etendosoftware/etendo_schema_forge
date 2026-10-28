@@ -56,11 +56,35 @@ import { NotPostedRowActions } from './NotPostedRowActions';
  * Same pattern `windows/custom/calendar/PeriodsExpandablePanel.jsx` already uses for
  * document *categories* (its `MXI: 'calendarDocCategoryMatchInvoice'` entry).
  *
- * Add an entry only when a GO window's name genuinely diverges from core's translation —
- * anything absent here keeps the backend's label untouched.
+ * ETP-5591 (QA CP-1b): every code is listed now. Core's translations are inconsistent ("Factura
+ * (Cliente)" next to "Albarán (cliente)", "Cobros" next to "Pago", "Landed Cost" untranslated),
+ * so the page names all 23 types in the design's sentence case. A code core adds later and
+ * this map lacks keeps the backend's label.
  */
-const DOC_TYPE_LABEL_KEYS = {
+export const DOC_TYPE_LABEL_KEYS = {
+  A: 'docTypeAmortization',
+  BMP: 'docTypeBomProduction',
+  BS: 'docTypeBankStatement',
+  CA: 'docTypeCostAdjustment',
+  DD: 'docTypeDoubtfulDebt',
+  GLJ: 'docTypeGlJournal',
+  GR: 'docTypeGoodsReceipt',
+  GS: 'docTypeGoodsShipment',
+  IC: 'docTypeInternalConsumption',
+  INV: 'docTypeInventory',
+  LC: 'docTypeLandedCost',
+  LCC: 'docTypeLandedCostCost',
+  M: 'docTypeMovements',
   MI: 'docTypeMatchedInvoices',
+  PI: 'docTypePurchaseInvoice',
+  PIN: 'docTypePaymentIn',
+  POT: 'docTypePaymentOut',
+  R: 'docTypeReconciliation',
+  RMR: 'docTypeReturnMaterialReceipt',
+  RVS: 'docTypeReturnToVendorShipment',
+  SI: 'docTypeSalesInvoice',
+  T: 'docTypeTransaction',
+  WE: 'docTypeWorkEffort',
 };
 
 /**

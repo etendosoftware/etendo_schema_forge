@@ -56,6 +56,7 @@ const DOC_TYPES = [
   { value: 'GS', label: 'Albarán (Cliente)' },
   { value: 'MI', label: 'Facturas cuadradas' },
   { value: 'T', label: 'Transacción' },
+  { value: 'ZZ', label: 'Tipo futuro' },
 ];
 
 const json = (body, init = {}) => Promise.resolve({ ok: true, status: 200, json: async () => body, ...init });
@@ -144,16 +145,18 @@ describe('NotPostedDocumentsPage — toolbar', () => {
     expect(await screen.findByText('documentType', { selector: 'div' })).toBeInTheDocument();
     const options = screen.getAllByRole('button')
       .map((b) => b.textContent)
-      .filter((t) => ['Albarán (Cliente)', 'Factura (Cliente)', 'docTypeMatchedInvoices', 'Transacción'].includes(t));
-    // "Relación albarán-factura" (MI) sorts by its OWN translated name, not core's.
-    expect(options).toEqual(['Albarán (Cliente)', 'docTypeMatchedInvoices', 'Factura (Cliente)', 'Transacción']);
+      .filter((t) => t.startsWith('docType') || t === 'Tipo futuro');
+    // Every type sorts by its OWN translated name, not core's; a code we do not name keeps the
+    // backend's label (ZZ).
+    expect(options).toEqual(['docTypeGoodsShipment', 'docTypeMatchedInvoices', 'docTypeSalesInvoice',
+      'docTypeTransaction', 'Tipo futuro']);
   });
 
   it('refetches as soon as a document type is picked, and puts it in the URL', async () => {
     renderPage();
     await waitFor(() => rowOf('doc-1'));
     fireEvent.click(screen.getByTestId('npd-filter-document-type'));
-    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    fireEvent.click(await screen.findByText('docTypeGoodsShipment'));
 
     await waitFor(() => expect(rowRequests().length).toBe(2));
     expect(rowRequests()[1].get('document')).toBe('GS');
@@ -251,12 +254,12 @@ describe('NotPostedDocumentsPage — toolbar', () => {
 });
 
 describe('NotPostedDocumentsPage — rows', () => {
-  it('shows the translated type, with our own rename for MI, and the raw label when there is no code', async () => {
+  it('shows our own name for every type, and the raw label when there is no code', async () => {
     renderPage();
     await waitFor(() => rowOf('doc-1'));
-    expect(rowOf('doc-1')).toHaveTextContent('Factura (Cliente)');
+    expect(rowOf('doc-1')).toHaveTextContent('docTypeSalesInvoice');
     expect(rowOf('doc-2')).toHaveTextContent('docTypeMatchedInvoices');
-    expect(rowOf('doc-3')).toHaveTextContent('Transacción');
+    expect(rowOf('doc-3')).toHaveTextContent('docTypeTransaction');
     expect(rowOf('doc-4')).toHaveTextContent('Some Future Type');
   });
 
@@ -356,9 +359,9 @@ describe('NotPostedDocumentsPage — rows', () => {
     await waitFor(() => rowOf('doc-1'));
     fireEvent.click(within(screen.getAllByTestId('column-header-documentTypeLabel')[0]).getByRole('button'));
     const order = screen.getAllByTestId(/^row-doc-/).map((r) => r.getAttribute('data-testid'));
-    // docTypeMatchedInvoices < Factura (Cliente) < Goods Receipt (no option, raw label)
-    // < Some Future Type < Transacción
-    expect(order).toEqual(['row-doc-2', 'row-doc-1', 'row-doc-5', 'row-doc-4', 'row-doc-3']);
+    // docTypeGoodsReceipt < docTypeMatchedInvoices < docTypeSalesInvoice < docTypeTransaction
+    // < Some Future Type (no code, raw label)
+    expect(order).toEqual(['row-doc-5', 'row-doc-2', 'row-doc-1', 'row-doc-3', 'row-doc-4']);
   });
 });
 
@@ -548,7 +551,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     selectRow('doc-1');
     expect(screen.getByTestId('npd-selection-toolbar')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('npd-filter-document-type'));
-    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    fireEvent.click(await screen.findByText('docTypeGoodsShipment'));
     await waitFor(() => expect(screen.queryByTestId('npd-selection-toolbar')).not.toBeInTheDocument());
   });
 
@@ -575,7 +578,7 @@ describe('NotPostedDocumentsPage — reload after an in-flight post', () => {
     fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
     await waitFor(() => expect(resolvePost).toBeTypeOf('function'));
     fireEvent.click(screen.getByTestId('npd-filter-document-type'));
-    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    fireEvent.click(await screen.findByText('docTypeGoodsShipment'));
     await waitFor(() => expect(rowRequests().at(-1).get('document')).toBe('GS'));
 
     await act(async () => { resolvePost(); });
@@ -595,7 +598,7 @@ describe('NotPostedDocumentsPage — reload after an in-flight post', () => {
     fireEvent.click(await screen.findByTestId('npd-post-selected'));
     await waitFor(() => expect(resolvePost).toBeTypeOf('function'));
     fireEvent.click(screen.getByTestId('npd-filter-document-type'));
-    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    fireEvent.click(await screen.findByText('docTypeGoodsShipment'));
     await waitFor(() => expect(rowRequests().at(-1).get('document')).toBe('GS'));
 
     await act(async () => { resolvePost(); });
