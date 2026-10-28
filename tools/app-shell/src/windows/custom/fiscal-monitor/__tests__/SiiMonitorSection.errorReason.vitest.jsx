@@ -1,8 +1,10 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx
 // Integration tests for the ETP-4784 "Motivo error" fallback: when the
 // C_Invoice header field (aeatsiiErrorMsg) is empty, the column must fall
 // back to the most-recent `motivo` from the issuedInvoicesSiiData /
 // receivedInvoicesSiiData entity for that invoice.
 
+import { allIconsAs } from '@/test/lucideIconMock.js';
 const invoiceRow = (overrides = {}) => ({
   id: 'inv-1',
   invoiceDate: '2026-01-10',
@@ -29,7 +31,7 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => currentApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v ?? '') }));
-vi.mock('lucide-react', () => ({ FileUp: () => null, FileDown: () => null }));
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

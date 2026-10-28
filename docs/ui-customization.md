@@ -18,6 +18,42 @@ tools/app-shell/src/windows/custom/{window}/ (your hand-written components)
 - Add/change a key in `decisions.json` and re-run the generator, or
 - Write/update a component in `windows/custom/{window}/` that the generator already imports via a config key.
 
+### Personal business-grid views
+
+`GRID_COLUMN_VIEWS` (`grid-column-views`) gates the existing `useGridView` and
+`GridViewControls` integration. Its shipped default is false (it ships dark); an explicit remote
+provider value of true (or a deterministic local override) enables it. A view belongs to the authenticated user and a verified
+configured spec/entity, never to a display name, selected parent record, or invented
+endpoint alias. Saving column visibility, order and widths is explicit; sorting,
+filters, selection, expansion, drafts and business actions stay with their original
+controllers.
+
+Coverage spans audited standard `ListView` entry points and their forwarding
+DataTable adapters, `ListModalWindow` with a validated scope, `InlineLinesPanel`
+using `DetailView`'s spec/entity context, migrated bespoke business grids, the
+financial-account custom grids and reconciliation workspace, and independent
+Calendar / Not Posted Documents DataTable surfaces. A direct DataTable consumer
+does not acquire a controller automatically. An existing parent controller keeps
+ownership, including while its preference request is pending. Inline add-row forms
+temporarily keep the default line layout and disabled controls for alignment.
+
+Structural selection, expansion, hierarchy and action slots remain protected;
+saved preferences cannot override runtime-hidden columns or break grouped/nested
+layouts. Inactive, failed or invalid-scope views keep their original usable grid.
+Reconciliation candidates are eligible only for a homogeneous verified movement
+or sales/purchase installment scope. `AttachmentsTable` remains unchanged: its
+table/record attachment endpoint has no configured attachment entity or
+collision-free personal-view surface contract. Reusing its document header scope
+would overwrite the document list's view.
+
+The [bespoke inventory](bespoke-grid-views.md),
+[standalone DataTable inventory](standalone-datatable-grid-views.md), and
+[financial-account inventory](../tools/app-shell/src/windows/custom/financial-account/README.md)
+record actual scopes and remaining blockers. Neither an unaudited custom layout
+nor an aggregate/action projection is eligible solely because it renders a table.
+Tests were authored; no checks were run at the user's request, and runtime QA
+remains pending.
+
 ### Gotcha — a hand-rolled `index.jsx` prop can silently shadow `decisions.json` (ETP-4839)
 
 Some windows have a hand-written `windows/custom/{window}/index.jsx` wrapper (not the pipeline-window
@@ -1711,6 +1747,14 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - **Date columns (ETP-5245):** a `type: 'date'` column renders the shared `DateField` (calendar trigger + locale-masked text input, emitting `yyyy-MM-dd`) in **all three** paths that can edit it — `EntityForm.renderDateField` (form mode), `DataTable.renderInlineAddFieldControl` (the add-line row) and `InlineLinesPanel.EditCell` (inline edit of an existing row). Each of those keeps its **own** field-type `if` chain, so a new field-type control has to be added to all three or it degrades silently into that path's fall-through renderer — which is exactly how add-row dates shipped as bare text boxes. Two accepted limits inside the add-row/inline-edit cells: `DateField` takes no `ref` (no `firstInputRef` autofocus if it is the first add-row field) and no `onKeyDown` (row-level Enter/Escape does not fire from inside it; `DateField` binds both itself).
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
+
+**Personal column views (ETP-5835).** With `GRID_COLUMN_VIEWS` enabled and both `specName` and `entity` supplied, `InlineLinesPanel` uses the existing `useGridView` and `GridViewControls` contract. `DetailView` passes `specName={windowName}` to its primary lines table; the entity key completes the stable scope. Users can hide, reorder and resize eligible business-data columns, then explicitly save their personal view for that spec/entity; changing the selected header record does not create a different view. With the flag off, an incomplete scope or no grid-data columns, controls are absent and no grid-view request is made. Existing type-based widths remain the fallback for columns without a saved width.
+
+Static `hidden` and runtime `hiddenColumns` exclusions take precedence over personalization: a saved view cannot expose those columns. Selection checkboxes, dimension expanders and action slots remain structural, outside the personal column controls. Required columns, explicit `gridConfigurable: false` or `gridReorderable: false` columns, `headClass`/`cellClass` columns, action/selection columns, presentation-only custom columns without an AD `column`, balance-footer debit/credit columns and the trailing amount column on a read-only document retain their default slots and widths. A saved order cannot move data across those locked slots. No-truncate columns cannot be hidden or resized, preserving their content-based width, but may be reordered. The dimension panel itself is not a grid-data column. The header, saved rows and balance footer use the same effective column layout, while inline edits, row actions, selection and dimension editing keep their existing handlers.
+
+**Add-row constraint:** while `lineFormActive` is true, the panel temporarily uses its default column layout and leaves the personal-view controls mounted but disabled. The sibling `DataTable` owns the add-row form and its colgroup, so suspending personalization keeps that form aligned inside the existing shared scroll-host portal without changing `DataTable` or generated wrappers. The current personal layout, including unsaved column changes, is retained and restored when the add-row form closes. This slice does not personalize the active add-row form.
+
+Behavior-level line-grid tests accompany this integration; tests, builds, lint and formatters were not executed at the user's request. Runtime and QA validation remain pending.
 
 **How it threads through the pipeline:**
 - `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).

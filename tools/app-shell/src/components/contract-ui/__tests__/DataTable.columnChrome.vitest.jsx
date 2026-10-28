@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/hooks/useGridView.js
 /**
  * DataTable — opt-in per-column chrome (`col.headClass` / `col.cellClass`), ETP-4658 Fase 0.
  *
@@ -11,7 +12,10 @@
  * Note on indices: DataTable always emits a leading gutter/selection cell, so the column
  * under test is cell index 1 in both the header row and the body row.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+const mockApiFetch = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 
 vi.mock('@/i18n', () => ({
   useLabel: () => (key) => key,
@@ -43,7 +47,7 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
   ...(await importOriginal()),
   columnFlex: () => '1 0 100px',
-  columnMinWidthPx: () => 100,
+  columnMinWidthPx: (col) => (col?.gridUserWidthPx != null ? Number(col.gridUserWidthPx) : 100),
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({ default: () => null }));
@@ -54,6 +58,7 @@ vi.mock('../RowQuickActions.jsx', () => ({ default: () => null }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { DataTable } from '../DataTable.jsx';
+import { useGridView } from '@/hooks/useGridView.js';
 
 const DATA = [{ id: 'r1', name: 'BBVA', total: 10 }];
 
@@ -179,6 +184,153 @@ describe('DataTable — per-column isolation', () => {
     const td = screen.getByTestId('row-r1').querySelectorAll('td')[1];
     expect(td.className).toContain('sf-cell-custom');
     expect(td).toContainElement(screen.getByTestId('custom-r1'));
+  });
+});
+
+describe('DataTable — headless grid-view interaction and presentation order', () => {
+  const viewId = (key) => `list:ad:${key}:field:${key.toLowerCase()}`;
+
+  function createGridView(overrides = {}) {
+    return {
+      active: true,
+      columns: [
+        { ...AMOUNT_COL, gridViewId: viewId('Total'), gridUserWidthPx: 180, grow: false },
+        { ...STRING_COL, gridViewId: viewId('Name'), gridUserWidthPx: 240, grow: false },
+      ],
+      availableKeys: ['total', 'name'],
+      columnSizing: { [viewId('Total')]: 180, [viewId('Name')]: 240 },
+      reorderable: vi.fn(() => true),
+      moveColumn: vi.fn(),
+      moveByKeyboard: vi.fn(),
+      isResizable: vi.fn(() => true),
+      widthBounds: vi.fn(() => ({ min: 100, max: 1200 })),
+      resizeHandler: vi.fn(() => vi.fn()),
+      resizeBy: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it('keeps header, body and total cells in the same personalized order, including the row-selection slot', () => {
+    const gridView = createGridView();
+    render(
+      <DataTable
+        columns={[STRING_COL, AMOUNT_COL]}
+        data={[{ id: 'r1', name: 'BBVA', total: 10 }]}
+        gridView={gridView}
+        showFooterTotals
+      />,
+    );
+
+    expect(screen.getByTestId('column-header-total')).toBeInTheDocument();
+    const headers = Array.from(document.querySelectorAll('thead th')).map((cell) => cell.textContent.trim());
+    expect(headers.slice(1)).toEqual(['Total', 'Name']);
+    const body = Array.from(screen.getByTestId('row-r1').querySelectorAll('td')).map((cell) => cell.textContent.trim());
+    expect(body.slice(1)).toEqual(['10', 'BBVA']);
+    const footer = Array.from(document.querySelectorAll('tfoot td')).map((cell) => cell.textContent.trim());
+    expect(footer).toHaveLength(3);
+    expect(footer[1]).not.toBe('');
+    expect(footer[2]).toBe('');
+  });
+
+  it('exposes accessible keyboard reorder and resize controls and forwards their actions to the headless model', () => {
+    const gridView = createGridView({
+      reorderable: (id) => id === viewId('Name'),
+      isResizable: (id) => id === viewId('Name'),
+    });
+    render(<DataTable columns={[STRING_COL, AMOUNT_COL]} data={DATA} gridView={gridView} />);
+
+    const moveHandle = screen.getByRole('button', { name: 'moveGridColumn' });
+    expect(moveHandle).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(moveHandle, { key: 'ArrowRight', altKey: true, shiftKey: true });
+    expect(gridView.moveByKeyboard).toHaveBeenCalledWith(viewId('Name'), 1);
+
+    const resizeHandle = screen.getByRole('separator', { name: 'resizeGridColumn' });
+    expect(resizeHandle).toHaveAttribute('aria-valuemin', '100');
+    expect(resizeHandle).toHaveAttribute('aria-valuemax', '1200');
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '240');
+    expect(resizeHandle).toHaveClass('w-4', 'cursor-col-resize');
+    expect(resizeHandle.querySelector('[aria-hidden="true"]')).toHaveClass('bg-border', 'group-hover:bg-muted-foreground', 'group-focus-visible:bg-primary');
+    fireEvent.keyDown(resizeHandle, { key: 'ArrowLeft' });
+    expect(gridView.resizeBy).toHaveBeenCalledWith(viewId('Name'), -10);
+  });
+
+  it('cancels native header dragging while forwarding the resize mouse gesture', () => {
+    const resize = vi.fn();
+    const gridView = createGridView({ resizeHandler: vi.fn(() => resize) });
+    render(<DataTable columns={[STRING_COL, AMOUNT_COL]} data={DATA} gridView={gridView} />);
+
+    const resizeHandle = screen.getAllByRole('separator', { name: 'resizeGridColumn' })[0];
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 100 });
+    resizeHandle.dispatchEvent(mouseDown);
+
+    expect(mouseDown.defaultPrevented).toBe(true);
+    expect(resize).toHaveBeenCalled();
+  });
+
+  it('resizes with the mouse and applies one width to header, body and colgroup', async () => {
+    mockApiFetch.mockResolvedValue({ ok: true, status: 204 });
+    const columns = [
+      { ...STRING_COL, gridDefaultWidthPx: 180 },
+      { ...AMOUNT_COL, gridDefaultWidthPx: 260 },
+    ];
+
+    function ResizableList() {
+      const gridView = useGridView({
+        spec: 'tax',
+        entity: 'Tax',
+        columns,
+        data: DATA,
+        enabled: true,
+        apiBaseUrl: '/sws',
+      });
+      return <DataTable columns={columns} data={DATA} gridView={gridView} />;
+    }
+
+    render(<ResizableList />);
+    const resizeHandles = await screen.findAllByRole('separator', { name: 'resizeGridColumn' });
+    expect(resizeHandles).toHaveLength(2);
+    const resizeHandle = resizeHandles.find((handle) => handle.getAttribute('aria-valuenow') === '260');
+    expect(resizeHandle).toBeTruthy();
+
+    fireEvent.mouseDown(resizeHandle, { clientX: 100 });
+    fireEvent.mouseMove(document, { clientX: 140 });
+    fireEvent.mouseUp(document, { clientX: 140 });
+
+    await waitFor(() => expect(resizeHandle).toHaveAttribute('aria-valuenow', '300'));
+    const header = screen.getByTestId('column-header-total');
+    const row = screen.getByTestId('row-r1');
+    const cells = Array.from(row.querySelectorAll('td'));
+    const headerIndex = Array.from(header.parentElement.children).indexOf(header);
+    const bodyCell = cells[headerIndex];
+    const bodyTable = row.closest('table');
+    const col = bodyTable.querySelectorAll('colgroup col')[headerIndex];
+
+    expect(header.style.width).toBe('300px');
+    expect(bodyCell.style.minWidth).toBe('300px');
+    expect(col.style.width).toBe('300px');
+  });
+
+  it('keeps locked and structural columns out of reorder handles while preserving custom renderers', () => {
+    const gridView = createGridView({
+      columns: [
+        { ...STRING_COL, gridViewId: viewId('Name'), render: (row) => <span data-testid="grid-custom-cell">{row.name}</span> },
+      ],
+      availableKeys: ['name'],
+      reorderable: () => false,
+      isResizable: () => false,
+    });
+    render(
+      <DataTable
+        columns={[STRING_COL, { key: 'actions', label: 'Actions', headClass: 'locked-slot' }]}
+        data={DATA}
+        gridView={gridView}
+      />,
+    );
+
+    expect(screen.getByTestId('grid-custom-cell')).toHaveTextContent('BBVA');
+    expect(screen.queryByRole('button', { name: 'moveGridColumn' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('separator', { name: 'resizeGridColumn' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('column-header-actions')).toBeInTheDocument();
   });
 });
 

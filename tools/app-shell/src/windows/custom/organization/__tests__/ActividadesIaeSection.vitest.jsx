@@ -1,3 +1,11 @@
+const gridBoundary = await vi.hoisted(async () => (await import('@/test/gridViewTestDoubles.jsx')).createGridBoundary());
+vi.mock('@/lib/flags', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridFlagsMock(() => gridBoundary.enabled));
+vi.mock('@/hooks/useGridView.js', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewHookMock(gridBoundary));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', async () => (await import('@/test/gridViewTestDoubles.jsx')).gridViewControlsMock());
+import { resetGridBoundary } from '@/test/gridViewTestDoubles.jsx';
+
+beforeEach(() => resetGridBoundary(gridBoundary));
+
 // @covers tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/useActividadesIae.js
 // Vitest component tests for ActividadesIaeSection — the "Actividades del IAE"
@@ -471,6 +479,51 @@ describe('ActividadesIaeSection — Modelo 390 cap (1 main + 5 others)', () => {
     expect(screen.getAllByTestId(/^ActividadesIaeSection__row-/)).toHaveLength(8);
     expect(screen.getByTestId('ActividadesIaeSection__overCapWarning')).toHaveTextContent('orgIaeOverCapWarning');
     expect(screen.getByTestId('ActividadesIaeSection__addButton')).toBeDisabled();
+  });
+});
+
+describe('ActividadesIaeSection personal columns', () => {
+  it('keeps inline selectors and the required default checkbox aligned in existing and new rows', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['default', 'epgrafeIAE'];
+    gridBoundary.widths = { epgrafeIAE: 245 };
+    const fetchMock = makeFetchMock({ rows: [{ id: 'row-1', default: false, epgrafeIAE: 'e1', 'epgrafeIAE$_identifier': 'Epigraph 1' }] });
+    global.fetch = fetchMock;
+    render(<ActividadesIaeSection {...baseProps} />);
+    const row = await screen.findByTestId('ActividadesIaeSection__row-row-1');
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers).toHaveLength(3);
+    expect(headers[0]).toHaveTextContent('orgIaeDefaultLabel');
+    expect(headers[1]).toHaveTextContent('orgIaeEpigraphLabel');
+    expect(headers[1]).toHaveStyle({ width: '245px' });
+    expect(row.children).toHaveLength(3);
+    expect(within(row.children[0]).getByRole('checkbox')).toBeInTheDocument();
+    expect(within(row).getByTestId('ActividadesIaeSection__delete').closest('td')).toBe(row.lastElementChild);
+    fireEvent.click(within(row).getByTestId('selector-epgrafeIAE'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, options]) => options.method === 'PATCH'
+      && JSON.parse(options.body).epgrafeIAE === 'epgrafeIAE-new-id')).toBe(true));
+
+    fireEvent.click(screen.getByTestId('ActividadesIaeSection__addButton'));
+    const draft = screen.getByTestId('ActividadesIaeSection__addRow');
+    expect(draft.children).toHaveLength(3);
+    expect(within(draft.children[0]).getByRole('checkbox')).toBeInTheDocument();
+    fireEvent.click(within(draft).getByTestId('selector-epgrafeIAE'));
+    fireEvent.click(screen.getByTestId('ActividadesIaeSection__saveNew'));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, options]) => options.method === 'POST'
+      && JSON.parse(options.body).epgrafeIAE === 'epgrafeIAE-new-id')).toBe(true));
+    expect(gridBoundary.last).toMatchObject({ spec: 'organization', entity: 'actividadesDelIae', enabled: true });
+    expect(gridBoundary.last.columns.find(column => column.key === 'default').required).toBe(true);
+  });
+
+  it('keeps the original four data columns when the personal view is unavailable', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.keys = ['default'];
+    global.fetch = makeFetchMock({ rows: [] });
+    render(<ActividadesIaeSection {...baseProps} />);
+    await screen.findByTestId('ActividadesIaeSection__empty');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(5);
+    expect(screen.getByTestId('ActividadesIaeSection__empty')).toHaveAttribute('colspan', '5');
   });
 });
 

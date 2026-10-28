@@ -2634,3 +2634,9 @@ TicketBAI invoices, so that part only matters in Classic.
 The Contacts address modal warns about a missing postal code while the address is typed. Full
 rules, the warning's conditions and the manual check:
 [`contacts.md`](contacts.md) → *ETP-5824 — Missing postal code and TicketBAI*.
+
+## Bespoke grid personal views
+
+The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

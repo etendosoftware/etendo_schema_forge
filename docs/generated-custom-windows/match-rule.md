@@ -232,3 +232,10 @@ with one.
   source of truth for active accounting dimensions, shared with `FinancialAccountTransactionsHandler`.
 - `tools/app-shell/src/lib/accountingDimensions.js` + `tools/app-shell/src/hooks/useActiveAccountingDimensions.js`
   — the generic column→dimension mapping and the fail-open fetch used by `ListModalWindow`.
+
+## Personal list-column views
+
+The Match Rule list renders through `ListModalWindow`, so it carries the personal
+Columns and Save view controls behind the `grid-column-views` flag. Its row
+selection, actions and filter/sort state are not part of a saved view. Identity
+checks and load/save failures: [shared grid-view policy](../feature-flags.md#personal-business-grid-views).
