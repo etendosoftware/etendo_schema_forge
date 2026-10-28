@@ -8,7 +8,7 @@
 // places the function's first character. Code that only runs at module top level is invisible
 // here (bundling merges it into the chunk's own top-level function), so a file whose only
 // executed code is top-level does not appear in the map, and a change to it falls back to the
-// whole suite.
+// whole suite. Each result also carries the test's outcome.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +53,19 @@ function lineAndColumn(lineStarts, offset) {
   return { line: lo + 1, column: offset - lineStarts[lo] };
 }
 
+// The source file of a function, by its chunk and offset: every test of a worker runs the same
+// bundle, so each function is mapped once instead of once per test.
+const sourceOf = new Map();
+
+function sourceFile(info, pathname, offset) {
+  const key = `${pathname}:${offset}`;
+  if (!sourceOf.has(key)) {
+    const original = info.consumer.originalPositionFor(lineAndColumn(info.lineStarts, offset));
+    sourceOf.set(key, original.source ? relative(REPO_DIR, resolve(info.mapDir, original.source)) : null);
+  }
+  return sourceOf.get(key);
+}
+
 function executedSourceFiles(entries) {
   const files = new Set();
   for (const entry of entries) {
@@ -63,9 +76,8 @@ function executedSourceFiles(entries) {
     for (const fn of entry.functions) {
       const range = fn.ranges[0];
       if (!range || range.count === 0) continue;
-      const original = info.consumer.originalPositionFor(lineAndColumn(info.lineStarts, range.startOffset));
-      if (!original.source) continue;
-      files.add(relative(REPO_DIR, resolve(info.mapDir, original.source)));
+      const file = sourceFile(info, pathname, range.startOffset);
+      if (file) files.add(file);
     }
   }
   return [...files].sort();
@@ -83,9 +95,12 @@ export const test = COVERAGE_DIR && DIST
           // The test closed its page; nothing to record.
         }
         mkdirSync(COVERAGE_DIR, { recursive: true });
+        // One file per test: a retry overwrites it, so the last attempt's outcome is the one kept.
+        // A test that did not pass may have stopped early, so the map treats its coverage as partial.
         writeFileSync(join(COVERAGE_DIR, `${testInfo.testId}.json`), JSON.stringify({
           spec: relative(REPO_DIR, testInfo.file),
           title: testInfo.titlePath.slice(1).join(' › '),
+          status: testInfo.status,
           files: executedSourceFiles(entries),
         }));
       },

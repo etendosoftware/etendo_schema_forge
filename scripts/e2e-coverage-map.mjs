@@ -12,12 +12,18 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isEntryPoint } from './find-tests.js';
 
-/** The map from per-test results ({ spec, files }): { commit, specs, files: { file: [spec] } }. */
+/**
+ * The map from per-test results ({ spec, status, files }): { commit, specs, partial, files: { file:
+ * [spec] } }. `partial` lists the specs with a test that did not pass: it may have stopped before
+ * running all it covers, so the selector does not trust its entries alone.
+ */
 export function buildMap(results, { commit = null } = {}) {
   const byFile = new Map();
   const specs = new Set();
-  for (const { spec, files } of results) {
+  const partial = new Set();
+  for (const { spec, status, files } of results) {
     specs.add(spec);
+    if (status && status !== 'passed' && status !== 'skipped') partial.add(spec);
     for (const file of files) {
       // Third-party code cannot change in a commit of this repo; the core package can, by a bump.
       if (file.includes('node_modules/') && !file.includes('node_modules/@etendosoftware/')) continue;
@@ -27,7 +33,7 @@ export function buildMap(results, { commit = null } = {}) {
   }
   const files = Object.fromEntries([...byFile].sort(([a], [b]) => a.localeCompare(b))
     .map(([file, s]) => [file, [...s].sort()]));
-  return { commit, specs: [...specs].sort(), files };
+  return { commit, specs: [...specs].sort(), partial: [...partial].sort(), files };
 }
 
 export function main(argv) {
@@ -52,6 +58,10 @@ export function main(argv) {
   const map = buildMap(results, { commit });
   writeFileSync(out, JSON.stringify(map));
   console.log(`tests: ${results.length} · specs: ${map.specs.length} · files in map: ${Object.keys(map.files).length} · map: ${statSync(out).size} bytes`);
+  if (map.partial.length) {
+    // An annotation on the run: the map is published, and these specs run on every app change.
+    console.log(`::warning::${map.partial.length} spec(s) had a test that did not pass; the pre-push runs them on every app change: ${map.partial.join(', ')}`);
+  }
   return 0;
 }
 

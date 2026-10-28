@@ -212,6 +212,14 @@ describe('selectMockedSpecs: specs the map cannot judge', () => {
   it('adds neither when only e2e files change: their imports are exact', () => {
     assert.deepEqual(specs(select(['e2e/tests/helpers/orders-helpers.js'], { tree, alwaysRun: [SPEC_C] })), [SPEC_A]);
   });
+
+  it('adds the specs the map has only partial coverage of when app code changes, and not otherwise', () => {
+    const map = { ...MAP, partial: [SPEC_C] };
+    const app = select(['tools/app-shell/src/components/DetailView.jsx'], { map });
+    assert.deepEqual(specs(app), [SPEC_B, SPEC_C].sort());
+    assert.deepEqual(app.reasons.at(-1), 'partial coverage in the map (a test did not pass when it was built): tests/flows/platform/multi-tab.mocked.spec.js');
+    assert.deepEqual(specs(select(['e2e/tests/helpers/orders-helpers.js'], { map })), [SPEC_A]);
+  });
 });
 
 describe('output', () => {

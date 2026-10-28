@@ -7,8 +7,10 @@ name: E2E Coverage Map
 # scripts/lib/e2e-coverage-map-lookup.js). The PR's mini pipeline and the cut still run every spec.
 #
 # cancel-in-progress: of a burst of merges only the last is mapped; the pre-push takes the newest
-# map within the last 20 merges into develop. A red suite publishes nothing: the pre-push then uses
-# an older map or runs the whole suite.
+# map within the last 20 merges into develop. The suite does not gate anything here (the PRs' mini
+# pipeline does), so a failed test still publishes the map: its spec goes into the map's `partial`
+# list, which the pre-push runs on every app change, and the run shows a warning naming it. Only a
+# run with no coverage at all publishes nothing; the pre-push then uses an older map or runs all.
 
 on:
   push:
@@ -52,6 +54,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Mocked E2E with coverage
+        continue-on-error: true
         env:
           E2E_SUITE: mocked
           E2E_COVERAGE_DIR: ${{ runner.temp }}/e2e-coverage

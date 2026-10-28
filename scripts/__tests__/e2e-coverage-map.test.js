@@ -20,12 +20,26 @@ describe('buildMap', () => {
     assert.deepEqual(map, {
       commit: 'abc',
       specs: [B, A],
+      partial: [],
       files: {
         'artifacts/orders/generated/Orders.jsx': [A],
         'tools/app-shell/src/App.jsx': [B],
         'tools/app-shell/src/List.jsx': [B, A],
       },
     });
+  });
+
+  it('marks as partial the specs with a test that failed or timed out, not the passed or skipped ones', () => {
+    const C = 'e2e/tests/flows/sales/quotes.mocked.spec.js';
+    const D = 'e2e/tests/flows/sales/returns.mocked.spec.js';
+    const map = buildMap([
+      { spec: A, status: 'passed', files: [] },
+      { spec: A, status: 'failed', files: [] },
+      { spec: B, status: 'timedOut', files: [] },
+      { spec: C, status: 'skipped', files: [] },
+      { spec: D, files: [] },
+    ]);
+    assert.deepEqual(map.partial, [B, A]);
   });
 
   it('keeps the core package but drops other third-party code', () => {

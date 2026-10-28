@@ -19,7 +19,8 @@
 //     imported, through any number of files the map does not have either, by files it executed:
 //     the nearest mapped importers on each path;
 //   - the change touches app code and the spec is in e2e/mocked-always-run.json (the map cannot
-//     see everything it executes) or the map does not know it yet (newer than the map).
+//     see everything it executes), the map does not know it yet (newer than the map) or the map
+//     only has part of its coverage (one of its tests did not pass when the map was built).
 // It runs the whole suite when it cannot follow a change: dependencies, the Vite or Playwright
 // configuration, the quarantine list, or app or e2e code that reaches nothing mapped (a dynamic
 // import, a registry). A window file (artifacts/) that reaches nothing mapped adds nothing, as
@@ -75,7 +76,7 @@ export function parseMap(text) {
   if (!data || !Array.isArray(data.specs) || !data.files || typeof data.files !== 'object') {
     return new Error('no `specs` list or `files` object');
   }
-  return { commit: data.commit ?? null, specs: data.specs, files: data.files };
+  return { commit: data.commit ?? null, specs: data.specs, partial: Array.isArray(data.partial) ? data.partial : [], files: data.files };
 }
 
 /** The specs of e2e/mocked-always-run.json, as repo paths; [] when it is missing or unreadable. */
@@ -225,6 +226,11 @@ export function selectMockedSpecs({ changed, files, readText, map, alwaysRun = [
     if (unknown.length) {
       unknown.forEach((s) => specs.add(s));
       reasons.push(`newer than the map: ${list(unknown)}`);
+    }
+    const partial = live(map.partial ?? []).filter((s) => !specs.has(s));
+    if (partial.length) {
+      partial.forEach((s) => specs.add(s));
+      reasons.push(`partial coverage in the map (a test did not pass when it was built): ${list(partial)}`);
     }
   }
   return { whole: false, specs, reasons, ignored, total, commit: map.commit };
