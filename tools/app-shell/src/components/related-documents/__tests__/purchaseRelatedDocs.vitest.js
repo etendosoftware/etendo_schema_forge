@@ -214,6 +214,44 @@ describe('PURCHASE_RELATED_DOCS — depsKey covers every record field a fetch so
   });
 });
 
+describe('PURCHASE_RELATED_DOCS — purchase-invoice built from several orders (ETP-5828)', () => {
+  it('two linkedOrders → two order chips, no header lookup without salesOrder', async () => {
+    const record = { id: 'pi1', linkedOrders: [{ id: 'po1' }, { id: 'po2' }] };
+    expect(chips(await resolve('purchase-invoice', record))).toEqual(['order:po1', 'order:po2']);
+    expect(helpers.fetchById).not.toHaveBeenCalled();
+  });
+
+  it('the header order among linkedOrders still yields two chips and is not fetched', async () => {
+    backend.byId = { 'purchase-order/header/po1': { id: 'po1' } };
+    const record = { id: 'pi1', salesOrder: 'po1', linkedOrders: [{ id: 'po1' }, { id: 'po2' }] };
+    expect(chips(await resolve('purchase-invoice', record))).toEqual(['order:po1', 'order:po2']);
+    expect(helpers.fetchById).not.toHaveBeenCalled();
+  });
+
+  it('a header order outside linkedOrders is fetched once and appended', async () => {
+    backend.byId = { 'purchase-order/header/po3': { id: 'po3' } };
+    const record = { id: 'pi1', salesOrder: 'po3', linkedOrders: [{ id: 'po1' }, { id: 'po2' }] };
+    expect(chips(await resolve('purchase-invoice', record))).toEqual(['order:po1', 'order:po2', 'order:po3']);
+    expect(helpers.fetchById).toHaveBeenCalledTimes(1);
+    expect(helpers.fetchById).toHaveBeenCalledWith('purchase-order', 'header', 'po3', 'tok', '/sws/neo/purchase-invoice');
+  });
+
+  it('without linkedOrders the header order alone is the fallback', async () => {
+    backend.byId = { 'purchase-order/header/po1': { id: 'po1' } };
+    expect(chips(await resolve('purchase-invoice', { id: 'pi1', salesOrder: 'po1', linkedOrders: [] })))
+      .toEqual(['order:po1']);
+  });
+
+  it.each([
+    [{ linkedOrders: [{ id: 'a' }] }, { linkedOrders: [{ id: 'a' }, { id: 'b' }] }],
+    [{ linkedOrders: [{ id: 'a' }, { id: 'b' }] }, { linkedOrders: [{ id: 'a' }, { id: 'c' }] }],
+    [{}, { linkedOrders: [{ id: 'a' }] }],
+  ])('depsKey: %j → %j changes the key', (before, after) => {
+    const { depsKey } = PURCHASE_RELATED_DOCS['purchase-invoice'];
+    expect(depsKey({ id: 'x', salesOrder: 'o1', ...before })).not.toBe(depsKey({ id: 'x', salesOrder: 'o1', ...after }));
+  });
+});
+
 describe('getPurchaseRelatedDocs', () => {
   it.each(Object.keys(PURCHASE_RELATED_DOCS))('%s → its definition', (spec) => {
     expect(getPurchaseRelatedDocs(spec)).toBe(PURCHASE_RELATED_DOCS[spec]);

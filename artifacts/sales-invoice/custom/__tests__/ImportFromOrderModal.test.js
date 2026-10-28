@@ -1,3 +1,4 @@
+// @covers artifacts/sales-invoice/custom/ImportFromOrderModal.jsx
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
@@ -60,7 +61,12 @@ describe('ImportFromOrderModal — source shape', () => {
     assert.match(src, /fetchLines=\{fetchLines\}/);
     assert.match(src, /getDocDisplay=\{getDocDisplay\}/);
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
-    assert.match(src, /afterImport=\{afterImport\}/);
+  });
+
+  it('spreads the shared global-discount props bound to the sales-invoice header', () => {
+    assert.match(src, /useOrderGlobalDiscountImport\(\{ headerEndpoint: 'sales-invoice\/header' \}\)/);
+    assert.match(src, /<ImportLinesModal[\s\S]*\{\.\.\.globalDiscountProps\}/);
+    assert.doesNotMatch(src, /afterImport=/);
   });
 
   // ETP-5381: `cOrderlineId` is not a key of the sales-invoice NEO spec, and
@@ -75,11 +81,11 @@ function mockRes(ok, data) {
   return { ok, json: async () => ({ response: { data } }) };
 }
 
-function installFetch({ orders, invLines = [], invoiceHeader }) {
+function installFetch({ orders, invLines = [], invoiceHeader, linesOk = true, headerOk = true }) {
   globalThis.fetch = mock.fn(async (url) => {
     if (url.includes('/sales-order/header?')) return mockRes(true, orders);
-    if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(true, invLines);
-    if (url.includes('/sales-invoice/header/')) return mockRes(true, [invoiceHeader]);
+    if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(linesOk, invLines);
+    if (url.includes('/sales-invoice/header/')) return mockRes(headerOk, [invoiceHeader]);
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
@@ -270,4 +276,47 @@ describe('ImportFromOrderModal — duplicate detection via the order line FK', (
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
     assert.equal(result.sharedContext.alreadyImportedOrderLines.has('ol9'), false);
   });
+});
+
+describe('ImportFromOrderModal — fetchDocuments invoice global-discount context', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  for (const { name, invLines, invoiceHeader, linesOk = true, headerOk = true, expected } of [
+    {
+      name: 'invoice with a % and lines',
+      invLines: [{ id: 'il1' }],
+      invoiceHeader: { etgoTotalDiscount: '5.00' },
+      expected: { invoiceGlobalDiscount: 5, invoiceHasLines: true, invoiceStateKnown: true },
+    },
+    {
+      name: 'invoice without % nor lines',
+      invLines: [],
+      invoiceHeader: { etgoTotalDiscount: 0 },
+      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false, invoiceStateKnown: true },
+    },
+    {
+      name: 'header GET non-OK',
+      invLines: [],
+      invoiceHeader: { etgoTotalDiscount: '5.00' },
+      headerOk: false,
+      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false, invoiceStateKnown: false },
+    },
+    {
+      name: 'lines GET non-OK',
+      invLines: [{ id: 'il1' }],
+      invoiceHeader: { etgoTotalDiscount: 0 },
+      linesOk: false,
+      expected: { invoiceGlobalDiscount: null, invoiceHasLines: false, invoiceStateKnown: false },
+    },
+  ]) {
+    it(`exposes the invoice % and whether it has lines: ${name}`, async () => {
+      installFetch({ orders: [], invLines, invoiceHeader, linesOk, headerOk });
+      const { sharedContext } = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+      assert.equal(sharedContext.invoiceGlobalDiscount, expected.invoiceGlobalDiscount);
+      assert.equal(sharedContext.invoiceHasLines, expected.invoiceHasLines);
+      assert.equal(sharedContext.invoiceStateKnown, expected.invoiceStateKnown);
+    });
+  }
 });

@@ -214,6 +214,72 @@ describe('SALES_RELATED_DOCS — depsKey covers every record field a fetch sourc
   });
 });
 
+describe('SALES_RELATED_DOCS — sales-invoice built from several orders (ETP-5828)', () => {
+  const originSource = () => SALES_RELATED_DOCS['sales-invoice'].sources.find(source => source.key === 'origin');
+
+  it('every linkedOrders entry is a chip, with no header lookup when salesOrder is blank', async () => {
+    const record = {
+      id: 'i1',
+      salesOrder: null,
+      linkedOrders: [{ id: 'o1' }, { id: 'o2' }, { id: 'q1', isQuotation: true }],
+    };
+    expect(chips(await resolve('sales-invoice', record))).toEqual([
+      'sales-order:o1', 'sales-order:o2', 'sales-quotation:q1',
+    ]);
+    expect(helpers.fetchById).not.toHaveBeenCalled();
+    expect(helpers.fetchByCriteria).not.toHaveBeenCalled();
+  });
+
+  it('the header order already among linkedOrders is neither fetched nor duplicated', async () => {
+    const record = { id: 'i1', salesOrder: 'o1', linkedOrders: [{ id: 'o1' }, { id: 'o2' }] };
+    expect(chips(await resolve('sales-invoice', record))).toEqual(['sales-order:o1', 'sales-order:o2']);
+    expect(helpers.fetchById).not.toHaveBeenCalled();
+  });
+
+  it('a header order outside linkedOrders is resolved and appended', async () => {
+    backend.byId = { 'sales-order/header/o3': { id: 'o3' } };
+    const record = { id: 'i1', salesOrder: 'o3', linkedOrders: [{ id: 'o1' }, { id: 'o2' }] };
+    expect(chips(await resolve('sales-invoice', record))).toEqual([
+      'sales-order:o1', 'sales-order:o2', 'sales-order:o3',
+    ]);
+    expect(helpers.fetchById).toHaveBeenCalledTimes(1);
+    expect(helpers.fetchById).toHaveBeenCalledWith('sales-order', 'header', 'o3', 'tok', '/sws/neo/sales-invoice');
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['empty', []],
+  ])('linkedOrders %s: the header quotation probe still yields a sales-quotation chip', async (_label, linkedOrders) => {
+    backend.byCriteria = { 'sales-quotation/quotation?id=q1': [{ id: 'q1' }] };
+    const record = { id: 'i1', salesOrder: 'q1', linkedOrders };
+    expect(chips(await resolve('sales-invoice', record))).toEqual(['sales-quotation:q1']);
+  });
+
+  it('linkedOrders entries without an id produce no chip', async () => {
+    const record = { id: 'i1', linkedOrders: [{ documentNo: 'NO-ID' }, null, { id: 'o1' }] };
+    expect(chips(await resolve('sales-invoice', record))).toEqual(['sales-order:o1']);
+  });
+
+  it.each([
+    [{ id: 'x', isQuotation: true }, 'sales-quotation'],
+    [{ id: 'x', _isQuotation: true }, 'sales-quotation'],
+    [{ id: 'x', isQuotation: false }, 'sales-order'],
+    [{ id: 'x', isQuotation: 'true' }, 'sales-order'],
+    [{ id: 'x' }, 'sales-order'],
+  ])('origin chip type of %j is %s', (doc, expected) => {
+    expect(originSource().type(doc)).toBe(expected);
+  });
+
+  it.each([
+    [{ linkedOrders: [{ id: 'a' }] }, { linkedOrders: [{ id: 'a' }, { id: 'b' }] }],
+    [{ linkedOrders: [{ id: 'a' }, { id: 'b' }] }, { linkedOrders: [{ id: 'a' }, { id: 'c' }] }],
+    [{}, { linkedOrders: [{ id: 'a' }] }],
+  ])('depsKey: %j → %j changes the key', (before, after) => {
+    const { depsKey } = SALES_RELATED_DOCS['sales-invoice'];
+    expect(depsKey({ id: 'x', salesOrder: 'o1', ...before })).not.toBe(depsKey({ id: 'x', salesOrder: 'o1', ...after }));
+  });
+});
+
 describe('getSalesRelatedDocs', () => {
   it.each([
     ['purchase-invoice'],

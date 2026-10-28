@@ -22,7 +22,7 @@
  *   }
  *
  * `record` is always the DETAIL record (GET /<entity>/<id>): several fields read here
- * (`linkedShipments`, `sourceInvoice`, `originInvoices`, goods-shipment `linked*`) are
+ * (`linkedShipments`, `linkedOrders`, `sourceInvoice`, `originInvoices`, goods-shipment `linked*`) are
  * injected by the backend handlers on the detail GET only. `apiBaseUrl` is the
  * spec-scoped base (`.../sws/neo/<spec>`); cross-spec calls go through neoBase().
  *
@@ -38,6 +38,8 @@ import {
   selectSource,
   originInvoicesSource,
   originInvoicesDepsKey,
+  invoiceOrdersFetch,
+  invoiceOrdersDepsKey,
   movementDefinition,
   returnDefinition,
   idsOf,
@@ -117,16 +119,18 @@ export const SALES_RELATED_DOCS = {
     // the shipment; the record re-read that follows also refreshes `linkedShipments`.
     refreshEvent: 'sales-invoice:document-created',
     depsKey: record => [
-      record?.salesOrder ?? '',
+      invoiceOrdersDepsKey(record),
       getArSubtype(record),
       originInvoicesDepsKey(record),
       idsOf(record?.rectifyingInvoices),
     ].join('|'),
     sources: [
       {
+        // ETP-5828: every order the invoice's lines come from (`linkedOrders`), plus the
+        // header origin (order or quotation) when it is not one of them.
         key: 'origin',
-        type: doc => (doc._isQuotation ? 'sales-quotation' : 'sales-order'),
-        fetch: fetchInvoiceOrigin,
+        type: doc => (doc._isQuotation || doc.isQuotation === true ? 'sales-quotation' : 'sales-order'),
+        fetch: invoiceOrdersFetch(fetchInvoiceOrigin),
       },
       // Resolved server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each
       // invoice line's own M_InOutLine_ID: normal deliveries AND customer returns, told
