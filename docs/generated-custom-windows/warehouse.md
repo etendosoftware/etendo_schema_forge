@@ -254,6 +254,12 @@ columns (`grid: true, form: false, visibility: "readOnly"`), and `aggregateProdu
 `etgoValuation` per product for the sidebar and warehouse totals (a `NULL` valuation counts
 as 0 in the total).
 
+**Cost and valuation display rule (Products tab).** `aggregateProducts` keeps `cost` and
+`valuation` as `null` while no row of the product carries a value, and keeps a real `0` as `0`.
+The tab renders `—` only for `null` (the product has no cost line) and formats a real `0` as a
+cost ("0,00 €"). This is the same rule the Inventory Stock Report uses, so a product reads the
+same in both places. A `null` valuation still counts as 0 in the warehouse total.
+
 ### One definition of "current cost"
 
 `etgo_product_cost(m_product_id)` is the single source of truth for every reader — the
