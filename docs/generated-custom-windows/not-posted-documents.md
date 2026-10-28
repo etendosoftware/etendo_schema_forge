@@ -515,8 +515,9 @@ in `messageKeys`, and `backendErrors.js` renders it in the UI locale. A reason i
 |---|---|---|
 | Transaction without payment, deposit (`BPD`), its financial account has no deposit account | `ETGO_PostingDisabledNoDepositAccount` (+ `financialAccount`) | "La cuenta financiera {cuenta} no tiene cuenta de depósito…" |
 | Same for withdrawal / bank fee (`BPW`, `BF`) and the withdrawal account | `ETGO_PostingDisabledNoWithdrawalAccount` | "…no tiene cuenta de retirada…" |
+| Payment-linked transaction whose payment method, on that account, posts to the deposit (`DEP`) / withdrawal (`WIT`) account, and that account is missing | the same two keys | same texts |
 | Invoice whose total, lines and taxes are all zero | `TotalGrossIsZero` | "El total de la factura es cero…" |
-| Anything else (payment-linked transaction, payment, other tables) | `DocumentDisabled` | "Este documento está deshabilitado para contabilidad…" |
+| Anything else (payment posting in transit / cleared, payment, other tables) | `DocumentDisabled` | "Este documento está deshabilitado para contabilidad…" |
 
 After that failed post core leaves the row `posted = 'D'`, which is not one of the page's statuses.
 A missing deposit or withdrawal account is a configuration error, not a document without
