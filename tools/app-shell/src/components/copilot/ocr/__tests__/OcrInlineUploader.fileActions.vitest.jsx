@@ -9,6 +9,11 @@
 
 let mockExtractionReturn;
 
+// The size limit comes from the attachments policy endpoint; pin it so the suite never hits the network.
+vi.mock('@/components/attachments/useAttachmentPolicy', () => ({
+  useAttachmentPolicy: () => ({ maxSizeMB: 10 }),
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
@@ -67,6 +72,7 @@ vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import OcrInlineUploader from '../OcrInlineUploader.jsx';
+import { pdfFile } from './ocrFixtures.js';
 
 const defaultProps = {
   docTypeId: 'purchase-invoice',
@@ -76,9 +82,7 @@ const defaultProps = {
   token: 'test-token',
 };
 
-function pdf(name = 'invoice.pdf') {
-  return new File([new ArrayBuffer(2048)], name, { type: 'application/pdf' });
-}
+const pdf = (name = 'invoice.pdf') => pdfFile(name);
 
 function fileInput(container) {
   return container.querySelector('input[type="file"]');
