@@ -22062,6 +22062,16 @@
     "minimum": "mínimo",
     "recentMovements": "Movimientos recientes",
     "oauth2Clients": "Clientes OAuth2",
+    "documentTemplatesTitle": "Plantillas de documentos",
+    "documentTemplatesDescription": "Elige la plantilla con la que se imprimen tus documentos de venta y compra (facturas, pedidos y presupuestos).",
+    "documentTemplatesLabel": "Plantilla",
+    "documentTemplatesClassic": "Actual",
+    "documentTemplatesCompact": "Compacta",
+    "documentTemplatesModern": "Moderna",
+    "documentTemplatesSave": "Guardar",
+    "documentTemplatesSaved": "Plantilla guardada",
+    "documentTemplatesSaveFailed": "No se pudo guardar la plantilla",
+    "documentTemplatesLoadFailed": "No se pudo cargar la plantilla elegida",
     "apiKeysTitle": "Claves de API públicas",
     "apiKeysDescription": "Gestiona las credenciales para acceder a tu API pública.",
     "apiKeysCreate": "Crear clave de API",
@@ -26108,6 +26118,9 @@
     "currencyRatesAtDate": "Tipos al {date}"
   },
   "menus": {
+    "Document Templates": {
+      "label": "Plantillas de documentos"
+    },
     "Goods Movement": {
       "label": "Movimiento entre almacenes"
     },

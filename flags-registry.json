@@ -1295,6 +1295,9 @@
         "ttl": "2027-03-31",
         "ttlNote": "PLACEHOLDER: MVP validation window; the owner decides the real removal date once the editing UI (T5) ships.",
         "symbols": [
+          "DocumentTemplatesPage",
+          "document-templates",
+          "documentTemplates",
           "doc-template-selection",
           "DOC_TEMPLATE_SELECTION",
           "loadDocTemplateConfig",
@@ -1306,11 +1309,13 @@
       "paths": {
         "frontend": [
           "tools/app-shell/src/windows/custom/shared/docTemplateConfig.js",
-          "tools/app-shell/src/windows/custom/shared/documentTemplateVariants.js"
+          "tools/app-shell/src/windows/custom/shared/documentTemplateVariants.js",
+        "tools/app-shell/src/pages/DocumentTemplatesPage.jsx",
+        "tools/app-shell/src/lib/docTemplateConfigApi.js"
         ],
         "backend": []
       },
-      "$pathsComment": "Owned code only. documentPdf.js, documentPdfRegistry.js, the four use*Pdf hooks and flag-keys.js are shared toggle points. The backend endpoint (NeoDocTemplateConfigEndpoint in com.etendoerp.go) is not gated by this flag.",
+      "$pathsComment": "Owned code only. documentPdf.js, documentPdfRegistry.js, the four use*Pdf hooks and flag-keys.js are shared toggle points, as are menu.json, runtime-routes.jsx, SideMenu.jsx, CommandPalette.jsx, navigationExpectations.js and the locale files (the `document-templates` menu item and the documentTemplates* keys). The backend endpoint (NeoDocTemplateConfigEndpoint in com.etendoerp.go) is not gated by this flag.",
       "testSpecs": {
         "unit": [
           {
@@ -1320,6 +1325,14 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/shared/__tests__/docTemplateConfig.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/DocumentTemplatesPage.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/docTemplateConfigApi.test.js"
           }
         ]
       }

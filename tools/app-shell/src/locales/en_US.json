@@ -21826,6 +21826,16 @@
     "minimum": "minimum",
     "recentMovements": "Recent Movements",
     "oauth2Clients": "OAuth2 Clients",
+    "documentTemplatesTitle": "Document templates",
+    "documentTemplatesDescription": "Choose the template used to print your sales and purchase documents (invoices, orders and quotations).",
+    "documentTemplatesLabel": "Template",
+    "documentTemplatesClassic": "Current",
+    "documentTemplatesCompact": "Compact",
+    "documentTemplatesModern": "Modern",
+    "documentTemplatesSave": "Save",
+    "documentTemplatesSaved": "Template saved",
+    "documentTemplatesSaveFailed": "The template could not be saved",
+    "documentTemplatesLoadFailed": "The template choice could not be loaded",
     "apiKeysTitle": "Public API keys",
     "apiKeysDescription": "Manage credentials for your public API access.",
     "apiKeysCreate": "Create API key",
@@ -25870,6 +25880,9 @@
     "currencyRatesAtDate": "Rates as of {date}"
   },
   "menus": {
+    "Document Templates": {
+      "label": "Document Templates"
+    },
     "Currency": {
       "label": "Currency"
     },
