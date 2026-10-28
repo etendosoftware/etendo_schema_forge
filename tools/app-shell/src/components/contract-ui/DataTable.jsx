@@ -606,6 +606,7 @@ import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
+import { committedItemFromRow } from './selectorSelection.js';
 import { ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS, ROW_CHECKED_BG, QUICK_ACTIONS_MIN_BAND_PX } from './rowVisuals.js';
 
 import { apiFetch } from '@/auth/api.js';
@@ -1208,6 +1209,8 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
       <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
         <LookupField
           value={displayLabel}
+          committedValue={values[field.key] ?? null}
+          committedItem={committedItemFromRow(field, values, values[field.key])}
           fieldKey={field.key}
           placeholder={fieldLabel}
           selectorUrl={selectorUrl}
@@ -1909,7 +1912,7 @@ function coerceFieldValues(valuesRef, fields) {
 /**
  * Inline field that shows selected value and opens modal on click/focus.
  */
-function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContext, token, onSelect, onKeyDown, inputRef, title, drawerKey = 'default', isInvalid, noTruncate = false }) {
+function LookupField({ value, committedValue = null, committedItem = null, fieldKey, placeholder, selectorUrl, selectorContext, token, onSelect, onKeyDown, inputRef, title, drawerKey = 'default', isInvalid, noTruncate = false }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const Drawer = LOOKUP_DRAWERS[drawerKey] || LOOKUP_DRAWERS.default;
@@ -1971,6 +1974,10 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
         selectorContext={selectorContext}
         token={token}
         title={title || undefined}
+        // ETP-5948 — reopening the add-row lookup after a pick opens on that pick.
+        value={committedValue}
+        valueLabel={value || ''}
+        committedItem={committedItem}
         data-testid="Drawer__eb5261" />
     </>
   );
@@ -1992,6 +1999,7 @@ function LookupButton({ selectorUrl, selectorContext, token, onSelect, title }) 
       >
         <Search className="h-3.5 w-3.5" data-testid="Search__eb5261" />
       </button>
+      {/* committed-selection-ok: an add-a-row button, it holds no value to reopen on. */}
       <DefaultDrawer
         open={open}
         onClose={() => setOpen(false)}

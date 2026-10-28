@@ -25,6 +25,7 @@ import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
+import { committedItemFromRow } from './selectorSelection.js';
 import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { columnFlex, isLineGridColumn, withLinesAbsorberColumn } from '@/lib/linesColumnWidth.js';
 import { isNoTruncateColumn, withContentWidths, rowsWithDraft } from '@/lib/linesContentWidth.js';
@@ -710,7 +711,23 @@ function renderLineCell({
  * `EntityForm.jsx` but rendered compactly inside a row cell — clicking the button opens
  * the same `ProductSearchDrawer` modal the side-panel form used.
  */
-function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+/**
+ * ETP-5948 — grid columns are generated without `onSelectMappings`. The inline commit
+ * applies them from the entry fields (buildInlineRowUpdateHandler's `fields`), so the lookup
+ * borrows the same mappings to rebuild the committed item (committedItemFromRow).
+ * shortcut: absent while the add-row form is open (the wrapper strips addRow); the stock
+ * drawer then marks the product group instead of the saved location row.
+ */
+function withEntryMappings(cols, entryFields) {
+  if (!entryFields?.length) return cols;
+  return cols.map(c => {
+    if (c.onSelectMappings) return c;
+    const mappings = entryFields.find(f => f.key === c.key)?.onSelectMappings;
+    return mappings ? { ...c, onSelectMappings: mappings } : c;
+  });
+}
+
+function LookupTrigger({ field, label, value, row, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
   // `label` is the locale-resolved column label (resolveColumnLabel); `field.label` is the raw
   // English AD name and must never reach the user (ETP-5681: the popup title read "Account").
   const resolvedLabel = label || field.label || '';
@@ -755,6 +772,10 @@ function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContex
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
+        // ETP-5948 — the line's committed value: the drawer opens marked and positioned on it.
+        value={value}
+        valueLabel={displayLabel}
+        committedItem={committedItemFromRow(field, row, value)}
         title={field.lookupTitle || resolvedLabel}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -1011,6 +1032,8 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <LookupTrigger
           field={col}
           label={resolveColumnLabel(col, locale, t)}
+          value={value}
+          row={row}
           displayLabel={displayLabel}
           selectorUrl={selectorUrl}
           selectorContext={selectorContext}
@@ -1228,6 +1251,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // (or has no balanceFooter at all) renders exactly as before this prop
   // existed.
   lineFormActive = false,
+  // The add-row config. Only its `fields` are read here: the inline commit applies
+  // `onSelectMappings` from those entry fields, not from the grid columns.
+  addRow,
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -1396,11 +1422,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const fontsReady = useFontsReady();
   const addRowDraft = useLinesAddRowDraft(entity);
   const defaultColumns = useMemo(
-    () => withContentWidths(withLinesAbsorberColumn((columns || []).filter(c => (
+    () => withContentWidths(withLinesAbsorberColumn(withEntryMappings((columns || []).filter(c => (
       isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
-    ))), rowsWithDraft(data, addRowDraft)),
+    )), addRow?.fields)), rowsWithDraft(data, addRowDraft)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fontsReady only triggers the re-measure
-    [columns, hiddenColumns, data, addRowDraft, fontsReady]
+    [columns, hiddenColumns, data, addRowDraft, fontsReady, addRow?.fields]
   );
   const gridColumnViewsFlag = useFeatureFlag(GRID_COLUMN_VIEWS);
   const gridViewEnabled = gridColumnViewsFlag && Boolean(specName && entity);

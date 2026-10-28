@@ -505,6 +505,61 @@ describe('TC-04 — grid row derives docNo/date/amount from the reversed invoice
 });
 
 // ---------------------------------------------------------------------------
+// ETP-5745 CP-12 — the ORIGINAL invoice must show the rectificativa(s) that point at it
+// (reverse direction: `reversedInvoice === recordId`, not `invoice === recordId`). Before the
+// fix, `fetchLines` kept only `invoice === recordId` rows, so an original invoice's own
+// "Rectificaciones" tab always rendered empty even with completed rectificativas linked to it.
+// ---------------------------------------------------------------------------
+
+describe('ETP-5745 CP-12 — an "incoming" row (this invoice is the original being rectified)', () => {
+  // The current record (RECORD_ID) is the ORIGINAL: `reversedInvoice` points at it, `invoice`
+  // is the rectificativa that was created against it.
+  const INCOMING_LINE = (extra = {}) => ({
+    id: 'line-incoming',
+    invoice: 'inv-rect-1',
+    'invoice$_identifier': '10000099 - 10-07-2026 - -363.00',
+    reversedInvoice: RECORD_ID,
+    aEAT349IsCorrective: 'N',
+    ...extra,
+  });
+
+  it('is listed even though `invoice` is not this record (reverse direction was previously dropped)', async () => {
+    renderPanel({ lines: [INCOMING_LINE()] });
+
+    // docNo appears in both "Factura original" and "Documento" columns, read from the
+    // RECTIFICATIVA side (`invoice$_identifier`), not the (circular) `reversedInvoice` side.
+    expect(await screen.findAllByText('10000099')).toHaveLength(2);
+    expect(screen.getByText('10/07/2026')).toBeInTheDocument();
+  });
+
+  it('both an outgoing and an incoming row render together', async () => {
+    renderPanel({ lines: [LINE(), INCOMING_LINE({ id: 'line-incoming-2' })] });
+
+    expect(await screen.findAllByText('10000067')).toHaveLength(2); // outgoing (LINE)
+    expect(screen.getAllByText('10000099')).toHaveLength(2);        // incoming
+  });
+
+  it('has no delete button — it is not this invoice\'s own child row to remove', async () => {
+    renderPanel({ lines: [INCOMING_LINE()] });
+
+    await screen.findAllByText('10000099');
+    expect(screen.queryByTestId('btn__deleteLine')).toBeNull();
+  });
+
+  it('expands read-only, showing the rectificativa (not a circular self-reference)', async () => {
+    renderPanel({ lines: [INCOMING_LINE()] });
+    await screen.findAllByText('10000099');
+    await expandFirstRow();
+
+    // The expanded "Factura original" field shows the rectificativa's own display, never the
+    // current record's id rendered as a dash/placeholder from a circular reference.
+    expect(await screen.findByText('10000099 · 10/07/2026 · -363,00 €')).toBeInTheDocument();
+    // Read-only: no search affordance to repick the invoice.
+    expect(screen.queryByLabelText('rectSearchAria')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // TC-05 / TC-06 — conditional AEAT-349 fields
 // ---------------------------------------------------------------------------
 

@@ -4,6 +4,8 @@ import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_TYPE } from './tokens';
 
+// committed-selection-ok: a short, static list-filter menu that already sets aria-selected from the active type; nothing to page or centre.
+
 const ALL = 'ALL';
 // Cross-type view that lists every archived (inactive) account regardless of type.
 const INACTIVE = 'INACTIVE';

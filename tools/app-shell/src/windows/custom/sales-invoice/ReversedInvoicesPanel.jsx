@@ -124,13 +124,33 @@ function draftSignature(draft) {
 
 // NEO does not send expanded reversedInvoice$documentNo/$invoiceDate/$grandTotalAmt
 // fields — parse them from the _identifier: "10000016 - 01-03-2021 - 14.52"
-function parseReversedRef(line) {
-  const ident = line?.['reversedInvoice$_identifier'] ?? '';
+// `field` lets the caller read either side of the C_Invoice_Reverse row: `reversedInvoice`
+// (the original, default) or `invoice` (the rectificativa — see isIncomingLine below).
+function parseReversedRef(line, field = 'reversedInvoice') {
+  const ident = line?.[`${field}$_identifier`] ?? '';
   const parts = ident.split(' - ');
   const docNo = parts[0] || ident || null;
   const date = parts[1] ? parts[1].replace(/-/g, '/') : null;
   const amount = parts[2] != null && parts[2] !== '' ? Number(parts[2]) : null;
   return { docNo, date, amount: Number.isNaN(amount) ? null : amount };
+}
+
+/**
+ * ETP-5745 CP-12 — a {@code C_Invoice_Reverse} row names the current invoice in one of two
+ * columns: `invoice` (it IS the rectificativa) or `reversedInvoice` (it is the ORIGINAL being
+ * rectified). `fetchLines` below now reads both directions, so this tells each row which side
+ * the current record is on: `true` means the row reached this invoice through `reversedInvoice`
+ * (an "incoming" rectification — this invoice is the original, the OTHER document is the one
+ * rectifying it) and the row must be displayed from the other side (`invoice`, not
+ * `reversedInvoice`) and treated as read-only — it is not this invoice's own child row to edit.
+ */
+function isIncomingLine(line, recordId) {
+  return line?.reversedInvoice === recordId && line?.invoice !== recordId;
+}
+
+/** The document to display for `line` from the perspective of `recordId` — see isIncomingLine. */
+function otherSideRef(line, recordId) {
+  return isIncomingLine(line, recordId) ? parseReversedRef(line, 'invoice') : parseReversedRef(line);
 }
 
 // ── CorrectivaBadge ───────────────────────────────────────────────────────────
@@ -810,8 +830,11 @@ export default function ReversedInvoicesPanel({
       const res = await apiFetch(`/reversedInvoices?_startRow=0&_endRow=200`);
       if (!res.ok) return;
       const json = await res.json();
-      // NEO ignores query-param filters — keep only rows of THIS invoice
-      const rows = parseRows(json).filter(l => l.invoice === recordId);
+      // NEO ignores query-param filters — keep only rows touching THIS invoice, on EITHER side:
+      // `invoice === recordId` (this invoice rectifies another) or `reversedInvoice === recordId`
+      // (another invoice rectifies this one). Before ETP-5745 CP-12 only the first half was kept,
+      // so the ORIGINAL invoice never saw the rectificativas that point back at it.
+      const rows = parseRows(json).filter(l => l.invoice === recordId || l.reversedInvoice === recordId);
       setLines(rows);
       onCountChange?.(rows.length);
     } catch { /* silent */ } finally {
@@ -1104,13 +1127,17 @@ export default function ReversedInvoicesPanel({
               const edits = pendingEdits[line.id] ?? {};
               const lineData = { ...line, ...edits };
               const corrective = isCorrective(lineData);
-              const ref = parseReversedRef(lineData);
-              const identifier = ref.docNo ?? lineData.reversedInvoice ?? '—';
+              const incoming = isIncomingLine(lineData, recordId);
+              const ref = otherSideRef(lineData, recordId);
+              const identifier = ref.docNo ?? (incoming ? lineData.invoice : lineData.reversedInvoice) ?? '—';
               const displayDate = ref.date ?? '—';
               const docNo = ref.docNo ?? identifier;
               const totalDisplay = ref.amount != null
                 ? formatCurrency('EUR', ref.amount)
                 : '—';
+              // An "incoming" row (this invoice is the ORIGINAL another document rectifies) is
+              // not this invoice's own child row — hide it from edit/delete (ETP-5745 CP-12).
+              const rowReadOnly = isReadOnly || incoming;
 
               return (
                 <React.Fragment key={line.id}>
@@ -1153,7 +1180,7 @@ export default function ReversedInvoicesPanel({
                     </td>
                     {/* Actions (three-dot menu placeholder — shows on hover) */}
                     <td className="px-2 align-middle opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                      {!isReadOnly && (
+                      {!rowReadOnly && (
                         <button
                           type="button"
                           onClick={() => deleteLine(line.id)}
@@ -1174,8 +1201,14 @@ export default function ReversedInvoicesPanel({
                     <tr>{renderGridCells(<>
                       <td colSpan={7} className="p-0">
                         <ExpandedForm
-                          lineData={lineData}
-                          readOnly={isReadOnly}
+                          // ExpandedForm always reads the `reversedInvoice`/`reversedInvoice$_identifier`
+                          // fields to render "Factura original". For an incoming row those point at
+                          // THIS invoice (circular) — the document to show is `invoice` instead, so it
+                          // is remapped here rather than teaching ExpandedForm about both directions.
+                          lineData={incoming
+                            ? { ...lineData, reversedInvoice: lineData.invoice, 'reversedInvoice$_identifier': lineData['invoice$_identifier'] }
+                            : lineData}
+                          readOnly={rowReadOnly}
                           isDraft={false}
                           onChange={(k, v) => handleChange(line.id, k, v)}
                           onFieldSave={(k, v) => handleFieldSave(line.id, line, k, v)}
