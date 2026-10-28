@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEnvironmentSwitch.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -37,6 +38,10 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 }));
 
 import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '../useEnvironmentSwitch.js';
+import {
+  setUnsavedChanges, subscribeNavigationPrompt, cancelPendingNavigation, confirmPendingNavigation,
+  installUnloadGuard, resetUnsavedChangesForTests,
+} from '@/lib/unsavedChanges.js';
 
 const ACME = {
   clientId: 'CLIENT-ACME',
@@ -175,6 +180,100 @@ describe('useEnvironmentSwitch', () => {
       expect(entered).toBe(false);
       expect(writtenAuthKeys()).toEqual([]);
       expect(fakeLocation.href).toBe('');
+    });
+  });
+
+  // ETP-5888 — switching from a form with unsaved changes. The switch used to rotate the session
+  // first and leave the only warning to the browser's `beforeunload`: cancelling it kept the page
+  // on the old tenant against a session on the new one, with `switching` stuck for good.
+  describe('switchTo behind the unsaved-changes guard', () => {
+    const ROLE_OK = { status: 'success', roleList: [{ id: 'ROLE-1', name: 'Admin', organizationList: [] }] };
+    let prompt;
+
+    beforeEach(() => {
+      resetUnsavedChangesForTests();
+      prompt = vi.fn();
+      subscribeNavigationPrompt(prompt);
+      setUnsavedChanges('invoice-form', true);
+      loginEnvironment.mockResolvedValue(ROLE_OK);
+    });
+
+    afterEach(() => resetUnsavedChangesForTests());
+
+    it('asks before touching the session when a form is dirty', async () => {
+      const { result } = renderDisabled();
+
+      act(() => { result.current.switchTo(ACME); });
+
+      expect(prompt).toHaveBeenCalledWith(true);
+      expect(loginEnvironment).not.toHaveBeenCalled();
+      expect(fakeLocation.href).toBe('');
+    });
+
+    it('leaves session, page and switcher untouched when the user cancels', async () => {
+      const { result } = renderDisabled();
+
+      let pending;
+      act(() => { pending = result.current.switchTo(ACME); });
+      act(() => { cancelPendingNavigation(); });
+
+      await expect(pending).resolves.toBe(false);
+      expect(loginEnvironment).not.toHaveBeenCalled();
+      expect(fakeLocation.href).toBe('');
+      expect(result.current.switching).toBeNull();
+    });
+
+    it('switches once the user discards, without a second native prompt', async () => {
+      const removeUnloadGuard = installUnloadGuard();
+      try {
+        const { result } = renderDisabled();
+
+        let pending;
+        act(() => { pending = result.current.switchTo(ACME); });
+        await act(async () => {
+          confirmPendingNavigation();
+          await pending;
+        });
+
+        expect(loginEnvironment).toHaveBeenCalledTimes(1);
+        expect(fakeLocation.href).toBe('/');
+        // The form is still registered as dirty; only the suppression keeps the reload from
+        // raising the browser's prompt on top of the one the user just answered.
+        const unload = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(unload);
+        expect(unload.defaultPrevented).toBe(false);
+      } finally {
+        removeUnloadGuard();
+      }
+    });
+
+    it('releases the spinner enterByClientName set when the user cancels', async () => {
+      fetchEnvironments.mockResolvedValue([ACME]);
+      const { result } = renderDisabled();
+
+      let pending;
+      act(() => { pending = result.current.enterByClientName('Acme Corp'); });
+      await waitFor(() => expect(prompt).toHaveBeenCalledWith(true));
+      act(() => { cancelPendingNavigation(); });
+
+      await expect(pending).resolves.toBe(false);
+      expect(loginEnvironment).not.toHaveBeenCalled();
+      await waitFor(() => expect(result.current.switching).toBeNull());
+    });
+
+    it('switches straight away when no form is dirty', async () => {
+      resetUnsavedChangesForTests();
+      subscribeNavigationPrompt(prompt);
+      const { result } = renderDisabled();
+
+      let entered;
+      await act(async () => {
+        entered = await result.current.switchTo(ACME);
+      });
+
+      expect(entered).toBe(true);
+      expect(prompt).not.toHaveBeenCalled();
+      expect(fakeLocation.href).toBe('/');
     });
   });
 

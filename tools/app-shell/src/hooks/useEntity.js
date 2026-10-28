@@ -1428,6 +1428,22 @@ export function useEntity(entity, childEntity, {
     // True when editing has diverged from the last-saved selected state.
     const isDirtyHeader = useMemo(() => dirtyHeaderFieldKeys.length > 0, [dirtyHeaderFieldKeys]);
 
+    // ETP-5888: what the unsaved-changes guard asks — would leaving lose something the USER did?
+    // For a saved record it is the same answer as isDirtyHeader. For a new one it is not: the
+    // /defaults response and the callouts that run when the form opens fill fields before the
+    // user touches anything, so isDirtyHeader is true from the first render and every way out of
+    // an untouched new record prompted. Here a new record counts every key the user authored —
+    // seeded keys included, as handleNew marks them user-changed — and counts it even when the
+    // user EMPTIED it: clearing a defaulted field is an edit, while isDirtyHeader's "has a value"
+    // rule would miss it. isDirtyHeader itself is left alone, so the Save button and every other
+    // reader keep their current behaviour. The refs are read inside the memo safely: every write
+    // to them goes with a setEditing, and `editing` is a dependency.
+    const hasUserHeaderEdits = useMemo(() => {
+        if (selected) return dirtyHeaderFieldKeys.length > 0;
+        return [...userChangedKeysRef.current].some(
+            key => key !== 'id' && isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef));
+    }, [dirtyHeaderFieldKeys, editing, selected]);
+
     // ETP-4563: shared client-side cache (app-shell-core). Null when no
     // DataProvider is mounted (e.g. isolated unit tests) — every read below then
     // falls back to a direct fetch, preserving the pre-cache behavior exactly.
@@ -2764,7 +2780,7 @@ export function useEntity(entity, childEntity, {
         recordError,
         runningProcess,
         blockingCondition, completionSignal,
-        isDirtyHeader, dirtyHeaderFieldKeys,
+        isDirtyHeader, dirtyHeaderFieldKeys, hasUserHeaderEdits,
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,

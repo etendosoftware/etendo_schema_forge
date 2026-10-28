@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
+import { requestTransition, suppressNextUnloadPrompt } from '@/lib/unsavedChanges.js';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
 
@@ -89,8 +90,7 @@ export function useEnvironmentSwitch({
     };
   }, [enabled, isAuthenticated]);
 
-  const switchTo = useCallback(async (env) => {
-    if (!isAuthenticated || !env?.adminUserId) return false;
+  const enterEnvironment = useCallback(async (env) => {
     setSwitching(env.clientId);
     try {
       // The backend rotates the session cookie for the target environment and
@@ -116,6 +116,11 @@ export function useEnvironmentSwitch({
       // Remembering the environment is a UX preference, deliberately outside the
       // session: logging out must not forget the last tenant entered.
       rememberEnvironment(env.clientId);
+      // ETP-5888 — the session already belongs to the new tenant, so this reload must not be
+      // vetoable: the user answered our own unsaved-changes prompt before the switch began, and
+      // a native `beforeunload` prompt on top of it could only cancel the reload, leaving the
+      // page on the old tenant against a session on the new one.
+      suppressNextUnloadPrompt();
       // The flag targeting identity belongs to the account, not the tenant, so it
       // survives — but anything cached per tenant must not, hence the full load.
       window.location.href = '/';
@@ -124,7 +129,30 @@ export function useEnvironmentSwitch({
       setSwitching(null);
       return false;
     }
-  }, [isAuthenticated, csrfToken]);
+  }, [csrfToken]);
+
+  /**
+   * Switches to `env`, asking first when a form holds unsaved changes.
+   *
+   * ETP-5888 — the question has to come BEFORE the session rotates. The switch used to rotate it
+   * and then reload, leaving the only warning to the browser's `beforeunload`: cancelling that
+   * prompt kept the page on the old tenant against a session on the new one, with `switching`
+   * stuck, so every later pick did nothing at all. Routed through the same gate as the side
+   * menu, the user sees our Save / Discard / Cancel prompt and a cancel leaves nothing changed.
+   *
+   * Resolves false when the switch is refused or the user cancels the prompt.
+   */
+  const switchTo = useCallback((env) => {
+    if (!isAuthenticated || !env?.adminUserId) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      requestTransition(() => { enterEnvironment(env).then(resolve); }, {
+        onCancel: () => {
+          setSwitching(null);
+          resolve(false);
+        },
+      });
+    });
+  }, [isAuthenticated, enterEnvironment]);
 
   /**
    * Enters an environment identified by name, re-reading the list first.
