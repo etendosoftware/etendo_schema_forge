@@ -611,7 +611,10 @@ describe('CurrencyRatePicker', () => {
     );
 
     await userEvent.click(screen.getByTestId('currency-rate-trigger'));
-    expect(await screen.findByText('Sin resultados')).toBeInTheDocument();
+    // ETP-5948: with no options loaded, the committed currency is still listed (pinned, marked)
+    // instead of "Sin resultados".
+    expect(await screen.findByTestId('currency-rate-option-usd-id')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Sin resultados')).not.toBeInTheDocument();
   });
 
   describe('ETP-5107 — comma-decimal rates', () => {
@@ -716,5 +719,103 @@ describe('CurrencyRatePicker', () => {
       expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 1.5, 'EM_ETGO_Currency_Rate');
       expect(onChange).not.toHaveBeenCalledWith('eTGOCurrencyRate', 1500, 'EM_ETGO_Currency_Rate');
     });
+  });
+});
+
+// ETP-5948 — the ETP-5903 reopen behaviour on the Moneda picker: the committed currency is marked
+// (✓ + aria-selected), the keyboard highlight is separate (data-highlighted + aria-activedescendant),
+// arrows start from the committed row, and a stored currency the list no longer offers is pinned.
+describe('CurrencyRatePicker — committed value on reopen (ETP-5948)', () => {
+  const THREE = [
+    { id: 'usd-id', isoCode: 'USD', rate: 1.2345 },
+    { id: 'gbp-id', isoCode: 'GBP', rate: 0.85 },
+    { id: 'eur-id', isoCode: 'EUR', rate: 1, isOrgCurrency: true },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = mkFetch(THREE);
+  });
+
+  async function openList(props) {
+    const view = renderPicker(props);
+    fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+    await screen.findByTestId('currency-rate-option-gbp-id');
+    return view;
+  }
+
+  it('marks only the committed currency with the check and aria-selected', async () => {
+    await openList({ value: 'gbp-id', displayValue: 'GBP' });
+
+    expect(screen.getByTestId('currency-rate-option-gbp-id')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('currency-rate-option-usd-id')).toHaveAttribute('aria-selected', 'false');
+    expect(within(screen.getByTestId('currency-rate-option-gbp-id')).getByTestId('currency-rate-option-check')).toBeInTheDocument();
+    expect(screen.getAllByTestId('currency-rate-option-check')).toHaveLength(1);
+  });
+
+  it('starts the arrows from the committed currency and never uses aria-selected for the highlight', async () => {
+    await openList({ value: 'usd-id', displayValue: 'USD' });
+    const input = screen.getByPlaceholderText('Buscar moneda...');
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    const next = screen.getByTestId('currency-rate-option-gbp-id');
+    expect(next).toHaveAttribute('data-highlighted', 'true');
+    expect(next).toHaveAttribute('aria-selected', 'false');
+    expect(input).toHaveAttribute('aria-activedescendant', next.id);
+  });
+
+  it('starts the arrows from the top once the user types a search', async () => {
+    await openList({ value: 'eur-id', displayValue: 'EUR' });
+    const input = screen.getByPlaceholderText('Buscar moneda...');
+
+    fireEvent.change(input, { target: { value: 'u' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    expect(screen.getByTestId('currency-rate-option-usd-id')).toHaveAttribute('data-highlighted', 'true');
+  });
+
+  it('ignores Enter while nothing is highlighted', async () => {
+    const { onChange } = await openList({ value: 'usd-id', displayValue: 'USD' });
+
+    fireEvent.keyDown(screen.getByPlaceholderText('Buscar moneda...'), { key: 'Enter' });
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('selects the highlighted currency with Enter', async () => {
+    const { onChange } = await openList({ value: 'usd-id', displayValue: 'USD' });
+    const input = screen.getByPlaceholderText('Buscar moneda...');
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onChange).toHaveBeenCalledWith('cCurrencyId', 'gbp-id', 'C_Currency_ID');
+  });
+
+  it('pins a stored currency the list no longer offers on top, marked', async () => {
+    await openList({ value: 'old-id', displayValue: 'CHF' });
+
+    const options = screen.getAllByRole('option');
+    expect(options[0]).toHaveAttribute('data-testid', 'currency-rate-option-old-id');
+    expect(options[0]).toHaveTextContent('CHF');
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('re-picking the committed currency closes the list and stages nothing', async () => {
+    const { onChange } = await openList({ value: 'old-id', displayValue: 'CHF', formData: { id: 'rec-1', eTGOCurrencyRate: 0.95 } });
+
+    fireEvent.click(screen.getByTestId('currency-rate-option-old-id'));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText('Buscar moneda...')).not.toBeInTheDocument();
+  });
+
+  it('marks nothing and keeps the arrows from the top without a committed value', async () => {
+    await openList({ value: '', displayValue: '' });
+
+    expect(screen.queryAllByTestId('currency-rate-option-check')).toHaveLength(0);
+    fireEvent.keyDown(screen.getByPlaceholderText('Buscar moneda...'), { key: 'ArrowDown' });
+    expect(screen.getByTestId('currency-rate-option-usd-id')).toHaveAttribute('data-highlighted', 'true');
   });
 });
