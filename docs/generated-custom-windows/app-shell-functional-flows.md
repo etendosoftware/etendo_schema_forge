@@ -1004,7 +1004,7 @@ nothing if X has nothing to render there.
 ## Personal grid-column views
 
 Supported standard ListView lists and ListModalWindow grids offer Columns and Save
-view under the single `grid-column-views` flag (enabled by default). Users can hide
+view under the single `grid-column-views` flag (disabled by default; see the rollout notes in [feature flags](../feature-flags.md#personal-business-grid-views)). Users can hide
 optional data columns, reorder them and adjust their widths, then explicitly save
 for their own user/spec/entity. Selection checkboxes and action columns remain
 available outside the saved data-column list. Required/locked columns keep the

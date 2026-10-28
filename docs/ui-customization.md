@@ -21,8 +21,8 @@ tools/app-shell/src/windows/custom/{window}/ (your hand-written components)
 ### Personal business-grid views
 
 `GRID_COLUMN_VIEWS` (`grid-column-views`) gates the existing `useGridView` and
-`GridViewControls` integration. Its shipped default is true; an explicit remote
-provider value of false (or a deterministic local override) disables it. A view belongs to the authenticated user and a verified
+`GridViewControls` integration. Its shipped default is false (it ships dark); an explicit remote
+provider value of true (or a deterministic local override) enables it. A view belongs to the authenticated user and a verified
 configured spec/entity, never to a display name, selected parent record, or invented
 endpoint alias. Saving column visibility, order and widths is explicit; sorting,
 filters, selection, expansion, drafts and business actions stay with their original

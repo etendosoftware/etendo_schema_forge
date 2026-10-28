@@ -221,13 +221,25 @@ its behaviour is documented in its topic doc and in `com.etendoerp.go`
 ## Personal business-grid views
 
 `GRID_COLUMN_VIEWS` (`grid-column-views`) is the single switch for personal column
-visibility, order and widths. Its shipped default is **true**, including when no
-provider answers; an explicit remote provider value of false (or a deterministic
-local override) disables it. No per-window
+visibility, order and widths. Its shipped default is **false** (the feature ships
+dark), including when no provider answers; it is turned on by an explicit remote
+provider value of true or a deterministic local override
+(`VITE_FEATURE_FLAGS='{"grid-column-views":true}'`, fixed at server start). No per-window
 flags are introduced. Saving is explicit and scoped by authenticated user, spec and entity;
 filters, sorting, selected rows and business actions are not saved. An entity scope must match
 an entity registered in that spec; Unicode letters, digits, `.`, `_`, `-` and parentheses are
 supported in entity names. The preference key hashes the spec/entity pair.
+
+**Rollout and rollback.** The flag ships off, so the default build, the push gate and the
+default Playwright run exercise the original grids; only the specs specific to this feature
+run with it on (they skip themselves unless the server was started with the flag on). To
+roll out, turn it on for a chosen environment through the remote provider or
+`VITE_FEATURE_FLAGS`, and check the surfaces listed in
+[bespoke grid views](bespoke-grid-views.md) there before widening it. To roll back, set it
+back to false: every surface returns to its original column layout and no personal-view
+request is made. Saved views are not deleted by turning the flag off; they live in the
+user's preferences and apply again when it is turned on. A stored view whose schema does not
+match the current columns is normalized or ignored, never shown as saved.
 
 ListView entry points qualify only when the registry identifies a generated page
 or an audited forwarding wrapper, and the loaded contract declares the standard

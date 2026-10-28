@@ -102,7 +102,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [UNIFIED_CALENDAR_POC]: false,
   [IMPORT_BATCH_SIZE]: 0,
   [MY_COMPANIES_PAGE]: false,
-  [GRID_COLUMN_VIEWS]: true,
+  [GRID_COLUMN_VIEWS]: false,
   [CONTACT_CATEGORY_TYPE]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
