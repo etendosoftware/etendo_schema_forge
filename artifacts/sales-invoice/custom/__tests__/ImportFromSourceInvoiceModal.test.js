@@ -1,3 +1,4 @@
+// @covers artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
@@ -19,7 +20,7 @@ const { helpers, source: src } = loadCustomModule(
   // which is what the mocks below install.
   { moduleApiFetch: apiFetchToGlobalFetch },
 );
-const { fetchDocuments, fetchLines, buildLineBody, afterImport } = helpers;
+const { fetchDocuments, fetchLines, buildLineBody } = helpers;
 
 // The invoice-line -> order-line FK key, read from the generated contract
 // (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
@@ -41,10 +42,16 @@ describe('ImportFromSourceInvoiceModal — source shape', () => {
     assert.match(src, /transactionDocument\$etsgIsRectificative.*notEqual.*value:\s*true/);
   });
 
-  it('shows the quantity stepper as negative and links back to the source invoice(s)', () => {
+  it('shows the quantity stepper as negative', () => {
     assert.match(src, /negativeQuantity/);
-    assert.match(src, /originInvoices/);
-    assert.match(src, /afterImport=\{afterImport\}/);
+  });
+
+  // ETP-6002: the origin link is written by the backend on each line POST (sourceInvoiceLineId).
+  // The header PATCH it replaces always failed with 409 stale_record, so it must not come back.
+  it('does not PATCH the header with originInvoices after the import', () => {
+    assert.doesNotMatch(src, /afterImport=/);
+    assert.doesNotMatch(src, /method:\s*'PATCH'/);
+    assert.equal(helpers.afterImport, undefined);
   });
 
   it('wires the source-invoice-specific i18n keys', () => {
@@ -262,49 +269,5 @@ describe('ImportFromSourceInvoiceModal — duplicate detection via sourceInvoice
     });
     assert.equal(lines.find(l => l.id === 'source-line-1')._alreadyImported, true);
     assert.equal(lines.find(l => l.id === 'source-line-2')._alreadyImported, false);
-  });
-});
-
-describe('ImportFromSourceInvoiceModal — afterImport (ETP-4919: multi-origin fix)', () => {
-  afterEach(() => {
-    mock.reset();
-  });
-
-  it('PATCHes originInvoices with a single id when importing from one source invoice', async () => {
-    globalThis.fetch = mock.fn(async () => ({ ok: true, json: async () => ({}) }));
-    await afterImport({
-      importedDocIds: new Set(['source-1']),
-      base: '/b', headers: {}, invoiceId: 'inv1',
-    });
-    assert.equal(globalThis.fetch.mock.calls.length, 1);
-    const [url, opts] = globalThis.fetch.mock.calls[0].arguments;
-    assert.equal(url, '/b/sales-invoice/header/inv1');
-    assert.equal(opts.method, 'PATCH');
-    assert.deepEqual(JSON.parse(opts.body), { originInvoices: ['source-1'] });
-  });
-
-  it('PATCHes originInvoices with BOTH ids when importing from two source invoices — this used to silently drop the first one', async () => {
-    globalThis.fetch = mock.fn(async () => ({ ok: true, json: async () => ({}) }));
-    await afterImport({
-      importedDocIds: new Set(['source-1', 'source-2']),
-      base: '/b', headers: {}, invoiceId: 'inv1',
-    });
-    assert.equal(globalThis.fetch.mock.calls.length, 1);
-    const [, opts] = globalThis.fetch.mock.calls[0].arguments;
-    assert.deepEqual(JSON.parse(opts.body), { originInvoices: ['source-1', 'source-2'] });
-  });
-
-  it('does not PATCH when nothing was imported', async () => {
-    globalThis.fetch = mock.fn(async () => ({ ok: true, json: async () => ({}) }));
-    await afterImport({ importedDocIds: new Set(), base: '/b', headers: {}, invoiceId: 'inv1' });
-    assert.equal(globalThis.fetch.mock.calls.length, 0);
-  });
-
-  it('swallows a fetch failure (best-effort link, lines are already imported regardless)', async () => {
-    globalThis.fetch = mock.fn(async () => { throw new Error('network error'); });
-    await assert.doesNotReject(afterImport({
-      importedDocIds: new Set(['source-1']),
-      base: '/b', headers: {}, invoiceId: 'inv1',
-    }));
   });
 });

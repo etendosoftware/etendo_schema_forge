@@ -1,5 +1,6 @@
 // @covers artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx
 // @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
+// @covers artifacts/sales-invoice/custom/ImportFromSourceInvoiceModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
@@ -357,7 +358,10 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
 // ---------------------------------------------------------------------------
 // ETP-4737: Import from Source Invoice — negative quantity, already-imported
-// detection, and the originInvoice link-back PATCH.
+// detection, and the origin link. Since ETP-6002 the link to the source invoice
+// (C_Invoice_Reverse) is written by the backend when each line is created from a
+// POST carrying `sourceInvoiceLineId`; the modal no longer PATCHes the header's
+// `originInvoices` (that PATCH always came back 409 stale_record).
 // ---------------------------------------------------------------------------
 
 const SRC_INVOICE_ID2 = 'mock-inv-src-001';
@@ -464,8 +468,8 @@ function isPlainLinesPath(url) {
 }
 
 async function installSourceInvoiceMocks(page, state) {
-  // Header: detail GET, currency-lookup GET (same URL), candidate-list GET, and the
-  // afterImport PATCH that links originInvoice back to the source invoice.
+  // Header: detail GET, currency-lookup GET (same URL), candidate-list GET, and any
+  // header PATCH — captured so the test can assert none of them carries `originInvoices`.
   await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
@@ -551,7 +555,7 @@ async function installSourceInvoiceMocks(page, state) {
 }
 
 test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
-  test('shows negative quantity, blocks re-import of an already-imported line, and links originInvoice on success', async ({ page }) => {
+  test('shows negative quantity, blocks re-import of an already-imported line, and links the source via the line POST, not a header PATCH', async ({ page }) => {
     const state = { postBodies: [], patchBodies: [] };
 
     await login(page);
@@ -602,16 +606,18 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     expect(state.postBodies[0].salesOrderLine).toBe(ORDER_LINE_ID);
     expect(Object.hasOwn(state.postBodies[0], 'cOrderlineId')).toBe(false);
 
-    // Assertion: after a successful import, afterImport PATCHes the header's originInvoices
-    // virtual field (ETP-4919: plural — a rectificativa can be linked to more than one source
-    // invoice across separate import runs) with the source invoice's id. Other unrelated
-    // PATCHes to the same header (e.g. autosave) may also fire, so find the one that actually
-    // carries originInvoices rather than assuming it is the first captured PATCH.
-    await expect.poll(
-      () => state.patchBodies.some((b) => b.originInvoices !== undefined),
-      { timeout: 5_000 },
-    ).toBe(true);
-    const originInvoicePatch = state.patchBodies.find((b) => b.originInvoices !== undefined);
-    expect(originInvoicePatch.originInvoices).toEqual([SOURCE_INVOICE_ID]);
+    // ETP-6002: the source-invoice link is carried by the line itself — each line POST
+    // must reference its source line under `sourceInvoiceLineId`, which is what the backend
+    // (SalesRectificativeLineLinkSupport) uses to write C_Invoice_Reverse in the same
+    // transaction as the line. Dropping this key would leave the rectificativa unlinked
+    // with no error anywhere.
+    expect(state.postBodies[0].sourceInvoiceLineId).toBe(SRC_LINE_2_ID);
+
+    // The import has finished once the modal is gone (it closes on success). Checked after
+    // that point, not polled, so a header PATCH carrying `originInvoices` cannot slip in
+    // unseen: the modal must not PATCH the header to link the source invoice any more (that
+    // PATCH carried the pre-import `updated` token and always came back 409 stale_record).
+    await expect(page.locator('.fixed.inset-0.z-50')).toHaveCount(0, { timeout: 5_000 });
+    expect(state.patchBodies.filter((b) => Object.hasOwn(b, 'originInvoices'))).toEqual([]);
   });
 });

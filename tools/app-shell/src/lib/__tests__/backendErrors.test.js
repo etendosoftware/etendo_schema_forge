@@ -15,6 +15,8 @@ import {
   parseBackendError,
   translateBackendErrorResponse,
   translateBackendErrorBody,
+  translateImportRefusal,
+  isImportRefusalCode,
 } from '../backendErrors.js';
 
 /**
@@ -3996,5 +3998,101 @@ describe('translateBackendError — draft invoice already exists (ETP-5714)', ()
     }
     const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
     assert.ok(ar.includes('Confirmala o eliminala antes de generar otra'));
+  });
+});
+
+// Line-import action refusals (ETP-6002): `{ error: { code, message, product, requested, pending } }`
+// from DocumentLineImport / InvoiceGlobalDiscountRule. The code picks the SPA sentence; the server's
+// English `message` must never reach the user.
+describe('translateImportRefusal / isImportRefusalCode — line-import refusals (ETP-6002)', () => {
+  const loadLabels = (locale) => JSON.parse(
+    readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+  ).genericLabels;
+  const esLabels = loadLabels('es_ES');
+  const es = fakeUiTranslator(esLabels);
+  const FALLBACK = 'No se pudieron importar las líneas';
+  const DETAILS = { product: 'Fernet', requested: 9, pending: 2 };
+  const refusal = (code, details = DETAILS) => ({
+    error: { status: 409, code, message: `English prose for ${code}`, ...details },
+  });
+
+  // code -> i18n key. `globalDiscountConflict` is the one code outside the `import*` prefix.
+  const MAPPED = [
+    ['importTargetNotDraft', 'backendError.importTargetNotDraft'],
+    ['importSourceNotCompleted', 'backendError.importSourceNotCompleted'],
+    ['importBusinessPartnerMismatch', 'backendError.importBusinessPartnerMismatch'],
+    ['importCurrencyMismatch', 'backendError.importCurrencyMismatch'],
+    ['importDirectionMismatch', 'backendError.importDirectionMismatch'],
+    ['importQuantityExceedsPending', 'backendError.importQuantityExceedsPending'],
+    ['importLineNotInDocument', 'backendError.importLineNotInDocument'],
+    ['importNothingPending', 'backendError.importNothingPending'],
+    ['importInvalidLine', 'backendError.importInvalidLine'],
+    ['importDocumentNotFound', 'backendError.importDocumentNotFound'],
+    ['importPriceListRequired', 'backendError.importPriceListRequired'],
+    ['importQuantityNotHonoured', 'backendError.importQuantityNotHonoured'],
+    ['importNoStorageBin', 'backendError.importNoStorageBin'],
+    ['globalDiscountConflict', 'backendError.importGlobalDiscountConflict'],
+  ];
+  const NOTHING_PENDING_ON_LINE = 'backendError.importQuantityNothingPendingOnLine';
+
+  for (const [code, key] of MAPPED) {
+    it(`${code} renders ${key} with its details, never the server prose`, () => {
+      const expected = esLabels[key]
+        .replace('{product}', 'Fernet').replace('{requested}', '9').replace('{pending}', '2');
+      const result = translateImportRefusal(refusal(code), es, FALLBACK);
+      assert.equal(result, expected);
+      assert.doesNotMatch(result, /English prose|\{(product|requested|pending)\}/);
+      assert.equal(isImportRefusalCode(code), true);
+    });
+  }
+
+  it('importQuantityExceedsPending with pending 0 (number or string) uses the nothing-pending sentence', () => {
+    for (const pending of [0, '0']) {
+      assert.equal(
+        translateImportRefusal(refusal('importQuantityExceedsPending', { ...DETAILS, pending }), es, FALLBACK),
+        'No se pueden importar 9 de Fernet: no queda nada pendiente en esta línea '
+          + '(las cantidades ya incluidas en documentos en borrador cuentan como usadas).',
+        `pending=${JSON.stringify(pending)}`,
+      );
+    }
+  });
+
+  it('an unmapped import* code falls back to the given message, not to the English prose', () => {
+    assert.equal(isImportRefusalCode('importSomethingNew'), true);
+    assert.equal(translateImportRefusal(refusal('importSomethingNew'), es, FALLBACK), FALLBACK);
+  });
+
+  it('a mapped code whose key is missing from the locale, or with no translator, falls back', () => {
+    assert.equal(translateImportRefusal(refusal('importTargetNotDraft'), fakeUiTranslator({}), FALLBACK), FALLBACK);
+    assert.equal(translateImportRefusal(refusal('importTargetNotDraft'), undefined, FALLBACK), FALLBACK);
+  });
+
+  it('isImportRefusalCode is false outside the family', () => {
+    for (const code of ['important', 'draftInvoiceExists', 'stale_record', '', undefined, null, 42]) {
+      assert.equal(isImportRefusalCode(code), false, String(code));
+    }
+  });
+
+  it('a non-import body is translated exactly as translateBackendErrorBody does', () => {
+    const t = fakeUiTranslator({
+      'backendError.draftInvoiceExists': 'El pedido ya tiene una factura en borrador ({docs}). Confírmala o elimínala antes de generar otra.',
+    });
+    const body = { error: { status: 409, code: 'draftInvoiceExists', message: 'This order already has a draft invoice (INV-9).' } };
+    const result = translateImportRefusal(body, t, FALLBACK);
+    assert.equal(result, 'El pedido ya tiene una factura en borrador (INV-9). Confírmala o elimínala antes de generar otra.');
+    assert.equal(result, translateBackendErrorBody(body, t, FALLBACK));
+  });
+
+  it('every mapped key exists in en_US and es_ES; the quantity sentences keep their placeholders', () => {
+    const keys = [...MAPPED.map(([, key]) => key), NOTHING_PENDING_ON_LINE];
+    for (const locale of ['en_US', 'es_ES']) {
+      const labels = loadLabels(locale);
+      for (const key of keys) {
+        assert.equal(typeof labels[key], 'string', `${locale}: ${key}`);
+        assert.ok(labels[key].trim().length > 0, `${locale}: ${key} is empty`);
+      }
+      assert.match(labels['backendError.importQuantityExceedsPending'], /\{requested\}.*\{product\}.*\{pending\}/, locale);
+      assert.match(labels[NOTHING_PENDING_ON_LINE], /\{requested\}.*\{product\}/, locale);
+    }
   });
 });

@@ -84,7 +84,8 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['sales-order:o1'],
     },
     {
-      name: 'sales-invoice: linkedShipments classified by isReturn (ETP-4534), sourceInvoice',
+      // ETP-6002: a deduced `sourceInvoice` (return → shipment → invoice) is not a chip.
+      name: 'sales-invoice: linkedShipments classified by isReturn (ETP-4534), no deduced sourceInvoice',
       spec: 'sales-invoice',
       record: {
         id: 'i1',
@@ -92,30 +93,22 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
         sourceInvoice: { id: 'i0' },
       },
       backend: {},
-      expected: ['shipment:s1', 'return-material-receipt:r1', 'shipment:s2', 'sales-invoice:i0'],
+      expected: ['shipment:s1', 'return-material-receipt:r1', 'shipment:s2'],
     },
     {
-      name: 'sales-invoice RECTIFICATIVA: the other invoices of its order, itself excluded',
+      // ETP-6002 (CP-16): the other invoices of the same order are not what a rectificative
+      // rectifies — only its C_Invoice_Reverse links are.
+      name: 'sales-invoice RECTIFICATIVA: no "same order" invoices, only the order itself',
       spec: 'sales-invoice',
       record: { id: 'i1', salesOrder: 'o1', arInvoiceSubtype: 'RECTIFICATIVA' },
       backend: {
         byId: { 'sales-order/header/o1': { id: 'o1' } },
         byCriteria: { 'sales-invoice/header?salesOrder=o1': [{ id: 'i0' }, { id: 'i1' }] },
       },
-      expected: ['sales-order:o1', 'sales-invoice:i0'],
-    },
-    {
-      name: 'sales-invoice FAC: no rectified-invoice lookup even with siblings on the order',
-      spec: 'sales-invoice',
-      record: { id: 'i1', salesOrder: 'o1', arInvoiceSubtype: 'FAC' },
-      backend: {
-        byId: { 'sales-order/header/o1': { id: 'o1' } },
-        byCriteria: { 'sales-invoice/header?salesOrder=o1': [{ id: 'i0' }] },
-      },
       expected: ['sales-order:o1'],
     },
     {
-      name: 'sales-invoice: every originInvoices entry (ETP-4919), a rectified duplicate shown once',
+      name: 'sales-invoice: every originInvoices entry (ETP-4919)',
       spec: 'sales-invoice',
       record: { id: 'i1', salesOrder: 'o1', arInvoiceSubtype: 'RECTIFICATIVA', originInvoices: [{ id: 'i0' }, { id: 'i9' }] },
       backend: {
@@ -124,7 +117,6 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
           'sales-invoice/header/i0': { id: 'i0' },
           'sales-invoice/header/i9': { id: 'i9' },
         },
-        byCriteria: { 'sales-invoice/header?salesOrder=o1': [{ id: 'i0' }] },
       },
       expected: ['sales-order:o1', 'sales-invoice:i0', 'sales-invoice:i9'],
     },
@@ -161,6 +153,23 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['sales-invoice:i-origin', 'sales-invoice:i-rectifying'],
     },
     {
+      // ETP-6002 (IMP-3): the quotation lists the shipments whose lines point at its lines.
+      name: 'sales-quotation: its shipments and returns from linkedShipments',
+      spec: 'sales-quotation',
+      record: { id: 'q1', linkedShipments: [{ id: 's1', isReturn: false }, { id: 'r1', isReturn: true }] },
+      backend: {},
+      expected: ['shipment:s1', 'return-material-receipt:r1'],
+    },
+    {
+      // ETP-6002 (IMP-3): a quotation among the shipment's linkedOrders is a quotation chip.
+      // An entry with no flag at all (the handler only sets it on quotations) stays an order.
+      name: 'goods-shipment: a linked quotation renders as sales-quotation, an order (flag false or absent) as sales-order',
+      spec: 'goods-shipment',
+      record: { id: 's1', linkedOrders: [{ id: 'q1', isQuotation: true }, { id: 'o1', isQuotation: false }, { id: 'o2' }] },
+      backend: {},
+      expected: ['sales-quotation:q1', 'sales-order:o1', 'sales-order:o2'],
+    },
+    {
       name: 'goods-shipment: read from the detail record only',
       spec: 'goods-shipment',
       record: { id: 's1', linkedOrders: [{ id: 'o1' }], linkedInvoices: [{ id: 'i1' }], returnReceipts: [{ id: 'r1' }] },
@@ -177,6 +186,17 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
   ])('$name', async ({ spec, record, backend: data, expected }) => {
     Object.assign(backend, data);
     expect(chips(await resolve(spec, record))).toEqual(expected);
+  });
+
+  // ETP-6002 (CP-17): the origin chip is the full origin record (amount, status), never the
+  // bare {id, documentNo} a deduced `sourceInvoice` used to put first in the dedupe.
+  it('sales-invoice: the origin chip carries the full originInvoices record', async () => {
+    const origin = { id: 'i0', documentNo: 'FV1', grandTotalAmount: 121, documentStatus: 'CO' };
+    backend.byId = { 'sales-invoice/header/i0': origin };
+    const items = await resolve('sales-invoice', {
+      id: 'i1', originInvoices: [{ id: 'i0', documentNo: 'FV1' }], sourceInvoice: { id: 'i0', documentNo: 'FV1' },
+    });
+    expect(items).toEqual([{ type: 'sales-invoice', doc: origin }]);
   });
 
   it('sales-order: falls back to the quotation identifier when the quotation cannot be read', async () => {
@@ -199,7 +219,6 @@ describe('SALES_RELATED_DOCS — depsKey covers every record field a fetch sourc
   it.each([
     ['sales-order', { quotation: 'q1' }, { quotation: 'q2' }],
     ['sales-invoice', { salesOrder: 'o1' }, { salesOrder: 'o2' }],
-    ['sales-invoice', { arInvoiceSubtype: 'FAC' }, { arInvoiceSubtype: 'RECTIFICATIVA' }],
     ['sales-invoice', { originInvoices: [{ id: 'a' }] }, { originInvoices: [{ id: 'a' }, { id: 'b' }] }],
     ['sales-invoice', { originInvoice: 'a' }, { originInvoice: 'b' }],
     ['sales-invoice', { rectifyingInvoices: [{ id: 'a' }] }, { rectifyingInvoices: [{ id: 'a' }, { id: 'b' }] }],

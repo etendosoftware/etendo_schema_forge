@@ -153,7 +153,9 @@ const submitOrderImport = async ({ lines, base, invoiceId, selection, serverCarr
     if (!byOrder.has(docId)) byOrder.set(docId, []);
     byOrder.get(docId).push({ sourceLineId: line.id, quantity });
   }
-  if (byOrder.size === 0) return { ok: false };
+  // Every selected quantity is 0: nothing is sent. Same message the modal's own quantity check
+  // shows for a zero quantity, so the user knows what to fix (the modal stays open).
+  if (byOrder.size === 0) return { ok: false, error: ui('qtyMustBePositive') };
   const carry = serverCarry(selection);
   const res = await moduleApiFetch(actionUrl(base, invoiceId, 'importOrderLines'), {
     method: 'POST',
