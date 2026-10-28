@@ -1,0 +1,68 @@
+name: E2E Coverage Map
+
+# ETP-5891: on every push to develop, runs the mocked Playwright suite with browser coverage
+# (e2e/tests/helpers/test.js) and publishes the map "app source file → mocked specs that execute
+# it" as the `e2e-coverage-map` artifact of that develop commit. The pre-push reads it to run only
+# the mocked specs a change can affect (scripts/select-mocked-specs.js, which finds it through
+# scripts/lib/e2e-coverage-map-lookup.js). The PR's mini pipeline and the cut still run every spec.
+#
+# cancel-in-progress: of a burst of merges only the last is mapped; the pre-push takes the newest
+# map within the last 20 merges into develop. A red suite publishes nothing: the pre-push then uses
+# an older map or runs the whole suite.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-coverage-map
+  cancel-in-progress: true
+
+jobs:
+  map:
+    name: Build the coverage map
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read   # npm install from npm.pkg.github.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp .env.example .env
+          make install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Mocked E2E with coverage
+        env:
+          E2E_SUITE: mocked
+          E2E_COVERAGE_DIR: ${{ runner.temp }}/e2e-coverage
+          E2E_COVERAGE_DIST: ${{ github.workspace }}/tools/app-shell/dist-e2e
+        run: make test-e2e-headless
+
+      - name: Build the map
+        run: node scripts/e2e-coverage-map.mjs build "$RUNNER_TEMP/e2e-coverage" map.json --commit "$GITHUB_SHA"
+
+      - name: Publish the map
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-coverage-map
+          path: map.json
+          retention-days: 14
+          if-no-files-found: error
