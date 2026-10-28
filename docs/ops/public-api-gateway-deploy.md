@@ -6,12 +6,14 @@ ETP-5862, ETP-6024. Deployment of the public API gateway (`gateway/`, the ETP-53
 
 The workflow `.github/workflows/deploy-public-api.yml`:
 
-- **Triggers** on push to `main` touching `gateway/**`, `public-api/**`, `package.json` (the core pin) or the workflow itself. On pull requests touching the same paths it only builds and smoke-tests the image; it never publishes or deploys.
+- **Triggers** on push to `main` touching `gateway/**`, `public-api/**`, `package.json` (the core pin) or the workflow itself. A push where `package.json` changed but the core pin did not (any other dependency bump) deploys nothing. On pull requests touching the same paths it only runs the gateway tests and builds and smoke-tests the image; it never publishes or deploys.
 - **Takes the core from the pin**, not from a local checkout: `schema_forge_core` is checked out at the git tag of the exact version in `package.json` (`@etendosoftware/schema-forge-core`). A core change reaches production when its bump PR (opened by `bump-core-on-release.yml`) reaches `main`.
-- **Smoke-tests the image before publishing** (no configuration needed): `/healthz`, `/api` 200, `/api/openapi.json` 200, `/api/v1/products` without key 401.
+- **Runs the gateway tests** (`npm test` in `gateway/`, against the `api-gateway-core` packed from the pinned core) on PRs and on `main`, before building. A failure stops the deploy.
+- **Smoke-tests the image before publishing** (no configuration needed): `/healthz`, `/api` 200, `/api/openapi.json` 200, `/api/v1/product` without key 401.
 - **Deploys by digest**, cloning the task definition revision the service is running (not the latest of the family), and verifies: rollout `COMPLETED`, every running task on the new revision, `HEALTHY` and with the expected digest, then the section 6 smoke checks through the public host.
 - **Rolls back automatically** to the previous running revision if any step after registering the task definition fails.
-- **Credentials:** AWS OIDC role `etendo-public-api-deploy` (only `main` of this repo can assume it; it can push only to `etendo/public-api-gateway` and update only this service). The core is read with the read-only deploy key secret `CORE_DEPLOY_KEY`.
+- **Credentials:** AWS OIDC role `etendo-public-api-deploy` (only `main` of this repo can assume it; it can push only to `etendo/public-api-gateway` and update only this service). The account id and the role ARN are repository secrets (`AWS_ACCOUNT_ID`, `PUBLIC_API_DEPLOY_ROLE_ARN`), so this public repo's Actions logs mask them; task definitions are shown as `family:revision` only. The core is read with the read-only deploy key secret `CORE_DEPLOY_KEY`.
+- **`redeploy_tag`** is validated against `^sf-[0-9a-f]{7}-core-[0-9a-f]{7}$` and never interpolated into the script.
 
 **Rollback or redeploy:** Actions → "Deploy Public API gateway" → Run workflow on `main` with `redeploy_tag=<existing ECR tag>`. It goes through the same verification.
 

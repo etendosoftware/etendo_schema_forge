@@ -24,10 +24,16 @@ name: Deploy Public API gateway
 # reviewers to the job (that also changes the OIDC sub — update the role).
 #
 # CREDENTIALS
-# AWS via OIDC role etendo-public-api-deploy (infra repo, 14-security.yaml).
-# No static AWS keys. The role can only push to ECR etendo/public-api-gateway
-# and update this one service. schema_forge_core is read with the read-only
-# deploy key CORE_DEPLOY_KEY.
+# AWS via an OIDC role (infra repo, 14-security.yaml). No static AWS keys. The
+# role can only push to ECR etendo/public-api-gateway and update this one
+# service. schema_forge_core is read with the read-only deploy key
+# CORE_DEPLOY_KEY.
+#
+# THIS REPOSITORY IS PUBLIC, AND SO ARE ITS ACTIONS LOGS
+# The AWS account id and the role ARN come from secrets (AWS_ACCOUNT_ID,
+# PUBLIC_API_DEPLOY_ROLE_ARN) so GitHub masks them wherever they would be
+# printed (ECR registry host, ARNs). Logs and the summary only show task
+# definitions as family:revision.
 
 on:
   push:
@@ -35,7 +41,8 @@ on:
     paths:
       - 'gateway/**'
       - 'public-api/**'
-      # The schema_forge_core pin lives here.
+      # The schema_forge_core pin lives here. Other dependency changes in this
+      # file are filtered out in "Resolve what this run does".
       - 'package.json'
       - '.github/workflows/deploy-public-api.yml'
   pull_request:
@@ -64,13 +71,12 @@ concurrency:
 
 env:
   AWS_REGION: eu-west-3
-  AWS_ACCOUNT: '278186107973'
+  AWS_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
   ECR_REPOSITORY: etendo/public-api-gateway
   ECS_CLUSTER: etendo-production
   ECS_SERVICE: etendo-public-api-service
   CONTAINER: public-api-gateway
   PUBLIC_HOST: https://app.etendo.ai
-  DEPLOY_ROLE: arn:aws:iam::278186107973:role/etendo-public-api-deploy
 
 jobs:
   deploy:
@@ -85,15 +91,23 @@ jobs:
 
       - name: Resolve what this run does
         id: plan
+        env:
+          # Through env, never interpolated into the script: a workflow input
+          # is user text, and ${{ }} inside run: is pasted in as shell code.
+          REDEPLOY_TAG: ${{ inputs.redeploy_tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          REDEPLOY_TAG="${{ inputs.redeploy_tag }}"
+          REDEPLOY_TAG="${REDEPLOY_TAG:-}"
 
           if [ -n "$REDEPLOY_TAG" ]; then
+            printf '%s' "$REDEPLOY_TAG" | grep -Eq '^sf-[0-9a-f]{7}-core-[0-9a-f]{7}$' \
+              || { echo "::error::redeploy_tag must look like sf-<7 hex>-core-<7 hex>"; exit 1; }
             BUILD=false; DEPLOY=true
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            # A PR proves the image still builds and boots. It never publishes
-            # and never deploys.
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            # A PR proves the gateway tests pass and the image builds and
+            # boots. It never publishes and never deploys.
             BUILD=true; DEPLOY=false
           else
             BUILD=true; DEPLOY=true
@@ -104,6 +118,23 @@ jobs:
           # range (^, ~) has no single tag to check out — refuse to guess.
           printf '%s' "$CORE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
             || { echo "::error::schema-forge-core pin in package.json is '$CORE_VERSION', expected an exact x.y.z"; exit 1; }
+
+          # package.json is a trigger only because it holds the core pin. A push
+          # that changed nothing of the gateway and left the pin alone (any
+          # other dependency bump) is not a reason to redeploy production.
+          # If the previous commit cannot be read, deploy: a needless restart
+          # is cheaper than a missed deploy.
+          if [ "$EVENT_NAME" = "push" ] && [ -n "${BEFORE_SHA:-}" ] \
+             && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ] \
+             && git fetch -q --depth=1 origin "$BEFORE_SHA" 2>/dev/null; then
+            CHANGED=$(git diff --name-only "$BEFORE_SHA" HEAD)
+            OLD_CORE=$(git show "$BEFORE_SHA:package.json" | jq -r '.dependencies["@etendosoftware/schema-forge-core"] // .devDependencies["@etendosoftware/schema-forge-core"] // empty')
+            if ! printf '%s\n' "$CHANGED" | grep -Eq '^(gateway/|public-api/|\.github/workflows/deploy-public-api\.yml$)' \
+               && [ "$OLD_CORE" = "$CORE_VERSION" ]; then
+              echo "::notice::only package.json changed and the core pin is still $CORE_VERSION — nothing to deploy"
+              BUILD=false; DEPLOY=false
+            fi
+          fi
 
           {
             echo "build=$BUILD"
@@ -137,6 +168,36 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "tag=$TAG"
           grep '"version"' .schema_forge_core/packages/api-gateway-core/package.json
+
+      - uses: actions/setup-node@v4
+        if: steps.plan.outputs.build == 'true'
+        with:
+          node-version: 22
+
+      # What reaches main goes straight to production, so the gateway's own
+      # test suite is a gate on both PRs and main. The core package is packed
+      # from the pinned checkout exactly as the Dockerfile does, so the tests
+      # run against the same api-gateway-core the image will contain.
+      # gateway/ has no lockfile, hence `npm install` (not `npm ci`), and
+      # --no-save: gateway/package.json is COPYed into the image and must not
+      # end up pointing at a local tarball.
+      - name: Gateway tests
+        if: steps.plan.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          CORE_PKG=.schema_forge_core/packages/api-gateway-core
+          npm install --include=dev --prefix "$CORE_PKG"
+          npm install --include=dev --no-save --prefix "$CORE_PKG" @types/node
+          npm run build --prefix "$CORE_PKG"
+          (cd "$CORE_PKG" && npm pack --pack-destination "$RUNNER_TEMP")
+
+          cd gateway
+          npm install --include=dev --no-save "$RUNNER_TEMP"/etendosoftware-api-gateway-core-*.tgz
+          npm test
+          rm -rf node_modules "$RUNNER_TEMP"/etendosoftware-api-gateway-core-*.tgz
+          # The image build must see the committed tree, not test leftovers.
+          git -C .. diff --quiet -- gateway/package.json \
+            || { echo "::error::gateway/package.json was modified by the test install"; exit 1; }
 
       - name: Build image
         if: steps.plan.outputs.build == 'true'
@@ -178,19 +239,18 @@ jobs:
           check /api 200
           check /api/openapi.json 200
           grep -q '"openapi"' body.txt || { echo "::error::/api/openapi.json is not an OpenAPI document"; exit 1; }
-          check /api/v1/products 401
+          # `product` is a real resource of base.v1.json, so this stays a 401
+          # even if key validation ever moves after routing.
+          check /api/v1/product 401
 
       - name: Configure AWS credentials (OIDC)
         if: steps.plan.outputs.deploy == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.DEPLOY_ROLE }}
+          role-to-assume: ${{ secrets.PUBLIC_API_DEPLOY_ROLE_ARN }}
           role-session-name: gha-public-api-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Confirm the assumed identity
-        if: steps.plan.outputs.deploy == 'true'
-        run: aws sts get-caller-identity --output table
+          mask-aws-account-id: true
 
       - name: Push to ECR
         if: steps.plan.outputs.deploy == 'true' && steps.plan.outputs.build == 'true'
@@ -282,12 +342,15 @@ jobs:
 
       - name: Update service and wait
         if: steps.plan.outputs.deploy == 'true'
+        env:
+          NEW_TD: ${{ steps.register.outputs.new_td }}
         run: |
           set -euo pipefail
 
           aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
             --task-definition "${{ steps.register.outputs.new_td }}" \
-            --region "$AWS_REGION" --query 'service.taskDefinition' --output text
+            --region "$AWS_REGION" >/dev/null
+          echo "update-service -> ${NEW_TD##*/}"
 
           # The waiter can return before ECS marks the rollout, so poll the
           # PRIMARY deployment's rolloutState with a bound. An empty or
@@ -373,8 +436,8 @@ jobs:
           check /api/openapi.json 200
           grep -q '"openapi"' body.txt || { echo "::error::/api/openapi.json is not an OpenAPI document"; exit 1; }
           # 401 with a JSON body from the gateway, not a CloudFront/ALB error page.
-          check /api/v1/products 401
-          jq -e . body.txt >/dev/null || { echo "::error::/api/v1/products 401 body is not JSON — not the gateway answering"; exit 1; }
+          check /api/v1/product 401
+          jq -e . body.txt >/dev/null || { echo "::error::/api/v1/product 401 body is not JSON — not the gateway answering"; exit 1; }
 
       # Belt and braces: the service's ECS circuit breaker is disabled, so this
       # is the only automatic way back.
@@ -391,7 +454,7 @@ jobs:
           if aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --region "$AWS_REGION"; then
             echo "rollback complete — running ${PREV##*/}"
           else
-            echo "::error::rollback did not stabilise. Manual step: aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition $PREV --region $AWS_REGION"
+            echo "::error::rollback did not stabilise. Manual step: aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition ${PREV##*/} --region $AWS_REGION"
             exit 1
           fi
 
@@ -399,6 +462,9 @@ jobs:
       # both full SHAs, the tag and the rollback target.
       - name: Summary
         if: always()
+        env:
+          NEW_TD: ${{ steps.register.outputs.new_td }}
+          PREVIOUS_TD: ${{ steps.register.outputs.previous_td }}
         run: |
           {
             echo "### Public API gateway deploy"
@@ -411,10 +477,10 @@ jobs:
             echo "| deployed | \`${{ steps.plan.outputs.deploy }}\` |"
             echo "| tag | \`${{ steps.image.outputs.tag || steps.tag.outputs.image_tag }}\` |"
             echo "| digest | \`${{ steps.image.outputs.digest }}\` |"
-            echo "| task definition | \`${{ steps.register.outputs.new_td }}\` |"
-            echo "| previous (rollback target) | \`${{ steps.register.outputs.previous_td }}\` |"
+            echo "| task definition | \`${NEW_TD##*/}\` |"
+            echo "| previous (rollback target) | \`${PREVIOUS_TD##*/}\` |"
             if [ "${{ steps.plan.outputs.deploy }}" != "true" ]; then
               echo
-              echo "Pull request: image built and smoke-tested, nothing published or deployed."
+              echo "Nothing published or deployed (pull request, or a push with nothing of the gateway to deploy)."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
