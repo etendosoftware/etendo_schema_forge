@@ -124,7 +124,7 @@
           "section": "principal",
           "form": true,
           "seq": 30,
-          "agentPrompt": "The order date. If omitted the server proposes today, as the form does; send the date the user gives when it is another one."
+          "agentPrompt": "The order date. If omitted the server proposes today, as the form does; send the date the user gives when it is another one. It is also the order's accounting date: accountingDate always takes the same day (the app has one date), so changing orderDate moves accountingDate too and the answer shows both."
         },
         "businessPartner": {
           "grid": true,

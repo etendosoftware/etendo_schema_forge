@@ -758,3 +758,7 @@ cannot differ from its price list's (422), and the order date is also the accoun
 ## Agent prompts on order date and line tax — ETP-5852
 
 `orderDate` (server proposes today; send the user's date, M-31) and `lines.tax` (resolved from product and customer tax categories, options through `etendo_selectors`, M-35/M-79).
+
+## Order date and accounting date — ETP-5852
+
+`orderDate.agentPrompt` also says the accounting date always follows the order date (`mirrorAccountingDate`, ETP-4531), so an agent changing it expects both to move. Feedback M-183.

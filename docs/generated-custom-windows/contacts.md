@@ -1761,3 +1761,7 @@ simplified flag, the note stays hidden. Logic:
 ## Contact searchKey over MCP — ETP-5852
 
 As in the app (whose form does not show it), a contact's `searchKey` is its number (`etgoIdentifier`). `etendo_schema(view:"create")` lists it as optional, `serverDefaulted` (`BusinessPartnerHandler#serverResolvedCreateFields`), and the placeholder the save needs is put before MCP's mandatory pre-check (`resolveServerCreateFields`), so a create without it is no longer refused. A value the agent sends is still replaced by the number, and the answer says so in `searchKeyNote`. Field `agentPrompt` tells agents not to send it. Feedback M-107.
+
+## Contact address name over MCP — ETP-5852
+
+An address created over MCP without `name` gets the name the address editor gives (city and address line, else region and country, else "Location"), not the AD default ".". Feedback M-168.
