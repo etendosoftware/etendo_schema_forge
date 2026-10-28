@@ -4,7 +4,6 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
-import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
@@ -36,7 +35,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['searchKey', 'name', 'offsetMonthDue', 'overduePaymentDaysRule'];
+const requiredHeaderFields = ['name', 'overduePaymentDaysRule'];
 // @sf-generated-end requiredHeaderFields:header
 
 
@@ -55,7 +54,6 @@ export const api = {
       "listUrl": "/sws/neo/payment-term/header",
       "detailUrl": "/sws/neo/payment-term/header/{id}",
       "supportedFilters": [
-        "searchKey",
         "name"
       ]
     }
@@ -88,6 +86,12 @@ export const api = {
       "IsDefault": "Por defecto",
       "IsNextBusinessDay": "Siguiente día hábil",
       "IsActive": "Activo"
+    },
+    "en_US": {
+      "Name": "Name",
+      "NetDays": "Days",
+      "IsDefault": "Default",
+      "IsNextBusinessDay": "Next Business Day"
     }
   }
 };
@@ -121,7 +125,14 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       api={api}
         hidePrint
         hideMoreMenu
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_PaymentTerm", config: {} } }]}
+        noHeaderBorder
+        toolbarBorderBottom
+        whiteFormBackground
+        autoSaveOnBlur
+        tabsBarPaddingX="px-2"
+        toolbarPaddingX="px-2"
+        formCardPadding="p-2"
+        formScrollPaddingX="px-2"
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
@@ -138,8 +149,11 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
       hidePrint
       hideMoreMenu
+      hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props} window={effectiveWindow}

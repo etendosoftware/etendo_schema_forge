@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.8.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-10-22T18:19:27.763Z",
-  "contractChecksum": "bcf0a37c41423f8f",
+  "updatedAt": "2026-10-28T12:26:46.739Z",
+  "contractChecksum": "8ec01d73c8b1277f",
   "apiPrediction": {
     "specName": "payment-term",
     "baseUrl": "/sws/neo/payment-term",
@@ -17,7 +17,6 @@
         "listUrl": "/sws/neo/payment-term/header",
         "detailUrl": "/sws/neo/payment-term/header/{id}",
         "supportedFilters": [
-          "searchKey",
           "name"
         ]
       }
@@ -50,6 +49,12 @@
         "IsDefault": "Por defecto",
         "IsNextBusinessDay": "Siguiente día hábil",
         "IsActive": "Activo"
+      },
+      "en_US": {
+        "Name": "Name",
+        "NetDays": "Days",
+        "IsDefault": "Default",
+        "IsNextBusinessDay": "Next Business Day"
       }
     }
   },
@@ -57,13 +62,7 @@
     "entities": {
       "header": {
         "fields": {
-          "searchKey": {
-            "required": true
-          },
           "name": {
-            "required": true
-          },
-          "offsetMonthDue": {
             "required": true
           },
           "overduePaymentDaysRule": {
@@ -84,9 +83,7 @@
     ],
     "minimumCreate": {
       "headerFields": [
-        "searchKey",
         "name",
-        "offsetMonthDue",
         "overduePaymentDaysRule"
       ],
       "recommendedOrder": [
@@ -102,9 +99,7 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "searchKey",
           "name",
-          "offsetMonthDue",
           "overduePaymentDaysRule"
         ]
       }
@@ -113,5 +108,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "6284b19cb648d259"
+  "checksum": "04123f60471e0a29"
 }

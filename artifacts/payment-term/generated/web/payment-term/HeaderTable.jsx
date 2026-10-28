@@ -3,14 +3,14 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:header
 const columns = [
-  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true, maxLength: 40 },
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60, grow: true },
   { key: 'overduePaymentDaysRule', column: 'NetDays', type: 'number', label: 'Overdue Payment Days Rule', required: true },
-  { key: 'default', column: 'IsDefault', type: 'boolean', labels: {"es_ES":"Por defecto","en_US":"Default"}, label: 'Default', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}} },
+  { key: 'nextBusinessDay', column: 'IsNextBusinessDay', type: 'boolean', labels: {"es_ES":"Siguiente día hábil","en_US":"Next Business Day"}, label: 'Next Business Day', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, badgeVariants: {"true":"green","false":"neutral"} },
+  { key: 'default', column: 'IsDefault', type: 'boolean', labels: {"es_ES":"Por defecto","en_US":"Default"}, label: 'Default', badge: true, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, badgeVariants: {"true":"green","false":"neutral"} },
 ];
 // @sf-generated-end columns:header
 
-const filters = ['searchKey', 'name'];
+const filters = ['name'];
 
 // @sf-generated-start component:HeaderTable
 const HeaderTable = forwardRef(function HeaderTable(props, ref) {

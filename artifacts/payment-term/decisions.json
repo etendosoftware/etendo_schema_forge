@@ -5,8 +5,20 @@
     "category": "settings",
     "name": "Payment Term",
     "detailEntity": null,
+    "attachments": false,
+    "formCardPadding": "p-2",
+    "toolbarPaddingX": "px-2",
+    "tabsBarPaddingX": "px-2",
+    "formScrollPaddingX": "px-2",
+    "noHeaderBorder": true,
+    "toolbarBorderBottom": true,
+    "whiteFormBackground": true,
+    "autoSaveOnBlur": true,
     "hidePrint": true,
+    "hideLink": true,
     "hideMoreMenu": true,
+    "listbarPaddingX": "px-2",
+    "tablePaddingX": "px-2",
     "labelOverrides": {
       "es_ES": {
         "Value": "Clave",
@@ -17,47 +29,101 @@
         "IsDefault": "Por defecto",
         "IsNextBusinessDay": "Siguiente día hábil",
         "IsActive": "Activo"
+      },
+      "en_US": {
+        "Name": "Name",
+        "NetDays": "Days",
+        "IsDefault": "Default",
+        "IsNextBusinessDay": "Next Business Day"
       }
     }
   },
   "entities": {
     "header": {
       "fields": {
-        "searchKey": {
-          "grid": true,
-          "searchable": true,
-          "section": "principal",
-          "seq": 1
-        },
         "name": {
           "grid": true,
+          "gridOrder": 1,
+          "grow": true,
           "searchable": true,
           "section": "principal",
-          "seq": 2
-        },
-        "description": {
-          "visibility": "discarded"
-        },
-        "offsetMonthDue": {
-          "grid": false,
-          "section": "principal",
-          "seq": 4
+          "seq": 1,
+          "span": 2
         },
         "overduePaymentDaysRule": {
           "grid": true,
+          "gridOrder": 2,
           "section": "principal",
-          "seq": 5
+          "seq": 2,
+          "span": 2
         },
         "default": {
           "grid": true,
+          "gridOrder": 4,
           "section": "principal",
-          "seq": 6,
+          "seq": 3,
+          "span": 2,
           "badge": true,
-          "labels": { "es_ES": "Por defecto", "en_US": "Default" },
+          "labels": {
+            "es_ES": "Por defecto",
+            "en_US": "Default"
+          },
           "badgeLabels": {
-            "true": { "es_ES": "Sí", "en_US": "Yes" },
-            "false": { "es_ES": "No", "en_US": "No" }
+            "true": {
+              "es_ES": "Sí",
+              "en_US": "Yes"
+            },
+            "false": {
+              "es_ES": "No",
+              "en_US": "No"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "neutral"
           }
+        },
+        "nextBusinessDay": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 3,
+          "section": "principal",
+          "seq": 4,
+          "span": 2,
+          "defaultExpr": "Y",
+          "reason": "New-record form starts ticked so it matches what PaymentTermHandler.enrichCreate derives for days != 0 (QA BUG-2, ETP-5978). The UI now always sends it, so a 0-day term keeps the user's choice instead of the derived false.",
+          "labels": {
+            "es_ES": "Siguiente día hábil",
+            "en_US": "Next Business Day"
+          },
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "es_ES": "Sí",
+              "en_US": "Yes"
+            },
+            "false": {
+              "es_ES": "No",
+              "en_US": "No"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "neutral"
+          }
+        },
+        "searchKey": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "reason": "Hidden from the user: PaymentTermHandler.enrichCreate (com.etendoerp.go) fills it on create when not sent, as '<days>D' ('I' for 0 days). No unique constraint on C_PaymentTerm.Value, so duplicates are allowed (ETP-5978)."
+        },
+        "offsetMonthDue": {
+          "visibility": "system",
+          "derivation": "fromConfig",
+          "reason": "Hidden from the user: PaymentTermHandler.enrichCreate (com.etendoerp.go) fills it with 0 on create when not sent (ETP-5978)."
+        },
+        "description": {
+          "visibility": "discarded"
         },
         "active": {
           "visibility": "discarded"
@@ -77,13 +143,6 @@
         "overduePaymentDayRule": {
           "visibility": "discarded"
         },
-        "nextBusinessDay": {
-          "visibility": "editable",
-          "grid": false,
-          "section": "principal",
-          "seq": 7,
-          "labels": { "es_ES": "Siguiente día hábil", "en_US": "Next business day" }
-        },
         "comments": {
           "visibility": "discarded"
         },
@@ -100,5 +159,7 @@
     }
   },
   "rules": {},
-  "discardPatterns": ["EM_*"]
+  "discardPatterns": [
+    "EM_*"
+  ]
 }

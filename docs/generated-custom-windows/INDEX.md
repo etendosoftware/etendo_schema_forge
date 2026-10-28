@@ -102,7 +102,7 @@ This folder is the entry point for documentation that describes how generated an
 | [organization.md](organization.md) | Custom organization-settings window (ETP-4749) — flattens the Classic Organization/Information AD tabs (window 110) into one tabless screen: identity, fiscal data, and contact details, plus the Certificado digital, IAE and Modelo 390 sections shown only when a fiscal configuration that uses them is active (ETP-5831) |
 | [document-sequence.md](document-sequence.md) | Document numbering window (ETP-5190, AD window 112) — prefix/suffix/next-number per sequence, with the Spanish localization prefix rules enforced on write; target of the First Steps invoicing step |
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
-| [payment-term.md](payment-term.md) | Generated payment-term maintenance window |
+| [payment-term.md](payment-term.md) | Generated payment-term maintenance window: name + days only, key and month offset derived server-side, rename syncs translations (ETP-5978) |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
 | [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
 | [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type behind the `contact-category-type` flag (ETP-5791) |

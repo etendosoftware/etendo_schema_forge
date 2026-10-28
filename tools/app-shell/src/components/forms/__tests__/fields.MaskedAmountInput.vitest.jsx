@@ -410,6 +410,22 @@ describe('MaskedAmountInput — other passthrough props', () => {
     expect(onKeyDown).toHaveBeenCalled();
   });
 
+  it('forwards id to the underlying input so an external <label htmlFor> associates with it', () => {
+    render(
+      <>
+        <label htmlFor="netDays">Days</label>
+        <MaskedAmountInput id="netDays" value={5} bare data-testid="mi" />
+      </>,
+    );
+    expect(getInput('mi')).toHaveAttribute('id', 'netDays');
+    expect(screen.getByLabelText('Days')).toBe(getInput('mi'));
+  });
+
+  it('renders no id when none is given (line-grid cells must not collide)', () => {
+    render(<MaskedAmountInput value={5} bare data-testid="mi" />);
+    expect(getInput('mi')).not.toHaveAttribute('id');
+  });
+
   it('defaults to a stable data-testid derived from `name` when none is given explicitly', () => {
     render(<MaskedAmountInput value={5} name="listPrice" />);
     expect(screen.getByTestId('field-number-listPrice')).toBeInTheDocument();

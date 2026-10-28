@@ -650,6 +650,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
   if (isNumber) {
     return (
       <MaskedAmountInput
+        id={f.key}
         name={f.key}
         data-testid={`field-${f.key}`}
         value={buffer ?? ''}
@@ -1266,6 +1267,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       // swallows the comma keystroke. Read-only numerics keep the plain <Input> below, since they
       // render `displayValue` (already formatted upstream) and accept no keystrokes at all.
       (<MaskedAmountInput
+        id={f.key}
         name={f.key}
         data-testid={`field-${f.key}`}
         value={getFieldValue(isReadOnly, displayValue, data, f)}

@@ -234,10 +234,11 @@ function toIdleDisplay(value, grouping) {
  * @param {(clean: string) => boolean} [isAllowed] - optional keystroke/paste veto on the CLEAN candidate value: returning false refuses the edit outright (the field keeps showing what it had, `onChange` does not fire) — for a hard length/precision ceiling the caller owns, e.g. an AEAT record width (ETP-5597)
  * @param {boolean} [clearZeroOnFocus=false] - ETP-5611: when the committed value is exactly 0, focus shows an empty field so the user types straight in; blurring it still blank without a keystroke commits nothing and the 0 comes back (line-grid amount cells)
  * @param {string} [aria-label] - accessible name for the underlying input, for a `bare` cell that has no visible label
+ * @param {string} [id] - id for the underlying input, so an external `<label htmlFor>` (e.g. EntityForm's) associates with it. Omit in repeated cells (line grids) to avoid duplicate ids
  */
 export function MaskedAmountInput({
   label, required, value, onChange, onCommit, onBlur, onFocus, onKeyDown, placeholder, disabled,
-  className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
+  className = '', id, name, currency, bare = false, grouping = true, autoFocus, inputRef,
   inputMode = 'decimal', isAllowed, clearZeroOnFocus = false, 'data-testid': dataTestId,
   'aria-label': ariaLabel,
 }) {
@@ -398,6 +399,7 @@ export function MaskedAmountInput({
   const inputEl = (
     <Input
       ref={activeRef}
+      id={id}
       type="text"
       inputMode={inputMode}
       value={display}
