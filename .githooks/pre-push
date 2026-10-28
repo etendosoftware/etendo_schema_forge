@@ -582,8 +582,16 @@ run_playwright() {
     # scripts/select-mocked-specs.js from the coverage map CI publishes for develop; the PR's mini
     # pipeline and the cut still run every spec. PRE_PUSH_MOCKED_ALL=1, tooling or an unknown file,
     # no base ref or any selector problem run the whole suite: never fewer specs when in doubt.
-    local whole_reason plan_file plan_out plan_status total
+    local whole_reason plan_file plan_out plan_status total contract_out
     MOCKED_SPECS=""
+    # A spec off the shared fixture records no coverage, so the selection could never reach it.
+    if contract_out="$(cd "$REPO_DIR" && node --test scripts/__tests__/mocked-specs-coverage-contract.test.js 2>&1)"; then
+      echo "==> Mocked specs coverage contract... OK ✅"
+    else
+      printf '%s\n' "$contract_out" | grep -E '^not ok|^\s+[+-] |^\s+(actual|message):' | sed 's/^/   /'
+      echo "==> Mocked specs coverage contract... FAILED ❌ (scripts/__tests__/mocked-specs-coverage-contract.test.js)"
+      record_failure "Mocked specs coverage contract (every mocked spec imports e2e/tests/helpers/test.js; extra pages go in e2e/mocked-always-run.json)"
+    fi
     whole_reason="$(printf '%s\n' "${CHANGED_FILES:-}" | relevance_mocked_whole)"
     if [ "${PRE_PUSH_MOCKED_ALL:-}" = "1" ]; then
       whole_reason="PRE_PUSH_MOCKED_ALL=1"
