@@ -18540,7 +18540,7 @@
       ]
     },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
-      "checksum": "c3705137c8cc55d37a08a1b5c01186a48598de5905927d176640bf99095a4053",
+      "checksum": "c268ce9d8161f286c09e8af6355458e27397117badbb82e1543aa333b25224a0",
       "params": [
         "192"
       ],
@@ -18616,6 +18616,18 @@
           "ad_table_id": "394",
           "columnname": "IsDefault",
           "position": "12"
+        },
+        {
+          "ad_column_id": "21C77AF9602040C083412FF4029F0D15",
+          "ad_table_id": "394",
+          "columnname": "EM_Etgo_Iscustomer",
+          "position": "13"
+        },
+        {
+          "ad_column_id": "C091859BC595424B8AFB1D7C4CA242C3",
+          "ad_table_id": "394",
+          "columnname": "EM_Etgo_Isvendor",
+          "position": "14"
         },
         {
           "ad_column_id": "4973",

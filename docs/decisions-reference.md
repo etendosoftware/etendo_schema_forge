@@ -81,7 +81,9 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `relatedDocuments` | boolean | `false` | — | Enables the Related Documents footer in the detail view. Requires a hand-written `RelatedDocuments.jsx` in `artifacts/{window}/custom/`. The generator emits the import and `customTabs` prop automatically. |
 | `attachments` | boolean \| object | `true` | See below | Adds an "Attachments" tab to the detail view. Auto-enabled on every window with `layoutType: "default"`. Set to `false` to opt out; pass an object to tune client-side limits. See the Attachments subsection below. |
 | `notesField` | string | `null` | Any entity field name | Field to display as a notes/description panel in the detail view footer (e.g., `"description"`). Rendered as an expandable text input. |
-| `detailVisibleWhenCapability` | string | `null` | A capability key, e.g. `"showAccountingFields"` | **(ETP-5648)** Gates the WHOLE detail (lines) tab of `detailEntity` behind a capability from the `SFWindowAccessMap` `capabilities` map. When it resolves `false` for the current role, DetailView treats the window as having no detail entity: no tab, no children fetch, no `evaluate-display`, no line callouts (`gateDetailTab` in `detailViewHelpers.jsx`). Opt-in — absent means always visible. The server enforces the same rule on its own (`NeoAccountingAccessPolicy`, `com.etendoerp.go/docs/neo-headless.md` §7 item 4b); this flag only keeps the UI from showing an empty tab and firing requests that would be refused. Used by `product-category` and `business-partner-category`, whose detail entity is their accounting tab. |
+| `detailVisibleWhenCapability` | string | `null` | A capability key, e.g. `"showAccountingFields"` | **(ETP-5648)** Gates the WHOLE detail (lines) tab of `detailEntity` behind a capability from the `SFWindowAccessMap` `capabilities` map. When it resolves `false` for the current role, DetailView treats the window as having no detail entity: no tab, no children fetch, no `evaluate-display`, no line callouts (`gateDetailTab` in `detailViewHelpers.jsx`). Opt-in — absent means always visible. The server enforces the same rule on its own (`NeoAccountingAccessPolicy`, `com.etendoerp.go/docs/neo-headless.md` §7 item 4b); this flag only keeps the UI from showing an empty tab and firing requests that would be refused. Used by `product-category` and `business-partner-category`, whose detail entity is their accounting tab. A `customLinesComponent` replaces that same tab, so it is gated too (ETP-5791). |
+| `customLinesComponent` | string | `null` | Component name | Replaces the detail (lines) tab with a hand-written component: the generator emits `CustomLines={X}` on `DetailView` and drops the generated `DetailTable`/`DetailForm`/`addLineFields` (`detailEntity` is still emitted). File: `artifacts/{window}/custom/{value}.jsx` (resolved by `resolveCustomImport`). Props: `recordId`, `data` (the header's LIVE editing record — unsaved edits included), `status`, `token`, `apiBaseUrl`, `api`, `editing`, `catalogs`, `entity` (the `detailEntity`), `isNew`, `onCountChange(n)` (tab badge), `onRefresh()`, `onSave()`. The component loads and writes its own rows. Gated by `detailVisibleWhenCapability` like the tab it replaces. Users: `amortization` (`AmortizationLinesTable`). The same `CustomLines` prop can also be passed at runtime by a window wrapper (props passed to a generated page win over its own): `business-partner-category` declares no `customLinesComponent` and its wrapper (`tools/app-shell/src/windows/custom/business-partner-category/index.jsx`) swaps the generated Accounting table for `BpCategoryAccountingPanel` only while the `contact-category-type` flag is on (ETP-5791). |
+| `customLinesLabel` | string | `"Invoices"` | Menu-translatable label | Tab label of the `customLinesComponent` tab (passed through `tMenu`, e.g. `"Accounting"` → "Contabilidad"). |
 | `documentPreview` | object | `null` | `{ titlePrefix: string }` | Enables the document preview button in the detail header. `titlePrefix` is shown in the preview drawer title (e.g., `"Order"`, `"Invoice"`). |
 | `breadcrumb` | string | `"{category} / {name}"` | Any string | Overrides the auto-generated breadcrumb path shown in the topbar. Useful when the default category/name combination is too verbose (e.g., `"Product"` instead of `"Reference / Product"`). |
 | `hideCreate` | boolean | `false` | — | Hides the generic Create/New button in the list toolbar. Use this when creation is handled by a window-specific action or custom component. |
@@ -663,6 +665,14 @@ Read by the generic import dialog (`ImportDialog`) from the generated contract; 
 
 With `batchSize > 1` the engine namespaces each row's op ids (`r<row>.<id>`, including `parentRef` and `$ref:` references) so they stay unique per request. A chunk is resent row by row only after a rollback the server vouches for (`committed:false`, `atomic:true`, empty `persisted`), so each row gets its own outcome; any other outcome — no response, a non-BatchService body, `atomic:false`, a missing or non-empty `persisted` — reports all its rows UNKNOWN and never resends (no idempotency key — resending could duplicate).
 
+### Flag-gated import columns (`window.import.fields[].hiddenWhenFlag`) — ETP-5791
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `hiddenWhenFlag` | string | `null` | A boolean feature-flag key from `tools/app-shell/src/lib/flags/flag-keys.js`. While that flag is **ON** the field is dropped from the import config: it is not in the downloaded template, the column mapping, the review grid or the list export. With the flag OFF (or the key absent) the field behaves as usual. |
+
+The generator passes the key through unchanged (each `window.import.fields` entry is spread into the contract); the filtering happens at runtime in `useFlagGatedImportConfig` (`tools/app-shell/src/lib/importFlagGates.js`), applied once by `ListView` and by the First Steps import button, so every consumer of the config sees the same field list. Use it when a flagged feature retires a column; the window's import descriptor must stop reading the cell under the same flag (see `contactsImportDescriptor.js`). User: `contacts` — `customer` / `vendor` carry `"hiddenWhenFlag": "contact-category-type"` (with the flag on, the contact category decides the type). When the flag is retired, delete the key together with the fields it hides.
+
 ### Custom Components (`window.customComponents`)
 
 Override generated components with custom implementations from `artifacts/{window}/custom/`. The generator emits the correct imports and DetailView props automatically.
@@ -825,7 +835,7 @@ Entity keys use **camelCase from tabName** (e.g., `"header"`, `"lines"`, `"basic
 | `exclude` | boolean | `false` | Omit entire entity from schema **and close it in NEO** (`ETGO_SF_ENTITY.ISINCLUDED = 'N'` on the entity plus every one of its `ETGO_SF_FIELD` rows). See below. |
 | `fields` | object | `{}` | Field-level decisions. |
 | `draftMode` | object | `null` | Draft/Processed workflow config. |
-| `javaQualifier` | string | `null` | CDI qualifier for custom NeoHandler. |
+| `javaQualifier` | string | `null` | **Legacy** CDI qualifier for a custom NeoHandler. Do not add new ones: bind the class with `@NeoExtension(spec, entity)` instead (CI in com.etendoerp.go rejects a rising qualifier count). Echoed into the contract only; the runtime reads the `ETGO_SF_ENTITY` row. |
 | `namedFilters` | array | `null` | **Hand-authored named HQL filters** the NEO Headless MCP exposes as `{ "status": "<name>" }` list filters. See below. |
 | `virtualFields` | array | `[]` | Columns with **no AD column behind them**, injected per row by the entity's NeoHandler in `afterHandle`. See below. |
 | `handlesDefaults` | boolean | `true` | **HandleDefaults.** When `true` (default), a new detail line's add-row fetches `GET /{detailEntity}/defaults?parentId=…` on open and pre-fills empty editable fields from the backend-resolved defaults (reusing the header-defaults normalization). Set `false` to opt this detail entity out — the add-row keeps literal-only seeding and no `/defaults` request is made. Emitted to the contract / runtime `api.crud` only when `false`. |
@@ -840,7 +850,6 @@ in `afterHandle`; NEO will not derive it (no AD column → no OBDal property →
 
 ```json
 "account": {
-  "javaQualifier": "financialAccountHeaderHandler",
   "virtualFields": [
     { "name": "pendingCount", "column": "pendingCount", "label": "Pending",
       "type": "integer", "visibility": "readOnly", "form": false,
@@ -1593,7 +1602,7 @@ selected.
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
 | `lookup` | boolean | `false` | Enables the drawer-style picker for this field (instead of a plain search input). |
-| `lookupDrawer` | string \| null | `null` (→ `"default"`) | Key into `LOOKUP_DRAWERS` (`tools/app-shell/src/components/contract-ui/lookupDrawers.js`). `"default"` is the plain `ProductSearchDrawer`. `"product-stock"` is the shared, window-agnostic product+stock picker (groups by product, warehouse-filter pills, expand/collapse per-locator rows) — used by any window whose product field needs to resolve a storage bin/warehouse on selection. `"account"` (ETP-5681) is `AccountLookupPopup`: the shared centered `SearchPopup` (the report filters' "Desde la cuenta" popup) over the field's own selector, showing each `"<code> - <name>"` in full — used by the G/L journal line Account and by every ValidCombination (account) field of the generated accounting tabs (asset group, assets, business partner category, contacts, product, product category, tax, warehouse), each declared with `"lookup": true, "lookupDrawer": "account"`. Honoured by all three lookup paths: add-row (`DataTable`), inline edit (`InlineLinesPanel`) and the side-panel form (`EntityForm`). In the add-row, a field that names a `lookupDrawer` is a lookup even when its type is `selector` (the generator flags only the first `search`-type add-line field as `lookup`). |
+| `lookupDrawer` | string \| null | `null` (→ `"default"`) | Key into `LOOKUP_DRAWERS` (`tools/app-shell/src/components/contract-ui/lookupDrawers.js`). `"default"` is the plain `ProductSearchDrawer`. `"product-stock"` is the shared, window-agnostic product+stock picker (groups by product, warehouse-filter pills, expand/collapse per-locator rows) — used by any window whose product field needs to resolve a storage bin/warehouse on selection. `"account"` (ETP-5681) is `AccountLookupPopup`: the shared centered `SearchPopup` (the report filters' "Desde la cuenta" popup) over the field's own selector, showing each `"<code> - <name>"` in full — used by the G/L journal line Account and by every ValidCombination (account) field of the generated accounting tabs (asset group, assets, contacts, product, product category, tax, warehouse), each declared with `"lookup": true, "lookupDrawer": "account"`. The business partner category Accounting tab is not a generated grid since ETP-5791: its custom `BpCategoryAccountingPanel` renders `AccountSelect` fed by the same field selectors (`useAccountSelectorPages`). Honoured by all three lookup paths: add-row (`DataTable`), inline edit (`InlineLinesPanel`) and the side-panel form (`EntityForm`). In the add-row, a field that names a `lookupDrawer` is a lookup even when its type is `selector` (the generator flags only the first `search`-type add-line field as `lookup`). |
 | `lookupTitle` | string \| null | Field label (translated) | Title shown in the drawer header and in its search placeholder ("Buscar <title>..."). It is a **literal, untranslated** string, so leave it unset: the default is the field's locale-resolved label. ETP-5681 dropped `"Product"` / `"Product + Warehouse"` from goods-movements and internal-consumption because Spanish users saw "Buscar Product...". |
 | `onSelectMappings` | array \| null | `null` | Maps data from the selected raw selector row onto other fields in the same line. Each entry: `{ "from": "<path into the row, e.g. _aux._LOC>", "to": "<sibling field key>", "labelFrom": ["<row key>", ...] }`. `labelFrom` is tried in order — the first non-empty value becomes the label shown for `to`. Applied by `applyOnSelectMappings` in `DataTable.jsx`, caller-side; the drawer itself never writes to sibling fields. |
 
@@ -1651,6 +1660,22 @@ instead of the default input when it detects this property.
 - If the component needs i18n, use `useUI()` from `@/i18n` and add keys to **both**
   `en_US.json` and `es_ES.json` under `genericLabels`.
 - This is a form-only feature: the grid column always uses the standard cell renderer.
+
+**Extra props and a self-drawn label (ETP-5791).** Besides `{ value, onChange, record, readOnly }`
+the component also receives:
+
+| Prop | Purpose |
+|------|---------|
+| `label` | The resolved field label (per-window `labels` → AD label → `label`). |
+| `required` | `true` when the field is `required` or `requiredVisual`. |
+| `onFieldChange(key, value)` | Writes a **sibling** field of the same record — for a renderer that edits more than one column (e.g. a group of checkboxes). The sibling can be `form: false`: a value written through `onChange` always reaches the save payload. |
+| `onCommit()` | The immediate-save hook a plain checkbox fires after toggling (`autoSaveOnBlur`): saves an existing record right away and rolls the toggle back if the backend refuses it. No-op when the window has no `autoSaveOnBlur`. |
+
+A component that declares the static `Component.ownsLabel = true` is rendered **without** the
+field label above it, so it can draw its own legend (asterisk and hint included). Use `span` to
+give it the width it needs. Reference: `business-partner-category`'s `ContactTypeField`
+(`etgoIscustomer` renders the "Tipo de contacto" group and also writes `etgoIsvendor`; the
+window wrapper excludes the field while the `contact-category-type` flag is off).
 
 ### Input Prefix (`inputPrefix`)
 

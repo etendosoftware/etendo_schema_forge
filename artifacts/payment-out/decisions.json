@@ -71,7 +71,6 @@
   },
   "entities": {
     "header": {
-      "javaQualifier": "payment-reactivate",
       "fields": {
         "documentNo": {
           "visibility": "readOnly",

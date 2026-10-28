@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import RecordCreateModal from '../../contract-ui/RecordCreateModal.jsx';
-import {
-  LOOKUP_CREATE_TARGETS, buildContactSeed, resolveContactName,
-} from '../../contract-ui/lookupCreateTargets.js';
+import { buildContactSeed, resolveContactName } from '../../contract-ui/lookupCreateTargets.js';
 import { useContactCategorySeed } from '../../contract-ui/useContactCategorySeed.js';
+import { ContactTypeRequirementContext } from '../../contract-ui/contactTypeRequirement.js';
+import { useContactCreateTypeGate } from '../../contract-ui/useContactCreateTypeGate.js';
 import { deriveContactsApiBase } from './contactApi.js';
 
 /* eslint-disable react/prop-types */
@@ -20,24 +20,25 @@ import { deriveContactsApiBase } from './contactApi.js';
 export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onCancel, onSubmit }) {
   const bpApiBaseUrl = useMemo(() => deriveContactsApiBase(apiBaseUrl), [apiBaseUrl]);
 
-  // Memoised: RecordCreateModal's reset effect depends on `target`, so a fresh object per
-  // render would reload the window module and refetch /defaults continuously.
-  const target = useMemo(
-    () => ({ ...LOOKUP_CREATE_TARGETS.contact, apiBaseUrl: bpApiBaseUrl }),
-    [bpApiBaseUrl],
-  );
+  const documentType = item?.payload?.documentType || null;
+  // ETP-5791 (flag `contact-category-type`): same gate as a document's Contacto selector — with
+  // the flag ON the category must grant the type the extracted document needs (`null`
+  // requirement when the extraction has no nature) and the seed carries no customer/vendor;
+  // OFF is the pre-ETP-5791 popup. See useContactCreateTypeGate.
+  const {
+    requirement: contactTypeRequirement, target, seedDocumentType,
+  } = useContactCreateTypeGate({ documentType, bpApiBaseUrl });
 
   const prefilled = item?.payload?.prefilled || {};
   const initialQuery = prefilled.name || '';
-  const documentType = item?.payload?.documentType || null;
   // Resolved before the popup mounts: the embedded window reads its seed once, on mount.
   const { ready, categorySeed } = useContactCategorySeed({
     contactsApiBaseUrl: bpApiBaseUrl, documentType, active: true,
   });
   const initialData = useMemo(
-    () => ({ ...buildOcrContactSeed(prefilled, documentType), ...categorySeed }),
+    () => ({ ...buildOcrContactSeed(prefilled, seedDocumentType), ...categorySeed }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(prefilled), documentType, categorySeed],
+    [JSON.stringify(prefilled), seedDocumentType, categorySeed],
   );
 
   // The address belongs to the `locationAddress` child tab: it reaches the Contacts window as a
@@ -51,21 +52,27 @@ export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onC
   if (!ready) return null;
 
   return (
-    <RecordCreateModal
-      open
-      target={target}
-      initialQuery={initialQuery}
-      initialData={initialData}
-      initialChildData={initialChildData}
-      token={token}
-      onCancel={onCancel}
-      onCreated={record => onSubmit({ created: { ...record, name: resolveContactName(record) } })}
-      data-testid="RecordCreateModal__ocrContact" />
+    <ContactTypeRequirementContext.Provider value={contactTypeRequirement}>
+      <RecordCreateModal
+        open
+        target={target}
+        initialQuery={initialQuery}
+        initialData={initialData}
+        initialChildData={initialChildData}
+        token={token}
+        onCancel={onCancel}
+        onCreated={record => onSubmit({ created: { ...record, name: resolveContactName(record) } })}
+        data-testid="RecordCreateModal__ocrContact" />
+    </ContactTypeRequirementContext.Provider>
   );
 }
 
 /**
  * Maps the OCR extraction onto `businessPartner` header fields.
+ *
+ * `documentType` flags the contact `vendor` (purchase) / `customer` (sale). With the
+ * `contact-category-type` flag ON (ETP-5791) the caller passes none: the contact's type comes from
+ * its category, which `useContactCategorySeed` seeds from the document's nature.
  *
  * Only the four header keys are seeded here. `address`, `postalCode`, `city` and `country` —
  * also produced by `createPrefilledFrom` in `ocrDocTypes.js` — belong to the `locationAddress`

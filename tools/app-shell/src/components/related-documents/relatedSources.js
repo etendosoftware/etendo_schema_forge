@@ -48,6 +48,33 @@ export function originInvoicesDepsKey(record) {
 }
 
 /**
+ * Fetch of an invoice's ORDER source (ETP-5828): every order its lines come from
+ * (`linkedOrders`, injected on the detail GET by AbstractInvoiceHeaderHandler#enrichLinkedOrders
+ * from C_InvoiceLine.C_OrderLine_ID), plus the header order (`salesOrder`, C_Order_ID) resolved
+ * by `fetchHeaderOrigin` when it is not already among them. The header order alone is not
+ * enough: it is blanked when the lines come from more than one order (ETP-5381). It stays the
+ * fallback when `linkedOrders` is absent or empty (e.g. an invoice generated from a quotation
+ * before its lines exist, or an older backend).
+ *
+ * @param {(ctx: object) => Promise<object[]>} fetchHeaderOrigin — resolves the header order
+ * @returns {(ctx: { record: object }) => Promise<object[]>}
+ */
+export function invoiceOrdersFetch(fetchHeaderOrigin) {
+  return async function fetchInvoiceOrders(ctx) {
+    const linked = asArray(ctx.record?.linkedOrders).filter(order => order?.id);
+    const headerOrderId = ctx.record?.salesOrder;
+    if (!headerOrderId || linked.some(order => order.id === headerOrderId)) return linked;
+    const headerOrigin = await fetchHeaderOrigin(ctx);
+    return [...linked, ...asArray(headerOrigin)];
+  };
+}
+
+/** The part of an invoice definition's `depsKey` that tracks its orders (ETP-5828). */
+export function invoiceOrdersDepsKey(record) {
+  return `${record?.salesOrder ?? ''}|${idsOf(record?.linkedOrders)}`;
+}
+
+/**
  * Definition of a goods movement (goods shipment / goods receipt): its linked orders,
  * invoices and returns, all injected by the backend on the detail GET.
  */
