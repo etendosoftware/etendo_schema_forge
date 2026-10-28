@@ -206,7 +206,8 @@
           "gridOrder": 1,
           "searchable": true,
           "section": "principal",
-          "seq": 3
+          "seq": 3,
+          "agentPrompt": "The order date. If omitted the server proposes today, as the form does; send the date the user gives when it is another one."
         },
         "scheduledDeliveryDate": {
           "displayLogic": null,
@@ -412,7 +413,8 @@
             "lineGrossAmount",
             "grossUnitPrice",
             "lineNetAmount"
-          ]
+          ],
+          "agentPrompt": "Normally omit it: the server picks the tax from the product's tax category and the customer's tax category (a customer under 'Recargo de Equivalencia' gets the tax with the surcharge), as the form does. To see or change the options for this line, call etendo_selectors for 'tax' with recordContext {product, businessPartner, orderDate} — not the tax/tax catalogue."
         },
         "listPrice": {
           "grid": true,

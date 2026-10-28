@@ -206,7 +206,8 @@
           "section": "principal",
           "readOnlyLogic": null,
           "seq": 30,
-          "businessCritical": true
+          "businessCritical": true,
+          "agentPrompt": "The date printed on the supplier's invoice. If omitted the server proposes today, as the form does — send the supplier document's own date when registering it."
         },
         "businessPartner": {
           "grid": true,
@@ -250,7 +251,8 @@
           "grid": false,
           "seq": 35,
           "readOnlyLogic": "@Posted@='Y'",
-          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post."
+          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post.",
+          "agentPrompt": "The date the invoice is posted to the ledger; it must fall in an open period. If omitted it follows the invoice date (today when that was omitted too)."
         },
         "paymentTerms": {
           "section": "principal",
@@ -733,7 +735,8 @@
           "readOnlyLogic": null,
           "forceCalloutFields": [
             "lineNetAmount"
-          ]
+          ],
+          "agentPrompt": "Normally omit it: the server picks the tax from the product's tax category and the supplier's tax category, as the form does. To see or change the options for this line, call etendo_selectors for 'tax' with recordContext {product, businessPartner, invoiceDate} — not the tax/tax catalogue, which lists every rate, including inactive and future ones."
         },
         "taxableAmount": {
           "visibility": "readOnly",

@@ -389,7 +389,8 @@
           "visibility": "discarded"
         },
         "salesOrderLine": {
-          "visibility": "system"
+          "visibility": "system",
+          "agentPrompt": "The sales order line this shipment line delivers. A shipment line has no price of its own: the price is on this order line (read it in sales-order/lines). An invoice created from the shipment takes its prices from these order lines."
         },
         "project": {
           "visibility": "editable",
@@ -406,7 +407,8 @@
         "invoiceQuantity": {
           "visibility": "discarded"
         }
-      }
+      },
+      "agentPrompt": "Lots, serial numbers and expiry dates are not handled in Etendo GO yet: a shipment line cannot carry them. Tell the user they cannot be recorded here."
     },
     "accounting": {
       "exclude": true

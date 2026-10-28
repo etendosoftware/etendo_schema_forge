@@ -199,7 +199,8 @@
           "searchable": true,
           "section": "principal",
           "seq": 30,
-          "businessCritical": true
+          "businessCritical": true,
+          "agentPrompt": "The invoice date. If omitted the server proposes today, as the form does. When the user names a date, or the invoice copies an earlier document, send that date explicitly."
         },
         "accountingDate": {
           "visibility": "editable",
@@ -208,7 +209,8 @@
           "section": "principal",
           "seq": 35,
           "readOnlyLogic": "@Posted@='Y'",
-          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post."
+          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post.",
+          "agentPrompt": "The date the invoice is posted to the ledger; it must fall in an open period. If omitted it follows the invoice date (today when that was omitted too)."
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -695,7 +697,8 @@
           "inputMode": "selector",
           "forceCalloutFields": [
             "lineNetAmount"
-          ]
+          ],
+          "agentPrompt": "Normally omit it: the server picks the tax from the product's tax category and the customer's tax category (a customer under 'Recargo de Equivalencia' gets the tax with the surcharge), as the form does. To see or change the options for this line, call etendo_selectors for 'tax' with recordContext {product, businessPartner, invoiceDate} — not the tax/tax catalogue, which lists every rate, including inactive and future ones."
         },
         "lineNetAmount": {
           "visibility": "system",

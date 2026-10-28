@@ -719,3 +719,7 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 ## Read-only role tier: Períodos tab — ETP-5830
 
 With a `read-only` tier, `PeriodsExpandablePanel` (reached through `SecondaryPanelTab`, which now forwards `readOnly`) renders no checkboxes and no row links. The Accounting tab has no writes. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Agent prompt on fiscal-calendar/year — ETP-5852
+
+`fiscal-calendar` `entities.year.agentPrompt` sends an agent that wants to know whether a date is in an open period to `open-close-period-control/periodControl` filtered by `startingDate`/`endingDate`, instead of walking calendar → year → period. Feedback M-43.

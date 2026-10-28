@@ -374,7 +374,8 @@
         "copyservicemodifytaxconfig": {
           "visibility": "discarded"
         }
-      }
+      },
+      "agentPrompt": "A product's name is not unique: two products can share it. Identify one by its searchKey (code) or id. When several match what the user said, do not pick one: show them (name, searchKey, prices) and ask. If the user cannot tell, suggest — for them to confirm — the one used in that contact's most recent order or invoice (etendo_list on sales-order/header filtered by businessPartner, newest first, then its lines)."
     },
     "price": {
       "javaQualifier": "productPriceHandler",

@@ -123,7 +123,8 @@
           "searchable": true,
           "section": "principal",
           "form": true,
-          "seq": 30
+          "seq": 30,
+          "agentPrompt": "The order date. If omitted the server proposes today, as the form does; send the date the user gives when it is another one."
         },
         "businessPartner": {
           "grid": true,
@@ -462,7 +463,8 @@
             "lineGrossAmount",
             "grossUnitPrice",
             "lineNetAmount"
-          ]
+          ],
+          "agentPrompt": "Normally omit it: the server picks the tax from the product's tax category and the supplier's tax category, as the form does. To see or change the options for this line, call etendo_selectors for 'tax' with recordContext {product, businessPartner, orderDate} — not the tax/tax catalogue."
         },
         "listPrice": {
           "grid": true,

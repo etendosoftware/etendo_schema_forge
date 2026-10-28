@@ -290,7 +290,8 @@
         "salesOrderLine": {
           "visibility": "editable",
           "form": false,
-          "grid": false
+          "grid": false,
+          "agentPrompt": "The purchase order line this receipt line receives. A receipt line has no price of its own: the price is on this order line (read it in purchase-order/lines). An invoice created from the receipt takes its prices from these order lines."
         },
         "invoiceQuantity": {
           "grid": false,
@@ -339,7 +340,8 @@
           "visibility": "discarded",
           "displayLogic": null
         }
-      }
+      },
+      "agentPrompt": "Lots, serial numbers and expiry dates are not handled in Etendo GO yet: a receipt line cannot carry them. Tell the user they cannot be recorded here."
     },
     "accounting": {
       "javaQualifier": "factAcctHandler",
