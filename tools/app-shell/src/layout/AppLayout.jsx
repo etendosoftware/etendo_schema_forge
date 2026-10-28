@@ -472,10 +472,10 @@ function SessionConflictScreen() {
   }, []);
 
   // The support account's email is internal (.invalid): show a human label instead.
-  const named = (email) => (email === SUPPORT_ACCOUNT_EMAIL ? ui('sessionConflictSupportUser') : email);
+  const named = (email) => (email?.toLowerCase() === SUPPORT_ACCOUNT_EMAIL.toLowerCase() ? ui('sessionConflictSupportUser') : email);
   const currentUser = named(auth?.account?.email) || auth?.username || ui('sessionConflictThisAccount');
   const otherUser = named(live?.account?.email) || null;
-  const withUsers = (text) => text.replace('{currentUser}', currentUser).replace('{otherUser}', otherUser);
+  const withUsers = (text) => text.replace('{currentUser}', () => currentUser).replace('{otherUser}', () => otherUser);
 
   const continueAsOther = () => {
     window.location.reload();
