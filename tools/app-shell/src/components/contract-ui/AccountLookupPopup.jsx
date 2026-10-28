@@ -1,17 +1,5 @@
-import { useCallback } from 'react';
-import { useApiFetch } from '@/auth/useApiFetch.js';
-import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
-import { SearchPopup, SEARCH_POPUP_PAGE_SIZE } from './SearchPopup.jsx';
-
-/**
- * The label a selector item is shown with — the same fallback chain the lookup fields use when
- * they store the picked item's `$_identifier`.
- *
- * @param {{label?: string, name?: string, _identifier?: string, id: string}} item
- */
-function selectorItemLabel(item) {
-  return item.label || item.name || item._identifier || item.id;
-}
+import { SearchPopup } from './SearchPopup.jsx';
+import { useAccountSelectorPages } from './useAccountSelectorPages.js';
 
 /**
  * AccountLookupPopup — the `account` entry of the lookup drawer registry (`lookupDrawers.js`):
@@ -34,21 +22,7 @@ function selectorItemLabel(item) {
  * @param {string} [props.title]
  */
 export default function AccountLookupPopup({ open, onClose, onSelect, selectorUrl, selectorContext, title }) {
-  const apiFetch = useApiFetch();
-
-  const loadPage = useCallback(async (query, offset, signal) => {
-    if (!selectorUrl) return { items: [], hasMore: false };
-    const params = { ...(selectorContext || {}), limit: SEARCH_POPUP_PAGE_SIZE, offset };
-    if (query) params.q = query;
-    const res = await apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '', signal });
-    if (!res.ok) throw new Error(`Account selector request failed: ${res.status}`);
-    const data = await res.json();
-    const raw = Array.isArray(data) ? data : (data?.items ?? []);
-    return {
-      items: raw.map((item) => ({ ...item, name: selectorItemLabel(item) })),
-      hasMore: Array.isArray(data) ? false : Boolean(data?.hasMore),
-    };
-  }, [selectorUrl, selectorContext, apiFetch]);
+  const loadPage = useAccountSelectorPages(selectorUrl, selectorContext);
 
   return (
     <SearchPopup

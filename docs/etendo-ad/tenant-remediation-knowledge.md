@@ -3431,6 +3431,38 @@ restart — but it argues for running this fix close to a restart.
   applied to Calendar1 (`A5C303F8CF314BBF85CDC90757C8DBD7`) → `APPLIED (430 rows)`, Jan–Oct all `'O'`,
   Nov/Dec `'N'` → re-run `SKIPPED_NOT_NEEDED — kept prior success state`.
 
+## ETP-5791 — Contact category type flags + "Cliente/Proveedor" (U1, R55+R56 (born R50/R51, then R53/R54), 2026-10-19)
+
+- **2026-10-19 — Supersedes the 2026-07-01 note "`C_BP_Group` has NO `iscustomer`/`isvendor`
+  columns".** ETP-5791 adds `EM_ETGO_ISCUSTOMER` / `EM_ETGO_ISVENDOR` (YesNo, NOT NULL, default
+  `'N'`) to `C_BP_Group`. The flags on `C_BPartner` (`iscustomer`/`isvendor`) are unrelated and
+  unchanged. **Apply:** a fix or dataset row that creates a `C_BP_Group` must set both flags; the
+  column default N/N produces a category the UI cannot save again.
+- **2026-10-19 — `c_bp_group_trg()` is the ONLY trigger on `C_BP_Group`** (confirmed via
+  `pg_trigger`), so wrapping a group INSERT in `ad_disable_triggers()`/`ad_enable_triggers()` skips
+  nothing but the `C_BP_Group_Acct` defaulting. R55 does this so its own NOT EXISTS-guarded
+  `INSERT ... SELECT` that mirrors another category's posting rows is the single writer (otherwise
+  the trigger creates the rows from `C_AcctSchema_Default` first and the mirror INSERT silently
+  no-ops — the 2026-07-01 trap).
+- **2026-10-19 — "Cliente" and "Proveedor" `C_BP_Group_Acct` rows are byte-identical (all 21
+  `*_acct` columns) on all 211 tenants that have both**; "Acreedor" differs (R9/R35 overrides).
+  `C_BP_Group_Acct` has `UNIQUE (c_bp_group_id, c_acctschema_id)`; `C_BP_Group` has
+  `UNIQUE (value, ad_org_id, ad_client_id)` — NOT unique on name, hence `DISTINCT ON` in R55's
+  mirror inserts.
+- **2026-10-19 — `DemoDataTransferEntityCopier#targetBusinessPartnerCategory` maps categories by
+  NAME and, when the target lacks one, copies only Name/Value/Description.** A copied custom
+  category would land N/N once the flags exist. **Apply:** the copier must also copy the two flags
+  (open item for ETP-5791's code side; the four standard categories exist on both sides, so they
+  are always matched, never copied).
+- **2026-10-20 — Custom-category flags are derived from contacts (R56, product decision option
+  (a)).** Rule: customer=Y if any `C_BPartner` in the category has `IsCustomer='Y'`, vendor=Y if any
+  has `IsVendor='Y'`, Y/Y when the category is empty or holds neither (e.g. employees only);
+  inactive contacts count. Only N/N rows with a non-standard name are written, so a renamed
+  standard category is covered and a category already flagged by anyone is never touched.
+  **Apply:** a follow-up flag fix must stay dated after R55 (fail-fast chain ordering) and keep the
+  "only N/N" guard — it is what makes it idempotent and non-destructive. In `@report`,
+  `updated = now()` selects exactly the rows `@apply` wrote (same transaction, same `now()`).
+
 ## ETP-5046 — S1 R37 retirement widened to every subscribed tenant: develop's R42 re-adds the plan marker (2026-10-05)
 
 - **Wrong assumption:** "once ETP-5046's paid upgrade stops writing `ETGO_TenantPlan`, no new tenant

@@ -117,7 +117,9 @@ const BACKEND_ERROR_MAP = {
   'Invalid country': 'backendError.invalidCountry',
   // ETP-5473 (FinancialAccountHandler). Country is mandatory for every financial-account type on
   // create; the IBAN is never used to derive it. (Clearing it on update of a Bank account that
-  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.)
+  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.) These three
+  // now travel with `messageKeys` (ETGO_FinAcc*, see BACKEND_ERROR_KEY_MAP) and are written in the
+  // request language; the English literals are kept only as the fallback for a keyless backend.
   'Country is required': 'backendError.countryRequired',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
@@ -472,6 +474,12 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5791 — the contact-type refusals of com.etendoerp.go (BusinessPartnerCategoryHandler /
+  // ContactTypeRules): a contact category, or a contact, saved with neither Customer nor
+  // Vendor/Creditor. AD_MESSAGE records of a module with no es_ES translation pack, so this map
+  // is where they become Spanish.
+  ETGO_BPGroupContactTypeRequired: 'backendError.bpGroupContactTypeRequired',
+  ETGO_BPartnerContactTypeRequired: 'backendError.bpartnerContactTypeRequired',
   // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
   // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
   // same case maps to "period not open", which sends the user to open a period they do not need.
@@ -491,6 +499,13 @@ const BACKEND_ERROR_KEY_MAP = {
   // translatePaymentTermConflict.
   ETGO_PaymentTermDaysInvalid: 'backendError.paymentTermDaysInvalid',
   ETGO_PaymentTermDaysOutOfRange: 'backendError.paymentTermDaysOutOfRange',
+  // ETP-5473 — com.etendoerp.go FinancialAccountHandler: the country refusals of a financial
+  // account. The backend now answers them in the request language (REST/MCP have no SPA to
+  // translate), so the text is no longer a stable English literal; these keys are. The English
+  // exact-match entries in BACKEND_ERROR_MAP stay as the fallback for a backend that predates them.
+  ETGO_FinAccCountryRequired: 'backendError.countryRequired',
+  ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
+  ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
