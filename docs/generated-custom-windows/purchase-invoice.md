@@ -2915,6 +2915,36 @@ Discovery and edge cases of the purchase invoice import (ETP-5713 review):
 - The remainder of an order import (ordered and not delivered, or already taken by another draft) is created through the native process with a temporary receipt/shipment marker that is removed right after; a skipped removal rolls the import back (`importQuantityNotHonoured`). `ImportOrderLinesIntoInvoiceHandlerIntegrationTest` runs the real process for the covered-by-draft case.
 - A document of another client answers 404 exactly like a missing one. The source lines are locked with `FOR NO KEY UPDATE`.
 
+## Import into a draft rectificative purchase invoice over MCP — ETP-5876
+
+The window offers a rectificative purchase invoice two imports, "from return" (`ImportFromGoodsReturnModal`) and "from source invoice"
+(`ImportFromSourceInvoiceModal`), and none of the order / receipt ones; an agent now has the same, with six actions declared on
+`header` (`PurchaseInvoiceHeaderHandler`): `availableReturns` / `availableReturnLines` / `importReturnLines`
+(`{returnId, lines?:[{sourceLineId, quantity}]}`) and `availableOriginInvoices` / `availableOriginInvoiceLines` /
+`importOriginInvoiceLines` (`{invoiceId, lines?}`). The `id` of every call is the draft rectificative; the quantity of a line is always
+a **positive** number and the line that is written is its negative.
+
+- **The kind of invoice decides.** A rectificative is the window's `RECTIFICATIVA` subtype (`getApSubtype`, the server's `apInvoiceSubtype`):
+  the flag `EM_Etsg_Isrectificative` or the legacy `APC` / `API` + `isReturn` document types. On a rectificative `importOrderLines`, `importReceiptLines` and their `available*`
+  answer **422 `importNotAvailableOnRectificative`** and create nothing; on a normal invoice the six actions above answer **422
+  `importRequiresRectificative`**. `etendo_schema(view:"actions", id)` shows the ones that do not apply as `availableNow:false` with the reason. Only a draft takes an import.
+- **From a return** (return to the vendor, completed, same vendor): negative lines linked to the return line, with the unit price and tax of the
+  invoice's **current price list** (what the line callout gives; a return alone does not know the price it was sold at: `createReturnInvoice` on the return credits at the
+  original price). The cap is each modal's own (see below):
+  asking for more is a 422 `importQuantityExceedsPending` and nothing is created. No `C_Invoice_Reverse` row is written, as in the window.
+- **From an origin invoice** (completed standard invoice of the same vendor, any currency; a rectificative is never offered): negative lines with
+  the product, unit, tax, price, list price and discount of the source line, partial quantities allowed up to the quantity of the source line,
+  the source line kept in `EM_ETGO_Source_Invoiceline_ID` (the purchase modal does not send the order line). A source line already imported into
+  this rectificative is not offered again (the modal tracks presence, not quantity), and what other draft rectificatives or returns already credited of a line is **not**
+  deducted: that is the window's behaviour and it is kept. The origin import links the origin invoice in the Rectificaciones tab (once per invoice, both sides, also when the source has an order); the return import writes no link.
+- **The total discount of the invoice is not carried** by any of these imports, nor by `createReturnInvoice`, as in the window.
+- The classic `CreateFrom` redirect reasons say they do not apply to a rectificative. The spec prompt (`agent-prompts/purchase-invoice/spec.md`) describes the flow.
+
+Each side follows its own modal, neither stricter nor laxer. Purchase return cap: the return line quantity, skipping only a line THIS invoice already holds (what other invoices hold, drafts or completed, is not deducted); no currency is compared, neither for returns nor for the origin invoice. Both list only returns whose invoiceStatus is below 100. Two differences remain: (1) a return line that carries an order line is priced from it by the native process. (2) The origin import copies the source line's price, list price, tax and UOM, while the purchase `ImportFromSourceInvoiceModal.jsx` `buildLineBody` is callout-first (the callout's price, list price, tax and UOM before the source line's). The modal calls the callout with an empty header and no product auxiliary values (`resolveLinePrice(base, line.product, qty, {})`), so the request has no invoice and no price list prices: as written it is expected to return nothing and every field falls back to the source line, which is what the MCP copies. This is inferred from the code and **not verified on screen**; if the callout does answer there, the screen prices from the price list and the MCP differs. Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.42.
+
+Manual check on screen (the MCP must match it): on a draft rectificative, open "Import from return" and "Import from source invoice" and import the same
+return / invoice by MCP into a second draft; compare the lines (sign, quantity, unit price, tax, discount) and the Rectificaciones tab (the origin import must show its row).
+
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 Agents (MCP) no longer have to learn what a purchase invoice allows from refusals:
