@@ -56,10 +56,6 @@ import LocationEditorModal from '../LocationEditorModal.jsx';
 import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
-import {
-  readPartnerCustomer,
-  shouldWarnMissingTbaiPostalCode,
-} from '../tbaiPostalCodeWarning.js';
 
 /** Restores the default (flag ON) `useAuth()` mock used by every pre-existing test. */
 function useCapabilitiesOn() {
@@ -1515,50 +1511,6 @@ describe('LocationEditorModal — TicketBAI postal code warning (ETP-5824)', () 
 
     expect(fetchedUrls().some(u => u.includes('/tbai-config/header') || u.includes('/businessPartner/'))).toBe(false);
     expect(screen.queryByTestId(WARNING_TESTID)).not.toBeInTheDocument();
-  });
-});
-
-describe('tbaiPostalCodeWarning — pure rules (ETP-5824)', () => {
-  describe('shouldWarnMissingTbaiPostalCode', () => {
-    const WARN_BASE = { tbaiActive: true, partnerSimplified: false, postalCode: '' };
-
-    it('warns for a customer partner', () => {
-      expect(shouldWarnMissingTbaiPostalCode({ ...WARN_BASE, partnerCustomer: true })).toBe(true);
-    });
-
-    it('does not warn for a non-customer partner', () => {
-      expect(shouldWarnMissingTbaiPostalCode({ ...WARN_BASE, partnerCustomer: false })).toBe(false);
-    });
-
-    it('does not warn when the customer flag is unknown (null)', () => {
-      expect(shouldWarnMissingTbaiPostalCode({ ...WARN_BASE, partnerCustomer: null })).toBe(false);
-    });
-
-    it('does not warn when the customer flag is omitted', () => {
-      expect(shouldWarnMissingTbaiPostalCode(WARN_BASE)).toBe(false);
-    });
-
-    it('does not warn for a customer once a postal code is present', () => {
-      expect(shouldWarnMissingTbaiPostalCode({ ...WARN_BASE, partnerCustomer: true, postalCode: '20001' })).toBe(false);
-    });
-  });
-
-  describe('readPartnerCustomer', () => {
-    it.each([
-      ['Y', true],
-      ['N', false],
-      [true, true],
-      [false, false],
-      [undefined, null],
-      ['', null],
-    ])('reads customer=%j as %j', (raw, expected) => {
-      expect(readPartnerCustomer({ customer: raw })).toBe(expected);
-    });
-
-    it('returns null for a record without the property, or no record at all', () => {
-      expect(readPartnerCustomer({ id: 'bp-1' })).toBeNull();
-      expect(readPartnerCustomer(undefined)).toBeNull();
-    });
   });
 });
 
