@@ -86,6 +86,9 @@ widens it up to `columnMaxWidth`, past which it is cut with an ellipsis. As soon
 row actions: the free width stays empty on the right, no data column stretches, and the hover
 edit / delete sit at the far right edge. Declare a width on every column for a fully fixed grid
 (`grow` is not read by list-modal). A grid that declares no width lays out exactly as before.
+With a personal grid view active (`grid-column-views`, ETP-5835) the user's widths win instead:
+`columnWidth` is only the view's default width (160px when undeclared), and neither the
+`columnMaxWidth` cap nor the spacer applies — the hover actions sit right after the last column.
 
 **Advanced filter (Filtros).** It offers every entity column — the grid columns plus the modal
 fields. A boolean / checkbox / toggle column is a `Sí`/`No` picker (worded by its `badgeLabels`,

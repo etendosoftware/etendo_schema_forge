@@ -1,4 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { gridViewColumnId } from '@/hooks/useGridView.js';
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+
+// Exercise personal views through the real shared hook; only the session/API boundary is mocked.
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
+// @covers tools/app-shell/src/windows/custom/financial-account/ReconciledTxnsModal.jsx
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const navigate = vi.fn();
@@ -150,5 +159,31 @@ describe('ReconciledTxnsModal — accounting capability gate (ETP-5684)', () => 
     render(<ReconciledTxnsModal line={line()} currency="EUR" onClose={vi.fn()} />);
     expect(screen.getByText('financeAccountMovementsTypeBPW')).toBeInTheDocument();
     expect(dots().length).toBe(0);
+  });
+});
+
+describe('ReconciledTxnsModal — personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    const column = getContractGridColumns('transaction').find((item) => item.name === 'description');
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: gridViewColumnId({ ...column, key: 'description' }), visible: false },
+        { id: 'list:field:actions', visible: false, order: -1 },
+      ],
+    }) });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('retains the transaction navigation action after applying saved visibility', async () => {
+    const onClose = vi.fn();
+    render(<ReconciledTxnsModal line={line()} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/transaction', { baseUrl: '' });
+    const row = screen.getByTestId('reconciled-txn-row-1000034');
+    expect(row).not.toHaveTextContent('Invoice No.: 10000016.');
+    fireEvent.click(screen.getByTestId('reconciled-txn-go-1000034'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('/financial-account/acc-1?tab=movements&txn=txn-1', { replace: true });
   });
 });

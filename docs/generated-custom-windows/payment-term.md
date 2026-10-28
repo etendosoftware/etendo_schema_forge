@@ -106,6 +106,24 @@ Since ETP-5978 `PaymentTermHandler` (after a successful rename) copies the new n
 - **Not atomic with the rename:** the translation update runs in a second transaction after the rename is committed. If it fails, the error is logged and the rename stays saved; the identifier stays stale until the term is renamed again.
 - **Terms renamed before this fix** keep their stale translations until they are renamed again.
 
+## Personal list-column views
+
+Since ETP-5978 the Payment Term list renders through `ListModalWindow` with a stable scope (spec
+`payment-term`, entity `header`, base URL `/sws/neo/payment-term`), so it carries the personal
+Columns and Save view controls behind the `grid-column-views` flag (off by default). Its row
+selection, actions and filter/sort state are not part of a saved view. Identity checks and
+load/save failures: [shared grid-view policy](../feature-flags.md#personal-business-grid-views).
+
+Specific to this window's fixed widths (see *List columns* above):
+
+- **With a personal view active**, the user's widths win. The declared `columnWidth` values become
+  the view's default widths — `Nombre` 164px, `Días` 124px, `Siguiente día hábil` 158px,
+  `Por defecto` 158px. The `columnMaxWidth` cap (240 / 148) and the empty spacer column do not
+  apply, so the table is exactly as wide as its columns and the hover edit / delete sit right
+  after the last column.
+- **Without a view** (flag off, or no view saved), the fixed widths, the caps and the spacer stand
+  as described above.
+
 ## Gap assessment
 
 - Due-date semantics are narrower in the shipped UI than in the backend model. The backend contract includes hidden header fields such as `fixedDueDate`, `maturityDate1/2/3` and `overduePaymentDayRule`, and since ETP-5978 also `offsetMonthDue`; the window only exposes the number of days and the next-business-day flag. Fixed-date, multi-date or month-offset terms are maintained through the API or the classic UI, not here.

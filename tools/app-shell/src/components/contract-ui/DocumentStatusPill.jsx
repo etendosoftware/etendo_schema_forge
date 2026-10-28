@@ -1,4 +1,4 @@
-import { Clock, Check, X } from 'lucide-react';
+import { Clock, Check, X, AlertTriangle } from 'lucide-react';
 import { useLocale } from '@/i18n';
 import { getStatusTone, statusLabel } from '@/lib/statusBadge.js';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
@@ -7,6 +7,7 @@ const TONE_ICON = {
   success: Check,
   warning: Clock,
   destructive: X,
+  caution: AlertTriangle,
   neutral: null,
 };
 
@@ -14,6 +15,7 @@ const TONE_ICON_COLOR = {
   success: 'var(--status-success-fg)',
   warning: 'var(--status-warning-fg)',
   destructive: 'hsl(var(--destructive))',
+  caution: 'var(--status-caution-fg)',
   neutral: 'hsl(var(--muted-foreground))',
 };
 
@@ -39,7 +41,7 @@ const LABEL_STYLE = { padding: '0 4px' };
  * - status: raw status value; nothing renders when null/undefined.
  * - label: explicit text; otherwise resolved via statusLabel(status, dictionary, null, enumLabels).
  * - enumLabels: optional enum-to-label map passed to statusLabel.
- * - tone: overrides getStatusTone(status); one of success | warning | destructive | neutral.
+ * - tone: overrides getStatusTone(status); one of success | warning | destructive | caution | neutral.
  * - prefix: optional bold "prefix:" rendered before the text.
  * - hint: tooltip (title attribute).
  * - testId (default "document-status-pill"): overrides data-testid for callers that must keep a legacy id.

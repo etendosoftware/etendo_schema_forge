@@ -19,6 +19,7 @@ import { resolveFkNavigation } from './fkNavigation.js';
 import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { resolveLookupDrawer } from './lookupDrawers.js';
+import { committedItemFromRow } from './selectorSelection.js';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker, resolveRateDateField } from './CurrencyRatePicker.jsx';
@@ -157,6 +158,8 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
+        value={value}
+        valueLabel={displayValue}
         title={label}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -316,7 +319,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
  * Form field that opens the field's lookup drawer (`field.lookupDrawer`, resolved through the
  * shared registry — the product search drawer by default) for lookup-enabled search fields.
  */
-function LookupFormField({ field, value, displayValue, selectorUrl, selectorContext, token, resolvedLabel, onChange }) {
+function LookupFormField({ field, value, displayValue, row, selectorUrl, selectorContext, token, resolvedLabel, onChange }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const Drawer = resolveLookupDrawer(field.lookupDrawer);
@@ -348,6 +351,10 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
+        // ETP-5948 — open marked and positioned on the field's committed value.
+        value={value}
+        valueLabel={displayValue}
+        committedItem={committedItemFromRow(field, row, value)}
         title={resolvedLabel}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -1134,6 +1141,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             field={f}
             value={data?.[f.key] ?? ''}
             displayValue={data?.[f.key + '$_identifier']}
+            row={data}
             selectorUrl={selectorUrl}
             selectorContext={effectiveSelectorContext}
             token={token}

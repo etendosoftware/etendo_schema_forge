@@ -41,3 +41,10 @@ Predates the `cli/config/regen-windows.json` convention — see [match-rule](mat
 - `artifacts/transaction-type/decisions.json` (W spec config: `Name` editable, `Value` readOnly/auto, `javaQualifier`)
 - `tools/app-shell/src/components/contract-ui/InlineCreateSelector.jsx` + `InlineCreateModal.jsx` (the inline-create selector + modal)
 - match-rule `decisions.json` → `transactionType` field (`allowCreate`, `createSpec`, `createEntity`, `createTitleKey`, `createNamePlaceholderKey`)
+
+## Personal list-column views
+
+The Transaction Type list is also a `ListModalWindow` surface, with the same personal
+Columns and Save view controls behind `grid-column-views`; the inline-create flow
+above is unaffected. See the [shared grid-view policy](../feature-flags.md#personal-business-grid-views)
+for identity checks, failures and rollback.

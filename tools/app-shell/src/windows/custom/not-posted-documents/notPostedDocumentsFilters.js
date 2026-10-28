@@ -25,8 +25,8 @@ import { postedStatusTone } from '@/lib/postedStatus.js';
  * Labels are the page's own i18n keys, in the design's sentence case, not the AD's Title Case
  * translations ("Cuenta No Válida"). The badge tone is NOT declared here: it comes from the
  * shared posting-status registry (`postedStatusTone`), the one colour source every surface
- * that shows a posting status reads — so "No contabilizado" is the same yellow, and "Periodo
- * cerrado" the same red, here as in the lists and the detail view (ETP-5647).
+ * that shows a posting status reads — so "No contabilizado" is the same yellow, and "Período
+ * cerrado" the same orange, here as in the lists and the detail view (ETP-5647, ETP-5591).
  *
  * `error: true` marks the statuses the "Todos los errores" shortcut selects: every status that
  * means a posting attempt FAILED, i.e. all but "No contabilizado" (never attempted).

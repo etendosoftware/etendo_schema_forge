@@ -10,8 +10,21 @@
 // these tests stay focused on ListModalWindow behaviour; the children get their
 // own dedicated test files.
 
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Keep the request boundary stable while allowing each case to route API answers.
+let apiFetchMock = vi.fn();
+let gridColumnViewsEnabled = false;
+vi.mock('@/auth/useApiFetch.js', async () => {
+  const { useMemo } = await import('react');
+  return { useApiFetch: (baseUrl = '') => useMemo(() => (path, options = {}) =>
+    apiFetchMock(`${options.baseUrl ?? baseUrl}${path}`, options), [baseUrl]) };
+});
+vi.mock('@/lib/flags', () => ({
+  GRID_COLUMN_VIEWS: 'grid-column-views',
+  useFeatureFlag: () => gridColumnViewsEnabled,
+}));
 
 // react-router-dom: capture the navigate mock so we can assert the back button.
 const navigateMock = vi.fn();
@@ -182,13 +195,14 @@ function rowCount() {
 }
 
 beforeEach(() => {
+  gridColumnViewsEnabled = false;
   neoState.data = [];
   neoState.loading = false;
   neoState.reload = vi.fn();
   lastEntityFormProps = null;
   navigateMock.mockClear();
   vi.restoreAllMocks();
-  global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+  apiFetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 });
 
 describe('ListModalWindow — toolbar & banner', () => {
@@ -427,8 +441,8 @@ describe('ListModalWindow — save method selection', () => {
       fireEvent.click(screen.getByTestId('list-modal-submit'));
     });
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = global.fetch.mock.calls[0];
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = apiFetchMock.mock.calls[0];
     expect(url).toBe(`${API_BASE}/${ENTITY}`);
     expect(opts.method).toBe('POST');
   });
@@ -446,8 +460,8 @@ describe('ListModalWindow — save method selection', () => {
       fireEvent.click(screen.getByTestId('list-modal-submit'));
     });
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = global.fetch.mock.calls[0];
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = apiFetchMock.mock.calls[0];
     expect(url).toBe(`${API_BASE}/${ENTITY}/ROW-42`);
     expect(opts.method).toBe('PUT');
   });
@@ -462,8 +476,8 @@ describe('ListModalWindow — inline toggle', () => {
       fireEvent.click(screen.getByTestId('cell-toggle-active-ROW-7'));
     });
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    const [url, opts] = global.fetch.mock.calls[0];
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = apiFetchMock.mock.calls[0];
     expect(url).toBe(`${API_BASE}/${ENTITY}/ROW-7`);
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ active: true });
@@ -511,7 +525,7 @@ describe('ListModalWindow — auto-priority seeding', () => {
       fireEvent.click(screen.getByTestId('list-modal-submit'));
     });
 
-    const [, opts] = global.fetch.mock.calls[0];
+    const [, opts] = apiFetchMock.mock.calls[0];
     const body = JSON.parse(opts.body);
     expect(body.priority).toBe(30);
   });
@@ -621,7 +635,7 @@ describe('ListModalWindow — footer toggle', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('list-modal-submit'));
     });
-    const [, opts] = global.fetch.mock.calls[0];
+    const [, opts] = apiFetchMock.mock.calls[0];
     expect(JSON.parse(opts.body).createTransaction).toBe(true);
   });
 });
@@ -663,14 +677,14 @@ describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
   // Route the `?action=activeDimensions` GET to `dimensionsResponse`; everything else gets the
   // generic ok/{} answer the other suites rely on.
   function mockFetch(dimensionsResponse) {
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (isDimensionRequest(url)) return Promise.resolve(dimensionsResponse());
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   }
 
   function dimensionRequestCount() {
-    return global.fetch.mock.calls.filter(([url]) => isDimensionRequest(url)).length;
+    return apiFetchMock.mock.calls.filter(([url]) => isDimensionRequest(url)).length;
   }
 
   it('hides a dimension field whose dimension is not active in the Accounting Schema', async () => {
@@ -764,7 +778,7 @@ describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
   });
 
   it('fails open: keeps the dimension field when the dimensions request throws', async () => {
-    global.fetch = vi.fn((url) => {
+    apiFetchMock = vi.fn((url) => {
       if (isDimensionRequest(url)) return Promise.reject(new Error('network down'));
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
@@ -900,7 +914,7 @@ function selectionPillText() {
 }
 
 function deleteCalls() {
-  return global.fetch.mock.calls.filter(([, opts]) => opts?.method === 'DELETE');
+  return apiFetchMock.mock.calls.filter(([, opts]) => opts?.method === 'DELETE');
 }
 
 const TWO_ROWS = [
@@ -1022,7 +1036,7 @@ describe('ListModalWindow — multi-select + bulk delete', () => {
   it('keeps only the failed rows checked after a partial bulk-delete failure', async () => {
     neoState.data = TWO_ROWS;
     // ROW-2's DELETE fails; ROW-1's succeeds.
-    global.fetch = vi.fn((url, opts) => {
+    apiFetchMock = vi.fn((url, opts) => {
       if (opts?.method === 'DELETE' && String(url).endsWith('/ROW-2')) {
         return Promise.resolve({
           ok: false,
@@ -1485,11 +1499,11 @@ function jsonResponse(body, { ok = true, status = 200 } = {}) {
 }
 
 function writeCalls(method) {
-  return global.fetch.mock.calls.filter(([, opts]) => opts?.method === method);
+  return apiFetchMock.mock.calls.filter(([, opts]) => opts?.method === method);
 }
 
 function getCalls() {
-  return global.fetch.mock.calls.filter(([, opts]) => !opts?.method || opts.method === 'GET');
+  return apiFetchMock.mock.calls.filter(([, opts]) => !opts?.method || opts.method === 'GET');
 }
 
 function clearToasts() {
@@ -1520,7 +1534,7 @@ describe('ListModalWindow — deep link', () => {
       expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'ruleEdit' })).toBeInTheDocument();
       expect(lastEntityFormProps.data).toMatchObject({ id: 'A', name: 'Alpha' });
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(apiFetchMock).not.toHaveBeenCalled();
     });
 
     it('opens the default edit modal for a window without the compact variant', () => {
@@ -1540,19 +1554,19 @@ describe('ListModalWindow — deep link', () => {
       neoState.data = [];
       const { rerender } = render(<ListModalWindow {...deepProps({ recordId: 'A' })} />);
       expect(screen.queryByTestId('list-modal-compact-dialog')).not.toBeInTheDocument();
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(apiFetchMock).not.toHaveBeenCalled();
 
       neoState.loading = false;
       neoState.data = ROWS;
       rerender(<ListModalWindow {...deepProps({ recordId: 'A' })} />);
       expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument();
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(apiFetchMock).not.toHaveBeenCalled();
     });
   });
 
   describe('a record outside the list', () => {
     it('reads it by id (GET {entity}/{id}) and opens it', async () => {
-      global.fetch = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [{ id: 'B', name: 'Beta' }] } })));
+      apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [{ id: 'B', name: 'Beta' }] } })));
       renderWindow({ ...DEEP, recordId: 'B' });
       await waitFor(() => expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument());
       expect(getCalls()).toHaveLength(1);
@@ -1562,13 +1576,13 @@ describe('ListModalWindow — deep link', () => {
     });
 
     it('URL-encodes the record id in the request path', async () => {
-      global.fetch = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [{ id: 'a/b' }] } })));
+      apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [{ id: 'a/b' }] } })));
       renderWindow({ ...DEEP, recordId: 'a/b' });
       await waitFor(() => expect(getCalls()[0]?.[0]).toBe(`${API_BASE}/${ENTITY}/a%2Fb`));
     });
 
     it('a record the server does not return toasts and drops back to the list URL', async () => {
-      global.fetch = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [] } })));
+      apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [] } })));
       renderWindow({ ...DEEP, recordId: 'ZZ' });
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('recordNotFoundTitle'));
       expect(navigateMock).toHaveBeenCalledWith(`/${WINDOW}`, { replace: true });
@@ -1576,14 +1590,14 @@ describe('ListModalWindow — deep link', () => {
     });
 
     it('a non-ok response is treated as not found', async () => {
-      global.fetch = vi.fn(() => Promise.resolve(jsonResponse({ error: { message: 'nope' } }, { ok: false, status: 404 })));
+      apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse({ error: { message: 'nope' } }, { ok: false, status: 404 })));
       renderWindow({ ...DEEP, recordId: 'ZZ' });
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('recordNotFoundTitle'));
       expect(navigateMock).toHaveBeenCalledWith(`/${WINDOW}`, { replace: true });
     });
 
     it('a failed request is treated as not found', async () => {
-      global.fetch = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
+      apiFetchMock = vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
       renderWindow({ ...DEEP, recordId: 'ZZ' });
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('recordNotFoundTitle'));
       expect(navigateMock).toHaveBeenCalledWith(`/${WINDOW}`, { replace: true });
@@ -1591,9 +1605,9 @@ describe('ListModalWindow — deep link', () => {
 
     it('does not toast after the window unmounted', async () => {
       let resolve;
-      global.fetch = vi.fn(() => new Promise((r) => { resolve = r; }));
+      apiFetchMock = vi.fn(() => new Promise((r) => { resolve = r; }));
       const { unmount } = renderWindow({ ...DEEP, recordId: 'ZZ' });
-      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      await waitFor(() => expect(apiFetchMock).toHaveBeenCalled());
       unmount();
       resolve(jsonResponse({ response: { data: [] } }));
       await new Promise((r) => setTimeout(r, 0));
@@ -1607,13 +1621,13 @@ describe('ListModalWindow — deep link', () => {
       renderWindow({ ...DEEP, recordId: 'A', window: { readOnly: true } });
       expect(screen.getByTestId('list-modal-row-A')).toBeInTheDocument();
       expect(screen.queryByTestId('list-modal-compact-dialog')).not.toBeInTheDocument();
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(apiFetchMock).not.toHaveBeenCalled();
       expect(navigateMock).not.toHaveBeenCalled();
     });
 
     it('does not read a record outside the list either', () => {
       renderWindow({ ...DEEP, recordId: 'ZZ', window: { readOnly: true } });
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(apiFetchMock).not.toHaveBeenCalled();
       expect(toast.error).not.toHaveBeenCalled();
     });
   });
@@ -1692,7 +1706,7 @@ describe('ListModalWindow — client save gate', () => {
       it('a decimal in an integer field sends no request and shows one message', async () => {
         await editWith('10.5');
         expect(writeCalls('PUT')).toHaveLength(0);
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(apiFetchMock).not.toHaveBeenCalled();
         expect(screen.getAllByText('fieldIntegerError')).toHaveLength(1);
         expect(toast.error).not.toHaveBeenCalled();
         expect(toast.dismiss).toHaveBeenCalledWith('numeric-field-days');
@@ -1700,7 +1714,7 @@ describe('ListModalWindow — client save gate', () => {
 
       it('a value below min sends no request and shows one message', async () => {
         await editWith('-1');
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(apiFetchMock).not.toHaveBeenCalled();
         expect(screen.getAllByText('fieldMinValueError')).toHaveLength(1);
         expect(toast.dismiss).toHaveBeenCalledWith('numeric-field-days');
       });
@@ -1740,7 +1754,7 @@ describe('ListModalWindow — backend refusal translation', () => {
     neoState.data = ROWS;
     clearToasts();
     translateBackendError.mockClear();
-    global.fetch = vi.fn(() => Promise.resolve(jsonResponse(REFUSAL, { ok: false, status: 400 })));
+    apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse(REFUSAL, { ok: false, status: 400 })));
   });
 
   function expectKeyedTranslation() {
@@ -1776,7 +1790,7 @@ describe('ListModalWindow — backend refusal translation', () => {
   }
 
   it('a plain (unkeyed) refusal still reaches the box through the same reader', async () => {
-    global.fetch = vi.fn(() => Promise.resolve(jsonResponse({ error: { message: 'Name too long' } }, { ok: false, status: 400 })));
+    apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse({ error: { message: 'Name too long' } }, { ok: false, status: 400 })));
     renderWindow();
     fireEvent.click(screen.getByTestId('list-modal-edit-ROW-1'));
     await act(async () => { fireEvent.click(screen.getByTestId('list-modal-submit')); });
@@ -1860,5 +1874,214 @@ describe('ListModalWindow — row keyboard open', () => {
     renderWindow({ config: EDIT });
     fireEvent.keyDown(screen.getByTestId('list-modal-delete-ROW-1'), { key: 'Enter' });
     expect(editOpen()).not.toBeInTheDocument();
+  });
+});
+
+describe('ListModalWindow — personal grid views', () => {
+  const scope = `/sws/neo/grid-views/match-rule/${ENTITY}`;
+  const columnId = (key) => {
+    const column = COLUMNS.find((item) => item.key === key);
+    return `list:ad:${column.column}:field:${key}`;
+  };
+  const savedView = {
+    version: 1,
+    surface: 'list',
+    columns: [
+      { id: columnId('name'), visible: true, order: 1, width: 240 },
+      { id: columnId('priority'), visible: true, order: 0, width: 160 },
+      { id: columnId('active'), visible: false, order: 2 },
+    ],
+  };
+
+  beforeEach(() => {
+    gridColumnViewsEnabled = true;
+    neoState.data = [{ id: 'GRID-1', name: 'Rule', priority: 10, active: true }];
+    apiFetchMock.mockImplementation(async (url, options = {}) => {
+      if (url === scope) {
+        return { ok: true, status: 200, json: async () => options.method === 'PUT'
+          ? JSON.parse(options.body) : savedView };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+  });
+
+  it('restores visibility, order and widths without removing selection or edit actions', async () => {
+    renderWindow({ windowName: 'match-rule' });
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(apiFetchMock).toHaveBeenCalledWith(scope, expect.objectContaining({ baseUrl: '' }));
+    const row = screen.getByTestId('list-modal-row-GRID-1');
+    const cells = [...row.querySelectorAll('[data-testid^="cell-"]')];
+    expect(cells.map((cell) => cell.getAttribute('data-testid'))).toEqual([
+      'cell-priority-GRID-1', 'cell-name-GRID-1',
+    ]);
+    expect(screen.getByTestId('cell-name-GRID-1').closest('td')).toHaveStyle({ width: '240px' });
+    fireEvent.click(screen.getByTestId('list-modal-select-GRID-1'));
+    expect(within(row).getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByTestId('list-modal-edit-GRID-1'));
+    expect(screen.getByTestId('list-modal-submit')).toBeInTheDocument();
+    expect(lastEntityFormProps.data.name).toBe('Rule');
+  });
+
+  it('saves a keyboard width change explicitly without writing the business record', async () => {
+    renderWindow({ windowName: 'match-rule' });
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(screen.getByTestId('grid-view-save')).toBeDisabled();
+    fireEvent.keyDown(screen.getAllByRole('separator')[0], { key: 'ArrowRight' });
+    expect(screen.getByTestId('grid-view-save')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('grid-view-save'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([url, options]) =>
+      url === scope && options.method === 'PUT')).toBe(true));
+    const [, request] = apiFetchMock.mock.calls.find(([url, options]) => url === scope && options.method === 'PUT');
+    expect(JSON.parse(request.body).columns.find((column) => column.id === columnId('priority')).width).toBe(170);
+    expect(apiFetchMock.mock.calls.filter(([, options]) => options.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('reorders visible data columns by keyboard while leaving selection first', async () => {
+    renderWindow({ windowName: 'match-rule' });
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    fireEvent.keyDown(screen.getAllByRole('button', { name: 'moveGridColumn' })[1], {
+      key: 'ArrowLeft', altKey: true, shiftKey: true,
+    });
+    const row = screen.getByTestId('list-modal-row-GRID-1');
+    expect([...row.querySelectorAll('[data-testid^="cell-"]')].map((cell) => cell.getAttribute('data-testid')))
+      .toEqual(['cell-name-GRID-1', 'cell-priority-GRID-1']);
+    expect(row.firstElementChild).toContainElement(screen.getByTestId('list-modal-select-GRID-1'));
+    expect(screen.getByTestId('grid-view-save')).toBeEnabled();
+  });
+
+  it('disables personalization and makes no view request when the shared flag is off', () => {
+    gridColumnViewsEnabled = false;
+    renderWindow({ windowName: 'match-rule' });
+    expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('cell-toggle-active-GRID-1')).toBeInTheDocument();
+  });
+
+  it('fails closed for an ambiguous identity while preserving the current list', () => {
+    renderWindow({ windowName: 'another-window', api: { baseUrl: '/sws/neo/match-rule' } });
+    expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('list-modal-row-GRID-1')).toBeInTheDocument();
+  });
+
+  it('uses the explicit API spec when no route window name is supplied', async () => {
+    renderWindow({ api: { specName: 'match-rule', baseUrl: '/sws/neo/match-rule' } });
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(apiFetchMock).toHaveBeenCalledWith(scope, expect.objectContaining({ baseUrl: '' }));
+  });
+
+  it('does not derive a persistence identity from an API URL alone', () => {
+    renderWindow();
+    expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('list-modal-row-GRID-1')).toBeInTheDocument();
+  });
+
+  // A window that declares columnWidth / columnMaxWidth (emitted as minWidth / maxWidth): while a
+  // personal view is ACTIVE the view sizes every column (user width, else the view default, which
+  // is the declared minWidth) in a fixed table layout — so neither the declared frame style, the
+  // content cap nor the spacer column apply.
+  describe('with declared column widths', () => {
+    const WIDE_COLUMNS = [
+      { key: 'name', column: 'Name', type: 'string', minWidth: 164, maxWidth: 240 },
+      { key: 'priority', column: 'Priority', type: 'number', inlineEdit: true, minWidth: 124 },
+      { key: 'active', column: 'IsActive', type: 'boolean', toggle: true },
+    ];
+    // The user resized only the name column; priority / active keep the view default.
+    const wideView = {
+      version: 1,
+      surface: 'list',
+      columns: [
+        { id: columnId('name'), visible: true, order: 0, width: 200 },
+        { id: columnId('priority'), visible: true, order: 1 },
+        { id: columnId('active'), visible: true, order: 2 },
+      ],
+    };
+
+    beforeEach(() => {
+      apiFetchMock.mockImplementation(async (url, options = {}) => (url === scope
+        ? { ok: true, status: 200, json: async () => (options.method === 'PUT' ? JSON.parse(options.body) : wideView) }
+        : { ok: true, status: 200, json: async () => ({}) }));
+    });
+
+    async function renderActive(overrides = {}) {
+      const utils = renderWindow({ windowName: 'match-rule', columns: WIDE_COLUMNS, ...overrides });
+      await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+      return utils;
+    }
+
+    const headerOf = (label) => screen.getByText(label).closest('th');
+
+    it('sizes header and cell by the user width, not the declared fixed width', async () => {
+      await renderActive();
+      const th = headerOf('Name');
+      const td = screen.getByTestId('cell-name-GRID-1').closest('td');
+      for (const el of [th, td]) {
+        expect(el.style.width).toBe('200px');
+        expect(el.style.minWidth).toBe('');
+      }
+    });
+
+    it('falls back to the view default — the declared minWidth — for a column the user did not resize', async () => {
+      await renderActive();
+      expect(headerOf('Priority').style.width).toBe('124px');
+      expect(screen.getByTestId('cell-toggle-active-GRID-1').closest('td').style.width).toBe('160px');
+      expect(screen.getByTestId('cell-toggle-active-GRID-1').closest('td').style.minWidth).toBe('');
+    });
+
+    it('does not cap the cell content at the declared maxWidth', async () => {
+      await renderActive();
+      const content = screen.getByTestId('cell-name-GRID-1');
+      expect(content.parentElement.tagName).toBe('TD');
+      expect(content.closest('td').querySelector('.truncate')).toBeNull();
+    });
+
+    it('renders no spacer column', async () => {
+      await renderActive();
+      expect(screen.queryByTestId('list-modal-spacer-head')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('list-modal-spacer-cell')).not.toBeInTheDocument();
+    });
+
+    it('the empty-state colSpan counts no spacer (3 columns + checkbox + actions)', async () => {
+      neoState.data = [];
+      renderWindow({ windowName: 'match-rule', columns: WIDE_COLUMNS });
+      await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+      expect(screen.queryByTestId('list-modal-spacer-head')).not.toBeInTheDocument();
+      expect(screen.getByTestId('list-modal-empty')).toHaveAttribute('colspan', '5');
+    });
+
+    it('fixes the table width to the columns plus a 40px checkbox column and the actions column', async () => {
+      await renderActive();
+      const table = screen.getByRole('table');
+      expect(table.style.tableLayout).toBe('fixed');
+      // 200 (name, user) + 124 (priority, default = minWidth) + 160 (active, no width) + 40 + 80.
+      expect(table.style.width).toBe('604px');
+    });
+
+    it('counts the checkbox column as 32px in the compact list', async () => {
+      await renderActive({ config: { listVariant: 'compact' } });
+      expect(screen.getByRole('table').style.width).toBe('596px');
+    });
+
+    it('without an active view the declared widths, cap and spacer apply unchanged', () => {
+      gridColumnViewsEnabled = false;
+      renderWindow({ windowName: 'match-rule', columns: WIDE_COLUMNS });
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+      const td = screen.getByTestId('cell-name-GRID-1').closest('td');
+      expect(td.style.width).toBe('164px');
+      expect(td.style.minWidth).toBe('164px');
+      expect(screen.getByTestId('cell-name-GRID-1').parentElement.style.maxWidth).toBe('216px');
+      expect(screen.getByTestId('list-modal-spacer-head')).toBeInTheDocument();
+      expect(screen.getByRole('table').style.tableLayout).toBe('');
+    });
+  });
+
+  it('keeps default columns and exposes retry when loading the saved view fails', async () => {
+    apiFetchMock.mockRejectedValue(new Error('offline'));
+    renderWindow({ windowName: 'match-rule' });
+    await waitFor(() => expect(screen.getByTestId('grid-view-status')).toHaveTextContent('gridViewLoadFailed'));
+    expect(screen.getByTestId('grid-view-save')).toBeDisabled();
+    expect(screen.getByTestId('cell-toggle-active-GRID-1')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-edit-GRID-1')).toBeInTheDocument();
   });
 });

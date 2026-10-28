@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useGridView } from '@/hooks/useGridView.js';
+import { GridViewControls } from './GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, X, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -442,6 +446,23 @@ export function ListModalWindow({
     label: `ListModalWindow:${entity}`,
   });
   const allRows = useMemo(() => rows ?? [], [rows]);
+  // Never derive persistence scope from a display label or a URL's last segment.
+  const spec = api?.specName || windowName;
+  const stableScope = typeof spec === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(spec)
+    && typeof entity === 'string' && entity.trim() === entity && entity.length > 0
+    && (!windowName || windowName === spec)
+    && (!api?.baseUrl || api.baseUrl === `/sws/neo/${spec}`);
+  const gridColumns = useMemo(() => columns.map(column => ({
+    ...column,
+    gridDefaultWidthPx: Number.isFinite(Number(column.minWidth)) && Number(column.minWidth) > 0 ? Number(column.minWidth) : 160,
+  })), [columns]);
+  const gridColumnViewsFlag = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridView = useGridView({
+    spec, entity, columns: gridColumns, data: allRows, apiBaseUrl,
+    enabled: gridColumnViewsFlag && stableScope && columns.length > 0,
+  });
+  const visibleColumns = gridView.active ? gridView.columns : columns;
+
 
   // --- Toolbar dropdown filters (declarative; applied client-side) ----------
   const toolbarFilters = config?.toolbarFilters ?? [];
@@ -791,6 +812,14 @@ export function ListModalWindow({
               />
             </div>
           )}
+          {gridView.enabled && (
+            <GridViewControls
+              gridView={gridView}
+              gridColumns={gridColumns}
+              ui={ui}
+              t={tLabel}
+              data-testid="GridViewControls__19eda5" />
+          )}
           <ListSortPopover
             columns={columns}
             labelOverrides={api?.labelOverrides}
@@ -849,7 +878,8 @@ export function ListModalWindow({
         loading={loading}
         hasRows={allRows.length > 0}
         gridProps={{
-          columns,
+          columns: visibleColumns,
+          gridView,
           data,
           sortKey,
           sortDirection,
@@ -1096,10 +1126,24 @@ function rowOpenProps(onRowClick, row) {
  * Cell content, capped so the cell (padding included) never grows past the column's `maxWidth`
  * (ellipsis beyond it) when it declares one. Width rules: `listModalColumnWidth.js`.
  */
-function CellContent({ col, children }) {
-  const cap = cellContentMaxWidth(col);
+function CellContent({ col, capped = true, children }) {
+  // A personal grid view sizes the column itself: a user-resized width is never capped.
+  const cap = capped ? cellContentMaxWidth(col) : null;
   if (cap == null) return children;
   return <div className="truncate" style={{ maxWidth: cap }}>{children}</div>;
+}
+
+/**
+ * Inline width of a header / body cell. With a personal grid view active (ETP-5835) the user's
+ * width — or the view's default, which is the declared `columnWidth` (minWidth) — wins, in the
+ * fixed table layout the view uses; otherwise the declared fixed width (listModalColumnWidth.js).
+ */
+function gridColumnStyle(col, gridView, header = false) {
+  if (!gridView?.active) return columnWidthStyle(col);
+  const width = col.gridUserWidthPx ?? col.gridDefaultWidthPx;
+  return header
+    ? { width, overflowWrap: 'anywhere', whiteSpace: 'normal' }
+    : { width, overflowWrap: 'anywhere' };
 }
 
 // Row / header / checkbox-column density. `compact` (templateConfig.listVariant) is the Figma
@@ -1108,12 +1152,14 @@ const GRID_DENSITY = {
   default: {
     cell: 'px-3 py-3',
     select: 'w-10 px-3',
-    head: 'h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
+    head: 'relative h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
+    selectPx: 40,
   },
   compact: {
     cell: 'h-10 px-3 py-0',
     select: 'w-8 pl-2 pr-0',
-    head: 'h-10 px-3 text-xs font-semibold leading-4 tracking-[-0.005em] text-[hsl(var(--foreground))]',
+    head: 'relative h-10 px-3 text-xs font-semibold leading-4 tracking-[-0.005em] text-[hsl(var(--foreground))]',
+    selectPx: 32,
   },
 };
 
@@ -1131,16 +1177,19 @@ function ListModalGrid({
   columns, data, sortKey, sortDirection, onSort, tMenu, tLabel, locale, ui, onRowClick,
   onEdit, onClone, onDelete, deletingId, onToggle, savingToggles,
   readOnly = false, selectable = false, selectedIds, allSelected, someSelected,
-  onToggleSelect, onToggleSelectAll, compactList = false,
+  onToggleSelect, onToggleSelectAll, compactList = false, gridView,
 }) {
   const actionsColClass = onClone ? 'w-28' : 'w-20';
+  const actionsColWidthPx = onClone ? 112 : 80;
   const isEmpty = !data || data.length === 0;
   const hasRowActions = Boolean(onEdit || onClone || onDelete);
   const density = compactList ? GRID_DENSITY.compact : GRID_DENSITY.default;
   // Fixed-width columns (decisions `columnWidth`) leave the free width to an empty spacer column,
   // so no data column stretches and the hover actions stay at the far right. Only rendered when a
   // column declares a width: a grid without widths lays out exactly as before.
-  const hasSpacer = columns.some((col) => col.minWidth != null);
+  // A personal grid view (fixed layout, table width = sum of its columns) leaves the free space
+  // empty on its own, so the spacer is not rendered there.
+  const hasSpacer = !gridView?.active && columns.some((col) => col.minWidth != null);
   // columns + the leading checkbox + the spacer + the trailing actions column, whichever are present.
   const colSpan = columns.length + (selectable ? 1 : 0) + (hasSpacer ? 1 : 0) + (hasRowActions ? 1 : 0);
 
@@ -1148,7 +1197,13 @@ function ListModalGrid({
     // [&>div]:overflow-visible cancels the base Table's inner overflow-auto so the
     // hovered row's shadow-lg isn't clipped on the last row (matches Cuentas).
     <div className="[&>div]:overflow-visible">
-      <Table data-testid="Table__19eda5">
+      <Table
+        style={gridView?.active ? {
+          tableLayout: 'fixed',
+          width: columns.reduce((sum, col) => sum + (col.gridUserWidthPx ?? col.gridDefaultWidthPx ?? 160), 0)
+            + (selectable ? density.selectPx : 0) + (hasRowActions ? actionsColWidthPx : 0),
+        } : undefined}
+        data-testid="Table__19eda5">
         <TableHeader data-testid="TableHeader__19eda5">
           <TableRow
             className="border-b border-[hsl(var(--border-subtle))] hover:bg-transparent"
@@ -1167,7 +1222,8 @@ function ListModalGrid({
               <TableHead
                 key={col.key}
                 className={cn(density.head, cellAlignClass(col))}
-                style={columnWidthStyle(col)}
+                style={gridColumnStyle(col, gridView, true)}
+                {...gridHeaderProps(col, gridView)}
                 data-testid="TableHead__19eda5">
                 <SortableHeaderLabel
                   label={gridHeaderLabel(col, { ui, tLabel, tMenu, locale })}
@@ -1177,6 +1233,8 @@ function ListModalGrid({
                   onSort={onSort}
                   align={cellAlignClass(col)?.includes('text-right') ? 'right' : undefined}
                   data-testid="SortableHeaderLabel__19eda5" />
+                {gridReorderHandle(col, gridView, gridHeaderLabel(col, { ui, tLabel, tMenu, locale }), ui)}
+                {gridResizeHandle(col, gridView, gridHeaderLabel(col, { ui, tLabel, tMenu, locale }), ui)}
               </TableHead>
             ))}
             {hasSpacer && <TableHead className="p-0" aria-hidden="true" data-testid="list-modal-spacer-head" />}
@@ -1228,9 +1286,9 @@ function ListModalGrid({
                 <TableCell
                   key={col.key}
                   className={cn(density.cell, cellAlignClass(col))}
-                  style={columnWidthStyle(col)}
+                  style={gridColumnStyle(col, gridView)}
                   data-testid="TableCell__19eda5">
-                  <CellContent col={col} data-testid="CellContent__19eda5">
+                  <CellContent col={col} capped={!gridView?.active} data-testid="CellContent__19eda5">
                   <ListModalCell
                     row={row}
                     col={col}
