@@ -26,7 +26,7 @@ export default function SupportAccessPage() {
       if (result.ok) {
         // Deliberately not gated on `active`: the ticket is spent, so this session is the only
         // one there will be, whatever happened to this component meanwhile.
-        void completeSupportHandoff(result.data, { routerBase: detectBasePath().routerBase });
+        completeSupportHandoff(result.data, { routerBase: detectBasePath().routerBase });
         return;
       }
       if (active) setFailure(result.reason);

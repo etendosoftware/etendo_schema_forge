@@ -33,7 +33,7 @@ export const isAnalyticsSuppressed = observability.isAnalyticsSuppressed;
 // answer and nothing towards the tenant's health score. Wired here, on the singleton every
 // caller goes through, so it is decided once and before `main.jsx` initializes the providers
 // (`bootSupportSession` seeds the store first; see lib/supportSession.js).
-void setAnalyticsSuppressed(isSupportModeActive(getSupportSessionState()));
+setAnalyticsSuppressed(isSupportModeActive(getSupportSessionState()));
 subscribeSupportSession((current) => {
-  void setAnalyticsSuppressed(isSupportModeActive(current));
+  setAnalyticsSuppressed(isSupportModeActive(current));
 });
