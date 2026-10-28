@@ -763,6 +763,7 @@ test('test', async ({ page }) => {
 > "Here's my recording for goods receipt creation. Turn it into a proper test that validates the form fields load, the save works, and check the record appears in the list."
 
 Claude will:
+- For a mocked spec, take `test` and `expect` from `e2e/tests/helpers/test.js` instead of `@playwright/test`, so it records coverage for the pre-push selection (`docs/developer-tools.md`)
 - Replace hardcoded URLs with `navigateTo()`
 - Add `login()` with proper role/org context
 - Add `expect()` assertions for every important step

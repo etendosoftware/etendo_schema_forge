@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/account/SubscriptionSection.jsx
 // @covers tools/app-shell/src/components/billing/BillingStatusBanner.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, declareCookieSession } from '../../helpers/auth.js';
 
 /**

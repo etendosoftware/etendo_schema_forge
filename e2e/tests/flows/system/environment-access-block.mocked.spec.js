@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/App.jsx
 // @covers tools/app-shell/src/lib/environmentAccessGate.js
 // @covers tools/app-shell/src/layout/AppLayout.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

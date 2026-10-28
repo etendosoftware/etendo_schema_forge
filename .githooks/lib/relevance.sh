@@ -25,8 +25,8 @@
 #   pw-integration ← app-shell/src (UI), any non-mocked spec, shared e2e infra, package.json,
 #                    package-lock.json
 #
-#   relevance_mocked_specs : the changed *.mocked.spec.js files when they alone call for the mocked
-#                      suite, so the pre-push runs just those; nothing when the whole suite must run.
+#   relevance_mocked_whole : why the mocked suite must run whole whatever the coverage map says, or
+#                      nothing; otherwise scripts/select-mocked-specs.js picks the specs (ETP-5891).
 #   RUN-ALL (.githooks/**, run-sonar.sh, and the scripts that run the pre-push's Playwright
 #     suites or the whole hook: scripts/run-e2e-full.sh, scripts/run-remote-prepush.sh) or any
 #     UNRECOGNISED file → all of them.
@@ -87,15 +87,17 @@ relevance_checks() {
   printf '%s' "${out# }"
 }
 
-# relevance_mocked_specs < changed-files-on-stdin → the changed *.mocked.spec.js paths, one per line,
-# when nothing but them calls for the mocked suite; nothing at all when the whole suite must run
-# (UI source, e2e infrastructure, the quarantine list, dependencies, tooling or an unknown file).
-relevance_mocked_specs() {
+# relevance_mocked_whole < changed-files-on-stdin → why the mocked suite must run whole whatever the
+# coverage map says, or nothing: a file no bucket knows, or the hooks' own tooling (RUN-ALL). Every
+# other call is scripts/select-mocked-specs.js's, which also runs it whole for dependencies, the
+# Vite or Playwright configuration, the quarantine list and code it cannot follow.
+relevance_mocked_whole() {
   local files
   files="$(grep -Ev '^[[:space:]]*$' || true)"
   [ -n "$files" ] || return 0
-  printf '%s\n' "$files" | grep -Evq "$RELEVANCE_RE_KNOWN" && return 0
-  printf '%s\n' "$files" | grep -Eq "$RELEVANCE_RE_RUN_ALL|$RELEVANCE_RE_NPM|^tools/app-shell/src/" && return 0
-  printf '%s\n' "$files" | grep -Eq '^e2e/(playwright\.config\.js|package\.json|tests/helpers/|quarantine\.json$)' && return 0
-  printf '%s\n' "$files" | grep -E '^e2e/.*\.mocked\.spec\.js$' || true
+  if printf '%s\n' "$files" | grep -Evq "$RELEVANCE_RE_KNOWN"; then
+    printf 'a changed file matches no known check'
+  elif printf '%s\n' "$files" | grep -Eq "$RELEVANCE_RE_RUN_ALL"; then
+    printf "the change touches the hooks' own tooling"
+  fi
 }

@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 // @covers tools/app-shell/src/lib/linesContentWidth.js
 // @covers tools/app-shell/src/lib/linesColumnWidth.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { login } from '../../helpers/auth.js';
 import { mkdirSync } from 'node:fs';

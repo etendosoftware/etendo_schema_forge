@@ -1,0 +1,9 @@
+{
+  "_doc": "Mocked specs the pre-push runs on every change to app code, because the coverage map cannot see all they execute (ETP-5891). Entry: {file: 'tests/…mocked.spec.js', reason}. scripts/select-mocked-specs.js reads it; the PR and the cut run every spec anyway.",
+  "specs": [
+    {
+      "file": "tests/flows/platform/session-multi-tab-csrf.mocked.spec.js",
+      "reason": "Opens more pages with context.newPage(); coverage only records the test's own page."
+    }
+  ]
+}

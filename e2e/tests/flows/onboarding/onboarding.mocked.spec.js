@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { declareNoSession } from '../../helpers/auth.js';
 
 const LOCALE_LABELS = {

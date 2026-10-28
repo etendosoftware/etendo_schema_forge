@@ -1,7 +1,7 @@
 // @covers artifacts/contacts/decisions.json
 // @covers tools/app-shell/src/components/contract-ui/AccountLookupPopup.jsx
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { clickEmptyStateAddLine } from '../../helpers/secondaryTabsInteractions.js';
 

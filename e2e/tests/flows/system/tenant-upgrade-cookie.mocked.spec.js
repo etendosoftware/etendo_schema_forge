@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/pages/UpgradePage.jsx
 // @covers tools/app-shell/src/lib/upgrade/api.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, declareCookieSession } from '../../helpers/auth.js';
 // The upgrade submit stays disabled without a plan catalog (ETP-5046) — see the helper.
 import { installPlansMock, PRODUCTIVE_PLAN } from '../../helpers/plan-catalog-mock.js';

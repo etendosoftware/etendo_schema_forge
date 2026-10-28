@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/components/contract-ui/TabStripButton.jsx
 // @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 // @covers tools/app-shell/src/components/attachments/AttachmentsTable.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

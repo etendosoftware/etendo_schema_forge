@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

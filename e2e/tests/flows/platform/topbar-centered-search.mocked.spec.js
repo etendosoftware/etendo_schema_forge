@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/layout/TopBar/TopBar.jsx
 // @covers tools/app-shell/src/pages/ReportViewerPage.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**
