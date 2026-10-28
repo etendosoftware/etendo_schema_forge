@@ -3,7 +3,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { REDACTED, sanitizeValue } from '@etendosoftware/app-shell-core/observability/sanitize';
-import { createObservability } from '../observability/core.js';
+import { TRUSTED_CONTEXT_KEYS, createObservability } from '../observability/core.js';
 import { OBSERVABILITY_EVENT_LIST, buildObservabilityEvent } from '../observability/events.js';
 import { SAFE_EVENT_PROPERTY_KEYS, sanitizeEventProperties } from '../observability/payload.js';
 import { createDatadogProvider } from '../observability/providers/datadog.js';
@@ -83,7 +83,8 @@ describe('approved properties survive the gateway (ETP-4578 H8, N5)', () => {
   it('no approved key is redacted or dropped by the gateway\'s key-name rule', () => {
     // One key at a time: a single object with every key would also meet the 50-key limit.
     const lost = APPROVED.filter((key) => {
-      const out = sanitizeValue({ [key]: sampleFor(key) }, { allowedKeys: APPROVED });
+      const out = sanitizeValue({ [key]: sampleFor(key) },
+        { allowedKeys: APPROVED, trustedKeys: TRUSTED_CONTEXT_KEYS });
       return !(key in out) || out[key] === REDACTED;
     });
     assert.deepEqual(lost, [], `approved keys the gateway redacts or drops: ${lost.join(', ')}`);

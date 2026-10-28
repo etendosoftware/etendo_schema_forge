@@ -336,6 +336,33 @@ const customLoaders = {
   'amortization': () => import('./custom/amortization/index.jsx'),
 };
 
+// Audited custom entry points forward ListView grid props to the standard DataTable.
+// Custom column renderers are supported; unknown entry points fail closed.
+const standardListViewCustomEntryPoints = new Set([
+  'amortization', 'assets', 'goods-movements', 'goods-receipt',
+  'internal-consumption', 'physical-inventory', 'price-list', 'purchase-order',
+  'return-to-vendor-shipment', 'sales-order', 'sales-quotation',
+  'sales-invoice', 'purchase-invoice', 'payment-in', 'payment-out', 'user', 'warehouse',
+  'contacts', 'product', 'product-category', 'goods-shipment', 'return-material-receipt',
+  'financial-account',
+]);
+
+// The original loader map also contains custom paths; distinguish them explicitly.
+const customWindowLoaderEntryPoints = new Set([
+  'contacts', 'product', 'product-category', 'goods-shipment', 'return-material-receipt', 'user',
+]);
+
+// Exact audited contract slots: a replacement name must be inspected before admission.
+const standardListViewHeaderTables = {
+  contacts: 'ContactsTable',
+  'financial-account': 'AccountsHeaderTable',
+  'sales-invoice': 'InvoiceHeaderTable',
+  'purchase-invoice': 'InvoiceHeaderTable',
+  'payment-in': 'PaymentHeaderTable',
+  'payment-out': 'PaymentHeaderTable',
+  user: 'UserHeaderTable',
+};
+
 /**
  * Build window map with loaders for all windows in menu.json plus every
  * SDK-app menu entry from the catalog (so installing an app from the
@@ -350,6 +377,13 @@ export function buildWindowMap() {
       name: item.name,
       label: item.label,
       contract: null,
+      // Generated pages and audited custom wrappers are candidates. WindowLoader
+      // additionally requires the exact expected layout and header-table contract.
+      standardListViewSource: customLoaders[item.name] || customWindowLoaderEntryPoints.has(item.name)
+        ? standardListViewCustomEntryPoints.has(item.name)
+        : Boolean(windowLoaders[item.name]),
+      standardListViewLayout: item.name === 'product' ? 'gallery' : 'default',
+      standardListViewHeaderTable: standardListViewHeaderTables[item.name] ?? null,
       loader: customLoaders[item.name]
         || windowLoaders[item.name]
         || (() => import('./PlaceholderWindow.jsx')),

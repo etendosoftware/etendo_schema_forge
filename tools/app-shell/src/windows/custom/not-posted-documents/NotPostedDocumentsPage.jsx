@@ -1,8 +1,10 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FileCheck, Link2 } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLabel } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { DistinctValuesFilter } from '@etendosoftware/app-shell-core/components/ui/distinct-values-filter.jsx';
 import { DataTable } from '@/components/contract-ui';
@@ -85,6 +87,7 @@ const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg
 
 export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
+  const t = useLabel();
   const navigate = useNavigate();
   // apiBaseUrl already points to the spec (e.g. .../swebsf/not-posted-documents)
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -255,6 +258,15 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     { key: 'accountingDate', label: ui('accountingDate'), type: 'date', dot: false },
     { key: 'organization', label: ui('organization'), type: 'string' },
   ], [ui]);
+
+  // Use the backing NEO entity, independently of the surrounding route or parent record.
+  const { gridView } = useFlaggedGridView({
+    spec: 'not-posted-documents',
+    entity: 'header',
+    columns,
+    data: sorted,
+    apiBaseUrl,
+  });
 
   // ── Posting ───────────────────────────────────────────────────────────────────
   const [posting, setPosting] = useState(() => new Set());
@@ -482,6 +494,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           onClear={clearSort}
           isDefaultSort={isDefaultSort}
           data-testid="ListSortPopover__npd" />
+        {gridView.enabled && <GridViewControls
+          gridView={gridView}
+          gridColumns={columns}
+          ui={ui}
+          t={t}
+          data-testid="GridViewControls__b28bb1" />}
         <RefreshButton onRefresh={reload} label={ui('refresh')} data-testid="RefreshButton__npd" />
       </div>
       {/* Refetches keep the current rows on screen under a progress bar; only the very first
@@ -493,6 +511,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           the sticky hover-actions cell stays pinned to the right edge. */}
       <div className="flex-1 min-w-0 overflow-auto" data-testid="npd-table-scroll">
         <DataTable
+          gridView={gridView}
           columns={columns}
           data={sorted}
           loading={loading && !loaded}

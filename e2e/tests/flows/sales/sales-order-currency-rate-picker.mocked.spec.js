@@ -155,7 +155,7 @@ test.describe('CurrencyRatePicker — E: currency with a rate on the order date'
     await waitForDetailView(page);
 
     const trigger = await openCurrencyPicker(page);
-    await page.getByRole('button', { name: /USD/ }).last().click();
+    await page.getByRole('option', { name: /USD/ }).last().click();
 
     await expect(trigger).toContainText('USD', { timeout: 5_000 });
     await expect(trigger).toContainText(/1[,.]15/);
@@ -174,7 +174,7 @@ test.describe('CurrencyRatePicker — F: currency without a rate on the order da
     const trigger = await openCurrencyPicker(page);
     // The list already tells the user there is no rate on that date.
     await expect(page.getByTestId('currency-rate-option-missing')).toBeVisible({ timeout: 5_000 });
-    await page.getByRole('button', { name: /ARS/ }).last().click();
+    await page.getByRole('option', { name: /ARS/ }).last().click();
 
     await expect(trigger).toContainText('ARS', { timeout: 5_000 });
     await expect(trigger).not.toContainText('USD');

@@ -27,7 +27,11 @@ import {
  * @param {*} [p.excludeId] an id the list hides on purpose: a value equal to it counts as found
  * @param {boolean} [p.paged=true] the list is fed by server pages (the walk only runs then)
  * @param {string} p.selectorUrl
+ * @param {boolean} [p.canFetch=!!selectorUrl] whether more pages can be loaded at all (ETP-5948: a
+ *   caller fed by a `loadPage` function, like SearchPopup, has no selector URL)
  * @param {Array|null} p.rows the loaded server pages, null until the first one lands
+ * @param {number} [p.loadedRows=rows.length] rows fetched so far, for the page cap (ETP-5948: a
+ *   caller that deduplicates its pages shows fewer rows than it fetched)
  * @param {boolean} [p.loading=false] a page is loading: the walk waits (`rows` may be stale)
  * @param {boolean} [p.panelLoading=false] the panel shows its loading state: no centring yet
  * @param {boolean} p.hasMore another page may exist
@@ -43,13 +47,14 @@ import {
  */
 export function useLocateCommittedValue({
   open, query, value, excludeId = null, dropdownRef, interactedRef,
-  paged = true, selectorUrl, rows, loading = false, panelLoading = false,
+  paged = true, selectorUrl, canFetch = !!selectorUrl, rows, loadedRows = rows?.length ?? 0,
+  loading = false, panelLoading = false,
   hasMore, pageSize, settledFetches, locateDone, setLocateDone, fetchPage, offsetRef,
   selectedIndex, renderedCount, layoutKey,
 }) {
   const centeredRef = useRef(false);
   const searching = query.trim() !== '';
-  const walkEnabled = paged && open && hasCommittedValue(value) && !!selectorUrl && !loading && !searching;
+  const walkEnabled = paged && open && hasCommittedValue(value) && canFetch && !loading && !searching;
   const found = resolveSelectedIndex(rows ?? [], value) !== -1 || (excludeId != null && value === excludeId);
   const centreBlocked = searching || panelLoading;
 
@@ -65,11 +70,11 @@ export function useLocateCommittedValue({
   useEffect(() => {
     if (!walkEnabled || locateDone || rows == null) return;
     const keepGoing = shouldKeepLocating({
-      found, hasMore, loadedRows: rows.length, pageSize, interacted: interactedRef.current,
+      found, hasMore, loadedRows, pageSize, interacted: interactedRef.current,
     });
     if (keepGoing) fetchPage('', offsetRef.current);
     else setLocateDone(true);
-  }, [walkEnabled, locateDone, rows, found, hasMore, pageSize, settledFetches, fetchPage, offsetRef, setLocateDone, interactedRef]);
+  }, [walkEnabled, locateDone, rows, loadedRows, found, hasMore, pageSize, settledFetches, fetchPage, offsetRef, setLocateDone, interactedRef]);
 
   useEffect(() => {
     if (!open || selectedIndex < 0 || centreBlocked || centeredRef.current || interactedRef.current) return;

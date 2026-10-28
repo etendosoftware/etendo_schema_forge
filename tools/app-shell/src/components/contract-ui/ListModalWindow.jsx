@@ -1,4 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useGridView } from '@/hooks/useGridView.js';
+import { GridViewControls } from './GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, X, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
@@ -290,6 +294,7 @@ export function ListModalWindow({
   token: tokenProp,
   apiBaseUrl: apiBaseUrlProp,
   window: windowConfig,
+  windowName,
 }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -330,6 +335,23 @@ export function ListModalWindow({
     label: `ListModalWindow:${entity}`,
   });
   const allRows = useMemo(() => rows ?? [], [rows]);
+  // Never derive persistence scope from a display label or a URL's last segment.
+  const spec = api?.specName || windowName;
+  const stableScope = typeof spec === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(spec)
+    && typeof entity === 'string' && entity.trim() === entity && entity.length > 0
+    && (!windowName || windowName === spec)
+    && (!api?.baseUrl || api.baseUrl === `/sws/neo/${spec}`);
+  const gridColumns = useMemo(() => columns.map(column => ({
+    ...column,
+    gridDefaultWidthPx: Number.isFinite(Number(column.minWidth)) && Number(column.minWidth) > 0 ? Number(column.minWidth) : 160,
+  })), [columns]);
+  const gridColumnViewsFlag = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridView = useGridView({
+    spec, entity, columns: gridColumns, data: allRows, apiBaseUrl,
+    enabled: gridColumnViewsFlag && stableScope && columns.length > 0,
+  });
+  const visibleColumns = gridView.active ? gridView.columns : columns;
+
 
   // --- Toolbar dropdown filters (declarative; applied client-side) ----------
   const toolbarFilters = config?.toolbarFilters ?? [];
@@ -666,6 +688,14 @@ export function ListModalWindow({
               />
             </div>
           )}
+          {gridView.enabled && (
+            <GridViewControls
+              gridView={gridView}
+              gridColumns={gridColumns}
+              ui={ui}
+              t={tLabel}
+              data-testid="GridViewControls__19eda5" />
+          )}
           <ListSortPopover
             columns={columns}
             sortColumn={sortKey}
@@ -721,7 +751,8 @@ export function ListModalWindow({
         loading={loading}
         hasRows={allRows.length > 0}
         gridProps={{
-          columns,
+          columns: visibleColumns,
+          gridView,
           data,
           sortKey,
           sortDirection,
@@ -936,9 +967,10 @@ function ListModalGrid({
   columns, data, sortKey, sortDirection, onSort, tMenu, ui,
   onEdit, onClone, onDelete, deletingId, onToggle, savingToggles,
   readOnly = false, selectable = false, selectedIds, allSelected, someSelected,
-  onToggleSelect, onToggleSelectAll,
+  onToggleSelect, onToggleSelectAll, gridView,
 }) {
   const actionsColClass = onClone ? 'w-28' : 'w-20';
+  const actionsColWidthPx = onClone ? 112 : 80;
   const isEmpty = !data || data.length === 0;
   const hasRowActions = Boolean(onEdit || onClone || onDelete);
   // columns + the leading checkbox + the trailing actions column, whichever are present.
@@ -948,7 +980,13 @@ function ListModalGrid({
     // [&>div]:overflow-visible cancels the base Table's inner overflow-auto so the
     // hovered row's shadow-lg isn't clipped on the last row (matches Cuentas).
     <div className="[&>div]:overflow-visible">
-      <Table data-testid="Table__19eda5">
+      <Table
+        style={gridView?.active ? {
+          tableLayout: 'fixed',
+          width: columns.reduce((sum, col) => sum + (col.gridUserWidthPx ?? col.gridDefaultWidthPx ?? 160), 0)
+            + (selectable ? 40 : 0) + (hasRowActions ? actionsColWidthPx : 0),
+        } : undefined}
+        data-testid="Table__19eda5">
         <TableHeader data-testid="TableHeader__19eda5">
           <TableRow
             className="border-b border-[hsl(var(--border-subtle))] hover:bg-transparent"
@@ -967,9 +1005,11 @@ function ListModalGrid({
               <TableHead
                 key={col.key}
                 className={cn(
-                  'h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
+                  'relative h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
                   cellAlignClass(col),
                 )}
+                style={gridView?.active ? { width: col.gridUserWidthPx ?? col.gridDefaultWidthPx, overflowWrap: 'anywhere', whiteSpace: 'normal' } : undefined}
+                {...gridHeaderProps(col, gridView)}
                 data-testid="TableHead__19eda5">
                 <SortableHeaderLabel
                   label={col.labelKey ? ui(col.labelKey) : (tMenu(col.label) ?? col.label ?? col.key)}
@@ -979,6 +1019,8 @@ function ListModalGrid({
                   onSort={onSort}
                   align={cellAlignClass(col)?.includes('text-right') ? 'right' : undefined}
                   data-testid="SortableHeaderLabel__19eda5" />
+                {gridReorderHandle(col, gridView, col.labelKey ? ui(col.labelKey) : (tMenu(col.label) ?? col.label ?? col.key), ui)}
+                {gridResizeHandle(col, gridView, col.labelKey ? ui(col.labelKey) : (tMenu(col.label) ?? col.label ?? col.key), ui)}
               </TableHead>
             ))}
             {/* Actions column header */}
@@ -1021,6 +1063,7 @@ function ListModalGrid({
                 <TableCell
                   key={col.key}
                   className={cn('px-3 py-3', cellAlignClass(col))}
+                  style={gridView?.active ? { width: col.gridUserWidthPx ?? col.gridDefaultWidthPx, overflowWrap: 'anywhere' } : undefined}
                   data-testid="TableCell__19eda5">
                   <ListModalCell
                     row={row}
