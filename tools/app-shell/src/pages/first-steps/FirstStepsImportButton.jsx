@@ -5,6 +5,7 @@ import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
 import { getSpecBaseUrl } from '@/lib/neoBaseUrl.js';
 import { useWindowImportDialog } from '@/components/contract-ui/useWindowImportDialog.js';
 import { loadImportConfig } from '@/pages/first-steps/firstStepsImport.js';
+import { useFlagGatedImportConfig } from '@/lib/importFlagGates.js';
 
 /**
  * ETP-5190 — runs a window's REAL import from inside the checklist.
@@ -29,7 +30,9 @@ export default function FirstStepsImportButton({ step, ui, disabled = false }) {
   // `undefined` = still loading, `null` = this window declares no import. The contract and the
   // descriptor are pulled in on demand so they stay out of the entry chunk; this component only
   // renders once its row is expanded, so the fetch starts when the user opens the step.
-  const [importConfig, setImportConfig] = useState(undefined);
+  const [loadedImportConfig, setImportConfig] = useState(undefined);
+  // Same flag-gated field list as the list view's dialog (`window.import.fields[].hiddenWhenFlag`).
+  const importConfig = useFlagGatedImportConfig(loadedImportConfig);
   useEffect(() => {
     let cancelled = false;
     loadImportConfig(step.importSpec).then((config) => {

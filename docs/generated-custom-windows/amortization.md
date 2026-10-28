@@ -687,3 +687,9 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 ## Read-only role tier — ETP-5830
 
 The amortization-lines `CustomLines` receive `editing=false` when the role tier is `read-only`. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Bespoke grid personal views
+
+The bespoke `AmortizationLinesTable` uses `GRID_COLUMN_VIEWS` and the existing personal-view contract for `amortization` / `lines`. Explicitly saved preferences cover data-column visibility, order and widths. Expansion, selection, inline editing and row actions remain intact; structural cells stay fixed.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this grid; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

@@ -1,4 +1,13 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { gridViewColumnId } from '@/hooks/useGridView.js';
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+
+// Exercise personal views through the real shared hook; only the session/API boundary is mocked.
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
+// @covers tools/app-shell/src/windows/custom/financial-account/StatementsTable.jsx
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -606,5 +615,42 @@ describe('StatementsTable — numeric header alignment', () => {
     expect(btn.className).toContain('flex-row-reverse');
     expect(screen.getByTestId('column-header-sort-documentNo').className)
       .not.toContain('flex-row-reverse');
+  });
+});
+
+describe('StatementsTable — personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    const nameColumn = getContractGridColumns('importedBankStatements').find((column) => column.name === 'name');
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: gridViewColumnId({ ...nameColumn, key: 'name' }), visible: false, order: 0 },
+        { id: 'list:field:expand', visible: false, order: 30 },
+        { id: 'list:field:select', visible: false, order: 29 },
+        { id: 'list:field:actions', visible: false, order: -1 },
+      ],
+    }) });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('hides the chosen data column while retaining row selection, actions and the nested accordion', async () => {
+    const onSelectionChange = vi.fn();
+    const onEdit = vi.fn();
+    const statement = { ...ROWS[0], status: 'DRAFT', processed: 'N' };
+    render(<StatementsTable statements={[statement]} loading={false} onSelectionChange={onSelectionChange}
+      actions={{ onEdit, onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn() }} />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/importedBankStatements', { baseUrl: '' });
+    expect(screen.queryByText('Mayo')).toBeNull();
+    const row = screen.getByTestId('statement-row-s1');
+    fireEvent.click(within(row).getByRole('checkbox'));
+    expect(onSelectionChange).toHaveBeenCalledWith('s1');
+    expect(screen.queryByTestId('stub-inline-s1')).toBeNull();
+    fireEvent.click(screen.getByTestId('statement-row-edit-s1'));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }));
+    fireEvent.click(row);
+    expect(screen.getByTestId('stub-inline-s1')).toBeInTheDocument();
+    fireEvent.click(row);
+    expect(screen.queryByTestId('stub-inline-s1')).toBeNull();
   });
 });

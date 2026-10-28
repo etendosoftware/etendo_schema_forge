@@ -530,3 +530,70 @@ describe('ProductSearchDrawer', () => {
     });
   });
 });
+
+// ETP-5948 — the committed product is marked (check + aria-selected) and the arrows start from it;
+// the keyboard highlight is data-highlighted + aria-activedescendant. D1: a single-pick click in
+// flight keeps only its border and background; multi-select picks keep the check.
+describe('ProductSearchDrawer — committed value (ETP-5948)', () => {
+  const ITEMS = [
+    { id: '1', label: 'Widget A', searchKey: 'W001' },
+    { id: '2', label: 'Widget B', searchKey: 'W002' },
+    { id: '3', label: 'Widget C', searchKey: 'W003' },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupFetchMock(ITEMS);
+    useCurrency.mockReturnValue(null);
+  });
+
+  it('marks only the committed product with the check and aria-selected', async () => {
+    render(<ProductSearchDrawer {...BASE_PROPS} value="2" valueLabel="Widget B" />);
+    const committed = await screen.findByTestId('product-search-option-2');
+    expect(committed).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('product-search-option-1')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getAllByTestId('Check__pds')).toHaveLength(1);
+  });
+
+  it('starts the first ArrowDown from the product after the committed one', async () => {
+    const user = userEvent.setup();
+    render(<ProductSearchDrawer {...BASE_PROPS} value="1" valueLabel="Widget A" />);
+    await screen.findByTestId('product-search-option-1');
+    const input = screen.getByTestId('product-search-input');
+    input.focus();
+    await user.keyboard('{ArrowDown}');
+
+    const next = screen.getByTestId('product-search-option-2');
+    expect(next).toHaveAttribute('data-highlighted', 'true');
+    expect(next).toHaveAttribute('aria-selected', 'false');
+    expect(input).toHaveAttribute('aria-activedescendant', next.id);
+  });
+
+  it('keeps the check off a single-pick click in flight (D1)', async () => {
+    const user = userEvent.setup();
+    render(<ProductSearchDrawer {...BASE_PROPS} value="1" valueLabel="Widget A" />);
+    await screen.findByTestId('product-search-option-3');
+    await user.click(screen.getByText('Widget C'));
+
+    expect(screen.getByTestId('product-search-option-3')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getAllByTestId('Check__pds')).toHaveLength(1);
+  });
+
+  it('marks the multi-select picks with the check and aria-selected', async () => {
+    render(<ProductSearchDrawer {...BASE_PROPS} keepOpenOnSelect selectedIds={['1', '3']} />);
+    await screen.findByTestId('product-search-option-3');
+    expect(screen.getByTestId('product-search-option-1')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('product-search-option-2')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getAllByTestId('Check__pds')).toHaveLength(2);
+  });
+
+  it('marks nothing and starts the arrows from the top without a value', async () => {
+    const user = userEvent.setup();
+    render(<ProductSearchDrawer {...BASE_PROPS} />);
+    await screen.findByTestId('product-search-option-1');
+    expect(screen.queryAllByTestId('Check__pds')).toHaveLength(0);
+    screen.getByTestId('product-search-input').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByTestId('product-search-option-1')).toHaveAttribute('data-highlighted', 'true');
+  });
+});

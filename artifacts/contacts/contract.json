@@ -1,8 +1,8 @@
 {
   "version": "0.5.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-22T19:29:02.744Z",
-  "checksum": "7dea1a211a0ec922",
+  "updatedAt": "2026-10-27T11:23:38.620Z",
+  "checksum": "31c2ecc5ba6a17e6",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -211,6 +211,7 @@
             "example": "Sí",
             "exampleKey": "importExampleContactCustomer",
             "labelKey": "importHeaderCustomer",
+            "hiddenWhenFlag": "contact-category-type",
             "column": "IsCustomer",
             "type": "boolean"
           },
@@ -226,6 +227,7 @@
             "required": false,
             "example": "No",
             "labelKey": "importHeaderVendor",
+            "hiddenWhenFlag": "contact-category-type",
             "column": "IsVendor",
             "type": "boolean"
           },
@@ -244,7 +246,7 @@
               "nombre categoría"
             ],
             "label": "Contact Category",
-            "example": "Clientes",
+            "example": "Cliente",
             "exampleKey": "importExampleContactCategory",
             "column": "C_BP_Group_ID"
           },
@@ -5608,6 +5610,7 @@
             "example": "Sí",
             "exampleKey": "importExampleContactCustomer",
             "labelKey": "importHeaderCustomer",
+            "hiddenWhenFlag": "contact-category-type",
             "column": "IsCustomer",
             "type": "boolean"
           },
@@ -5623,6 +5626,7 @@
             "required": false,
             "example": "No",
             "labelKey": "importHeaderVendor",
+            "hiddenWhenFlag": "contact-category-type",
             "column": "IsVendor",
             "type": "boolean"
           },
@@ -5641,7 +5645,7 @@
               "nombre categoría"
             ],
             "label": "Contact Category",
-            "example": "Clientes",
+            "example": "Cliente",
             "exampleKey": "importExampleContactCategory",
             "column": "C_BP_Group_ID"
           },

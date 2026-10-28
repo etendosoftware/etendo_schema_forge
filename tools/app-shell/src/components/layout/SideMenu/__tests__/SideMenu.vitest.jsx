@@ -188,6 +188,7 @@ vi.mock('@phosphor-icons/react', () => {
 });
 
 import SideMenu from '../SideMenu.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 import { buildMenuGroups, filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, catalogFeatureFlags } from '@/windows/__tests__/navigationExpectations.js';
 
@@ -815,5 +816,43 @@ describe('SideMenu', () => {
       render(<SideMenu {...defaultProps} />);
       expect(screen.getAllByText('yourCompany').length).toBeGreaterThanOrEqual(1);
     });
+  });
+});
+
+// ETP-5351 — the operator in a support session IS support: no help/chat entry point, no company
+// switching (the switch itself is refused by useEnvironmentSwitch; here only the button is checked).
+describe('SideMenu in a support session', () => {
+  const props = { menuGroups: MENU_GROUPS, expanded: true, onToggle: vi.fn(), onHelpClick: vi.fn() };
+
+  beforeEach(() => {
+    localStorage.clear();
+    applySupportSessionFromServer(
+      { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+      { storage: localStorage },
+    );
+  });
+
+  afterEach(() => {
+    resetSupportSessionForTests();
+  });
+
+  it.each([true, false])('hides the whole help entry point (expanded=%s)', (expanded) => {
+    render(<SideMenu {...props} expanded={expanded} unreadCount={3} />);
+
+    expect(screen.queryByText('helpAndSupport')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('helpAndSupport')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('help-menu-open-chat')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('help-menu-report-bug')).not.toBeInTheDocument();
+  });
+
+  it('keeps the company button as a label that does not open', () => {
+    render(<SideMenu {...props} />);
+    expect(screen.getByTestId('company-switcher')).toBeDisabled();
+  });
+
+  it('shows the help entry point again once /me confirms there is no support session', () => {
+    applySupportSessionFromServer(null, { storage: localStorage });
+    render(<SideMenu {...props} />);
+    expect(screen.getByTestId('help-menu-open-chat')).toBeInTheDocument();
   });
 });

@@ -1,4 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
+import { Fragment, useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -29,6 +32,12 @@ import { TBAI_SPEC, TBAI_ENTITY, buildCutoverCriteria } from './useFiscalMonitor
 // on an unrequested, coincidental companion projection); the historical
 // `issotrx`/`invoice$issotrx` names are kept as a fallback only for any row
 // shape that might already carry them.
+function headerClassName(columnKey) {
+  if (columnKey === 'grandTotalAmount') return 'num relative';
+  if (columnKey === 'invoiceDate') return 'sortable sorted relative';
+  return 'relative';
+}
+
 function isSalesRow(row) {
   const v = row?.salesTransaction ?? row?.['invoice$salesTransaction']
     ?? row?.issotrx ?? row?.['invoice$issotrx'];
@@ -87,6 +96,16 @@ function resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen })
   }
   return undefined;
 }
+
+const GRID_COLUMNS = [
+  { key: 'invoiceDate', label: 'fiscalMonitor.col.date' },
+  { key: 'invoice', label: 'fiscalMonitor.col.invoiceNumber' },
+  { key: 'salesTransaction', label: 'fiscalMonitor.col.direction' },
+  { key: 'description', label: 'fiscalMonitor.col.description' },
+  { key: 'signature', label: 'fiscalMonitor.col.signature' },
+  { key: 'estado', label: 'fiscalMonitor.col.status' },
+  { key: 'validationResults', label: 'fiscalMonitor.col.errorReason' },
+];
 
 const STATUS_FIELD = 'estado';
 
@@ -180,6 +199,9 @@ export default function TbaiMonitorSection({
   const [error, setError]         = useState(null);
   const { selectedIds, setSelectedIds, allSelected, someSelected, handleToggleAll, handleToggleRow } = useFmSelection(rows);
   const [exporting, setExporting] = useState(false);
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: TBAI_SPEC, entity: TBAI_ENTITY, columns: GRID_COLUMNS, data: rows, apiBaseUrl });
+  const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
+
 
   useEffect(() => { setFilter(mapInitialFilter(initialFilter)); }, [initialFilter]);
 
@@ -265,6 +287,12 @@ export default function TbaiMonitorSection({
             </button>
           ))}
         </div>
+        {gridColumnViews && <GridViewControls
+          gridView={gridView}
+          gridColumns={GRID_COLUMNS}
+          ui={ui}
+          t={ui}
+          data-testid="GridViewControls__dd7710" />}
         <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
           <ExportIcon data-testid="ExportIcon__dd7710" /> {ui('fiscalMonitor.export')}
         </button>
@@ -280,7 +308,7 @@ export default function TbaiMonitorSection({
       )}
       {!loading && !error && (
         <>
-          <table className="fm-table" data-testid="fm-data-table">
+          <table className="fm-table" data-testid="fm-data-table" style={gridView.active && Object.keys(gridView.columnSizing).length > 0 ? { tableLayout: 'fixed' } : undefined}>
             <thead>
               <tr>
                 <th><Checkbox
@@ -288,19 +316,24 @@ export default function TbaiMonitorSection({
                   indeterminate={someSelected}
                   onChange={handleToggleAll}
                   data-testid="Checkbox__dd7710" /></th>
-                <th className="sortable sorted">{ui('fiscalMonitor.col.date')}</th>
-                <th>{ui('fiscalMonitor.col.invoiceNumber')}</th>
-                <th>{ui('fiscalMonitor.col.direction')}</th>
-                <th>{ui('fiscalMonitor.col.description')}</th>
-                <th>{ui('fiscalMonitor.col.signature')}</th>
-                <th>{ui('fiscalMonitor.col.status')}</th>
-                <th>{ui('fiscalMonitor.col.errorReason')}</th>
+                {columns.map((column) => {
+                  const label = ui(column.label);
+                  return (
+                    <th key={column.key} className={headerClassName(column.key)}
+                      style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, whiteSpace: 'normal', overflowWrap: 'anywhere' } : undefined}
+                      {...gridHeaderProps(column, gridView)}>
+                      {label}
+                      {gridReorderHandle(column, gridView, label, ui)}
+                      {gridResizeHandle(column, gridView, label, ui)}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}> {/* 8 cols: checkbox + 7 data */}
+                  <td colSpan={columns.length + 1} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}>
                     {ui('fiscalMonitor.empty')}
                   </td>
                 </tr>
@@ -310,20 +343,15 @@ export default function TbaiMonitorSection({
                 const rowIsSales = isSalesRow(row);
                 const rowErrors = validationMap[row.id] ?? [];
                 const pillClick = resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen });
-                return (
-                  <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
-                    <td><Checkbox
-                      checked={selectedIds.has(row.id)}
-                      onChange={() => handleToggleRow(row.id)}
-                      data-testid="Checkbox__dd7710" /></td>
-                    <td>{fmtDate(row.invoiceDate ?? inv.date)}</td>
-                    <td className="num-factura">
+                const cells = {
+                  invoiceDate: (<td>{fmtDate(row.invoiceDate ?? inv.date)}</td>),
+                  invoice: (<td className="num-factura">
                       <NumFactura
                         n={inv.docNo}
                         onOpen={() => onInvoiceOpen?.(row.invoice, rowIsSales ? 'sales-invoice' : 'purchase-invoice')}
                         data-testid="NumFactura__dd7710" />
-                    </td>
-                    <td>
+                    </td>),
+                  salesTransaction: (<td>
                       {/* ETP-5432: purchase uses the shared `warn` role (amber/orange —
                           --fm-warning-bg/fg, themed off --status-warning-bg/fg, the same
                           warm-color token already used for e.g. AssetsSidebar's
@@ -338,9 +366,9 @@ export default function TbaiMonitorSection({
                       >
                         {ui(rowIsSales ? 'fiscalMonitor.direction.sales' : 'fiscalMonitor.direction.purchase')}
                       </span>
-                    </td>
-                    <td>{row['invoice$description'] ?? row.descripcion ?? '—'}</td>
-                    <td>
+                    </td>),
+                  description: (<td>{row['invoice$description'] ?? row.descripcion ?? '—'}</td>),
+                  signature: (<td>
                       {isSigned ? (
                         <span style={{ color: 'var(--fm-success-fg)', display: 'inline-flex', alignItems: 'center' }}>
                           <CheckIcon data-testid="CheckIcon__dd7710" />
@@ -348,17 +376,25 @@ export default function TbaiMonitorSection({
                       ) : (
                         <span style={{ color: 'var(--fm-fg-4)' }}>—</span>
                       )}
-                    </td>
-                    <td>
+                    </td>),
+                  estado: (<td>
                       <StatusPill
                         estado={row.estado}
                         onClick={pillClick}
                         title={isPendingStatus(row.estado) ? ui('fiscalMonitor.openInvoice') : undefined}
                         data-testid="StatusPill__dd7710" />
-                    </td>
-                    <td style={{ color: rowErrors.length ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
+                    </td>),
+                  validationResults: (<td style={{ color: rowErrors.length ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
                       {rowErrors.length > 0 ? formatValidationEntries(rowErrors) : '—'}
-                    </td>
+                    </td>),
+                };
+                return (
+                  <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
+                    <td><Checkbox
+                      checked={selectedIds.has(row.id)}
+                      onChange={() => handleToggleRow(row.id)}
+                      data-testid="Checkbox__dd7710" /></td>
+                    {columns.map((column) => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
                   </tr>
                 );
               })}

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEnvironmentSwitch.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -37,6 +38,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 }));
 
 import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '../useEnvironmentSwitch.js';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
 const ACME = {
   clientId: 'CLIENT-ACME',
@@ -276,6 +278,41 @@ describe('useEnvironmentSwitch', () => {
 
       expect(entered).toBe(false);
       expect(fetchEnvironments).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5351 — a support session is pinned to the tenant its ticket was issued for. Changing company
+  // means a new ticket from Classic (a new audit row), so the hook offers nothing to switch to and
+  // refuses to switch even if a caller asks.
+  describe('in a support session', () => {
+    beforeEach(() => {
+      applySupportSessionFromServer(
+        { clientId: 'CLIENT-HOME', clientName: 'Home Corp', expiresAt: '2026-10-05T11:00:00Z' },
+        { storage: globalThis.localStorage },
+      );
+    });
+
+    afterEach(() => {
+      resetSupportSessionForTests();
+    });
+
+    it('lists the current company alone and never switches', async () => {
+      fetchEnvironments.mockResolvedValue([
+        { clientId: 'CLIENT-HOME', clientName: 'Home Corp', adminUserId: 'USER-0' },
+        ACME,
+      ]);
+      const { result } = renderHook(() => useEnvironmentSwitch({ enabled: true }));
+
+      await waitFor(() => expect(result.current.environments.map((env) => env.clientId)).toEqual(['CLIENT-HOME']));
+
+      let entered;
+      await act(async () => {
+        entered = await result.current.switchTo(ACME);
+      });
+
+      expect(entered).toBe(false);
+      expect(loginEnvironment).not.toHaveBeenCalled();
+      expect(fakeLocation.href).toBe('');
     });
   });
 });

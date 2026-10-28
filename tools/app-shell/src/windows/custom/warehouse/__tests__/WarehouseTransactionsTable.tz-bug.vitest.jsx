@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/warehouse/WarehouseTransactionsTable.jsx
 // Regression test for ETP-4850: date off-by-one bug under negative-UTC-offset
 // timezones.
 //
@@ -12,6 +13,7 @@
 // make the bug reproducible regardless of the CI machine's default timezone
 // (verified empirically: process.env.TZ takes effect per-call in this
 // project's Node/Vitest setup, no ICU caching issue).
+import { allIconsAs } from '@/test/lucideIconMock.js';
 
 // --- Mocks (before imports) ---
 
@@ -30,7 +32,7 @@ vi.mock('../useWarehouseStock', () => ({
   useWarehouseStock: vi.fn(),
 }));
 
-vi.mock('lucide-react', () => ({
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal, {
   Loader2: (props) => <span data-testid="loader" {...props} />,
   ArrowUpRight: (props) => <span data-testid="icon-arrow-up-right" {...props} />,
 }));
