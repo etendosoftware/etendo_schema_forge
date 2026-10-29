@@ -1353,7 +1353,7 @@
     },
     {
       "id": "doc-template-selection",
-      "description": "Lets an organization choose the printed template of the commercial documents (sales invoice, sales order, purchase order, quotation): variant classic/compact/modern, logo and footer, read from GET /sws/neo/doctemplateconfig. Visual gating only: the endpoint authorizes every read and write on its own. Off, the current shared template is rendered unchanged and no request is made. MVP for validation; the editing UI is a separate task.",
+      "description": "Lets an organization choose the printed template of the commercial documents (sales invoice, sales order, purchase order, quotation): variant classic/compact/modern plus common options (base color, font, text size, alternating rows, logo, footer) for the documents and, apart, for the list print, read from GET /sws/neo/doctemplateconfig. Visual gating only: the endpoint authorizes every read and write on its own. Off, the current shared template is rendered unchanged and no request is made. MVP for validation.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-5988",
       "created": "2026-10-28",
@@ -1361,7 +1361,7 @@
         "key": "doc-template-selection",
         "defaultValue": false,
         "ttl": "2027-03-31",
-        "ttlNote": "PLACEHOLDER: MVP validation window; the owner decides the real removal date once the editing UI (T5) ships.",
+        "ttlNote": "PLACEHOLDER: MVP validation window; the owner decides the real removal date once the owner decides to ship it.",
         "symbols": [
           "DocumentTemplatesPage",
           "document-templates",
@@ -1379,7 +1379,13 @@
           "tools/app-shell/src/windows/custom/shared/docTemplateConfig.js",
           "tools/app-shell/src/windows/custom/shared/documentTemplateVariants.js",
           "tools/app-shell/src/pages/DocumentTemplatesPage.jsx",
-          "tools/app-shell/src/lib/docTemplateConfigApi.js"
+          "tools/app-shell/src/lib/docTemplateConfigApi.js",
+          "tools/app-shell/src/pages/PrintableSettingsSection.jsx",
+          "tools/app-shell/src/windows/custom/shared/printableStyle.js",
+          "tools/app-shell/src/windows/custom/shared/documentTemplateSample.js",
+          "tools/app-shell/src/windows/custom/shared/DocumentTemplatePreview.jsx",
+          "tools/app-shell/src/windows/custom/shared/ListingTemplatePreview.jsx",
+          "tools/app-shell/src/windows/custom/shared/PrintablePreviewFrame.jsx"
         ],
         "backend": []
       },
@@ -1401,6 +1407,18 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/lib/__tests__/docTemplateConfigApi.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/printableStyle.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/DocumentTemplatePreview.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/ListingTemplatePreview.vitest.jsx"
           }
         ]
       }
