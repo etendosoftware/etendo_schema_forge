@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/layout/AppLayout.jsx
 // @covers tools/app-shell/src/components/access/SessionConflictNotice.jsx
+// @covers tools/app-shell/src/hooks/useEnvironmentListFreshness.js
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -68,6 +69,8 @@ const useEnvironmentSwitchMock = vi.fn(() => ({
   currentClientId: 'CLIENT-CURRENT',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  // The layout's freshness triggers (`useEnvironmentListFreshness`) fire this event name.
+  ENVIRONMENT_LIST_REFRESH_EVENT: 'etendo:refresh-environments',
   useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
 }));
 
@@ -208,11 +211,17 @@ vi.mock('@/components/layout/PageMetaContext', () => ({
     title: 'Test',
     breadcrumb: 'Test',
     onBack: vi.fn(),
+    onPageHelp: vi.fn(),
   }),
 }));
 
 vi.mock('@/components/layout/TopBar', () => ({
-  default: ({ title }) => <div data-testid="top-bar">{title}</div>,
+  default: ({ title, onPageHelp }) => (
+    <div data-testid="top-bar">
+      {title}
+      {onPageHelp && <button data-testid="top-bar-help" onClick={onPageHelp}>Help</button>}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/CommandPalette.jsx', () => ({
@@ -264,6 +273,17 @@ vi.mock('@/components/ui/dropdown-menu.jsx', async () => {
   };
 });
 
+// ETP-5351 — the banner's own behaviour is covered in SupportSessionBanner.vitest.jsx; here only
+// where AppLayout mounts it. The stub follows the real store, like the banner does.
+vi.mock('@/components/layout/SupportSessionBanner.jsx', async () => {
+  const { useSupportSession } = await import('@/hooks/useSupportSession.js');
+  return {
+    SupportSessionBanner: () => (useSupportSession().isSupportMode
+      ? <div data-testid="support-mode-banner" />
+      : null),
+  };
+});
+
 vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
   WebMcpEtendoGoTools: () => <div data-testid="webmcp-agent-tools" />,
 }));
@@ -277,7 +297,9 @@ import { useAccessLoadError } from '@/hooks/useAccessLoadError.js';
 import { buildMenuGroups } from '@/windows/registry.js';
 import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
 import { useLocation, useSearchParams } from 'react-router-dom';
+import { QUOTA_REFUSED_EVENT } from '@/lib/planQuotas.js';
 import AppLayout from '../AppLayout.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
 describe('AppLayout — normal mode', () => {
   const defaultProps = {
@@ -1369,6 +1391,56 @@ describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
   });
 });
 
+// ETP-5351 — a support session: the banner is on screen, the help chat is not, and the menu
+// loses the entries a support session cannot use.
+describe('AppLayout — support session', () => {
+  const props = {
+    menuGroups: [{ group: 'Settings', items: [{ name: 'user', label: 'User' }, { name: 'oauth2-clients', label: 'OAuth2 Clients' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // clearAllMocks keeps implementations: the ETP-5742 block above leaves the gate on
+    // SUBSCRIPTION_REQUIRED and an empty menu, which would render the blocked screen here.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    localStorage.clear();
+    applySupportSessionFromServer(
+      { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+      { storage: localStorage },
+    );
+  });
+
+  afterEach(() => {
+    resetSupportSessionForTests();
+  });
+
+  it('shows the support banner without a help chat widget or TopBar help item', () => {
+    render(<AppLayout {...props} />);
+
+    expect(screen.getByTestId('support-mode-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('support-chat-widget')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('top-bar-help')).not.toBeInTheDocument();
+  });
+
+  it('drops the entries a support session cannot use from the menu it passes down', () => {
+    render(<AppLayout {...props} />);
+
+    const groups = screen.getByTestId('side-menu-groups').textContent;
+    expect(groups).toContain('"user"');
+    expect(groups).not.toContain('oauth2-clients');
+  });
+
+  it('brings the chat widget back and hides the banner once /me confirms there is no support session', () => {
+    applySupportSessionFromServer(null, { storage: localStorage });
+    render(<AppLayout {...props} />);
+
+    expect(screen.getByTestId('support-chat-widget')).toBeInTheDocument();
+    expect(screen.getByTestId('top-bar-help')).toBeInTheDocument();
+    expect(screen.queryByTestId('support-mode-banner')).not.toBeInTheDocument();
+  });
+});
+
 // ETP-5675 — the session cookie belongs to the browser profile and production is one domain for
 // every customer. When another tab signs in as a different account, this tab used to keep B's name
 // and avatar while every read answered with C's tenant data. The core records the conflict; what
@@ -1443,6 +1515,18 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
       expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
     },
   );
+
+  it('names a support session by a human label, never by its internal email', async () => {
+    fetch.mockImplementation(async () => new Response(JSON.stringify({
+      account: { id: 'acc-S', email: 'soporte@etendo-go.invalid' }, csrfToken: 'csrf-S',
+    }), { status: 200 }));
+
+    render(<AppLayout {...defaultProps} />);
+
+    await vi.waitFor(() => expect(screen.getByTestId('session-conflict-continue')).toHaveTextContent(LABELS.sessionConflictSupportUser));
+    expect(screen.getByTestId('session-conflict-continue')).toHaveTextContent(LABELS.sessionConflictSupportUser);
+    expect(screen.queryByText(/etendo-go\.invalid/)).not.toBeInTheDocument();
+  });
 
   it('continues as the other account by reloading, and revokes nothing', async () => {
     const user = userEvent.setup();
@@ -1577,5 +1661,60 @@ describe('AppLayout — failed-payment banner mount (ETP-5049)', () => {
     expect(screen.getByTestId('outlet')).toBeInTheDocument();
     expect(screen.queryByTestId('billing-status-banner')).not.toBeInTheDocument();
     expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * ETP-5051 — AppLayout is the ONE owner of the environment-list freshness triggers
+ * (`useEnvironmentListFreshness`: focus, a 5-minute interval, a quota refusal). The real hook runs
+ * here; each trigger dispatches `etendo:refresh-environments` once per mounted instance, so a
+ * quota refusal producing exactly one refresh event proves the layout mounts it exactly once (a
+ * second mount anywhere in the tree would make it two). Embedded windows show no banner and are
+ * pages of their own, so the hook is off there.
+ */
+describe('AppLayout — environment-list freshness (ETP-5051)', () => {
+  const defaultProps = { menuGroups: [{ label: 'Sales', items: [] }] };
+  let refreshes;
+  const countRefresh = () => { refreshes += 1; };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    refreshes = 0;
+    useAuthOptionalMock.mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useAccessLoadError).mockReturnValue(false);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/sales-order/123' });
+    window.addEventListener('etendo:refresh-environments', countRefresh);
+  });
+
+  afterEach(() => {
+    window.removeEventListener('etendo:refresh-environments', countRefresh);
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
+  });
+
+  it('mounts the freshness triggers once: a quota refusal asks for exactly one refresh', () => {
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+
+    window.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+    expect(refreshes).toBe(1);
+  });
+
+  it('stops the triggers when the layout unmounts', () => {
+    const { unmount } = render(<AppLayout {...defaultProps} />);
+    unmount();
+
+    window.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+    expect(refreshes).toBe(0);
+  });
+
+  it.each(['1', 'interactive'])('does not mount the triggers when embedded=%s', (embedded) => {
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(`embedded=${embedded}`), vi.fn()]);
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+
+    window.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+    expect(refreshes).toBe(0);
   });
 });

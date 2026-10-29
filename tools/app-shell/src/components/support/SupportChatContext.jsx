@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useApiFetch } from '@/auth/useApiFetch';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { getStoredLocale } from '@/i18n';
 import { track } from '@/lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
@@ -211,6 +212,13 @@ function reducer(state, action) {
 export function SupportChatProvider({ children }) {
   const [state, dispatch] = React.useReducer(reducer, INITIAL_STATE);
   const apiFetch = useApiFetch();
+  // ETP-5351 — in a support session the operator IS support, and the conversations here belong
+  // to the customer: no initial load, no poll, and the chat cannot be opened. The entry points
+  // are hidden by their owners (AppLayout, SideMenu, FmCommon); this is the backstop for any
+  // caller of `actions.open()` and the reason no `/sws/support/*` request leaves the tab.
+  const { isSupportMode } = useSupportSession();
+  const isSupportModeRef = React.useRef(isSupportMode);
+  isSupportModeRef.current = isSupportMode;
   const stateRef = React.useRef(state);
   React.useEffect(() => { stateRef.current = state; }, [state]);
   const apiFetchRef = React.useRef(apiFetch);
@@ -404,8 +412,14 @@ export function SupportChatProvider({ children }) {
   }, [apiFetch, state.conversations]);
 
   const openChat = React.useCallback(() => {
+    if (isSupportModeRef.current) return;
     dispatch({ type: 'OPEN' });
   }, []);
+
+  // A tab that learns it is a support session (from /me) while the chat is open closes it.
+  React.useEffect(() => {
+    if (isSupportMode) dispatch({ type: 'CLOSE' });
+  }, [isSupportMode]);
 
   const closeChat = React.useCallback(() => {
     dispatch({ type: 'CLOSE' });
@@ -448,6 +462,7 @@ export function SupportChatProvider({ children }) {
   // to hours in practice) — so a short interval only burned requests against our own backend
   // without a matching UX benefit.
   React.useEffect(() => {
+    if (isSupportMode) return undefined;
     const id = setInterval(async () => {
       const s = stateRef.current;
       if (!s.isOpen || !s.activeConversationId || s.activeConversationId === 'new') return;
@@ -476,10 +491,11 @@ export function SupportChatProvider({ children }) {
       } catch (_) { /* silent */ }
     }, 60000);
     return () => clearInterval(id);
-  }, []);
+  }, [isSupportMode]);
 
   // Initial silent load so unread badge shows immediately on page load
   React.useEffect(() => {
+    if (isSupportMode) return;
     (async () => {
       try {
         const res = await apiFetchRef.current('/sws/support/conversations');
@@ -489,12 +505,13 @@ export function SupportChatProvider({ children }) {
         if (convs.length > 0) dispatch({ type: 'SET_CONVERSATIONS', conversations: convs });
       } catch (_) { /* silent */ }
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSupportMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Polling: refresh conversation list every 60s regardless of widget state — same
   // reasoning as the messages poll above: support conversations don't need second-scale
   // freshness.
   React.useEffect(() => {
+    if (isSupportMode) return undefined;
     const id = setInterval(async () => {
       try {
         const res = await apiFetchRef.current('/sws/support/conversations');
@@ -539,7 +556,7 @@ export function SupportChatProvider({ children }) {
       } catch (_) { /* silent */ }
     }, 60000);
     return () => clearInterval(id);
-  }, []);
+  }, [isSupportMode]);
 
   const unreadCount = state.conversations.filter((c) => c.unread).length;
 

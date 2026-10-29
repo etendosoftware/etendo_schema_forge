@@ -1215,7 +1215,10 @@ describe('OrderCreateInvoice', () => {
 
       function resolveMessage(e, res) {
         const expr = extractCallExprAfter(createDocsModalSrc, 'action/createDraftInvoice', 'throw new Error(');
-        return new Function('e', 'res', `return ${expr};`)(e, res);
+        // ETP-5051: the expression first asks translateQuotaRefusalBody(e, ui) for a plan-quota
+        // sentence; this body is no quota refusal, so the stub answers null, as the real one does.
+        return new Function('e', 'res', 'ui', 'translateQuotaRefusalBody', `return ${expr};`)(
+          e, res, (k) => k, () => null);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {
