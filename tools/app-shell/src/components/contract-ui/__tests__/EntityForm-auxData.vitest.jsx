@@ -12,11 +12,13 @@ vi.mock('@/i18n', () => ({
 // which renders this drawer and calls `onSelect(item)` with the raw server item — feeding
 // `applyLookupAuxData` the same shape CreatableSearchSelect's `handleSelect` would.
 vi.mock('../ProductSearchDrawer.jsx', () => ({
-  default: ({ open, onSelect, 'data-testid': testId }) => (
+  default: ({ open, onSelect, value, valueLabel, 'data-testid': testId }) => (
     open ? (
       <button
         type="button"
         data-testid={`${testId}-pick`}
+        data-value={value ?? ''}
+        data-value-label={valueLabel ?? ''}
         onClick={() => onSelect({
           id: 'PROD1',
           name: 'Widget',
@@ -125,5 +127,20 @@ describe('EntityForm selector aux-data propagation (ETP-4600 regression)', () =>
     expect(calledNames).not.toContain('productsearchKey');
     expect(calledNames).not.toContain('productisTaxIncluded');
     expect(calledNames).not.toContain('productstandardPrice');
+  });
+
+  // ETP-5948 — the form's committed value reaches the drawer, which opens marked and positioned on it.
+  it.each([
+    ['a lookup field (LookupFormField)', { lookup: true }],
+    ['a popup field (PopupSearchInput)', { popup: true }],
+  ])('hands the committed value and its label to the drawer of %s', (_label, flags) => {
+    const fields = [{ key: 'product', id: 'product', label: 'Product', type: 'search', column: 'M_Product_ID', ...flags }];
+    render(<EntityForm fields={fields} data={{ product: 'PROD9', product$_identifier: 'Gadget' }} onChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('field-product'));
+
+    const drawer = screen.getByTestId('ProductSearchDrawer__product-pick');
+    expect(drawer).toHaveAttribute('data-value', 'PROD9');
+    expect(drawer).toHaveAttribute('data-value-label', 'Gadget');
   });
 });

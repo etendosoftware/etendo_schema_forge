@@ -136,6 +136,31 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['sales-invoice:i0'],
     },
     {
+      // ETP-5745 CP-12 — the mirror of originInvoices: from the ORIGINAL invoice, the
+      // rectificativa(s) that rectify it (SalesInvoiceHeaderHandler#enrichRectifyingInvoices).
+      // A synchronous `select`, not a `fetch`: the backend already enriches the field on the
+      // detail GET, so no extra round trip is needed.
+      name: 'sales-invoice: rectifyingInvoices read synchronously from the enriched field',
+      spec: 'sales-invoice',
+      record: { id: 'i0', rectifyingInvoices: [{ id: 'i1', documentNo: 'FVR1' }, { id: 'i2', documentNo: 'FVR2' }] },
+      backend: {},
+      expected: ['sales-invoice:i1', 'sales-invoice:i2'],
+    },
+    {
+      // Chain case: this invoice both rectifies another invoice (originInvoices) AND is
+      // itself rectified by a different one (rectifyingInvoices) — the two mirror fields
+      // are independent and must both surface chips on the same record.
+      name: 'sales-invoice: rectifies one invoice (originInvoices) AND is rectified by another (rectifyingInvoices)',
+      spec: 'sales-invoice',
+      record: {
+        id: 'i0',
+        originInvoices: [{ id: 'i-origin' }],
+        rectifyingInvoices: [{ id: 'i-rectifying', documentNo: 'FVR9' }],
+      },
+      backend: { byId: { 'sales-invoice/header/i-origin': { id: 'i-origin' } } },
+      expected: ['sales-invoice:i-origin', 'sales-invoice:i-rectifying'],
+    },
+    {
       name: 'goods-shipment: read from the detail record only',
       spec: 'goods-shipment',
       record: { id: 's1', linkedOrders: [{ id: 'o1' }], linkedInvoices: [{ id: 'i1' }], returnReceipts: [{ id: 'r1' }] },
@@ -177,6 +202,7 @@ describe('SALES_RELATED_DOCS — depsKey covers every record field a fetch sourc
     ['sales-invoice', { arInvoiceSubtype: 'FAC' }, { arInvoiceSubtype: 'RECTIFICATIVA' }],
     ['sales-invoice', { originInvoices: [{ id: 'a' }] }, { originInvoices: [{ id: 'a' }, { id: 'b' }] }],
     ['sales-invoice', { originInvoice: 'a' }, { originInvoice: 'b' }],
+    ['sales-invoice', { rectifyingInvoices: [{ id: 'a' }] }, { rectifyingInvoices: [{ id: 'a' }, { id: 'b' }] }],
   ])('%s: %j → %j changes the key', (spec, before, after) => {
     const { depsKey } = SALES_RELATED_DOCS[spec];
     expect(depsKey({ id: 'x', ...before })).not.toBe(depsKey({ id: 'x', ...after }));

@@ -121,6 +121,36 @@ describe('useBulkActionToast', () => {
     expect(toast.error.mock.calls[0]).toHaveLength(1);
   });
 
+  // ETP-5591: a reason every failure shares is said once, as the description.
+  it('adds the shared reason as description when every failure has the same identity', () => {
+    const { result } = renderHook(() => useBulkActionToast());
+    act(() => {
+      result.current.showResult({
+        ok: 1,
+        failed: [
+          { documentNo: 'DOC-3', message: 'Document disabled for accounting', messageKeys: ['DocumentDisabled'] },
+          { documentNo: 'DOC-4', message: 'Document disabled for accounting', messageKeys: ['DocumentDisabled'] },
+        ],
+      });
+    });
+    expect(toast.warning).toHaveBeenCalledWith('1 processed, 2 failed',
+      { description: 'Document disabled for accounting' });
+  });
+
+  it('keeps the plain count when the failures have different reasons', () => {
+    const { result } = renderHook(() => useBulkActionToast());
+    act(() => {
+      result.current.showResult({
+        ok: 0,
+        failed: [
+          { documentNo: 'DOC-3', message: 'Document disabled for accounting', messageKeys: ['DocumentDisabled'] },
+          { documentNo: 'DOC-4', message: 'Period closed', messageKeys: ['PeriodNotAvailable'] },
+        ],
+      });
+    });
+    expect(toast.error.mock.calls[0]).toEqual(['0 processed, 2 failed']);
+  });
+
   // ETP-5316 regression: an all-succeed result must stay a plain toast.success with no second
   // (description) argument at all — not even `undefined` — since `failed` never reaches
   // buildFailureDetail on that branch.

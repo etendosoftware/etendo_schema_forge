@@ -5,6 +5,7 @@ import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { fetchTemplateRoles, fetchRolesOverview } from '@/lib/rolesApi.js';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -33,6 +34,7 @@ export default function AssignTemplateRolesControl(props) {
   const { data, token, apiBaseUrl } = props;
   const ui = useUI();
   const { selectedRoleIds, setSelectedRoleIds } = useRoleSelection();
+  const { isSupportMode } = useSupportSession();
 
   const [roles, setRoles] = useState([]);
   const [adminRoleId, setAdminRoleId] = useState(null);
@@ -130,6 +132,9 @@ export default function AssignTemplateRolesControl(props) {
     e.stopPropagation();
     setSelectedRoleIds((current) => current.filter((id) => id !== roleId));
   }, [setSelectedRoleIds]);
+
+  // ETP-5351 — the backend refuses template-role assignment for a support session.
+  if (isSupportMode) return null;
 
   if (!hasPersistedUser) {
     return (
