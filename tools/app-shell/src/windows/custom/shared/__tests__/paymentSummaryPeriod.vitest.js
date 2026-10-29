@@ -56,8 +56,19 @@ describe('paymentSummaryPeriod', () => {
   });
 
   it('picks the cobros or pagos noun key per direction', () => {
-    expect(buildPeriodSubtitle(null, 1, 'in', ui)).toBe('dateRangeAllTime · 1 cobrosNoun');
-    expect(buildPeriodSubtitle(null, 1, 'out', ui)).toBe('dateRangeAllTime · 1 pagosNoun');
+    expect(buildPeriodSubtitle(null, 2, 'in', ui)).toBe('dateRangeAllTime · 2 cobrosNoun');
+    expect(buildPeriodSubtitle(null, 2, 'out', ui)).toBe('dateRangeAllTime · 2 pagosNoun');
+  });
+
+  // A single payment read "Hoy · 1 cobros" / "Hoy · 1 pagos": the plural noun was used whatever the
+  // count. One uses the singular key; zero and two or more keep the plural.
+  it('uses the singular noun for exactly one payment', () => {
+    expect(buildPeriodSubtitle(null, 1, 'in', ui)).toBe('dateRangeAllTime · 1 cobroNoun');
+    expect(buildPeriodSubtitle(null, 1, 'out', ui)).toBe('dateRangeAllTime · 1 pagoNoun');
+  });
+
+  it('keeps the plural noun for zero payments', () => {
+    expect(buildPeriodSubtitle(null, 0, 'in', ui)).toBe('dateRangeAllTime · 0 cobrosNoun');
   });
 
   describe('time zone', () => {

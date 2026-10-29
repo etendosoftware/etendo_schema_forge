@@ -33,8 +33,15 @@ export function buildPeriodLabel(dateFilter, ui) {
   return ui('dateRangeAllTime');
 }
 
+// Noun keys per direction: singular for exactly one payment, plural otherwise (0, 2, …) — the
+// explicit key-pair convention of InvoicePaymentHistoryModal's cobroRegistrado/cobrosRegistrados.
+const NOUN_KEYS = {
+  in: { one: 'cobroNoun', other: 'cobrosNoun' },
+  out: { one: 'pagoNoun', other: 'pagosNoun' },
+};
+
 /**
- * `${period} · ${rowCount} ${cobros|pagos}`.
+ * `${period} · ${rowCount} ${cobro(s)|pago(s)}` — "Hoy · 1 cobro", "Hoy · 2 cobros".
  *
  * @param {object|null|undefined} dateFilter
  * @param {number} rowCount - non-voided payments in the filtered set
@@ -42,6 +49,7 @@ export function buildPeriodLabel(dateFilter, ui) {
  * @param {(key: string) => string} ui
  */
 export function buildPeriodSubtitle(dateFilter, rowCount, dir, ui) {
-  const noun = ui(dir === 'in' ? 'cobrosNoun' : 'pagosNoun');
+  const keys = NOUN_KEYS[dir === 'in' ? 'in' : 'out'];
+  const noun = ui(rowCount === 1 ? keys.one : keys.other);
   return `${buildPeriodLabel(dateFilter, ui)} · ${rowCount} ${noun}`;
 }
