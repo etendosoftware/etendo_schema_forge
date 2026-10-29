@@ -288,6 +288,8 @@ export default function ReportDrawer({
       // The logo is read with the config, so the preview waits for both and renders once.
       const logo = config?.showLogo === 'on' ? (config.logo || await loadCompanyLogo(apiBaseUrl, token)) : null;
       if (cancelled) return;
+      // Names what the list print will use, so "the style is not applied" is diagnosable from the console.
+      console.info(`[list-print] ${config ? `saved design: ${config.variant}${config.color ? ` ${config.color}` : ''}` : 'no saved design (flag off, nothing saved or not readable): the current print'}`);
       setListingLogo(logo);
       setListingConfig(config);
     });
