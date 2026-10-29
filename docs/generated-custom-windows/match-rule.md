@@ -14,7 +14,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
 
 ## Interaction model
 
-- Route: `/match-rule` — a single list screen. There is **no drill-in detail route**.
+- Route: `/match-rule` — a single list screen. There is **no drill-in detail route**. Since ETP-5978 `/match-rule/<recordId>` (the generic `:windowName/:recordId` route) opens the list with that rule's edit modal already open; closing it returns the URL to `/match-rule` (shared `list-modal` behaviour, see `docs/window-templates.md` → *Deep link*). A read-only role gets the plain list.
 - Layout: `layoutType: "list-modal"` — a grid (list) plus a create/edit **modal**, rendered by the generic `ListModalWindow` component (`tools/app-shell/src/components/contract-ui/ListModalWindow.jsx`).
 - Visibility: intended for the Finance menu, label "Reglas de matcheo" (`Matching Rules` in `en_US`).
 - Window shape: header-only (`detailEntity: null`). The single entity is `etgoMatchRuleHeader`, backed by table `ETGO_Match_Rule`.
@@ -32,7 +32,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
   - Activa — `toggle` (inline `PillToggle`, `PATCH`; the shared pill toggle, same component as the modal footer and the Assets window).
   - Each row also shows a left **drag handle** (visual only; drag-to-reorder is deferred) and, on hover, an **edit** (pencil), a **clone** (Copy, opt-in via `templateConfig.allowClone`) and a **delete** (red trash) icon button. Clone opens the create modal pre-filled with the row's values; delete opens a confirmation dialog, then `DELETE`s the rule.
   - **Multi-select + bulk delete** — a leading checkbox column (the header checkbox selects every *visible* row, and renders indeterminate while partial) plus the floating "N Seleccionados" pill with a trash action: the same affordance the Cuentas / Movimientos / Extractos lists and `ListView`'s own grid already have. See "Multi-select and read-only gating (ETP-4950)" below.
-- **Toolbar**: a **back button** ("Cancelar", navigates to the referrer), a **dropdown filter** "Todas las reglas" (filter by Active: Activas / Inactivas), an **advanced "by conditions" filter** (funnel button → `AdvancedFilterButton`, applied client-side via `applyConditions`), a **search** box ("Buscar…"), the **"Ordenar por"** popover, a **refresh** icon button, and the primary **"+ Nueva regla"** button (yellow `#FFD500` hover, like the Accounts window). Filters and search are applied client-side over the loaded rows.
+- **Toolbar**: a **back button** ("Cancelar", navigates to the referrer), a **dropdown filter** "Todas las reglas" (filter by Active: Activas / Inactivas), an **advanced "by conditions" filter** (funnel button → `AdvancedFilterButton`, applied client-side via `applyConditions`), a **search** box ("Buscar…"), the **"Ordenar por"** popover, a **refresh** icon button, and the primary **"+ Nueva regla"** button (yellow `#FFD500` hover, like the Accounts window). Filters and search are applied client-side over the loaded rows. `Activa` is not offered in the advanced filter: since ETP-5978 a list-modal advanced filter includes boolean columns, except one a `toolbarFilters` dropdown already filters — here "Todas las reglas" (see `docs/window-templates.md` → *Advanced filter*). The window has no other boolean column, so its advanced filter is unchanged.
   - The refresh button is the shared `contract-ui/RefreshButton.jsx` (the same one `ListView` renders for a generated list, in the same slot between sort and create) wired to this window's `useNeoResource` `reload`. `ListModalWindow` draws its own toolbar, so it never inherited `ListView`'s. It is paired with `contract-ui/ListProgressBar.jsx` — the thin indeterminate line above the grid, shown under `loading && allRows.length > 0`, i.e. only while refreshing over rows already on screen. On the FIRST fetch the existing skeleton rows are the indicator instead, so the two never appear together.
 - **Banner**: a dismissible info banner (`bannerKey`) explaining that rules are evaluated by ascending priority and only apply to statement lines the standard algorithm could not match.
 - **Search** rules by name or pattern (local filter over the list).
@@ -57,6 +57,8 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
   - `priority` is **not** required to be unique — per the functional spec it is an ordering/ranking key (the highest-priority match is the main suggestion, ties rank as alternatives), so duplicate priorities within a scope are allowed (e.g. a cloned rule may keep the source priority).
   - `priority` **must be a whole number, 1 or greater** (upper bound: what `DECIMAL(10,0)` holds) — HTTP 400. Added because the field had no validation at all: `0` and negatives persisted silently, and a decimal was truncated by the column on the way in. Nothing technically broke with a negative (rules sort `priority ASC`, so it simply ranked first), which is why the range is a product decision rather than a crash fix. Validated on its own, **before** the content gate, because `priority` carries `inlineEdit` — a PATCH can legitimately carry priority and nothing else, and `hasContentFields` (name / condition / pattern) would not fire for it.
   - On a partial `PATCH` (inline Active toggle), content fields absent from the body are not re-validated.
+- **Input length limits (ETP-5978)**: the modal's `Name` and `Pattern to match` inputs stop accepting text at 200 characters (`maxLength: 200`, the DB column length, emitted by the generator from the extracted schema), so an over-long value never reaches the server as a database error.
+- **Translated backend errors (ETP-5978)**: every `list-modal` write — modal save (`POST`/`PUT`, shown in the modal's error box), the inline *Activa* toggle (`PATCH`) and delete (`DELETE`), both as a toast — passes the backend refusal through the shared `lib/backendErrors.js` (`translateBackendError`), so a known message key (e.g. the regex / priority 400s) is shown in the UI language; an untranslated message keeps the backend text.
 
 ## CRUD endpoints (generic W convention)
 
@@ -232,3 +234,10 @@ with one.
   source of truth for active accounting dimensions, shared with `FinancialAccountTransactionsHandler`.
 - `tools/app-shell/src/lib/accountingDimensions.js` + `tools/app-shell/src/hooks/useActiveAccountingDimensions.js`
   — the generic column→dimension mapping and the fail-open fetch used by `ListModalWindow`.
+
+## Personal list-column views
+
+The Match Rule list renders through `ListModalWindow`, so it carries the personal
+Columns and Save view controls behind the `grid-column-views` flag. Its row
+selection, actions and filter/sort state are not part of a saved view. Identity
+checks and load/save failures: [shared grid-view policy](../feature-flags.md#personal-business-grid-views).

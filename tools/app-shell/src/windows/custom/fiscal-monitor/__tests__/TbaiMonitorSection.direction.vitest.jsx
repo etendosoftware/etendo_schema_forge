@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/TbaiMonitorSection.jsx
 // ETP-5229 #14 — TBAI monitor "Direction" column.
 //
 // The `sincronización` entity links to C_Invoice via FK `invoice` with NO
@@ -20,6 +21,7 @@
 // invoice-open assertions here vacuous) — this file mocks isPendingStatus to
 // mirror the real "estado === 'Pendiente'" contract instead.
 
+import { allIconsAs } from '@/test/lucideIconMock.js';
 // Rows served by the mocked apiFetch below — set per-test before render().
 let currentRows = [];
 
@@ -37,7 +39,7 @@ const stableSetSelectedIds = vi.fn();
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
-vi.mock('lucide-react', () => ({}));
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

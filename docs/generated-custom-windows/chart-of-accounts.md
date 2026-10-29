@@ -171,3 +171,9 @@ controls the appearance. The tree's column-header row, row hover/selection state
 and toolbar controls now reuse the same `components/ui/table.jsx` primitives and
 ListView toolbar controls as every other window's grid (ETP-5593), instead of a bespoke selection color and uppercase header
 treatment.
+
+## Bespoke grid personal views
+
+The bespoke `AccountTreeView` uses the existing personal-view contract for `chart-of-accounts` / `elementValue`. Account code, indentation and expansion stay structural; customizable data columns preserve selection, keyboard opening and navigation, including when Name is hidden.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this grid; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/EntityForm.jsx
 import { render, screen } from '@testing-library/react';
 
 // Regression coverage for ETP-4529: DetailView's "principal" section used to
@@ -142,7 +144,7 @@ const PRINCIPAL_FIELDS = [
 ];
 
 // Mirrors a generated HeaderForm.jsx wrapper (see e.g.
-// artifacts/payment-term/generated/web/payment-term/HeaderForm.jsx): binds
+// artifacts/amortization/generated/web/amortization/HeaderForm.jsx): binds
 // the window's field list onto the shared EntityForm and forwards
 // everything DetailView passes through (including `displayLogic`).
 function HeaderForm(props) {

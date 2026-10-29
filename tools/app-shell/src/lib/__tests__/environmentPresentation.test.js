@@ -225,6 +225,56 @@ test('the dismissal key differs per client and per grace window', () => {
   assert.doesNotMatch(paymentGraceWarningDismissKey(undefined, null), /undefined|null/);
 });
 
+// accessEnforced: false — the per-tenant environment-access kill switch is on, so no block will
+// happen on graceEndsAt and the warning must not promise one (neutral, never escalated).
+
+test('an enforcing environment carries neutral: false, and a missing field means enforcing', () => {
+  assert.equal(paymentGraceWarning(pastDue(5 * DAY_MS), NOW).neutral, false);
+  assert.equal(paymentGraceWarning(pastDue(5 * DAY_MS, { accessEnforced: true }), NOW).neutral, false);
+  // Only an explicit false switches it: a falsy non-boolean is today's behaviour.
+  for (const accessEnforced of [undefined, null, 0, '', 'false']) {
+    const warning = paymentGraceWarning(pastDue(2 * DAY_MS, { accessEnforced }), NOW);
+    assert.equal(warning.neutral, false, JSON.stringify(accessEnforced));
+    assert.equal(warning.escalated, true, JSON.stringify(accessEnforced));
+  }
+  // ...and the grace end still hides the warning when enforcing.
+  assert.equal(paymentGraceWarning(pastDue(-1, { accessEnforced: true }), NOW), null);
+});
+
+test('accessEnforced false gives a neutral warning that is never escalated', () => {
+  const env = pastDue(DAY_MS, { accessEnforced: false, ownedByAccount: true });
+  const warning = paymentGraceWarning(env, NOW);
+  assert.equal(warning.neutral, true);
+  assert.equal(warning.escalated, false);
+  assert.equal(warning.canPay, true);
+  assert.equal(warning.graceEndsAt.toISOString(), env.graceEndsAt);
+  assert.equal(paymentGraceWarning(pastDue(DAY_MS, { accessEnforced: false, ownedByAccount: false }), NOW).canPay,
+    false);
+});
+
+test('accessEnforced false keeps the warning after graceEndsAt, since no block screen takes over', () => {
+  for (const ms of [0, -1, -30 * DAY_MS]) {
+    const warning = paymentGraceWarning(pastDue(ms, { accessEnforced: false }), NOW);
+    assert.ok(warning, String(ms));
+    assert.equal(warning.neutral, true);
+    assert.equal(warning.escalated, false);
+  }
+});
+
+test('accessEnforced false still warns with no usable graceEndsAt, carrying a null date', () => {
+  for (const graceEndsAt of [undefined, null, '', 'not-a-date']) {
+    const warning = paymentGraceWarning(pastDue(0, { graceEndsAt, accessEnforced: false }), NOW);
+    assert.deepEqual(warning, { graceEndsAt: null, escalated: false, canPay: false, neutral: true },
+      JSON.stringify(graceEndsAt));
+  }
+});
+
+test('accessEnforced false does not warn unless the subscription is PAST_DUE', () => {
+  for (const subscriptionStatus of ['CURRENT', 'EXPIRED', undefined]) {
+    assert.equal(paymentGraceWarning(pastDue(5 * DAY_MS, { subscriptionStatus, accessEnforced: false }), NOW), null);
+  }
+});
+
 // ---------------------------------------------------------------------------------------------
 // Demo trial state (demoTrialStatus, environmentTrialDaysKey, environmentTrialLabel)
 // ---------------------------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 import RoleChipsCell, {
   NO_ROLE_FILTER_VALUE, buildRoleEnumLabels, buildRoleFilterQueryParams,
   hasNoRole, resolveDefaultRoleId, resolveUserId, useUserRoleGridData,
@@ -242,9 +243,12 @@ export default function UserHeaderTable(props) {
     pill: { when: (row) => Boolean(row?.isOwner), label: ui('ownerBadge') },
   }), [ui]);
 
+  // ETP-5351 — the backend refuses changing `active` for a support session: no inline switch.
+  const { isSupportMode } = useSupportSession();
   const baseColumns = useMemo(
-    () => [nameColumnWithOwnerPill, ...columns.slice(1)],
-    [nameColumnWithOwnerPill],
+    () => [nameColumnWithOwnerPill, ...columns.slice(1)]
+      .map((col) => (isSupportMode && col.toggle ? { ...col, toggle: false } : col)),
+    [nameColumnWithOwnerPill, isSupportMode],
   );
 
   const tableColumns = useMemo(

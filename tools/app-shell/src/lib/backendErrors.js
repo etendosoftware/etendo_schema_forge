@@ -1,5 +1,8 @@
 // ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
 import { formatCalendarDate } from './dateOnly.js';
+import {
+  announceQuotaRefusal, extractQuotaExceeded, isQuotaCheckFailed, quotaResourceLabel, quotaUsageText,
+} from './planQuotas.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -451,6 +454,13 @@ const BACKEND_ERROR_KEY_MAP = {
   // ETP-5577 — core `PeriodNotValid`: the same refusal raised by GL_JOURNAL_CHK_RESTRICT_TRG when a
   // journal is saved with a date whose period is not open.
   PeriodNotValid: 'backendError.periodNotAvailable',
+  // ETP-5591 — DocumentPostingService/DocumentDisabledReason: core STATUS_DocumentDisabled, named
+  // by its certain reason or the generic DocumentDisabled. `messageParams.financialAccount` names
+  // the account of the two ETGO_ keys (English-only AD messages).
+  DocumentDisabled: 'backendError.documentDisabledForAccounting',
+  TotalGrossIsZero: 'backendError.invoiceTotalIsZero',
+  ETGO_PostingDisabledNoDepositAccount: 'backendError.finAccNoDepositAccount',
+  ETGO_PostingDisabledNoWithdrawalAccount: 'backendError.finAccNoWithdrawalAccount',
   // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
   // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
   // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so
@@ -776,7 +786,108 @@ export function translateBackendErrorBody(body, t, fallback) {
   return translateBackendError(message, t, {
     messageKeys: extractBackendMessageKeys(body),
     messageParams: extractBackendMessageParams(body),
+    quota: extractQuotaExceeded(body),
+    quotaCheckFailed: isQuotaCheckFailed(body),
   });
+}
+
+/**
+ * ETP-5051 — the translated sentence of a plan-quota refusal in a failed action's body, or `null`
+ * for any other body. "Plan-quota refusal" is a 403 QUOTA_EXCEEDED (`{ error: { code, message,
+ * quota } }`, also inside a `/sws/neo/batch` envelope) or a 500 QUOTA_CHECK_FAILED.
+ *
+ * For the action paths that read only `response.message` / `message` and so showed "Error (403)":
+ * `translateQuotaRefusalBody(body, ui) || <what the caller showed before>` routes the quota refusal
+ * through the one translator (`translateBackendErrorBody`, which also announces it to the quota
+ * banner via `announceQuotaRefusal`) and leaves every other error exactly as the caller had it.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @returns {string|null}
+ */
+export function translateQuotaRefusalBody(body, t) {
+  if (typeof t !== 'function') return null;
+  if (!extractQuotaExceeded(body) && !isQuotaCheckFailed(body)) return null;
+  return translateBackendErrorBody(body, t, null) || null;
+}
+
+/**
+ * ETP-5051 — the plan-quota identity of a failed action's body, as fields to put on the Error a
+ * caller throws, for a caller that has no `ui` at the throw site and translates later with
+ * `translateBackendError(err.message, ui, { ...options, ...quotaRefusalFields(err) })`. Empty for
+ * any other body, so spreading it changes nothing there.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @returns {{quota?: object, quotaCheckFailed?: boolean}}
+ */
+export function quotaRefusalFields(body) {
+  const quota = extractQuotaExceeded(body);
+  return {
+    ...(quota ? { quota } : {}),
+    ...(isQuotaCheckFailed(body) ? { quotaCheckFailed: true } : {}),
+  };
+}
+
+// ETP-5051 — a NEO write refused because a plan quota is exhausted: HTTP 403 with
+// `{ error: { code: 'QUOTA_EXCEEDED', message, quota: QuotaItem } }`, on REST single, batch and
+// MCP alike. The SPA owns the sentence, built from the catalog name and unit the quota carries, so
+// it is never read as a generic permission refusal and never as the 402 blocked-environment
+// screen (that one is decided in core's apiFetch on the status alone, and a 403 never reaches it).
+//
+// Two ways in, one sentence out:
+//   1. the structured `quota` (`extractQuotaExceeded`), passed by every caller that has the body;
+//   2. the message prose, `Quota exceeded: <resourceName> (<consumed>/<includedQty> <unitLabel>)`,
+//      for the many callers that only forward the message string. Plain string slicing, no regex:
+//      the resource name is operator-editable catalog data (javascript:S5852), and `lastIndexOf`
+//      keeps a name that itself contains " (" intact.
+const QUOTA_EXCEEDED_PREFIX = 'Quota exceeded: ';
+
+function matchQuotaExceededMessage(msg) {
+  if (typeof msg !== 'string') return null;
+  const trimmed = msg.trim();
+  if (!trimmed.startsWith(QUOTA_EXCEEDED_PREFIX) || !trimmed.endsWith(')')) return null;
+  const body = trimmed.slice(QUOTA_EXCEEDED_PREFIX.length, -1);
+  const open = body.lastIndexOf(' (');
+  if (open <= 0) return null;
+  const inner = body.slice(open + 2);
+  const slash = inner.indexOf('/');
+  if (slash <= 0) return null;
+  const rest = inner.slice(slash + 1);
+  const space = rest.indexOf(' ');
+  const unit = space < 0 ? '' : rest.slice(space + 1).trim();
+  return {
+    resourceName: body.slice(0, open),
+    consumed: inner.slice(0, slash).trim(),
+    includedQty: (space < 0 ? rest : rest.slice(0, space)).trim(),
+    // Defensive: the backend leaves a blank unit out of the sentence altogether
+    // (`QuotaItemJson.refusalMessage`), but a literal "null" is still read as no unit.
+    unitLabel: unit && unit !== 'null' ? unit : null,
+  };
+}
+
+// ETP-5051 — the quota check ITSELF failed (HTTP 500, `code: 'QUOTA_CHECK_FAILED'`): nothing was
+// saved and a retry is safe. Its own sentence, never the generic 500 text nor the English prose.
+// Recognised by the code (structured) or by the backend's fixed sentence (callers that forward
+// only the message).
+const QUOTA_CHECK_FAILED_MESSAGE = 'The quota check failed; nothing was saved. Try again.';
+
+function translateQuotaCheckFailed(failed, msg, t) {
+  if (!failed && !(typeof msg === 'string' && msg.trim() === QUOTA_CHECK_FAILED_MESSAGE)) return null;
+  return resolveLocaleKey(t, 'backendError.quotaCheckFailed');
+}
+
+function translateQuotaExceeded(quota, t) {
+  if (!quota) return null;
+  // Every classified QUOTA_EXCEEDED passes here, so this is where the quota banner hears about it
+  // (one shared re-read of the environment list; deduplicated, see `announceQuotaRefusal`).
+  announceQuotaRefusal(quota);
+  // Same label as the quota banner and the /account row: the catalog name, else the key.
+  const resource = quotaResourceLabel(quota);
+  if (!resource) return resolveLocaleKey(t, 'backendError.quotaExceededGeneric');
+  const usage = quotaUsageText(quota, t);
+  return usage
+    ? resolveLocaleKey(t, 'backendError.quotaExceeded', { resource, usage })
+    : resolveLocaleKey(t, 'backendError.quotaExceededNoUsage', { resource });
 }
 
 // `t(key, params)` interpolates `{var}` tokens (single-brace — this codebase's real
@@ -804,10 +915,14 @@ function translateByMessageKey(messageKeys, t, messageParams) {
     const key = BACKEND_ERROR_KEY_MAP[raw];
     if (!key) continue;
     const translated = t(key, params);
-    if (translated && translated !== key) return translated;
+    // ETP-5591: a caller that drops `messageParams` would show a raw `{financialAccount}`; the
+    // backend's own text is already localized and complete, so let it through instead.
+    if (translated && translated !== key && !UNFILLED_PARAM.test(translated)) return translated;
   }
   return null;
 }
+
+const UNFILLED_PARAM = /\{\w+\}/;
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
 // Business Partner name) instead of being a single fixed exact string, so they can't
@@ -1756,7 +1871,10 @@ function pickBackendErrorText(data) {
  * for a non-JSON body.
  *
  * @param {Response} res the failed response (its body is consumed)
- * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object}>}
+ * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object, quota?: object, quotaCheckFailed?: boolean, code?: string}>}
+ *   `quota` — ETP-5051, the exhausted plan quota of a 403 QUOTA_EXCEEDED refusal;
+ *   `quotaCheckFailed` — a 500 QUOTA_CHECK_FAILED (the check itself failed, nothing saved);
+ *   `code` — the body's error code, when it has one (`extractBackendErrorCode`).
  */
 export async function parseBackendError(res) {
   let data;
@@ -1765,10 +1883,15 @@ export async function parseBackendError(res) {
   } catch {
     return {};
   }
+  const quota = extractQuotaExceeded(data);
+  const quotaCheckFailed = isQuotaCheckFailed(data);
   return {
     message: pickBackendErrorText(data),
     messageKeys: extractBackendMessageKeys(data),
     messageParams: extractBackendMessageParams(data),
+    // Only when present, so a body without them keeps its plain three-field shape.
+    ...(quota ? { quota } : {}),
+    ...(quotaCheckFailed ? { quotaCheckFailed } : {}),
     ...codeEntry(data),
   };
 }
@@ -1788,8 +1911,11 @@ export async function parseBackendErrorMessage(res) {
  * @returns {Promise<string>} the translated message
  */
 export async function translateBackendErrorResponse(res, t) {
-  const { message, messageKeys, messageParams, code } = await parseBackendError(res);
-  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams, code });
+  const {
+    message, messageKeys, messageParams, quota, quotaCheckFailed, code,
+  } = await parseBackendError(res);
+  return translateBackendError(message ?? `Error ${res.status}`, t,
+    { messageKeys, messageParams, quota, quotaCheckFailed, code });
 }
 
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';
@@ -1828,17 +1954,28 @@ function translateSingleMessage(trimmed, t) {
  *
  * @param {string} msg the backend message (already-translated prose, as it crossed the wire)
  * @param {function} t the `ui` function from `useUI()`
- * @param {{messageKeys?: string[], messageParams?: object}} [options] ETP-5316 — the AD_MESSAGE
+ * @param {{messageKeys?: string[], messageParams?: object, quota?: object, quotaCheckFailed?: boolean}} [options] ETP-5316 — the AD_MESSAGE
  *   search keys behind `msg`, when the backend sent them (see `extractBackendMessageKeys`). Tried
  *   FIRST, because a key is a stable identity while the prose it produced may embed per-document
  *   values. ETP-5175 — `messageParams` (see `extractBackendMessageParams`) are the values those
  *   keys interpolate; with them a parameterized message (the Invalid-Account posting failure) is
  *   rendered entirely in the SPA's locale. Omitting either is the earlier behavior and stays fully
  *   supported.
+ *   ETP-5051 — `quota` (see `extractQuotaExceeded` in `planQuotas.js`) is the exhausted plan
+ *   quota of a 403 QUOTA_EXCEEDED write refusal; it wins over every other route.
+ *   `quotaCheckFailed` (see `isQuotaCheckFailed`) marks a 500 QUOTA_CHECK_FAILED: the quota
+ *   check itself failed and nothing was saved; it comes right after.
  * @returns {string} the translated message, or `msg` untouched when nothing matched
  */
 export function translateBackendError(msg, t, options = {}) {
   if (typeof t !== 'function') return msg;
+
+  // ETP-5051: the quota refusal first — its identity is the structured `quota`, or its fixed
+  // prose prefix when the caller forwarded only the message.
+  const quotaExceeded = translateQuotaExceeded(options.quota ?? matchQuotaExceededMessage(msg), t);
+  if (quotaExceeded !== null) return quotaExceeded;
+  const quotaCheckFailed = translateQuotaCheckFailed(options.quotaCheckFailed, msg, t);
+  if (quotaCheckFailed !== null) return quotaCheckFailed;
 
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);

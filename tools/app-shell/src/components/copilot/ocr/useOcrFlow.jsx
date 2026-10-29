@@ -4,6 +4,8 @@ import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
+import { translateBackendErrorBody } from '@/lib/backendErrors.js';
+import { extractQuotaExceeded, isQuotaCheckFailed } from '@/lib/planQuotas.js';
 import { checkReceiverTaxId, cleanTaxId } from './receiverTaxIdCheck';
 import { getOcrDocType } from './ocrDocTypes';
 import { useBatch } from './ingest/useBatch';
@@ -232,12 +234,20 @@ async function runReviewSteps(flow) {
   return flow.built;
 }
 
-function reportBatchResponse(response, unmatched, { showResult, setResult, onRefresh }) {
+function reportBatchResponse(response, unmatched, { showResult, setResult, onRefresh, ui }) {
   if (!response?.committed) {
     const message = response?.error?.message
       || `Operation '${response?.failedAt?.id}' failed`;
     console.warn('[OCR][batch] not committed', response);
-    showResult({ ok: 0, failed: [{ reason: message }] });
+    // ETP-5051 — a plan-quota refusal (`error.detail.error.code === 'QUOTA_EXCEEDED'`, contract
+    // §4d) is the one batch failure the user can act on, so the toast says it in their language
+    // instead of the generic "action failed". `message` is what the single-failure toast reads.
+    // A failed quota check (QUOTA_CHECK_FAILED, nothing saved) is surfaced the same way.
+    const quotaText = (extractQuotaExceeded(response) || isQuotaCheckFailed(response))
+      && typeof ui === 'function'
+      ? translateBackendErrorBody(response, ui, message)
+      : null;
+    showResult({ ok: 0, failed: [{ reason: message, ...(quotaText ? { message: quotaText } : {}) }] });
     setResult({
       committed: false,
       error: message,
@@ -269,7 +279,7 @@ function reportBatchResponse(response, unmatched, { showResult, setResult, onRef
   onRefresh?.(headerOp?.recordId);
 }
 
-async function submitBuiltBatch(built, { runBatch, showResult, setResult, onRefresh }) {
+async function submitBuiltBatch(built, { runBatch, showResult, setResult, onRefresh, ui }) {
   const ops = built.ops || [];
   const unmatched = built.unmatched || [];
   if (ops.length === 0) {
@@ -279,7 +289,7 @@ async function submitBuiltBatch(built, { runBatch, showResult, setResult, onRefr
   }
   console.log('[OCR][batch] POSTing', ops.length, 'op(s)');
   const response = await runBatch(ops);
-  reportBatchResponse(response, unmatched, { showResult, setResult, onRefresh });
+  reportBatchResponse(response, unmatched, { showResult, setResult, onRefresh, ui });
 }
 
 export function useOcrFlow({
@@ -449,7 +459,7 @@ export function useOcrFlow({
           markCancelled();
           return;
         }
-        await submitBuiltBatch(built, { runBatch, showResult, setResult, onRefresh });
+        await submitBuiltBatch(built, { runBatch, showResult, setResult, onRefresh, ui });
       } catch (e) {
         console.error('[OCR][batch] flow failed', e);
         showResult({ ok: 0, failed: [{ reason: e?.message || 'flow_failed' }] });

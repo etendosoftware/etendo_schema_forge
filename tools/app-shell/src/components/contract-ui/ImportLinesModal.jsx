@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
+import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 
 // A draft is valid when it parses to a finite magnitude in (0, maxQty]. Sign is
 // intentionally ignored — matches the existing Math.abs behavior for negativeQuantity mode.
@@ -235,7 +236,9 @@ export default function ImportLinesModal({
       lines, base, headers, invoiceId, sharedContext, extraState, selection,
     });
     if (!result?.ok) {
-      toast.error(result?.error || ui('failedToImportLines'));
+      // ETP-5051 — a handler that hands back the refusal `body` gets a plan-quota refusal shown as
+      // the translated quota sentence; anything else keeps its own error or the generic one.
+      toast.error(translateQuotaRefusalBody(result?.body, ui) || result?.error || ui('failedToImportLines'));
       return;
     }
     const count = result.count ?? lines.length;

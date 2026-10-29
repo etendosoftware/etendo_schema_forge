@@ -23,6 +23,7 @@ import { useLinesScrollHost, useAddRowScrollHostWidth, usePublishLinesAddRowDraf
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { tagColumnsFromAux } from '@/lib/auxReference.js';
 import { resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
@@ -2491,11 +2492,13 @@ function renderedHeaderLabel(col, locale, t) {
   return col.parts.map(part => resolveColumnLabel(part, locale, t)).join(col.partSeparator ?? ' & ');
 }
 
-function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader }) {
+function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader, gridView, ui }) {
   const separator = col.partSeparator ?? ' & ';
+  const label = renderedHeaderLabel(col, locale, t);
   return (
     <TableHead
       key={col.key}
+      {...gridHeaderProps(col, gridView)}
       // ETP-5281 follow-up — see renderColumnHeaderCell's matching comment:
       // this hidden twin must not carry the same testid as the real, visible
       // multiField header it mirrors.
@@ -2504,7 +2507,7 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
       // honours it: a window that pins column widths (financial-account's Figma layout) must
       // keep them when the header gains segments. Dropping it silently collapsed the column
       // to auto width, which no Product test caught because Product declares no headClass.
-      className={['align-middle', col.headClass || ''].filter(Boolean).join(' ')}
+      className={['relative align-middle', col.headClass || ''].filter(Boolean).join(' ')}
       style={headStyle}
     >
       {/* ETP-5281 — same cap as the single-label branch (renderColumnHeaderCell):
@@ -2552,6 +2555,8 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
           );
         })}
       </span>
+      {gridReorderHandle(col, gridView, label, ui)}
+      {gridResizeHandle(col, gridView, label, ui)}
     </TableHead>
   );
 }
@@ -2623,7 +2628,7 @@ function getHeaderCellStyling(col, isNumeric) {
  * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
  * header row so its onSort/isSorted branching lives in its own function.
  */
-function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, locale, t, hideHeader }) {
+function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, locale, t, hideHeader, gridView, ui }) {
   const colLabel = resolveColumnLabel(col, locale, t);
   const isSorted = sortColumn === col.key;
   const isSortable = col.sortable !== false;
@@ -2683,7 +2688,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   // sort on its own NEO field key. Non-multiField columns keep the single-label
   // branch below untouched.
   if (Array.isArray(col.parts) && col.parts.length > 0) {
-    return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader });
+    return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader, gridView, ui });
   }
   // Alignment / wrap / sort-arrow class computation lives in getHeaderCellStyling.
   // The `isNumeric` header/button lines below are matched by a source-regex alignment
@@ -2694,9 +2699,10 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   return (
     <TableHead
       key={col.key}
+      {...gridHeaderProps(col, gridView)}
       data-testid={columnHeaderTestId}
       className={[
-        'align-middle',
+        'relative align-middle',
         isNumeric ? 'text-right' : '',
         leftOverride,
         // Opt-in fixed-width / per-column header styling. Needed by list windows
@@ -2731,6 +2737,8 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
           {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass, wrapHeader)}
         </span>
       )}
+      {gridReorderHandle(col, gridView, colLabel, ui)}
+      {gridResizeHandle(col, gridView, colLabel, ui)}
     </TableHead>
   );
 }
@@ -3260,6 +3268,7 @@ export function DataTable({
   emptyState,
   // ETP-5757 — list GET envelope siblings (`meta.listTotals`); see serverTotals below.
   meta,
+  gridView = null,
 }) {
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
@@ -3393,6 +3402,18 @@ export function DataTable({
     // hold (e.g. `posted` on sales-invoice/purchase-invoice, restricted to
     // "showAccountingFields"). Absent visibleWhenCapability ⇒ always kept.
     base = base.filter(col => isCapabilityVisible(capabilities, col.visibleWhenCapability));
+    // ETP-5835 — the personal view is applied only to the normal list-table model. The
+    // capability-filtered base remains the authority; persisted ids can only reorder or hide
+    // columns already present in that authorized set.
+    if (gridView?.active && !hideHeader && linesLayout !== 'inlineEditable') {
+      const current = new Map(base.map((col) => [col.key, col]));
+      const ordered = gridView.columns
+        .map((viewColumn) => current.get(viewColumn.key) ? { ...current.get(viewColumn.key), ...viewColumn } : null)
+        .filter(Boolean);
+      const included = new Set(ordered.map((col) => col.key));
+      const authorized = new Set(gridView.availableKeys ?? []);
+      base = [...ordered, ...base.filter((col) => !authorized.has(col.key) && !included.has(col.key))];
+    }
     // ETP-5510 — plain list only (the lines/add-row modes size from columnFlex and must stay
     // aligned with InlineLinesPanel): guarantee one width-less column to absorb leftover
     // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
@@ -3412,7 +3433,7 @@ export function DataTable({
       ...col,
       headerMinWidthPx: listHeaderMinWidthPx(col, renderedHeaderLabel(col, locale, t), headerFont),
     })));
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, addRowDraft, capabilities, hideHeader, linesLayout, locale, t, headerFontsReady]);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, addRowDraft, capabilities, hideHeader, linesLayout, locale, t, headerFontsReady, gridView]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
   // separators, symbol, right alignment, numeric filter) — it does not by itself
@@ -3680,7 +3701,7 @@ export function DataTable({
             data-testid="Checkbox__eb5261" />
         </TableHead>
       )}
-      {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t, hideHeader }))}
+      {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t, hideHeader, gridView, ui }))}
       {renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
       {quickActionsEnabled && (
         <TableHead

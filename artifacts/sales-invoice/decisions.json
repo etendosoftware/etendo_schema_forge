@@ -85,6 +85,7 @@
         "tabOrder": 50,
         "requireSavedRecord": true,
         "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+        "visibleWhenLogic": "@C_Currency_ID@!'' & @C_Currency_ID@!@#OrgCurrencyId@",
         "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags. ETP-5657: @Processed@='Y' was deliberately dropped from this rule, reversing the ETP-4030 completion lock for the tab only — exchange rates stay editable on a completed-but-unposted invoice and lock once it is posted (editable again after unpost) or reversed. Core's C_CONVERSION_RATE_DOCUMENT_TRG still rejects writes on posted invoices server-side. The header currency/rate picker keeps its own @Processed@='Y' lock."
       }
     },

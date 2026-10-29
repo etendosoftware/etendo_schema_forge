@@ -49,14 +49,14 @@ describe('resolvePostedStatus', () => {
     });
   });
 
-  it("resolves 'E' (posting error) and 'p' (period closed) as destructive/red", () => {
+  it("resolves 'E' (posting error) as destructive/red and 'p' (period closed) as caution/orange", () => {
     const e = resolvePostedStatus('Posted', 'E');
     assert.equal(e.labelKey, 'postedStatusError');
     assert.equal(e.tone, 'destructive');
 
     const p = resolvePostedStatus('Posted', 'p');
     assert.equal(p.labelKey, 'postedStatusPeriodClosed');
-    assert.equal(p.tone, 'destructive');
+    assert.equal(p.tone, 'caution');
   });
 
   it("resolves 'T' (table disabled) and 'D' (document disabled) as neutral", () => {
@@ -145,8 +145,9 @@ describe('postedStatusTone — the single colour source (ETP-5647)', () => {
     assert.equal(postedStatusTone('false'), 'warning');
   });
 
-  it("'p' (period closed) is destructive, like every other failed posting", () => {
-    for (const code of ['p', 'E', 'C', 'i', 'b', 'c', 'NC', 'AD', 'DT', 'NO', 'L']) {
+  it("'p' (period closed) is caution (orange), every other failed posting destructive", () => {
+    assert.equal(postedStatusTone('p'), 'caution');
+    for (const code of ['E', 'C', 'i', 'b', 'c', 'NC', 'AD', 'DT', 'NO', 'L']) {
       assert.equal(postedStatusTone(code), 'destructive', `code '${code}'`);
     }
   });
@@ -222,7 +223,7 @@ describe('resolveStatusPill', () => {
     const pill = resolveStatusPill(badge, 'p', ui);
     assert.equal(pill.status, 'p');
     assert.equal(pill.label, 'postedStatusPeriodClosed');
-    assert.equal(pill.tone, 'destructive');
+    assert.equal(pill.tone, 'caution');
   });
 
   it('a one-sided badge (falseKey missing) hides on a falsy non-domain value', () => {
@@ -284,7 +285,7 @@ describe('resolveStatusPill', () => {
       assert.deepEqual(pill, {
         status: 'p',
         label: 'postedStatusPeriodClosed',
-        tone: 'destructive',
+        tone: 'caution',
         hint: undefined,
       });
     });

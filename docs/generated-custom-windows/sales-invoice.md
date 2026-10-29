@@ -390,8 +390,9 @@ already recorded ("Rechazado") is not duplicated. Runtime details:
 7. An invoice dated before the org's adoption date still offers nothing and shows "—".
 8. Open a completed invoice in the preview: Estado SII / TicketBAI / VERI\*FACTU render as coloured
    chips matching the grid; a system that does not apply to the invoice shows "—".
-9. With TicketBAI active, remove the postal code from the customer's invoice address and send: the
-   error message has no `OBException:` prefix, and the TicketBAI chip shows "Error" in the preview and
+9. With TicketBAI active, complete the invoice first, then remove the postal code from the customer's
+   invoice address and send (since ETP-5824 a non-simplified customer with no postal code can no
+   longer be completed, see the ETP-5824 section below): the error message has no `OBException:` prefix, and the TicketBAI chip shows "Error" in the preview and
    the grid. Fix the postal code and send again: the chip leaves "Error".
 
 ## Known issues / Open bugs
@@ -858,6 +859,7 @@ When a sales invoice is issued in a currency other than the organization's base 
 
 - Declared in `artifacts/sales-invoice/decisions.json → window.secondaryTabs.exchangeRates` (`label: "Exchange rates"`, `tabOrder: 50`) and resolved as the `exchangeRates` child entity (`javaQualifier: "invoiceExchangeRateHandler"`), mapping to the document conversion-rate records (`C_Conversion_Rate_Doc`) tied to the invoice header. ETP-4836: the label was previously `"Exchange Rates"` (capital R) — a casing typo that didn't match the locale dictionaries' `tabs["Exchange rates"]` entry (lowercase r, the tab's real AD_Tab name), so it always rendered untranslated regardless of locale. Every other window's `secondaryTabs.<key>.label` (`contacts`, `warehouse`, etc.) follows the same convention — an explicit label string that must match a dictionary key exactly — so the fix here is the same one-line casing correction, no generator change needed.
 - `foreignAmount`'s label is overridden per-window via `window.labelOverrides.{es_ES,en_US}.Foreign_Amount` (ETP-4836: the shared `Foreign_Amount` AD_Element label is also used by Payment Out's Exchange Rates tab, so the fix is scoped here rather than edited in the global dictionary) and the field is declared `noTrailing: true` (ETP-4836: it's the only `amount`-type column in this grid, so the generic "last amount column hides under row-hover action icons" heuristic in `InlineLinesPanel.jsx` was swallowing its editable input entirely — `noTrailing` opts it out).
+- **Visibility — ETP-5986:** the tab is not always shown. `window.secondaryTabs.exchangeRates.visibleWhenLogic` is `"@C_Currency_ID@!'' & @C_Currency_ID@!@#OrgCurrencyId@"` (generic mechanism: `docs/decisions-reference.md` → `secondaryTabs` → `visibleWhenLogic`). The tab appears only when the invoice's currency is set and differs from the **logged-in organization's** currency (`OrgCurrencyId`, from `/sws/neo/session` — the same value as the Organization window's "Moneda"; NOT the invoice's own Organization field). It is evaluated against the live header record, so choosing a foreign currency on a new, unsaved invoice shows the tab immediately and setting the org currency back hides it again. It is fail-closed: while the org currency is still loading (or `/session` fails, or the org has no currency) the tab stays hidden. A hidden tab is not rendered, not fetched, and an `openSecondaryTab` deep link to it is a no-op. It composes with the tab's `readOnlyLogic` and `requireSavedRecord` below, which are unchanged (a visible tab on an unsaved invoice is still disabled until the header is saved).
 - **Visible columns:** Currency (derived from the document, `form: false`), To Currency, Rate, and Foreign Amount. The inline add-row exposes `addLineFields: ["toCurrency", "rate", "foreignAmount"]`.
 - **`rate` is declared `"type": "number"` in decisions.json — ETP-5657:** `C_Conversion_Rate_Document.Rate` uses AD reference `800019` ("General Quantity"), which the core extractor's reference map does not cover yet, so it is extracted as `type: "string"` with `validation.maxLength: 10`. Before this override the inline editor treated the rate as free text (raw `0.68027210884`, no locale decimal comma). With the explicit type the generated grid column and form field are `type: 'number'`, so `InlineLinesPanel` edits it through `MaskedAmountInput` (no 2-decimal grouping, precision kept) and renders it with `formatPlainDecimal`. `number` is used rather than `decimal` because `decimal` is not in `InlineLinesPanel`'s `EDITABLE_TYPES` and would make the cell non-editable inline. The DB-derived `validation.maxLength: 10` still sits in the contract but is harmless: the generator emits `maxLength` only for string/text fields. Remove the override once ref `800019` is mapped in `schema_forge_core`.
 - **`requireSavedRecord: true`** — usable only after the invoice header is saved.
@@ -893,6 +895,7 @@ The `invoiceExchangeRateHandler` (`modules/com.etendoerp.go/src/com/etendoerp/go
 4. Complete with no rate present and no general rate: confirm the block `SMFCR_NoRateOnComplete <FROM> → <TO>`.
 5. Add the rate and confirm completion succeeds; on the completed (not yet posted) invoice confirm the tab is still editable and a rate change saves (ETP-5657).
 6. Post the invoice and confirm the tab is read-only (no edit/delete affordances); unpost it and confirm the tab is editable again. On a reversed invoice the tab stays read-only.
+7. **ETP-5986 — tab visibility.** (a) New invoice in the organization's currency: no Exchange rates tab. (b) Switch the Currency field to a foreign currency before saving: the tab appears. (c) Switch it back to the org currency: the tab hides. (d) Reload a saved foreign-currency invoice: the tab is present and shows its rows. (e) With that invoice open on **Others** (or any other tab), switch Currency to the org currency: the tab hides and the active tab stays on the same tab, not a neighbouring one. (f) Payments and other windows behave as before.
 
 ### Automated evidence
 
@@ -2559,6 +2562,36 @@ Discovery and edge cases of the sales invoice import (ETP-5713 review):
 - The remainder of an order import (ordered and not delivered, or already taken by another draft) is created through the native process with a temporary receipt/shipment marker that is removed right after; a skipped removal rolls the import back (`importQuantityNotHonoured`). `ImportOrderLinesIntoInvoiceHandlerIntegrationTest` runs the real process for the covered-by-draft case.
 - A document of another client answers 404 exactly like a missing one. The source lines are locked with `FOR NO KEY UPDATE`.
 
+## Import into a draft rectificative sales invoice over MCP — ETP-5876
+
+The window offers a rectificative sales invoice two imports, "from return" (`ImportFromReturnShipmentModal`) and "from source invoice"
+(`ImportFromSourceInvoiceModal`), and none of the order / shipment ones; an agent now has the same, with six actions declared on
+`header` (`SalesInvoiceHeaderHandler`): `availableReturns` / `availableReturnLines` / `importReturnLines`
+(`{returnId, lines?:[{sourceLineId, quantity}]}`) and `availableOriginInvoices` / `availableOriginInvoiceLines` /
+`importOriginInvoiceLines` (`{invoiceId, lines?}`). The `id` of every call is the draft rectificative; the quantity of a line is always
+a **positive** number and the line that is written is its negative.
+
+- **The kind of invoice decides.** A rectificative is the window's `RECTIFICATIVA` subtype (`getArSubtype`, the server's `arInvoiceSubtype`):
+  the flag `EM_Etsg_Isrectificative` or the legacy `ARC` / `ARI_RM` document types. On a rectificative `importOrderLines`, `importShipmentLines` and their `available*`
+  answer **422 `importNotAvailableOnRectificative`** and create nothing; on a normal invoice the six actions above answer **422
+  `importRequiresRectificative`**. `etendo_schema(view:"actions", id)` shows the ones that do not apply as `availableNow:false` with the reason. Only a draft takes an import.
+- **From a return** (customer return (return material receipt), completed, same customer): negative lines linked to the return line, with the unit price and tax of the
+  invoice's **current price list** (what the line callout gives; a return alone does not know the price it was sold at: `createReturnInvoice` on the return credits at the
+  original price). The cap is each modal's own (see below):
+  asking for more is a 422 `importQuantityExceedsPending` and nothing is created. No `C_Invoice_Reverse` row is written, as in the window.
+- **From an origin invoice** (completed standard invoice of the same customer and currency; a rectificative is never offered): negative lines with
+  the product, unit, tax, price, list price and discount of the source line, partial quantities allowed up to the quantity of the source line,
+  the source line kept in `EM_ETGO_Source_Invoiceline_ID` and its order line (as the sales modal sends it). A source line already imported into
+  this rectificative is not offered again (the modal tracks presence, not quantity), and what other draft rectificatives or returns already credited of a line is **not**
+  deducted: that is the window's behaviour and it is kept. The origin import links the origin invoice in the Rectificaciones tab (once per invoice, both sides, also when the source has an order); the return import writes no link.
+- **The total discount of the invoice is not carried** by any of these imports, nor by `createReturnInvoice`, as in the window.
+- The classic `CreateFrom` redirect reasons say they do not apply to a rectificative. The spec prompt (`agent-prompts/sales-invoice/spec.md`) describes the flow.
+
+Each side follows its own modal, neither stricter nor laxer. Sales return cap: the return line quantity minus every invoice line linked to it, whatever the status of its invoice (voided ones too, this invoice's own lines among them); a line whose order line is already invoiced is not offered; the currency of the return's sales order is compared when it has one; the origin invoice is filtered by currency. Both list only returns whose invoiceStatus is below 100. The one remaining difference on this side: a return line that carries an order line is priced from it by the native process. Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.42.
+
+Manual check on screen (the MCP must match it): on a draft rectificative, open "Import from return" and "Import from source invoice" and import the same
+return / invoice by MCP into a second draft; compare the lines (sign, quantity, unit price, tax, discount) and the Rectificaciones tab (the origin import must show its row).
+
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 Agents (MCP) no longer have to learn what a sales invoice allows from refusals:
@@ -2619,3 +2652,29 @@ full value on hover, no horizontal scroll.
 ## Read-only role tier: SIF tab and rectified invoices — ETP-5830
 
 With a `read-only` tier the SIF tab locks its fields (`useSifFieldPatcher` `locked`, same path as a processed invoice) and `ReversedInvoicesPanel` is read-only. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Completion refused for missing TicketBAI recipient data — ETP-5824
+
+Completing a sales invoice can now be refused by `com.smf.ticketbai` before the document leaves
+draft. When the invoice organization resolves a TicketBAI configuration (walking up the
+organization tree), the invoice date is not earlier than the TicketBAI system date, and the
+customer is **not** flagged as *Factura simplificada*, `ProcessInvoiceTbaiHook.preProcess`
+requires a postal code and address line 1 on the invoice partner address and a tax ID on the
+customer. A blank or spaces-only value counts as missing. The user sees `TBAI_EmptyPostalCode`,
+`TBAI_EmptyDir` or `TBAI_EmptyNifCode` (Spanish only: the module has no English translation yet)
+and the invoice stays in draft. This applies whether or not the configuration auto-sends invoices.
+Before ETP-5824 the invoice was completed and the TicketBAI send failed afterwards, with the error
+recorded only in the TicketBAI sync log.
+
+Purchase invoices are not affected. Voiding (`RC`) runs the same check, but GO offers no void for
+TicketBAI invoices, so that part only matters in Classic.
+
+The Contacts address modal warns about a missing postal code while the address is typed. Full
+rules, the warning's conditions and the manual check:
+[`contacts.md`](contacts.md) → *ETP-5824 — Missing postal code and TicketBAI*.
+
+## Bespoke grid personal views
+
+The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.
