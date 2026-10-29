@@ -180,9 +180,10 @@ export function installUnloadGuard() {
 /**
  * The transition the user asked for, held while the prompt is open, plus the saver that applies
  * to it. `save` is null for a whole-page navigation (then every dirty form is saved) and set for
- * a SCOPED transition, which must save only its own thing.
+ * a SCOPED transition, which must save only its own thing. `onCancel` is told when the transition
+ * is dropped instead of performed (see {@link requestTransition}).
  *
- * @type {{ perform: () => void, save?: () => Promise<unknown> } | null}
+ * @type {{ perform: () => void, save?: () => Promise<unknown>, onCancel?: () => void } | null}
  */
 let pendingNavigation = null;
 
@@ -215,19 +216,27 @@ export function requestNavigation(perform) {
  * `save` pairs with it: a scoped transition must save only its own thing, so it supplies its own
  * saver instead of letting the prompt save every registered form.
  *
+ * `onCancel` is for a caller that has to know the transition will NOT happen — the user cancelled,
+ * the save was refused, or a newer transition replaced this one. ETP-5888: the company switcher
+ * waits on the answer before touching the session, and without this signal a cancelled switch
+ * would leave it waiting forever.
+ *
  * Fails OPEN with no dialog host mounted — see {@link requestNavigation}.
  *
  * @param {() => void} perform the transition to run once it is allowed
  * @param {object} [options]
  * @param {() => boolean} [options.isDirty] what counts as dirty for THIS transition
  * @param {() => Promise<unknown>} [options.save] saves just what this transition endangers
+ * @param {() => void} [options.onCancel] called when the transition is dropped instead of performed
  */
-export function requestTransition(perform, { isDirty = hasUnsavedChanges, save } = {}) {
+export function requestTransition(perform, { isDirty = hasUnsavedChanges, save, onCancel } = {}) {
   if (!isDirty() || !promptListener) {
     perform();
     return;
   }
-  pendingNavigation = { perform, save };
+  // Only one transition can be held: a newer one replaces it, so the older caller is told it lost.
+  pendingNavigation?.onCancel?.();
+  pendingNavigation = { perform, save, onCancel };
   promptListener(true);
 }
 
@@ -267,15 +276,20 @@ export async function savePendingNavigation() {
   const saved = pending?.save ? Boolean(await pending.save()) : await saveUnsavedChanges();
   pendingNavigation = null;
   promptListener?.(false);
-  if (!saved) return false;
+  if (!saved) {
+    pending?.onCancel?.();
+    return false;
+  }
   pending?.perform();
   return true;
 }
 
 /** Abandon the held navigation and stay put. */
 export function cancelPendingNavigation() {
+  const pending = pendingNavigation;
   pendingNavigation = null;
   promptListener?.(false);
+  pending?.onCancel?.();
 }
 
 /** Test-only: drop all state so cases do not leak into each other. */

@@ -1,3 +1,6 @@
+// ETP-5051 — relative, not `@/`: this module is loaded by plain `node --test` too.
+import { translateQuotaRefusalBody } from '../../lib/backendErrors.js';
+
 /**
  * ETP-5576 — follow-up documents: the pure, React-free half of the generic flow that offers
  * the user the document that naturally follows a completed one (invoice → shipment /
@@ -194,8 +197,13 @@ export function mergeFollowUpInputValues(request, previousValues = {}) {
   return values;
 }
 
-/** Translated message for a failed follow-up action, never the raw backend text. */
+/**
+ * Translated message for a failed follow-up action, never the raw backend text. ETP-5051 — a
+ * plan-quota refusal (403 QUOTA_EXCEEDED / 500 QUOTA_CHECK_FAILED) reads as the quota sentence.
+ */
 export function followUpErrorMessage(body, ui) {
+  const quotaText = translateQuotaRefusalBody(body, ui);
+  if (quotaText) return quotaText;
   const key = FOLLOW_UP_ERROR_KEYS[readFollowUpErrorCode(body)] ?? FOLLOW_UP_GENERIC_ERROR_KEY;
   return ui?.(key) || key;
 }

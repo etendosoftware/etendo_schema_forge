@@ -2001,8 +2001,20 @@ Tests: `ocr/__tests__/hasExtractedData.test.js`, `useOcrExtraction.vitest.jsx`,
 Line products are looked up with `simSearch` (Product, `minSimPercent: 50`, `qtyResults: 3`; raised from 30 in ETP-5654 to cut low-similarity noise from the suggestions).
 `classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line:
 
-- **Exactly one candidate whose name equals the line description** (trim, case-insensitive) →
-  assigned automatically.
+- **Exactly one candidate whose name equals the line description** (trim, case-insensitive and
+  **accent-insensitive**) → assigned automatically. Names are compared through
+  `normalizeProductName` (NFC, trim, lowercase, diacritics stripped), mirrored by
+  `OcrProductMatch.normalizeProductName` in Java, so "Arnes ... talla M" equals "Arnés ... talla M"
+  even though the DB trigram similarity of that pair is only ~82% (CP-7: pg_trgm treats an
+  accented character as a different one). **Deliberate choice: the n-tilde stays distinct** —
+  "año" is not "ano" (different words; never silently assign a different product). Two or more
+  candidates equal after normalization ("Arnés X" and "Arnes X") remain ambiguous. Vendor matching
+  keeps its own normalizer. Because the accent fold also applies to an identical candidate, if the
+  catalog holds both "Arnés X" and "Arnes X" the description "Arnés X" has two normalized-exact
+  matches and goes to the user as a suggestion (`candidates[0]`, which may not be the identical
+  one); this is the safe direction by design. The trim uses the explicit ECMAScript whitespace set
+  on both sides (NBSP and other Unicode spaces included), so "Arnés " with a trailing NBSP equals
+  "Arnés".
 - **Single highest near-identical candidate (ETP-5654, 4th QA pass):** when no exact name
   applies, the candidate with the highest `similarityPercent` is assigned automatically if that
   value is **>= 90** (inclusive; `PRODUCT_AUTO_MATCH_MIN_SIMILARITY`) and exactly **one**

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/unsavedChanges.js
 // ETP-5073 / DOC-08 — the in-app navigation half of the unsaved-changes guard.
 //
 // ETP-5022 already covered F5, tab close and the language switch. What stayed broken: leaving a
@@ -224,6 +225,60 @@ describe('scoped save precedence over the global saver (ETP-5073)', () => {
     await expect(savePendingNavigation()).resolves.toBe(true);
     expect(headerSave).toHaveBeenCalledTimes(1);
     expect(perform).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('telling the caller its transition was dropped (ETP-5888)', () => {
+  // The company switcher waits on the answer before rotating the session. A transition that is
+  // dropped without a word would leave it waiting forever — the switcher stuck on "switching".
+  beforeEach(() => resetUnsavedChangesForTests());
+
+  function holdTransition() {
+    const perform = vi.fn();
+    const onCancel = vi.fn();
+    subscribeNavigationPrompt(vi.fn());
+    setUnsavedChanges('form', true, vi.fn().mockResolvedValue(null));
+    requestTransition(perform, { onCancel });
+    return { perform, onCancel };
+  }
+
+  it('calls onCancel when the user cancels the prompt', () => {
+    const { perform, onCancel } = holdTransition();
+    cancelPendingNavigation();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(perform).not.toHaveBeenCalled();
+  });
+
+  it('calls onCancel when the save is refused, since the transition will not run', async () => {
+    const { perform, onCancel } = holdTransition();
+    await savePendingNavigation();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(perform).not.toHaveBeenCalled();
+  });
+
+  it('calls the older onCancel when a newer transition replaces the held one', () => {
+    const { onCancel } = holdTransition();
+    const newer = vi.fn();
+    requestTransition(newer);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    confirmPendingNavigation();
+    expect(newer).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onCancel when the transition runs', () => {
+    const { perform, onCancel } = holdTransition();
+    confirmPendingNavigation();
+    expect(perform).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('does not call onCancel when nothing is dirty and the transition runs straight away', () => {
+    const perform = vi.fn();
+    const onCancel = vi.fn();
+    subscribeNavigationPrompt(vi.fn());
+    requestTransition(perform, { onCancel });
+    expect(perform).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
   });
 });
 

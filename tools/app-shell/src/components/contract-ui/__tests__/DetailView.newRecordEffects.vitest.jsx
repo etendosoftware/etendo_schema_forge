@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 /**
  * Coverage top-up for DetailView's isNew(recordId === 'new')-gated effects and
  * handlers — the identifier-resolution effect for default selector values, and
@@ -202,7 +203,7 @@ describe('DetailView isNew-gated effects', () => {
   it('resolves the $_identifier for a default selector value from loaded catalogs', async () => {
     renderNew();
     await waitFor(() => {
-      expect(mockHook.handleChange).toHaveBeenCalledWith('uOM$_identifier', 'Unit');
+      expect(mockHook.handleChange).toHaveBeenCalledWith('uOM$_identifier', 'Unit', { origin: 'callout' });
     });
   });
 
@@ -211,14 +212,14 @@ describe('DetailView isNew-gated effects', () => {
     renderNew();
     // Give the effect a tick to (not) fire.
     await act(async () => { await Promise.resolve(); });
-    expect(mockHook.handleChange).not.toHaveBeenCalledWith('uOM$_identifier', expect.anything());
+    expect(mockHook.handleChange.mock.calls.map(([key]) => key)).not.toContain('uOM$_identifier');
   });
 
   it('does not resolve an identifier when the selector value has no catalog match', async () => {
     mockHook.editing = { documentNo: '', documentStatus: 'DR', uOM: 'UNKNOWN' };
     renderNew();
     await act(async () => { await Promise.resolve(); });
-    expect(mockHook.handleChange).not.toHaveBeenCalledWith('uOM$_identifier', expect.anything());
+    expect(mockHook.handleChange.mock.calls.map(([key]) => key)).not.toContain('uOM$_identifier');
   });
 });
 
