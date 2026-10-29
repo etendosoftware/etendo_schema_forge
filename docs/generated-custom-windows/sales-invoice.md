@@ -2666,6 +2666,6 @@ rules, the warning's conditions and the manual check:
 
 ## Bespoke grid personal views
 
-The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization.
+The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization. Its date, document number and total columns use the keys `reversedInvoiceDate`, `reversedDocumentNo` and `reversedGrandTotalAmount` (ETP-5684), so they never collide with the header fields of the same name; personal views saved with the earlier keys fall back to the default for those three columns.
 
 The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

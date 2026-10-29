@@ -14,6 +14,8 @@ const { UI_MESSAGES } = vi.hoisted(() => ({
   UI_MESSAGES: {
     processExecuted: '{ok} ok, {failed} failed',
     processExecutedWithOmitted: '{ok} ok, {omitted} omitted, {failed} failed',
+    // A key that resolves to itself reads as untranslated to translateBackendError.
+    'backendError.accountingAccessDenied': 'translated: accounting access denied',
   },
 }));
 
@@ -1186,6 +1188,74 @@ describe('BulkDocumentAction — a posted row is reactivated with its RE alone (
     await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE'));
     expect(mockNeoExecute).not.toHaveBeenCalled();
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('BulkDocumentAction — bulk Reactivar over a posted/unposted mix (ETP-5684)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockNeoExecute.mockReset();
+    mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
+  });
+
+  it('sends exactly one RE per row and no separate unpost request', async () => {
+    const refresh = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={[
+          { id: 'inv-1', documentNo: 'FV-001', documentStatus: 'CO', posted: 'Y' },
+          { id: 'inv-2', documentNo: 'FV-002', documentStatus: 'CO', posted: 'N' },
+          { id: 'inv-3', documentNo: 'FV-003', documentStatus: 'CO', posted: 'Y' },
+        ]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="sales-invoice"
+        labelKey="process"
+        refresh={refresh}
+      />,
+    );
+    fireEvent.click(screen.getByText('process'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(mockDocExecute.mock.calls).toEqual([['inv-1', 'RE'], ['inv-2', 'RE'], ['inv-3', 'RE']]);
+    expect(mockNeoExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('BulkDocumentAction — accounting access denied is shown translated (ETP-5684)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockNeoExecute.mockReset();
+    mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
+  });
+
+  it('toasts the backendError.accountingAccessDenied translation, not the raw backend text', async () => {
+    const { translateBackendError: realTranslate } = await vi.importActual('@/lib/backendErrors.js');
+    mockTranslateBackendError.mockImplementation((...args) => realTranslate(...args));
+    const RAW = 'Your role cannot see or change accounting.';
+    mockNeoExecute.mockResolvedValueOnce({ success: false, message: RAW, messageKeys: ['ETGO_AccountingAccessDenied'] });
+    const refresh = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'inv-1', documentNo: 'FV-001', documentStatus: 'CO', posted: 'N', processed: 'Y' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="sales-invoice"
+        actionMode="neoAction"
+        buildActions={() => [{ value: 'post', labelKey: 'post' }]}
+        labelKey="process"
+        refresh={refresh}
+      />,
+    );
+    fireEvent.click(screen.getByText('process'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith('translated: accounting access denied');
+    expect(toast.error).not.toHaveBeenCalledWith(RAW);
   });
 });
 

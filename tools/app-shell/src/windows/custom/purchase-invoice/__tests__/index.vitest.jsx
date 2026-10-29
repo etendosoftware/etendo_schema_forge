@@ -559,6 +559,16 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
       expect(actions.map((a) => a.key)).toEqual(['reactivate', 'unpost']);
     });
 
+    // The server un-posts inside the RE, so the kebab Reactivar sends the RE alone.
+    it('the row-kebab Reactivar is a plain RE with no preUnpost flag', () => {
+      render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { documentStatus: 'CO', processed: 'Y', posted: 'Y' } });
+      const reactivate = actions.find((a) => a.key === 'reactivate');
+      expect(reactivate.documentAction).toBe('RE');
+      expect(reactivate.preUnpost).toBeUndefined();
+    });
+
     it('bumps refreshKey when a neoAction menu action (post) completes', () => {
       render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
 
