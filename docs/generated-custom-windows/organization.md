@@ -148,7 +148,9 @@ fiscal-incident deep link. A hidden section is not rendered at all (no collapsed
   declarations list (`FmListPage.jsx`) uses. **Empty-catalog rule:** a catalog that was never saved
   answers `{}`, which means **no model is active**; the registry's `defaultActive` is NOT applied
   (it only seeds the catalog drawer's toggles). Toggled in Modelos fiscales → "Catálogo de modelos".
-  **Backend-only flag `fiscal-model-390` (ETP-5716, default off):** while it is off for the tenant,
+  **Backend-only flag `fiscal-model-390` (ETP-5716, default off; targeted per user — account
+  email — and per tenant, so two users of the same tenant may differ):** while it is off for the
+  current user,
   the catalog answer never carries `390` (it lists it under `_unavailable`, which the hook splits
   off), so the "Representante legal / Modelo 390" section — the identity fields and the
   representatives grid (`RepresentantesLegalesSection.jsx`, which then never fetches) — is hidden,

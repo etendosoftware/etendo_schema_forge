@@ -1245,7 +1245,7 @@
         "key": "fiscal-model-390",
         "defaultValue": false,
         "ttl": "2027-01-01",
-        "ttlNote": "Set by the user for ETP-5716: by 2027-01-01 the 390 is released to every tenant and the flag retires on the ship branch (unwrap the two toggle points in NeoFiscalModelsCatalogService and the two in useFiscalModelsCatalog.js/FmCatalogPage.jsx, delete FiscalModel390Flag.java and catalogAvailability.js, delete the flag object, keep this entry).",
+        "ttlNote": "Set by the user for ETP-5716: by 2027-01-01 the 390 is released to every tenant and the flag retires on the ship branch (unwrap the two toggle points in NeoFiscalModelsCatalogService and the two in useFiscalModelsCatalog.js/FmCatalogPage.jsx, delete FiscalModel390Flag.java and catalogAvailability.js, remove the `catalogAvailability.js` line from the model-id guardrail ALLOWLIST in fiscal-models/__tests__/modelRegistry.vitest.js, delete the flag object, keep this entry).",
         "symbols": [
           "fiscal-model-390",
           "FLAG_FISCAL_MODEL_390",
