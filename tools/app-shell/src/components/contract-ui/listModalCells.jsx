@@ -177,7 +177,9 @@ function BooleanCell({ row, col, ui, locale }) {
   const isTrue = isTruthyFlag(raw);
   if (!isTrue && !isFalsyFlag(raw)) return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
   const branch = isTrue ? 'true' : 'false';
-  const label = resolveBadgeLabel(col.badgeLabels?.[branch], locale, ui ? ui(isTrue ? 'yes' : 'no') : branch);
+  const yesNoKey = isTrue ? 'yes' : 'no';
+  const fallbackLabel = ui ? ui(yesNoKey) : branch;
+  const label = resolveBadgeLabel(col.badgeLabels?.[branch], locale, fallbackLabel);
   if (!col.badge) return <span className="text-sm leading-5 text-[hsl(var(--foreground))]">{label}</span>;
   const variant = col.badgeVariants?.[branch] ?? (isTrue ? 'green' : 'neutral');
   const tone = VARIANT_TO_STATUS_TONE[variant];

@@ -13,6 +13,8 @@ import { RefreshCw } from 'lucide-react';
  * `className` (optional) is appended to the button's classes — e.g. the list-modal compact list
  * adds the Figma white fill + xs shadow. Absent, the button renders exactly as before.
  */
+const REFRESH_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors';
+
 export function RefreshButton({ onRefresh, label, className = '' }) {
   return (
     <button
@@ -20,7 +22,7 @@ export function RefreshButton({ onRefresh, label, className = '' }) {
       onClick={onRefresh}
       title={label}
       aria-label={label}
-      className={`h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors${className ? ` ${className}` : ''}`}
+      className={className ? `${REFRESH_BUTTON_CLASS} ${className}` : REFRESH_BUTTON_CLASS}
       data-testid="finance-refresh-button"
     >
       <RefreshCw className="h-5 w-5" data-testid="RefreshCw__finance-refresh" />
