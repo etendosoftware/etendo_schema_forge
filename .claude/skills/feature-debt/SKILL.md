@@ -54,10 +54,10 @@ as "flag deliberately off" (ETP-4966 family; reported by Irina and Rubén).
 |-------|-----------------|----------|
 | **Per account/user** | `forAccount(<ETGO_ACCOUNT email>)` — resolve it as `PortalLinkPolicy#currentAccountEmail` does (`GoAccountResolver.findAccountByUsername`, admin mode, null on failure ⇒ off) | the flag can be rolled out to specific users or percentages. **Default for any feature flag.** |
 | **Per tenant** | `forAccount(email).with(FeatureFlagContext.ATTRIBUTE_CLIENT_ID, clientId)` | rules by AD_Client |
-| **Environment-wide** | `forAccount(null)` | only operational kill switches / startup / scheduled jobs with no user (`*-disabled`, `*-off`, `billing-reconciliation-schedule`) |
+| **Environment-wide** | `FeatureFlagContext.environment()` (never bare `forAccount(null)`) | only operational kill switches / startup / scheduled jobs with no user (`*-disabled`, `*-off`, `billing-reconciliation-schedule`) |
 
-- Writing `forAccount(null)`? Put a comment saying why no user exists there. No comment ⇒
-  reviewers treat it as the bug.
+- Writing `environment()` / `forAccount(null)` for a new flag? Say in a comment why no user
+  exists there. No reason ⇒ reviewers treat it as the bug.
 - Do not cache a per-account result in a `static final` (the `ENVIRONMENT` constant
   pattern): it has no user to cache for. Evaluate per request.
 - The request does not say who the flag targets? **Ask the human** — do not pick env-wide

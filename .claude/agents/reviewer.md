@@ -167,7 +167,7 @@ Any new or changed `GoFeatureFlags.isEnabled(...)` call: look at the `FeatureFla
 - BLOCKER unless the flag is an operational kill switch / startup / scheduled-job flag with no user, AND a comment says so, AND the flag's registry/doc row states it is environment-wide.
 - Per-user flags must pass the resolved `ETGO_ACCOUNT` email (`PortalLinkPolicy#currentAccountEmail` pattern); per-tenant ones add `ATTRIBUTE_CLIENT_ID`.
 - Also BLOCKER: a flag read by both SPA and backend whose two ends build different identity (see `targeting-key-divergence`).
-- Check: `grep -rn "forAccount(null)" src/` on the changed files, and confirm a test asserts the email reaches the context.
+- Check: `grep -rn "forAccount(null)\|FeatureFlagContext.environment()" src/` on the changed files; each hit must be an operational flag. Confirm a test asserts the email reaches the context for per-user flags.
 Full rule: `feature-debt` skill, Step 1.
 
 ### Pipeline-Level Fixes (BLOCKER)
