@@ -174,7 +174,8 @@ describe('ReconciliationListTable — posting status pill', () => {
     const labels = (tone) => screen.queryAllByTestId(`status-${tone}`).map((el) => el.dataset.label);
     expect(labels('success')).toContain('postedStatus');
     expect(labels('warning')).toContain('notPostedStatus');
-    expect(labels('destructive')).toEqual(expect.arrayContaining(['postedStatusError', 'postedStatusPeriodClosed']));
+    expect(labels('destructive')).toContain('postedStatusError');
+    expect(labels('caution')).toContain('postedStatusPeriodClosed');
     expect(labels('neutral')).toContain('postedStatusDocumentDisabled');
   });
 });

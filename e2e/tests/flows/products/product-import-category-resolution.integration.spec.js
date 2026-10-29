@@ -1,8 +1,14 @@
+// @covers artifacts/product/decisions.json
 import { test, expect } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { apiAuthHeaders, login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
+
+// The mapping summary denominator is the number of importable Product fields.
+const IMPORT_FIELD_COUNT = JSON.parse(
+  readFileSync(resolve(import.meta.dirname, '../../../../artifacts/product/decisions.json'), 'utf8'),
+).window.import.fields.length;
 
 /**
  * ETP-4905 — Product import against a real Etendo/Tomcat backend.
@@ -149,8 +155,10 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     // of all importable fields, not columns mapped out of columns present. ETP-5350 took
     // Product from 8 to 10 by adding `cost` and `costStartingDate` to
     // `artifacts/product/decisions.json` → `window.import.fields`, so the denominator tracks
-    // that list: add a field there and this number moves.
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('5/10');
+    // that list, and ETP-5730 took it to 13 (taxCategory, stocked, returnable). The spec
+    // reads the count from there, so adding a field no longer breaks this assertion.
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount'))
+      .toContainText(`5/${IMPORT_FIELD_COUNT}`);
     // ETP-5223: the chip reads `<source column>→<target caption>`, and the target caption
     // is now resolved through `fieldLabelFn` (the AD label dictionary for the SESSION locale)
     // instead of the English `field.label` declared in decisions.json. The locale here is

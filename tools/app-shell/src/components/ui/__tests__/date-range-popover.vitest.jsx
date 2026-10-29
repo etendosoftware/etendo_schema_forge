@@ -63,13 +63,13 @@ describe('computeTriggerLabel — placeholder precedence (unchanged)', () => {
     expect(computeTriggerLabel(undefined, 'pickSomething', ui, 'es-ES')).toBe('pickSomething');
   });
 
-  it('falls back to the generic "any date" label when there is no placeholder', () => {
-    expect(computeTriggerLabel(null, undefined, ui, 'es-ES')).toBe('dateRangeAnyTime');
+  it('falls back to the "All time" preset label when there is no placeholder (ETP-5591)', () => {
+    expect(computeTriggerLabel(null, undefined, ui, 'es-ES')).toBe('dateRangeAllTime');
   });
 
   it('falls back to the placeholder for an unknown preset id', () => {
     expect(computeTriggerLabel({ presetId: 'nope' }, 'pickSomething', ui, 'es-ES')).toBe('pickSomething');
-    expect(computeTriggerLabel({ presetId: 'nope' }, undefined, ui, 'es-ES')).toBe('dateRangeAnyTime');
+    expect(computeTriggerLabel({ presetId: 'nope' }, undefined, ui, 'es-ES')).toBe('dateRangeAllTime');
   });
 
   it('renders a custom { from, to } range as a formatted day span', () => {
