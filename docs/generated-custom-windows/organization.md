@@ -137,7 +137,7 @@ fiscal-incident deep link. A hidden section is not rendered at all (no collapsed
 |---|---|
 | Certificado digital (`OrganizationPage__section-certificate`) | SII, TicketBAI or VERI\*FACTU is active for the organization, **or** an active catalog model files telematically (registry `telematicFiling`: 303 and 390 today — 349 alone does not show it) |
 | Actividades del IAE (`OrganizationPage__section-iae`) | model 303 **or** model 390 is active |
-| Representante legal / Modelo 390 (`OrganizationPage__section-390`) | model 390 is active |
+| Representante legal / Modelo 390 (`OrganizationPage__section-390`) | model 390 is active (never while the backend-only flag `fiscal-model-390` is off — see below) |
 
 **Data sources** — `useFiscalSectionVisibility(orgId, apiBaseUrl)`
 (`organization/useFiscalSectionVisibility.js`, pure rule `resolveFiscalSectionVisibility`):
@@ -148,6 +148,15 @@ fiscal-incident deep link. A hidden section is not rendered at all (no collapsed
   declarations list (`FmListPage.jsx`) uses. **Empty-catalog rule:** a catalog that was never saved
   answers `{}`, which means **no model is active**; the registry's `defaultActive` is NOT applied
   (it only seeds the catalog drawer's toggles). Toggled in Modelos fiscales → "Catálogo de modelos".
+  **Backend-only flag `fiscal-model-390` (ETP-5716, default off; targeted per user — account
+  email — and per tenant, so two users of the same tenant may differ):** while it is off for the
+  current user,
+  the catalog answer never carries `390` (it lists it under `_unavailable`, which the hook splits
+  off), so the "Representante legal / Modelo 390" section — the identity fields and the
+  representatives grid (`RepresentantesLegalesSection.jsx`, which then never fetches) — is hidden,
+  and "Actividades del IAE" and "Certificado digital" depend on the other models only. The page has
+  no flag logic of its own. Full rule: fiscal-models guide, "Modelo 390 behind the backend-only
+  flag `fiscal-model-390`".
 - **SII / TicketBAI / VERI\*FACTU:** the active `siiRecord` / `tbaiRecord` / `verifactuRecord` of
   `fiscal-config/useFiscalConfig.js`, reused as is. Toggled in Configuración fiscal.
 

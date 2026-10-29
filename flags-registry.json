@@ -1318,6 +1318,111 @@
       }
     },
     {
+      "id": "fiscal-model-390",
+      "description": "Modelo 390 (annual VAT summary) in Etendo GO, merged to develop by ETP-5716 and put behind a backend-only flag before release. Off hides the whole 390: the Fiscal Models catalog drawer toggle, the declarations list and 'Nueva declaración', the 390 detail page (reachable only from the list) and the Organization window's 'Representante legal / Modelo 390' section (identity fields + legal representatives grid). The backend (com.etendoerp.go) is the only evaluator: the fiscal models catalog answer drops 390 and lists it under `_unavailable`, a catalog save cannot switch it on, and the SPA reacts to that answer.",
+      "owner": "AyelenGarcia01",
+      "jira": "ETP-5716",
+      "created": "2026-10-29",
+      "flag": {
+        "key": "fiscal-model-390",
+        "defaultValue": false,
+        "ttl": "2027-01-01",
+        "ttlNote": "Set by the user for ETP-5716: by 2027-01-01 the 390 is released to every tenant and the flag retires on the ship branch (unwrap the two toggle points in NeoFiscalModelsCatalogService and the two in useFiscalModelsCatalog.js/FmCatalogPage.jsx, delete FiscalModel390Flag.java and catalogAvailability.js, remove the `catalogAvailability.js` line from the model-id guardrail ALLOWLIST in fiscal-models/__tests__/modelRegistry.vitest.js, delete the flag object, keep this entry).",
+        "symbols": [
+          "fiscal-model-390",
+          "FLAG_FISCAL_MODEL_390",
+          "ETGO_FLAG_FISCAL_MODEL_390",
+          "FiscalModel390Flag",
+          "catalogAvailability",
+          "splitCatalogAnswer",
+          "filterAvailableModels",
+          "unavailableModels"
+        ],
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, and none must be added. The frontend trail is the catalog answer's split, not a flag key: splitCatalogAnswer (inside useFiscalModelsCatalog.js) and filterAvailableModels/unavailableModels (FmListPage.jsx -> FmCatalogPage.jsx). The frontend names model 390 in exactly one place, catalogAvailability.js UNAVAILABLE_WITHOUT_ANSWER: the fail-hidden default used while there is no catalog answer (loading, read failure), mirroring the backend default, not a second evaluator -- any answer replaces it. The `_unavailable` marker itself is NOT a symbol: it collides with unrelated code (backendErrors.js, SubscriptionSection.jsx); it is only spelled in the two owned files (FiscalModel390Flag.UNAVAILABLE_KEY, catalogAvailability.UNAVAILABLE_KEY) and in useFiscalModelsCatalog.js's comment. The Organization window has NO toggle point: its Modelo 390 section already renders only while the catalog marks 390 active (useFiscalSectionVisibility.js), so it hides without naming the flag."
+      },
+      "$gatingComment": "ONE evaluator, the backend (FiscalModel390Flag). Targeted PER USER and PER TENANT: the context is FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the NEO session user, via GoAccountResolver.currentAccountEmail(), the same resolution bp-portal-link and contact-category-type use>).with(clientId), so the targeting key, `Email` and lowercase `email` carry the account and a Datadog rule matches the lowercase `email` attribute against lowercase values; with no resolvable account the context carries clientId only (tenant rules match, email rules do not, default hidden, never throws). GET /sws/neo/fiscal-models-catalog with the flag off answers the stored catalog minus `390` plus `\"_unavailable\": [\"390\"]`; flag on it answers exactly the stored catalog. PUT with the flag off ignores the client's 390 value and keeps the stored one (a tenant's earlier choice survives an off/on cycle); PUT with the flag on changes 390 only on an explicit value -- a body without the key keeps the stored one (absent is not false), so a page loaded while the flag was off and saved after it was turned on at runtime does not erase it; an unreadable stored catalog refuses the save in both states; `_unavailable` is never persisted. The SPA (not flag-owned, all models) saves the catalog only on a real change and never after a failed/unfinished read (FmCatalogPage catalogSelectionChanged, FmListPage onSave). Deliberately NOT gated (a flag is a visual gate, not authorization): /sws/neo/fiscal390/*, the fiscal303/declarations CRUD for model 390 and the organization's representanteLegal entity, all already protected by the role's window access. Local: etendo.go.flags.fiscal-model-390 / ETGO_FLAG_FISCAL_MODEL_390 (Tomcat restart).",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/FiscalModel390Flag.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost): backend NeoFiscalModelsCatalogService.java (getActiveModels / saveActiveModels); frontend useFiscalModelsCatalog.js (splitCatalogAnswer), FmCatalogPage.jsx (filterAvailableModels), FmListPage.jsx (passes unavailableModels). GoFeatureFlags.java is framework. Not owned and staying when the flag goes: every Modelo 390 file itself (models/390/, the Organization's Modelo390IdentitySection.jsx / RepresentantesLegalesSection.jsx / useRepresentantesLegales.js / representanteLegal.js, the /fiscal390/* handlers) -- they ARE the feature, not the flag.",
+      "testSpecs": {
+        "$testSpecsComment": "Backend specs are tester-go's, frontend specs tester-functional's. The two existing shared specs below were only adjusted for the flag (default off) and still need explicit on/off cases -- see each note.",
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FiscalModel390FlagTest.java",
+            "note": "Covers: applyToRead on/off (390 dropped + _unavailable added; on = stored as is; a stored _unavailable never echoed), applyToWrite on/off (incoming 390 ignored and stored 390 kept when off, absent when nothing stored; _unavailable stripped on both), arguments never mutated. Email reaches the provider context: contextFor(email, clientId) publishes the targeting key, `Email` and lowercase `email` plus clientId; contextFor(null, clientId) carries clientId only and no targeting key; isEnabled passes GoAccountResolver.currentAccountEmail() through, end to end through GoFeatureFlags into a capturing provider; unset, non-boolean and failing-provider all read as hidden."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/common/GoAccountResolverTest.java",
+            "note": "Shared spec, owned by ETP-5791 (develop): currentAccountEmail -- the resolver ETP-5791 extracted from PortalLinkPolicy and fiscal-model-390 now reuses (ETP-5716 had extracted the same method as findCurrentAccountEmail; dropped in the develop merge). Covers no OBContext (admin mode never entered), account found by a +suffix username, no user, no account and a failure reading the user -> null, admin mode always restored; a DAL failure is covered on findAccountByUsername."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoFiscalModelsCatalogServiceTest.java",
+            "note": "Shared spec. Every case pins the flag (flag(...) helper), so none depends on local Openbravo.properties/env. Extended for ETP-5716: GET with the flag on returns the stored catalog unchanged, GET off with a stored 390:true hides it and adds the marker, GET off with an unreadable store (PropertyException or RuntimeException) answers exactly {_unavailable:[390]}, a failure building the answer fails hidden; PUT off keeps the stored 390, PUT on keeps it when the body omits it, PUT never stores _unavailable, an unreadable store (PropertyException or RuntimeException) refuses the save with IllegalStateException in both flag states and writes nothing, PUT off over a corrupt or blank store saves without 390 or marker; the tenant id reaches the gate. The refusal's HTTP mapping (500, not 400) is pinned in NeoBuiltInEndpointHandlerTest (propagates, no 400) and NeoServletProcessRequestTest (500)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/catalogAvailability.vitest.js",
+            "note": "Written for ETP-5716: splitCatalogAnswer (marker split off, listed ids removed from activeModels even if sent, ids normalised to strings, no marker = plain catalog, input not mutated, null/undefined/string/number/boolean bodies -> empty split, an array body yields no active model), filterAvailableModels (same array when nothing is unavailable, order kept, no mutation), unavailableWithoutAnswer returns a fresh ['390'] each call."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/useFiscalModelsCatalog.vitest.jsx",
+            "note": "Shared spec; extended for ETP-5716: an answer with _unavailable exposes unavailableModels and keeps the marker (and a 390 sent as active) out of activeModels; before the read settles, after a rejected read and after a non-ok answer unavailableModels is ['390'] (fail hidden); a successful answer without the marker clears it, also after a failed read; a refresh that brings the marker back hides the 390 again."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmCatalogPage.vitest.jsx",
+            "note": "Shared spec; extended for ETP-5716: unavailableModels=['390'] removes the 390 card, the header catalog count and the saved payload's 390 (defaults and after toggling); with no marker the 390 card is shown, counted and saved; a missing prop hides nothing; closing saves only a real change, and catalogSelectionChanged compares as booleans (missing key = false, 1/'Y' = true, null/undefined/'' = false), defaults missing arguments to {} and never mutates them."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmListPage.vitest.jsx",
+            "note": "Shared spec; its string-body case goes through splitCatalogAnswer. Extended for ETP-5716: a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 row, no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels ['390']; a 390 sent as active with the marker stays hidden; a failed catalog GET hands the drawer ['390']; with no marker the 390 is counted, offered and the drawer hides nothing; with 390 unavailable (omitted, or sent as active with the marker) the PUT body sent to /fiscal-models-catalog carries neither 390 nor _unavailable; no PUT after a failed GET."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/organization/__tests__/useFiscalSectionVisibility.vitest.jsx",
+            "note": "Shared spec; extended for ETP-5716 through the real catalog reader: a catalog answer with _unavailable ['390'] keeps show390 false; a 390 sent as active together with the marker drives neither the 390 section, IAE nor the certificate; with no marker the 390 section shows."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/fiscal/fiscal-models-390-availability.mocked.spec.js",
+            "note": "Written for ETP-5716 (new file: no existing fiscal spec drives the catalog across list, drawer and Organization): mocked catalog answer with and without _unavailable: off -> list count (1), no 390 in the Modelo filter / Nueva declaración, no 390 card in the drawer, no Modelo 390 section in Organization, a drawer toggle PUTs a body with neither 390 nor _unavailable, closing the drawer with no change sends no PUT; on -> all present."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "mcp-and-api-not-gated",
+          "kind": "open",
+          "note": "By decision the flag hides only the UI: /fiscal390/*, the 390 declarations CRUD and the representanteLegal entity keep answering, so a direct API caller with the window grant can still create or read a 390 while it is hidden -- including through the MCP generic tools (etendo_list/etendo_get/etendo_update on organization/representanteLegal), since the MCP path never reads the flag. Therefore, if product wants the 390 unreachable outside the UI before 2027-01-01, that is an authorization change (a new decision), not a widening of this flag.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`fiscal-model-390` (ETP-5716)', 'A visual gate, not authorization'"
+          ]
+        },
+        {
+          "id": "refused-save-silent-in-spa",
+          "kind": "open",
+          "note": "When the stored catalog cannot be read, the backend refuses the catalog PUT (IllegalStateException from NeoFiscalModelsCatalogService.saveActiveModels, answered as HTTP 500 by NeoServlet, nothing written) in both flag states. The SPA does not notice: FmListPage's onSave has already applied the new selection through setActiveModels and its fire-and-forget PUT swallows the error (.catch(() => {})), so the page shows the change as saved until the next reload. Not done yet: map the refusal to a distinct status (409 or 503) instead of the generic 500, and in the SPA show a toast and re-read the catalog on a non-ok PUT. Not accepted debt -- an open item.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`fiscal-model-390` (ETP-5716)', 'Stored catalog unreadable'",
+            "docs/generated-custom-windows/fiscal-models.md — 'Persistence (NEO Headless, per-Client)', 'On save'"
+          ]
+        }
+      ]
+    },
+    {
       "id": "public-api-keys",
       "description": "Admin-only page (/api-keys) to create, rename, rotate, revoke and delete the user's own public API keys, backed by the /oauth2/api-keys credential-management API. Visual gating only: the backend API is not controlled by this flag. The flag value and its targeting are managed in ConfigCat.",
       "owner": "platform-team",
