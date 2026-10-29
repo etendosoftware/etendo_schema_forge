@@ -439,6 +439,8 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 - The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
 
+- `etblkpAccountingstatus` ("Estado contable") is `form: false` here, but it also carries the gate (QA pass 1): the accounting guard (`tools/app-shell/test/accounting-capability-guard.test.js`) reads every status column of the resolved contract, so a later `form: true` cannot expose it ungated.
+
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
 ## Default date filter: Last 30 days — ETP-5778

@@ -490,7 +490,7 @@ purpose (no `AD_MESSAGE` rows) and are localized by
 The rectificative invoice now arrives confirmed, so there is no "review the draft
 before confirming" step any more. To change it the user **reactivates** it from
 the `sales-invoice` window (`reactivate` menu action, `documentAction: 'RE'`,
-`preUnpost: true`, visible at `DocStatus='CO'` —
+visible at `DocStatus='CO'` —
 `artifacts/sales-invoice/contract.json:26-34`). That is the only route back to
 `DR`.
 

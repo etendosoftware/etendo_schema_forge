@@ -7,8 +7,8 @@
 // is correct: Edit stays at its default (visible, unchanged), the kebab is added on
 // top of it, "Confirmar"/"Reactivar" are offered for the right row state, confirm's
 // async validation genuinely runs before execution, and
-// reactivate's `preUnpost` wiring — which now lives entirely in `RowQuickActions.jsx`
-// (see that file's own suite for the generic mechanism) — is exercised end to end by
+// reactivate's wiring (a posted row is un-posted by the server inside the reactivation,
+// ETP-5684, so the kebab sends only `Processed`) is exercised end to end by
 // mounting the REAL `RowQuickActions` directly with this window's own config, so both
 // share the very same mocked `useNeoAction().execute` call log.
 //
@@ -158,11 +158,12 @@ describe('AmortizationWindow — per-row kebab (ETP-5414)', () => {
       expect(byKey.reactivate.visible).toBe(true);
     });
 
-    it('the reactivate entry is fully declarative: neoAction=Processed, preUnpost=true, no onClick', () => {
+    it('the reactivate entry is fully declarative: neoAction=Processed, no onClick', () => {
       renderWindow();
       const actions = lastListViewProps.rowQuickActions.menuActions({ row: confirmedNotPostedRow });
       const reactivate = actions.find((a) => a.key === 'reactivate');
-      expect(reactivate).toMatchObject({ neoAction: 'Processed', preUnpost: true, successKey: 'reactivated' });
+      expect(reactivate).toMatchObject({ neoAction: 'Processed', successKey: 'reactivated' });
+      expect(reactivate.preUnpost).toBeUndefined();
       expect(reactivate.onClick).toBeUndefined();
     });
   });
@@ -186,7 +187,7 @@ describe('AmortizationWindow — per-row kebab (ETP-5414)', () => {
       expect(actions.find((a) => a.key === 'post').visible).toBe(false);
     });
 
-    it('the post entry is fully declarative: neoAction=post, successKey=documentPosted, no onClick, no preUnpost', () => {
+    it('the post entry is fully declarative: neoAction=post, successKey=documentPosted, no onClick', () => {
       renderWindow();
       const actions = lastListViewProps.rowQuickActions.menuActions({ row: confirmedNotPostedRow });
       const post = actions.find((a) => a.key === 'post');
@@ -338,13 +339,11 @@ describe('AmortizationWindow — per-row kebab (ETP-5414)', () => {
     });
   });
 
-  // ── reactivate's preUnpost, exercised through the REAL RowQuickActions ──────────
+  // ── reactivate, exercised through the REAL RowQuickActions ──────────────────────
   // Mounts the actual generic component with this window's own `menuActions`/
-  // `onMenuActionExecuted` config, so the preUnpost mechanism (which lives entirely
-  // in RowQuickActions.jsx — see that file's own suite for the generic contract) is
-  // proven wired correctly from amortización's specific config, sharing the same
-  // mocked useNeoAction().execute call log as AmortizationWindow itself.
-  describe('reactivate — preUnpost wiring via the real RowQuickActions', () => {
+  // `onMenuActionExecuted` config, sharing the same mocked useNeoAction().execute call
+  // log as AmortizationWindow itself. ETP-5684 — a posted row is un-posted by the server.
+  describe('reactivate — wiring via the real RowQuickActions', () => {
     function mountRealKebab(row) {
       renderWindow();
       const rq = lastListViewProps.rowQuickActions;
@@ -370,7 +369,7 @@ describe('AmortizationWindow — per-row kebab (ETP-5414)', () => {
       );
     }
 
-    it('a posted, confirmed row: unpost runs before Processed when Reactivar is clicked', async () => {
+    it('a posted, confirmed row: Reactivar runs Processed alone, never unposting first', async () => {
       const user = userEvent.setup();
       mountRealKebab(confirmedPostedRow);
 
@@ -378,33 +377,8 @@ describe('AmortizationWindow — per-row kebab (ETP-5414)', () => {
       await user.click(screen.getByText('reactivate'));
       await new Promise((r) => setTimeout(r, 0));
 
-      expect(mockNeoExecute.mock.calls).toEqual([
-        ['r-posted', 'unpost'],
-        ['r-posted', 'Processed'],
-      ]);
+      expect(mockNeoExecute.mock.calls).toEqual([['r-posted', 'Processed']]);
       expect(toast.success).toHaveBeenCalledWith('reactivated');
-    });
-
-    it('a posted, confirmed row whose unpost fails: Processed never runs, and RowQuickActions itself toasts the failure (not AmortizationWindow)', async () => {
-      mockNeoExecute.mockImplementation(async (id, actionName) => {
-        if (actionName === 'unpost') return { success: false, message: 'accounting settled' };
-        return { success: true };
-      });
-      const user = userEvent.setup();
-      mountRealKebab(confirmedPostedRow);
-
-      await user.click(screen.getByTestId('row-quick-action-more'));
-      await user.click(screen.getByText('reactivate'));
-      await new Promise((r) => setTimeout(r, 0));
-
-      expect(mockNeoExecute).toHaveBeenCalledWith('r-posted', 'unpost');
-      expect(mockNeoExecute).not.toHaveBeenCalledWith('r-posted', 'Processed');
-      // This is RowQuickActions.jsx's own preUnpost-failure toast, fired before it
-      // calls onMenuActionExecuted({success:false,...}) — AmortizationWindow's own
-      // onMenuActionExecuted has no preUnpost-specific toast of its own, so a single
-      // toast.error call here proves there is exactly one toast, from one place.
-      expect(toast.error).toHaveBeenCalledWith('accounting settled');
-      expect(toast.success).not.toHaveBeenCalled();
     });
 
     it('a confirmed, NOT posted row: Reactivar runs Processed directly, no unpost call', async () => {
@@ -424,8 +398,8 @@ describe('AmortizationWindow — per-row kebab (ETP-5414)', () => {
   // ── post ("Contabilizar"), exercised through the REAL RowQuickActions ──────────────
   // Mirrors the reactivate block above (same `mountRealKebab` helper, same mocked
   // useNeoAction().execute call log), but proves the DIFFERENCE that matters for this
-  // entry: no preUnpost step — a single 'post' call, never an 'unpost' call first.
-  describe('post — no preUnpost, single call, via the real RowQuickActions', () => {
+  // entry: a single 'post' call, never an 'unpost' call first.
+  describe('post — single call, via the real RowQuickActions', () => {
     function mountRealKebab(row) {
       renderWindow();
       const rq = lastListViewProps.rowQuickActions;
@@ -451,7 +425,7 @@ describe('AmortizationWindow — per-row kebab (ETP-5414)', () => {
       );
     }
 
-    it('a confirmed, not-posted row: clicking Contabilizar fires exactly one neoAction.execute call, with "post" — no preUnpost/unpost call', async () => {
+    it('a confirmed, not-posted row: clicking Contabilizar fires exactly one neoAction.execute call, with "post" — no unpost call', async () => {
       const user = userEvent.setup();
       mountRealKebab(confirmedNotPostedRow);
 

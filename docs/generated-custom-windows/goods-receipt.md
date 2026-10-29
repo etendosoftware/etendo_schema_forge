@@ -492,7 +492,7 @@ for "fully invoiced" — and, on the bulk path below, rather than silently degra
 into "no cap at all" (which would re-invoice the full quantity instead of failing).
 
 **To modify a generated invoice**, the user reactivates it: `purchase-invoice`
-exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+exposes a `reactivate` menu action (`documentAction: 'RE'`,
 visible at `DocStatus='CO'`), now the only route back to `DR`.
 
 ### Manual verification

@@ -231,6 +231,7 @@
           "form": false
         },
         "etblkpAccountingstatus": {
+          "visibleWhenCapability": "showAccountingFields",
           "form": false,
           "agentPrompt": "Whether the payment is posted to the general ledger: Y posted, N not posted yet. Any other value is why posting failed or is pending (p period closed, i invalid account, b not balanced, c no conversion rate, l pending refresh...); options lists them all."
         },

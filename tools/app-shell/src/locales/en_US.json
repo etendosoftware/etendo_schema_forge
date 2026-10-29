@@ -488,6 +488,10 @@
       "label": "Posted",
       "description": "An accounting status button that indicates if the transaction has already been posted to the general ledger or not."
     },
+    "EM_Etblkp_Accountingstatus": {
+      "label": "Accounting Status",
+      "description": "Accounting state of the record: whether it has been posted to the General Ledger."
+    },
     "C_AcctSchema_ID": {
       "label": "General Ledger",
       "description": "The book containing all financial transactions recorded for the legal entity."
@@ -20811,6 +20815,7 @@
     "backendError.ibanRequired": "Using IBAN for generating the Displayed Account requires to introduce the IBAN",
     "backendError.genericAccountRequired": "Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number",
     "backendError.countryIban": "Country needed in an IBAN account.",
+    "backendError.accountingAccessDenied": "Your role cannot see or change accounting. Ask an administrator to enable Show Accounting Fields.",
     "backendError.countryNoIbanConfig": "{country} has no IBAN configuration, so it cannot be used on an account with an IBAN",
     "backendError.ibanPrefixCountryMismatch": "The IBAN starts with '{prefix}' but the selected country is {country} ({iso})",
     "backendError.ibanCountryLengthMismatch": "An IBAN for {country} must have {expected} characters (received {actual})",

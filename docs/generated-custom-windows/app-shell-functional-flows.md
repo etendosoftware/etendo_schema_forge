@@ -1072,26 +1072,22 @@ Developer contract (the slot's context object, the mandatory fallback branch,
 `showBulkActionToast` vs `useBulkActionToast`): [`../ui-customization.md`](../ui-customization.md)
 §9e.
 
-## Reversing a posted document before reactivating it lives in one helper — ETP-5302
+## Reversing a posted document before reactivating it runs on the server — ETP-5302 / ETP-5684
 
-**Applies to every window whose `decisions.json` carries `preUnpost: true` on a menu action**
-(today sales-invoice, purchase-invoice, amortization). The rule — *reactivating an
-already-posted record unposts it first* — is implemented exactly once, in
-`tools/app-shell/src/lib/preUnpost.js`, and both surfaces call it: the detail kebab
-(`DetailMoreActionsMenu.jsx`) and the list's bulk bar (`BulkDocumentAction.jsx`, via its
-`preUnpostActions` prop).
+**Applies to sales-invoice, purchase-invoice and amortization.** The rule — *reactivating an
+already-posted record unposts it first* — was implemented in the SPA from ETP-5302 on, in a
+shared `runPreUnpost` helper called by the detail kebab, the row kebab and the bulk bar
+(a `preUnpost: true` flag on the menu action, a `preUnpostActions` prop on the bulk bar).
 
-This is a rule that was previously implemented in one surface only, and the divergence was
-invisible until a user hit it: reactivating a posted invoice from the form worked, while the
-very same invoice reactivated from the list's bulk bar failed with "Factura contabilizada",
-because the bulk path sent a bare `docAction: 'RE'` that Core's `C_INVOICE_POST` rejects.
-Two implementations of one rule is what let them diverge, so there is now one.
-
-It is **opt-in per window**, and deliberately so: orders do not carry `preUnpostActions`
-because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an unpost there
-a gratuitous accounting reversal. Full reference, including the `isPosted` /
-`runPreUnpost` contracts and why the helper is a plain module rather than a hook:
-[`../ui-customization.md`](../ui-customization.md) §9e.
+**ETP-5684 moved it to the server.** `unpost` now needs the `showAccountingFields` capability,
+which a Sales or Purchasing role does not have, while reactivating is still theirs to do. The
+invoice and amortization handlers of com.etendoerp.go un-post the record themselves
+(`ReactivationUnpost`), as the last step before the reactivation runs, for REST and MCP
+alike. Every SPA surface now sends the reactivation alone, so the three surfaces cannot
+diverge again. The flag, the prop and the helper were removed; do not reintroduce a
+client-side `unpost` before `RE`: it is refused with a 403 for exactly the roles that need it.
+Reference: [`../ui-customization.md`](../ui-customization.md) §9e, *Reactivating a posted
+document*.
 
 ## Read-only role access — every write path is gated — ETP-5830
 

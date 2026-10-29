@@ -358,7 +358,7 @@ simply contributes no lines to the batch selection (or is filtered out client-si
 `invoiceStatus < 100` before the request is even sent).
 
 **To modify a generated invoice**, the user reactivates it: `sales-invoice`
-exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+exposes a `reactivate` menu action (`documentAction: 'RE'`,
 visible at `DocStatus='CO'`), now the only route back to `DR`.
 
 ### Manual verification
@@ -442,6 +442,8 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 - Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
 - The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/goods-shipment/index.jsx` (`COLUMNS`) carry the same gate.
+- **QA pass 1 (CP-8):** the bulk-posting module's `etblkpAccountingstatus` ("Estado contable", `EM_Etblkp_Accountingstatus`) was still shown in the form's "Otros" tab, because `decisions.json` never mentioned it and the generator did not write `visibleWhenCapability` on form fields. Now `entities.header.fields.etblkpAccountingstatus` carries the gate, the core generator emits it on the form line, and `EntityForm` hides the field at render time (it stays registered, so saving is unaffected). The field is the only "other" one here, so for a role without the capability the "Otros" tab disappears; `DetailView` re-probes it when the capability map loads. Its label comes from the global `fields` dictionary ("Estado contable"; the AD label was the untranslated "Accounting Status").
+- Reactivating a posted albarán's invoice, and the REST/MCP side of all this (403 on post/unpost, accounting fields stripped from MCP output): `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md`, access control 4b.
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
