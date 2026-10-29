@@ -25,6 +25,7 @@ vi.mock('../helpers.js', () => ({
 import * as helpers from '../helpers.js';
 import { SALES_RELATED_DOCS, getSalesRelatedDocs } from '../salesRelatedDocs.js';
 import { collectRelatedItems } from '../useRelatedDocuments.js';
+import { docChipProps } from '../docChipTypes.jsx';
 
 async function resolve(spec, record) {
   const definition = SALES_RELATED_DOCS[spec];
@@ -197,6 +198,15 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
       id: 'i1', originInvoices: [{ id: 'i0', documentNo: 'FV1' }], sourceInvoice: { id: 'i0', documentNo: 'FV1' },
     });
     expect(items).toEqual([{ type: 'sales-invoice', doc: origin }]);
+  });
+
+  // ETP-6002: on the ORIGINAL invoice, the rectificative chip renders like every other invoice
+  // chip (amount, currency, status) — the backend now sends those fields in rectifyingInvoices.
+  it('sales-invoice: a rectifyingInvoices chip carries amount, currency and status', async () => {
+    const rect = { id: 'r1', documentNo: 'FVR1', documentStatus: 'CO', grandTotalAmount: -12.1, 'currency$_identifier': 'EUR' };
+    const [item] = await resolve('sales-invoice', { id: 'i0', rectifyingInvoices: [rect] });
+    const props = docChipProps({ type: item.type, doc: item.doc, ui: k => k, navigate: () => {} });
+    expect(props).toMatchObject({ amount: -12.1, currency: 'EUR', status: 'CO' });
   });
 
   it('sales-order: falls back to the quotation identifier when the quotation cannot be read', async () => {
