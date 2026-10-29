@@ -689,3 +689,7 @@ Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP
 ## Voided order lines — ETP-5852
 
 `lines.lineGrossAmount.agentPrompt`: on a voided order the line keeps its gross amount while quantity and net drop to 0 (checked live), so agents read the header status before adding lines up. Feedback M-240.
+
+## Cancelling a line — ETP-5852
+
+`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise close the order (CL). Feedback M-123.

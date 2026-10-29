@@ -73,6 +73,7 @@
     "header": {
       "name": "goodsShipment",
       "javaQualifier": "goodsShipmentHeaderHandler",
+      "agentPrompt": "A goods shipment carries quantities only, no amounts, as in the app. Its value is each line's movementQuantity times the unit price of the sales order line it delivers (salesOrderLine, read in sales-order/lines); once invoiced, the invoice created from it has the amounts.",
       "draftMode": {
         "enabled": false
       },
@@ -102,7 +103,8 @@
           "searchable": true,
           "inputMode": "date",
           "section": "principal",
-          "seq": 30
+          "seq": 30,
+          "agentPrompt": "The date the goods left. It can be changed only while the shipment is a draft: a completed shipment cannot be reactivated or edited, in the app either. To correct one, return the goods (a customer return) and make a new shipment with the right date, or tell the user it stays as it is."
         },
         "warehouse": {
           "grid": true,

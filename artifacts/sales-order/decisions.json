@@ -331,6 +331,7 @@
     },
     "lines": {
       "javaQualifier": "orderLineHandler",
+      "agentPrompt": "A single line of a booked order cannot be cancelled, as in the app. While the order has no shipment or invoice: reactivate it (documentAction RE), delete or change the line, and book it again (CO). Once it has linked documents: close the order (documentAction CL), which closes what is still pending on every line, not on one.",
       "fields": {
         "priceStd": {
           "name": "baseNetUnitPrice",

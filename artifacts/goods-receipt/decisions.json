@@ -111,7 +111,8 @@
           "section": "principal",
           "seq": 30,
           "defaultValue": "@#Date@",
-          "readOnlyLogic": "@Processed@='Y'"
+          "readOnlyLogic": "@Processed@='Y'",
+          "agentPrompt": "The date the goods arrived. It can be changed only while the receipt is a draft: a completed receipt cannot be reactivated or edited, in the app either. To correct one, return the goods (action createPurchaseReturn) and make a new receipt with the right date, or tell the user it stays as it is."
         },
         "orderReference": {
           "grid": true,
