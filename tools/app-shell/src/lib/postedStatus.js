@@ -46,8 +46,9 @@ const POSTED_STATUS_COLUMNS = new Set(['Posted', 'posted']);
  *
  * Tones (the status palette, `TONE_STYLES` in `status-tag-tokens.js`): `Y` is `success`;
  * `N` — posting not attempted yet — is `warning` (yellow: pending, not an error); a code
- * that means "the posting failed and a human must act" is `destructive`, `p` (period
- * closed) included; a code that only means "posting is switched off / not prepared yet" is
+ * that means "the posting failed and a human must act" is `destructive`; `p` (period
+ * closed) is `caution` (orange, per design — ETP-5591): it needs action, but on the calendar,
+ * not on the document; a code that only means "posting is switched off / not prepared yet" is
  * `neutral`.
  */
 const POSTED_STATUS = {
@@ -63,7 +64,7 @@ const POSTED_STATUS = {
   DT: { labelKey: 'postedStatusNoDocumentType',     tone: 'destructive' },
   NO: { labelKey: 'postedStatusNoRelatedPo',        tone: 'destructive' },
   L:  { labelKey: 'postedStatusDocumentLocked',     tone: 'destructive' },
-  p:  { labelKey: 'postedStatusPeriodClosed',       tone: 'destructive' },
+  p:  { labelKey: 'postedStatusPeriodClosed',       tone: 'caution' },
   T:  { labelKey: 'postedStatusTableDisabled',      tone: 'neutral' },
   D:  { labelKey: 'postedStatusDocumentDisabled',   tone: 'neutral' },
   d:  { labelKey: 'postedStatusDisabledBackground', tone: 'neutral' },

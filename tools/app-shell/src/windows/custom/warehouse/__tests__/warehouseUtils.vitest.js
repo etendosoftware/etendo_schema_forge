@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/warehouse/warehouseUtils.js
 import { describe, it, expect } from 'vitest';
 import { aggregateProducts } from '../warehouseUtils';
 
@@ -134,10 +135,10 @@ describe('aggregateProducts', () => {
       expect(result[0].qty).toBe(0);
     });
 
-    it('treats non-numeric etgoValuation as 0', () => {
+    it('treats non-numeric etgoValuation as null (no valuation), not 0', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 5, etgoValuation: 'n/a' }];
       const result = aggregateProducts(rows);
-      expect(result[0].valuation).toBe(0);
+      expect(result[0].valuation).toBeNull();
     });
 
     it('coerces numeric string quantityOnHand', () => {
@@ -204,18 +205,47 @@ describe('aggregateProducts', () => {
       expect(result[0].cost).toBe(10);
     });
 
-    it('treats missing etgoCost as 0', () => {
+    it('treats missing etgoCost as null (no cost line), not 0', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5 }];
-      expect(aggregateProducts(rows)[0].cost).toBe(0);
+      expect(aggregateProducts(rows)[0].cost).toBeNull();
     });
 
-    it('treats non-numeric etgoCost as 0', () => {
+    it('treats non-numeric etgoCost as null, not 0', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5, etgoCost: 'n/a' }];
-      expect(aggregateProducts(rows)[0].cost).toBe(0);
+      expect(aggregateProducts(rows)[0].cost).toBeNull();
     });
 
     it('coerces numeric string etgoCost', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5, etgoCost: '25' }];
+      expect(aggregateProducts(rows)[0].cost).toBe(25);
+    });
+  });
+
+  describe('real zero versus no cost', () => {
+    const base = { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 4 };
+
+    it('keeps a real 0 cost and valuation as 0, and no cost as null', () => {
+      const [zero] = aggregateProducts([{ ...base, etgoCost: 0, etgoValuation: 0 }]);
+      const [none] = aggregateProducts([{ ...base, etgoCost: null, etgoValuation: null }]);
+      expect(zero.cost).toBe(0);
+      expect(zero.valuation).toBe(0);
+      expect(none.cost).toBeNull();
+      expect(none.valuation).toBeNull();
+    });
+
+    it('sums only numeric valuations across rows (40, null, 20 -> 60)', () => {
+      const rows = [
+        { ...base, etgoValuation: 40 },
+        { ...base, quantityOnHand: 6, etgoValuation: null },
+        { ...base, quantityOnHand: 2, etgoValuation: 20 },
+      ];
+      const [p] = aggregateProducts(rows);
+      expect(p.valuation).toBe(60);
+      expect(p.qty).toBe(12);
+    });
+
+    it('uses a later row cost when the first row cost is null', () => {
+      const rows = [{ ...base, etgoCost: null }, { ...base, etgoCost: 25 }, { ...base, etgoCost: 99 }];
       expect(aggregateProducts(rows)[0].cost).toBe(25);
     });
   });

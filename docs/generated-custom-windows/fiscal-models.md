@@ -4401,6 +4401,8 @@ exactly 2 items:
   surface.
 - **"Ayuda de esta página"** — `onPageHelp` → `useSupportChatSafe()`'s `actions.setTab('ayuda')` +
   `actions.open()`, the real `SupportChatWidget` "Ayuda" tab.
+  Hidden in a support session (ETP-5351): `AppLayout` passes `onPageHelp: null` to the TopBar,
+  so the operator inside the tenant as "Soporte Etendo" sees no help item or support chat.
 
 History: ETP-4755 first turned a dead in-page `MoreVertical` icon into a working in-page kebab
 component (`MoreOptionsMenu` in `FmCommon.jsx`). ETP-5584 moved the titles into the TopBar,

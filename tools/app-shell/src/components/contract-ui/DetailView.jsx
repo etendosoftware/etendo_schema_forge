@@ -21,7 +21,7 @@ import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmoun
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
-import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
+import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver, isFormCalculating } from './saveActions.jsx';
 import { DetailDeleteButton } from './DetailDeleteButton.jsx';
 import { translateBackendError, translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -44,6 +44,7 @@ import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useSecondaryTabVisibility, useRevealedTabFetch, useActiveTabResolver } from './useSecondaryTabVisibility.js';
 import { resolveStatusPill } from '@/lib/postedStatus.js';
 import { evaluateFieldCondition } from '@/lib/evaluateFieldCondition.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -68,7 +69,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import { buildLineRowUpdateHandler, resolveCompletedLineFieldGate } from './inlineLineUpdateHandlers.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, gateDetailTab, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveInitialCalloutTriggers, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset, panelEditing, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, gateDetailTab, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveInitialCalloutTriggers, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset, panelEditing, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, withExchangeRateHeaderSync, isSecondaryTabVisible, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
   // ETP-4731 (slice 2 of 3): the secondary-tab helpers and the remaining free module scope moved
   // to detailViewHelpers.jsx; imported here only for the symbols this component body still uses.
   formatAmount, NO_GATE_EXCLUSIONS, detailContentPadding, getTabStripBleedClassName,
@@ -76,7 +77,7 @@ import {
   getAddLineWrapperStyle, buildDeleteRowHandler, getDraftModeCompleted, shouldRenderSaveActionsRow,
   onlySaveButtonForCompletedDoc, getDetailContentContainerClassName, getLinesTabsSectionClassName,
   computeIsDirty, shouldShowLinesEmptyState, DIMENSION_MACRO_KEYS, shouldShowLineActionButtons,
-  canShowAddLineArea, executeDetailProcessImpl,
+  canShowAddLineArea, executeDetailProcessImpl, computeIsDirtyForGuard,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -266,7 +267,7 @@ export function DetailView({
   tabsBarRight = null,
   tabsBarAfter = null,
   hideTopBar = false,
-  CustomLines = null,
+  CustomLines: rawCustomLines = null,
   customLinesLabel = 'Invoices',
   sidePanel = null,
   sidePanelStyle = null,
@@ -371,7 +372,7 @@ export function DetailView({
     [Form, gateExclusions]
   );
   const capabilities = useCapabilitiesSafe(); // ETP-4520/5648 — capability-gated pills, tabs and detail
-  const [detailEntity, DetailTable] = gateDetailTab(rawDetailEntity, rawDetailTable, detailVisibleWhenCapability, capabilities);
+  const [detailEntity, DetailTable, CustomLines] = gateDetailTab(rawDetailEntity, rawDetailTable, detailVisibleWhenCapability, capabilities, rawCustomLines);
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields, initialData });
   const apiFetch = useApiFetch(apiBaseUrl);
   // Session-level currency fallback. NEO Headless doesn't return
@@ -381,6 +382,7 @@ export function DetailView({
   // preserves any existing value). Removes the need for per-window
   // `*LinesTable` wrappers that were doing the same thing manually.
   const sessionCurrencyCode = useCurrency();
+  const vis = useSecondaryTabVisibility({ hook, orgCurrencyCode: sessionCurrencyCode });
   const enrichedChildren = useMemo(() => {
     if (!Array.isArray(hook.children)) return hook.children;
     if (!sessionCurrencyCode) return hook.children;
@@ -406,11 +408,11 @@ export function DetailView({
   // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
   // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
   // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
-  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHooks = withExchangeRateHeaderSync(withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook), secondaryTabs, hook);
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
@@ -444,7 +446,7 @@ export function DetailView({
   // even when called from a setTimeout scheduled before the React re-render committed.
   const handleFieldBlurRef = useRef(null);
   handleFieldBlurRef.current = async () => {
-    if (!hasUnsavedEdits(hook.editing, hook.selected)) return;
+    if (isFormCalculating(hook) || !hasUnsavedEdits(hook.editing, hook.selected)) return;
     // handleSave() resolves to the saved record on success, or null on any
     // failure (validation block, non-2xx PATCH, network error) — see
     // useEntity.js. A checkbox/toggle field autosaves immediately (ETP-4670:
@@ -927,13 +929,13 @@ export function DetailView({
   // additionalDirtyState lets custom windows inject extra dirty sources via prop.
   const isDirty =
     computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
-  // ETP-5022: publish to the global registry so a language change (which reloads the page)
-  // and F5 / tab close both warn before discarding these edits.
+  // ETP-5022: publish to the global registry so a language change (which reloads the page) and F5 / tab close warn.
   // ETP-5073 / DOC-08 adds the saver, so the in-app navigation prompt can offer "Save and leave"
   // rather than only "Discard". `silent: true` suppresses the per-save toast: the user is leaving,
   // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
   // is what stops the navigation. ETP-5199: buildUnsavedChangesSaver also runs onAfterExistingSave/onAfterCreate.
-  useUnsavedChangesGuard(isDirty, buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
+  // ETP-5888: publishes only USER edits — an untouched new record (defaults + opening callouts) must not prompt.
+  useUnsavedChangesGuard(computeIsDirtyForGuard(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState), buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -1239,7 +1241,7 @@ export function DetailView({
   // Resolve $_identifier for default FK values.
   // NOTE: Mandatory defaults are now handled by the backend (NeoDefaultsService).
   // The frontend only ensures that if a value exists (from a default or callout),
-  // we resolve its $_identifier from the catalogs so it displays correctly.
+  // we resolve its $_identifier from the catalogs so it displays correctly. ETP-5888: not a user edit, hence the origin.
   useEffect(() => {
     if (!isNew || !hook.editing || !catalogsLoaded || !api?.selectors) return;
     for (const sel of api.selectors) {
@@ -1251,7 +1253,7 @@ export function DetailView({
       if (!Array.isArray(options) || options.length === 0) continue;
       const match = options.find(o => o.id === val);
       if (match) {
-        hook.handleChange(sel.field + '$_identifier', match.label || match.name || match._identifier);
+        hook.handleChange(sel.field + '$_identifier', match.label || match.name || match._identifier, { origin: 'callout' });
       }
     }
   }, [isNew, hook.editing, catalogsLoaded, catalogs, api]);
@@ -1370,6 +1372,8 @@ export function DetailView({
     secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
+
+  useRevealedTabFetch({ secondaryTabs, secondaryHooks, capabilities, vis, selectedId: hook.selected?.id });
 
   // Apply callout results to the form when they arrive
   useEffect(() => {
@@ -1758,7 +1762,7 @@ export function DetailView({
   const tabs = buildInitialTabs({
     secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
     hook, detailTabIndex, detailTabOrder, CustomLines, customLinesLabel, customLinesCount,
-    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities, isNew,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities, isNew, tabRecord: vis.record, tabCtx: vis.ctx,
   });
 
   // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
@@ -1792,17 +1796,7 @@ export function DetailView({
   // different tab, leaving the tab strip with no active tab and no panel shown. Track the
   // active tab by its stable `key` (not the index, which shifts when entries are removed)
   // and redirect to the first tab whenever the previously active key is no longer present.
-  const activeTabKeyRef = useRef(null);
-  useEffect(() => {
-    const prevKey = activeTabKeyRef.current;
-    const prevKeyStillExists = prevKey == null || tabs.some(t => t.key === prevKey);
-    if (!prevKeyStillExists) {
-      setActiveTab(0);
-      activeTabKeyRef.current = tabs[0]?.key ?? null;
-    } else {
-      activeTabKeyRef.current = tabs[activeTab]?.key ?? prevKey;
-    }
-  }, [tabs, activeTab]);
+  useActiveTabResolver(tabs, activeTab, setActiveTab);
 
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
 
@@ -2527,6 +2521,7 @@ export function DetailView({
                                   ref={inlineLinesRef}
                                   data={enrichedChildren}
                                   entity={detailEntity}
+                                  specName={windowName}
                                   token={token}
                                   apiBaseUrl={apiBaseUrl}
                                   linesLayout={linesLayout}
@@ -2913,7 +2908,7 @@ export function DetailView({
                           const isActiveTab = tabs[activeTab]?.key === st.key;
                           // Panel tabs are always mounted so their onCount fires eagerly (counts appear without clicking).
                           // Non-Panel tabs stay lazy to avoid unnecessary fetches; a capability-hidden tab (ETP-5116, mirrors ETP-4520) never renders at all, Panel or not — defense-in-depth alongside buildInitialTabs already excluding it from `tabs`/the nav strip and the openSecondaryTab deep-link.
-                          if (!isCapabilityVisible(capabilities, st.visibleWhenCapability) || (!isActiveTab && !st.Panel)) return false;
+                          if (!isSecondaryTabVisible(st, capabilities, vis.record, vis.ctx) || (!isActiveTab && !st.Panel)) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
                             st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
                             extractErrorMessage, requestBatchDelete: requestLineBatchDelete, secondaryInlineLinesRefs,

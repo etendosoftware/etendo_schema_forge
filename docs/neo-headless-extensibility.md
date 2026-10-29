@@ -633,6 +633,10 @@ public class ActiveUsersCounter implements UsageResourceCounter {
 }
 ```
 
+Real implementation: `TenantSeatCounter` (`@Named("tenantSeats")`, `com.etendoerp.go.usage`,
+ETP-5051) — the seats a tenant uses now, a stock answered with today's value dated at the range
+start. What a seat is and how a plan caps it: `modules/com.etendoerp.go/docs/plan-quotas.md` §2.1.
+
 **`@Named` only — never `@ApplicationScoped` or any other normal scope.** Lookup matches on
 `Bean#getName()`, and a normal-scoped bean is served through a Weld client proxy whose subclass
 does not carry the (non-`@Inherited`) qualifier, so the counter is silently skipped. This is the

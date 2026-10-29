@@ -763,6 +763,8 @@ is (`availableNow` says so for a given record). A `post` right after completing 
 `retryAfterSeconds`, repeat) or **422 `costCalculationStalled`** (costing is stuck: do not retry, ask an administrator). The AD
 `Posted` button is hidden from agents through `MCP_CONFIG` (a blind toggle the window never uses): calling it answers 405 with the reason.
 
+An `unpost` of a return receipt that is not posted is refused with **422** (`ETGO_GoodsUnpostNotPosted`).
+
 
 ## "Generar factura rectificativa" title on the post-confirm invoice popup — ETP-5688
 

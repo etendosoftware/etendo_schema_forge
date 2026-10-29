@@ -6,84 +6,108 @@ export const businessPartnerCategory = [
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Standard order for Q1 delivery",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Acme Corp",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-002",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Rush order - priority shipping required",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "TechFlow Inc",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-003",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Bulk purchase for warehouse restocking",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Global Trade Ltd",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-004",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Sample order for client evaluation",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Summit Industries",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-005",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Recurring monthly supply order",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Pacific Partners",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-006",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Special pricing agreement applies",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Alpine Solutions",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-007",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Consolidated order from multiple requests",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Meridian Group",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-008",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Trial order for new product line",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Vertex Systems",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-009",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Replacement for damaged goods",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Atlas Manufacturing",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-010",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Pre-season inventory build-up",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Nova Enterprises",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-011",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Customer-specific configuration",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Pinnacle Services",
+    "etgoIsvendor": "Sample etgoIsvendor"
   },
   {
     "id": "mock-businessPartnerCategory-012",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Government contract fulfillment",
-    "default": "Sample default"
+    "default": "Sample default",
+    "etgoIscustomer": "Horizon Labs",
+    "etgoIsvendor": "Sample etgoIsvendor"
   }
 ];
 

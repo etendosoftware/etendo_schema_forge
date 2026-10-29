@@ -71,6 +71,8 @@ import {
   subscribeNavigationPrompt,
 } from '@/lib/unsavedChanges.js';
 
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
+
 const LONG_NAME = 'Banco Santander S.A (Sandbox) - PT50018000354378591102009';
 
 beforeEach(() => {
@@ -190,6 +192,21 @@ describe('TopBar title', () => {
     expect(input).toHaveValue('lentejas');
     document.removeEventListener('schema-forge:vector-search-selection', recordSelection);
     window.history.pushState({}, '', '/');
+  });
+});
+
+describe('TopBar upgrade CTA in support mode (ETP-5351)', () => {
+  afterEach(() => resetSupportSessionForTests());
+
+  it('shows the payment CTA outside support mode', () => {
+    render(<TopBar title="Inicio" />);
+    expect(screen.getByTestId('topbar-go-to-payment')).toBeInTheDocument();
+  });
+
+  it('hides the payment CTA in support mode', () => {
+    applySupportSessionFromServer({ clientId: 'demo-client', clientName: 'Acme', expiresAt: null }, { storage: null });
+    render(<TopBar title="Inicio" />);
+    expect(screen.queryByTestId('topbar-go-to-payment')).toBeNull();
   });
 });
 

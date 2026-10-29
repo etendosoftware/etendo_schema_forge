@@ -453,6 +453,15 @@ Three matching mechanisms coexist — know all three before adding a new backend
    neither fit to show. They surface only on a stale screen (the SPA's own gates prevent them
    otherwise), so the copy tells the user to refresh.
 
+   **Keyed refusals whose prose is already localized (ETP-5840, ETP-5473).** A few `com.etendoerp.go`
+   refusals are answered in the *request language* by the backend itself (`NeoMessageText`: the
+   Spanish lives in its versioned `neo_hints_es.properties` catalog), because REST and MCP callers
+   have no SPA to translate them — e.g. the financial-account country refusals
+   `ETGO_FinAccCountryRequired`, `ETGO_FinAccInvalidCountry`, `ETGO_FinAccIbanRequiresCountry`. Their
+   text is therefore **not** a stable English literal any more: map them by key here. An English
+   exact-match entry in `BACKEND_ERROR_MAP` may stay as the fallback for an older, keyless backend,
+   but never add a Spanish-text entry — the key already covers it.
+
    **Degradation is the point, not a shim.** `com.etendoerp.go` and this repo deploy separately, so
    a frontend running against a backend that predates the field is the normal steady state for a
    while. No keys → `translateBackendError` skips this mechanism entirely and behaves exactly as it

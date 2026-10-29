@@ -8,7 +8,7 @@
  * search fields, horizontal layout filtering, section filtering, span classes,
  * and the image-field side-panel layout.
  */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // --- Mocks (must precede imports) ---
@@ -1417,6 +1417,49 @@ describe('EntityForm — extended render coverage', () => {
     });
   });
 
+  // --- customRenderer that owns its label (groups several fields, commits like a checkbox) ---
+
+  describe('customRenderer with ownsLabel', () => {
+    function GroupRenderer({ label, required, onFieldChange, onCommit, record }) {
+      return (
+        <fieldset data-testid="group-renderer">
+          <legend>{label}{required ? ' *' : ''}</legend>
+          <span data-testid="group-record">{String(record?.typeB)}</span>
+          <button type="button" data-testid="group-toggle-b" onClick={() => { onFieldChange('typeB', true); onCommit(); }}>b</button>
+        </fieldset>
+      );
+    }
+    GroupRenderer.ownsLabel = true;
+    const fields = [
+      { key: 'typeA', label: 'Contact type', column: 'EM_Type_A', required: true, customRenderer: GroupRenderer },
+      { key: 'typeB', label: 'Type B', column: 'EM_Type_B', form: false },
+    ];
+
+    it('leaves the label to the renderer, handing it the label, required flag and record', () => {
+      const { container } = render(<EntityForm fields={fields.slice(0, 1)} data={{ typeB: false }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('group-renderer')).toHaveTextContent('EM_Type_A *');
+      expect(screen.getByTestId('group-record')).toHaveTextContent('false');
+      expect(container.querySelector('label')).toBeNull();
+    });
+
+    it('writes a sibling field with its own column, then commits that change asynchronously', async () => {
+      vi.useFakeTimers();
+      try {
+        const onChange = vi.fn();
+        const onFieldBlur = vi.fn();
+        render(<EntityForm fields={fields} data={{}} onChange={onChange} onFieldBlur={onFieldBlur} />);
+        screen.getByTestId('group-toggle-b').click();
+        expect(onChange).toHaveBeenCalledWith('typeB', true, 'EM_Type_B');
+        // Deferred so the parent applies the write before the immediate save reads the record.
+        expect(onFieldBlur).not.toHaveBeenCalled();
+        vi.runAllTimers();
+        expect(onFieldBlur).toHaveBeenCalledWith('typeA');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   // --- Boolean select with valueType handling ---
 
   describe('boolean select value resolution', () => {
@@ -2301,5 +2344,225 @@ describe('EntityForm — extended render coverage', () => {
     // ETP-5107 — see the sibling assertion above: type="number" is the defect shape.
     expect(input.getAttribute('inputMode')).toBe('decimal');
     expect(input.getAttribute('type')).not.toBe('number');
+  });
+});
+
+// `variant: 'compact'` (the list-modal compact popup), the `gap` prop with `cols`, and the
+// `stepper: true` number-field branch. All three are opt-in: the default rendering must not move.
+describe('EntityForm — compact variant, grid gap and stepper field', () => {
+  const textField = { key: 'name', label: 'Name', type: 'text', column: 'Name' };
+  const checkboxField = { key: 'active', label: 'Active', type: 'checkbox', column: 'IsActive' };
+  const stepperField = {
+    key: 'days', label: 'Days', type: 'number', column: 'NetDays',
+    stepper: true, min: 0, max: 365, integer: true,
+  };
+  const hasClass = (el, cls) => el.className.split(/\s+/).includes(cls);
+
+  describe('gap', () => {
+    it('defaults the cols grid gap to 16px', () => {
+      const { container } = render(<EntityForm fields={[textField]} data={{}} onChange={vi.fn()} cols={1} />);
+      expect(container.firstElementChild.style.gap).toBe('16px');
+    });
+
+    it('applies a custom gap together with cols', () => {
+      const { container } = render(
+        <EntityForm fields={[textField]} data={{}} onChange={vi.fn()} cols={1} gap={20} />,
+      );
+      expect(container.firstElementChild.style.gap).toBe('20px');
+      expect(container.firstElementChild.style.gridTemplateColumns).toBe('repeat(1, minmax(0, 1fr))');
+    });
+
+    it('ignores gap without cols (the class-based grid keeps its own gap)', () => {
+      const { container } = render(<EntityForm fields={[textField]} data={{}} onChange={vi.fn()} gap={20} />);
+      const grid = container.firstElementChild;
+      expect(grid.style.gap).toBe('');
+      expect(hasClass(grid, 'gap-3')).toBe(true);
+    });
+  });
+
+  describe('variant', () => {
+    it('default: no compact grid classes, a 36px-density input and the pt-6 checkbox row', () => {
+      const { container } = render(
+        <EntityForm fields={[textField, checkboxField]} data={{ active: true }} onChange={vi.fn()} />,
+      );
+      expect(container.firstElementChild.className).not.toContain('space-y-2');
+      expect(hasClass(screen.getByTestId('field-name'), 'h-10')).toBe(false);
+      const box = screen.getByTestId('field-active');
+      expect(hasClass(box.parentElement, 'pt-6')).toBe(true);
+      expect(hasClass(box, 'rounded-sm')).toBe(true);
+      // Default checkbox: the check mark sits directly in the button, no inner 16px box.
+      expect(box.querySelector('span[aria-hidden="true"]')).toBeNull();
+      expect(box.querySelector('svg')).not.toBeNull();
+    });
+
+    it('compact: 40px inputs and the 8px label gap on the stacked wrappers', () => {
+      const { container } = render(
+        <EntityForm fields={[textField]} data={{}} onChange={vi.fn()} cols={1} variant="compact" />,
+      );
+      const grid = container.firstElementChild;
+      expect(grid.className).toContain('[&>div:not(.flex)]:space-y-2');
+      expect(grid.className).toContain('[&_label]:leading-6');
+      expect(hasClass(screen.getByTestId('field-name'), 'h-10')).toBe(true);
+    });
+
+    it('compact: the checkbox row drops pt-6 and draws the inner 16px box', () => {
+      render(
+        <EntityForm fields={[checkboxField]} data={{ active: false }} onChange={vi.fn()} variant="compact" />,
+      );
+      const button = screen.getByTestId('field-active');
+      const row = button.parentElement;
+      expect(hasClass(row, 'pt-6')).toBe(false);
+      expect(hasClass(row, 'gap-3')).toBe(true);
+      expect(hasClass(button, 'h-6')).toBe(true);
+      const inner = button.querySelector('span[aria-hidden="true"]');
+      expect(hasClass(inner, 'border-[1.5px]')).toBe(true);
+      expect(hasClass(inner, 'bg-card')).toBe(true);
+      expect(inner.querySelector('svg')).toBeNull();
+      expect(row.querySelector('label').className).toContain('font-normal');
+    });
+
+    it('compact: a checked box is filled with the primary colour and shows the check mark', () => {
+      render(
+        <EntityForm fields={[checkboxField]} data={{ active: 'Y' }} onChange={vi.fn()} variant="compact" />,
+      );
+      const button = screen.getByTestId('field-active');
+      expect(button).toHaveAttribute('aria-checked', 'true');
+      const inner = button.querySelector('span[aria-hidden="true"]');
+      expect(hasClass(inner, 'bg-primary')).toBe(true);
+      expect(inner.querySelector('svg')).not.toBeNull();
+    });
+
+    it('compact: the checkbox still toggles through onChange', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(
+        <EntityForm fields={[checkboxField]} data={{ active: false }} onChange={onChange} variant="compact" />,
+      );
+      await user.click(screen.getByTestId('field-active'));
+      expect(onChange).toHaveBeenCalledWith('active', true, 'IsActive');
+    });
+
+    it('an unknown variant renders as default', () => {
+      render(<EntityForm fields={[checkboxField]} data={{}} onChange={vi.fn()} variant="bogus" />);
+      expect(hasClass(screen.getByTestId('field-active').parentElement, 'pt-6')).toBe(true);
+    });
+  });
+
+  describe('stepper field', () => {
+    it('renders the − / + stepper for a stepper number field, associated with its label', () => {
+      render(<EntityForm fields={[stepperField]} data={{ days: 5 }} onChange={vi.fn()} />);
+      const input = screen.getByTestId('field-days');
+      expect(input).toHaveValue('5');
+      expect(screen.getByLabelText(/Days/)).toBe(input);
+      expect(screen.getByTestId('field-days-increment')).toBeEnabled();
+      expect(screen.getByTestId('field-days-decrement')).toBeEnabled();
+    });
+
+    it('a plain number field (no stepper flag) has no stepper buttons', () => {
+      const { stepper, ...plain } = stepperField;
+      render(<EntityForm fields={[plain]} data={{ days: 5 }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('field-days')).toBeInTheDocument();
+      expect(screen.queryByTestId('field-days-increment')).toBeNull();
+    });
+
+    it('a click reports the new value with the column and fires onFieldBlur deferred', async () => {
+      const onChange = vi.fn();
+      const onFieldBlur = vi.fn();
+      render(
+        <EntityForm fields={[stepperField]} data={{ days: 5 }} onChange={onChange} onFieldBlur={onFieldBlur} />,
+      );
+      fireEvent.click(screen.getByTestId('field-days-increment'));
+      expect(onChange).toHaveBeenCalledWith('days', '6', 'NetDays');
+      expect(onFieldBlur).not.toHaveBeenCalled();
+      await waitFor(() => expect(onFieldBlur).toHaveBeenCalledWith('days'));
+    });
+
+    it('disables + at the field max and starts an empty value at the field min', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(<EntityForm fields={[stepperField]} data={{ days: 365 }} onChange={onChange} />);
+      expect(screen.getByTestId('field-days-increment')).toBeDisabled();
+      rerender(<EntityForm fields={[stepperField]} data={{ days: '' }} onChange={onChange} />);
+      fireEvent.click(screen.getByTestId('field-days-increment'));
+      expect(onChange).toHaveBeenLastCalledWith('days', '0', 'NetDays');
+    });
+
+    it('clamps a typed value above max on blur', () => {
+      const onChange = vi.fn();
+      render(<EntityForm fields={[stepperField]} data={{ days: '' }} onChange={onChange} />);
+      const input = screen.getByTestId('field-days');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '400' } });
+      fireEvent.blur(input);
+      expect(onChange).toHaveBeenLastCalledWith('days', '365', 'NetDays');
+    });
+
+    it('disables the stepper while the field is saving', () => {
+      render(<EntityForm fields={[stepperField]} data={{ days: 5 }} onChange={vi.fn()} savingField="days" />);
+      expect(screen.getByTestId('field-days')).toBeDisabled();
+      expect(screen.getByTestId('field-days-increment')).toBeDisabled();
+      expect(screen.getByTestId('field-days-decrement')).toBeDisabled();
+    });
+
+    it('a read-only stepper field renders the plain read-only input, without buttons', () => {
+      render(<EntityForm fields={[stepperField]} data={{ days: 5 }} onChange={vi.fn()} readOnly />);
+      expect(screen.getByTestId('field-days')).toBeDisabled();
+      expect(screen.queryByTestId('field-days-increment')).toBeNull();
+    });
+
+    describe('refusal hint', () => {
+      const typeInto = (value) => {
+        const input = screen.getByTestId('field-days');
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value } });
+        return input;
+      };
+
+      it('shows the field stepperRejectedKey under the field when a keystroke is refused', () => {
+        render(
+          <EntityForm fields={[{ ...stepperField, stepperRejectedKey: 'paymentTermDaysNotInteger' }]} data={{ days: '10' }} onChange={vi.fn()} />,
+        );
+        typeInto('10,');
+        expect(screen.getByTestId('field-days-rejected')).toHaveAttribute('role', 'alert');
+        expect(screen.getByTestId('field-days-rejected')).toHaveTextContent('paymentTermDaysNotInteger');
+      });
+
+      it('falls back to fieldIntegerError without a stepperRejectedKey', () => {
+        render(<EntityForm fields={[stepperField]} data={{ days: '10' }} onChange={vi.fn()} />);
+        typeInto('-');
+        expect(screen.getByTestId('field-days-rejected')).toHaveTextContent('fieldIntegerError');
+      });
+
+      it('refuses a digit beyond max length, then clears on the next accepted keystroke and on blur', () => {
+        const onChange = vi.fn();
+        render(<EntityForm fields={[stepperField]} data={{ days: '' }} onChange={onChange} />);
+        typeInto('1000');
+        expect(onChange).not.toHaveBeenCalled();
+        expect(screen.getByTestId('field-days-rejected')).toBeInTheDocument();
+        const input = typeInto('10');
+        expect(onChange).toHaveBeenCalledWith('days', '10', 'NetDays');
+        expect(screen.queryByTestId('field-days-rejected')).toBeNull();
+        typeInto('10.');
+        expect(screen.getByTestId('field-days-rejected')).toBeInTheDocument();
+        fireEvent.blur(input);
+        expect(screen.queryByTestId('field-days-rejected')).toBeNull();
+      });
+
+      it('a stepper field without integer: true neither vetoes nor hints', () => {
+        const onChange = vi.fn();
+        const { integer, ...decimalStepper } = stepperField;
+        render(<EntityForm fields={[decimalStepper]} data={{ days: '10' }} onChange={onChange} />);
+        typeInto('10,5');
+        expect(onChange).toHaveBeenCalledWith('days', '10.5', 'NetDays');
+        expect(screen.queryByTestId('field-days-rejected')).toBeNull();
+      });
+    });
+
+    it('calloutOn blur wins over stepper (deferred input, no buttons)', () => {
+      render(
+        <EntityForm fields={[{ ...stepperField, calloutOn: 'blur' }]} data={{ days: 5 }} onChange={vi.fn()} />,
+      );
+      expect(screen.getByTestId('field-days')).toBeInTheDocument();
+      expect(screen.queryByTestId('field-days-increment')).toBeNull();
+    });
   });
 });

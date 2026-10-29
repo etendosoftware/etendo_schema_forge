@@ -1,5 +1,8 @@
 // ETP-5840 — relative, not `@/`: this module is loaded by plain `node --test` too.
 import { formatCalendarDate } from './dateOnly.js';
+import {
+  announceQuotaRefusal, extractQuotaExceeded, isQuotaCheckFailed, quotaResourceLabel, quotaUsageText,
+} from './planQuotas.js';
 // Expands N synonym source messages that all map to the SAME translation key into that many map
 // entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
 // run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
@@ -117,7 +120,9 @@ const BACKEND_ERROR_MAP = {
   'Invalid country': 'backendError.invalidCountry',
   // ETP-5473 (FinancialAccountHandler). Country is mandatory for every financial-account type on
   // create; the IBAN is never used to derive it. (Clearing it on update of a Bank account that
-  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.)
+  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.) These three
+  // now travel with `messageKeys` (ETGO_FinAcc*, see BACKEND_ERROR_KEY_MAP) and are written in the
+  // request language; the English literals are kept only as the fallback for a keyless backend.
   'Country is required': 'backendError.countryRequired',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
@@ -449,6 +454,13 @@ const BACKEND_ERROR_KEY_MAP = {
   // ETP-5577 — core `PeriodNotValid`: the same refusal raised by GL_JOURNAL_CHK_RESTRICT_TRG when a
   // journal is saved with a date whose period is not open.
   PeriodNotValid: 'backendError.periodNotAvailable',
+  // ETP-5591 — DocumentPostingService/DocumentDisabledReason: core STATUS_DocumentDisabled, named
+  // by its certain reason or the generic DocumentDisabled. `messageParams.financialAccount` names
+  // the account of the two ETGO_ keys (English-only AD messages).
+  DocumentDisabled: 'backendError.documentDisabledForAccounting',
+  TotalGrossIsZero: 'backendError.invoiceTotalIsZero',
+  ETGO_PostingDisabledNoDepositAccount: 'backendError.finAccNoDepositAccount',
+  ETGO_PostingDisabledNoWithdrawalAccount: 'backendError.finAccNoWithdrawalAccount',
   // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
   // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
   // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so
@@ -467,11 +479,23 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_InvoiceFieldsLockedStatus: 'backendError.invoiceStatusDimensionsLocked',
   ETGO_InvoiceFieldsLockedSiiSent: 'backendError.invoiceSiiSentReferenceLocked',
   ETGO_InvoiceReactivateFiscalRectified: 'backendError.invoiceReactivateFiscalRectified',
+  // ETP-5745 CP-9 — com.etendoerp.go RectificationTotalGuard: completing a rectificativa whose
+  // total, added to every other COMPLETED rectificativa of the same origin, would exceed the
+  // origin invoice's own total. `messageParams.originTotal`/`rectifiedTotal` are dropped here —
+  // same rationale as the CashCloseSupport matchers below: a raw BigDecimal string pasted into
+  // Spanish copy renders the wrong decimal separator and no currency symbol.
+  ETGO_InvoiceRectificationExceedsOriginal: 'backendError.invoiceRectificationExceedsOriginal',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5791 — the contact-type refusals of com.etendoerp.go (BusinessPartnerCategoryHandler /
+  // ContactTypeRules): a contact category, or a contact, saved with neither Customer nor
+  // Vendor/Creditor. AD_MESSAGE records of a module with no es_ES translation pack, so this map
+  // is where they become Spanish.
+  ETGO_BPGroupContactTypeRequired: 'backendError.bpGroupContactTypeRequired',
+  ETGO_BPartnerContactTypeRequired: 'backendError.bpartnerContactTypeRequired',
   // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
   // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
   // same case maps to "period not open", which sends the user to open a period they do not need.
@@ -491,6 +515,13 @@ const BACKEND_ERROR_KEY_MAP = {
   // translatePaymentTermConflict.
   ETGO_PaymentTermDaysInvalid: 'backendError.paymentTermDaysInvalid',
   ETGO_PaymentTermDaysOutOfRange: 'backendError.paymentTermDaysOutOfRange',
+  // ETP-5473 — com.etendoerp.go FinancialAccountHandler: the country refusals of a financial
+  // account. The backend now answers them in the request language (REST/MCP have no SPA to
+  // translate), so the text is no longer a stable English literal; these keys are. The English
+  // exact-match entries in BACKEND_ERROR_MAP stay as the fallback for a backend that predates them.
+  ETGO_FinAccCountryRequired: 'backendError.countryRequired',
+  ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
+  ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -642,6 +673,52 @@ function translateInvalidAccount(messageKeys, messageParams, t) {
   return [base, entity, groupAccounts, productAccounts].filter(Boolean).join(' ');
 }
 
+const INVOICE_REACTIVATE_FISCAL_KEY = 'ETGO_InvoiceReactivateFiscalRectified';
+
+/**
+ * Joins a list with a locale-aware conjunction before the last item ("A y B" / "A and B",
+ * "A, B y C" / "A, B and C" for 3+) — ETP-5745. The generic `toInterpolationParams` comma-join
+ * (used by every other array-valued messageParam, including this SAME message's `rectificativas`)
+ * must stay untouched: it is correct for a document-number list, but reads awkwardly for a list of
+ * fiscal system names ("SII, TicketBAI y está rectificada..." → "SII y TicketBAI y está..."). The
+ * conjunction word itself comes from `t()`, not a hardcoded "y", so it never leaks into en_US.
+ *
+ * Exported so the two GET-enrichment-driven previews of this SAME message —
+ * `DetailMoreActionsMenu.jsx`'s pre-unpost check and `useInvoiceWindow.js`'s bulk-bar row
+ * preview, both reading `reactivationBlockedFiscalSystem` directly via `ui()` rather than
+ * through `translateBackendError` — can render identically to the live 422 instead of falling
+ * back to a flat comma join.
+ */
+export function joinWithConjunction(items, t) {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  if (items.length === 1) return String(items[0]);
+  const and = t('listConjunctionAnd');
+  if (items.length === 2) return `${items[0]} ${and} ${items[1]}`;
+  // No Oxford comma before the conjunction ("A, B y C" / "A, B and C") — matches the ticket's
+  // own worked example for the es_ES wording, mirrored in en_US for a single shared algorithm.
+  return `${items.slice(0, -1).join(', ')} ${and} ${items[items.length - 1]}`;
+}
+
+/**
+ * `ETGO_InvoiceReactivateFiscalRectified` (InvoiceReactivationGuard, ETP-5745): special-cased
+ * ahead of the generic {@link translateByMessageKey} route because this ONE message needs TWO
+ * different join behaviors on its two array messageParams — `fiscalSystem` (conjunction) and
+ * `rectificativas` (plain comma, unchanged). `messageParams.fiscalSystem` is a real `JSONArray`
+ * from the backend (no longer pre-joined into a string there), matching `rectificativas`' own
+ * shape.
+ */
+function translateInvoiceReactivateFiscalRectified(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageKeys.includes(INVOICE_REACTIVATE_FISCAL_KEY)) return null;
+  if (!messageParams || typeof messageParams !== 'object') return null;
+  const fiscalSystem = Array.isArray(messageParams.fiscalSystem)
+    ? joinWithConjunction(messageParams.fiscalSystem, t)
+    : messageParams.fiscalSystem;
+  const rectificativas = Array.isArray(messageParams.rectificativas)
+    ? messageParams.rectificativas.join(', ')
+    : messageParams.rectificativas;
+  return resolveLocaleKey(t, 'backendError.invoiceReactivateFiscalRectified', { fiscalSystem, rectificativas });
+}
+
 // ETP-5840 — the exchange-rate refusals of com.etendoerp.go, rendered from their identity.
 // A foreign-currency quotation/order/invoice with an empty `eTGOCurrencyRate` is refused with
 // HTTP 422 on every channel:
@@ -709,7 +786,108 @@ export function translateBackendErrorBody(body, t, fallback) {
   return translateBackendError(message, t, {
     messageKeys: extractBackendMessageKeys(body),
     messageParams: extractBackendMessageParams(body),
+    quota: extractQuotaExceeded(body),
+    quotaCheckFailed: isQuotaCheckFailed(body),
   });
+}
+
+/**
+ * ETP-5051 — the translated sentence of a plan-quota refusal in a failed action's body, or `null`
+ * for any other body. "Plan-quota refusal" is a 403 QUOTA_EXCEEDED (`{ error: { code, message,
+ * quota } }`, also inside a `/sws/neo/batch` envelope) or a 500 QUOTA_CHECK_FAILED.
+ *
+ * For the action paths that read only `response.message` / `message` and so showed "Error (403)":
+ * `translateQuotaRefusalBody(body, ui) || <what the caller showed before>` routes the quota refusal
+ * through the one translator (`translateBackendErrorBody`, which also announces it to the quota
+ * banner via `announceQuotaRefusal`) and leaves every other error exactly as the caller had it.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @returns {string|null}
+ */
+export function translateQuotaRefusalBody(body, t) {
+  if (typeof t !== 'function') return null;
+  if (!extractQuotaExceeded(body) && !isQuotaCheckFailed(body)) return null;
+  return translateBackendErrorBody(body, t, null) || null;
+}
+
+/**
+ * ETP-5051 — the plan-quota identity of a failed action's body, as fields to put on the Error a
+ * caller throws, for a caller that has no `ui` at the throw site and translates later with
+ * `translateBackendError(err.message, ui, { ...options, ...quotaRefusalFields(err) })`. Empty for
+ * any other body, so spreading it changes nothing there.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @returns {{quota?: object, quotaCheckFailed?: boolean}}
+ */
+export function quotaRefusalFields(body) {
+  const quota = extractQuotaExceeded(body);
+  return {
+    ...(quota ? { quota } : {}),
+    ...(isQuotaCheckFailed(body) ? { quotaCheckFailed: true } : {}),
+  };
+}
+
+// ETP-5051 — a NEO write refused because a plan quota is exhausted: HTTP 403 with
+// `{ error: { code: 'QUOTA_EXCEEDED', message, quota: QuotaItem } }`, on REST single, batch and
+// MCP alike. The SPA owns the sentence, built from the catalog name and unit the quota carries, so
+// it is never read as a generic permission refusal and never as the 402 blocked-environment
+// screen (that one is decided in core's apiFetch on the status alone, and a 403 never reaches it).
+//
+// Two ways in, one sentence out:
+//   1. the structured `quota` (`extractQuotaExceeded`), passed by every caller that has the body;
+//   2. the message prose, `Quota exceeded: <resourceName> (<consumed>/<includedQty> <unitLabel>)`,
+//      for the many callers that only forward the message string. Plain string slicing, no regex:
+//      the resource name is operator-editable catalog data (javascript:S5852), and `lastIndexOf`
+//      keeps a name that itself contains " (" intact.
+const QUOTA_EXCEEDED_PREFIX = 'Quota exceeded: ';
+
+function matchQuotaExceededMessage(msg) {
+  if (typeof msg !== 'string') return null;
+  const trimmed = msg.trim();
+  if (!trimmed.startsWith(QUOTA_EXCEEDED_PREFIX) || !trimmed.endsWith(')')) return null;
+  const body = trimmed.slice(QUOTA_EXCEEDED_PREFIX.length, -1);
+  const open = body.lastIndexOf(' (');
+  if (open <= 0) return null;
+  const inner = body.slice(open + 2);
+  const slash = inner.indexOf('/');
+  if (slash <= 0) return null;
+  const rest = inner.slice(slash + 1);
+  const space = rest.indexOf(' ');
+  const unit = space < 0 ? '' : rest.slice(space + 1).trim();
+  return {
+    resourceName: body.slice(0, open),
+    consumed: inner.slice(0, slash).trim(),
+    includedQty: (space < 0 ? rest : rest.slice(0, space)).trim(),
+    // Defensive: the backend leaves a blank unit out of the sentence altogether
+    // (`QuotaItemJson.refusalMessage`), but a literal "null" is still read as no unit.
+    unitLabel: unit && unit !== 'null' ? unit : null,
+  };
+}
+
+// ETP-5051 — the quota check ITSELF failed (HTTP 500, `code: 'QUOTA_CHECK_FAILED'`): nothing was
+// saved and a retry is safe. Its own sentence, never the generic 500 text nor the English prose.
+// Recognised by the code (structured) or by the backend's fixed sentence (callers that forward
+// only the message).
+const QUOTA_CHECK_FAILED_MESSAGE = 'The quota check failed; nothing was saved. Try again.';
+
+function translateQuotaCheckFailed(failed, msg, t) {
+  if (!failed && !(typeof msg === 'string' && msg.trim() === QUOTA_CHECK_FAILED_MESSAGE)) return null;
+  return resolveLocaleKey(t, 'backendError.quotaCheckFailed');
+}
+
+function translateQuotaExceeded(quota, t) {
+  if (!quota) return null;
+  // Every classified QUOTA_EXCEEDED passes here, so this is where the quota banner hears about it
+  // (one shared re-read of the environment list; deduplicated, see `announceQuotaRefusal`).
+  announceQuotaRefusal(quota);
+  // Same label as the quota banner and the /account row: the catalog name, else the key.
+  const resource = quotaResourceLabel(quota);
+  if (!resource) return resolveLocaleKey(t, 'backendError.quotaExceededGeneric');
+  const usage = quotaUsageText(quota, t);
+  return usage
+    ? resolveLocaleKey(t, 'backendError.quotaExceeded', { resource, usage })
+    : resolveLocaleKey(t, 'backendError.quotaExceededNoUsage', { resource });
 }
 
 // `t(key, params)` interpolates `{var}` tokens (single-brace — this codebase's real
@@ -737,10 +915,14 @@ function translateByMessageKey(messageKeys, t, messageParams) {
     const key = BACKEND_ERROR_KEY_MAP[raw];
     if (!key) continue;
     const translated = t(key, params);
-    if (translated && translated !== key) return translated;
+    // ETP-5591: a caller that drops `messageParams` would show a raw `{financialAccount}`; the
+    // backend's own text is already localized and complete, so let it through instead.
+    if (translated && translated !== key && !UNFILLED_PARAM.test(translated)) return translated;
   }
   return null;
 }
+
+const UNFILLED_PARAM = /\{\w+\}/;
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
 // Business Partner name) instead of being a single fixed exact string, so they can't
@@ -991,6 +1173,21 @@ function matchReturnInvoiceWithoutAmount(msg) {
   const products = msg.slice(RETURN_INVOICE_NO_AMOUNT_PREFIX.length, -RETURN_INVOICE_NO_AMOUNT_SUFFIX.length);
   if (!products) return null;
   return { products };
+}
+
+// OrderInvoiceDuplicateGuard.java (com.etendoerp.go — ETP-5714), `error.code = draftInvoiceExists`:
+// "This order already has a draft invoice (D1, D2)." — the draft document numbers are one opaque
+// {docs} param, located by the fixed prefix and suffix (never by a regex). The screen hides the
+// button while a draft exists, so this is only ever read from a bulk action or a race.
+const DRAFT_INVOICE_EXISTS_PREFIX = 'This order already has a draft invoice (';
+const DRAFT_INVOICE_EXISTS_SUFFIX = ').';
+
+function matchDraftInvoiceExists(msg) {
+  if (!msg.startsWith(DRAFT_INVOICE_EXISTS_PREFIX) || !msg.endsWith(DRAFT_INVOICE_EXISTS_SUFFIX)) {
+    return null;
+  }
+  const docs = msg.slice(DRAFT_INVOICE_EXISTS_PREFIX.length, -DRAFT_INVOICE_EXISTS_SUFFIX.length);
+  return docs ? { docs } : null;
 }
 
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
@@ -1436,6 +1633,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchReturnLineNotInDocument, 'backendError.returnLineNotInDocument'],
   [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
   [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
+  [matchDraftInvoiceExists, 'backendError.draftInvoiceExists'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -1606,7 +1804,10 @@ function pickBackendErrorText(data) {
  * for a non-JSON body.
  *
  * @param {Response} res the failed response (its body is consumed)
- * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object}>}
+ * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object, quota?: object, quotaCheckFailed?: boolean, code?: string}>}
+ *   `quota` — ETP-5051, the exhausted plan quota of a 403 QUOTA_EXCEEDED refusal;
+ *   `quotaCheckFailed` — a 500 QUOTA_CHECK_FAILED (the check itself failed, nothing saved);
+ *   `code` — the body's error code, when it has one (`extractBackendErrorCode`).
  */
 export async function parseBackendError(res) {
   let data;
@@ -1615,10 +1816,15 @@ export async function parseBackendError(res) {
   } catch {
     return {};
   }
+  const quota = extractQuotaExceeded(data);
+  const quotaCheckFailed = isQuotaCheckFailed(data);
   return {
     message: pickBackendErrorText(data),
     messageKeys: extractBackendMessageKeys(data),
     messageParams: extractBackendMessageParams(data),
+    // Only when present, so a body without them keeps its plain three-field shape.
+    ...(quota ? { quota } : {}),
+    ...(quotaCheckFailed ? { quotaCheckFailed } : {}),
     ...codeEntry(data),
   };
 }
@@ -1638,8 +1844,11 @@ export async function parseBackendErrorMessage(res) {
  * @returns {Promise<string>} the translated message
  */
 export async function translateBackendErrorResponse(res, t) {
-  const { message, messageKeys, messageParams, code } = await parseBackendError(res);
-  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams, code });
+  const {
+    message, messageKeys, messageParams, quota, quotaCheckFailed, code,
+  } = await parseBackendError(res);
+  return translateBackendError(message ?? `Error ${res.status}`, t,
+    { messageKeys, messageParams, quota, quotaCheckFailed, code });
 }
 
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';
@@ -1678,17 +1887,28 @@ function translateSingleMessage(trimmed, t) {
  *
  * @param {string} msg the backend message (already-translated prose, as it crossed the wire)
  * @param {function} t the `ui` function from `useUI()`
- * @param {{messageKeys?: string[], messageParams?: object}} [options] ETP-5316 — the AD_MESSAGE
+ * @param {{messageKeys?: string[], messageParams?: object, quota?: object, quotaCheckFailed?: boolean}} [options] ETP-5316 — the AD_MESSAGE
  *   search keys behind `msg`, when the backend sent them (see `extractBackendMessageKeys`). Tried
  *   FIRST, because a key is a stable identity while the prose it produced may embed per-document
  *   values. ETP-5175 — `messageParams` (see `extractBackendMessageParams`) are the values those
  *   keys interpolate; with them a parameterized message (the Invalid-Account posting failure) is
  *   rendered entirely in the SPA's locale. Omitting either is the earlier behavior and stays fully
  *   supported.
+ *   ETP-5051 — `quota` (see `extractQuotaExceeded` in `planQuotas.js`) is the exhausted plan
+ *   quota of a 403 QUOTA_EXCEEDED write refusal; it wins over every other route.
+ *   `quotaCheckFailed` (see `isQuotaCheckFailed`) marks a 500 QUOTA_CHECK_FAILED: the quota
+ *   check itself failed and nothing was saved; it comes right after.
  * @returns {string} the translated message, or `msg` untouched when nothing matched
  */
 export function translateBackendError(msg, t, options = {}) {
   if (typeof t !== 'function') return msg;
+
+  // ETP-5051: the quota refusal first — its identity is the structured `quota`, or its fixed
+  // prose prefix when the caller forwarded only the message.
+  const quotaExceeded = translateQuotaExceeded(options.quota ?? matchQuotaExceededMessage(msg), t);
+  if (quotaExceeded !== null) return quotaExceeded;
+  const quotaCheckFailed = translateQuotaCheckFailed(options.quotaCheckFailed, msg, t);
+  if (quotaCheckFailed !== null) return quotaCheckFailed;
 
   // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
   const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);
@@ -1700,6 +1920,12 @@ export function translateBackendError(msg, t, options = {}) {
   // ETP-5826: same reason — the duplicate refusals pick their sentence from a param.
   const paymentTermConflict = translatePaymentTermConflict(options.messageKeys, options.messageParams, t);
   if (paymentTermConflict !== null) return paymentTermConflict;
+
+  // ETP-5745: before the key route too — see translateInvoiceReactivateFiscalRectified for why
+  // this one message needs a join behavior the generic key route's toInterpolationParams can't give it.
+  const reactivateFiscal = translateInvoiceReactivateFiscalRectified(
+    options.messageKeys, options.messageParams, t);
+  if (reactivateFiscal !== null) return reactivateFiscal;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

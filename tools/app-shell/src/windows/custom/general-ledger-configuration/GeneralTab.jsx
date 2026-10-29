@@ -1,5 +1,5 @@
 import { useUI } from '@/i18n';
-import SectionShell from './SectionShell.jsx';
+import { SectionShell } from '@/components/contract-ui';
 import Field from './Field.jsx';
 import { CURRENCY_OPTIONS } from './mockCatalogs.js';
 

@@ -1,8 +1,14 @@
 // @covers tools/app-shell/src/windows/registry.js
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import menuConfig from '../../menu.json' with { type: 'json' };
 import { buildMenuGroups, buildWindowMap, getAllWindowNames } from '../registry.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const registrySrc = readFileSync(join(__dirname, '..', 'registry.js'), 'utf8');
 
 describe('buildMenuGroups', () => {
   it('returns groups from menu.json', () => {
@@ -35,6 +41,31 @@ describe('getAllWindowNames', () => {
     assert.ok(names.includes('business-partner'));
     assert.ok(names.includes('product'));
     assert.ok(names.length >= 11);
+  });
+});
+
+// ETP-5806 — `bp-location` is a wiring/registration contract, not a `buildWindowMap()`
+// behavior: AD Window 121 "Location" has no nav entry in menu.json (the inactive-in-menu
+// comment above its `windowLoaders` line says so), so `buildWindowMap()` — which only
+// iterates `menuConfig.menu` — never surfaces it, and there is no way to exercise this
+// registration by calling the module's exported functions. Reading `windowLoaders` as
+// source text is the only way to guard that the loader still exists; this is exactly the
+// "wiring contract" case test-reuse-policy.md carves out for source-reading (point 7).
+describe('windowLoaders registration — bp-location (ETP-5806, source contract)', () => {
+  it('registers a bp-location loader pointing at the generated bp-location window', () => {
+    assert.match(
+      registrySrc,
+      /'bp-location':\s*\(\)\s*=>\s*import\(['"]@generated\/bp-location\/generated\/web\/bp-location\/index\.jsx['"]\)/,
+    );
+  });
+
+  it('is not reachable through buildWindowMap() (no nav entry in menu.json), confirming the loader is a direct-navigation safety net, not a menu window', () => {
+    const map = buildWindowMap();
+    assert.equal(map['bp-location'], undefined);
+    assert.ok(
+      !menuConfig.menu.some(group => group.items.some(item => item.name === 'bp-location')),
+      'bp-location must have no menu.json nav entry — if one is ever added, extend this test to assert buildWindowMap() resolves it via windowLoaders',
+    );
   });
 });
 
@@ -82,5 +113,43 @@ describe('buildWindowMap', () => {
   it('registers items of a hidden group only when they are routeOnly', () => {
     const map = buildWindowMap();
     for (const name of ['project', 'time-tracking', 'document']) assert.ok(map[name], `${name} is linked from /projects`);
+  });
+
+  it('marks generated windows and audited standard DataTable wrappers as grid-view candidates', () => {
+    const map = buildWindowMap();
+
+    assert.equal(map['goods-shipment'].standardListViewSource, true);
+    assert.equal(map.amortization.standardListViewSource, true);
+    assert.equal(map['financial-account'].standardListViewSource, true);
+    for (const name of [
+      'amortization', 'assets', 'goods-movements', 'goods-receipt', 'internal-consumption',
+      'physical-inventory', 'price-list', 'purchase-order', 'return-to-vendor-shipment',
+      'sales-order', 'sales-quotation', 'sales-invoice', 'purchase-invoice',
+      'payment-in', 'payment-out', 'user', 'warehouse', 'contacts', 'product',
+      'product-category', 'goods-shipment', 'return-material-receipt', 'financial-account',
+    ]) assert.equal(map[name].standardListViewSource, true, name);
+    for (const name of ['calendar', 'organization', 'fiscal-monitor']) {
+      assert.equal(map[name].standardListViewSource, false, name);
+    }
+  });
+});
+
+
+describe('audited standard table contract slots', () => {
+  it('declares the exact forwarding header wrapper for each audited custom table', () => {
+    const map = buildWindowMap();
+    for (const [name, headerTable] of Object.entries({
+      contacts: 'ContactsTable',
+      'financial-account': 'AccountsHeaderTable',
+      'sales-invoice': 'InvoiceHeaderTable',
+      'purchase-invoice': 'InvoiceHeaderTable',
+      'payment-in': 'PaymentHeaderTable',
+      'payment-out': 'PaymentHeaderTable',
+      user: 'UserHeaderTable',
+    })) assert.equal(map[name].standardListViewHeaderTable, headerTable, name);
+    assert.equal(map['sales-order'].standardListViewHeaderTable, null);
+    assert.equal(map.warehouse.standardListViewHeaderTable, null);
+    assert.equal(map.product.standardListViewLayout, 'gallery');
+    assert.equal(map.contacts.standardListViewLayout, 'default');
   });
 });

@@ -20,7 +20,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { loadLocaleDictionary, makeRealUI } from '../../shared/__tests__/testUtils/realLocaleUI.js';
 
-import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
+import NotPostedDocumentsPage, { DOC_TYPE_LABEL_KEYS } from '../NotPostedDocumentsPage.jsx';
 
 const esES = loadLocaleDictionary('es_ES');
 const enUS = loadLocaleDictionary('en_US');
@@ -129,7 +129,7 @@ describe('NotPostedDocumentsPage — toolbar and status copy against the real lo
     expect(screen.getByTestId('npd-filter-document-type')).toHaveTextContent('Todos los documentos');
     expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('Todos los estados');
     expect(screen.getByTestId('npd-filter-date-range')).toHaveTextContent('Últimos 12 meses');
-    expect(screen.getByTestId('npd-status-doc-1')).toHaveTextContent('Periodo cerrado');
+    expect(screen.getByTestId('npd-status-doc-1')).toHaveTextContent('Período cerrado');
     expect(screen.getByTestId('npd-status-doc-2')).toHaveTextContent('No contabilizado');
     expect(screen.getByTestId('npd-post-row-doc-1')).toHaveTextContent('Contabilizar');
     expect(screen.getByTestId('npd-open-row-doc-1')).toHaveTextContent('Abrir documento');
@@ -172,14 +172,28 @@ describe('NotPostedDocumentsPage — toolbar and status copy against the real lo
 });
 
 describe('NotPostedDocumentsPage — document-type badge translation (ETP-4945)', () => {
-  it('renders the mapped label for a known document-type code, not the raw value', async () => {
+  it('renders the GO name for a known document-type code, not the core label nor the raw value (ETP-5591)', async () => {
     activeUi = realUiEs;
     vi.stubGlobal('fetch', mkFetch(ROWS));
     renderPage();
 
     const row = await screen.findByTestId('row-doc-1');
-    expect(row.textContent).toContain('Asiento contable');
+    expect(row.textContent).toContain('Asiento manual');
+    expect(row.textContent).not.toContain('Asiento contable');
     expect(row.textContent).not.toContain('GL Journal');
+  });
+
+  it('names every document-type code core emits, in every locale (ETP-5591)', () => {
+    // AD_Reference DE94535164E741AB9B1A560EF3F72854, the posting document types.
+    const CORE_CODES = ['A', 'BMP', 'BS', 'CA', 'DD', 'GLJ', 'GR', 'GS', 'IC', 'INV', 'LC', 'LCC', 'M',
+      'MI', 'PI', 'PIN', 'POT', 'R', 'RMR', 'RVS', 'SI', 'T', 'WE'];
+    expect(Object.keys(DOC_TYPE_LABEL_KEYS).sort()).toEqual([...CORE_CODES].sort());
+    for (const locale of ['es_ES', 'en_US', 'es_AR']) {
+      const ui = makeRealUI(loadLocaleDictionary(locale));
+      for (const key of Object.values(DOC_TYPE_LABEL_KEYS)) {
+        expect(ui(key), `${locale}.${key}`).not.toBe(key);
+      }
+    }
   });
 
   it('falls back to the raw datasource label for a row without a code', async () => {

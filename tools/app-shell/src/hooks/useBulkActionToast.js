@@ -47,52 +47,99 @@ export function showBulkActionToast(ui, result) {
   // `omitted.length > 0` means more than one row was actually selected, so those
   // stay on the generic/mixed path below.
   if (failed.length === 1 && ok === 0 && omitted.length === 0) {
-    // `messageKeys` (ETP-5316) lets a core document-action failure be resolved by AD_MESSAGE key
-    // rather than by its text — the text carries AD line numbers (10, 20, 30…) that match no
-    // literal and point at nothing the user can find in the document. Absent against a backend
-    // that does not send them, in which case this is the pre-existing text-only translation.
-    const text = translateBackendError(failed[0].message, ui, {
-      messageKeys: failed[0].messageKeys,
-      messageParams: failed[0].messageParams,
-    })
-      || ui('actionFailed');
-    // ETP-5577: a "period not open" refusal also offers the way to open it.
-    const recovery = periodNotAvailableToastOptions(failed[0].messageKeys, ui);
-    if (Object.keys(recovery).length > 0) toast.error(text, recovery);
-    else toast.error(text);
+    showSingleRecordFailureToast(ui, failed[0]);
     return;
   }
 
-  // Backward compatible: when nothing was omitted (every consumer that doesn't pass
-  // a `rowFilter`, plus a clean run of one that does), the message stays the plain
-  // 2-number "processExecuted" wording — no redundant "0 omitted" clause cluttering
-  // the common case.
-  const msg = omitted.length === 0
-    ? ui('processExecuted')
-      .replace('{ok}', String(ok))
-      .replace('{failed}', String(failed.length))
-    : ui('processExecutedWithOmitted')
-      .replace('{ok}', String(ok))
-      .replace('{omitted}', String(omitted.length))
-      .replace('{failed}', String(failed.length));
+  const msg = bulkSummaryMessage(ui, { ok, omitted, failed });
   // ETP-5316 QA rejection — a mass/multi-record action must NEVER surface a
   // per-row backend error as toast `description`: it doesn't scale past a
   // handful of rows and the raw messages (e.g. line-number references) aren't
-  // locatable in the document from a toast anyway. Only the exact single-record
-  // fast path above may show a real backend error; every multi/mixed case below
-  // stays the plain generic count summary, no description.
+  // locatable in the document from a toast anyway. Two exceptions, both said once as the
+  // description (see `bulkFailureDescription`): a plan-quota refusal (ETP-5051) and a reason
+  // every failure shares (ETP-5591).
+  const description = bulkFailureDescription(failed, ui);
+  const notify = (show) => (description ? show(msg, { description }) : show(msg));
   if (failed.length === 0 && omitted.length === 0) {
     toast.success(msg);
   } else if (failed.length > 0 && ok === 0 && omitted.length === 0) {
     // Nothing was skipped and nothing succeeded — every attempted row genuinely
     // errored. Same "hard failure" case the original 2-number logic covered.
-    toast.error(msg);
+    notify(toast.error);
   } else {
     // Everything else is a mix: some ok/omitted/failed combination that is neither
     // a clean full success nor a hard full failure — including the "0 ok, some
     // omitted, 0 failed" case (nothing eligible, but nothing genuinely errored).
-    toast.warning(msg);
+    notify(toast.warning);
   }
+}
+
+/**
+ * The one-record failure toast: the record's own backend error, translated, plus the way out of a
+ * "period not open" refusal when that is the cause.
+ */
+function showSingleRecordFailureToast(ui, failure) {
+  // `messageKeys` (ETP-5316) lets a core document-action failure be resolved by AD_MESSAGE key
+  // rather than by its text — the text carries AD line numbers (10, 20, 30…) that match no
+  // literal and point at nothing the user can find in the document. Absent against a backend
+  // that does not send them, in which case this is the pre-existing text-only translation.
+  const text = translateBackendError(failure.message, ui, {
+    messageKeys: failure.messageKeys,
+    messageParams: failure.messageParams,
+  })
+    || ui('actionFailed');
+  // ETP-5577: a "period not open" refusal also offers the way to open it.
+  const recovery = periodNotAvailableToastOptions(failure.messageKeys, ui);
+  if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+  else toast.error(text);
+}
+
+/**
+ * The count summary of a multi-record run. Backward compatible: when nothing was omitted (every
+ * consumer that doesn't pass a `rowFilter`, plus a clean run of one that does), the message stays
+ * the plain 2-number "processExecuted" wording — no redundant "0 omitted" clause cluttering the
+ * common case.
+ */
+function bulkSummaryMessage(ui, { ok, omitted, failed }) {
+  if (omitted.length === 0) {
+    return ui('processExecuted')
+      .replace('{ok}', String(ok))
+      .replace('{failed}', String(failed.length));
+  }
+  return ui('processExecutedWithOmitted')
+    .replace('{ok}', String(ok))
+    .replace('{omitted}', String(omitted.length))
+    .replace('{failed}', String(failed.length));
+}
+
+/**
+ * The description of a multi-record failure summary, or `undefined` for the plain count.
+ *
+ * ETP-5051 — a plan-quota refusal wins: it is not a per-row detail but the account-wide reason the
+ * rest of the run failed, and the user can act on it (the plan), so its already translated sentence
+ * (the caller flags the row `quotaRefusal`) is shown even when other rows failed for other reasons.
+ * Otherwise ETP-5591's shared reason, when every failure has it.
+ */
+function bulkFailureDescription(failed, ui) {
+  const quotaFailure = failed.find((entry) => entry?.quotaRefusal && entry?.message);
+  if (quotaFailure) return quotaFailure.message;
+  return sharedFailureReason(failed, ui) ?? undefined;
+}
+
+/**
+ * The translated reason when every failure has the same identity (`messageKeys` +
+ * `messageParams`), else `null`. Identity, not text: an unkeyed backend message can carry
+ * row-specific detail (ETP-5710), so it is never promoted to the summary.
+ */
+function sharedFailureReason(failed, ui) {
+  if (failed.length < 2 || !failed[0].messageKeys?.length) return null;
+  const identity = (f) => JSON.stringify([f.messageKeys ?? [], f.messageParams ?? {}]);
+  const first = identity(failed[0]);
+  if (!failed.every((f) => identity(f) === first)) return null;
+  return translateBackendError(failed[0].message, ui, {
+    messageKeys: failed[0].messageKeys,
+    messageParams: failed[0].messageParams,
+  }) || null;
 }
 
 export function persistBulkActionResult(result) {

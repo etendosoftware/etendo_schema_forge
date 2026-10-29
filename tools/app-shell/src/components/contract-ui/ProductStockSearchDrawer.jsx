@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, ChevronRight, ChevronDown, Warehouse } from 'lucide-react';
 import ProductDrawerShell from './ProductDrawerShell.jsx';
 import { ProductAvatar, formatQty, resolveImageId } from './productSelectorDrawerShared.jsx';
+import { nextActiveIndex, arrowStartIndexFor } from './selectorSelection.js';
 
 /**
  * M_Product_Stock_V returns one "generic" row per product (locator=null, qty=0) plus one
@@ -54,8 +55,9 @@ function useStockVariant(ctx) {
 
   const {
     open, results, freshToken, activeIdx, setActiveIdx, activeItemRef,
-    inputRef, select, imageMap, neoBaseUrl, token,
+    inputRef, select, imageMap, neoBaseUrl, token, value, committedItem, query,
   } = ctx;
+  const autoExpandedRef = useRef(false);
 
   // Reset drawer-specific state when the drawer opens (the shell stays mounted).
   useEffect(() => {
@@ -63,10 +65,21 @@ function useStockVariant(ctx) {
     setSelectedKey(null);
     setExpandedProducts(new Set());
     setWarehouseFilter(null);
+    autoExpandedRef.current = false;
   }, [open]);
 
   // Collapse everything when a fresh (non-append) fetch replaces the results.
   useEffect(() => { setExpandedProducts(new Set()); }, [freshToken]);
+
+  // ETP-5948 — open the committed product's group once per open, as soon as it is loaded, so its
+  // location rows can be marked and centred. Declared AFTER the collapse above (same commit, and
+  // a functional update) so a fresh page cannot collapse it again.
+  useEffect(() => {
+    if (!open || value == null || value === '' || autoExpandedRef.current) return;
+    if (!results.some(r => String(r.id) === String(value))) return;
+    autoExpandedRef.current = true;
+    setExpandedProducts(prev => new Set(prev).add(value));
+  }, [open, value, results]);
 
   // All groups from raw results.
   const allGroups = useMemo(() => {
@@ -121,6 +134,21 @@ function useStockVariant(ctx) {
     [groups, expandedProducts],
   );
 
+  // ETP-5948 — the committed row: the location row the line was saved with (recognised by the
+  // item rebuilt from the field's mappings, see committedItemFromRow), else the product's group.
+  const committedKey = committedItem ? rowKey(committedItem) : null;
+  const committedRow = committedKey ? flatRows.find(r => rowKey(r) === committedKey) : null;
+  const hasCommittedRow = committedKey != null && results.some(r => rowKey(r) === committedKey);
+  const committedGroupId = value != null && value !== '' && !hasCommittedRow ? String(value) : null;
+  const committedGroupFirstIdx = committedGroupId
+    ? flatRows.findIndex(r => String(r.id) === committedGroupId)
+    : -1;
+  // Centred row: the committed row, or the first row of the committed group. Arrows start ON the
+  // committed row (next = the row after it), or just before the group's first row (next = it).
+  const selectedIndex = committedRow ? flatRows.indexOf(committedRow) : committedGroupFirstIdx;
+  const arrowStart = committedRow ? selectedIndex : Math.max(-1, committedGroupFirstIdx - 1);
+  const optionId = (row) => `product-stock-opt-${rowKey(row)}`;
+
   const toggleProduct = (productId) => {
     setExpandedProducts(prev => {
       const next = new Set(prev);
@@ -140,14 +168,11 @@ function useStockVariant(ctx) {
   };
 
   const onNavKeyDown = (e) => {
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       inputRef.current?.focus();
-      setActiveIdx(prev => Math.min(prev + 1, flatRows.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      inputRef.current?.focus();
-      setActiveIdx(prev => Math.max(prev - 1, 0));
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      setActiveIdx(prev => nextActiveIndex(prev, arrowStartIndexFor(query, arrowStart), delta, flatRows.length));
     } else if (e.key === 'Enter' && activeIdx >= 0 && flatRows[activeIdx]) {
       e.preventDefault();
       handleSelect(flatRows[activeIdx]);
@@ -188,7 +213,7 @@ function useStockVariant(ctx) {
   ) : null;
 
   const body = (
-    <ul className="py-2">
+    <ul className="py-2" role="listbox">
       {groups.map((group, gi) => {
         const isExpanded = expandedProducts.has(group.productId);
         const headRow = group.locations[0];
@@ -219,6 +244,9 @@ function useStockVariant(ctx) {
               >
                 {group.locations.length} {group.locations.length === 1 ? 'location' : 'locations'}
               </span>
+              {String(group.productId) === committedGroupId && (
+                <Check className="h-4 w-4 text-primary shrink-0" data-testid="product-stock-group-check" />
+              )}
               {isExpanded
                 ? <ChevronDown
                 className="h-4 w-4 text-muted-foreground shrink-0"
@@ -234,6 +262,9 @@ function useStockVariant(ctx) {
                 {group.locations.map((row) => {
                   const flatIdx = flatRows.indexOf(row);
                   const isActive = flatIdx === activeIdx;
+                  // ETP-5948 (D1): check + aria-selected = the committed row; the click in flight
+                  // keeps only its border and background.
+                  const isCommitted = row === committedRow;
                   const isSelected = selectedKey === rowKey(row);
                   const warehouseName = row.warehouse || '—';
                   const qty = formatQty(row._aux?._QTY);
@@ -243,6 +274,11 @@ function useStockVariant(ctx) {
                       key={rowKey(row)}
                       ref={isActive ? activeItemRef : null}
                       type="button"
+                      id={optionId(row)}
+                      role="option"
+                      aria-selected={isCommitted}
+                      data-option-index={flatIdx}
+                      {...(isActive ? { 'data-highlighted': 'true' } : {})}
                       data-testid={`product-stock-option-${row.id}`}
                       onClick={() => handleSelect(row)}
                       className={getRowClassName(isSelected, isActive)}
@@ -251,7 +287,7 @@ function useStockVariant(ctx) {
                       {qty != null && (
                         <span className="text-xs tabular-nums text-muted-foreground shrink-0">{qty} ud</span>
                       )}
-                      {isSelected
+                      {isCommitted
                         ? <Check className="h-3.5 w-3.5 text-primary shrink-0" data-testid="Check__pssd" />
                         : <ChevronRight
                         className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -274,6 +310,8 @@ function useStockVariant(ctx) {
     footerCount: groups.length,
     hasResults: groups.length > 0,
     onNavKeyDown,
+    selectedIndex,
+    activeDescendant: activeIdx >= 0 && flatRows[activeIdx] ? optionId(flatRows[activeIdx]) : null,
   };
 }
 
@@ -291,6 +329,9 @@ export default function ProductStockSearchDrawer({
   token,
   title = null,
   selectorContext = {},
+  value = null,
+  valueLabel = '',
+  committedItem = null,
 }) {
   return (
     <ProductDrawerShell
@@ -301,6 +342,9 @@ export default function ProductStockSearchDrawer({
       token={token}
       title={title}
       selectorContext={selectorContext}
+      value={value}
+      valueLabel={valueLabel}
+      committedItem={committedItem}
       fetchConfig={FETCH_CONFIG}
       useVariant={useStockVariant}
       maxHeight="68vh"

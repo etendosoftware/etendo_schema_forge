@@ -4,6 +4,7 @@ export async function run({
   workers,
   documentId,
   windowName,
+  attachmentTable,
   baseUrl,
   token,
   pdfBlob,
@@ -33,6 +34,7 @@ export async function run({
             documentId,
             windowName,
             pdfBlob,
+            attachmentTable,
           });
         });
         const latency = Date.now() - startTime;

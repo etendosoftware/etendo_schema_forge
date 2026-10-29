@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
 import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
+import { extractQuotaExceeded, isQuotaCheckFailed } from '@/lib/planQuotas.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
@@ -251,9 +252,14 @@ export async function extractErrorMessage(res, ui) {
             const raw = decoded.replace(/\s+/g, ' ').trim();
             // ETP-5692 — the body's identity rides along: the invoice write fence answers in
             // English plus `messageKeys`, and only the key can be translated.
+            // ETP-5051 — and so does a plan-quota refusal (403 QUOTA_EXCEEDED): its sentence is
+            // built from the quota the body carries, not from the English prose. A failed quota
+            // check (500 QUOTA_CHECK_FAILED) gets its own "nothing was saved" sentence.
             return translateBackendError(raw, ui, {
                 messageKeys: extractBackendMessageKeys(data),
                 messageParams: extractBackendMessageParams(data),
+                quota: extractQuotaExceeded(data),
+                quotaCheckFailed: isQuotaCheckFailed(data),
             }) || raw;
         };
 
@@ -1427,6 +1433,22 @@ export function useEntity(entity, childEntity, {
 
     // True when editing has diverged from the last-saved selected state.
     const isDirtyHeader = useMemo(() => dirtyHeaderFieldKeys.length > 0, [dirtyHeaderFieldKeys]);
+
+    // ETP-5888: what the unsaved-changes guard asks — would leaving lose something the USER did?
+    // For a saved record it is the same answer as isDirtyHeader. For a new one it is not: the
+    // /defaults response and the callouts that run when the form opens fill fields before the
+    // user touches anything, so isDirtyHeader is true from the first render and every way out of
+    // an untouched new record prompted. Here a new record counts every key the user authored —
+    // seeded keys included, as handleNew marks them user-changed — and counts it even when the
+    // user EMPTIED it: clearing a defaulted field is an edit, while isDirtyHeader's "has a value"
+    // rule would miss it. isDirtyHeader itself is left alone, so the Save button and every other
+    // reader keep their current behaviour. The refs are read inside the memo safely: every write
+    // to them goes with a setEditing, and `editing` is a dependency.
+    const hasUserHeaderEdits = useMemo(() => {
+        if (selected) return dirtyHeaderFieldKeys.length > 0;
+        return [...userChangedKeysRef.current].some(
+            key => key !== 'id' && isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef));
+    }, [dirtyHeaderFieldKeys, editing, selected]);
 
     // ETP-4563: shared client-side cache (app-shell-core). Null when no
     // DataProvider is mounted (e.g. isolated unit tests) — every read below then
@@ -2764,7 +2786,7 @@ export function useEntity(entity, childEntity, {
         recordError,
         runningProcess,
         blockingCondition, completionSignal,
-        isDirtyHeader, dirtyHeaderFieldKeys,
+        isDirtyHeader, dirtyHeaderFieldKeys, hasUserHeaderEdits,
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
