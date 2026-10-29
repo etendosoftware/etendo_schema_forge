@@ -632,3 +632,7 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 The bespoke IAE and legal-representative grids use the existing personal-view contract for `organization` / `actividadesDelIae` and `organization` / `representanteLegal`. IAE selectors and the new inline row follow data-column preferences; the required main-activity column and fixed action cells remain available. Representative line/390 markers and edit/delete cells stay fixed; record order and the separate edit form are unchanged.
 
 The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.
+
+## Certificate status for agents — ETP-5852
+
+Over NEO/MCP, `organization/organization` declares the read-only action `certificate` (`OrganizationCertificateAction` in com.etendoerp.go): whether an active signing certificate exists, `validTo` and `daysLeft`, the same status the fiscal configuration warns about. Uploading and replacing it stays in the app. Feedback M-170.

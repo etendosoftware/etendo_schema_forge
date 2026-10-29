@@ -756,3 +756,23 @@ window does (the exchange rate follows the currency, `1` in the company's own; n
 price the order in it) and the order date is also the accounting date. See `purchase-order.md`
 ("Header validations over MCP `etendo_update`") and
 `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41.
+
+## Agent prompts on order date and line tax — ETP-5852
+
+`orderDate` (server proposes today; send the user's date, M-31) and `lines.tax` (resolved from product and customer tax categories, options through `etendo_selectors`, M-35/M-79).
+
+## Order date and accounting date — ETP-5852
+
+`orderDate.agentPrompt` also says the accounting date always follows the order date (`mirrorAccountingDate`, ETP-4531), so an agent changing it expects both to move. Feedback M-183.
+
+## Voided order lines — ETP-5852
+
+`lines.lineGrossAmount.agentPrompt`: on a voided order the line keeps its gross amount while quantity and net drop to 0 (checked live), so agents read the header status before adding lines up. Feedback M-240.
+
+## Cancelling a line — ETP-5852
+
+`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise close the order (CL). Feedback M-123.
+
+## Agent prompt on the business partner — ETP-5852
+
+`businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.

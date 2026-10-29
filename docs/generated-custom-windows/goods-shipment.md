@@ -638,3 +638,11 @@ Manual check: shipment with 1 line of 4 → return 2 → **Ver devolución** →
 still there and the wizard offers 2. Return the other 2 → the button disappears without a
 reload. Delete one of the draft returns → back to the shipment: the return is gone from
 Documentos and the button is back.
+
+## Agent prompts on lines — ETP-5852
+
+`entities.lines.agentPrompt` says lots, serial numbers and expiry dates are not handled in Etendo GO (the line's `attributeSetValue` is discarded in the UI too), so agents tell the user instead of looking for a field (M-23). `salesOrderLine.agentPrompt` says the shipment line has no price of its own and points to the order line (M-33).
+
+## Agent prompts on value and dates — ETP-5852
+
+`header.agentPrompt` says a shipment carries quantities only (its value is the order lines' prices times the quantities, or the invoice made from it; M-71), and `movementDate.agentPrompt` that a completed shipment keeps its date: it is corrected with a return and a new shipment (M-163).

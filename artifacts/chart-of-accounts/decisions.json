@@ -22,6 +22,7 @@
     "elementValue": {
       "javaQualifier": "chart-of-accounts",
       "orderBy": [{ "field": "searchKey", "direction": "ASC" }],
+      "agentPrompt": "The client's chart of accounts. List and read it without parentId: the client has one chart, as in the app. To create an account pass parentId = the accountingElement every listed account carries (not the row's parentId, which is its place in the tree). A new account is a subaccount: send searchKey = 8 digits starting with the 4-digit code of the account it goes under (43000099 goes under 4300; the app's New subaccount does the same, there is no parent field), name and accountType; it is created active. An account with postings or combinations cannot be deleted: set active to false instead.",
       "fields": {
         "searchKey":             { "visibility": "editable",  "grid": true,  "form": true, "customRenderer": "AccountCodeField", "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
         "name":                  { "visibility": "editable",  "grid": true,  "form": true, "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
