@@ -10,9 +10,9 @@
 #   avg_msgs_conv  messages of the conversations CREATED in the bucket divided
 #                  by those conversations (so a long chat is not split across days)
 #
-# Every metric is bucketed by its own row's `created`. `isactive` is ignored on
-# purpose: mcp-usage-dump.sh repurposes it as a "reviewed" flag, it does not
-# mean the row is gone.
+# Every metric is bucketed by its own row's `created`. Review state (`Status`) and
+# `isactive` are ignored on purpose: a reviewed row is still traffic, it is not
+# gone.
 #
 # Same connection model as mcp-usage-dump.sh (scripts/lib/remote-etendo-psql.sh):
 # the target is a remote-connection profile (~/.config/schema-forge/remote/<name>.env

@@ -681,3 +681,23 @@ Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP
 ## Manage-documents popup title follows the pending action — ETP-5688
 
 `CreateDocsModal` (`artifacts/purchase-order/custom/PurchaseOrderActions.jsx`) used to title itself with the fixed `soManageDocsTitle` ("Generar factura") even when only the receipt was pending. The title now comes from the same `poManageDocsLabel(ui, needsReceipt, needsInvoice)` helper that labels the detail-view button: `poManageReceiptAndInvoice` ("Gestionar recepción y factura") when both are pending, `poManageInvoice` ("Gestionar factura") for invoice only, `poManageReceipt` ("Gestionar recepción") for receipt only, falling back to `soManageDocsTitle` only if the modal opens with nothing pending. It follows what is **pending** (`derived.needsReceipt` / `derived.needsInvoice`), not what the user ticked, and applies to both openers (the detail button and `ManageDocsLauncher`, used by the list-row kebab). Mirrors the Sales Order change in ETP-5525.
+
+## Agent prompts on order date and line tax — ETP-5852
+
+`orderDate` (M-31) and `lines.tax` (M-35). Over MCP a line price sent alone on update is the line's Precio and the net follows the discount, as on create (M-103).
+
+## Order date and accounting date — ETP-5852
+
+`orderDate.agentPrompt` also says the accounting date always follows the order date (`mirrorAccountingDate`, ETP-4531), so an agent changing it expects both to move. Feedback M-183.
+
+## Voided order lines — ETP-5852
+
+`lines.lineGrossAmount.agentPrompt`: on a voided order the line keeps its gross amount while quantity and net drop to 0 (checked live), so agents read the header status before adding lines up. Feedback M-240.
+
+## Cancelling a line — ETP-5852
+
+`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise close the order (CL). Feedback M-123.
+
+## Agent prompt on the business partner — ETP-5852
+
+`businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.

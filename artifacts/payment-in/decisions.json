@@ -113,7 +113,8 @@
           "dependsOn": {
             "field": "paymentMethod",
             "filterKey": "Fin_Paymentmethod_ID"
-          }
+          },
+          "agentPrompt": "The financial account (bank, cash or card) the money is received into."
         },
         "referenceNo": {
           "visibility": "readOnly",
@@ -137,7 +138,8 @@
         "status": {
           "visibility": "readOnly",
           "grid": true,
-          "form": false
+          "form": false,
+          "agentPrompt": "Where the collection stands: RPAP awaiting payment; RPR received; RDNC deposited in the account but not yet reconciled; RPPC cleared (reconciled with the bank); RPVOID void; RPAE awaiting execution; REM_SENT/REM_CANCEL remitted/settled in a remittance. Accounting is a separate field (etblkpAccountingstatus)."
         },
         "generatedCredit": {
           "visibility": "discarded"
@@ -230,7 +232,8 @@
         },
         "etblkpAccountingstatus": {
           "visibleWhenCapability": "showAccountingFields",
-          "form": false
+          "form": false,
+          "agentPrompt": "Whether the payment is posted to the general ledger: Y posted, N not posted yet. Any other value is why posting failed or is pending (p period closed, i invalid account, b not balanced, c no conversion rate, l pending refresh...); options lists them all."
         },
         "etblkpBulkposting": {
           "form": false

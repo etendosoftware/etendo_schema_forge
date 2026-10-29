@@ -2677,3 +2677,15 @@ rules, the warning's conditions and the manual check:
 The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization. Its date, document number and total columns use the keys `reversedInvoiceDate`, `reversedDocumentNo` and `reversedGrandTotalAmount` (ETP-5684), so they never collide with the header fields of the same name; personal views saved with the earlier keys fall back to the default for those three columns.
 
 The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.
+
+## Agent prompts on dates, line tax and installments — ETP-5852
+
+`invoiceDate`/`accountingDate` explain the server proposes today and the user's own date must be sent (M-31); `lines.tax` says the server resolves the tax from product and customer tax categories, Recargo de Equivalencia included, and points to `etendo_selectors` for the line's options instead of the tax catalogue (M-35, M-79). `paymentPlan` allows `etendo_list(allParents:true)` (MCP_CONFIG.parent.allParents) to find installments by `dueDate`/`daysOverdue` across invoices (M-50).
+
+## Journal entries for agents — ETP-5852
+
+`entities.accounting` is no longer excluded: it publishes the invoice's posted entries read-only for NEO/MCP (`etendo_list(spec:"sales-invoice", entity:"accounting", parentId:<invoice>)`), the same entity purchase invoices have. `renderTab:false` keeps the window as it was: neither invoice window shows an accounting tab. Feedback M-81.
+
+## Agent prompt on the business partner — ETP-5852
+
+`businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.

@@ -50,8 +50,8 @@ make mcp-metrics PROFILE=production DAYS=30 DAILY=1    # one row per day + total
 make mcp-metrics PROFILE=production SINCE=2026-09-01 UNTIL=2026-10-01 CLIENT='Acme' CSV=1
 make mcp-metrics HOST=etendo-go-production             # bare SSH alias, default path
 
-make mcp-usage PROFILE=production COUNT=1              # how many unreviewed rows
-make mcp-usage PROFILE=production MARK_REVIEWED=1      # export + mark reviewed
+make mcp-usage PROFILE=production COUNT=1              # how many unreviewed rows (Status IS NULL)
+make mcp-usage PROFILE=production MARK_REVIEWED=1 REVIEWER="Your Name"  # export + mark Status=R
 ```
 
 `DAILY=1` lists days with no activity as zeros, so the series has no gaps.

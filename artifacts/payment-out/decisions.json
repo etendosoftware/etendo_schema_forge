@@ -95,7 +95,8 @@
           "reference": "FinancialAccount",
           "section": "principal",
           "seq": 30,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "agentPrompt": "The financial account (bank, cash or card) the money is paid from."
         },
         "paymentDate": {
           "grid": true,
@@ -168,7 +169,8 @@
           "grid": true,
           "searchable": true,
           "form": false,
-          "section": "principal"
+          "section": "principal",
+          "agentPrompt": "Where the payment stands: RPAP awaiting payment; PPM paid; PWNC withdrawn from the account but not yet reconciled; RPPC cleared (reconciled with the bank); RPVOID void; RPAE awaiting execution; REM_SENT/REM_CANCEL remitted/settled in a remittance. Accounting is a separate field (etblkpAccountingstatus)."
         },
         "usedCredit": {
           "visibility": "readOnly",
@@ -235,7 +237,8 @@
         },
         "etblkpAccountingstatus": {
           "visibleWhenCapability": "showAccountingFields",
-          "form": false
+          "form": false,
+          "agentPrompt": "Whether the payment is posted to the general ledger: Y posted, N not posted yet. Any other value is why posting failed or is pending (p period closed, i invalid account, b not balanced, c no conversion rate, l pending refresh...); options lists them all."
         },
         "etblkpBulkposting": {
           "form": false
