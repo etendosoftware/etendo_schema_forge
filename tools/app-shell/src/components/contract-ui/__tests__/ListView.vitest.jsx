@@ -1,5 +1,55 @@
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+const gridViewTestState = vi.hoisted(() => ({
+  flagEnabled: false,
+  options: null,
+  overrides: null,
+  setVisibility: vi.fn(),
+  save: vi.fn(),
+  retryLoad: vi.fn(),
+}));
+
+vi.mock('@/lib/flags', () => ({
+  GRID_COLUMN_VIEWS: 'grid-column-views',
+  useFeatureFlag: () => gridViewTestState.flagEnabled,
+}));
+vi.mock('@/hooks/useGridView.js', () => ({
+  gridViewColumnId: (column) => `list:${column.column ? `ad:${column.column}:field:${column.key ?? ''}` : `field:${column.key ?? ''}`}`,
+  useGridView: (options) => {
+    gridViewTestState.options = options;
+    const columns = options.columns.map((column) => ({ ...column, gridViewId: `list:${column.column ? `ad:${column.column}:field:${column.key ?? ''}` : `field:${column.key ?? ''}`}` }));
+    return {
+      enabled: options.enabled,
+      active: options.enabled,
+      columns,
+      availableIds: columns.map((column) => column.gridViewId),
+      availableKeys: columns.map((column) => column.key),
+      columnSizing: {},
+      columnVisibility: {},
+      visibleIds: columns.map((column) => column.gridViewId),
+      loading: false,
+      loadError: false,
+      saveState: 'idle',
+      dirty: false,
+      announcement: null,
+      save: gridViewTestState.save,
+      retryLoad: gridViewTestState.retryLoad,
+      resizeHandler: () => () => {},
+      resizeBy: vi.fn(),
+      isResizable: () => false,
+      widthBounds: () => ({ min: 80, max: 1200 }),
+      reorderable: () => false,
+      moveColumn: vi.fn(),
+      moveByKeyboard: vi.fn(),
+      labelFor: (id) => columns.find((column) => column.gridViewId === id)?.label ?? id,
+      setVisibility: gridViewTestState.setVisibility,
+      canHide: (id) => columns.find((column) => column.gridViewId === id)?.gridConfigurable !== false,
+      ...gridViewTestState.overrides,
+    };
+  },
+}));
 
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
@@ -70,6 +120,15 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
 }));
 
 import { ListView, ViewToggle } from '../ListView.jsx';
+
+beforeEach(() => {
+  gridViewTestState.flagEnabled = false;
+  gridViewTestState.options = null;
+  gridViewTestState.overrides = null;
+  gridViewTestState.setVisibility.mockReset();
+  gridViewTestState.save.mockReset();
+  gridViewTestState.retryLoad.mockReset();
+});
 
 // A minimal Table component mock that renders rows
 function MockTable({ data, onNavigate, ...rest }) {
@@ -153,6 +212,140 @@ describe('ListView', () => {
   it('renders the filter bar by default', () => {
     render(<ListView {...defaultProps} />);
     expect(screen.getByTestId('list-filter-bar')).toBeInTheDocument();
+  });
+
+  describe('personal grid view controls', () => {
+    const gridColumns = [
+      { key: 'documentNo', column: 'DocumentNo', label: 'Document number' },
+      { key: 'status', column: 'DocStatus', label: 'Status', gridConfigurable: false },
+    ];
+
+    it('keeps controls hidden with the feature flag off even when the surface is eligible', () => {
+      render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns} gridColumnViewsSurface />);
+
+      expect(gridViewTestState.options.enabled).toBe(false);
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+      expect(capturedTableProps.gridView.active).toBe(false);
+    });
+
+    it('shows personal grid controls only in the table mode when switching a gallery window', () => {
+      gridViewTestState.flagEnabled = true;
+      render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns}
+        gridColumnViewsSurface galleryRenderer={() => <div data-testid="personal-grid-gallery" />} />);
+      const buttons = screen.getByTestId('view-toggle').querySelectorAll('button');
+      fireEvent.click(buttons[0]);
+      expect(screen.getByTestId('grid-view-controls')).toBeInTheDocument();
+      fireEvent.click(buttons[1]);
+      expect(screen.getByTestId('personal-grid-gallery')).toBeInTheDocument();
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+      fireEvent.click(buttons[0]);
+      expect(screen.getByTestId('grid-view-controls')).toBeInTheDocument();
+      expect(screen.queryByTestId('personal-grid-gallery')).not.toBeInTheDocument();
+    });
+
+    it('activates only the explicitly enabled standard surface and exposes hide controls for configurable columns', async () => {
+      gridViewTestState.flagEnabled = true;
+      const { rerender } = render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns} gridColumnViewsSurface />);
+
+      expect(gridViewTestState.options.enabled).toBe(true);
+      expect(screen.getByTestId('grid-view-controls')).toBeInTheDocument();
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('grid-view-columns-trigger'));
+      const configurable = await screen.findByTestId('grid-view-column-documentNo');
+      const locked = screen.getByTestId('grid-view-column-status');
+      expect(configurable).toBeEnabled();
+      expect(locked).toHaveAttribute('aria-disabled', 'true');
+      await user.click(configurable);
+      expect(gridViewTestState.setVisibility).toHaveBeenCalledWith('list:ad:DocumentNo:field:documentNo', false);
+
+      gridViewTestState.overrides = { columnVisibility: { 'list:ad:DocumentNo:field:documentNo': false } };
+      rerender(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns} gridColumnViewsSurface />);
+      await user.click(screen.getByTestId('grid-view-columns-trigger'));
+      await user.click(await screen.findByTestId('grid-view-column-documentNo'));
+      expect(gridViewTestState.setVisibility).toHaveBeenLastCalledWith('list:ad:DocumentNo:field:documentNo', true);
+    });
+
+    it('fails closed for unaudited custom list surfaces even with a hidden list bar', () => {
+      gridViewTestState.flagEnabled = true;
+      render(<ListView {...defaultProps} initialColumns={gridColumns} hideListBar tableOwnsScroll />);
+      expect(gridViewTestState.options.enabled).toBe(false);
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['direct scroll', { tableOwnsScroll: true }],
+      ['options scroll', { listViewOptions: { tableOwnsScroll: true } }],
+      ['direct hidden bar', { hideListBar: true }],
+      ['options hidden bar', { listViewOptions: { hideListBar: true } }],
+      ['both hidden and scrolling', { hideListBar: true, tableOwnsScroll: true }],
+      ['options false overrides direct hidden bar', { hideListBar: true, listViewOptions: { hideListBar: false } }],
+    ])('keeps exactly one usable grid control group with %s', async (_label, surfaceProps) => {
+      gridViewTestState.flagEnabled = true;
+      gridViewTestState.overrides = { dirty: true };
+      render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns}
+        gridColumnViewsSurface {...surfaceProps} />);
+      expect(gridViewTestState.options.enabled).toBe(true);
+      expect(capturedTableProps.gridView.active).toBe(true);
+      expect(screen.getAllByTestId('grid-view-controls')).toHaveLength(1);
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('grid-view-columns-trigger'));
+      expect(await screen.findByTestId('grid-view-column-documentNo')).toBeEnabled();
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByTestId('grid-view-save'));
+      expect(gridViewTestState.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides fallback controls for a gallery renderer and restores them when only the table renders', () => {
+      gridViewTestState.flagEnabled = true;
+      localStorage.setItem(`viewMode:${defaultProps.entity}`, 'gallery');
+      const { rerender } = render(<ListView {...defaultProps} Table={CapturingMockTable}
+        initialColumns={gridColumns} gridColumnViewsSurface hideListBar
+        galleryRenderer={() => <div data-testid="hidden-bar-gallery" />} />);
+      expect(screen.getByTestId('hidden-bar-gallery')).toBeInTheDocument();
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+      rerender(<ListView {...defaultProps} Table={CapturingMockTable}
+        initialColumns={gridColumns} gridColumnViewsSurface hideListBar />);
+      expect(screen.getByTestId('mock-table')).toBeInTheDocument();
+      expect(screen.getAllByTestId('grid-view-controls')).toHaveLength(1);
+      localStorage.removeItem(`viewMode:${defaultProps.entity}`);
+    });
+
+    it('keeps fallback controls absent when the shared feature flag is off', () => {
+      render(<ListView {...defaultProps} initialColumns={gridColumns} gridColumnViewsSurface hideListBar tableOwnsScroll />);
+      expect(gridViewTestState.options.enabled).toBe(false);
+      expect(screen.queryByTestId('grid-view-controls')).not.toBeInTheDocument();
+    });
+
+    it('surfaces pending, load-error, retry and save-error states accessibly', () => {
+      gridViewTestState.flagEnabled = true;
+      gridViewTestState.overrides = { loading: true, active: false, saveState: 'error', loadError: true };
+      render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns} gridColumnViewsSurface />);
+
+      expect(screen.getByTestId('grid-view-status')).toHaveAttribute('role', 'alert');
+      expect(screen.getByTestId('grid-view-status')).toHaveTextContent('gridViewLoading');
+      expect(screen.getByText('gridViewRetry')).toBeInTheDocument();
+      expect(screen.getByTestId('grid-view-columns-trigger')).toBeDisabled();
+      expect(screen.getByTestId('grid-view-save')).toBeDisabled();
+      fireEvent.click(screen.getByText('gridViewRetry'));
+      expect(gridViewTestState.retryLoad).toHaveBeenCalledTimes(1);
+    });
+
+    it('announces moved columns and reports a save failure with an alert role', () => {
+      gridViewTestState.flagEnabled = true;
+      const columnId = 'list:ad:DocumentNo:field:documentNo';
+      gridViewTestState.overrides = {
+        active: true,
+        loading: false,
+        loadError: false,
+        saveState: 'error',
+        announcement: { id: columnId, position: 2, count: 2 },
+      };
+      render(<ListView {...defaultProps} Table={CapturingMockTable} initialColumns={gridColumns} gridColumnViewsSurface />);
+
+      expect(screen.getByTestId('grid-view-status')).toHaveAttribute('role', 'alert');
+      expect(screen.getByTestId('grid-view-status')).toHaveTextContent('gridViewSaveFailed');
+      expect(screen.getByText('gridColumnMoved')).toHaveAttribute('aria-live', 'polite');
+    });
   });
 
   it('hides the filter bar when hideListFilters is true', () => {

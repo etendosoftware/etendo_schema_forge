@@ -110,4 +110,37 @@ describe('WarehouseSummary', () => {
     expect(formatCurrency).not.toHaveBeenCalledWith('USD', NaN);
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
   });
+
+  it('counts real zero valuations and ignores null ones in the total', () => {
+    useWarehouseStock.mockReturnValue({
+      loading: false,
+      error: null,
+      products: [
+        { qty: 5, valuation: null },
+        { qty: 4, valuation: 0 },
+        { qty: 3, valuation: 100 },
+      ],
+      transactions: [],
+    });
+    render(<WarehouseSummary data={{ id: 'wh-1' }} token="t" apiBaseUrl="/api" />);
+    expect(formatCurrency).toHaveBeenCalledWith('USD', 100);
+    expect(formatCurrency).not.toHaveBeenCalledWith('USD', NaN);
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+
+  it('totals 0 (not NaN) when every product has a null valuation', () => {
+    useWarehouseStock.mockReturnValue({
+      loading: false,
+      error: null,
+      products: [
+        { qty: 5, valuation: null },
+        { qty: 2, valuation: null },
+      ],
+      transactions: [],
+    });
+    render(<WarehouseSummary data={{ id: 'wh-1' }} token="t" apiBaseUrl="/api" />);
+    expect(formatCurrency).toHaveBeenCalledWith('USD', 0);
+    expect(formatCurrency).not.toHaveBeenCalledWith('USD', NaN);
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
 });

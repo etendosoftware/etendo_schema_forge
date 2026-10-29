@@ -21,6 +21,13 @@ function classifyQtyDraft(raw, maxQty) {
   return { valid: false, tooHigh: isNumeric && magnitude > maxQty };
 }
 
+// Shows a caller-provided toast ({ message, variant }) and reports whether it did.
+function showCustomToast(custom) {
+  if (!custom?.message) return false;
+  (custom.variant === 'warning' ? toast.warning : toast.success)(custom.message);
+  return true;
+}
+
 export default function ImportLinesModal({
   invoiceId,
   bpId,
@@ -49,6 +56,19 @@ export default function ImportLinesModal({
   eagerLoadLines = true,
   showAvailableQtyColumn = false,
   qtyColumnLabelKey = 'qty',
+  // Optional, generic extension points. Every one defaults to today's behaviour.
+  // `selection` (below) = { selectedDocIds, selectedDocuments, selectedCount, documents,
+  // sharedContext, extraState, setExtraState }. `afterImport` additionally receives
+  // `documents`, `extraState` and `selectedDocIds`, and whatever it returns is handed to
+  // `getSuccessToast` as `afterImportResult`.
+  initialExtraState,     // caller-owned state kept by the modal (e.g. a toggle), passed back everywhere
+  renderDocAdornment,    // (doc, selection) => node shown in the document row, after the date
+  getDocTotal,           // ({ doc, lines, total, sharedContext }) => number shown as the row total
+  renderSelectionPanel,  // (selection) => node rendered between the list and the footer
+  getSelectionHint,      // (selection) => string | null overriding the footer "N selected" text
+  getSuccessToast,       // ({ count, importedDocIds, afterImportResult, partial, ...selection }) => { message, variant? } | null
+                         // `partial` = some line imports failed: the modal shows its own warning and
+                         // ALSO shows whatever this returns (e.g. a failed follow-up write).
 }) {
   if (!linesEndpoint && !submitImport) {
     throw new Error('ImportLinesModal: linesEndpoint prop is required unless submitImport is provided');
@@ -68,6 +88,7 @@ export default function ImportLinesModal({
   const [qtyDrafts, setQtyDrafts] = useState({});
   const [eagerLoadingLines, setEagerLoadingLines] = useState(false);
   const [excludedByCurrency, setExcludedByCurrency] = useState(false);
+  const [extraState, setExtraState] = useState(initialExtraState);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +146,21 @@ export default function ImportLinesModal({
     const q = search.toLowerCase();
     return visible.filter(d => (d.documentNo || '').toLowerCase().includes(q));
   }, [documents, docLines, search]);
+
+  // Documents owning at least one selected line, in list order. Recomputed on every selection
+  // change so callers can react live (see `renderSelectionPanel` / `getSelectionHint`).
+  const selection = useMemo(() => {
+    const selectedDocuments = documents.filter(d => (docLines[d.id] || []).some(l => selected.has(l.id)));
+    return {
+      selectedDocIds: new Set(selectedDocuments.map(d => d.id)),
+      selectedDocuments,
+      selectedCount: selected.size,
+      documents,
+      sharedContext,
+      extraState,
+      setExtraState,
+    };
+  }, [documents, docLines, selected, sharedContext, extraState]);
 
   const loadLines = async (docId) => {
     if (docLines[docId] || loadingLines.has(docId)) return;
@@ -201,37 +237,52 @@ export default function ImportLinesModal({
       toast.error(translateQuotaRefusalBody(result?.body, ui) || result?.error || ui('failedToImportLines'));
       return;
     }
-    toast.success(ui(successMessageKey, { count: result.count ?? lines.length }));
+    const count = result.count ?? lines.length;
+    showSuccessToast({ count, importedDocIds: new Set(lines.map(l => l.docId)), afterImportResult: undefined });
     onSuccess();
   };
 
-  // Default: one POST per selected line against `linesEndpoint`.
-  const importViaPerLinePost = async () => {
+  const showSuccessToast = ({ count, importedDocIds, afterImportResult }) => {
+    if (showCustomToast(getSuccessToast?.({ ...selection, count, importedDocIds, afterImportResult }))) return;
+    toast.success(ui(successMessageKey, { count }));
+  };
+
+  // One POST per selected line, in document order; line numbers step by 10.
+  const postSelectedLines = async () => {
     let lineNo = 10;
     let errors = 0;
+    let importedCount = 0;
     const importedDocIds = new Set();
-    for (const doc of documents) {
-      const lines = (docLines[doc.id] || []).filter(l => selected.has(l.id));
-      if (lines.length === 0) continue;
-
-      for (const line of lines) {
-        const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
-        const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
-        // ETP-5424 — a line create in an import loop: a cut-off write that still commits
-        // would be re-imported on retry, so it opts out of the default timeout.
-        const res = await apiFetch(`/${linesEndpoint}`, {
-          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
-        });
-        if (!res.ok) errors++;
-        else importedDocIds.add(doc.id);
-        lineNo += 10;
-      }
+    for (const { line, qty, docId } of collectSelectedLines()) {
+      const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
+      // ETP-5424 — a line create in an import loop: a cut-off write that still commits
+      // would be re-imported on retry, so it opts out of the default timeout.
+      const res = await apiFetch(`/${linesEndpoint}`, {
+        method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
+      });
+      if (!res.ok) errors++;
+      else { importedDocIds.add(docId); importedCount++; }
+      lineNo += 10;
     }
-    if (afterImport) await afterImport({ importedDocIds, sharedContext, base, headers, invoiceId });
+    return { errors, importedCount, importedDocIds };
+  };
+
+  const runAfterImport = (importedDocIds) => (afterImport
+    ? afterImport({
+      importedDocIds, sharedContext, base, headers, invoiceId,
+      documents, extraState, selectedDocIds: selection.selectedDocIds,
+    })
+    : undefined);
+
+  // Default: one POST per selected line against `linesEndpoint`.
+  const importViaPerLinePost = async () => {
+    const { errors, importedCount, importedDocIds } = await postSelectedLines();
+    const afterImportResult = await runAfterImport(importedDocIds);
     if (errors > 0) {
-      toast.warning(`Imported with ${errors} error(s) — review the invoice`);
+      toast.warning(ui('importedLinesWithErrors', { count: importedCount, errors }));
+      showCustomToast(getSuccessToast?.({ ...selection, count: importedCount, importedDocIds, afterImportResult, partial: true }));
     } else {
-      toast.success(ui(successMessageKey));
+      showSuccessToast({ count: importedCount, importedDocIds, afterImportResult });
     }
     onSuccess();
   };
@@ -300,9 +351,12 @@ export default function ImportLinesModal({
               const hasAnySelected = checkState.checked || checkState.indeterminate;
               const display = getDocDisplay(doc);
               const docTotalSign = negativeQuantity ? -1 : 1;
-              const docTotal = lines.length > 0
+              const baseDocTotal = lines.length > 0
                 ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0) * docTotalSign
                 : null;
+              const docTotal = (baseDocTotal != null && getDocTotal)
+                ? getDocTotal({ doc, lines, total: baseDocTotal, sharedContext })
+                : baseDocTotal;
               return (
                 <div key={doc.id} style={{ borderLeft: (isExpanded || hasAnySelected) ? '3px solid hsl(var(--foreground))' : '3px solid transparent' }}>
                   <div
@@ -323,6 +377,7 @@ export default function ImportLinesModal({
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{display.docNo}</span>
                         <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtDate(display.date)}</span>
+                        {renderDocAdornment?.(doc, selection)}
                       </div>
                     </div>
                     <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', fontVariantNumeric: 'tabular-nums', flexShrink: 0, marginLeft: 8 }}>
@@ -457,9 +512,13 @@ export default function ImportLinesModal({
           })()}
         </div>
 
+        {renderSelectionPanel && !loading && !eagerLoadingLines && renderSelectionPanel(selection)}
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))', padding: '10px 16px' }}>
           <span style={{ fontSize: 12, color: selected.size > 0 ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: selected.size > 0 ? 500 : 400 }}>
-            {selected.size > 0 ? ui('selected', { count: selected.size }) : ui('selectLinesToImport')}
+            {selected.size > 0
+              ? (getSelectionHint?.(selection) || ui('selected', { count: selected.size }))
+              : ui('selectLinesToImport')}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}>{ui('cancel')}</button>

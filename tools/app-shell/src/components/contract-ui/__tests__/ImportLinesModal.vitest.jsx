@@ -1037,7 +1037,7 @@ describe('ImportLinesModal', () => {
       expect(call.importedDocIds instanceof Set).toBe(true);
       expect(call.importedDocIds.has('doc-1')).toBe(true);
       expect(call.invoiceId).toBe('inv-1');
-      expect(toast.success).toHaveBeenCalledWith('importSuccess');
+      expect(toast.success).toHaveBeenCalledWith('importSuccess:{"count":1}');
       expect(toast.warning).not.toHaveBeenCalled();
     });
 
@@ -1048,7 +1048,7 @@ describe('ImportLinesModal', () => {
       fireEvent.click(screen.getByText(/importSelected/).closest('button'));
 
       await waitFor(() => expect(props.onSuccess).toHaveBeenCalled());
-      expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('1 error'));
+      expect(toast.warning).toHaveBeenCalledWith('importedLinesWithErrors:{"count":0,"errors":1}');
       expect(toast.success).not.toHaveBeenCalled();
     });
 

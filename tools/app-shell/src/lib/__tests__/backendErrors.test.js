@@ -3489,6 +3489,10 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
       'Cost calculation looks stalled: transactions have been waiting for their cost for a long time, so repeating the post will not help. An administrator must check the Costing Background process and the pending transactions.'],
     ['NotCalculatedCost', 'backendError.costNotCalculated',
       'Cost has not yet been calculated for all products in the document.'],
+    // ETP-5591: a disabled document, generic or with its certain reason.
+    ['DocumentDisabled', 'backendError.documentDisabledForAccounting', 'Document disabled for accounting'],
+    ['TotalGrossIsZero', 'backendError.invoiceTotalIsZero',
+      'Total Gross Amount of the invoice is zero. Invoice is disabled for accounting.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {
@@ -3503,6 +3507,23 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
       assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
     });
   }
+
+  it('names the financial account missing its deposit or withdrawal account (ETP-5591)', () => {
+    const prose = 'The financial account Caja has no deposit account in its accounting.';
+    const params = { financialAccount: 'Caja' };
+    assert.equal(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoDepositAccount'], messageParams: params }),
+      es('backendError.finAccNoDepositAccount', params));
+    assert.match(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoWithdrawalAccount'], messageParams: params }),
+      /Caja.*cuenta de retirada/);
+  });
+
+  it('keeps the backend text when the caller dropped the params a translation needs (ETP-5591)', () => {
+    const prose = 'La cuenta financiera Caja no tiene cuenta de depósito en su contabilidad.';
+    assert.equal(
+      translateBackendError(prose, es, { messageKeys: ['ETGO_PostingDisabledNoDepositAccount'] }), prose);
+  });
 
   it('speaks the accountants’ Spanish: Descontabilizar / contabilizada / asientos', () => {
     assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
@@ -3587,6 +3608,50 @@ describe('translateBackendError — invoice reactivate fiscal-rectified refusal 
     assert.equal(translateBackendError(prose, (k) => k, {
       messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
     }), prose);
+  });
+
+  // ── fiscalSystem as a real array (ETP-5745 correction) — the live-verified production shape.
+  // `messageParams.fiscalSystem` used to be pre-joined into a comma string on the backend
+  // (InvoiceReactivationGuard#reject); it is now a real JSONArray, exactly like `rectificativas`
+  // already was — but unlike `rectificativas`, it must render with a LOCALE-AWARE CONJUNCTION
+  // ("SII y TicketBAI" / "SII and TicketBAI"), not the generic comma join every other
+  // array-valued messageParam gets. Reads the REAL locale files, pinning the exact wording a
+  // real MCP `etendo_action` 422 produces for a 2-fiscal-system case (confirmed live, 2026-10).
+  it('joins a 2-element fiscalSystem array with the real es_ES/en_US conjunction, not a comma', () => {
+    const params = { fiscalSystem: ['SII', 'TicketBAI'], rectificativas: ['REC-1000022'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+
+    assert.equal(esText,
+      'No se puede reactivar esta factura: ya ha sido aceptada por SII y TicketBAI y está '
+      + 'rectificada por: REC-1000022.');
+    assert.equal(enText,
+      'This invoice cannot be reactivated: it has already been accepted by SII and TicketBAI '
+      + 'and is rectified by: REC-1000022.');
+    assert.doesNotMatch(esText, /SII, TicketBAI/);
+  });
+
+  it('joins a 3-element fiscalSystem array with no Oxford comma before the conjunction', () => {
+    const params = { fiscalSystem: ['SII', 'Verifactu', 'TicketBAI'], rectificativas: ['REC-1', 'REC-2'] };
+    const esText = translateBackendError('ignored', es, { messageKeys: [KEY], messageParams: params });
+    const enText = translateBackendError('ignored', en, { messageKeys: [KEY], messageParams: params });
+
+    assert.match(esText, /SII, Verifactu y TicketBAI/);
+    assert.match(enText, /SII, Verifactu and TicketBAI/);
+    assert.doesNotMatch(esText, /Verifactu, y TicketBAI/);
+    assert.doesNotMatch(enText, /Verifactu, and TicketBAI/);
+    // rectificativas keeps the plain comma join, untouched by the conjunction fix.
+    assert.match(esText, /REC-1, REC-2/);
+  });
+
+  it('a single-element fiscalSystem array renders the same as the legacy bare string', () => {
+    const arrayText = translateBackendError('ignored', es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: ['SII'], rectificativas: ['REC-1'] },
+    });
+    const bareText = translateBackendError('ignored', es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'SII', rectificativas: ['REC-1'] },
+    });
+    assert.equal(arrayText, bareText);
   });
 });
 

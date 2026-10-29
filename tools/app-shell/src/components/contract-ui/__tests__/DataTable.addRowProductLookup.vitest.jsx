@@ -167,6 +167,37 @@ describe('DataTable add-row — the product control comes from addRow.fields, no
       .toHaveAttribute('title', 'Agua mineral');
   });
 
+  // ETP-5948 — reopening the add-row lookup after a pick opens on that pick.
+  it('reopens the drawer marked on the product already picked in the add-row', async () => {
+    const user = userEvent.setup();
+    globalThis.fetch.mockImplementation((url) => {
+      if (String(url).includes('/image/')) return Promise.resolve({ ok: false });
+      if (String(url).includes('/product/product')) {
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          items: [
+            { id: 'p1', label: 'Agua mineral', searchKey: 'AGUA' },
+            { id: 'p2', label: 'Zumo', searchKey: 'ZUMO' },
+          ],
+          hasMore: false,
+        }),
+      });
+    });
+    renderAddRow();
+    await user.click(screen.getByTestId('inline-add-field-product'));
+    await user.click(await screen.findByText('Zumo'));
+    await waitFor(() => expect(screen.getByTestId('inline-add-field-product')).toHaveTextContent('Zumo'));
+    await waitFor(() => expect(screen.queryByTestId('product-search-drawer')).not.toBeInTheDocument());
+
+    await user.click(screen.getByTestId('inline-add-field-product'));
+
+    await waitFor(() => expect(screen.getByTestId('product-search-option-p2')).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.getByTestId('product-search-option-p1')).toHaveAttribute('aria-selected', 'false');
+  });
+
   it('falls back to the selector combo when the add-row entry itself is not a lookup', async () => {
     // Same `columns` array — only the addRow descriptor changed. This is the control that
     // proves the branch is decided by `addRow.fields` and nothing else.

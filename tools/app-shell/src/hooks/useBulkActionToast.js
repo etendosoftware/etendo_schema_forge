@@ -55,29 +55,22 @@ export function showBulkActionToast(ui, result) {
   // ETP-5316 QA rejection — a mass/multi-record action must NEVER surface a
   // per-row backend error as toast `description`: it doesn't scale past a
   // handful of rows and the raw messages (e.g. line-number references) aren't
-  // locatable in the document from a toast anyway. Only the exact single-record
-  // fast path above may show a real backend error; every multi/mixed case below
-  // stays the plain generic count summary, no description.
-  //
-  // ETP-5051 — the one exception: a plan-quota refusal. It is not a per-row detail but the account-
-  // wide reason the rest of the run failed, and the user can act on it (the plan), so its already
-  // translated sentence (the caller flags the row `quotaRefusal`) is shown once as the description.
-  const quotaFailure = failed.find((entry) => entry?.quotaRefusal && entry?.message);
-  const options = quotaFailure ? { description: quotaFailure.message } : undefined;
+  // locatable in the document from a toast anyway. Two exceptions, both said once as the
+  // description (see `bulkFailureDescription`): a plan-quota refusal (ETP-5051) and a reason
+  // every failure shares (ETP-5591).
+  const description = bulkFailureDescription(failed, ui);
+  const notify = (show) => (description ? show(msg, { description }) : show(msg));
   if (failed.length === 0 && omitted.length === 0) {
     toast.success(msg);
   } else if (failed.length > 0 && ok === 0 && omitted.length === 0) {
     // Nothing was skipped and nothing succeeded — every attempted row genuinely
     // errored. Same "hard failure" case the original 2-number logic covered.
-    if (options) toast.error(msg, options);
-    else toast.error(msg);
-  } else if (options) {
-    toast.warning(msg, options);
+    notify(toast.error);
   } else {
     // Everything else is a mix: some ok/omitted/failed combination that is neither
     // a clean full success nor a hard full failure — including the "0 ok, some
     // omitted, 0 failed" case (nothing eligible, but nothing genuinely errored).
-    toast.warning(msg);
+    notify(toast.warning);
   }
 }
 
@@ -117,6 +110,36 @@ function bulkSummaryMessage(ui, { ok, omitted, failed }) {
     .replace('{ok}', String(ok))
     .replace('{omitted}', String(omitted.length))
     .replace('{failed}', String(failed.length));
+}
+
+/**
+ * The description of a multi-record failure summary, or `undefined` for the plain count.
+ *
+ * ETP-5051 — a plan-quota refusal wins: it is not a per-row detail but the account-wide reason the
+ * rest of the run failed, and the user can act on it (the plan), so its already translated sentence
+ * (the caller flags the row `quotaRefusal`) is shown even when other rows failed for other reasons.
+ * Otherwise ETP-5591's shared reason, when every failure has it.
+ */
+function bulkFailureDescription(failed, ui) {
+  const quotaFailure = failed.find((entry) => entry?.quotaRefusal && entry?.message);
+  if (quotaFailure) return quotaFailure.message;
+  return sharedFailureReason(failed, ui) ?? undefined;
+}
+
+/**
+ * The translated reason when every failure has the same identity (`messageKeys` +
+ * `messageParams`), else `null`. Identity, not text: an unkeyed backend message can carry
+ * row-specific detail (ETP-5710), so it is never promoted to the summary.
+ */
+function sharedFailureReason(failed, ui) {
+  if (failed.length < 2 || !failed[0].messageKeys?.length) return null;
+  const identity = (f) => JSON.stringify([f.messageKeys ?? [], f.messageParams ?? {}]);
+  const first = identity(failed[0]);
+  if (!failed.every((f) => identity(f) === first)) return null;
+  return translateBackendError(failed[0].message, ui, {
+    messageKeys: failed[0].messageKeys,
+    messageParams: failed[0].messageParams,
+  }) || null;
 }
 
 export function persistBulkActionResult(result) {

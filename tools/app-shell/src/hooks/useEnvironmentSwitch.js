@@ -5,6 +5,7 @@ import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/s
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
+import { useSupportSession } from './useSupportSession.js';
 
 export const ENVIRONMENT_LIST_REFRESH_EVENT = 'etendo:refresh-environments';
 
@@ -98,6 +99,10 @@ export function useEnvironmentSwitch({
   const isAuthenticated = (auth?.isAuthenticated ?? false) || Boolean(credential);
   const csrfToken = auth?.csrfToken ?? threadedCsrf;
   const clientId = auth?.clientId ?? null;
+  // ETP-5351 — a support session is pinned to the tenant it was opened for: changing company means
+  // a new ticket from Classic, with its own audit row. So it lists the current company alone and
+  // never switches, whatever the backend answers (it refuses /session/environment anyway).
+  const { isSupportMode } = useSupportSession();
   // ETP-5051 O-3 — read through a ref so the effect below keeps its [enabled, isAuthenticated]
   // identity: a session change clears the provider's cache and changes the key, and the next
   // read (refresh or a later mount) uses the new one.
@@ -174,7 +179,7 @@ export function useEnvironmentSwitch({
   }, [enabled, isAuthenticated]);
 
   const switchTo = useCallback(async (env) => {
-    if (!isAuthenticated || !env?.adminUserId) return false;
+    if (!isAuthenticated || isSupportMode || !env?.adminUserId) return false;
     setSwitching(env.clientId);
     try {
       // The backend rotates the session cookie for the target environment and
@@ -208,7 +213,7 @@ export function useEnvironmentSwitch({
       setSwitching(null);
       return false;
     }
-  }, [isAuthenticated, csrfToken]);
+  }, [isAuthenticated, isSupportMode, csrfToken]);
 
   /**
    * Enters an environment identified by name, re-reading the list first.
@@ -239,7 +244,7 @@ export function useEnvironmentSwitch({
   }, [isAuthenticated, switchTo]);
 
   return {
-    environments,
+    environments: isSupportMode ? environments.filter((env) => env.clientId === clientId) : environments,
     loading,
     switchTo,
     enterByClientName,

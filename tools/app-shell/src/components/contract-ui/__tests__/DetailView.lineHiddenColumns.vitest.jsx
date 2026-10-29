@@ -228,6 +228,18 @@ describe('DetailView — lineHiddenColumns forwarded to the line grid (ETP-4543)
     expect(detailTableProps.current.hiddenColumns).toContain('costcenter');
   });
 
+  it('passes the stable window spec and detail entity across record changes', () => {
+    const { rerender } = render(<DetailView {...BASE_PROPS} />);
+    expect(detailTableProps.current.specName).toBe('sales-invoice');
+    expect(detailTableProps.current.entity).toBe(DETAIL_ENTITY);
+
+    mockHook.selected = { id: '456', documentNo: 'INV-002', documentStatus: 'DR' };
+    mockHook.editing = { ...mockHook.selected };
+    rerender(<DetailView {...BASE_PROPS} recordId="456" />);
+    expect(detailTableProps.current.specName).toBe('sales-invoice');
+    expect(detailTableProps.current.entity).toBe(DETAIL_ENTITY);
+  });
+
   it('does NOT hide costcenter when the lines-entity evaluator resolves visibility.costcenter=true', () => {
     displayLogicByEntity.current[DETAIL_ENTITY] = { readOnly: {}, visibility: { costcenter: true } };
     render(<DetailView {...BASE_PROPS} />);

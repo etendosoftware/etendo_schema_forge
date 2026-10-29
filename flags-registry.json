@@ -1362,6 +1362,74 @@
           }
         ]
       }
+    },
+    {
+      "id": "grid-column-views",
+      "description": "Personal column views for list, lines and bespoke business grids: the user hides, reorders and resizes data columns and saves the result explicitly per user, spec and entity. TanStack Table (headless) holds the column state while the markup stays Schema Forge's own. Persistence is a user-scoped AD_Preference behind /sws/neo/grid-views/{spec}/{entity} in com.etendoerp.go.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5835",
+      "created": "2026-10-20",
+      "flag": {
+        "key": "grid-column-views",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER, not a decision: the date to retire the flag has not been set. The feature ships dark (default off); the real TTL depends on the rollout phases a human still has to approve (see the contract-approval-not-recorded item).",
+        "symbols": [
+          "grid-column-views",
+          "GRID_COLUMN_VIEWS",
+          "useGridView",
+          "useFlaggedGridView",
+          "GridViewControls",
+          "renderGridViewCells"
+        ],
+        "$symbolsComment": "useGridView, useFlaggedGridView, GridViewControls and renderGridViewCells are the toggle points that never name the key: the bespoke grids call useFlaggedGridView and render GridViewControls only when the flag is on."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/hooks/useGridView.js",
+          "tools/app-shell/src/hooks/useFlaggedGridView.js",
+          "tools/app-shell/src/components/contract-ui/GridViewControls.jsx",
+          "tools/app-shell/src/components/contract-ui/GridColumnHeaderControls.jsx"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/NeoGridViewsService.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost, deliberately not owned): DataTable.jsx, ListView.jsx, ListModalWindow.jsx, InlineLinesPanel.jsx, ReconciliationSplitPanel.jsx, windows/registry.js, and the bespoke grids listed in docs/bespoke-grid-views.md. NeoBuiltInEndpointHandler.java routes the endpoint but also serves unrelated built-in endpoints.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/hooks/__tests__/useFlaggedGridView.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.gridViews.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/flags/__tests__/useFeatureFlag.vitest.jsx",
+            "note": "Shared spec; covers the default-off state and the explicit on override of this flag."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/platform/grid-column-views.mocked.spec.js",
+            "note": "The flag-off half runs on the plain server (what CI runs) and proves the grids are inert; the flag-on half skips itself unless E2E_GRID_COLUMN_VIEWS_FLAG=on and the server was started with VITE_FEATURE_FLAGS."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "contract-approval-not-recorded",
+          "kind": "precondition",
+          "note": "The human approval of the ETP-5834 contract (surfaces, view content, storage, rollout, width precedence) is still recorded as PENDING, so the flag must not be turned on beyond a test environment, and the TTL above stays a placeholder until a person decides.",
+          "refs": [
+            "docs/plans/grid-customization-evaluation.md — 'Decision record'"
+          ]
+        }
+      ]
     }
   ]
 }
