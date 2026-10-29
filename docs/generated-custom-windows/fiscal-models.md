@@ -1102,6 +1102,119 @@ bare status code was ever propagated) via the existing `parseServerMessage` help
 `fm.list.reactivate_failed` when no reason is present (network error, or any future 409 this
 mechanism doesn't tag).
 
+**QA CP-19 — the list "Resultado" of a 349 disagreed with the detail and the file.** The column
+read 2.390,00 € where the detail "Total operaciones" KPI and the generated `.349` both read
+2.290,00 €. The value is not stored and not stale: both screens consume the SAME
+`GET /fiscal349/operators` payload, and the only difference was the client-side reduction.
+`deriveListResult349` (ETP-5432 pt.2) returned
+`sumAbsKeyTotals(summary) + sumAbsKeyTotals(rectificativeSummary)` — it **added the
+rectifications block into the operations total**, and the 100,00 € gap was exactly the
+rectifications amount.
+
+That sum has no referent in the AEAT record of design. The type-1 header carries **two
+independent (count, amount) pairs over disjoint sets of type-2 records** — "importe de las
+operaciones intracomunitarias" over the OPERATOR records (positions 138-146 / 147-161) and
+"importe de las rectificaciones" over the RECTIFICATION records (162-170 / 171-185) — and no
+third, combined field; a rectification record's base-imponible positions are blanks, so it
+cannot carry a current-period operation amount at all. `AEAT3492010Report#generateLine1` writes
+exactly those four fields and nothing else. A prior-period rectification therefore never counts
+toward the period's total of operations, and the detail/file were the correct side.
+
+**Carrying rectifications does not change a declaration's TYPE** — two orthogonal axes. A
+rectificativa issued in month 10 against an already-declared invoice of month 09 is a
+rectification record (ejercicio/periodo = 09) inside the **ordinaria** of month 10; month 09 is
+untouched and month 10 does not become sustitutiva. "Sustitutiva" is decided on the declaration's
+own period: one was already filed for it and new invoices *of that period* appeared afterwards.
+An ordinaria carrying rectifications is entirely normal.
+
+**The fix.** `models/349/operations349.js` (new) holds the one reduction:
+`sum349OperationsBase(operators)` — regular rows only — plus `isRectificativeOp` and
+`sumAbsRectificativeTotals(rectificativeSummary)` (per-key `Math.abs`, the same anti-netting rule
+`RectificativeSubtotalCard` documents). Both `FmModel349Page.jsx`'s `totalBase` KPI and
+`listBehavior349.js` now call `sum349OperationsBase` on the same payload, so the two figures are
+the same number by construction. It is a module of its own rather than another export of
+`fiscalModelsUtils.js` because several suites replace that module with a non-spread `vi.mock`
+factory.
+
+**The layout went through two revisions.** The first cut (committed, then superseded) stacked a
+muted "rect. 100,00 €" sub-line inside the "Resultado" cell itself. After reviewing the real AEAT
+Sede UI, Ruben asked for the AEAT header's own two-pair shape to be visible as **two separate
+columns** instead of one cell carrying both numbers, so the final shape is:
+
+- **"Resultado"** (`InfoResult`, `FmListPage.jsx`) goes back to showing ONLY the operations
+  total — exactly what it showed before ETP-5432 pt.2, and exactly what the detail KPI and the
+  `.349` file show. An ordinaria with zero operations but real rectifications renders `—`
+  (never "Informativa" — **the ETP-5432 pt.2 case is preserved**, just via the other column now).
+- **"Rectificaciones"** (`RectificationsCell`, new, right after "Resultado") went through
+  THREE rounds of visual follow-up before landing on its final shape, each one a real rendering
+  issue caught by looking at the actual UI rather than the mockup alone:
+  1. First cut: a pill with a clock icon, and the origin periods as a permanent sub-line under
+     it with an explicit `minHeight` to keep every row the same height. That `minHeight` box
+     became the row's TALLEST cell, and `.fm-table td`'s `vertical-align: middle` centers that
+     whole box — not the pill inside it, which `flexDirection: column; alignItems: flex-start`
+     had top-anchored — so the pill sat visibly higher than sibling cells' centered text.
+  2. Second cut: dropped the clock icon and the wrapper/`minHeight`, rendering the pill as a
+     single inline span (the exact shape `IncidentsCell`, same file, already uses for its own
+     badge-or-text cell) so `vertical-align: middle` centers it like every other cell, with the
+     origin periods moved to the pill's native `title` attribute (a browser tooltip) instead of
+     permanent text. The native `title` tooltip turned out unreliable in practice (inconsistent
+     hover delay/visibility), and the pill itself was reconsidered.
+  3. **Final shape:** plain text, same typographic weight as the "Resultado" operations amount
+     (`fontVariantNumeric: tabular-nums, fontSize: 14, color: hsl(var(--foreground))`) — no pill
+     background, no color tint at all. The only visual distinctiveness is a small info icon next
+     to the amount; hovering it reveals the origin periods ("de 09, 10, 11" —
+     `collectRectificationOrigins`/`formatRectificationOriginsLabel`, `operations349.js`, reading
+     the `declaredYear`/`declaredPeriod` ETP-5027 already puts on every corrective operator row).
+     The icon reuses `FmInfoTooltip` (`FmCommon.jsx`, new) — the SAME hover-info mechanism
+     "Totales por clave" (`FmModel349Page.jsx`) already had for its own info icon, not a second
+     copy. Empty (no icon, no amount shown via this column) when there are no rectifications.
+- A cross-year origin (a correction can in principle reference a prior YEAR, not just a prior
+  month of the current year — the corrective DAO groups by `(BPId, TaxKey, Year, Period)`, so
+  nothing restricts it to the current exercise) is qualified with its full year
+  (`"<period> <year>"`), the same convention `declaredPeriodLabel` already uses on the detail
+  page's "Rectificaciones" tab, rather than inventing a new one.
+- The generic, cross-model `FmListPage.jsx` never sees the 349-specific `(year, period)` row
+  shape: `deriveListResult349` pre-formats `rectificationOriginsLabel` as a plain string, the same
+  way the 390 ships its own `labelKey` instead of a raw kind code.
+
+The "Rectificaciones" tab, the per-key totals, "Subtotal rectificativas" and every `.349` amount
+are untouched; the 303/390 rows' own result rendering is untouched (they never populate
+`rectifications`, so their "Rectificaciones" column cell is simply empty).
+
+**`FmInfoTooltip` (`FmCommon.jsx`, new) — fixing a pre-existing z-index bug, found while
+reusing the pattern.** "Totales por clave"'s own info icon (step 3 above pointed at it as the
+pattern to reuse) had a tooltip that rendered with its top portion hidden BEHIND the sticky
+operators filter row above it. Root cause, confirmed against the CSS before fixing (not assumed):
+`.fm-349-totals` is `position: sticky` with no explicit `z-index`. Per the CSS Positioned Layout
+spec, `position: sticky` creates its OWN stacking context regardless of z-index — so the old
+tooltip's `z-index: 500` could only ever win a comparison against OTHER CHILDREN of
+`.fm-349-totals`'s own context, never against a sibling stacking context that sets an explicit
+z-index, which is exactly what the filter row right above it does (`zIndex: 15`,
+`FmModel349Page.jsx`). No z-index value inside `.fm-349-totals` could ever beat that sibling.
+
+Rather than patch that one sticky ancestor's z-index — and because the pattern was about to be
+reused in a SECOND, structurally different ancestor (the list's "Rectificaciones" cell, inside a
+plain non-sticky `<td>`, proof the fix needs to generalize) — `FmInfoTooltip` portals the tooltip
+box to `document.body` via `createPortal` (the same pattern `App.jsx`, `SelectionToolbar.jsx` and
+`DataTable.jsx` already use elsewhere in the app). A portaled node is a true sibling of every
+other top-level layer, so it no longer participates in either ancestor's stacking context at all;
+position is computed from the icon's own `getBoundingClientRect()` on hover and applied via
+`position: fixed` (so it tracks the anchor correctly even inside a scrolling/sticky container —
+`position: absolute` would be meaningless once portaled out of the DOM tree it was relative to).
+The box's z-index dropped from the old arbitrary `500` to `z-20` ("Floating" tier,
+`docs/ui-design-guidelines.md`: small local floating elements / inline tooltips) — once portaled,
+it only has to clear the app's OTHER top-level layers, not the local sticky mess it used to be
+trapped inside, so the guideline's modest tier is enough. Both call sites ("Totales por clave"
+and "Rectificaciones") now share this one show/hide mechanism instead of two copies that could
+drift; the old `.fm-349-totals__info-wrap`/`.fm-349-totals__tooltip` CSS classes and the inline
+`Info` + `showInfo` state in `TotalsCard` are gone, replaced by `<FmInfoTooltip text={...} />`.
+
+**Deliberately not changed:** `em_aeat349_iscorrective` (the manual flag that decides whether an
+invoice lands in "Rectificaciones" or "Facturas origen") stays exactly as it is. Deriving it would
+need a three-step chain — is the rectified invoice from an earlier period, does that period have a
+submitted declaration, and did that invoice actually enter it — with real performance implications;
+it needs its own investigation.
+
 **QA CP-20 — the confirmation popup must close on BOTH outcomes.** The toast above was shown
 *underneath a still-open modal*: `handleConfirmReactivate` cleared `reactivateTarget` only inside
 its `result.ok` branch, so every rejected reactivation (the common

@@ -1097,7 +1097,8 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
 
     await waitFor(() => {
       const row = container.querySelector('tbody tr');
-      const incidentsCell = row.querySelectorAll('td')[6]; // 7th column = Incidencias
+      // ETP-5725: "Rectificaciones" column inserted at index 6, Incidencias shifted to 7.
+      const incidentsCell = row.querySelectorAll('td')[7];
       expect(incidentsCell.textContent).not.toBe(INCIDENTS_NONE_KEY);
       expect(incidentsCell.textContent).toContain('1');
     });
@@ -1118,7 +1119,7 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
 
     await waitFor(() => {
       const row = container.querySelector('tbody tr');
-      const incidentsCell = row.querySelectorAll('td')[6];
+      const incidentsCell = row.querySelectorAll('td')[7]; // ETP-5725: Rectificaciones column at index 6
       expect(incidentsCell.textContent).not.toBe(INCIDENTS_NONE_KEY);
       // One blocking + one warning badge, each rendering its own "1" count.
       expect(incidentsCell.textContent.match(/1/g)?.length).toBe(2);
@@ -1135,7 +1136,7 @@ describe('FmListPage — real incidents refresh (regression, ETP-4755)', () => {
 
     await waitFor(() => {
       const row = container.querySelector('tbody tr');
-      const incidentsCell = row.querySelectorAll('td')[6];
+      const incidentsCell = row.querySelectorAll('td')[7]; // ETP-5725: Rectificaciones column at index 6
       expect(incidentsCell.textContent).toBe(INCIDENTS_NONE_KEY);
     });
   });

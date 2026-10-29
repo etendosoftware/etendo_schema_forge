@@ -4,15 +4,16 @@ import { useUI, useLocaleSwitch } from '@/i18n';
 import {
   Download, CircleCheck, Search,
   Loader2, Globe, ChevronDown, Users, FileEdit,
-  TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
+  TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, FileCheck,
   X, Save, RefreshCw,
 } from 'lucide-react';
-import { KpiWidget, Tabs } from '../../FmCommon.jsx';
+import { KpiWidget, Tabs, FmInfoTooltip } from '../../FmCommon.jsx';
 import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle, tabCount, incidentsTabBadge, FmEmptyState } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData, RECEIPT_ATTACHMENT_CONFIG } from '../../fiscalModelsUtils.js';
+import { isRectificativeOp, sum349OperationsBase } from './operations349.js';
 import { FORMER_STATEMENT_LENGTH, isValidFormerStatement, sanitizeFormerStatementInput } from '../../formerStatement.js';
 import { invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
@@ -36,13 +37,10 @@ const MOCK_OPERATORS = [
   { id:7, nif:'PL1234567890',  name:'Kraków Components sp.z.o.o.',key:'A', base:3200.00,  vies:'valid',   origin:'1 factura compra' },
 ];
 
-// ETP-5027 — the operators endpoint now returns corrective (rectificative) rows
-// alongside the regular ones, ordered after them. `rectificative` is present on
-// EVERY row (false for regular ones, never omitted), so no undefined-check is
-// needed; this helper only normalizes the string/boolean shapes NEO can emit.
-function isRectificativeOp(op) {
-  return op?.rectificative === true || op?.rectificative === 'true' || op?.rectificative === 'Y';
-}
+// ETP-5027 — the operators endpoint returns corrective (rectificative) rows alongside the
+// regular ones, ordered after them. ETP-5725 (QA CP-19): `isRectificativeOp` moved to
+// operations349.js, where the list's "Resultado" column shares it with this page — see
+// `sum349OperationsBase` there for why both screens must now reduce the payload identically.
 
 // ETP-5027 — the declaration period a corrective row rectifies, as the
 // `T1 2025` string shown on the row and folded into its identity. Regular rows
@@ -190,28 +188,17 @@ function TotalsCard({ operators, rectifSummary, t }) {
   const regular = operators.filter(o => !isRectificativeOp(o));
   const totals = {};
   KEY_IDS.forEach(k => { totals[k] = regular.filter(o => o.key === k).reduce((s,o) => s + (parseFloat(o.base) || 0), 0); });
-  const [showInfo, setShowInfo] = useState(false);
   return (
     <div className="fm-349-totals">
       <div className="fm-349-totals__card">
         <div className="fm-349-totals__title">
           {t('fm.m349.totals.title')}
-          <span
-            className="fm-349-totals__info-wrap"
-            onMouseEnter={() => setShowInfo(true)}
-            onMouseLeave={() => setShowInfo(false)}
-          >
-            <Info
-              size={12}
-              strokeWidth={1.75}
-              style={{ color: 'var(--fm-fg-3)', cursor: 'help' }}
-              data-testid="Info__346dd5" />
-            {showInfo && (
-              <div className="fm-349-totals__tooltip">
-                {t('fm.m349.totals.info') ?? 'Calculados a partir de los operadores. No editable. Modifica los operadores para ajustar los totales.'}
-              </div>
-            )}
-          </span>
+          {/* ETP-5725 — shared hover-info tooltip (FmCommon.jsx), fixing the pre-existing
+              z-index bug where this tooltip rendered half-hidden underneath the sticky
+              filter row above it. See FmInfoTooltip's own comment for the root cause. */}
+          <FmInfoTooltip
+            text={t('fm.m349.totals.info') ?? 'Calculados a partir de los operadores. No editable. Modifica los operadores para ajustar los totales.'}
+            data-testid="FmInfoTooltip__346dd5-totals" />
         </div>
         {KEY_IDS.map(k => (
           <div key={k} className="fm-349-total-row">
@@ -997,10 +984,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   const operatorCount = countDistinct(operators, operatorIdentity);
   const viesPending  = countDistinct(operators.filter(o => o.vies === 'pending'), viesIdentity);
   // Excludes corrective rows for the same reason TotalsCard does — their signed
-  // deltas must not net off against the regular base total (ETP-5027).
-  const totalBase    = operators
-    .filter(o => !isRectificativeOp(o))
-    .reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
+  // deltas must not net off against the regular base total (ETP-5027). ETP-5725
+  // (QA CP-19): this is now the shared reduction the list's "Resultado" column
+  // applies to the very same payload, so the two figures cannot disagree again.
+  const totalBase    = sum349OperationsBase(operators);
   const rectifSummary = liveRectifSummary ?? decl.rectificativeSummary ?? null;
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
   const rectifications = rectificationCountFor(snapshotServed, submittedSnapshot, rectifRows);

@@ -5,7 +5,7 @@ import {
   LayoutGrid, ArrowUpDown,
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
-import { EmptyState, KpiWidget } from './FmCommon.jsx';
+import { EmptyState, KpiWidget, FmInfoTooltip } from './FmCommon.jsx';
 import { FmStatusChip } from './FmDetailChrome.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -243,6 +243,57 @@ const RESULT_BADGE_STYLE = {
   background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
 };
 
+// ETP-5725 (QA CP-19) — the informative ("info") result of a Modelo 349 row is the TOTAL OF
+// OPERATIONS ONLY, identical by construction to the detail page's "Total operaciones" KPI and
+// to the generated .349 file (both now reduce the same `GET /fiscal349/operators` payload
+// through `sum349OperationsBase`). Its prior-period RECTIFICATIONS amount is a DIFFERENT AEAT
+// header field over a disjoint set of records and is rendered by its own "Rectificaciones"
+// column (`RectificationsCell` below) — Ruben's review of the real AEAT Sede UI replaced the
+// first cut's stacked "rect. X" sub-line inside this cell with that separate column. An
+// ordinaria with no new operations but real rectifications therefore reads "—" here (not
+// "Informativa") — the ETP-5432 pt.2 case, protected via the other column instead.
+function InfoResult({ result, t }) {
+  return result.amount > 0
+    ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
+    : (result.rectifications > 0
+      ? <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>
+      : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>);
+}
+
+// ETP-5725 (QA CP-19) — the "Rectificaciones" column: plain text, same typographic weight as
+// the "Resultado" operations amount (`InfoResult` above) — no pill, no colored background. The
+// only visual distinctiveness is a small info icon next to the amount, whose hover tooltip
+// reveals the distinct origin periods ("de 09, 10, 11" —
+// `collectRectificationOrigins`/`formatRectificationOriginsLabel`, operations349.js). Only
+// Modelo 349 rows ever carry `rectifications` (303/390 derive neither), so this renders
+// nothing for every other model and for a 349 row with none — not an empty icon.
+//
+// Two rounds of visual follow-up already behind this shape: a pill-with-clock-icon, then a
+// primary-color pill with a native `title` tooltip (dropped — unreliable hover behavior, and
+// Ruben reconsidered the pill itself). The icon-hover tooltip now reuses `FmInfoTooltip`
+// (FmCommon.jsx) — the SAME show/hide mechanism "Totales por clave" (FmModel349Page.jsx)
+// already used for its own info icon, portaled to `document.body` so it cannot inherit that
+// panel's pre-existing z-index bug (see FmInfoTooltip's own comment for the root cause).
+function RectificationsCell({ result, t }) {
+  const amount = result?.rectifications ?? 0;
+  if (amount <= 0) return null;
+  // Pre-formatted by `deriveListResult349` (the ONLY place that reads the 349-specific
+  // (year, period) row shape) — this generic, cross-model page renders a plain string, the
+  // same contract `labelKey` already uses for the 390's model-specific badge text above.
+  const originsLabel = result?.rectificationOriginsLabel ?? '';
+  const tooltipText = originsLabel
+    ? (t('fm.result.rectifications_origins', { periods: originsLabel }) ?? `de ${originsLabel}`)
+    : null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>
+        {formatAmount(amount)}
+      </span>
+      {tooltipText && <FmInfoTooltip text={tooltipText} data-testid="fm-rectifications-info" />}
+    </span>
+  );
+}
+
 // Result as plain text — used in the list table
 function ResultText({ isComputing, error, result, t }) {
   if (isComputing) return <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 13 }}>…</span>;
@@ -250,11 +301,7 @@ function ResultText({ isComputing, error, result, t }) {
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.N') ?? 'Sin resultado'}</span>;
   if (result.kind === 'zero') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.zero') ?? 'Resultado cero'}</span>;
-  if (result.kind === 'info') {
-    return result.amount > 0
-      ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
-      : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
-  }
+  if (result.kind === 'info') return <InfoResult result={result} t={t} />;
   // A model may name its own badge text (`labelKey`, e.g. the 390's informative "Resultado
   // positivo"); otherwise the shared `fm.result.<kind>` key.
   const label = t(result.labelKey ?? `fm.result.${result.kind}`) ?? result.kind;
@@ -1100,6 +1147,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <th>{t('fm.col.type')}</th>
             <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
             <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
+            <th style={{ textAlign: 'right' }}>{t('fm.col.rectifications') ?? 'Rectificaciones'}</th>
             <th>{t('fm.col.incidents')}</th>
             <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
             <th style={{ width: 72 }} aria-hidden="true" />
@@ -1192,6 +1240,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     result={displayResult}
                     t={t}
                     data-testid="ResultText__cb728e" />
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <RectificationsCell result={displayResult} t={t} data-testid="RectificationsCell__cb728e" />
                 </td>
                 <td>
                   <IncidentsCell

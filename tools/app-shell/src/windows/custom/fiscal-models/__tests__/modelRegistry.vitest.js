@@ -196,16 +196,25 @@ describe('modelRegistry — bindings', () => {
     expect(getConfigSection('390')).toBeUndefined();
   });
 
-  it('derives the list result per model (303: box 71 of the boxes; 349: abs-summed key totals)', () => {
+  // ETP-5725 (QA CP-19) — the 349 row reports the two AEAT header blocks SEPARATELY and never
+  // their sum: `amount` is the total of operations (the regular operator rows, the same
+  // reduction the detail KPI and the .349 file apply) and `rectifications` is the prior-period
+  // corrections amount. This used to be a single `Σ|summary| + Σ|rectificativeSummary|`.
+  it('derives the list result per model (303: box 71 of the boxes; 349: operations + rectifications, kept apart)', () => {
     const decl = { manualData: {} };
     const res303 = getListBehavior('303').deriveListResult(decl, {
       summary: { result: 500 }, boxes: { 27: 500 }, sources: [{ id: 'i1' }],
     });
     expect(res303.amount).toBe(500);
     const res349 = getListBehavior('349').deriveListResult(decl, {
-      summary: { totalE: '10', totalS: -5 }, rectificativeSummary: { totalA: -2.5 },
+      operators: [
+        { key: 'E', base: '10', rectificative: false },
+        { key: 'S', base: '5', rectificative: false },
+        { key: 'A', base: '-2.5', rectificative: true },
+      ],
+      summary: { totalE: '10', totalS: '5' }, rectificativeSummary: { totalA: -2.5 },
     });
-    expect(res349).toEqual({ kind: 'info', amount: 17.5 });
+    expect(res349).toEqual({ kind: 'info', amount: 15, rectifications: 2.5, rectificationOriginsLabel: '' });
   });
 
   // ETP-5716 — 390: the annual result ([86], or [94] in territory mode), informative: only its sign

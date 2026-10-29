@@ -373,8 +373,17 @@ describe('FmListPage — submitted declarations with a persisted submission snap
       id: 'snap-349',
       model: '349',
       status: 'submitted_ack',
+      // ETP-5725 (QA CP-19): the row's operations total is now reduced from the operator rows
+      // — the same reduction the detail KPI applies — so the fixture carries the rows its
+      // summary describes, which is the shape Fiscal349SnapshotSupport actually persists
+      // (`operators`, one row per partner, alongside `summary`/`rectificativeSummary`).
       submittedSnapshot: {
-        operators: [], summary: { totalE: '100.00', totalS: '20.00', totalA: '3.00', totalI: '0.00' },
+        operators: [
+          { key: 'E', base: '100.00', rectificative: false },
+          { key: 'S', base: '20.00', rectificative: false },
+          { key: 'A', base: '3.00', rectificative: false },
+        ],
+        summary: { totalE: '100.00', totalS: '20.00', totalA: '3.00', totalI: '0.00' },
       },
     });
     const { container } = render(

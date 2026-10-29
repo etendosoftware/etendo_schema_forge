@@ -5,39 +5,58 @@
 //   checkModifiedFn   the draft polling check (checkModified349) — a getter, so the function is
 //                     read at render time exactly as FmListPage read it before (tests that mock
 //                     fiscalModelsUtils.js compare it by identity)
-//   deriveListResult  the row's "Resultado" { kind, amount } from a successful compute
+//   deriveListResult  the row's "Resultado" { kind, amount, rectifications,
+//                     rectificationOriginsLabel } from a successful compute
 import { compute349Operators, checkModified349 } from '../../fiscalModelsUtils.js';
+import {
+  sum349OperationsBase, sumAbsRectificativeTotals,
+  collectRectificationOrigins, formatRectificationOriginsLabel,
+} from './operations349.js';
 
 async function computeOperators349Real(decl, { token, apiBaseUrl } = {}) {
   return compute349Operators(decl, { token, apiBaseUrl });
 }
 
-// ETP-5432 pt.2 — sums a 349 key-totals object (`summary` or `rectificativeSummary`,
-// both `{ totalE, totalS, totalA, totalI }`) via Math.abs on each key, so a
-// negative corrective delta contributes to the list's "Resultado" total instead of
-// silently cancelling a positive one (or a same-sized regular total) into 0 — the
-// exact anti-netting rule `RectificativeSubtotalCard` (FmModel349Page.jsx) already
-// applies when rendering these same two objects on the detail page.
-function sumAbsKeyTotals(obj) {
-  return ['totalE', 'totalS', 'totalA', 'totalI']
-    .reduce((s, k) => s + Math.abs(parseFloat(obj?.[k]) || 0), 0);
-}
-
-// ETP-5432 pt.2 — a rectification-only period (no regular operators
-// alongside it) has an all-zero regular `summary` (Fiscal349BoxesHandler
-// always emits `summaryByKey` from the REGULAR aggregation only), so
-// summing `summary` alone silently showed "Informativa"/0 here even
-// though the declaration has real corrective operators — the detail
-// page's own RectificativeSubtotalCard already renders the same
-// `rectificativeSummary` correctly, so this was a list-only gap.
-// Correctives are SIGNED deltas (can be negative), so they are summed
-// via Math.abs — the same anti-cancellation rule RectificativeSubtotalCard
-// documents for why E/S/A/I are never netted against each other; without
-// it a -30 sales correction offset by a +30 purchase one would still sum
-// to 0 and reproduce this exact bug.
+/**
+ * ETP-5725 (QA CP-19) — the row reports the SAME two figures the AEAT type-1 header keeps
+ * apart, and never their sum:
+ *
+ *   `amount`                total of OPERATIONS — identical, by construction, to the detail
+ *                           page's "Total operaciones" KPI and to the generated .349 file,
+ *                           because both now go through `sum349OperationsBase` over the
+ *                           same payload. Rendered by the "Resultado" column alone.
+ *   `rectifications`        amount of the prior-period RECTIFICATIONS this declaration
+ *                           carries. Rendered by its OWN "Rectificaciones" column (Ruben's
+ *                           review of the real AEAT Sede UI replaced the first cut's stacked
+ *                           "rect. X" sub-line inside "Resultado" with a separate column).
+ *   `rectificationOriginsLabel`  the distinct prior periods those rectifications correct,
+ *                           sorted ascending and pre-formatted as "09, 10, 11" — the "de …"
+ *                           line under that column's pill. Formatted here, not in the
+ *                           generic `FmListPage.jsx`, so that page stays unaware of the
+ *                           349-specific (year, period) row shape — the same reason the 390
+ *                           ships its own `labelKey` instead of a raw kind code.
+ *
+ * This replaces `sumAbsKeyTotals(summary) + sumAbsKeyTotals(rectificativeSummary)`, which
+ * added the two blocks together and is the whole of CP-19: the list read 2.390,00 € where
+ * the detail and the file read 2.290,00 € plus 100,00 € of rectifications.
+ *
+ * ETP-5432 pt.2's case is deliberately preserved and is now reported correctly rather than
+ * by inflating the operations total: a rectification-only period has an all-zero regular
+ * `summary` (the backend builds `summaryByKey` from the REGULAR aggregation only), so it
+ * yields `amount: 0` (rendered as "—") WITH a non-zero `rectifications` in the other column.
+ * Note an ordinaria carrying rectifications is entirely normal: a rectificativa issued in
+ * month 10 against an invoice of month 09 is a rectification record (ejercicio/periodo = 09)
+ * inside the ORDINARIA of month 10 — it does not make month 10 sustitutiva, and month 09 is
+ * untouched.
+ */
 function deriveListResult349(decl, computed) {
-  const total = sumAbsKeyTotals(computed.summary) + sumAbsKeyTotals(computed.rectificativeSummary);
-  return { kind: 'info', amount: total };
+  return {
+    kind: 'info',
+    amount: sum349OperationsBase(computed?.operators),
+    rectifications: sumAbsRectificativeTotals(computed?.rectificativeSummary),
+    rectificationOriginsLabel: formatRectificationOriginsLabel(
+      collectRectificationOrigins(computed?.operators, decl?.year)),
+  };
 }
 
 const listBehavior349 = Object.freeze({
