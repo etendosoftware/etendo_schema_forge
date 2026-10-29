@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/EntityForm.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock i18n hooks. useUI resolves a tiny dictionary and interpolates `{param}`
@@ -9,6 +10,8 @@ vi.mock('@/i18n', () => {
   const dict = {
     fieldMinValueError: 'Value must be at least {min}',
     fieldIntegerError: 'Value must be a whole number',
+    qtyMaxAllowed: 'El máximo permitido es {max}',
+    paymentTermDaysNotInteger: 'Whole days only',
   };
   return {
     useLabel: () => (key) => key,
@@ -112,5 +115,44 @@ describe('EntityForm — generic numeric blur validation (ETP-4542)', () => {
     render(<EntityForm fields={[minIntField]} data={{ qty: '' }} onChange={vi.fn()} />);
     fireEvent.blur(screen.getByTestId('field-qty'));
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// Stepper refusal hint (`stepperMessages`): a refused keystroke says WHY under the field — the
+// format message (the field's stepperRejectedKey, else fieldIntegerError) for a decimal / minus,
+// and `qtyMaxAllowed` with the field's {max} for a digit past max's length.
+describe('EntityForm — stepper refusal messages', () => {
+  const stepper = {
+    key: 'days', label: 'Days', type: 'number', column: 'NetDays',
+    stepper: true, min: 0, max: 365, integer: true,
+  };
+  const typeInto = (value) => {
+    const input = screen.getByTestId('field-days');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value } });
+  };
+
+  it('a digit past the length of max says the interpolated maximum', () => {
+    render(<EntityForm fields={[stepper]} data={{ days: '' }} onChange={vi.fn()} />);
+    typeInto('1000');
+    expect(screen.getByTestId('field-days-rejected')).toHaveTextContent('El máximo permitido es 365');
+  });
+
+  it('a decimal says the field format message, from stepperRejectedKey', () => {
+    render(<EntityForm fields={[{ ...stepper, stepperRejectedKey: 'paymentTermDaysNotInteger' }]} data={{ days: '10' }} onChange={vi.fn()} />);
+    typeInto('10,');
+    expect(screen.getByTestId('field-days-rejected')).toHaveTextContent('Whole days only');
+  });
+
+  it('the format message falls back to fieldIntegerError', () => {
+    render(<EntityForm fields={[stepper]} data={{ days: '10' }} onChange={vi.fn()} />);
+    typeInto('-');
+    expect(screen.getByTestId('field-days-rejected')).toHaveTextContent('Value must be a whole number');
+  });
+
+  it('the range message follows the declared max (99 → 2 digits)', () => {
+    render(<EntityForm fields={[{ ...stepper, max: 99 }]} data={{ days: '' }} onChange={vi.fn()} />);
+    typeInto('100');
+    expect(screen.getByTestId('field-days-rejected')).toHaveTextContent('El máximo permitido es 99');
   });
 });

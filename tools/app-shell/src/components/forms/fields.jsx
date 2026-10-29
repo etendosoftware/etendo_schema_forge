@@ -231,15 +231,17 @@ function toIdleDisplay(value, grouping) {
  * @param {boolean} [bare=false] - skip the `Field`/label wrapper, for a dense table cell
  * @param {boolean} [grouping=true] - live thousands-grouping + 2-decimal idle format (price/amount-shaped fields); false keeps a plain, ungrouped look (quantity/integer/number/decimal/percent — matches today's behavior)
  * @param {import('react').RefObject} [inputRef] - optional external ref to the underlying input (e.g. for a caller-managed autoFocus)
+ * @param {(raw: string) => boolean} [isRawAllowed] - optional veto on the RAW text (the DOM value a keystroke produced, or the text a paste would leave), run BEFORE the mask strips anything: returning false refuses the edit like `isAllowed`. `isAllowed` only sees the masked value, so it cannot tell a refused letter from no edit at all — the integer stepper uses this to say why (ETP-5978). Absent → unchanged behavior
  * @param {(clean: string) => boolean} [isAllowed] - optional keystroke/paste veto on the CLEAN candidate value: returning false refuses the edit outright (the field keeps showing what it had, `onChange` does not fire) — for a hard length/precision ceiling the caller owns, e.g. an AEAT record width (ETP-5597)
  * @param {boolean} [clearZeroOnFocus=false] - ETP-5611: when the committed value is exactly 0, focus shows an empty field so the user types straight in; blurring it still blank without a keystroke commits nothing and the 0 comes back (line-grid amount cells)
  * @param {string} [aria-label] - accessible name for the underlying input, for a `bare` cell that has no visible label
+ * @param {string} [id] - id for the underlying input, so an external `<label htmlFor>` (e.g. EntityForm's) associates with it. Omit in repeated cells (line grids) to avoid duplicate ids
  */
 export function MaskedAmountInput({
   label, required, value, onChange, onCommit, onBlur, onFocus, onKeyDown, placeholder, disabled,
-  className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
-  inputMode = 'decimal', isAllowed, clearZeroOnFocus = false, 'data-testid': dataTestId,
-  'aria-label': ariaLabel,
+  className = '', id, name, currency, bare = false, grouping = true, autoFocus, inputRef,
+  inputMode = 'decimal', isAllowed, isRawAllowed, clearZeroOnFocus = false, 'data-testid': dataTestId,
+  'aria-label': ariaLabel, 'aria-describedby': ariaDescribedBy, 'aria-invalid': ariaInvalid,
 }) {
   const internalRef = useRef(null);
   const activeRef = inputRef || internalRef;
@@ -292,6 +294,8 @@ export function MaskedAmountInput({
   const handleChange = (e) => {
     const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
     const rawValue = e.target.value;
+    // Refused edit on the raw text: nothing changes, exactly like a refused `isAllowed`.
+    if (isRawAllowed && !isRawAllowed(rawValue)) return;
     const cursorPos = e.target.selectionStart ?? rawValue.length;
     const groupSeparator = grouping ? thousandsSeparator : null;
 
@@ -331,6 +335,15 @@ export function MaskedAmountInput({
   const handlePaste = (e) => {
     const el = e.currentTarget;
     const pasted = e.clipboardData?.getData('text') ?? '';
+    if (isRawAllowed) {
+      // The text the paste would leave, vetted raw — a full or a partial paste alike.
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? start;
+      if (!isRawAllowed(el.value.slice(0, start) + pasted + el.value.slice(end))) {
+        e.preventDefault();
+        return;
+      }
+    }
     const selectsAll = el.selectionStart === 0 && el.selectionEnd === el.value.length;
     if (!pasted.trim() || !(el.value === '' || selectsAll)) return;
 
@@ -398,6 +411,7 @@ export function MaskedAmountInput({
   const inputEl = (
     <Input
       ref={activeRef}
+      id={id}
       type="text"
       inputMode={inputMode}
       value={display}
@@ -415,6 +429,8 @@ export function MaskedAmountInput({
       autoFocus={autoFocus}
       className={inputClassName}
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
+      aria-invalid={ariaInvalid}
       data-testid={dataTestId || (name ? `field-number-${name}` : 'field-number')} />
   );
 
