@@ -1,10 +1,13 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { useEffect, useMemo, useState } from 'react';
-import { useUI } from '@/i18n';
+import { useUI, useLabel } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { DataTable } from '@/components/contract-ui';
 
 export default function AccountingPanel({ parentId, apiBaseUrl, onCount }) {
   const ui = useUI();
+  const t = useLabel();
   const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array: `undefined` = loading (initial/in-flight),
   // `null` = a request failed (network error or non-2xx response), an array = loaded rows
@@ -49,13 +52,29 @@ export default function AccountingPanel({ parentId, apiBaseUrl, onCount }) {
     { key: 'description', label: ui('description'), type: 'string', sortable: false },
   ], [ui]);
 
+  // Use the backing NEO entity, independently of the surrounding route or parent record.
+  const { gridView } = useFlaggedGridView({
+    spec: 'end-year-close',
+    entity: 'accounting',
+    columns,
+    data: rows ?? [],
+    apiBaseUrl,
+  });
+
   if (rows === null) {
     return <div data-testid="accounting-panel-error" className="p-4 text-sm text-destructive">{ui('accountingLoadError')}</div>;
   }
 
   return (
     <div data-testid={rows === undefined ? 'accounting-panel-loading' : 'accounting-panel-table'}>
+      {gridView.enabled && <GridViewControls
+        gridView={gridView}
+        gridColumns={columns}
+        ui={ui}
+        t={t}
+        data-testid="GridViewControls__d73b6d" />}
       <DataTable
+        gridView={gridView}
         columns={columns}
         data={rows ?? []}
         loading={rows === undefined}

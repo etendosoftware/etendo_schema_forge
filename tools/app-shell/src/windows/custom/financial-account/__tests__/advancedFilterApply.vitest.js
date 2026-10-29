@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/advancedFilterApply.js
 // Client-side advanced-filter evaluator (ETP-4956).
 //
 // The three financial-account tabs (Movimientos, Extractos importados,
@@ -449,5 +450,55 @@ describe('applyConditions', () => {
     const sparse = [{ id: 'x' }, { id: 'y', n: 5 }];
     expect(ids(applyConditions(sparse, f([{ field: 'n', operator: 'greaterThan', value: 1 }]), undefined, COLS))).toEqual(['y']);
     expect(ids(applyConditions(sparse, f([{ field: 'n', operator: 'isNull' }]), undefined, COLS))).toEqual(['x']);
+  });
+});
+
+// A boolean filter column (`type: 'boolean'` → booleanLabel mode) sends `true` / `false`, while a
+// row may carry the AD representation ('Y' / 'N'). The generic string `equals` compared
+// "true" with "y" and never matched.
+describe('applyConditions — boolean column', () => {
+  const columnsByKey = { isDefault: { key: 'isDefault', type: 'boolean' } };
+  const rows = [
+    { id: 'a', isDefault: true },
+    { id: 'b', isDefault: false },
+    { id: 'c', isDefault: 'Y' },
+    { id: 'd', isDefault: 'N' },
+  ];
+  const ids = (filter) => applyConditions(rows, filter, undefined, columnsByKey).map((r) => r.id);
+
+  it('matches true against true and Y', () => {
+    expect(ids({ conditions: [{ field: 'isDefault', operator: 'equals', value: true }] })).toEqual(['a', 'c']);
+  });
+
+  it('matches false against false and N', () => {
+    expect(ids({ conditions: [{ field: 'isDefault', operator: 'equals', value: false }] })).toEqual(['b', 'd']);
+  });
+
+  it('accepts the string form of the picked value', () => {
+    expect(ids({ conditions: [{ field: 'isDefault', operator: 'equals', value: 'true' }] })).toEqual(['a', 'c']);
+  });
+
+  // A row with no flag at all (null / undefined / missing) never "is" Sí or No, but it does count
+  // as "is not": the same permissive notEqual the date table keeps (a row with no date "is not"
+  // the given date). Pinned so a change here is deliberate.
+  describe('rows with no flag', () => {
+    const sparse = [
+      { id: 'a', isDefault: true },
+      { id: 'b', isDefault: false },
+      { id: 'n', isDefault: null },
+      { id: 'u', isDefault: undefined },
+      { id: 'm' },
+    ];
+    const sparseIds = (filter) => applyConditions(sparse, filter, undefined, columnsByKey).map((r) => r.id);
+
+    it('equals never matches them', () => {
+      expect(sparseIds({ conditions: [{ field: 'isDefault', operator: 'equals', value: true }] })).toEqual(['a']);
+      expect(sparseIds({ conditions: [{ field: 'isDefault', operator: 'equals', value: false }] })).toEqual(['b']);
+    });
+
+    it('notEqual matches them ("is not Sí" includes rows with no flag)', () => {
+      expect(sparseIds({ conditions: [{ field: 'isDefault', operator: 'notEqual', value: true }] })).toEqual(['b', 'n', 'u', 'm']);
+      expect(sparseIds({ conditions: [{ field: 'isDefault', operator: 'notEqual', value: 'N' }] })).toEqual(['a', 'n', 'u', 'm']);
+    });
   });
 });

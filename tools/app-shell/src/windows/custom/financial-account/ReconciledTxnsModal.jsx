@@ -1,3 +1,5 @@
+import { FinancialGridView, FinancialGridRow } from './FinancialGridView.jsx';
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Link2, ArrowUpRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -17,6 +19,17 @@ import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisi
 //   Fecha · Pago · Contacto · Descripción · Tipo(+estado) · Importe · (ir →)
 const TXN_GRID =
   'grid grid-cols-[88px_92px_minmax(96px,1fr)_minmax(140px,1.5fr)_130px_110px_44px] items-center gap-3';
+
+const PERSONAL_COLUMNS = [
+  ...[['transactionDate', 'Date', '88px'], ['documentNo', 'Document', '92px'],
+    ['businessPartner', 'Contact', 'minmax(96px,1fr)'], ['description', 'Description', 'minmax(140px,1.5fr)'],
+    ['transactionType', 'Type', '130px']].map(([key, label, gridTrack]) => ({
+      ...getContractGridColumns('transaction').find((column) => column.name === key),
+      key, labelKey: `financeAccountMovementsCol${label}`, gridTrack,
+    })),
+  { key: 'amount', labelKey: 'financeAccountMovementsColAmount', gridTrack: '110px' },
+  { key: 'actions', gridConfigurable: false, gridTrack: '44px' },
+];
 
 function trxTypeLabel(trxType, ui) {
   if (trxType === 'BPD') return ui('financeAccountMovementsTypeBPD');
@@ -161,9 +174,18 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
         </div>
 
         {/* Movements table (full-width separators) */}
-        <div className="max-h-[56vh] overflow-y-auto overflow-x-hidden">
+        <div className="max-h-[56vh] overflow-y-auto overflow-x-auto">
+          <FinancialGridView
+            spec="financial-account"
+            entity="transaction"
+            columns={PERSONAL_COLUMNS}
+            data={txns.map((transaction) => ({ ...transaction, id: transaction.transactionId }))}
+            data-testid="FinancialGridView__2dbb84">
           {/* head */}
-          <div className={cn(TXN_GRID, 'min-h-[40px] border-b border-[hsl(var(--border-subtle))] px-6 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]')}>
+          <FinancialGridRow
+            header
+            className={cn(TXN_GRID, 'min-h-[40px] border-b border-[hsl(var(--border-subtle))] px-6 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]')}
+            data-testid="FinancialGridRow__2dbb84">
             <span>{ui('financeAccountMovementsColDate')}</span>
             <span>{ui('financeAccountMovementsColDocument')}</span>
             <span>{ui('financeAccountMovementsColContact')}</span>
@@ -171,10 +193,10 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
             <span>{ui('financeAccountMovementsColType')}</span>
             <span className="justify-self-end">{ui('financeAccountMovementsColAmount')}</span>
             <span aria-hidden="true" />
-          </div>
+          </FinancialGridRow>
           {/* rows */}
           {txns.map((t) => (
-            <div
+            <FinancialGridRow
               key={t.transactionId || t.documentNo}
               data-testid={`reconciled-txn-row-${t.documentNo}`}
               className={cn(TXN_GRID, 'min-h-[54px] border-b border-[hsl(var(--border-subtle))] px-6 text-sm text-[hsl(var(--foreground))] last:border-0 hover:bg-[hsl(var(--muted))]')}
@@ -210,8 +232,9 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
                   </button>
                 ) : null}
               </span>
-            </div>
+            </FinancialGridRow>
           ))}
+          </FinancialGridView>
         </div>
 
         {/* Footer */}
