@@ -2678,3 +2678,7 @@ The full app-shell `npm run test:all` suite and `npm run build` passed. Browser 
 ## Journal entries for agents — ETP-5852
 
 `entities.accounting` is no longer excluded: it publishes the invoice's posted entries read-only for NEO/MCP (`etendo_list(spec:"sales-invoice", entity:"accounting", parentId:<invoice>)`), the same entity purchase invoices have. `renderTab:false` keeps the window as it was: neither invoice window shows an accounting tab. Feedback M-81.
+
+## Agent prompt on the business partner — ETP-5852
+
+`businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.

@@ -219,7 +219,8 @@
           "readOnlyLogic": "@Processed@='Y'",
           "displayLogic": null,
           "seq": 10,
-          "businessCritical": true
+          "businessCritical": true,
+          "agentPrompt": "The vendor, as its id plus the name in businessPartner$_identifier. Names can repeat: to tell two apart, read their searchKey and taxID with one etendo_list on contacts/businessPartner filtered by id: {in: [ids]}."
         },
         "partnerAddress": {
           "section": "principal",

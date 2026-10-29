@@ -694,3 +694,7 @@ Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP
 ## Cancelling a line — ETP-5852
 
 `lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise close the order (CL). Feedback M-123.
+
+## Agent prompt on the business partner — ETP-5852
+
+`businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
