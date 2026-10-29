@@ -205,27 +205,25 @@ async function runProductSimSearch({ token, lines }) {
   });
 }
 
-// The whitespace set of ECMAScript String.prototype.trim (WhiteSpace + LineTerminator), spelled out
-// so the Java mirror can use the very same set (String.strip/trim differ: NBSP, control chars).
-const PRODUCT_NAME_EDGE_SPACE = /(?:^[\t\n\u000B\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+)|(?:[\t\n\u000B\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+$)/g;
-
 /**
  * Normalizer for the EXACT-name step of the product classification (ETP-5654, CP-7): NFC, trim
- * (explicit Unicode whitespace set, NBSP included), lowercase, then diacritics stripped (NFD +
- * removal of combining marks), so "Arnés" equals "Arnes" exactly like "60M" equals "60m". The
+ * (ECMAScript WhiteSpace + LineTerminator, NBSP included), lowercase, then diacritics stripped
+ * (NFD + removal of combining marks), so "Arnés" equals "Arnes" exactly like "60M" equals "60m". The
  * n-tilde is deliberately kept distinct ("año" is not "ano": different words, and a silent wrong
  * product is worse than a suggestion), so it is protected with a placeholder while the marks are
  * stripped. The fold also applies to an identical candidate: if the catalog holds both "Arnés X"
  * and "Arnes X", the description "Arnés X" has two normalized-exact matches and goes to the user
  * as a suggestion (candidates[0], which may not be the identical one); the safe direction by
- * design. Mirrors OcrProductMatch.normalizeProductName in com.etendoerp.go; keep both identical.
+ * design. Mirrors OcrProductMatch.normalizeProductName in com.etendoerp.go; keep both identical:
+ * `trim()` already is the ECMAScript whitespace set, which the Java twin spells out because
+ * String.trim() (<= U+0020) and strip() (keeps NBSP) do not match it.
  * Not used for vendor matching (`normalizeName`). Exported for testing.
  */
 export function normalizeProductName(value) {
   if (value == null) return '';
   return String(value)
     .normalize('NFC')
-    .replaceAll(PRODUCT_NAME_EDGE_SPACE, '')
+    .trim()
     .toLowerCase()
     .replaceAll('ñ', '\u0001')
     .normalize('NFD')
