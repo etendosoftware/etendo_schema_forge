@@ -22,6 +22,10 @@ vi.mock('@/lib/docTemplateConfigApi.js', async (importOriginal) => ({
   listDocTemplateConfigs: (...a) => api.list(...a),
   saveDocTemplateVariant: (...a) => api.save(...a),
 }));
+// The preview renders through jsreport; its own test covers it. Here it only proves the page passes the chosen variant.
+vi.mock('@/windows/custom/shared/DocumentTemplatePreview.jsx', () => ({
+  default: ({ variant }) => <div data-testid="preview-stub" data-variant={variant} />,
+}));
 // A native select keeps the assertions about the page, not about Radix's popover in jsdom.
 vi.mock('@/components/ui/select', () => ({
   Select: ({ value, onValueChange, disabled, children }) => (
@@ -61,6 +65,16 @@ describe('DocumentTemplatesPage', () => {
     await waitFor(() => expect(api.list).toHaveBeenCalled());
     expect(select().value).toBe('classic');
     expect(saveButton().disabled).toBe(true);
+  });
+
+  it('previews the variant being chosen, before it is saved', async () => {
+    api.list.mockResolvedValue([]);
+    render(<DocumentTemplatesPage />);
+    await waitFor(() => expect(select().disabled).toBe(false));
+    expect(screen.getByTestId('preview-stub').dataset.variant).toBe('classic');
+    fireEvent.change(select(), { target: { value: 'modern' } });
+    expect(screen.getByTestId('preview-stub').dataset.variant).toBe('modern');
+    expect(api.save).not.toHaveBeenCalled();
   });
 
   it('offers exactly the current, compact and modern templates', async () => {

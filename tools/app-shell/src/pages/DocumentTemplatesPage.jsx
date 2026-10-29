@@ -8,6 +8,7 @@ import {
   COMMERCIAL_DOC_TYPES, DEFAULT_VARIANT, VARIANTS,
   currentVariant, listDocTemplateConfigs, saveDocTemplateVariant,
 } from '@/lib/docTemplateConfigApi.js';
+import DocumentTemplatePreview from '@/windows/custom/shared/DocumentTemplatePreview.jsx';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -20,7 +21,7 @@ const VARIANT_LABEL_KEYS = {
 };
 
 /**
- * ETP-5988 — Settings → Document templates. One selector: the printed template of the commercial
+ * ETP-5988 — Settings → Printable documents. One selector: the printed template of the commercial
  * documents (invoice, order, purchase order, quotation) of the organization. Reached only with the
  * `doc-template-selection` flag on and an administrator capability; saving is authorized again by
  * the backend, whose refusal is shown here, not hidden.
@@ -73,8 +74,9 @@ export default function DocumentTemplatesPage() {
   return (
     <div className="h-full overflow-y-auto space-y-6 p-6" data-testid="DocumentTemplatesPage">
       <p className="text-sm text-muted-foreground">{ui('documentTemplatesDescription')}</p>
-      <Card data-testid="DocumentTemplatesPage__card">
-        <CardContent className="flex max-w-md flex-col gap-4 p-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+      <Card data-testid="DocumentTemplatesPage__card" className="self-start">
+        <CardContent className="flex flex-col gap-4 p-6">
           <Label htmlFor="document-template-variant">{ui('documentTemplatesLabel')}</Label>
           <Select value={selected} onValueChange={setSelected} disabled={loading || saving}>
             <SelectTrigger id="document-template-variant" data-testid="DocumentTemplatesPage__select">
@@ -97,6 +99,12 @@ export default function DocumentTemplatesPage() {
           </Button>
         </CardContent>
       </Card>
+      <div className="space-y-2" data-testid="DocumentTemplatesPage__preview">
+        <p className="text-sm font-medium">{ui('documentTemplatesPreviewTitle')}</p>
+        <p className="text-xs text-muted-foreground">{ui('documentTemplatesPreviewHint')}</p>
+        <DocumentTemplatePreview variant={selected} />
+      </div>
+      </div>
     </div>
   );
 }

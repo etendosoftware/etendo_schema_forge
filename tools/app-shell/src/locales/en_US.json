@@ -21878,16 +21878,19 @@
     "minimum": "minimum",
     "recentMovements": "Recent Movements",
     "oauth2Clients": "OAuth2 Clients",
-    "documentTemplatesTitle": "Document templates",
-    "documentTemplatesDescription": "Choose the template used to print your sales and purchase documents (invoices, orders and quotations).",
-    "documentTemplatesLabel": "Template",
+    "documentTemplatesTitle": "Printable documents settings",
+    "documentTemplatesDescription": "Choose the design used to print your sales and purchase documents (invoices, orders and quotations). The preview shows a sample invoice with the selected design.",
+    "documentTemplatesLabel": "Printable design",
     "documentTemplatesClassic": "Current",
     "documentTemplatesCompact": "Compact",
     "documentTemplatesModern": "Modern",
     "documentTemplatesSave": "Save",
-    "documentTemplatesSaved": "Template saved",
-    "documentTemplatesSaveFailed": "The template could not be saved",
-    "documentTemplatesLoadFailed": "The template choice could not be loaded",
+    "documentTemplatesSaved": "Printable design saved",
+    "documentTemplatesSaveFailed": "The printable design could not be saved",
+    "documentTemplatesLoadFailed": "The printable design choice could not be loaded",
+    "documentTemplatesPreviewTitle": "Preview",
+    "documentTemplatesPreviewHint": "Sample invoice with fictitious data. Saving applies the design to invoices, orders, purchase orders and quotations.",
+    "documentTemplatesPreviewFailed": "The preview could not be rendered",
     "apiKeysTitle": "Public API keys",
     "apiKeysDescription": "Manage credentials for your public API access.",
     "apiKeysCreate": "Create API key",
@@ -25933,7 +25936,7 @@
   },
   "menus": {
     "Document Templates": {
-      "label": "Document Templates"
+      "label": "Printable Documents"
     },
     "Currency": {
       "label": "Currency"

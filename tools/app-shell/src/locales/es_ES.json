@@ -22114,16 +22114,19 @@
     "minimum": "mínimo",
     "recentMovements": "Movimientos recientes",
     "oauth2Clients": "Clientes OAuth2",
-    "documentTemplatesTitle": "Plantillas de documentos",
-    "documentTemplatesDescription": "Elige la plantilla con la que se imprimen tus documentos de venta y compra (facturas, pedidos y presupuestos).",
-    "documentTemplatesLabel": "Plantilla",
+    "documentTemplatesTitle": "Configuración de imprimibles",
+    "documentTemplatesDescription": "Elige el diseño con el que se imprimen tus documentos de venta y compra (facturas, pedidos y presupuestos). La vista previa muestra una factura de ejemplo con el diseño elegido.",
+    "documentTemplatesLabel": "Diseño del imprimible",
     "documentTemplatesClassic": "Actual",
     "documentTemplatesCompact": "Compacta",
     "documentTemplatesModern": "Moderna",
     "documentTemplatesSave": "Guardar",
-    "documentTemplatesSaved": "Plantilla guardada",
-    "documentTemplatesSaveFailed": "No se pudo guardar la plantilla",
-    "documentTemplatesLoadFailed": "No se pudo cargar la plantilla elegida",
+    "documentTemplatesSaved": "Diseño de imprimible guardado",
+    "documentTemplatesSaveFailed": "No se pudo guardar el diseño del imprimible",
+    "documentTemplatesLoadFailed": "No se pudo cargar el diseño de imprimible elegido",
+    "documentTemplatesPreviewTitle": "Vista previa",
+    "documentTemplatesPreviewHint": "Factura de ejemplo con datos ficticios. Al guardar, el diseño se aplica a facturas, pedidos, pedidos de compra y presupuestos.",
+    "documentTemplatesPreviewFailed": "No se pudo generar la vista previa",
     "apiKeysTitle": "Claves de API públicas",
     "apiKeysDescription": "Gestiona las credenciales para acceder a tu API pública.",
     "apiKeysCreate": "Crear clave de API",
@@ -26171,7 +26174,7 @@
   },
   "menus": {
     "Document Templates": {
-      "label": "Plantillas de documentos"
+      "label": "Configuración de imprimibles"
     },
     "Goods Movement": {
       "label": "Movimiento entre almacenes"
