@@ -382,12 +382,14 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   and keeps "You don't have an active subscription." (`subscriptionNoActive`) without one. The
   Manage (portal) button is not shown in either no-subscription state.
 - **Per quota row:** the catalog `resourceName` (its `resourceKey` when the name is blank);
-  "`consumed` of `includedQty` `unitLabel`" followed by the period word, so a quota on a yearly plan
-  reads "per year" (`open-and-notable-topics.md` §5.8); "(not measured yet)" when `consumed` is
+  "`consumed` of `includedQty` `unitLabel`" followed by the period word. Plan limits count over the
+  subscription year whatever the billing interval, so every quota reads "per year", a monthly plan's
+  included (the backend sends `period: "year"`; only a subscription without a start date sends the
+  billing interval — `open-and-notable-topics.md` §5.5, §5.8); "(not measured yet)" when `consumed` is
   null; a badge for WARN ("Near the limit", or "Over the limit" once a `warn`-mode quota has passed
-  it) and DENY ("Limit reached"), none for ALLOW or a quota in mode `off`. The subscription's
-  current period (`periodStart`–`periodEnd`, day-level, `formatCalendarDate`) is shown once above
-  the list.
+  it) and DENY ("Limit reached"), none for ALLOW or a quota in mode `off`. The counted window
+  (`periodStart`–`periodEnd`, day-level, `formatCalendarDate`: the current subscription year) is
+  shown once above the list.
 - **Unlimited:** a plan with an empty `planQuotas` reads "Your plan has no usage limits." (§5.1).
   No plan (`planName` null) shows no quota block at all.
 - **Grace with enforcement off:** with `accessEnforced: false` on the same response (contract

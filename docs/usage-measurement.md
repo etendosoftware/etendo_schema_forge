@@ -6,15 +6,15 @@ ETP-5051 (plan quotas) have real numbers to reason about before anyone is billed
 
 > **Extended by ETP-5051.** Plan quotas read what this page measures: the stored daily usage (a
 > quota's `aggregate` source) or a live count with the same catalog rule (`live`), combined over
-> the subscription period by `ETGO_BILLING_RESOURCE.AGGREGATION`. Where quotas are enforced and
-> where they are only reported, the extensibility ladder, how an operator caps a resource and the
-> accepted limits: `modules/com.etendoerp.go/docs/plan-quotas.md`. The usage job is now
-> schedulable (§9).
+> the subscription year (whatever the billing interval) by `ETGO_BILLING_RESOURCE.AGGREGATION`.
+> Where quotas are enforced and where they are only reported, the extensibility ladder, how an
+> operator caps a resource and the accepted limits: `modules/com.etendoerp.go/docs/plan-quotas.md`.
+> The usage job is now schedulable (§7.1), and the first stock counter, seats, is deployed (§4).
 
 Implementation lives in `modules/com.etendoerp.go/src/com/etendoerp/go/usage/`. The design
 document is `modules/com.etendoerp.go/docs/plans/2026-09-15-etp-5050-usage-measurement-design.md`;
 this page is the summary of what the branch actually delivers, and of the one design problem
-that is still open.
+it left open, since decided (§4).
 
 ---
 
@@ -82,10 +82,11 @@ the day was open is the number that stands.
 Finality is evaluated **per tenant**, because the preference can be overridden per tenant. The
 scan uses the maximum across tenants; each row's flag uses that tenant's own window.
 
-## 4. The stock resource problem (open)
+## 4. The stock resource problem (decided)
 
-This is the significant unresolved issue in the design, and it decides how `activeUsers` and
-`productiveEnvironments` can be implemented at all.
+This was the significant unresolved issue in the design, and it decides how users and
+`productiveEnvironments` can be implemented at all. It was decided on 2026-09-28 (*What was
+decided* below); users are now counted as **seats** by `TenantSeatCounter` (ETP-5051).
 
 ### Flow versus stock
 
@@ -140,11 +141,39 @@ A stock resource has to solve it at the source, and the options are:
 
 Note that `productiveEnvironments` is specified in the ticket as `Client` by `creationDate`,
 which is option 3 by accident: it counts clients *created* that day, a flow, while the billable
-quantity is a stock. With no rollup in this task the difference does not yet bite, but storing a
-flow under a stock's name would make every later reading of it wrong.
+quantity is a stock. The ETP-5050 design made it a daily snapshot of the active clients (strategy
+`S`) instead; no counter for it is deployed yet.
 
-**Decision still owed:** the data source for `activeUsers`, and which of the three options above
-applies to it. `AD_SESSION` is explicitly ruled out.
+### What was decided
+
+**Option 2** (Sebastián Barrozo, 2026-09-28): record the current value from when measurement is
+enabled, and never backfill earlier dates. `AD_SESSION` is explicitly ruled out. The register
+entry is `modules/com.etendoerp.go/docs/open-and-notable-topics.md` §1.1.
+
+**Users are counted as seats** (ETP-5051). `TenantSeatCounter`, `@Named("tenantSeats")`, is the
+first production `UsageResourceCounter`. A **seat** is an active `AD_User` of the tenant that is
+the owner (`EM_ETGO_IS_OWNER`) or has an `ETGO_INVITATION` that is not `REVOKED`:
+
+- a **pending** invitation already takes its seat; a **revoked** one does not;
+- bootstrap users, the client admin and business-partner contacts have neither, so they never
+  count;
+- `ETGO_ACCOUNT` is deliberately **not** the source: it is global (client 0, one row per email)
+  and only created when an invitation is accepted, so an admin could invite without limit.
+
+**How the stock behaves.** Every call returns **today's** value, dated at the start of the
+requested range — one entry per tenant. A live quota asks once over its window and gets today's
+seats. The usage job asks per day, so each day it recomputes (the settling window, or a backfill)
+gets today's value: the service does not yet write the current day only, which is the
+implementation still owed in the register (§1.1). Give a stock resource aggregation `last`, so a
+quota reads the newest day; `sum` would add the same seats up once per day, and `max` would keep a
+freed seat for the rest of the window.
+
+**Setup is operator configuration, nothing is seeded:** a Billing Resource row with counting mode
+`S` and Strategy Qualifier `tenantSeats`, then a `block` quota on each plan that should cap seats.
+That quota is refused at user create, and at the reactivation of a user who would count as a
+seat once active (owner, or an invitation not revoked); reactivating any other user is never
+refused. The same seat rule (`SEAT_CONDITION`) serves the tenant count and that per-user check
+(`modules/com.etendoerp.go/docs/plan-quotas.md` §2.1, worked example §4.6).
 
 ## 5. Save-time validation
 
