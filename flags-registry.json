@@ -1274,18 +1274,17 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/FiscalModel390FlagTest.java",
-            "expected": true,
-            "note": "Pending (tester-go): applyToRead on/off (390 dropped + _unavailable added; on = stored as is; a stored _unavailable never echoed), applyToWrite on/off (incoming 390 ignored and stored 390 kept when off, absent when nothing stored; _unavailable stripped on both), arguments never mutated. Email reaches the provider context: contextFor(email, clientId) publishes the targeting key, `Email` and lowercase `email` plus clientId; contextFor(null, clientId) carries clientId only and no targeting key; isEnabled passes GoAccountResolver.findCurrentAccountEmail() through."
+            "note": "Covers: applyToRead on/off (390 dropped + _unavailable added; on = stored as is; a stored _unavailable never echoed), applyToWrite on/off (incoming 390 ignored and stored 390 kept when off, absent when nothing stored; _unavailable stripped on both), arguments never mutated. Email reaches the provider context: contextFor(email, clientId) publishes the targeting key, `Email` and lowercase `email` plus clientId; contextFor(null, clientId) carries clientId only and no targeting key; isEnabled passes GoAccountResolver.findCurrentAccountEmail() through, end to end through GoFeatureFlags into a capturing provider; unset, non-boolean and failing-provider all read as hidden."
           },
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/common/GoAccountResolverTest.java",
-            "note": "Shared spec; still missing (tester-go, extension): findCurrentAccountEmail (moved from PortalLinkPolicy for ETP-5716) -- context user with an account returns its email, no context user / no account returns null, a lookup failure returns null without throwing."
+            "note": "Shared spec; extended for ETP-5716: findCurrentAccountEmail (moved from PortalLinkPolicy) -- context user with an account returns its email (also with a +suffix username), no context user / no OBContext / no account returns null, a context or lookup failure returns null without throwing, admin mode always restored."
           },
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/NeoFiscalModelsCatalogServiceTest.java",
-            "note": "Shared spec. Adjusted for the flag's default (off) by counting only model keys; still missing (tester-go, extension): GET with the flag on returns the stored catalog unchanged, GET off with a stored 390:true hides it, PUT off keeps the stored 390, PUT never stores _unavailable."
+            "note": "Shared spec. Adjusted for the flag's default (off) by counting only model keys; extended for ETP-5716: GET with the flag on returns the stored catalog unchanged, GET off with a stored 390:true hides it and adds the marker, PUT off keeps the stored 390, PUT never stores _unavailable (flag on and off), the tenant id reaches the gate."
           },
           {
             "root": "frontend",
