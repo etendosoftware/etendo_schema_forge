@@ -208,6 +208,20 @@ For `contacts`, the custom `BillingPreferencesForm` keeps customer/vendor billin
 until the header record exists (`data.id` present). This mirrors Classic behavior where billing
 details are edited after the Business Partner is created.
 
+**Holding Save while the form is calculating (ETP-5680).** A `customForm` that starts a request whose
+answer must become part of the record being saved (the product's tax category after a type change)
+registers it in `lib/formPendingWork.js`: `const release = registerPending(onLocalChange)` —
+synchronously, before issuing the request — and calls `release()` on EVERY way out (`finally`, stale
+or dropped reply, record switch, unmount; the release is idempotent). While anything is pending, the
+save buttons of that form instance (new record, existing record, draftMode) are disabled through the
+same `saveGate` they already honour, show their spinner and carry the `saveCalculating` tooltip, and
+the auto-save-on-blur skips its save without rolling the edit back. The scope is `onLocalChange`
+(the instance's `hook.handleChange`, the same reference the save buttons read from `hook`), so the
+main window and the embedded "new record" popup never see each other's pending work. It is a
+module-level store, not a prop, because `DetailView.jsx` cannot grow (`docs/detailview-growth-hook.md`).
+Do not make Save await a promise instead: `performSave` is closed over the render's `editing`.
+Reference use: `windows/custom/product/ProductStockDefaultsWatcher.jsx`.
+
 For `user`, `AssignTemplateRolesControl` (ETP-4906) renders a multi-select chip control for
 composing 1+ system-level template roles onto an existing user, with its own save-first
 placeholder while `data.id` is absent — see `docs/generated-custom-windows/user.md` → "Role
@@ -554,7 +568,7 @@ For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`,
 
 Payments (cobros) are deliberately **not** related documents: no sales or purchase order/invoice lists its payments as chips (functional decision, ETP-5527 / ETP-5539). Do not add a payments source to a definition.
 
-The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
+The definition always reads the **detail** record: `linkedShipments`, `originInvoices`, `rectifyingInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 
 `RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
 

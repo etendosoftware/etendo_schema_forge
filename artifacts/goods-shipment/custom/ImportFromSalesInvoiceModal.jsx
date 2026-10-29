@@ -48,9 +48,19 @@ async function fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId }) {
   return draftInfo;
 }
 
+// ETP-6002 (IMP-3): only plain invoices are shipped from. A rectificative (FVR…) carries its source
+// lines' order lines, but it delivers nothing — it must not be offered here. Same server-side
+// criteria as ImportFromSourceInvoiceModal and the "Facturas" subset filter: the plain-invoice
+// category (ARI — which also leaves out the legacy ARC / ARI_RM rectificative categories) and not
+// flagged rectificative.
+const PLAIN_INVOICE_CRITERIA = encodeURIComponent(JSON.stringify([
+  { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'ARI' },
+  { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
+]));
+
 const fetchDocuments = async ({ base, bpId, invoiceId: shipmentId }) => {
   const [invoicesRes, draftInfo, headerRes] = await Promise.all([
-    moduleApiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${PLAIN_INVOICE_CRITERIA}`),
     fetchDraftInfoByOrderLine({ base, bpId, currentShipmentId: shipmentId }),
     moduleApiFetch(`${base}/goods-shipment/goodsShipment/${shipmentId}`),
   ]);

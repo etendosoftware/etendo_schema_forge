@@ -310,8 +310,7 @@
           "form": false,
           "grid": false
         }
-      },
-      "javaQualifier": "salesQuotationHeaderHandler"
+      }
     },
     "lines": {
       "javaQualifier": "orderLineHandler",

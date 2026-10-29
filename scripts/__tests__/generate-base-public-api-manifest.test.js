@@ -296,6 +296,22 @@ describe('buildEntity — conservative base exposure', () => {
     assert.equal(build('product', fields).fields.search_key.direction, 'inout');
   });
 
+  it('marks a writable field declared publicApi.required, and never a read-only one', () => {
+    const fields = [
+      { name: 'searchKey', visibility: 'editable', form: true, type: 'string' },
+      { name: 'name', visibility: 'editable', form: true, type: 'string' },
+      { name: 'description', visibility: 'editable', form: true, type: 'string' },
+    ];
+    const policy = exposurePolicyOf({ entities: { header: { fields: {
+      searchKey: { publicApi: { required: true } },
+      name: { publicApi: { required: true, readOnly: true } },
+    } } } }, 'header');
+    const entity = buildEntity({ specName: 'product', entityName: 'header', contract: contractFor('product', fields), functional, parent: null, rawEntity: null, policy });
+    assert.equal(entity.fields.search_key.required, true);
+    assert.equal(entity.fields.name.required, undefined, 'a read-only field is never required on write');
+    assert.equal(entity.fields.description.required, undefined);
+  });
+
   it('lets a read-only field work on a curated entity too', () => {
     const fields = [
       { name: 'searchKey', visibility: 'editable', type: 'string', publicApi: { exposed: true } },
@@ -482,11 +498,12 @@ describe('generateManifest — child tabs and functional texts', () => {
           businessPartner: tab('c_bpartner', 'Business Partner'),
           bankAccount: tab('c_bp_bankaccount', 'Bank Account'),
           locationAddress: tab('c_bpartner_location', 'Location/Address'),
+          addressNote: tab('c_bp_address_note', 'Address Note'),
         },
       },
       backendContract: {
         entities: {},
-        endpoints: ['businessPartner', 'bankAccount', 'locationAddress'].map((entity) => ({ entity, method: 'POST' })),
+        endpoints: ['businessPartner', 'bankAccount', 'locationAddress', 'addressNote'].map((entity) => ({ entity, method: 'POST' })),
         processEndpoints: [],
       },
     };
@@ -504,6 +521,8 @@ describe('generateManifest — child tabs and functional texts', () => {
         { tableName: 'c_bpartner', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'c_bpartner_id' }] },
         child('c_bp_bankaccount'),
         child('c_bpartner_location'),
+        // A tab under a child tab (AD level 2), linked to the window's record as well.
+        { ...child('c_bp_address_note'), level: 'subline' },
       ],
     }));
     mkdirSync(join(root, 'docs'), { recursive: true });
@@ -512,7 +531,7 @@ describe('generateManifest — child tabs and functional texts', () => {
 
   after(() => rmSync(root, { recursive: true, force: true }));
 
-  it('does not publish the bank account tab, but keeps the other linked children', async () => {
+  it('does not publish the bank account tab nor a tab under a child tab, but keeps the other linked children', async () => {
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
     assert.deepEqual(Object.keys(manifest.entities).sort(), ['contacts', 'contacts-locationAddress']);
     assert.ok(manifest.policy.excludedChildTabs.includes('^bank account$'));

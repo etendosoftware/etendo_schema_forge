@@ -599,9 +599,11 @@ export function applyOneComboEntry(key, combo, ctx) {
   const userHasValue = currentVal !== '' && currentVal != null;
   if (userTouchedRef.current.has(key) && userHasValue) return;
   appliedFields.set(key, selectedVal);
-  hook.handleChange(key, selectedVal);
+  // ETP-5888: a combo is a callout response like any other field — same `origin` as
+  // applyCalloutFieldUpdates, so neither the value nor its label reads as a user edit.
+  hook.handleChange(key, selectedVal, { origin: 'callout' });
   if (selectedLabel) {
-    hook.handleChange(key + '$_identifier', selectedLabel);
+    hook.handleChange(key + '$_identifier', selectedLabel, { origin: 'callout' });
   }
   bumpFieldGeneration(key, fieldGenerationRef);
 }
@@ -1778,9 +1780,13 @@ export function resolveStatusPrefix(key, translate) {
   return key ? translate(key) : undefined;
 }
 
+// ETP-5888: the label rides the same callout response as its value, so it carries the same
+// `origin: 'callout'`. Without it the label alone read as a user edit, and an untouched new
+// record whose opening callout returned an FK (purchase invoice: transactionDocument) counted
+// as having unsaved changes.
 export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
   if (entry._identifier) {
-    hook.handleChange(key + '$_identifier', entry._identifier);
+    hook.handleChange(key + '$_identifier', entry._identifier, { origin: 'callout' });
   } else if (entry.value && api?.selectors) {
     // Callout returned an ID without _identifier — resolve from loaded catalogs
     const sel = api.selectors.find(s => s.field === key);
@@ -1788,7 +1794,7 @@ export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
       const options = getCatalogOptions(catalogs, sel.entity, sel);
       const match = Array.isArray(options) && options.find(o => o.id === entry.value);
       if (match) {
-        hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
+        hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier, { origin: 'callout' });
       }
     }
   }
@@ -2732,6 +2738,17 @@ export function computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits,
       || Object.values(addingSecondaryLine).some(Boolean)
       || (lineEdits != null && Object.keys(lineEdits).length > 0)
       || (additionalDirtyState === true);
+}
+
+/**
+ * ETP-5888: the dirtiness the unsaved-changes guard publishes — {@link computeIsDirty} with the
+ * header part reduced to what the user edited (`hook.hasUserHeaderEdits`), so an untouched new
+ * record no longer prompts on every way out. Falls back to `isDirtyHeader` for a hook that does
+ * not expose the user-edit signal (a custom window passing its own).
+ */
+export function computeIsDirtyForGuard(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState) {
+  const isDirtyHeader = hook.hasUserHeaderEdits ?? hook.isDirtyHeader;
+  return computeIsDirty({ isDirtyHeader }, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
 }
 
 export function resolveHideMoreMenu(hideMoreMenu, data) {

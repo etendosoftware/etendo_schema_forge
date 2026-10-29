@@ -1,8 +1,8 @@
 {
   "version": "0.6.0",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "updatedAt": "2026-10-29T13:31:32.945Z",
-  "checksum": "b1b5002b760a8840",
+  "updatedAt": "2026-10-29T18:37:31.207Z",
+  "checksum": "d84cd8ff690f79f2",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -788,8 +788,7 @@
               "source": "false"
             }
           }
-        ],
-        "javaQualifier": "goodsShipmentHeaderHandler"
+        ]
       },
       "goodsShipmentLine": {
         "tableName": "M_InOutLine",
@@ -1656,8 +1655,7 @@
             "visibility": "system",
             "required": true
           }
-        ],
-        "javaQualifier": "goodsShipmentHeaderHandler"
+        ]
       },
       "goodsShipmentLine": {
         "tableName": "M_InOutLine",

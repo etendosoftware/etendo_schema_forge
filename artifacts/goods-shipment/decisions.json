@@ -72,7 +72,6 @@
   "entities": {
     "header": {
       "name": "goodsShipment",
-      "javaQualifier": "goodsShipmentHeaderHandler",
       "draftMode": {
         "enabled": false
       },

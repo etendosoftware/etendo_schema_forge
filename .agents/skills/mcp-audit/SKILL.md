@@ -80,9 +80,10 @@ Exported columns (from `scripts/mcp-usage-dump.sh`):
 | `triage_task` | Feedback only: key of the private Jira task the bot opened (`ETP-...`) |
 | `triaged` | Feedback only: when the bot processed the row; null = not triaged yet |
 
-**Feedback arrives triaged.** An external bot (`etendo-bots`, `bin/bug-triage`) polls the
-`McpFeedbackPending` webhook every 15 minutes, classifies each new feedback row into a cell, assigns
-it when it is sure, opens a GitHub pre-ticket and a Jira task, and writes the result back with the
+**Feedback arrives triaged.** An external bot, the bug router (`etendo-bots`, `bin/bug-router`),
+polls the `McpFeedbackPending` webhook every 15 minutes, classifies each new feedback row into a
+cell, assigns it when it is sure, opens a GitHub pre-ticket (and, optionally, a Jira task), and
+writes the result back with the
 `McpFeedbackTriage` webhook (the `triage_*` columns and `triaged`). The triage is the bot's job, not
 this audit's: read those columns, never write them. They are independent of the review flag
 (`isactive`): a triaged row is still unreviewed until someone reviews it.
