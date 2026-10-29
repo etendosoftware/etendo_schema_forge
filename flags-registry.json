@@ -1263,7 +1263,6 @@
           "structuredAddressForSepa",
           "capabilities.structuredAddressForSepa",
           "StructuredAddressComposer.isEnabled",
-          "GoAccountResolver.currentAccountEmail",
           "streetName",
           "buildingNumber",
           "buildingName",
@@ -1271,7 +1270,7 @@
           "EM_OBSEPA_BldgNb",
           "EM_OBSEPA_BldgNm"
         ],
-        "$symbolsComment": "Backend-only flag (positive polarity, both ends evaluate the SIGNAL not the flag -- see $gatingComment): no key in flag-keys.js and no frontend evaluator of the flag itself. The frontend grep trail is the capability field name, not a flag key, because the only thing the frontend ever reads is capabilities.structuredAddressForSepa off SFWindowAccessMap (role-scoped pages) and the onboarding session-bootstrap response GET /sws/go/session (pre-tenant pages, where SFWindowAccessMap has no role to resolve against). The 3 AD column DB names are included because they are the structural keys several call sites branch on by name (AddressVirtualSelectorPolicy.STRUCTURED_ADDRESS_COLUMNS, McpSchemaFieldBuilder.STRUCTURED_ADDRESS_COLUMNS) and the 3 published field names are the ones every handler and the frontend agree on in JSON.",
+        "$symbolsComment": "Backend-only flag (positive polarity, both ends evaluate the SIGNAL not the flag -- see $gatingComment): no key in flag-keys.js and no frontend evaluator of the flag itself. The frontend grep trail is the capability field name, not a flag key, because the only thing the frontend ever reads is capabilities.structuredAddressForSepa off SFWindowAccessMap (role-scoped pages) and the onboarding session-bootstrap response GET /sws/go/session (pre-tenant pages, where SFWindowAccessMap has no role to resolve against). The 3 AD column DB names are included because they are the structural keys several call sites branch on by name (AddressVirtualSelectorPolicy.STRUCTURED_ADDRESS_COLUMNS, McpSchemaFieldBuilder.STRUCTURED_ADDRESS_COLUMNS) and the 3 published field names are the ones every handler and the frontend agree on in JSON. GoAccountResolver.currentAccountEmail is DELIBERATELY NOT listed, and must not be re-added: it is shared platform code that survives this flag's retirement, and since ETP-5952 merged it is used by FLAG_BP_PORTAL_LINK (PortalLinkPolicy) and FLAG_CONTACT_CATEGORY_TYPE (ContactTypeRules) too, so listing it charges those features' toggle points to this one. It was ETP-5806-exclusive while it was named resolveCurrentAccountEmail; consolidating onto develop's shared helper during the develop merge is what made it non-discriminating. Nothing is lost by its absence: StructuredAddressComposer.isEnabled above finds all 8 gating call sites, and FLAG_STRUCTURED_ADDRESS_FOR_SEPA finds SFWindowAccessMap's own evaluation.",
         "capability": {
           "field": "structuredAddressForSepa",
           "sources": [
