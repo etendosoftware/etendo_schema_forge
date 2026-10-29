@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCurrencyId } from '@/hooks/useCurrencyId.jsx';
 import { buildTabVisibilityContext, isSecondaryTabVisible } from './detailViewHelpers.jsx';
 
@@ -72,4 +72,27 @@ export function useActiveTabResolver(tabs, activeTab, setActiveTab) {
     }
     activeKeyRef.current = tabs[next]?.key ?? prevKey;
   }, [signature, activeTab]);
+}
+
+/**
+ * The "Others" tab exists only when its hidden probe renders something. With `primaryTabs` the
+ * tab is never auto-added (a primary tab holds those fields). ETP-5684: a capability-gated field
+ * may be the only "other" one and capabilities can arrive after the probe ran, so the probe runs
+ * again when they change — the reset is declared first so the mount pass ends with its answer.
+ *
+ * @returns {{ showOthers: boolean|null, othersRef: object }} `null` while probing
+ */
+export function useOthersProbe(primaryTabs, capabilities) {
+  const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
+  const othersRef = useRef(null);
+  useEffect(() => {
+    if (!primaryTabs) setShowOthers(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capabilities]);
+  useEffect(() => {
+    if (showOthers === null && othersRef.current) {
+      setShowOthers(othersRef.current.childElementCount > 0);
+    }
+  });
+  return { showOthers, othersRef };
 }
