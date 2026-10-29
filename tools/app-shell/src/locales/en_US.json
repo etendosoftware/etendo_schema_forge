@@ -25796,7 +25796,7 @@
     "currencyRateSelectPlaceholder": "Select {label}...",
     "currencyRateEdit": "Edit exchange rate",
     "currencyRateNotAvailable": "No exchange rate for this date. You can type one.",
-    "currencyRatesAtDate": "Rates as of {date}"
+    "currencyRatesAtDate": "Conversions as of {date}"
   },
   "menus": {
     "Currency": {

@@ -21816,7 +21816,7 @@
     "currencyRateSelectPlaceholder": "Seleccionar {label}...",
     "currencyRateEdit": "Editar tipo de cambio",
     "currencyRateNotAvailable": "No hay tipo de cambio para esta fecha. Podés indicarlo manualmente.",
-    "currencyRatesAtDate": "Tipos al {date}",
+    "currencyRatesAtDate": "Conversiones al {date}",
     "rectifySelectedCount": "{count} seleccionadas",
     "rectifySelectInvoices": "Seleccionar facturas a rectificar…",
     "orgIaeCapHint": "Máximo alcanzado: 1 actividad principal y {max} adicionales (límite del Modelo 390).",

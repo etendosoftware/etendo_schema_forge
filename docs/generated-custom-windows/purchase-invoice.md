@@ -679,7 +679,7 @@ rate on the accounting date (ETP-5840)" and `docs/ui-customization.md` §22.
 
 ### Manual verification
 
-1. Open a new purchase invoice and confirm the currency field renders as the searchable `CurrencyRatePicker` (not a plain dropdown), listing every selectable currency with its rate on the accounting date in the form («—» when there is no range). Note the current field-order gap: Tarifa currently renders before Moneda, the opposite of the intended order.
+1. Open a new purchase invoice and confirm the currency field renders as the searchable `CurrencyRatePicker` (not a plain dropdown), listing every selectable currency with its rate on the accounting date in the form («—» when there is no range), under the header «Conversiones al dd/mm/yyyy» (`currencyRatesAtDate`). Note the current field-order gap: Tarifa currently renders before Moneda, the opposite of the intended order.
 2. Select a non-org currency with a defined `C_Conversion_Rate`: confirm no warning appears and the field commits normally.
 3. Select a non-org currency with no conversion range on the accounting date: confirm it shows «—», stays selected with an empty rate, and that saving without typing a rate is refused with a translated message (ETP-5840).
 4. Save the invoice, add a line, and confirm the invoice's Exchange Rates tab (ETP-4030 section below) reflects an updated `foreignAmount` as the grand total changes — without needing to touch the exchange-rate row directly.

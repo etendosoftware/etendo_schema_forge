@@ -778,7 +778,8 @@ Sales invoices carry the same currency/exchange-rate editing model already shipp
 - The dropdown lists every selectable currency (one with a conversion range to or from the org currency on any date) with its rate on the `accountingDate` currently in
   the form (`currencyOptions?date=`); a currency with no range shows «—» and selecting it leaves
   the rate empty for the user to type with the pencil (available on new and saved invoices unless
-  the currency is the org's own, `isOrgCurrency`).
+  the currency is the org's own, `isOrgCurrency`). The dropdown header reads «Conversiones al
+  dd/mm/yyyy» (`currencyRatesAtDate`).
 - Changing `currency`, `accountingDate` or `invoiceDate` (which cascades `accountingDate`)
   recalculates `eTGOCurrencyRate` through the header callout, overriding a manual rate; empty
   when there is no range. No change is reverted anymore («Cambio de moneda cancelado» is gone).
