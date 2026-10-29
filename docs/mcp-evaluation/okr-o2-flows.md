@@ -33,57 +33,57 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 
 | # | Id propuesto | Flujo | Ventanas | UI | Holded |
 |---|---|---|---|---|---|
-| | **Ventas** | | | | |
-| 1 | `w-customer-crud` | Alta, cambio y baja de un cliente | Contactos, Categoría de Contacto | ✅ | sí (sin lectura) |
-| 2 | `f-quotation-to-invoice` | Presupuesto aceptado y facturado | Presupuesto, Factura | ✅ | parcial |
-| 3 | `f-order-ship-invoice` | Pedido → albarán → factura | Pedido, Albarán, Factura | ✅ | parcial |
-| 4 | `f-order-direct-invoice` | Pedido facturado sin albarán | Pedido, Factura | 👁 | no |
-| 5 | `w-draft-order-edit-delete` | Corregir y descartar un pedido en borrador | Pedido | 👁 | sí |
-| 6 | `f-collect-invoice` | Cobro parcial y saldo restante | Factura, Cobro | ✅ | verificar |
-| 7 | `f-collect-several-invoices` | Un cobro para varias facturas | Factura, Cobro | 📄 | verificar |
-| 8 | `f-overpay-sales-invoice` | Cobro mayor que la factura | Factura, Cobro | 👁 | verificar |
-| 9 | `f-undo-collection` | Deshacer un cobro registrado por error | Cobro, Factura | ✅ | verificar |
-| 10 | `f-credit-note` | Factura rectificativa | Factura (Rectificaciones) | 👁 | no |
-| 11 | `f-void-invoice` | Anular una factura emitida (solo vale la rectificativa) | Factura | 👁 | no |
-| 12 | `w-send-invoice` | Enviar una factura por correo | Factura | 👁 | verificar |
-| 13 | `f-customer-return` | Devolución de un cliente | Albarán, Albarán de devolución | 👁 | verificar |
-| | **Consultas** | | | | |
-| 14 | `q-dashboard-indicators` | Indicadores del negocio | Inicio | 👁 | parcial |
-| 15 | `q-sales-this-month` | Ventas del mes | Factura | 👁 | sí |
-| 16 | `q-top-customers` | Mejores clientes | Factura, Inicio | 👁 | parcial |
-| | **Compras** | | | | |
-| 17 | `f-purchase-receive-invoice` | Pedido de compra → recepción → factura | Pedido, Albarán, Factura (compras), Relación albarán-factura | 👁 | parcial |
-| 18 | `f-pay-purchase-invoice` | Pagar una factura de proveedor | Factura (compras), Pago | 👁 | verificar |
-| 19 | `f-vendor-return` | Devolución a proveedor | Albarán (compras), Albarán de devolución (compras) | 👁 | verificar |
-| | **Inventario** | | | | |
-| 20 | `w-product-crud` | Alta, cambio y baja de un producto | Producto | ✅ | sí (sin lectura) |
-| 21 | `w-product-category-crud` | Alta, cambio y baja de una categoría | Categoría del producto | ✅ | verificar |
-| 22 | `w-warehouse-crud` | Alta, cambio y baja de un almacén | Almacén | 👁 | verificar |
-| 23 | `f-physical-inventory` | Recuento de stock | Inventario físico | 👁 | parcial |
-| 24 | `f-warehouse-transfer` | Pasar stock de un almacén a otro | Movimiento entre almacenes | 👁 | verificar |
-| 25 | `f-internal-consumption` | Consumo interno de stock | Consumo interno | 👁 | no |
-| 26 | `q-stock-report` | Consultar el stock | Informes (inventario) | 👁 | verificar |
-| | **Finanzas** | | | | |
-| 27 | `f-bank-account-transfer` | Cuenta nueva y transferencia | Cuentas | 👁 | verificar |
-| 28 | `w-subaccount` | Subcuenta contable | Plan de cuentas | 👁 | verificar |
-| 29 | `w-cost-center-project` | Centro de costos y proyecto | Centro de costos, Proyecto | ✅ | parcial |
-| 30 | `f-open-period` | Año fiscal y apertura de período | Calendario, Esquema contable | ✅ | no |
-| 31 | `f-asset-amortization` | Activo y su amortización | Categoría de activo, Activos, Amortización | ✅/👁 | no |
-| 32 | `f-manual-journal-post` | Asiento manual y contabilización | Asientos Manuales, Documentos no contabilizados | 👁 | verificar |
-| 33 | `q-financial-reports` | Informes financieros | Informes (finanzas) | 👁 | verificar |
-| 34 | `q-taxes-and-rates` | Impuestos, categorías y tipos de cambio | Impuesto, Categoría de Impuesto, Rangos de conversión | 👁 | parcial |
-| 35 | `q-fiscal-status` | Situación fiscal de la empresa | Configuración Fiscal, Monitor Fiscal, Modelos Fiscales | 👁 | no |
-| | **Configuración** | | | | |
-| 36 | `w-commercial-setup` | Tarifa y condiciones de pago | Tarifa, Condiciones de pago | ✅ | verificar |
-| 37 | `w-company-users-numbering` | Usuarios, roles, datos de la empresa y numeración | Usuarios, Roles, Organización, Secuencias de documentos | ✅/👁 | parcial |
-| | **Errores y negativas** | | | | |
-| 38 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
-| 39 | `e-invalid-write` | Cantidad negativa | Pedido | 📄 | sí |
-| 40 | `e-ambiguous-customer` | Cliente ambiguo | Contactos, Pedido | 📄 | verificar |
-| 41 | `e-duplicate-payment-term` | Condición de pago repetida | Condiciones de pago | ✅ | verificar |
-| 42 | `e-closed-period` | Documento en período cerrado | Factura, Calendario | ✅ | no |
 | | **Arranque** | | | | |
-| 43 | `q-hello` | Saludo: costo de arrancar una conversación | — | no aplica | sí |
+| 1 | `q-hello` | Saludo: costo de arrancar una conversación | — | no aplica | sí |
+| | **Ventas** | | | | |
+| 2 | `w-customer-crud` | Alta, cambio y baja de un cliente | Contactos, Categoría de Contacto | ✅ | sí (sin lectura) |
+| 3 | `f-quotation-to-invoice` | Presupuesto aceptado y facturado | Presupuesto, Factura | ✅ | parcial |
+| 4 | `f-order-ship-invoice` | Pedido → albarán → factura | Pedido, Albarán, Factura | ✅ | parcial |
+| 5 | `f-order-direct-invoice` | Pedido facturado sin albarán | Pedido, Factura | 👁 | no |
+| 6 | `w-draft-order-edit-delete` | Corregir y descartar un pedido en borrador | Pedido | 👁 | sí |
+| 7 | `f-collect-invoice` | Cobro parcial y saldo restante | Factura, Cobro | ✅ | verificar |
+| 8 | `f-collect-several-invoices` | Un cobro para varias facturas | Factura, Cobro | 📄 | verificar |
+| 9 | `f-overpay-sales-invoice` | Cobro mayor que la factura | Factura, Cobro | 👁 | verificar |
+| 10 | `f-undo-collection` | Deshacer un cobro registrado por error | Cobro, Factura | ✅ | verificar |
+| 11 | `f-credit-note` | Factura rectificativa | Factura (Rectificaciones) | 👁 | no |
+| 12 | `f-void-invoice` | Anular una factura emitida (solo vale la rectificativa) | Factura | 👁 | no |
+| 13 | `w-send-invoice` | Enviar una factura por correo | Factura | 👁 | verificar |
+| 14 | `f-customer-return` | Devolución de un cliente | Albarán, Albarán de devolución | 👁 | verificar |
+| | **Consultas** | | | | |
+| 15 | `q-dashboard-indicators` | Indicadores del negocio | Inicio | 👁 | parcial |
+| 16 | `q-sales-this-month` | Ventas del mes | Factura | 👁 | sí |
+| 17 | `q-top-customers` | Mejores clientes | Factura, Inicio | 👁 | parcial |
+| | **Compras** | | | | |
+| 18 | `f-purchase-receive-invoice` | Pedido de compra → recepción → factura | Pedido, Albarán, Factura (compras), Relación albarán-factura | 👁 | parcial |
+| 19 | `f-pay-purchase-invoice` | Pagar una factura de proveedor | Factura (compras), Pago | 👁 | verificar |
+| 20 | `f-vendor-return` | Devolución a proveedor | Albarán (compras), Albarán de devolución (compras) | 👁 | verificar |
+| | **Inventario** | | | | |
+| 21 | `w-product-crud` | Alta, cambio y baja de un producto | Producto | ✅ | sí (sin lectura) |
+| 22 | `w-product-category-crud` | Alta, cambio y baja de una categoría | Categoría del producto | ✅ | verificar |
+| 23 | `w-warehouse-crud` | Alta, cambio y baja de un almacén | Almacén | 👁 | verificar |
+| 24 | `f-physical-inventory` | Recuento de stock | Inventario físico | 👁 | parcial |
+| 25 | `f-warehouse-transfer` | Pasar stock de un almacén a otro | Movimiento entre almacenes | 👁 | verificar |
+| 26 | `f-internal-consumption` | Consumo interno de stock | Consumo interno | 👁 | no |
+| 27 | `q-stock-report` | Consultar el stock | Informes (inventario) | 👁 | verificar |
+| | **Finanzas** | | | | |
+| 28 | `f-bank-account-transfer` | Cuenta nueva y transferencia | Cuentas | 👁 | verificar |
+| 29 | `w-subaccount` | Subcuenta contable | Plan de cuentas | 👁 | verificar |
+| 30 | `w-cost-center-project` | Centro de costos y proyecto | Centro de costos, Proyecto | ✅ | parcial |
+| 31 | `f-open-period` | Año fiscal y apertura de período | Calendario, Esquema contable | ✅ | no |
+| 32 | `f-asset-amortization` | Activo y su amortización | Categoría de activo, Activos, Amortización | ✅/👁 | no |
+| 33 | `f-manual-journal-post` | Asiento manual y contabilización | Asientos Manuales, Documentos no contabilizados | 👁 | verificar |
+| 34 | `q-financial-reports` | Informes financieros | Informes (finanzas) | 👁 | verificar |
+| 35 | `q-taxes-and-rates` | Impuestos, categorías y tipos de cambio | Impuesto, Categoría de Impuesto, Rangos de conversión | 👁 | parcial |
+| 36 | `q-fiscal-status` | Situación fiscal de la empresa | Configuración Fiscal, Monitor Fiscal, Modelos Fiscales | 👁 | no |
+| | **Configuración** | | | | |
+| 37 | `w-commercial-setup` | Tarifa y condiciones de pago | Tarifa, Condiciones de pago | ✅ | verificar |
+| 38 | `w-company-users-numbering` | Usuarios, roles, datos de la empresa y numeración | Usuarios, Roles, Organización, Secuencias de documentos | ✅/👁 | parcial |
+| | **Errores y negativas** | | | | |
+| 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
+| 40 | `e-invalid-write` | Cantidad negativa | Pedido | 📄 | sí |
+| 41 | `e-ambiguous-customer` | Cliente ambiguo | Contactos, Pedido | 📄 | verificar |
+| 42 | `e-duplicate-payment-term` | Condición de pago repetida | Condiciones de pago | ✅ | verificar |
+| 43 | `e-closed-period` | Documento en período cerrado | Factura, Calendario | ✅ | no |
 
 **Fuera del listado** (decidido con Valentin, 23 oct): las pantallas de prueba de concepto (Venta Rápida,
 Compra Rápida, Calendario unificado), Conectar agente de IA (es la pantalla informativa para
@@ -93,49 +93,49 @@ conectar el MCP) y cualquier ventana que no esté en el menú.
 
 Un archivo por flujo en [`okr-o2-flows/`](okr-o2-flows/):
 
-1. [`w-customer-crud`](okr-o2-flows/01-w-customer-crud.md)
-2. [`f-quotation-to-invoice`](okr-o2-flows/02-f-quotation-to-invoice.md)
-3. [`f-order-ship-invoice`](okr-o2-flows/03-f-order-ship-invoice.md)
-4. [`f-order-direct-invoice`](okr-o2-flows/04-f-order-direct-invoice.md)
-5. [`w-draft-order-edit-delete`](okr-o2-flows/05-w-draft-order-edit-delete.md)
-6. [`f-collect-invoice`](okr-o2-flows/06-f-collect-invoice.md)
-7. [`f-collect-several-invoices`](okr-o2-flows/07-f-collect-several-invoices.md)
-8. [`f-overpay-sales-invoice`](okr-o2-flows/08-f-overpay-sales-invoice.md)
-9. [`f-undo-collection`](okr-o2-flows/09-f-undo-collection.md)
-10. [`f-credit-note`](okr-o2-flows/10-f-credit-note.md)
-11. [`f-void-invoice`](okr-o2-flows/11-f-void-invoice.md)
-12. [`w-send-invoice`](okr-o2-flows/12-w-send-invoice.md)
-13. [`f-customer-return`](okr-o2-flows/13-f-customer-return.md)
-14. [`q-dashboard-indicators`](okr-o2-flows/14-q-dashboard-indicators.md)
-15. [`q-sales-this-month`](okr-o2-flows/15-q-sales-this-month.md)
-16. [`q-top-customers`](okr-o2-flows/16-q-top-customers.md)
-17. [`f-purchase-receive-invoice`](okr-o2-flows/17-f-purchase-receive-invoice.md)
-18. [`f-pay-purchase-invoice`](okr-o2-flows/18-f-pay-purchase-invoice.md)
-19. [`f-vendor-return`](okr-o2-flows/19-f-vendor-return.md)
-20. [`w-product-crud`](okr-o2-flows/20-w-product-crud.md)
-21. [`w-product-category-crud`](okr-o2-flows/21-w-product-category-crud.md)
-22. [`w-warehouse-crud`](okr-o2-flows/22-w-warehouse-crud.md)
-23. [`f-physical-inventory`](okr-o2-flows/23-f-physical-inventory.md)
-24. [`f-warehouse-transfer`](okr-o2-flows/24-f-warehouse-transfer.md)
-25. [`f-internal-consumption`](okr-o2-flows/25-f-internal-consumption.md)
-26. [`q-stock-report`](okr-o2-flows/26-q-stock-report.md)
-27. [`f-bank-account-transfer`](okr-o2-flows/27-f-bank-account-transfer.md)
-28. [`w-subaccount`](okr-o2-flows/28-w-subaccount.md)
-29. [`w-cost-center-project`](okr-o2-flows/29-w-cost-center-project.md)
-30. [`f-open-period`](okr-o2-flows/30-f-open-period.md)
-31. [`f-asset-amortization`](okr-o2-flows/31-f-asset-amortization.md)
-32. [`f-manual-journal-post`](okr-o2-flows/32-f-manual-journal-post.md)
-33. [`q-financial-reports`](okr-o2-flows/33-q-financial-reports.md)
-34. [`q-taxes-and-rates`](okr-o2-flows/34-q-taxes-and-rates.md)
-35. [`q-fiscal-status`](okr-o2-flows/35-q-fiscal-status.md)
-36. [`w-commercial-setup`](okr-o2-flows/36-w-commercial-setup.md)
-37. [`w-company-users-numbering`](okr-o2-flows/37-w-company-users-numbering.md)
-38. [`e-unknown-document`](okr-o2-flows/38-e-unknown-document.md)
-39. [`e-invalid-write`](okr-o2-flows/39-e-invalid-write.md)
-40. [`e-ambiguous-customer`](okr-o2-flows/40-e-ambiguous-customer.md)
-41. [`e-duplicate-payment-term`](okr-o2-flows/41-e-duplicate-payment-term.md)
-42. [`e-closed-period`](okr-o2-flows/42-e-closed-period.md)
-43. [`q-hello`](okr-o2-flows/43-q-hello.md)
+1. [`q-hello`](okr-o2-flows/01-q-hello.md)
+2. [`w-customer-crud`](okr-o2-flows/02-w-customer-crud.md)
+3. [`f-quotation-to-invoice`](okr-o2-flows/03-f-quotation-to-invoice.md)
+4. [`f-order-ship-invoice`](okr-o2-flows/04-f-order-ship-invoice.md)
+5. [`f-order-direct-invoice`](okr-o2-flows/05-f-order-direct-invoice.md)
+6. [`w-draft-order-edit-delete`](okr-o2-flows/06-w-draft-order-edit-delete.md)
+7. [`f-collect-invoice`](okr-o2-flows/07-f-collect-invoice.md)
+8. [`f-collect-several-invoices`](okr-o2-flows/08-f-collect-several-invoices.md)
+9. [`f-overpay-sales-invoice`](okr-o2-flows/09-f-overpay-sales-invoice.md)
+10. [`f-undo-collection`](okr-o2-flows/10-f-undo-collection.md)
+11. [`f-credit-note`](okr-o2-flows/11-f-credit-note.md)
+12. [`f-void-invoice`](okr-o2-flows/12-f-void-invoice.md)
+13. [`w-send-invoice`](okr-o2-flows/13-w-send-invoice.md)
+14. [`f-customer-return`](okr-o2-flows/14-f-customer-return.md)
+15. [`q-dashboard-indicators`](okr-o2-flows/15-q-dashboard-indicators.md)
+16. [`q-sales-this-month`](okr-o2-flows/16-q-sales-this-month.md)
+17. [`q-top-customers`](okr-o2-flows/17-q-top-customers.md)
+18. [`f-purchase-receive-invoice`](okr-o2-flows/18-f-purchase-receive-invoice.md)
+19. [`f-pay-purchase-invoice`](okr-o2-flows/19-f-pay-purchase-invoice.md)
+20. [`f-vendor-return`](okr-o2-flows/20-f-vendor-return.md)
+21. [`w-product-crud`](okr-o2-flows/21-w-product-crud.md)
+22. [`w-product-category-crud`](okr-o2-flows/22-w-product-category-crud.md)
+23. [`w-warehouse-crud`](okr-o2-flows/23-w-warehouse-crud.md)
+24. [`f-physical-inventory`](okr-o2-flows/24-f-physical-inventory.md)
+25. [`f-warehouse-transfer`](okr-o2-flows/25-f-warehouse-transfer.md)
+26. [`f-internal-consumption`](okr-o2-flows/26-f-internal-consumption.md)
+27. [`q-stock-report`](okr-o2-flows/27-q-stock-report.md)
+28. [`f-bank-account-transfer`](okr-o2-flows/28-f-bank-account-transfer.md)
+29. [`w-subaccount`](okr-o2-flows/29-w-subaccount.md)
+30. [`w-cost-center-project`](okr-o2-flows/30-w-cost-center-project.md)
+31. [`f-open-period`](okr-o2-flows/31-f-open-period.md)
+32. [`f-asset-amortization`](okr-o2-flows/32-f-asset-amortization.md)
+33. [`f-manual-journal-post`](okr-o2-flows/33-f-manual-journal-post.md)
+34. [`q-financial-reports`](okr-o2-flows/34-q-financial-reports.md)
+35. [`q-taxes-and-rates`](okr-o2-flows/35-q-taxes-and-rates.md)
+36. [`q-fiscal-status`](okr-o2-flows/36-q-fiscal-status.md)
+37. [`w-commercial-setup`](okr-o2-flows/37-w-commercial-setup.md)
+38. [`w-company-users-numbering`](okr-o2-flows/38-w-company-users-numbering.md)
+39. [`e-unknown-document`](okr-o2-flows/39-e-unknown-document.md)
+40. [`e-invalid-write`](okr-o2-flows/40-e-invalid-write.md)
+41. [`e-ambiguous-customer`](okr-o2-flows/41-e-ambiguous-customer.md)
+42. [`e-duplicate-payment-term`](okr-o2-flows/42-e-duplicate-payment-term.md)
+43. [`e-closed-period`](okr-o2-flows/43-e-closed-period.md)
 
 ## Hallazgos del recorrido (23 oct)
 
