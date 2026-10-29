@@ -182,6 +182,11 @@ versión siguiente, no en la medición en curso.
    revisa su utilidad al cierre de Q4 (§3.7).
 4. ~~¿Tope de pruebas Etendo Only?~~ **Decidido:** sin tope; el desglose Only / Win ya lo hace
    visible. Si la proporción de Only se vuelve excesiva, se revisa más adelante.
+5. ~~¿Una prueba de "Hola" cuenta para el KR?~~ **Decidido (2026-10-29):** sí, como una prueba
+   más (`q-hello`). Mide el costo del catálogo de tools al arrancar una conversación: alarma si se
+   agregan tools de más o se infla su metadata, y mide cómo convive el MCP en un agente que tiene
+   otros MCP configurados. Es la única excepción a la regla de origen (§3.3): no sale de la UI de
+   Etendo ni del MCP de Holded.
 
 **No quedan preguntas abiertas.**
 

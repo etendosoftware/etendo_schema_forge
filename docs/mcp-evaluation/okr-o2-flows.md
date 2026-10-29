@@ -3,7 +3,7 @@
 **Tarea:** ETP-5848 (T1). **Plan:** `docs/plans/2026-10-22-mcp-okr-metric-base-plan.md`.
 **Base de operaciones:** `docs/mcp-evaluation/okr-o2-operations-catalog.md`.
 
-Listado de 42 flujos que cubren **todas las ventanas del menú** de Etendo Go, salvo las excluidas
+Listado de 43 flujos que cubren **todas las ventanas del menú** de Etendo Go, salvo las excluidas
 abajo. Un flujo mínimo por ventana (entrar, leer, crear, editar, borrar), agrupando ventanas cuando
 el flujo natural las encadena, más consultas y pruebas de error con foco en ventas. La cantidad no es
 fija. Se itera; todavía **no son pruebas de la suite**.
@@ -82,6 +82,8 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 40 | `e-ambiguous-customer` | Cliente ambiguo | Contactos, Pedido | 📄 | verificar |
 | 41 | `e-duplicate-payment-term` | Condición de pago repetida | Condiciones de pago | ✅ | verificar |
 | 42 | `e-closed-period` | Documento en período cerrado | Factura, Calendario | ✅ | no |
+| | **Arranque** | | | | |
+| 43 | `q-hello` | Saludo: costo de arrancar una conversación | — | no aplica | sí |
 
 **Fuera del listado** (decidido con Valentin, 23 oct): las pantallas de prueba de concepto (Venta Rápida,
 Compra Rápida, Calendario unificado), Conectar agente de IA (es la pantalla informativa para
@@ -133,6 +135,7 @@ Un archivo por flujo en [`okr-o2-flows/`](okr-o2-flows/):
 40. [`e-ambiguous-customer`](okr-o2-flows/40-e-ambiguous-customer.md)
 41. [`e-duplicate-payment-term`](okr-o2-flows/41-e-duplicate-payment-term.md)
 42. [`e-closed-period`](okr-o2-flows/42-e-closed-period.md)
+43. [`q-hello`](okr-o2-flows/43-q-hello.md)
 
 ## Hallazgos del recorrido (23 oct)
 
