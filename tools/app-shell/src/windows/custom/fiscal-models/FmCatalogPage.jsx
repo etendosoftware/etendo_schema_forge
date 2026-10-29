@@ -7,6 +7,7 @@ import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 import { listModels, getModel } from './modelRegistry.js';
 import useOrgSiiStatus, { isSiiJoinedDuringYear } from './useOrgSiiStatus.js';
+import { filterAvailableModels } from './catalogAvailability.js';
 
 // The catalog lists every registered model (id, periodicities, default state, lock, badge
 // variant) — see modelRegistry.js.
@@ -69,13 +70,26 @@ function ToggleSwitch({ checked, onChange, disabled }) {
   );
 }
 
-export default function FmCatalogPage({ onBack, onSave, activeModels, token, apiBaseUrl }) {
+/**
+ * Whether the drawer's selection differs from the one it opened with. Values are compared as
+ * booleans, so an absent model and an explicit `false` are the same (toggling a model on and back
+ * off is no change). Exported for tests.
+ */
+export function catalogSelectionChanged(before = {}, after = {}) {
+  const ids = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...ids].some(id => Boolean(before[id]) !== Boolean(after[id]));
+}
+
+export default function FmCatalogPage({ onBack, onSave, activeModels, unavailableModels, token, apiBaseUrl }) {
   const t = useUI();
+  // ETP-5716 — models the backend marks unavailable (catalogAvailability.js) are not offered.
+  const catalog = filterAvailableModels(CATALOG, unavailableModels);
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
-  const [active, setActive] = useState(
-    () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
+  const [initialActive] = useState(
+    () => activeModels ?? Object.fromEntries(catalog.map(m => [m.id, m.defaultActive]))
   );
+  const [active, setActive] = useState(initialActive);
   const [configModel, setConfigModel] = useState(null);
   // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null, and
   // the formatted SII date when the organization joined during the current year.
@@ -83,7 +97,11 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
   const [siiSinceLabel, setSiiSinceLabel] = useState(null);
   const getSiiStatus = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
 
-  const handleClose = () => { onSave?.(active); onBack?.(); };
+  // Closing saves only a real change: opening and closing the drawer never rewrites the catalog.
+  const handleClose = () => {
+    if (catalogSelectionChanged(initialActive, active)) onSave?.(active);
+    onBack?.();
+  };
 
   // ETP-5187 (adjacent scope) — Modelo 303 needs a default IAE activity configured for its
   // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
@@ -111,7 +129,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
     setSiiSinceLabel(joinedThisYear ? formatCalendarDate(status.since, locale || 'es-ES') : null);
     setSiiPendingId(id);
   };
-  const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
+  const lockedIds = new Set(catalog.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
 
   const modelSortKey = (m) => {
@@ -119,7 +137,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
     if (m.locked) return 2;
     return 1;
   };
-  const sortedCatalog = [...CATALOG].sort((a, b) =>
+  const sortedCatalog = [...catalog].sort((a, b) =>
     modelSortKey(a) - modelSortKey(b) || parseInt(a.id, 10) - parseInt(b.id, 10)
   );
 
@@ -138,7 +156,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
                   background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
                   fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
                 }}>
-                  {CATALOG.length}
+                  {catalog.length}
                 </span>
               </div>
               <div className="fm-catalog-header__sub">

@@ -1,4 +1,6 @@
 import { PillToggle } from '@/components/PillToggle';
+import { Tag } from '@/components/ui/tag';
+import { StatusTag } from '@/components/ui/status-tag';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 
 /**
@@ -24,6 +26,10 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
  *                      optionally toned via `column.tones[value]`
  *  - percent         : numeric value rendered as `N%`
  *  - toggle          : an inline Switch wired to a PATCH callback
+ *  - boolean column  : (`type: 'boolean'`, no toggle) a Yes/No text, or a badge when the column
+ *                      declares `badge` (`badgeLabels` / `badgeVariants`, same shape as the
+ *                      standard DataTable boolean badge; drawn as StatusTag where the variant
+ *                      has a status tone, else Tag)
  *  - text (default)  : plain enum-label / identifier / raw value
  */
 
@@ -137,6 +143,50 @@ function ToggleCell({ row, col, onToggle, saving, readOnly = false }) {
   );
 }
 
+function isTruthyFlag(v) {
+  return v === true || v === 'Y' || v === 'true';
+}
+
+function isFalsyFlag(v) {
+  return v === false || v === 'N' || v === 'false';
+}
+
+// A `badgeLabels` entry is either a per-locale dict ({ es_ES, en_US }) or a plain string.
+function resolveBadgeLabel(raw, locale, fallback) {
+  if (raw && typeof raw === 'object') return raw[locale] ?? raw.en_US ?? fallback;
+  return raw ?? fallback;
+}
+
+/**
+ * Plain boolean column (no inline toggle). Without `badge` it reads Yes/No; with `badge` it draws
+ * a badge coloured by `badgeVariants` (default green / neutral)
+ * and worded by `badgeLabels` (default the generic yes/no labels). An unknown value is a dash.
+ *
+ * Before this renderer existed the column fell through to DefaultCell, which handed React the raw
+ * `true`/`false` — and React renders a boolean child as nothing, so the cell was always blank.
+ */
+// `badgeVariants` speak the Tag palette (green / neutral / red…). The ones with a StatusTag tone
+// render as StatusTag, whose Figma tokens are the list badge colours (Sí #EEFBF4 / #17663A);
+// any other variant keeps the plain Tag.
+const VARIANT_TO_STATUS_TONE = {
+  green: 'success', neutral: 'neutral', red: 'destructive', yellow: 'warning', blue: 'info',
+};
+
+function BooleanCell({ row, col, ui, locale }) {
+  const raw = rawValue(row, col.key);
+  const isTrue = isTruthyFlag(raw);
+  if (!isTrue && !isFalsyFlag(raw)) return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
+  const branch = isTrue ? 'true' : 'false';
+  const yesNoKey = isTrue ? 'yes' : 'no';
+  const fallbackLabel = ui ? ui(yesNoKey) : branch;
+  const label = resolveBadgeLabel(col.badgeLabels?.[branch], locale, fallbackLabel);
+  if (!col.badge) return <span className="text-sm leading-5 text-[hsl(var(--foreground))]">{label}</span>;
+  const variant = col.badgeVariants?.[branch] ?? (isTrue ? 'green' : 'neutral');
+  const tone = VARIANT_TO_STATUS_TONE[variant];
+  if (tone) return <StatusTag status={branch} tone={tone} label={label} data-testid="StatusTag__846bd2" />;
+  return <Tag variant={variant} label={label} data-testid="Tag__846bd2" />;
+}
+
 function BoldTextCell({ row, col }) {
   const value = rawValue(row, col.key);
   if (value == null || value === '') return <span className="text-[hsl(var(--text-disabled))]">&mdash;</span>;
@@ -160,7 +210,7 @@ function DefaultCell({ row, col, tMenu }) {
  * Render a single grid cell for the list-modal table.
  * Selects a renderer by `col.cellType`, falling back to a plain value cell.
  */
-export function ListModalCell({ row, col, tMenu, ui, onToggle, savingToggle, readOnly = false }) {
+export function ListModalCell({ row, col, tMenu, ui, locale, onToggle, savingToggle, readOnly = false }) {
   const toggleCellEl = (
     <ToggleCell
       row={row}
@@ -189,6 +239,9 @@ export function ListModalCell({ row, col, tMenu, ui, onToggle, savingToggle, rea
       // `toggle: true` (legacy inlineToggle flag) without an explicit cellType.
       if (col.toggle) {
         return toggleCellEl;
+      }
+      if (col.type === 'boolean') {
+        return <BooleanCell row={row} col={col} ui={ui} locale={locale} data-testid="BooleanCell__846bd2" />;
       }
       return <DefaultCell row={row} col={col} tMenu={tMenu} data-testid="DefaultCell__846bd2" />;
   }

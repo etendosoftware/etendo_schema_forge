@@ -1,10 +1,27 @@
-# Public API Gateway: Manual Build and Deploy Runbook
+# Public API Gateway: Build and Deploy Runbook
 
-ETP-5862. Deployment of the public API gateway (`gateway/`, the ETP-5345 NestJS app) is **manual today**. It is not part of the SPA pipeline. This runbook is the single procedure for it, and every deployment is recorded in the [Deployment record](#8-deployment-record) so that the SHA behind any running image is known. Automating the deploy is out of scope until this procedure has been run and verified.
+ETP-5862, ETP-6024. Deployment of the public API gateway (`gateway/`, the ETP-5345 NestJS app) is **automatic**: every merge to `main` that touches it is deployed to production by the [Deploy Public API gateway](../../.github/workflows/deploy-public-api.yml) workflow (section 0). It is not part of the SPA pipeline. Sections 1 to 7 are the manual procedure the workflow automates; keep them as the fallback when GitHub Actions is unavailable.
+
+## 0. Automated deploy (default)
+
+The workflow `.github/workflows/deploy-public-api.yml`:
+
+- **Triggers** on push to `main` touching `gateway/**`, `public-api/**`, `package.json` (the core pin) or the workflow itself. A push where `package.json` changed but the core pin did not (any other dependency bump) deploys nothing. On pull requests touching the same paths it only runs the gateway tests and builds and smoke-tests the image; it never publishes or deploys.
+- **Takes the core from the pin**, not from a local checkout: `schema_forge_core` is checked out at the git tag of the exact version in `package.json` (`@etendosoftware/schema-forge-core`). A core change reaches production when its bump PR (opened by `bump-core-on-release.yml`) reaches `main`.
+- **Runs the gateway tests** (`npm test` in `gateway/`, against the `api-gateway-core` packed from the pinned core) on PRs and on `main`, before building. A failure stops the deploy.
+- **Smoke-tests the image before publishing** (no configuration needed): `/healthz`, `/api` 200, `/api/openapi.json` 200, `/api/v1/product` without key 401.
+- **Deploys by digest**, cloning the task definition revision the service is running (not the latest of the family), and verifies: rollout `COMPLETED`, every running task on the new revision, `HEALTHY` and with the expected digest, then the section 6 smoke checks through the public host.
+- **Rolls back automatically** to the previous running revision if any step after registering the task definition fails.
+- **Credentials:** AWS OIDC role `etendo-public-api-deploy` (only `main` of this repo can assume it; it can push only to `etendo/public-api-gateway` and update only this service). The account id and the role ARN are repository secrets (`AWS_ACCOUNT_ID`, `PUBLIC_API_DEPLOY_ROLE_ARN`), so this public repo's Actions logs mask them; task definitions are shown as `family:revision` only. The core is read with the read-only deploy key secret `CORE_DEPLOY_KEY`.
+- **`redeploy_tag`** is validated against `^sf-[0-9a-f]{7}-core-[0-9a-f]{7}$` and never interpolated into the script.
+
+**Rollback or redeploy:** Actions → "Deploy Public API gateway" → Run workflow on `main` with `redeploy_tag=<existing ECR tag>`. It goes through the same verification.
+
+**Deployment record:** for automated deploys, each run's summary is the record (both full SHAs, core version, tag, digest, new and previous task definition revision). Manual deploys still add a row to section 8.
 
 ## 1. Purpose and when to use
 
-Use this runbook to build the gateway image from pinned sources, push it to ECR, roll the ECS service and verify it. For the routing around the service (CloudFront, ALB, target group) see [cloudfront-alb-routing.md](cloudfront-alb-routing.md), section "Public API gateway (production)".
+Use this procedure (manual fallback) to build the gateway image from pinned sources, push it to ECR, roll the ECS service and verify it. For the routing around the service (CloudFront, ALB, target group) see [cloudfront-alb-routing.md](cloudfront-alb-routing.md), section "Public API gateway (production)".
 
 > **Build only from a `main` SHA that was agreed for the deploy.** Since the public API merge block (ETP-5873, including #1877) the Dockerfile installs whatever `api-gateway-core` version `.schema_forge_core` packs (`etendosoftware-api-gateway-core-*.tgz`), and `gateway/package.json` asks for `^0.2.0`; a core checkout older than 0.2.0 must not be used.
 
@@ -136,16 +153,16 @@ Repeat the [smoke check](#6-smoke-check). The previous image tag must still exis
 
 ## 8. Deployment record
 
-**Rule: every deployment (including rollbacks) adds a row in the same PR or commit window, before the deploy is considered done.** Use full SHAs. Never put credentials, account IDs or ARNs in this table.
+Automated deploys are recorded in their workflow run summary (section 0). **Rule: every manual deployment (including rollbacks) adds a row in the same PR or commit window, before the deploy is considered done.** Use full SHAs. Never put credentials, account IDs or ARNs in this table.
 
 | Date (UTC) | etendo_schema_forge SHA | schema_forge_core SHA | Image tag | ECS task definition revision | Deployed by | Notes |
 |---|---|---|---|---|---|---|
 | 2026-09-16 | `cfb35e0e0bd58f2b1581f355fbc9f219c3650e8a` | `45a16a8ba6a8e998008f8ff8afff7966bce505cb` (not verified) | `etp-5345-cfb35e0e0` | `etendo-public-api-production:3` | gateway author | Built before this record existed, on a developer machine. The core SHA is inferred: it is the last change to `packages/api-gateway-core` before the build (the next one is from 2026-10-05), assuming the local `.schema_forge_core` was up to date. |
+| 2026-10-28 | `1d5faa58c91c94391173e1aa97b759d81f13cd8d` | `ef9824a7dd6b29917e439772998a645303b2bf56` | `sf-1d5faa5-core-ef9824a` | `etendo-public-api-production:4` | DevOps | Last manual deploy, with the runbook script. Rollback target: `etendo-public-api-production:3`. Core `ef9824a` is tag `0.3.84`, the version pinned on `main` at the time. |
 
 ## Open points
 
 - **Pin the core by version, not by a local checkout.** `api-gateway-core` is not published with the other `schema_forge_core` packages, so the image depends on whatever `.schema_forge_core` holds at build time. Publishing it in the core release would make the core version traceable from `gateway/package.json`. Infra sees no objection; the decision belongs to the core owners.
-- **Shared deploy identity.** Deploys use personal IAM credentials from a developer machine; a dedicated deploy role (or a pipeline) would make them reproducible and auditable.
 - **Rate limiting is per task.** The gateway's rate limit is kept in memory. With one task it is exact; scaling the service out multiplies the effective limit by the task count, so revisit it before raising `desiredCount`.
 
 ## Dockerfile notes

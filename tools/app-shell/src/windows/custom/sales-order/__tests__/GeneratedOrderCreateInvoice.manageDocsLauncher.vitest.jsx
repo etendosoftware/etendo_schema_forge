@@ -1,3 +1,4 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 /**
  * Rules-of-Hooks regression for `ManageDocsLauncher` (ETP-5295) — sales-order twin.
  *
@@ -36,12 +37,16 @@
  * "pending shipment", on both surfaces that carry their own copy of that derivation.
  */
 
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, fireEvent } from '@testing-library/react';
 
 // ── Mocks (before the import under test) ─────────────────────────────────────────────────
 
+// Keys echo back, except the plan-quota sentence (ETP-5051): an echoed key reads as "not
+// translated", so the translator would fall back and the quota path could not be observed.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params = {}) => (key === 'backendError.quotaExceeded'
+    ? `Límite del plan alcanzado: ${params.resource}`
+    : key),
   useMenuLabel: () => (key) => key,
 }));
 
@@ -84,7 +89,9 @@ vi.mock('@/lib/observability/health-events.js', () => ({
   trackTransactionPosted: vi.fn(),
   trackDocumentCreated: vi.fn(),
 }));
-vi.mock('@/lib/formatCurrency.js', () => ({
+// Partial: the plan-quota sentence (ETP-5051) formats its counts with the real `formatGroupedNumber`.
+vi.mock('@/lib/formatCurrency.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   formatCurrency: (_currency, value) => `${Number(value || 0).toFixed(2)} €`,
 }));
 
@@ -317,5 +324,54 @@ describe('Local pending fallback ignores the Total Discount line (ETP-5525)', ()
     expect(await screen.findByText('soManageInvoice')).toBeInTheDocument();
     expect(screen.queryByText('soManageShipmentAndInvoice')).not.toBeInTheDocument();
     expect(screen.queryByText('soManageShipment')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5051 — the invoice step of CreateDocsModal can be refused by the plan quota (403
+// QUOTA_EXCEEDED). The inline error reads as the translated quota sentence, not "Error (403)" nor
+// the backend prose; any other refusal shows its backend message exactly as before.
+describe('CreateDocsModal — a refused invoice step (ETP-5051)', () => {
+  const INVOICE_ONLY = { orderLines: [{ orderedQuantity: 10, deliveredQuantity: 10 }], grandTotalAmount: 500 };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function createRefusedWith(status, body) {
+    await renderLauncher(INVOICE_ONLY);
+    const lookups = globalThis.fetch;
+    globalThis.fetch = vi.fn((url, opts) => (String(url).includes('/action/createDraftInvoice')
+      ? Promise.resolve({ ok: false, status, json: () => Promise.resolve(body) })
+      : lookups(url, opts)));
+    fireEvent.click(screen.getByTestId('sales-order-manage-docs-submit'));
+    await waitFor(() => expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/action/createDraftInvoice'))).toBe(true));
+  }
+
+  it('shows the translated quota sentence for a 403 QUOTA_EXCEEDED', async () => {
+    const onCreated = vi.fn();
+    await createRefusedWith(403, {
+      error: {
+        code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Sales invoices (100/100)',
+        quota: { resourceKey: 'CREATE_DOCS_INVOICES', resourceName: 'Sales invoices', includedQty: 100, consumed: 100, verdict: 'DENY' },
+      },
+    });
+
+    expect(await screen.findByText('Límite del plan alcanzado: Sales invoices')).toBeInTheDocument();
+    expect(screen.queryByText('Error (403)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Quota exceeded: Sales invoices (100/100)')).not.toBeInTheDocument();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(screen.getByTestId('sales-order-manage-docs-modal')).toBeInTheDocument();
+  });
+
+  it('keeps the backend message of any other refusal', async () => {
+    await createRefusedWith(409, { error: { status: 409, message: 'Business partner on hold' } });
+
+    expect(await screen.findByText('Business partner on hold')).toBeInTheDocument();
+  });
+
+  it('keeps "Error (<status>)" for a refusal with no message', async () => {
+    await createRefusedWith(502, null);
+
+    expect(await screen.findByText('Error (502)')).toBeInTheDocument();
   });
 });

@@ -118,7 +118,7 @@ Overrides win over the type: `col.minWidth` (decisions `columnWidth`; elastic by
 
 **Date with time — documented exception.** There is no `datetime` tier: no list or lines column carries one today (the only `datetime` fields in the contracts are the hidden `created`/`updated` audit columns; the generator maps a visible datetime to `string`, and a `date` column renders date-only). When a datetime column is ever exposed, add its tier together with its renderer (and the generator mapping in `schema_forge_core`).
 
-**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `manual-journals`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
+**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `manual-journals`; custom `minWidth` in `components/attachments/AttachmentsTable.jsx` (both dates, 130 + `headerWrap` — narrow side panel), `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow` (no type-based defaults; since ETP-5978 it honours an explicit `columnWidth` / `columnMaxWidth` as a FIXED width with a spacer column, not the elastic ETP-5332 rule — see `docs/window-templates.md` → *Fixed column widths*), `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
 
 Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the geometry specs `e2e/tests/flows/sales/sales-quotation-list-column-widths.mocked.spec.js` (list) and `e2e/tests/flows/platform/lines-grid-narrow-viewport.mocked.spec.js` (lines), and the `linesAddRowColumnAlignment.vitest.jsx` cases. The implicit absorber is `withImplicitGrowColumn` (list) / `withLinesAbsorberColumn` (lines + add-row): a descriptive non-code column when one exists (never a `tag` pill, never `DocumentNo`/`Value` while something else describes), otherwise the first unpinned column (e.g. the leading amount on Product > Costo). Header floor: `linesColumnWidth.test.js` (*list header floor*) and `DataTable.percentHeader.vitest.jsx` (*plain list header floor*: AD-resolved label drives `<th>`, cells and table min-width; sorting does not move a column).
 
@@ -207,6 +207,20 @@ Props received: `recordId`, `data`, `token`, `apiBaseUrl`, `api`. **Real example
 For `contacts`, the custom `BillingPreferencesForm` keeps customer/vendor billing controls disabled
 until the header record exists (`data.id` present). This mirrors Classic behavior where billing
 details are edited after the Business Partner is created.
+
+**Holding Save while the form is calculating (ETP-5680).** A `customForm` that starts a request whose
+answer must become part of the record being saved (the product's tax category after a type change)
+registers it in `lib/formPendingWork.js`: `const release = registerPending(onLocalChange)` —
+synchronously, before issuing the request — and calls `release()` on EVERY way out (`finally`, stale
+or dropped reply, record switch, unmount; the release is idempotent). While anything is pending, the
+save buttons of that form instance (new record, existing record, draftMode) are disabled through the
+same `saveGate` they already honour, show their spinner and carry the `saveCalculating` tooltip, and
+the auto-save-on-blur skips its save without rolling the edit back. The scope is `onLocalChange`
+(the instance's `hook.handleChange`, the same reference the save buttons read from `hook`), so the
+main window and the embedded "new record" popup never see each other's pending work. It is a
+module-level store, not a prop, because `DetailView.jsx` cannot grow (`docs/detailview-growth-hook.md`).
+Do not make Save await a promise instead: `performSave` is closed over the render's `editing`.
+Reference use: `windows/custom/product/ProductStockDefaultsWatcher.jsx`.
 
 For `user`, `AssignTemplateRolesControl` (ETP-4906) renders a multi-select chip control for
 composing 1+ system-level template roles onto an existing user, with its own save-first
@@ -554,7 +568,7 @@ For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`,
 
 Payments (cobros) are deliberately **not** related documents: no sales or purchase order/invoice lists its payments as chips (functional decision, ETP-5527 / ETP-5539). Do not add a payments source to a definition.
 
-The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
+The definition always reads the **detail** record: `linkedShipments`, `originInvoices`, `rectifyingInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 
 `RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
 
