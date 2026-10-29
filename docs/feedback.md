@@ -3223,3 +3223,43 @@ realizar esta acción."), because that is the one the new read-only gating surfa
 
 **Lesson:** when adding a `backendError.*` key, add it to es_AR too. A guardrail test comparing the
 `backendError.*` sets of es_ES and es_AR would stop the gap from growing.
+
+---
+
+## [2026-10-28] ETP-5978 — Two `make regen` quirks found while regenerating payment-term (known, not fixed)
+
+**Component:** `sf-regen-all` (`cli/src/regen-all.js` in `schema_forge_core`), driven by `make regen`.
+
+### 1. `SKIP_EXTRACT=1` still reads the DB
+
+**Symptom:** `make regen ONLY=<window> SKIP_EXTRACT=1` (seen with `LOCAL_CORE=1`) still logs
+`[F1a] Extracting fields...` / `[F1b] Extracting rules...` and rewrites `schema-raw.json` /
+`rules-raw.json` from the live DB, although `make regen-help` describes the flag as "Skip the DB
+extraction step (reuse existing schema-raw.json)". Already noticed, and not chased, in the
+`dimensionsPanel` regen entry above.
+
+**Root cause:** not specific to `LOCAL_CORE`. `--skip-extract` only guards step F0 (the raw CSV dump
+into `raw-query-results/`). F1a (`extract-fields.js`) and F1b (`extract-rules.js`) always open a DB
+pool. The published `@etendosoftware/schema-forge-cli` (0.3.84) has the same code.
+
+**Workaround (not fixed):** to keep the DB out of the run, use `FROM_CACHE=1`, which reads the
+cached AD snapshot the same way CI's offline check does. Otherwise review the `schema-raw.json` /
+`rules-raw.json` diff before committing. A local DB with incomplete data can change them without
+any warning.
+
+### 2. The contract version moves on a regen that changes no content
+
+**Symptom:** regenerating a window with no new decisions change still bumps the minor `version`
+(and `updatedAt`) of `contract.mcp.json`. Commit `9c64f814c` ("Sync payment-term MCP contract
+version") was nothing but that bump. Across ETP-5978's regens payment-term went from `0.8.0` to
+`0.12.0` (`contract.json`), and the two files do not always land on the same number in the working
+tree.
+
+**Root cause:** not diagnosed. Start with `splitWindowContractArtifacts()` in
+`cli/src/generate-contract.js`, where the MCP contract takes its version from `contract.version`,
+as called from `regen-all.js`.
+
+**Workaround (not fixed):** before committing, check that a regen diff on `contract.mcp.json` is
+version / `updatedAt` / checksum only. Treat `make regen-check ONLY=<window> FROM_CACHE=1` (what the
+pre-push hook and CI's offline drift check compute) as the authoritative result, and commit what it
+produces.

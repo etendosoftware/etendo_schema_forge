@@ -410,9 +410,52 @@ describe('MaskedAmountInput — other passthrough props', () => {
     expect(onKeyDown).toHaveBeenCalled();
   });
 
+  it('forwards id to the underlying input so an external <label htmlFor> associates with it', () => {
+    render(
+      <>
+        <label htmlFor="netDays">Days</label>
+        <MaskedAmountInput id="netDays" value={5} bare data-testid="mi" />
+      </>,
+    );
+    expect(getInput('mi')).toHaveAttribute('id', 'netDays');
+    expect(screen.getByLabelText('Days')).toBe(getInput('mi'));
+  });
+
+  it('renders no id when none is given (line-grid cells must not collide)', () => {
+    render(<MaskedAmountInput value={5} bare data-testid="mi" />);
+    expect(getInput('mi')).not.toHaveAttribute('id');
+  });
+
   it('defaults to a stable data-testid derived from `name` when none is given explicitly', () => {
     render(<MaskedAmountInput value={5} name="listPrice" />);
     expect(screen.getByTestId('field-number-listPrice')).toBeInTheDocument();
+  });
+
+  // Opt-in a11y wiring (NumberStepperInput's refusal hint). Every amount field in the app shares
+  // this input, so absent props must leave the rendered input exactly as it was.
+  it('forwards aria-describedby and aria-invalid to the input (bare and labelled)', () => {
+    const { unmount } = render(
+      <MaskedAmountInput value={5} bare aria-describedby="days-rejected" aria-invalid data-testid="mi" />,
+    );
+    expect(getInput('mi')).toHaveAttribute('aria-describedby', 'days-rejected');
+    expect(getInput('mi')).toHaveAttribute('aria-invalid', 'true');
+    unmount();
+    render(<MaskedAmountInput value={5} label="Amount" aria-describedby="hint" aria-invalid="true" data-testid="mi" />);
+    expect(getInput('mi')).toHaveAttribute('aria-describedby', 'hint');
+    expect(getInput('mi')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('renders neither attribute when they are not passed (shared input unchanged)', () => {
+    render(<MaskedAmountInput value={5} currency="EUR" data-testid="mi" />);
+    expect(getInput('mi')).not.toHaveAttribute('aria-describedby');
+    expect(getInput('mi')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('drops the attributes again when the caller stops passing them', () => {
+    const { rerender } = render(<MaskedAmountInput value={5} bare aria-describedby="h" aria-invalid data-testid="mi" />);
+    rerender(<MaskedAmountInput value={5} bare data-testid="mi" />);
+    expect(getInput('mi')).not.toHaveAttribute('aria-describedby');
+    expect(getInput('mi')).not.toHaveAttribute('aria-invalid');
   });
 });
 
@@ -590,5 +633,46 @@ describe('MaskedAmountInput — clearZeroOnFocus (ETP-5611)', () => {
     render(<MaskedAmountInput value={0} data-testid="mi" />);
     await user.click(getInput('mi'));
     expect(getInput('mi')).toHaveValue('0,00');
+  });
+});
+
+// ETP-5978 — optional `isRawAllowed(raw)` veto on the RAW text, before the mask strips anything.
+// `isAllowed` only ever sees the masked value, so a letter or a misplaced `-` (dropped by the mask)
+// could not be told apart from "nothing happened" — the integer stepper needs to say why.
+describe('MaskedAmountInput — isRawAllowed veto (raw text, before the mask)', () => {
+  it('passes the raw typed text and refuses the edit when it returns false', () => {
+    const onChange = vi.fn();
+    const seen = [];
+    render(
+      <MaskedAmountInput value="7" grouping={false} onChange={onChange}
+        isRawAllowed={(raw) => { seen.push(raw); return /^\d*$/.test(raw); }} data-testid="amt" />,
+    );
+    const input = screen.getByTestId('amt');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '7a' } });
+    expect(seen).toEqual(['7a']);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input.value).toBe('7');
+  });
+
+  it('vets a full-value paste on the raw clipboard text', () => {
+    const onChange = vi.fn();
+    render(
+      <MaskedAmountInput value="" grouping={false} onChange={onChange}
+        isRawAllowed={(raw) => /^\d*$/.test(raw)} data-testid="amt" />,
+    );
+    const input = screen.getByTestId('amt');
+    fireEvent.focus(input);
+    fireEvent.paste(input, { clipboardData: { getData: () => '50%' } });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('changes nothing when absent: a letter is still stripped by the mask', () => {
+    const onChange = vi.fn();
+    render(<MaskedAmountInput value="7" grouping={false} onChange={onChange} data-testid="amt" />);
+    const input = screen.getByTestId('amt');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '7a' } });
+    expect(onChange).toHaveBeenCalledWith('7', 7);
   });
 });

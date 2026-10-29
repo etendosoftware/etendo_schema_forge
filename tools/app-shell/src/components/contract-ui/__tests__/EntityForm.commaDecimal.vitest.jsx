@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/EntityForm.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -131,6 +132,21 @@ describe('EntityForm — comma-decimal numeric input (ETP-5107)', () => {
     expect(input).toHaveValue('1.234');
     expect(onChange).toHaveBeenLastCalledWith('v', '1234', 'V');
   });
+
+  // --- 2b. The replacement must keep the label association the native input had ---
+  // The swap to MaskedAmountInput dropped `id={f.key}`, so the `<Label htmlFor={f.key}>` pointed at
+  // nothing: getByLabel found no control and clicking the label did not focus the field (WCAG
+  // 1.3.1 / 4.1.2). Both editable numeric branches are pinned: plain and calloutOn blur.
+
+  for (const calloutOn of [undefined, 'blur']) {
+    for (const type of NUMERIC_FIELD_TYPES) {
+      it(`editable "${type}" field${calloutOn ? ' (calloutOn blur)' : ''} is associated with its label`, () => {
+        const fields = [{ key: 'v', label: 'V', type, column: 'V', calloutOn }];
+        render(<EntityForm fields={fields} data={{}} onChange={vi.fn()} />);
+        expect(screen.getByLabelText('V')).toBe(screen.getByTestId('field-v'));
+      });
+    }
+  }
 
   // --- 3. The deliberate exclusion: read-only numerics keep the plain input ---
 

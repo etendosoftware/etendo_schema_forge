@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// @covers tools/app-shell/src/windows/custom/return-material-receipt/ImportFromShipmentModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/importReturnLinesHelpers.js
 //
 // ETP-5429 — this wrapper was rewritten to render the shared ImportLinesModal
 // directly (fetchDocuments/fetchLines/getDocDisplay/submitImport passed as
@@ -242,6 +244,43 @@ describe('ImportFromShipmentModal', () => {
       const lines = [{ line: { id: 'LINE-1' }, qty: 999 }];
       const result = await submitImport({ lines, base: '/sws/neo', invoiceId: 'REC-1' });
       expect(result).toEqual({ ok: false });
+    });
+
+    // ETP-5051 — submitImport is the shared `submitReturnImportBatch`. A refusal now hands back its
+    // parsed body, so ImportLinesModal can show a plan-quota refusal as the quota sentence.
+    it('hands back the parsed body of a refusal (a 403 QUOTA_EXCEEDED)', async () => {
+      render(<ImportFromShipmentModal {...BASE_PROPS} />);
+      const { submitImport } = capturedProps;
+      const body = {
+        error: {
+          code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Returns (5/5)',
+          quota: { resourceKey: 'RETURNS', resourceName: 'Returns', includedQty: 5, consumed: 5, verdict: 'DENY' },
+        },
+      };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => body }));
+
+      const result = await submitImport({ lines: [{ line: { id: 'LINE-1' }, qty: 1 }], base: '/sws/neo', invoiceId: 'REC-1' });
+      expect(result).toEqual({ ok: false, body });
+    });
+
+    it('returns exactly { ok: false } when the refusal has no JSON body', async () => {
+      render(<ImportFromShipmentModal {...BASE_PROPS} />);
+      const { submitImport } = capturedProps;
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); },
+      }));
+
+      const result = await submitImport({ lines: [{ line: { id: 'LINE-1' }, qty: 1 }], base: '/sws/neo', invoiceId: 'REC-1' });
+      expect(result).toStrictEqual({ ok: false });
+    });
+
+    it('returns exactly { ok: false } when the refusal body is JSON null', async () => {
+      render(<ImportFromShipmentModal {...BASE_PROPS} />);
+      const { submitImport } = capturedProps;
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => null }));
+
+      const result = await submitImport({ lines: [{ line: { id: 'LINE-1' }, qty: 1 }], base: '/sws/neo', invoiceId: 'REC-1' });
+      expect(result).toStrictEqual({ ok: false });
     });
   });
 });

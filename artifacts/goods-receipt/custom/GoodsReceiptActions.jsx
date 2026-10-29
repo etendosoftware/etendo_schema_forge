@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
@@ -308,7 +308,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Error (${res.status})`);
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+        throw new Error(translateQuotaRefusalBody(err, ui)
+          || err?.response?.message || err?.message || `Error (${res.status})`);
       }
       const invData = (await res.json())?.response?.data;
       setShowInvoiceConfirm(false);
@@ -512,7 +514,8 @@ export function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) 
       const res = await apiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}/action/cloneRecord`, { method: 'POST' });
       const json = await res.json();
       if (!res.ok) {
-        setError(json?.response?.error?.message || ui('cloneReceiptError'));
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+        setError(translateQuotaRefusalBody(json, ui) || json?.response?.error?.message || ui('cloneReceiptError'));
         return;
       }
       onCloned(json?.response?.data?.id);
