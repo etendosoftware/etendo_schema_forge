@@ -28,6 +28,12 @@
  * so returning to it — the back button, a Related Documents chip — refetches it instead of
  * showing the pre-completion status for `recordStaleTime`.
  *
+ * ETP-5729 — the shipment shows values derived from its customer returns: `canCreateReturn`
+ * (the «Crear devolución» button) and the `returnReceipts` Related Documents chips. Deleting,
+ * editing or completing a return therefore marks the shipment stale, so going back to it no
+ * longer shows the deleted return and a hidden button for `recordStaleTime`. The Purchase side
+ * (`return-to-vendor-shipment` → `goods-receipt`) is owned by the Purchase cell.
+ *
  * ETP-5571 adds a second map, `WRITE_INVALIDATES_ENTITIES`, for caches keyed by entity rather
  * than by spec — see its own comment below.
  */
@@ -35,6 +41,7 @@ export const WRITE_INVALIDATES_SPECS = Object.freeze({
   'goods-shipment': Object.freeze(['sales-order', 'sales-invoice']),
   'sales-invoice': Object.freeze(['sales-order']),
   'goods-receipt': Object.freeze(['purchase-invoice']),
+  'return-material-receipt': Object.freeze(['goods-shipment']),
 });
 
 /**
@@ -53,12 +60,20 @@ export const WRITE_INVALIDATES_SPECS = Object.freeze({
  * ETP-5681 — the accounting dimensions: deactivating (or renaming) a cost center or a project
  * left the document Cost Center / Project selectors listing it until the cache window ran out.
  * `project` and `service-project` both write `C_Project`.
+ *
+ * ETP-5826 — payment terms can be created from any payment-term selector ("+ Crear condición de
+ * pago", a POST to `payment-term/header`). The selector that created it shows the new term, but the
+ * same column in another form (a contact's Condiciones de pago, then a purchase invoice's) kept its
+ * cached page without it. A selector entry is keyed by the selector URL of the document that shows
+ * it, which names no target table, so the whole `selector` entity is marked stale, like the specs
+ * above.
  */
 export const WRITE_INVALIDATES_ENTITIES = Object.freeze({
   contacts: Object.freeze(['selector']),
   'cost-center': Object.freeze(['selector']),
   project: Object.freeze(['selector']),
   'service-project': Object.freeze(['selector']),
+  'payment-term': Object.freeze(['selector']),
 });
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

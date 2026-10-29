@@ -45,6 +45,9 @@
       }
     },
     "dateFilterKey": "paymentDate",
+    "listViewOptions": {
+      "defaultDatePreset": "last30"
+    },
     "hideCreate": true,
     "hideFormCard": true,
     "hidePrint": true,
@@ -71,7 +74,6 @@
     "header": {
       "name": "finPayment",
       "formCols": 3,
-      "javaQualifier": "payment-reactivate",
       "fields": {
         "documentNo": {
           "visibility": "readOnly",

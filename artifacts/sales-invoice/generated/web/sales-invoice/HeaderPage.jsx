@@ -27,8 +27,6 @@ const breadcrumb = 'Sales / Sales Invoice';
 // @sf-generated-start summary:header
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
@@ -66,7 +64,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'accountingDate'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'currency', 'priceList', 'accountingDate'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -327,6 +325,14 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "lines",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/lines/selectors/uOM"
     },
     {
       "entity": "lines",
@@ -625,7 +631,8 @@ export const api = {
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
-      "em_etgo_tbai_status": "Estado TicketBAI"
+      "em_etgo_tbai_status": "Estado TicketBAI",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "OutstandingAmt": "Outstanding Amount",
@@ -633,10 +640,12 @@ export const api = {
       "em_etgo_delivery_status": "Delivery Status",
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
-      "em_etgo_tbai_status": "TicketBAI Status"
+      "em_etgo_tbai_status": "TicketBAI Status",
+      "C_UOM_ID": "Unit"
     },
     "es_AR": {
-      "OutstandingAmt": "Saldo pendiente"
+      "OutstandingAmt": "Saldo pendiente",
+      "C_UOM_ID": "Unidad"
     }
   }
 };
@@ -674,7 +683,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
+          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50, visibleWhen: (record, ctx) => ctx['OrgCurrencyId'] != null && ((record['currency'] != null && record['currency'] !== '') && record['currency'] !== ctx['OrgCurrencyId']) },
         ]}
         hideDeleteWhenComplete
         hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}

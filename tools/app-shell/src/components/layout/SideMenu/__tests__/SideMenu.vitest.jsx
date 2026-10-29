@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -187,6 +188,7 @@ vi.mock('@phosphor-icons/react', () => {
 });
 
 import SideMenu from '../SideMenu.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 import { buildMenuGroups, filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, catalogFeatureFlags } from '@/windows/__tests__/navigationExpectations.js';
 
@@ -371,6 +373,33 @@ describe('SideMenu', () => {
     // The whole name is rendered (wrapped, not cut), with its plan on the line below.
     expect(other).toHaveTextContent('Acme Demo With A Rather Long Company Name');
     expect(other).toHaveTextContent('environmentDemo');
+  });
+
+  // ETP-5047: a canceled productive environment reports plan "free" with environmentType
+  // "PRODUCTIVE". It is labelled "Productive", but its chip keeps the muted colour, which follows
+  // the plan: productive, not paying. A paying productive keeps the success colour.
+  it('labels a canceled productive environment "Productive" in the muted chip style', () => {
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [
+        { clientId: 'canceled-1', clientName: 'Canceled Productive', plan: 'free',
+          environmentType: 'PRODUCTIVE', subscriptionStatus: 'EXPIRED', accessState: 'ALLOWED' },
+        { clientId: 'prod-1', clientName: 'Acme Productive', plan: 'productive', environmentType: 'PRODUCTIVE' },
+      ],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'canceled-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(within(screen.getByLabelText('switchCompany')).getByText('environmentProductive')).toBeInTheDocument();
+    const canceledChip = within(screen.getByTestId('company-option-canceled-1')).getByText('environmentProductive');
+    expect(canceledChip).toHaveClass('bg-muted', 'text-muted-foreground');
+    expect(canceledChip).not.toHaveClass('bg-status-success');
+    expect(screen.getByTestId('company-option-canceled-1')).not.toHaveTextContent('environmentDemo');
+    const paidChip = within(screen.getByTestId('company-option-prod-1')).getByText('environmentProductive');
+    expect(paidChip).toHaveClass('bg-status-success', 'text-status-success-foreground');
+    expect(paidChip).not.toHaveClass('bg-muted');
   });
 
   it('selecting the current company does not switch, selecting another one does', () => {
@@ -787,5 +816,43 @@ describe('SideMenu', () => {
       render(<SideMenu {...defaultProps} />);
       expect(screen.getAllByText('yourCompany').length).toBeGreaterThanOrEqual(1);
     });
+  });
+});
+
+// ETP-5351 — the operator in a support session IS support: no help/chat entry point, no company
+// switching (the switch itself is refused by useEnvironmentSwitch; here only the button is checked).
+describe('SideMenu in a support session', () => {
+  const props = { menuGroups: MENU_GROUPS, expanded: true, onToggle: vi.fn(), onHelpClick: vi.fn() };
+
+  beforeEach(() => {
+    localStorage.clear();
+    applySupportSessionFromServer(
+      { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+      { storage: localStorage },
+    );
+  });
+
+  afterEach(() => {
+    resetSupportSessionForTests();
+  });
+
+  it.each([true, false])('hides the whole help entry point (expanded=%s)', (expanded) => {
+    render(<SideMenu {...props} expanded={expanded} unreadCount={3} />);
+
+    expect(screen.queryByText('helpAndSupport')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('helpAndSupport')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('help-menu-open-chat')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('help-menu-report-bug')).not.toBeInTheDocument();
+  });
+
+  it('keeps the company button as a label that does not open', () => {
+    render(<SideMenu {...props} />);
+    expect(screen.getByTestId('company-switcher')).toBeDisabled();
+  });
+
+  it('shows the help entry point again once /me confirms there is no support session', () => {
+    applySupportSessionFromServer(null, { storage: localStorage });
+    render(<SideMenu {...props} />);
+    expect(screen.getByTestId('help-menu-open-chat')).toBeInTheDocument();
   });
 });

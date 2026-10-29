@@ -26,7 +26,9 @@ export function createMixpanelProvider({
   loader = loadMixpanel,
   storage = globalThis.localStorage,
 } = {}) {
-  return createMixpanelAdapter({
+  // ETP-5351 — `analytics: true`: product analytics, silenced as a whole while a support session
+  // is active (see `setAnalyticsSuppressed` in ../core.js).
+  return Object.assign(createMixpanelAdapter({
     loadSdk: loader,
     enabled,
     token,
@@ -35,5 +37,5 @@ export function createMixpanelProvider({
     allowedKeys: SAFE_EVENT_PROPERTY_KEYS,
     logger,
     storage,
-  });
+  }), { analytics: true });
 }

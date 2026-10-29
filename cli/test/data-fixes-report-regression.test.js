@@ -1,3 +1,4 @@
+// @covers cli/src/data-fixes/parse-fix.js
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readdir, readFile } from 'node:fs/promises';
@@ -100,6 +101,15 @@ const FIXES_WITH_REPORT = new Set([
   // Invoice"). Its @report lists every such sequence plus the doctype that kept it alive — same
   // "flag, don't guess" pattern as R19.
   '20260916T120000Z__R37-deactivate-reversed-invoice-doctypes',
+  // R37 (ETP-5046) backfills one open ETGO_SUBSCRIPTION row for every tenant still carrying only
+  // the legacy ETGO_TenantPlan='productive' marker. Its @report is a THIRD flavour: not "skipped
+  // work" (R19) and not "ambiguity" (R35) but an OPERATOR-ATTESTATION report — it pins, verbatim
+  // in the ledger, the manual pre-check that must hold for the backfill to be safe (production
+  // Stripe checkout still not live since 2026-08-27), plus one line per created subscription
+  // saying whether the Stripe ids were copied from a checkout request or deliberately left NULL.
+  // It is therefore the one @report in the catalog that is NEVER empty on an APPLIED row — the
+  // attestation branch is driven by ad_client, which always matches the target tenant.
+  '20261005T180000Z__R37-tenant-subscription-backfill',
   // R38 (ETP-5352) backfills AD_ORG.AD_LEGALENTITY_ORG_ID, but only on organizations that
   // finished provisioning (isready='Y'). Its @report lists the legal-entity orgs left
   // untouched because isready='N' — an org whose alta never completed is missing far more
@@ -173,6 +183,31 @@ const FIXES_WITH_REPORT = new Set([
   // currency. The @report lists a partner the chain could not resolve (a client with no base
   // currency) and is empty on every clean run.
   '20261015T184242Z__R49-bpartner-currency-from-org',
+  // R50 (ETP-5729) removes the duplicated tax line and the order link of rectificative invoices
+  // created from a return. Its @report lists the posted invoices it repaired after deleting their
+  // accounting (RESET, read back from @apply's RETURNING via a temp table — the R32 pattern) and
+  // every document it left alone with the guard that protected it: PERIOD_CLOSED,
+  // CASH_FLOW_STATEMENT, SIF_SENT, TOTALS, PAID, CASH_VAT, TAX_REGISTER, PAYMENT_PLAN,
+  // POSTED_MATCH or ORDER_LINE_OVER_INVOICED — same "flag, don't guess" pattern as R19.
+  '20261016T185257Z__R50-rectificative-dup-tax-and-order-link',
+  '20261019T141632Z__R50-gl-journal-foreign-doctype',
+  // R50 (ETP-5801) repoints return-to-vendor shipments created on another tenant's RTV doctype.
+  // Its @report lists a shipment left foreign because its tenant has no own RTV doctype (the
+  // @check keeps matching it on purpose) and any fact_acct row still on a foreign doctype or GL
+  // category after @apply.
+  '20261021T120000Z__R50-inout-foreign-return-doctype',
+  // Its @report names every predefined payment term NOT seeded because the anchor org already
+  // holds a term with that name but a different shape (lines, fixed due day, month offset).
+  '20261022T150000Z__R52-payment-terms-extended',
+  // R53 (ETP-5902) lists the (schema, rule account) groups not fully on target: columns left
+  // alone because customized, and rows skipped because the chart lacks the account.
+  '20261027T120000Z__R53-spanish-tax-accounts',
+  // R55 (ETP-5791) flags the four standard contact categories and adds "Cliente/Proveedor"; its
+  // @report lists the custom categories it left N/N (with contact counts) for R56 to flag.
+  '20261026T120000Z__R55-bp-category-customer-vendor-flags',
+  // R56 (ETP-5791) flags every custom N/N category from its contacts; its @report lists what each
+  // category received and why (rows this run wrote, selected by updated = now()).
+  '20261026T130000Z__R56-bp-category-custom-flags-from-contacts',
 ]);
 
 async function loadCatalogFiles() {

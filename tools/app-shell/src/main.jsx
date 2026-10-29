@@ -1,6 +1,20 @@
 import { createRoot } from 'react-dom/client';
+import { installNeoRequestDedupe } from './lib/neoRequestDedupe.js';
 import { initBrowserObservability } from './lib/observability/browser.js';
 import { initFeatureFlags } from './lib/flags/index.js';
+import { bootSupportSession } from './lib/supportSession.js';
+import { detectBasePath } from './lib/neoBaseUrl.js';
+
+// ETP-5351 — runs before initFeatureFlags / initBrowserObservability (static imports are evaluated
+// earlier, but none of them reports the URL): takes a support ticket out of the
+// address bar and decides whether this load is a support session, which keeps product analytics
+// from being initialized at all (see lib/supportSession.js).
+bootSupportSession({ routerBase: detectBasePath().routerBase });
+
+// ETP-4952 — before anything can issue a request: one network read per resource per page load
+// (the NEO session, a record's header, its marked attachment). See lib/neoRequestDedupe.js for
+// the allowlist; every other request goes out untouched.
+installNeoRequestDedupe();
 
 // Fire-and-forget: never rejects, and flags resolve to their declared defaults
 // until (or unless) the provider becomes ready.

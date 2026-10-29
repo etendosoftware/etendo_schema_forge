@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * InlineLinesPanel — `balanceFooter` grid-aligned totals row (ETP-5210).
  *
@@ -56,7 +57,7 @@ vi.mock('./quickActionsStyle.js', () => ({
   QUICK_ACTIONS_PILL_CLASS: 'pill',
 }));
 
-// Three columns of varying types/widths (mirrors simple-g-l-journal: a string
+// Three columns of varying types/widths (mirrors manual-journals: a string
 // "Cuenta" column plus the two amount columns balanceFooter targets) so the
 // column-width alignment assertion below is meaningful — a fixture where every
 // column shared the same width could pass even if the totals row used its own
@@ -124,8 +125,9 @@ describe('InlineLinesPanel — balanceFooter totals row', () => {
 
     const row = screen.getByTestId('balance-footer-row');
     // Structure mirrors the header row: [checkbox placeholder] [account] [debit] [credit] [right spacer].
-    // No dimensionsPanel column and no reserved action slot in this fixture (the
-    // trailing amount column — credit — always supplies the hover-action slot).
+    // No dimensionsPanel column in this fixture; the reserved action slot (an editable
+    // table always has one since ETP-5600) sits after the last column, so index 1 is
+    // still the account cell.
     const accountCell = row.children[1];
     expect(accountCell).not.toBe(within(row).getByTestId('balance-footer-debit'));
     expect(accountCell).not.toBe(within(row).getByTestId('balance-footer-credit'));

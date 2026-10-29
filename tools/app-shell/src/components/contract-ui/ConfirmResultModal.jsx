@@ -17,6 +17,7 @@ const TYPE_CONFIG = {
   pedidoVenta:          { labelKey: 'confirmResultModal.docType.pedidoVenta',          titleKey: 'confirmResultModal.title.pedido',               viewKey: 'sqViewOrder',    Icon: FileText,    gender: 'masculine' },
   // Purchases-side returns (return-to-vendor shipment and its rectificative invoice).
   devolucionCompra:           { labelKey: 'confirmResultModal.docType.devolucionCompra',           titleKey: 'confirmResultModal.title.devolucionCompra',           viewKey: 'confirmResultModal.view.devolucion', Icon: Truck,       gender: 'feminine' },
+  devolucionVenta:            { labelKey: 'confirmResultModal.docType.devolucionVenta',            titleKey: 'confirmResultModal.title.devolucionVenta',            viewKey: 'confirmResultModal.view.devolucion', Icon: Truck,       gender: 'feminine' },
   facturaRectificativaCompra: { labelKey: 'confirmResultModal.docType.facturaRectificativaCompra', titleKey: 'confirmResultModal.title.facturaRectificativaCompra', viewKey: 'poViewInvoice',                     Icon: ReceiptText, gender: 'feminine' },
 };
 
@@ -276,14 +277,14 @@ export function ConfirmResultModal({ docs = [], navigate, onClose, onNavigate })
                   type="button"
                   onClick={() => openDoc(singleDoc)}
                   data-testid="action-confirm-result-view"
-                  className={FOCUS_RING_CLS}
+                  className={PRIMARY_BTN_CLS}
                   style={primaryBtnStyle}
                 >
                   {ui(getConfirmResultTypeConfig(singleDoc.type).viewKey)}
                 </button>
               </>
             ) : (
-              <button {...closeButtonProps} ref={primaryRef} style={primaryBtnStyle}>
+              <button {...closeButtonProps} className={PRIMARY_BTN_CLS} ref={primaryRef} style={primaryBtnStyle}>
                 {ui('soClose')}
               </button>
             )}
@@ -402,10 +403,13 @@ const pillBaseStyle = {
   fontSize: 14, lineHeight: '24px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
 };
 
-const primaryBtnStyle = {
-  ...pillBaseStyle,
-  border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))',
-};
+// Colour, hover, shadow, transition and focus ring come from the same classes as the shared
+// default Button (core button.jsx: `bg-primary ... shadow hover:bg-primary/90`), so this button
+// reads exactly like the «Confirmar» of the order windows. Only the shape is inline. The ring
+// gets an offset so it stays visible against the blue (the original ring is the same blue).
+const PRIMARY_BTN_CLS = 'bg-primary text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2';
+
+const primaryBtnStyle = { ...pillBaseStyle, border: 'none' };
 
 const secondaryBtnStyle = {
   ...pillBaseStyle,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLabel, useUI } from '@/i18n';
 import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
@@ -45,6 +45,32 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // `apiBaseUrl`, which it used to chop a segment off. `apiBaseUrl` is still this hook's own
   // base for the existing-record lookup below, and must be the SPEC's URL.
   const { runBatch } = useBatch({ token });
+  // ETP-5676 — the import engine reads only `committed`, each op's `recordId` and the failure
+  // envelope, so every create may skip decorating the record it would echo back. Its rows are
+  // many similar creates that always send the same fields, the case the redundant-callout skip is
+  // for; the OCR flow sends neither option.
+  // ETP-5677 — and it runs as an async job: a long chunk can outlive the proxy in front of Tomcat
+  // and lose its answer for rows the server did commit. The job returns at once, commits row by row
+  // and is polled; `onProgress` (passed by the import engine) feeds the dialog's progress bar.
+  //
+  // The wait (429 back-off, polling) stops when the owner of this hook unmounts: the controller is
+  // created inside the effect so React StrictMode's mount/cleanup/mount cycle gets a fresh one.
+  const abortRef = useRef(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    return () => controller.abort();
+  }, []);
+  const postBatch = useCallback(
+    (operations, { onProgress } = {}) => runBatch(operations, {
+      onlyReturnIds: true,
+      skipRedundantCallouts: true,
+      async: true,
+      onProgress,
+      signal: abortRef.current?.signal,
+    }),
+    [runBatch],
+  );
   const entity = importConfig?.entity;
   // ETP-5676: core only receives the resolved number; the global flag, if set, beats the window.
   const batchSizeFlag = useNumberFlag(IMPORT_BATCH_SIZE);
@@ -231,7 +257,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
 
   return useMemo(() => ({
     token,
-    postBatch: runBatch,
+    postBatch,
     // ETP-5350: every installed AD language, not just the session one. The endpoint
     // translates the term OUT of the session language before matching the English base
     // rows, so an English value always matched and a Spanish one only matched a Spanish
@@ -243,7 +269,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     existingKeyFetchFn,
     batchSize,
     onImportFinished,
-  }), [token, runBatch, labels, ui, fieldLabelFn, existingKeyFetchFn, batchSize, onImportFinished]);
+  }), [token, postBatch, labels, ui, fieldLabelFn, existingKeyFetchFn, batchSize, onImportFinished]);
 }
 
 export default useWindowImportDialog;

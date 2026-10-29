@@ -4,6 +4,10 @@ import { describe, it, vi, afterEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { resetImportRun } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
+import { runImport } from '@etendosoftware/app-shell-core/lib/import/importEngine.js';
+import { runImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
+import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
+import { getExportHints } from '@/lib/importExportColumns.js';
 import '../productFkResolvers.js'; // registers the 'product-uom' resolver the send path looks up
 import '../productImportDescriptor.js'; // side-effecting import: registers the 'product' descriptor on load
 
@@ -56,10 +60,13 @@ describe('product import descriptor', () => {
     const ops = await buildOperations({ ...baseRow, salesPrice: '1234.50' }, productConfig('tok-valid'));
     assert.equal(ops.length, 2);
     const [product, price] = ops;
-    // Product op carries the copied columns plus the AD-defaulted product type.
+    // Product op carries the copied columns plus the AD-defaulted product type, and names the
+    // version its price op writes so the backend does not seed a zero row there first (ETP-5676).
     assert.equal(product.id, 'product');
     assert.equal(product.entity, 'product');
-    assert.deepEqual(product.body, { searchKey: 'P-001', name: 'Widget', description: 'A widget', productType: 'I' });
+    assert.deepEqual(product.body, {
+      searchKey: 'P-001', name: 'Widget', description: 'A widget', productType: 'I', _skipPricesSeed: ['PLV-SALES-1'],
+    });
     // Price op mirrors ProductPriceBar's add flow: standard/list/limit all set to the price,
     // linked to the not-yet-committed product op via parentRef.
     assert.equal(price.id, 'salesPrice');
@@ -241,6 +248,75 @@ describe('product import descriptor', () => {
       assert.equal(purchase.body.priceListVersion, 'PLV-PURCHASE-1');
       assert.equal(purchase.body.standardPrice, '100');
       assert.equal(purchase.parentRef, 'product');
+    });
+
+    // ETP-5676 — the product op names the versions its own price ops write, so the backend skips
+    // the zero-price seed only where the version it would seed is one of them (review W2: client
+    // and server choose "the default tariff" by different rules).
+    it('names the priced versions in _skipPricesSeed, and sends nothing for an unpriced row', async () => {
+      stubFetch(SALES_ITEMS);
+      const both = await buildOperations(
+        { ...baseRow, salesPrice: '150', purchasePrice: '100' },
+        productConfig('tok-seed-both'),
+      );
+      assert.deepEqual(both[0].body._skipPricesSeed, ['PLV-SALES-1', 'PLV-PURCHASE-1']);
+      const salesOnly = await buildOperations({ ...baseRow, salesPrice: '150' }, productConfig('tok-seed-sales'));
+      assert.deepEqual(salesOnly[0].body._skipPricesSeed, ['PLV-SALES-1']);
+      const none = await buildOperations({ ...baseRow }, productConfig('tok-seed-none'));
+      assert.equal(none[0].body._skipPricesSeed, undefined);
+    });
+
+    it('names only the purchase version for a purchase-only row, so the sales tariff is still seeded', async () => {
+      stubFetch(SALES_ITEMS);
+      const purchaseOnly = await buildOperations({ ...baseRow, purchasePrice: '42' }, productConfig('tok-seed-purchase'));
+      assert.equal(purchaseOnly[0].id, 'product');
+      assert.deepEqual(purchaseOnly[0].body._skipPricesSeed, ['PLV-PURCHASE-1']);
+    });
+
+    // ETP-5676 — with batchSize > 1 the core engine namespaces every op id of a row as
+    // `r<index>.<id>` and rewrites its references; the descriptor's directive must survive that
+    // rewrite on each row's own product op, and each row's prices must still point at it.
+    it('keeps _skipPricesSeed and the parentRef wiring on every row of a multi-row chunk', async () => {
+      stubFetch(SALES_ITEMS);
+      const config = productConfig('tok-seed-chunk');
+      const rows = [
+        { searchKey: 'P-0', name: 'A', salesPrice: '10', purchasePrice: '5' },
+        { searchKey: 'P-1', name: 'B', salesPrice: '20' },
+        { searchKey: 'P-2', name: 'C', salesPrice: '30', purchasePrice: '15' },
+      ];
+      const postBatch = vi.fn(async (ops) => ({
+        committed: true,
+        // Ids only — what `_onlyReturnIds` makes the backend answer.
+        operations: ops.map((op) => ({ id: op.id, recordId: `REC-${op.id}`, ok: true })),
+      }));
+
+      const { results } = await runImport(rows, {
+        buildRowOperations: (row) => buildOperations(row, config),
+        postBatch,
+        batchSize: 3,
+      });
+
+      assert.equal(postBatch.mock.calls.length, 1);
+      const sent = postBatch.mock.calls[0][0];
+      const byId = Object.fromEntries(sent.map((op) => [op.id, op]));
+      assert.deepEqual(Object.keys(byId).sort(), [
+        'r0.product', 'r0.purchasePrice', 'r0.salesPrice',
+        'r1.product', 'r1.salesPrice',
+        'r2.product', 'r2.purchasePrice', 'r2.salesPrice',
+      ]);
+      assert.deepEqual(byId['r0.product'].body._skipPricesSeed, ['PLV-SALES-1', 'PLV-PURCHASE-1']);
+      assert.deepEqual(byId['r2.product'].body._skipPricesSeed, ['PLV-SALES-1', 'PLV-PURCHASE-1']);
+      assert.deepEqual(byId['r1.product'].body._skipPricesSeed, ['PLV-SALES-1']);
+      for (const op of sent.filter((o) => !o.id.endsWith('.product'))) {
+        const prefix = op.id.slice(0, op.id.indexOf('.') + 1);
+        assert.equal(op.parentRef, `${prefix}product`, `${op.id} must reference its own row's product`);
+      }
+      // No op body still carries a reference to an un-prefixed sibling id.
+      assert.doesNotMatch(JSON.stringify(sent.map((op) => op.body)), /"\$ref:(product|salesPrice|purchasePrice)"/);
+      // Each row's record id is read from its own prefixed product op of the ids-only response.
+      assert.deepEqual(results.map((r) => [r.status, r.recordId]), [
+        ['ok', 'REC-r0.product'], ['ok', 'REC-r1.product'], ['ok', 'REC-r2.product'],
+      ]);
     });
 
     it('imports a purchase price on its own, without a sales price', async () => {
@@ -717,5 +793,125 @@ describe('product import descriptor — FK reuse and run reset (ETP-5676)', () =
     await run();
     assert.equal(count('/product/defaults'), 2);
     assert.equal(count('/price/selectors/'), 2);
+  });
+});
+
+describe('product import descriptor — tax category and Yes/No flags (ETP-5730)', () => {
+  const resolveTaxCategoryFn = vi.fn(async (value) => (value === 'IVA Reducido'
+    ? { status: 'auto-resolved', id: 'TAX-REDUCED' }
+    : { status: 'needs-review', candidates: [] }));
+
+  const bodyOf = async (row, token, extra = {}) => {
+    stubFetch(SALES_ITEMS);
+    const [product] = await buildOperations({ ...baseRow, ...row }, productConfig(token, { resolveTaxCategoryFn, ...extra }));
+    return product.body;
+  };
+
+  it('sends none of the five fields when the row carries no such columns', async () => {
+    const body = await bodyOf({}, 'tok-5730-none');
+    for (const key of ['taxCategory', 'stocked', 'returnable']) {
+      assert.ok(!(key in body), `${key} must stay absent so today's defaults keep applying, got ${JSON.stringify(body)}`);
+    }
+  });
+
+  it('treats blank cells like absent columns', async () => {
+    const body = await bodyOf(
+      { taxCategory: '  ', stocked: ' ', returnable: '' }, 'tok-5730-blank',
+    );
+    for (const key of ['taxCategory', 'stocked', 'returnable']) {
+      assert.ok(!(key in body), `${key} sent for a blank cell`);
+    }
+  });
+
+  it('sends the resolved tax category and the parsed flags', async () => {
+    const body = await bodyOf({ taxCategory: 'IVA Reducido', stocked: 'No', returnable: 'Sí' }, 'tok-5730-ok');
+    assert.equal(body.taxCategory, 'TAX-REDUCED');
+    assert.equal(body.stocked, false);
+    assert.equal(body.returnable, true);
+  });
+
+  it.each([
+    ['Sí', true], ['si', true], ['SÍ', true], ['Yes', true], ['y', true], ['1', true], ['true', true],
+    ['No', false], ['no', false], ['N', false], ['0', false], ['false', false],
+  ])('reads "%s" as %s', async (cell, expected) => {
+    const body = await bodyOf({ stocked: cell }, `tok-5730-flag-${cell}`);
+    assert.equal(body.stocked, expected);
+  });
+
+  it('fails the row, naming the column and the accepted values, for a cell that is not Yes/No', async () => {
+    stubFetch(SALES_ITEMS);
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, returnable: 'quizás' }, productConfig('tok-5730-bad-flag')),
+      /quizás.*Returnable.*Accepted values/s,
+    );
+  });
+
+  it('fails the row, naming the value, when the tax category does not exist — never drops or creates it', async () => {
+    stubFetch(SALES_ITEMS);
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, taxCategory: 'IVA Inventado' }, productConfig('tok-5730-bad-tax', { resolveTaxCategoryFn })),
+      /"IVA Inventado" does not match any existing tax category/,
+    );
+  });
+
+  it('reports an unparseable flag in the review queue, so the send path cannot disagree', () => {
+    const errors = runImportRowValidator('product', { ...baseRow, stocked: 'Sí', returnable: 'quizás' });
+    assert.deepEqual(errors.map((e) => e.target), ['returnable']);
+    assert.match(errors[0].message, /quizás/);
+    assert.doesNotMatch(errors[0].message, /true|false/, 'the message names Yes/No, not the internal codes');
+    const translate = (key, params) => (key === 'importAcceptedYesNo' ? 'Yes, No' : `${key}:${JSON.stringify(params ?? {})}`);
+    const [localized] = runImportRowValidator('product', { ...baseRow, returnable: 'quizás' }, { translate });
+    assert.match(localized.message, /"accepted":"Yes, No"/);
+    assert.deepEqual(runImportRowValidator('product', { ...baseRow, stocked: '', returnable: 'No' }), []);
+  });
+
+  it('exports the flags as Sí/No, and every label it writes is one the import reads back', async () => {
+    const { valueLabels } = getExportHints('product');
+    for (const target of ['stocked', 'returnable']) {
+      assert.deepEqual(valueLabels[target], { true: 'Sí', false: 'No' });
+      for (const label of Object.values(valueLabels[target])) {
+        assert.deepEqual(runImportRowValidator('product', { ...baseRow, [target]: label }), []);
+      }
+    }
+  });
+
+  describe('product-tax-category resolver', () => {
+    const family = [
+      { id: 'T-EXENTO', name: 'Exento', similarityPercent: 100 },
+      { id: 'T-EXENTO-SERV', name: 'Exento Servicios', similarityPercent: 82 },
+      { id: 'T-EXENTO-SUPLIDO', name: 'Exento servicios por suplido', similarityPercent: 70 },
+    ];
+    const search = (candidates) => vi.fn(async () => [{ candidates }]);
+    const resolve = (value, candidates) => getFkResolver('product-tax-category')(value, {
+      token: `tok-tax-${value}-${Math.random()}`, simSearchFn: search(candidates),
+    });
+
+    it('picks the exact name inside a family of near-identical names', async () => {
+      const result = await resolve('Exento', family);
+      assert.deepEqual([result.status, result.id], ['auto-resolved', 'T-EXENTO']);
+    });
+
+    it('ignores case, accents and surrounding whitespace', async () => {
+      const result = await resolve('  EXENTO   ', family);
+      assert.equal(result.id, 'T-EXENTO');
+    });
+
+    it('never accepts a candidate by rank when no name is equal to the cell', async () => {
+      const result = await resolve('Exent', family);
+      assert.equal(result.status, 'needs-review');
+      assert.equal(result.candidates.length, 3);
+    });
+
+    it('asks for review, rather than picking one, when two candidates share the exact name', async () => {
+      const result = await resolve('Exento', [family[0], { ...family[0], id: 'T-EXENTO-2' }]);
+      assert.equal(result.status, 'needs-review');
+    });
+
+    it('needs review when nothing is found', async () => {
+      const result = await getFkResolver('product-tax-category')('Nada', {
+        token: 'tok-tax-none', simSearchFn: vi.fn(async () => [null]),
+      });
+      assert.equal(result.status, 'needs-review');
+    });
   });
 });

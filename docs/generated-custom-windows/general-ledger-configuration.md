@@ -22,7 +22,9 @@ The current frontend is production-shaped but still backed by local mock data be
 - Slug: `general-ledger-configuration`
 - Window type: `layoutType: custom`
 - Top metadata: breadcrumb `Finanzas / Esquema contable` (built from the shared `ui('finance')` key + `ui('glc.title')`, ETP-4945)
-- Right side of the tab row: dirty-state `Guardar cambios` button
+- Top bar (`glc-toolbar`): follows the record (form view) toolbar standard (ETP-5736) — 56px, 8px padding, inset bottom rule, via the shared `getLinesToolbarClassName()` (`components/contract-ui/toolbarClasses.js`)
+- Left side of the top bar: the 4 tabs, rendered by the shared segmented control `SegmentedTabs` (40px group, 32px tabs, same as the list subset tabs; group label = translated window title)
+- Right side of the top bar: dirty-state `Guardar cambios` button, 40px via the shared `getSaveBtnCls()`; primary colour from the semantic tokens (ETP-5752 brand blue), not hardcoded
 
 ## Tab Behavior
 
@@ -105,6 +107,15 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 
 **Each account selector follows its own toggle (ETP-5682)**, matching the AD display logic (`@UseSuspenseBalancing@='Y'`, `@UseCurrencyBalancing@='Y'`): the selector is shown only while its toggle is on, immediately, without saving. Turning a toggle off only **hides** the selector — the stored account is kept (Classic behavior) and posting reads it only while the flag is on.
 
+**While a toggle is on, its account is required (ETP-5724).** Core posting (`AcctSchema.java`) silently treats "switch on, no account" as off, so the row is refused instead: the selector shows the required marker and cannot be cleared, and `Guardar cambios` with the account empty is blocked on this tab with a required error under the selector. The backend enforces the same rule on every NEO channel that can write the row (REST single and MCP; batch only creates, and creating is closed) for both write paths — the aggregate save (`GeneralLedgerConfigurationHandler`) and a generic PUT/PATCH on `Cuentas generales` (`GeneralLedgerAccountsHandler` → `GeneralLedgerBalancingRule`) — answering `400 MISSING_REQUIRED_FIELDS` with `fields: ["suspenseBalancing"]` / `["currencyBalancingAcct"]`. If the backend refuses a save the page could not foresee (e.g. the account was cleared over the API meanwhile), the page marks the account, jumps to this tab and shows a translated "complete all required fields" toast. `Cuentas generales` cannot be created or deleted through the API (`methods: GET, GETBYID, PUT, PATCH` in `decisions.json` → native `405`, and MCP does not offer create/delete for it): its single row comes from the ledger setup and the window cannot load without it.
+
+Asymmetries that are intended (do not log them as bugs):
+
+- **Classic still accepts** a switch on without its account (unchanged on purpose).
+- A row that is **already broken** blocks every aggregate save, even one that only edits `General`; a generic CRUD write to `Valores por defecto` / `Dimensiones` is not blocked.
+- A **stale** PUT/PATCH on a broken row answers the 400 before the 409 (the pre-hook runs before the stale-record check).
+- A stored account missing from the account list shows empty, required and not clearable (pre-existing).
+
 `Active` (`IsActive` on `C_AcctSchema_GL`) is not surfaced in this tab — it mirrors the window-level `Active` flag and is marked `system` in `decisions.json`.
 
 ## Current Technical State
@@ -112,20 +123,22 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 - Custom page: `tools/app-shell/src/windows/custom/general-ledger-configuration/`
 - Artifact: `artifacts/general-ledger-configuration/`
 - Registration already present in `menu.json`, `registry.js`, and `cli/config/regen-windows.json`
-- Generic components promoted from this work:
+- Generic components promoted from this work (all in `tools/app-shell/src/components/contract-ui/`,
+  exported by its `index.js`):
   - `AccountSelect` (was `AccountBadgeSelect` until ETP-5681)
   - `ToggleRow`
+  - `SectionShell` (ETP-5791) — the title/subtitle section card of every tab. It was window-local
+    (`windows/custom/general-ledger-configuration/SectionShell.jsx`) and was **moved** unchanged so
+    the contact category Accounting tab (`BpCategoryAccountingPanel`) renders its account sections
+    with the same card; the four tabs now import it from `@/components/contract-ui`. `Field.jsx`
+    stays window-local (only the General tab uses it; the account tabs label through
+    `AccountSelect`).
 
 ## Known Gaps
 
-- No NEO spec or `ETGO_SF_*` config for window `125` yet
-- No multi-entity save handler yet
-- No real selector/catalog reads yet
-- `Guardar cambios` is still a frontend stub over mock state
-- **Cuentas generales — a balancing switch can be saved on with no account (ETP-5682 QA, tracked in ETP-5724).** Classic parity: nothing requires `suspenseBalancing` / `currencyBalancingAcct` while its switch is on. Proposed: make the account required while its switch is on.
-- **Account ids are not checked against the tenant on save (pre-existing, tracked in ETP-5722).** `GeneralLedgerConfigurationHandler.resolveAccountingCombination` accepts a `C_ValidCombination` id of another client. Not reachable from the UI, only through a hand-written API request.
+- **Generic CRUD on `Valores por defecto` / `Dimensiones` bypasses the aggregate's rules** (required defaults, mandatory and locked dimensions), and POST/DELETE on `Valores por defecto` can leave the window unable to load. Follow-up of ETP-5724, not fixed there.
 
-After the backend wiring lands, remember the Etendo step:
+Any change to `ETGO_SF_*` for this window needs `make regen ONLY=general-ledger-configuration PUSH_TO_NEO=1` and then, in the Etendo root:
 
 ```bash
 ./gradlew export.database
@@ -141,7 +154,8 @@ After the backend wiring lands, remember the Etendo step:
 6. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
 7. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
 8. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear. Confirm the list never shows a row for Organización (`OO`), Cuenta (`AC`), Contacto (`BP`) or Producto (`PR`) — the first two are Etendo's built-in mandatory dimensions, and Contacto/Producto are locked always-on per ETP-4879 (same as `U1`/`U2`) — while Proyecto (`PJ`) and Centro de coste (`CC`) remain visible and toggleable.
-9. On **Cuentas generales**, confirm the three sections render and the two toggle+account pairs (suspense balancing, currency balancing) behave independently, and that no suspense error switch or account is shown: with a toggle off its account selector is hidden; turning it on shows it at once; turning it off again hides it, and turning it back on shows the same account (ETP-5682).
+9. On **Cuentas generales**, confirm the three sections render and the two toggle+account pairs (suspense balancing, currency balancing) behave independently, and that no suspense error switch or account is shown: with a toggle off its account selector is hidden; turning it on shows it at once; turning it off again hides it, and turning it back on shows the same account (ETP-5682). Then turn a toggle on, leave its account empty and save: the save is blocked and the account shows the required marker and a required error (ETP-5724); pick an account and the save goes through.
+10. Top bar (ETP-5736): in DevTools the bar (`glc-toolbar`) is 56px with 8px padding and its bottom rule is an inset `box-shadow` (no border); the tab group is 40px with 32px tabs (14px/24px, medium); `Guardar cambios` is 40px. Editing a field does not change the bar height. Compare with the Factura de venta form toolbar (`/sales-invoice/new`): same bar height, padding and rule.
 
 ## Test Design
 
@@ -164,8 +178,10 @@ Core acceptance coverage should include at least these scenarios:
 
 Current automated coverage:
 
-- `e2e/tests/flows/general-ledger-configuration.mocked.spec.js`
-  captures the tabs and provides a visual-review seed in mock mode.
+- `e2e/tests/flows/accounting/general-ledger-configuration.mocked.spec.js`
+  captures the tabs as a visual-review seed in mock mode, drives the dirty-state save, the
+  account selectors and the dimension toggles, and asserts the top bar's sizes (ETP-5736: bar
+  56px with an inset rule, tab group 40px, tabs 32px, Save 40px).
 
 Recommended next automated additions once backend/save work starts:
 
@@ -196,3 +212,24 @@ posted to. Local check: 662 → 661 accounts (the `640` heading gone, `64000000`
 
 Manual check: open **Valores por defecto**, click any account field → a centered popup with full
 names; typing a code (`572`) or a word (`puente`) filters; no summary heading (e.g. `640`) is offered.
+
+## Tenant-scoped ids on save — ETP-5722
+
+`GET`/`POST /general-ledger-configuration/General` (REST and MCP) only accept ids of the caller's own
+tenant, or of client 0. This covers every account in `generalAccounts` and `defaults`, `general.currency`,
+and `selectedOrgId` (query, or POST body). An id of another tenant gets the same 400 as a missing one:
+*Accounting combination / Currency / Organization not found: &lt;id&gt;*. Before, these ids were written
+into the other tenant's ledger setup. The UI never sends such ids, because its selectors are already
+tenant-scoped, so nothing changes on screen.
+
+Any 400/500 from this endpoint now rolls back the whole request, so a body is never half-saved.
+Before, a valid `general.name` plus a bad account answered 400 and still renamed the ledger.
+
+Backend detail: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` (example "tenant-scoped
+ids (ETP-5722)").
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Defaults and General Accounts tabs now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `GeneralLedgerConfigurationHandler` (aggregate save, rolled back on refusal) and the `@NeoExtension` handlers of the generic `Valores por defecto` / `Cuentas generales` entities (`com.etendoerp.go`, see `neo-headless.md`).
+
+Error display: a failed save used to show nothing (the page had no `catch`). `useGeneralLedgerConfig.save` now throws with the backend message and body (`throwHttpError`), and `GeneralLedgerConfigPage` shows it as a toast translated by `messageKeys` (any backend error, not only these).

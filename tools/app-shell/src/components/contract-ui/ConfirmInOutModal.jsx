@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, quotaRefusalFields, translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { PeriodRecoveryLink } from './PeriodRecoveryLink.jsx';
@@ -91,13 +91,26 @@ async function runConfirm({ apiFetch, actionBase, skipDocumentAction, invoiceReq
  * `translateBackendError` resolve a core document-action failure whose text embeds AD line
  * numbers and so can never be matched as a literal. An older backend simply sends no keys and the
  * Error is exactly what it used to be.
+ *
+ * ETP-5051 — a plan-quota refusal (403 QUOTA_EXCEEDED / 500 QUOTA_CHECK_FAILED) carries its text
+ * in `error.message`, which this never read: the user saw "Error (403)". Its `quota` /
+ * `quotaCheckFailed` now ride on the Error, so the translator renders the quota sentence (and
+ * announces the refusal to the quota banner). Any other error is built exactly as before.
  */
 function buildBackendError(body, status) {
   const err = new Error(body?.response?.message || body?.message || `Error (${status})`);
   err.status = status;
   err.messageKeys = extractBackendMessageKeys(body);
+  Object.assign(err, quotaRefusalFields(body));
   return err;
 }
+
+// Footer button colours. The footer is gray (--muted), so Cancel rests on the card (white) and
+// its hover is a translucent muted-foreground wash (visibly darker than both). Confirm hovers
+// to the same --primary-hover the primary toolbar buttons use.
+const CANCEL_REST_BG = 'hsl(var(--card))';
+const CANCEL_HOVER_BG = 'hsl(var(--muted-foreground) / 0.12)';
+const CONFIRM_HOVER_BG = 'var(--primary-hover)';
 
 /**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
@@ -196,7 +209,9 @@ export default function ConfirmInOutModal({
       });
       onConfirmed({ invoice });
     } catch (err) {
-      setError(translateBackendError(err.message, ui, { messageKeys: err.messageKeys }));
+      setError(translateBackendError(err.message, ui, {
+        messageKeys: err.messageKeys, quota: err.quota, quotaCheckFailed: err.quotaCheckFailed,
+      }));
       setErrorRecovery(periodNotAvailableToastOptions(err.messageKeys, ui, { date: periodDate }));
       setLoading(false);
     }
@@ -206,6 +221,9 @@ export default function ConfirmInOutModal({
   const primaryLabel = invoiceRequested && confirmWithInvoiceLabel
     ? confirmWithInvoiceLabel
     : confirmLabel;
+
+  const confirmDisabled = loading || !canConfirm;
+  const confirmRestBg = confirmDisabled ? 'var(--status-info-border)' : 'var(--status-info-fg)';
 
   return createPortal(
     <div
@@ -362,9 +380,9 @@ export default function ConfirmInOutModal({
             data-testid="confirm-modal-cancel-btn"
             onClick={onClose}
             disabled={loading}
-            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'hsl(var(--muted))'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--border-subtle))', background: CANCEL_REST_BG, color: 'hsl(var(--muted-foreground))', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1 }}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = CANCEL_HOVER_BG; }}
+            onMouseLeave={e => { e.currentTarget.style.background = CANCEL_REST_BG; }}
           >
             {cancelLabel}
           </button>
@@ -372,10 +390,10 @@ export default function ConfirmInOutModal({
             type="button"
             data-testid="confirm-modal-confirm-btn"
             onClick={handleConfirm}
-            disabled={loading || !canConfirm}
-            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: (loading || !canConfirm) ? 'var(--status-info-border)' : 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: (loading || !canConfirm) ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+            disabled={confirmDisabled}
+            style={{ height: 38, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: confirmRestBg, color: 'hsl(var(--card))', cursor: confirmDisabled ? 'not-allowed' : 'pointer', transition: 'background .15s' }}
+            onMouseEnter={e => { if (!confirmDisabled) e.currentTarget.style.background = CONFIRM_HOVER_BG; }}
+            onMouseLeave={e => { e.currentTarget.style.background = confirmRestBg; }}
           >
             {loading ? (
               <>

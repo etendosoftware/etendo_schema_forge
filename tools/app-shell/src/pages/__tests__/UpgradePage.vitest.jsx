@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const navigateMock = vi.fn();
@@ -6,9 +7,15 @@ const assignMock = vi.fn();
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key, options) => key === 'upgradePlanProductivePrice' && options
-    ? `${options.amount} / ${options.interval}`
-    : key,
+  // Keys pass through untranslated. The two catalog price keys append their interpolated values,
+  // so a test can still assert on a formatted amount (`formatCurrency`'s output) without depending
+  // on the English copy around it.
+  useUI: () => (key, options) => {
+    if (options && (key === 'upgradePlanPriceMonthly' || key === 'upgradePlanPriceYearly')) {
+      return `${key} ${Object.values(options).join(' ')}`;
+    }
+    return key;
+  },
   getStoredLocale: () => 'es_ES',
 }));
 // ETP-4576 — UpgradePage reaches useEnvironmentSwitch, which now proves the account with
@@ -35,6 +42,10 @@ vi.mock('@/lib/observability.js', () => ({
   track: vi.fn(),
 }));
 
+// ETP-5049 — the expired-session state signs the user out to the login view, like AccountSettings.
+const logoutMock = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/useLogout.js', () => ({ useLogout: () => logoutMock }));
+
 import {
   TEST_BEARER_TOKEN,
   TEST_CSRF_TOKEN,
@@ -43,6 +54,7 @@ import {
   expectNoAuthorizationHeader,
 } from '@/test/sessionContract.js';
 import UpgradePage from '../UpgradePage.jsx';
+import { UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
 import { ENVIRONMENT_LIST_REFRESH_EVENT } from '../../hooks/useEnvironmentSwitch.js';
 import enUs from '@/locales/en_US.json';
 import esEs from '@/locales/es_ES.json';
@@ -82,6 +94,19 @@ const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
 
 const PROVISIONING_STEPS = ['setup', 'client', 'organization', 'dataset', 'sequences', 'finalize'];
+
+/**
+ * The v1 catalog: one flat monthly subscription. Shaped exactly like GET /sws/go/plans answers —
+ * note there is no `providerPriceID`, and the server never sends one.
+ */
+const PRODUCTIVE_PLAN = {
+  planKey: 'productive-monthly',
+  name: 'Productive',
+  description: 'A second tenant for real work',
+  displayPrice: '49.00',
+  currency: 'EUR',
+  billingInterval: 'month',
+};
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
   return { ok, status, json: async () => data };
@@ -139,8 +164,7 @@ function successStream({ success = true, clientName = 'Acme Productive', clientI
  */
 function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
   purchaseDataTransferEnabled, purchaseProjection, checkoutError, checkout = {}, statuses = ['paid'], onboarding,
-  offer = { code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' },
-  sessionEnvironment } = {}) {
+  sessionEnvironment, plans = [PRODUCTIVE_PLAN] } = {}) {
   const requests = [];
   let statusCallIndex = 0;
   let onboardingRan = false;
@@ -161,11 +185,13 @@ function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
     if (target.includes('/sws/go/session/environment') && sessionEnvironment) {
       return sessionEnvironment(init);
     }
+    // The plan catalog (ETP-5046). The checkout endpoint requires a plan key and has no default,
+    // so every test that reaches the submit needs this route to answer.
+    if (target.includes('/sws/go/plans')) {
+      return typeof plans === 'function' ? plans() : jsonResponse({ plans });
+    }
     if (target.includes('/sws/go/billing/overview')) {
       return jsonResponse({ canManageBilling: true, purchases });
-    }
-    if (target.includes('/sws/go/billing/offers')) {
-      return jsonResponse(offer);
     }
     if (target.includes('/sws/go/billing/purchases')) {
       if (!init.method) {
@@ -175,6 +201,10 @@ function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
           ...(purchaseDataTransfer === undefined ? {} : { dataTransfer: purchaseDataTransfer }),
           ...(purchaseDataTransferEnabled === undefined ? {} : { dataTransferEnabled: purchaseDataTransferEnabled }) });
       }
+      // The submit posts here now, so a test that wants the purchase to fail overrides this
+      // route. Checked before `requests.push` so a rejected purchase records no request —
+      // spreading a function into the success body would silently answer 200 instead.
+      if (typeof checkout === 'function') return checkout();
       requests.push({ url, init, body: JSON.parse(init.body || '{}') });
       if (checkoutError) return jsonResponse(checkoutError, { ok: false, status: 409 });
       return jsonResponse({
@@ -194,6 +224,10 @@ function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
       return typeof entry === 'function' ? entry() : jsonResponse({ status: entry });
     }
     if (target.includes('/sws/go/checkout/sessions')) {
+      // A function lets a test fail THIS route specifically. Sequencing responses with
+      // mockImplementationOnce cannot: mount now fires two lookups (environments and the plan
+      // catalog) whose order is not guaranteed.
+      if (typeof checkout === 'function') return checkout();
       requests.push({ url, init, body: JSON.parse(init.body || '{}') });
       return jsonResponse({
         requestId: 'upgrade-request-1',
@@ -300,6 +334,9 @@ function setupCheckoutReturn({
 async function renderUpgradePage({ advanceCheckout = true, advanceAddons = true } = {}) {
   render(<UpgradePage />);
   await waitFor(() => expect(screen.queryByTestId('upgrade-account-loading')).not.toBeInTheDocument());
+  // The plan catalog settles independently of the environments lookup, and the submit stays
+  // disabled until it does — there is no plan key to send before then.
+  await waitFor(() => expect(screen.queryByTestId('upgrade-plans-loading')).not.toBeInTheDocument());
   if (advanceCheckout && screen.queryByTestId('upgrade-plan-continue')) {
     screen.getByTestId('upgrade-plan-continue').click();
     // The step change re-renders after the click returns, so the add-ons step has to be awaited
@@ -339,87 +376,6 @@ afterEach(() => {
 });
 
 describe('UpgradePage — hosted checkout', () => {
-  it('displays the amount, currency, and interval returned by the billing offer', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      offer: { code: 'productive-tenant', amountMinor: 1000, currency: 'USD', interval: 'year' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    const expectedAmount = formatCurrency('USD', 10);
-    const planCard = screen.getByTestId('upgrade-plan-productive');
-    expect(planCard).toHaveTextContent(displayed(`${expectedAmount} / upgradeBillingIntervalYear`));
-    expect(planCard).not.toHaveTextContent('upgradeCheckoutMonth');
-    expect(planCard).not.toHaveTextContent('49');
-  });
-
-  it('uses Stripe whole-unit amounts for zero-decimal currencies and ISK compatibility amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'JPY', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('JPY', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-  });
-
-  it('displays Stripe ISK compatibility amounts in whole units', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'ISK', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('ISK', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-    expect(screen.getByTestId('upgrade-plan-productive')).not.toHaveTextContent('12,34');
-  });
-
-  it('displays Stripe UGX compatibility amounts in whole units', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'UGX', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('UGX', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-  });
-
-  it('preserves two-decimal HUF charge amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'HUF', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('HUF', 12.34)} / upgradeBillingIntervalMonth`));
-  });
-
-  it('preserves two-decimal TWD charge amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'TWD', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('TWD', 12.34)} / upgradeBillingIntervalMonth`));
-  });
-
-  it('does not show a numeric fallback when the billing offer is unavailable', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      offer: null,
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    const planCard = screen.getByTestId('upgrade-plan-productive');
-    expect(planCard).toHaveTextContent('upgradePlanProductivePriceUnavailable');
-    expect(planCard).not.toHaveTextContent('49');
-  });
-
   it('uses customer-facing retry and payment copy in every supported locale', () => {
     const locales = [enUs, esEs, esAr];
     for (const locale of locales) {
@@ -435,6 +391,22 @@ describe('UpgradePage — hosted checkout', () => {
       expect(customerMessages[2]).toMatch(/charged again|sin volver a pagar|no se te volverá a cobrar|cobrar de nuevo|cobrar otra vez/i);
       expect(customerMessages[3]).toMatch(/company selector|selector de empresa/i);
     }
+  });
+
+  // The page shows `ui(error.code)` for every known code, and `useUI()` echoes the raw key when the
+  // active dictionary lacks it. There is no locale-to-locale fallback: `LocaleProvider` hands
+  // `useUI` only `dictionaries[locale]`, and `core.es_AR.json` is es_AR.json alone, so es_AR is
+  // checked like the other two. A code added without its copy fails here instead of reaching a user.
+  it.each([
+    ['en_US', enUs],
+    ['es_ES', esEs],
+    ['es_AR', esAr],
+  ])('%s translates every UPGRADE_ERROR_CODES value', (_name, locale) => {
+    const untranslated = Object.values(UPGRADE_ERROR_CODES).filter((key) => {
+      const value = locale.genericLabels?.[key];
+      return typeof value !== 'string' || value.trim() === '' || value === key;
+    });
+    expect(untranslated).toEqual([]);
   });
 
   it('renders no raw card fields', async () => {
@@ -464,6 +436,8 @@ describe('UpgradePage — hosted checkout', () => {
       action: 'productive-tenant',
       clientName: 'Acme Trial',
       upgradeAction: 'create-productive',
+      // The key the catalog handed over — never a literal written in this page, and never a price.
+      planKey: 'productive-monthly',
       language: 'es_ES',
     });
     expect(JSON.stringify(requests[0].body)).not.toMatch(/card|paymentToken|mock-paid|priceId|amount/i);
@@ -490,14 +464,10 @@ describe('UpgradePage — hosted checkout', () => {
 
   it('surfaces a checkout creation failure without redirecting', async () => {
     const user = userEvent.setup();
-    const requests = installFetch({ environments: [{ clientName: 'Acme Trial' }] });
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: 'Acme Trial' }] }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ canManageBilling: true, purchases: [] }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
-      { message: 'Stripe unavailable' },
-      { ok: false, status: 503 }
-    ));
+    const requests = installFetch({
+      environments: [{ clientName: 'Acme Trial' }],
+      checkout: () => jsonResponse({ message: 'Stripe unavailable' }, { ok: false, status: 503 }),
+    });
     await renderUpgradePage();
 
     await user.click(screen.getByTestId('upgrade-submit'));
@@ -505,6 +475,426 @@ describe('UpgradePage — hosted checkout', () => {
     expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradeCheckoutCreationFailed');
     expect(assignMock).not.toHaveBeenCalled();
     expect(requests).toHaveLength(0);
+  });
+
+  // ETP-5046 — the server's legacy price fallback retires itself when the first priced plan is
+  // created. A page loaded before that flip still offers the old plan, and the server refuses it
+  // with 400 PLAN_NOT_AVAILABLE. The buyer must be told to RELOAD (the plan list is stale), not
+  // shown the generic "checkout failed" that invites retrying a plan that is gone.
+  it('tells the buyer to reload when the plan they chose is no longer available', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: 'Acme Trial' }],
+      checkout: () => jsonResponse(
+        { error: { code: 'PLAN_NOT_AVAILABLE', message: 'The selected plan is no longer available.' } },
+        { ok: false, status: 400 },
+      ),
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    const error = await screen.findByTestId('upgrade-error');
+    expect(error).toHaveTextContent('upgradePlanNotAvailable');
+    expect(error).not.toHaveTextContent('upgradeCheckoutCreationFailed');
+    expect(assignMock).not.toHaveBeenCalled();
+    // The key renders real copy in both shipped languages, and that copy asks for a reload.
+    expect(enUs.genericLabels.upgradePlanNotAvailable).toMatch(/reload/i);
+    expect(esEs.genericLabels.upgradePlanNotAvailable).toMatch(/recarga/i);
+  });
+});
+
+/**
+ * The plan catalog (ETP-5046), chosen on the Plan step since ETP-5049. The checkout endpoint
+ * REQUIRES a plan key and has no default, so the page cannot complete a purchase without asking
+ * the server what is for sale. These specs pin the three catalog shapes and, above all, that the
+ * page never invents a key.
+ */
+describe('UpgradePage — plan catalog', () => {
+  const SECOND_PLAN = {
+    planKey: 'productive-yearly',
+    name: 'Productive annual',
+    description: 'Twelve months up front',
+    displayPrice: '490.00',
+    currency: 'EUR',
+    billingInterval: 'year',
+  };
+
+  it('selects the only purchasable plan and shows what is being bought', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    // Step 1 shows the catalog plan itself — its name and its price, never a static card.
+    const card = screen.getByTestId('upgrade-plan-card-productive-monthly');
+    expect(card).toHaveAttribute('data-selected', 'true');
+    expect(within(card).getByTestId('upgrade-plan-name')).toHaveTextContent('Productive');
+    // Formatted through the canonical formatCurrency, never a hand-rolled toFixed/Intl call.
+    expect(within(card).getByTestId('upgrade-plan-price'))
+      .toHaveTextContent(displayed(formatCurrency('EUR', '49.00')));
+    expect(screen.queryByTestId('upgrade-plan-productive')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-coming-soon-1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-plan-continue'));
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+
+    // Step 3 summarizes the choice read-only: no second chooser.
+    expect(screen.getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive');
+    expect(screen.getByTestId('upgrade-plan-summary-price')).toHaveTextContent('49,00');
+    expect(screen.queryByTestId('upgrade-plan-choice')).not.toBeInTheDocument();
+  });
+
+  it('sends the catalog key and no price when there is a single plan', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    // ETP-5396 made the tenant name read-only on this step: it is taken from the demo
+    // environment rather than typed, so the fixture above supplies it.
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-monthly');
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/price/i);
+  });
+
+  it('requires a choice when the catalog offers more than one plan', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [PRODUCTIVE_PLAN, SECOND_PLAN],
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    // No default is picked for the user: the server has none either, and choosing on their
+    // behalf would charge them for something they did not select.
+    expect(screen.getByTestId('upgrade-plan-card-productive-monthly')).toHaveAttribute('data-selected', 'false');
+    expect(screen.getByTestId('upgrade-plan-card-productive-yearly')).toHaveAttribute('data-selected', 'false');
+    expect(screen.getByTestId('upgrade-plan-continue')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
+
+    await user.click(within(screen.getByTestId('upgrade-plan-card-productive-yearly'))
+      .getByTestId('upgrade-plan-select'));
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+
+    expect(screen.getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-yearly');
+  });
+
+  it('blocks checkout when nothing is purchasable', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [] });
+    await renderUpgradePage();
+
+    // The Plan step says so and offers no way forward: there is no plan key to send.
+    expect(screen.getByTestId('upgrade-plans-unavailable')).toHaveTextContent('upgradePlansEmpty');
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
+  });
+
+  it('blocks checkout and offers a retry when the catalog cannot be read', async () => {
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ message: 'boom' }, { ok: false, status: 503 }),
+    });
+    await renderUpgradePage();
+
+    // Never a hardcoded fallback key: the unreviewed-purchase failure mode this design forbids
+    // is exactly what a guess here would reintroduce.
+    expect(screen.getByTestId('upgrade-plans-unavailable'))
+      .toHaveTextContent('upgradePlansUnavailable');
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-plans-retry')).toBeInTheDocument();
+  });
+
+  it('recovers the catalog when the retry succeeds', async () => {
+    const user = userEvent.setup();
+    let attempt = 0;
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => {
+        attempt += 1;
+        return attempt === 1
+          ? jsonResponse({ message: 'boom' }, { ok: false, status: 503 })
+          : jsonResponse({ plans: [PRODUCTIVE_PLAN] });
+      },
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-plans-retry'));
+
+    expect(await screen.findByTestId('upgrade-plan-card-productive-monthly')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-plan-continue')).toBeEnabled();
+  });
+
+  // --- The Plan step as a chooser (ETP-5049) -------------------------------------------------
+
+  const THIRD_PLAN = {
+    planKey: 'productive-plus',
+    name: 'Productive Plus',
+    description: 'More users and storage',
+    displayPrice: '1234.50',
+    currency: 'EUR',
+    billingInterval: 'month',
+  };
+  const PRICE_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
+  /** What a card says for a plan's price under this file's i18n mock: key + formatted amount. */
+  const priceText = plan => displayed(`${PRICE_KEYS[plan.billingInterval]} ${formatCurrency(plan.currency, plan.displayPrice)}`);
+  const card = plan => screen.getByTestId(`upgrade-plan-card-${plan.planKey}`);
+  const selectPlan = plan => userEvent.setup().click(within(card(plan)).getByTestId('upgrade-plan-select'));
+  /** Back to step 1 through the stepper, which is enabled for any step already reached. */
+  async function backToPlanStep(user) {
+    await user.click(screen.getByTestId('upgrade-checkout-step-plan'));
+    await waitFor(() => expect(screen.getByTestId('upgrade-plan-catalog')).toBeInTheDocument());
+  }
+  function expectSelected(plan, selected) {
+    expect(card(plan)).toHaveAttribute('data-selected', String(selected));
+    expect(within(card(plan)).getByTestId('upgrade-plan-select')).toHaveAttribute('aria-pressed', String(selected));
+    const badge = within(card(plan)).queryByTestId('upgrade-plan-selected-badge');
+    if (selected) expect(badge).toHaveTextContent('upgradePlanSelectedBadge');
+    else expect(badge).not.toBeInTheDocument();
+  }
+
+  it.each([
+    ['two', [PRODUCTIVE_PLAN, SECOND_PLAN]],
+    ['three', [PRODUCTIVE_PLAN, SECOND_PLAN, THIRD_PLAN]],
+  ])('shows one card per catalog plan, from the catalog, none preselected (%s plans)', async (_count, catalog) => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: catalog });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const catalogGroup = screen.getByTestId('upgrade-plan-catalog');
+    const cards = within(catalogGroup).getAllByTestId(/^upgrade-plan-card-/);
+    expect(cards.map(element => element.dataset.testid))
+      .toEqual(catalog.map(plan => `upgrade-plan-card-${plan.planKey}`));
+    for (const plan of catalog) {
+      expect(within(card(plan)).getByTestId('upgrade-plan-name')).toHaveTextContent(plan.name);
+      expect(within(card(plan)).getByTestId('upgrade-plan-description')).toHaveTextContent(plan.description);
+      expect(within(card(plan)).getByTestId('upgrade-plan-price')).toHaveTextContent(priceText(plan));
+      expectSelected(plan, false);
+    }
+    expect(screen.queryAllByTestId('upgrade-plan-selected-badge')).toHaveLength(0);
+  });
+
+  it('moves the selected badge, aria-pressed and data-selected with the click', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [PRODUCTIVE_PLAN, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(SECOND_PLAN);
+    // Choosing a card moves on to the add-ons.
+    await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
+    await backToPlanStep(user);
+    expectSelected(SECOND_PLAN, true);
+    expectSelected(PRODUCTIVE_PLAN, false);
+
+    await selectPlan(PRODUCTIVE_PLAN);
+    await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
+    await backToPlanStep(user);
+    expectSelected(PRODUCTIVE_PLAN, true);
+    expectSelected(SECOND_PLAN, false);
+    expect(screen.getAllByTestId('upgrade-plan-selected-badge')).toHaveLength(1);
+  });
+
+  it('summarizes the chosen plan name and price on the Add-ons step', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [PRODUCTIVE_PLAN, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(SECOND_PLAN);
+
+    expect(await screen.findByTestId('upgrade-checkout-summary-plan')).toHaveTextContent('Productive annual');
+    expect(screen.getByTestId('upgrade-checkout-summary-price')).toHaveTextContent(priceText(SECOND_PLAN));
+  });
+
+  it('shows a read-only summary on the Payment step, with no chooser, and sends only the chosen key', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [PRODUCTIVE_PLAN, SECOND_PLAN, THIRD_PLAN],
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(THIRD_PLAN);
+    await user.click(await screen.findByTestId('upgrade-addons-continue'));
+
+    const summary = await screen.findByTestId('upgrade-plan-summary');
+    expect(within(summary).getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive Plus');
+    expect(within(summary).getByTestId('upgrade-plan-summary-price')).toHaveTextContent(priceText(THIRD_PLAN));
+    expect(screen.queryByTestId('upgrade-plan-catalog')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-select')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^upgrade-plan-card-/)).toHaveLength(0);
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-plus');
+    expect(requests[0].body).not.toHaveProperty('priceId');
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/price|amount|1234/i);
+  });
+
+  it('shows the bare amount for a billing interval it does not know', async () => {
+    const weekly = { ...PRODUCTIVE_PLAN, planKey: 'productive-weekly', billingInterval: 'week' };
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [weekly] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const price = within(card(weekly)).getByTestId('upgrade-plan-price');
+    // Never asserted as "per month": no price key at all, only the formatted amount.
+    expect(displayed(price.textContent).trim()).toBe(displayed(formatCurrency('EUR', '49.00')));
+    expect(price).not.toHaveTextContent(/upgradePlanPrice/);
+  });
+
+  it('renders a plan that has no description', async () => {
+    const user = userEvent.setup();
+    const bare = { planKey: 'productive-bare', name: 'Bare', displayPrice: '10.00', currency: 'EUR', billingInterval: 'month' };
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [bare, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(within(card(bare)).getByTestId('upgrade-plan-name')).toHaveTextContent('Bare');
+    expect(within(card(bare)).getByTestId('upgrade-plan-price')).toHaveTextContent(priceText(bare));
+    expect(within(card(bare)).queryByTestId('upgrade-plan-description')).not.toBeInTheDocument();
+
+    await selectPlan(bare);
+    await user.click(await screen.findByTestId('upgrade-addons-continue'));
+    expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Bare');
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-bare');
+  });
+
+  it('says the session expired, and blocks going forward, when the catalog answers 401', async () => {
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ error: { message: 'Invalid or expired token' } }, { ok: false, status: 401 }),
+    });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-plans-session-expired')).toHaveTextContent('upgradeSessionExpired');
+    // Not an unreadable catalog: retrying the same request cannot help.
+    expect(screen.queryByTestId('upgrade-plans-unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plans-retry')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-catalog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-checkout-step-payment')).toBeDisabled();
+    expect(screen.queryByTestId('upgrade-submit')).not.toBeInTheDocument();
+  });
+
+  it('offers to sign in again when the catalog answers 401, landing on the login view', async () => {
+    const user = userEvent.setup();
+    logoutMock.mockClear();
+    localStorage.removeItem('sf_onboarding_initial_view');
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ error: { message: 'Invalid or expired token' } }, { ok: false, status: 401 }),
+    });
+    await renderUpgradePage();
+
+    const signIn = screen.getByTestId('upgrade-plans-sign-in-again');
+    expect(signIn).toHaveTextContent('accountSignInAgain');
+    await user.click(signIn);
+    expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a catalog re-read on the Payment step', () => {
+    /** Environments fail once, so the Payment step offers a retry that re-reads both lookups. */
+    function environmentsFailingOnce() {
+      let attempt = 0;
+      return () => {
+        attempt += 1;
+        return attempt === 1
+          ? jsonResponse({ error: { message: 'boom' } }, { ok: false, status: 503 })
+          : jsonResponse({ environments: [{ clientName: EXISTING_TENANT, clientId: 'CLIENT-1' }] });
+      };
+    }
+    /** Answers the catalog lookups in order, repeating the last answer. */
+    function plansInSequence(...answers) {
+      let attempt = 0;
+      return () => {
+        const answer = answers[Math.min(attempt, answers.length - 1)];
+        attempt += 1;
+        return answer === 'fail'
+          ? jsonResponse({ message: 'boom' }, { ok: false, status: 503 })
+          : jsonResponse({ plans: answer });
+      };
+    }
+    const plansReads = () => globalThis.fetch.mock.calls
+      .filter(([url]) => String(url).includes('/sws/go/plans')).length;
+    /** The retry re-read both lookups and both have settled. */
+    async function settledAfterReread(expectedReads) {
+      await waitFor(() => expect(plansReads()).toBe(expectedReads));
+      await waitFor(() => expect(screen.queryByTestId('upgrade-environments-unavailable')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByTestId('upgrade-plans-loading')).not.toBeInTheDocument());
+    }
+    async function choosePlanAndReachPayment(user, plan) {
+      await renderUpgradePage({ advanceCheckout: false });
+      await selectPlan(plan);
+      await user.click(await screen.findByTestId('upgrade-addons-continue'));
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent(plan.name);
+    }
+
+    it('keeps the chosen plan when the re-read succeeds', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
+      await user.click(screen.getByTestId('upgrade-submit'));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].body.planKey).toBe('productive-yearly');
+    });
+
+    it('restores the chosen plan when a failed re-read is retried', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN], 'fail', [PRODUCTIVE_PLAN, SECOND_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+      // The re-read failed: the summary gives way to the retry, and nothing can be bought.
+      expect(await screen.findByTestId('upgrade-plans-retry')).toBeInTheDocument();
+      expect(screen.queryByTestId('upgrade-plan-summary')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('upgrade-plans-retry'));
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
+      await user.click(screen.getByTestId('upgrade-submit'));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].body.planKey).toBe('productive-yearly');
+    });
+
+    it('drops the choice, and asks for one, when the catalog no longer offers it', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN], [PRODUCTIVE_PLAN, THIRD_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+      expect(screen.queryByTestId('upgrade-plan-summary')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('upgrade-submit'));
+      expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradePlanRequired');
+      expect(requests).toHaveLength(0);
+
+      // A way back to the chooser, rather than a dead end with no plan to pick.
+      const choose = screen.getByTestId('upgrade-plan-summary-choose');
+      expect(choose).toHaveTextContent('upgradePlanChoiceLabel');
+      await user.click(choose);
+      expect(await screen.findByTestId('upgrade-plan-catalog')).toBeInTheDocument();
+      expect(screen.queryByTestId('upgrade-submit')).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -712,14 +1102,10 @@ describe('UpgradePage — checkout funnel tracking', () => {
 
   it('tracks a checkout-session creation failure without a duration, since provisioning never started', async () => {
     const user = userEvent.setup();
-    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: EXISTING_TENANT }] }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ canManageBilling: true, purchases: [] }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
-      { message: 'Stripe unavailable' },
-      { ok: false, status: 503 }
-    ));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      checkout: () => jsonResponse({ message: 'Stripe unavailable' }, { ok: false, status: 503 }),
+    });
     await renderUpgradePage();
 
     await user.click(screen.getByTestId('upgrade-submit'));
@@ -1118,6 +1504,7 @@ describe('UpgradePage — clientName resolution on submit (upgrade clientName bu
       action: 'productive-tenant',
       clientName: 'Acme Second Co',
       upgradeAction: 'create-productive',
+      planKey: 'productive-monthly',
       language: 'es_ES',
     });
     expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBe('Acme Second Co');
@@ -1220,6 +1607,16 @@ describe('UpgradePage — current-environment prefill and taken-name guard (ETP-
 });
 
 describe('UpgradePage — provisioning environment synchronization (ETP-5443)', () => {
+  it('reads the trial pill in the singular with one day left (ETP-5049)', async () => {
+    UPGRADE_SESSION.clientId = 'CURRENT-DEMO';
+    installFetch({ environments: [
+      { clientName: 'Current Demo', clientId: 'CURRENT-DEMO', plan: 'demo', trialDaysRemaining: 1 },
+    ] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(await screen.findByTestId('upgrade-trial-pill')).toHaveTextContent('environmentTrialDaysRemainingOne');
+  });
+
   it('requires the user to choose a demo source when starting from a demo with multiple demos', async () => {
     const user = userEvent.setup();
     UPGRADE_SESSION.clientId = 'CURRENT-DEMO';
@@ -1330,6 +1727,127 @@ describe('UpgradePage — provisioning environment synchronization (ETP-5443)', 
     expect(requests[0].body).not.toHaveProperty('demoClientId');
     expect(requests[0].body).not.toHaveProperty('dataTransfer');
     expect(sessionStorage.getItem('sf_pending_checkout_data_transfer')).toBe('{}');
+  });
+
+  /**
+   * ETP-5047: a canceled subscription makes the backend report `plan: 'free'` for a productive
+   * environment, with `environmentType: 'PRODUCTIVE'`. It is not a demo: a purchase from it is a
+   * clean productive environment (no picker, no self-preselect, no transfer), and from a demo it is
+   * never offered as the source.
+   */
+  const CANCELED_PRODUCTIVE = {
+    clientName: 'Canceled Productive', clientId: 'CANCELED-PROD', plan: 'free',
+    environmentType: 'PRODUCTIVE', subscriptionStatus: 'EXPIRED',
+    accessState: 'SUBSCRIPTION_REQUIRED', associatedWithProductive: false,
+  };
+
+  it('treats a canceled productive origin as productive: no source, no self-preselect, no transfer', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CANCELED-PROD';
+    const requests = installFetch({ environments: [
+      CANCELED_PRODUCTIVE,
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-source-demo-field')).not.toBeInTheDocument();
+    const nameInput = screen.getByTestId('upgrade-tenant-name-input');
+    expect(nameInput).toHaveValue('');
+    await user.type(nameInput, 'Fresh Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).not.toHaveProperty('demoClientId');
+    expect(requests[0].body).not.toHaveProperty('dataTransfer');
+  });
+
+  it('never offers a canceled productive environment as the source of a demo purchase', async () => {
+    UPGRADE_SESSION.clientId = 'TRIAL-1';
+    installFetch({ environments: [
+      CANCELED_PRODUCTIVE,
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+    ] });
+    await renderUpgradePage();
+
+    const sourceSelect = screen.getByTestId('upgrade-source-demo-select');
+    const offered = [...sourceSelect.querySelectorAll('option')].map(option => option.value);
+    expect(offered).toEqual(['', 'TRIAL-1']);
+    expect(sourceSelect).toHaveValue('TRIAL-1');
+  });
+
+  // The kill switch lets a canceled environment keep working: access reads ALLOWED although the
+  // subscription is EXPIRED. The type alone keeps it out of the source flow, whatever the access.
+  it('treats a canceled productive origin with kill-switch access as productive: no source, no transfer', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CANCELED-PROD';
+    const requests = installFetch({ environments: [
+      { ...CANCELED_PRODUCTIVE, accessState: 'ALLOWED' },
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-source-demo-field')).not.toBeInTheDocument();
+    const nameInput = screen.getByTestId('upgrade-tenant-name-input');
+    expect(nameInput).toHaveValue('');
+    await user.type(nameInput, 'Fresh Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe('Fresh Productive');
+    expect(requests[0].body).not.toHaveProperty('demoClientId');
+    expect(requests[0].body).not.toHaveProperty('dataTransfer');
+  });
+
+  it('omits demo identity and transfer data after a Stripe return to a canceled productive origin', async () => {
+    UPGRADE_SESSION.clientId = 'CANCELED-PROD';
+    setupCheckoutReturn({ tenantName: 'New Productive' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer', JSON.stringify({ products: true, contacts: true }));
+    const requests = installFetch({
+      environments: (() => {
+        let reads = 0;
+        const beforeProvision = [
+          CANCELED_PRODUCTIVE,
+          { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+        ];
+        return () => jsonResponse({ environments: reads++ === 0 ? beforeProvision : [
+          ...beforeProvision,
+          { clientName: 'New Productive', clientId: 'CREATED-PRODUCTIVE', plan: 'productive' },
+        ] });
+      })(),
+      purchases: [{ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'New Productive' }],
+      // The server persists no demo source for a purchase started in a productive environment.
+      statuses: ['paid'],
+      onboarding: () => successStream({ clientId: 'CREATED-PRODUCTIVE' }),
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    const onboardingCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/sws/go/onboarding'));
+    expect(onboardingCall).toBeTruthy();
+    const body = JSON.parse(onboardingCall[1].body);
+    expect(body).not.toHaveProperty('demoClientId');
+    expect(body).not.toHaveProperty('dataTransfer');
+    expect(requests).toHaveLength(0);
+  });
+
+  // Pinned, not endorsed: the taken-name guard is plan-based, so a canceled productive
+  // environment (plan "free") does not reserve its name on the client. Whether it should is open
+  // (register §4.13 item 12, ETP-5742); a change here must be deliberate.
+  it('does not treat a canceled productive environment name as taken on the client', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [CANCELED_PRODUCTIVE] });
+    await renderUpgradePage();
+
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'CANCELED PRODUCTIVE');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(screen.queryByTestId('upgrade-tenant-name-taken')).not.toBeInTheDocument();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe('CANCELED PRODUCTIVE');
   });
 
   it('omits demo identity and transfer data after a Stripe return to a productive origin', async () => {

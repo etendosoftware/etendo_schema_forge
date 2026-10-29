@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/shared/SifTab.jsx
+// @covers tools/app-shell/src/windows/custom/shared/useSifFieldPatcher.js
 // Mocks must be declared before any imports that pull in the mocked modules.
 
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
@@ -415,6 +417,15 @@ describe('SifTab', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: false } })} />);
       const wrapper = document.querySelector('#sif-siiType').closest('[data-testid="select-wrapper"]');
       expect(wrapper).toHaveAttribute('data-disabled', 'false');
+    });
+
+    it('locks Tipo factura and Descripción SII on a draft for a read-only role (ETP-5830)', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', processed: false, aeatsiiDescripcionSii: 'Draft desc' },
+      })} accessReadOnly />);
+      const wrapper = document.querySelector('#sif-siiType').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'true');
+      expect(screen.getByTestId('input-sif-siiDesc')).toBeDisabled();
     });
 
     it('Tipo factura select stays enabled when documentStatus looks completed but processed is still false', () => {
@@ -1372,6 +1383,127 @@ describe('SifTab', () => {
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'CO' }, onChange })} />);
       expect(onChange).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── aeatsiiClaveTipo/aeatsiiClaveTipoFc auto-set-to-R effect (ETP-4783, scoped
+  //    to sales-only by ETP-5745 CP-10) ─────────────────────────────────────────
+  //
+  // CP-10 root cause: this effect used to force `aeatsiiClaveTipoFc` to 'R' on PURCHASE
+  // invoices too, even though `PURCHASE_CLAVE_TIPO_FC_OPTIONS` never offers 'R' as a
+  // choice — the UI silently set a value the user never picked, and it then failed the
+  // (correct) reference-list validation on save. Corrected behavior: purchase invoices
+  // are excluded entirely (`isPurchaseInvoice` guard) and stay at whatever the user set
+  // (defaulting to 'F1'); sales invoices keep the original auto-set behavior unchanged.
+  describe('aeatsiiClaveTipo auto-set-to-R effect (ETP-4783, sales-only per ETP-5745 CP-10)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('sales: auto-sets aeatsiiClaveTipo to R when the invoice is rectificative and no value exists yet', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true }, onChange })} />);
+      expect(onChange).toHaveBeenCalledWith('aeatsiiClaveTipo', 'R');
+    });
+
+    it('sales: does not re-fire once aeatsiiClaveTipo is already R', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipo: 'R' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', expect.anything());
+    });
+
+    it('sales: does not fire when the invoice is not rectificative', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: false }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipo', expect.anything());
+    });
+
+    // ETP-5745 CP-10 — the corrected behavior under test.
+    it('purchase: NEVER auto-sets aeatsiiClaveTipoFc to R, even when the invoice is rectificative', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipoFc', expect.anything());
+    });
+
+    it('purchase: leaves an existing F1 value on aeatsiiClaveTipoFc untouched for a rectificative invoice', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', isRectificative: true, aeatsiiClaveTipoFc: 'F1' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiClaveTipoFc', expect.anything());
+    });
+  });
+
+  // ── aeatsiiTipoRectif auto-default effect (ETP-5745 CP-11) ─────────────────
+  //
+  // `EM_AEATSII_C_INV_RECT_CHK` (the DB check constraint) requires BOTH
+  // aeatsiiMotivoRectif AND aeatsiiTipoRectif non-null once the SII type is 'R' —
+  // on sales (aeatsiiClaveTipo) AND on purchase (aeatsiiClaveTipoFc), since the
+  // constraint's ISSOTRX branches cover both. The field has no UI select (hidden,
+  // form:false in decisions.json); SifTab only ever lets the user set the Motivo.
+  // Before this fix, confirming a rectificativa whose aeatsiiTipoRectif was never
+  // populated (e.g. created via "Import from source invoice") failed with a raw,
+  // untranslated DB constraint violation instead of completing.
+  describe('aeatsiiTipoRectif auto-default effect (ETP-5745 CP-11)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('sales: calls onChange with I when the SII type is R and no value exists yet', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />);
+      expect(onChange).toHaveBeenCalledWith('aeatsiiTipoRectif', 'I');
+    });
+
+    it('purchase: calls onChange with I when the SII type (ClaveTipoFc) is R and no value exists yet', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', aeatsiiClaveTipoFc: 'R' },
+        onChange,
+      })} />);
+      expect(onChange).toHaveBeenCalledWith('aeatsiiTipoRectif', 'I');
+    });
+
+    it('never clobbers an existing aeatsiiTipoRectif value', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R', aeatsiiTipoRectif: 'S' },
+        onChange,
+      })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiTipoRectif', expect.anything());
+    });
+
+    it('does not default when the SII type is not R', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'F1' }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiTipoRectif', expect.anything());
+    });
+
+    it('does not default for a completed (non-draft) invoice', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', aeatsiiClaveTipo: 'R' }, onChange })} />);
+      expect(onChange).not.toHaveBeenCalledWith('aeatsiiTipoRectif', expect.anything());
+    });
+
+    it('does not re-fire for the same record on a re-render', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />
+      );
+      expect(onChange.mock.calls.filter(c => c[0] === 'aeatsiiTipoRectif')).toHaveLength(1);
+
+      rerender(<SifTab {...makeProps({ data: { documentStatus: 'DR', aeatsiiClaveTipo: 'R' }, onChange })} />);
+      expect(onChange.mock.calls.filter(c => c[0] === 'aeatsiiTipoRectif')).toHaveLength(1);
     });
   });
 

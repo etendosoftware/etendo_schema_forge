@@ -2,10 +2,12 @@ import { useCallback } from 'react';
 import { useAuthOptional, notifyAmbientUnauthorized } from '@etendosoftware/app-shell-core/auth';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { reset } from '../lib/observability.js';
+import { forgetSupportSessionMarker } from '../lib/supportSession.js';
+import { setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 
 /**
  * Returns a logout function that resets session-scoped UI state (the dashboard
- * period filter) before delegating to the core logout.
+ * period filter, the environment-access block) before delegating to the core logout.
  *
  * Use this everywhere instead of `useAuth().logout` so that EVERY exit path —
  * the user menu, the post-password-change flow, and the automatic 401
@@ -22,12 +24,21 @@ export function useLogout() {
   const logout = auth?.logout;
   return useCallback(() => {
     clearStoredDateRange();
+    // ETP-5047 — forget a recorded environment-access block. `fetchWindowAccess` clears it only
+    // on a granted access map, and this logout stays in the SPA (no reload), so the next login
+    // in this tab would otherwise open on the previous session's blocked screen.
+    setEnvironmentAccessDecision(null);
     // Reset the observability identity before logging out: otherwise the
     // account_id super-property set during this session stays registered
     // inside the Mixpanel SDK and can leak into events fired by the NEXT
     // login in this same browser (see providers/mixpanel.js). Fire-and-forget
     // so a slow/failed provider never blocks the actual logout.
     void reset(); // NOSONAR -- intentional fire-and-forget, same pattern as health-events.js's void track()/group() calls.
+    // ETP-5351 — a support session's marker must not outlive an explicit logout, or the next load
+    // of this browser would start in support mode until /me said otherwise. Only the persisted
+    // marker: this tab stays in support mode (analytics included) until a new session's /me
+    // confirms it is not one.
+    forgetSupportSessionMarker();
     return (logout || notifyAmbientUnauthorized)();
   }, [logout]);
 }

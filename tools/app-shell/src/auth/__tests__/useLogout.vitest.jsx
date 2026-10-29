@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/auth/useLogout.js
 import { renderHook, act } from '@testing-library/react';
 
 // Mock the core auth so we control (and observe) the underlying logout.
@@ -12,6 +13,13 @@ vi.mock('@etendosoftware/app-shell-core/auth', () => ({
 }));
 
 import { useLogout } from '../useLogout';
+import {
+  getEnvironmentAccessDecision,
+  resetEnvironmentAccessGateForTest,
+  setEnvironmentAccessDecision,
+} from '@/lib/environmentAccessGate.js';
+
+import { SUPPORT_SESSION_STORAGE_KEY } from '@/lib/supportSession.js';
 
 const STORAGE_KEY = 'dashboard_date_range';
 
@@ -20,6 +28,7 @@ describe('useLogout', () => {
     vi.clearAllMocks();
     sessionStorage.clear();
     localStorage.clear();
+    resetEnvironmentAccessGateForTest();
   });
 
   afterEach(() => {
@@ -67,5 +76,33 @@ describe('useLogout', () => {
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(coreLogout).toHaveBeenCalledTimes(1);
+  });
+
+  // ETP-5351 — a support session's persisted marker must not outlive an explicit logout.
+  it('forgets the support session marker on logout', () => {
+    localStorage.setItem(SUPPORT_SESSION_STORAGE_KEY, '{"clientId":"C1"}');
+    const { result } = renderHook(() => useLogout());
+    act(() => result.current());
+    expect(localStorage.getItem(SUPPORT_SESSION_STORAGE_KEY)).toBeNull();
+    expect(coreLogout).toHaveBeenCalledTimes(1);
+  });
+
+  // ETP-5047 — `fetchWindowAccess` clears a recorded environment-access block only on a granted
+  // access map, never on a 401/500. The in-SPA logout does not reload the page, so without this
+  // the next login in the same tab would open on the previous session's blocked screen until its
+  // own access map answered (and stay there if that call failed).
+  it('forgets a recorded environment-access block before calling the core logout', () => {
+    setEnvironmentAccessDecision('SUBSCRIPTION_REQUIRED');
+    let decisionAtLogout = 'unset';
+    coreLogout.mockImplementation(() => {
+      decisionAtLogout = getEnvironmentAccessDecision();
+    });
+
+    const { result } = renderHook(() => useLogout());
+    act(() => result.current());
+
+    expect(coreLogout).toHaveBeenCalledTimes(1);
+    expect(decisionAtLogout).toBeNull();
+    expect(getEnvironmentAccessDecision()).toBeNull();
   });
 });

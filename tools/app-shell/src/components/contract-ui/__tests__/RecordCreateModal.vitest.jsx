@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/RecordCreateModal.jsx
 /**
  * ETP-5254 — RecordCreateModal creates a record of ANOTHER spec using that spec's own
  * generated form, laid out to read like that spec's own window.
@@ -34,7 +35,13 @@ const mocks = vi.hoisted(() => ({
   // mount effect (the real `useUI` is memoized on the dictionary), so a fresh function per
   // render would re-fire the effect forever. Same reasoning for `coreDict`/`localeSwitch`,
   // which feed the `modalDictionaries` memo.
-  ui: (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  // A param-less key that has a translation must resolve to something OTHER than the key:
+  // `translateBackendError` treats "returned the key" as "no translation" and falls back to the
+  // backend's prose. `backendError.quotaCheckFailed` (ETP-5051) is such a key.
+  ui: (key, params) => {
+    if (params) return `${key}:${JSON.stringify(params)}`;
+    return key === 'backendError.quotaCheckFailed' ? `translated:${key}` : key;
+  },
   // Tab labels resolve through the MENU dictionary (`tMenu(tab.label)`), not `ui`.
   tMenu: (key) => key,
   coreDict: {
@@ -464,11 +471,11 @@ describe('RecordCreateModal', () => {
     expect(screen.getByTestId('record-create-panel-general')).toHaveClass('hidden');
   });
 
-  it('falls back to a single General tab when the target declares none', async () => {
+  it('falls back to a single General panel, with no tab strip, when the target declares no tabs (ETP-5696)', async () => {
     const tabless = { ...TARGET, tabs: undefined };
     await renderModal(baseProps({ target: tabless }));
-    const triggers = within(screen.getByTestId('record-create-tabs')).getAllByRole('button');
-    expect(triggers.map(b => b.textContent)).toEqual(['General']);
+    // One panel is not a tab group: the strip is only rendered for two or more tabs.
+    expect(screen.queryByTestId('record-create-tabs')).not.toBeInTheDocument();
     expect(screen.getByTestId('record-create-panel-general')).not.toHaveClass('hidden');
     expect(screen.queryByTestId('record-create-panel-additionalInfo')).not.toBeInTheDocument();
     expect(screen.queryByTestId('stub-form-other')).not.toBeInTheDocument();
@@ -764,6 +771,81 @@ describe('RecordCreateModal', () => {
     await waitFor(() => expect(screen.getByTestId('record-create-submit')).toBeEnabled());
   });
 
+  // ETP-5051 — a create refused by a plan quota (403 QUOTA_EXCEEDED) must read as the SPA's own
+  // translated sentence built from the quota, not as the backend's English prose.
+  it('translates a plan-quota refusal of the POST instead of showing the raw English message', async () => {
+    installApiFetch({
+      post: jsonResponse({
+        error: {
+          message: 'Quota exceeded: Products (50/50 Prod)',
+          status: 403,
+          code: 'QUOTA_EXCEEDED',
+          quota: { resourceName: 'Productos', consumed: 50, includedQty: 50, unitLabel: 'Prod' },
+        },
+      }, false),
+    });
+    const user = userEvent.setup();
+    const props = baseProps({ initialQuery: 'Agua' });
+    await renderModal(props);
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('backendError.quotaExceeded');
+    expect(error).toHaveTextContent('"resource":"Productos"');
+    expect(error).not.toHaveTextContent('Quota exceeded: Products');
+    expect(props.onCreated).not.toHaveBeenCalled();
+  });
+
+  // ETP-5051 — a create that was not saved because the quota check itself failed (500
+  // QUOTA_CHECK_FAILED) reads as the translated "nothing was saved" sentence: not the backend's
+  // English prose, not the target's generic error.
+  it('translates a failed quota check of the POST instead of the English prose or the generic error', async () => {
+    installApiFetch({
+      post: jsonResponse({
+        error: {
+          message: 'The quota check failed; nothing was saved. Try again.',
+          status: 500,
+          code: 'QUOTA_CHECK_FAILED',
+        },
+      }, false),
+    });
+    const user = userEvent.setup();
+    const props = baseProps({ initialQuery: 'Agua' });
+    await renderModal(props);
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('translated:backendError.quotaCheckFailed');
+    expect(error).not.toHaveTextContent('The quota check failed');
+    expect(error).not.toHaveTextContent('createProductError');
+    expect(props.onCreated).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByTestId('record-create-submit')).toBeEnabled());
+  });
+
+  it('keeps the backend message of any other 500 on the POST', async () => {
+    installApiFetch({
+      post: jsonResponse({
+        error: { message: 'Unexpected failure while saving', status: 500, code: 'INTERNAL_ERROR' },
+      }, false),
+    });
+    const user = userEvent.setup();
+    await renderModal(baseProps({ initialQuery: 'Agua' }));
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('Unexpected failure while saving');
+    expect(error).not.toHaveTextContent('backendError.quotaCheckFailed');
+  });
+
   it('falls back to the target error when the failed POST carries no message', async () => {
     installApiFetch({ post: { ok: false, json: async () => { throw new Error('not json'); } } });
     const user = userEvent.setup();
@@ -802,6 +884,60 @@ describe('RecordCreateModal', () => {
 
     expect(await screen.findByTestId('record-create-error')).toHaveTextContent('createProductError');
     expect(props.onCreated).not.toHaveBeenCalled();
+  });
+
+  // A target may veto the create (Contacts: the category does not grant the contact type the
+  // calling document needs). The check is awaited BEFORE the POST: a refusal shows its message
+  // and sends nothing; a `null` answer that arrives later still lets the create through.
+  it.each([
+    ['a refusal message blocks the POST and is shown', 'categoria-no-proveedor', false],
+    ['a null answer (resolved late) lets the POST through', null, true],
+  ])('validateBeforeCreate: %s', async (_label, answer, posted) => {
+    let release;
+    const validateBeforeCreate = vi.fn(() => new Promise((resolve) => { release = () => resolve(answer); }));
+    const user = userEvent.setup();
+    const props = baseProps({ initialQuery: 'Agua', target: { ...TARGET, validateBeforeCreate } });
+    await renderModal(props);
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    await waitFor(() => expect(validateBeforeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Agua', searchKey: 'typed-searchKey' }),
+    ));
+    expect(postBody()).toBeNull();
+    release();
+
+    if (posted) {
+      await waitFor(() => expect(props.onCreated).toHaveBeenCalled());
+      expect(postBody()).toMatchObject({ name: 'Agua' });
+    } else {
+      expect(await screen.findByTestId('record-create-error')).toHaveTextContent('categoria-no-proveedor');
+      expect(postBody()).toBeNull();
+      await waitFor(() => expect(screen.getByTestId('record-create-submit')).toBeEnabled());
+    }
+  });
+
+  // Contacts' `customer` / `vendor`: `/defaults` always answers them, but their mere presence in
+  // the POST disables the backend's inheritance from the category. Only a user edit sends them.
+  it('omits createOmitUntouched keys that only came from /defaults, but sends them once the user edits them', async () => {
+    installApiFetch({ defaults: { stocked: 'Y', productCategory: 'cat-default' } });
+    const user = userEvent.setup();
+    const target = { ...TARGET, createOmitUntouched: ['stocked', 'productCategory'] };
+    const props = baseProps({ initialQuery: 'Agua', target });
+    await renderModal(props);
+    await waitFor(() => expect(screen.getByTestId('value-stocked')).toHaveTextContent('Y'));
+
+    await user.click(screen.getByTestId('fill-searchKey'));
+    await user.click(screen.getByTestId('fill-taxCategory'));
+    await user.click(screen.getByTestId('fill-productCategory'));
+    await user.click(screen.getByTestId('record-create-submit'));
+
+    await waitFor(() => expect(props.onCreated).toHaveBeenCalled());
+    const body = postBody();
+    expect(body).not.toHaveProperty('stocked');
+    expect(body.productCategory).toBe('typed-productCategory');
   });
 });
 
@@ -1038,6 +1174,107 @@ describe('RecordCreateModal — post-create phase', () => {
     // save must not half-apply.
     await user.click(screen.getByTestId('record-create-finish'));
     expect(props.onCreated).toHaveBeenCalledWith(CREATED);
+  });
+
+  // ETP-5051 — the field PATCH goes through the same `readErrorBody` as the POST, so a plan-quota
+  // refusal there reads as the translated quota sentence too.
+  it('translates a plan-quota refusal of a field PATCH instead of showing the raw English message', async () => {
+    installApiFetch({
+      post: jsonResponse({ response: { data: [CREATED] } }),
+      patch: jsonResponse({
+        error: {
+          message: 'Quota exceeded: Products (50/50 Prod)',
+          status: 403,
+          code: 'QUOTA_EXCEEDED',
+          quota: { resourceName: 'Productos', consumed: 50, includedQty: 50, unitLabel: 'Prod' },
+        },
+      }, false),
+    });
+    const user = userEvent.setup();
+    const props = await createRecord(user);
+    await screen.findByTestId('record-create-post-tabs');
+
+    await user.click(screen.getByTestId('fill-name'));
+    await user.click(screen.getByTestId('blur-name'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('backendError.quotaExceeded');
+    expect(error).toHaveTextContent('"resource":"Productos"');
+    expect(error).not.toHaveTextContent('Quota exceeded: Products');
+    expect(error).not.toHaveTextContent('createProductError');
+    await waitFor(() => expect(formProps.principal.savingField).toBeNull());
+
+    // The refused field save does not half-apply: finishing hands back the CREATE's record.
+    await user.click(screen.getByTestId('record-create-finish'));
+    expect(props.onCreated).toHaveBeenCalledWith(CREATED);
+  });
+
+  // ETP-5051 — a field PATCH not saved because the quota check itself failed (500
+  // QUOTA_CHECK_FAILED) reads as the translated "nothing was saved" sentence, like the POST.
+  it('translates a failed quota check of a field PATCH instead of the English prose or the generic error', async () => {
+    installApiFetch({
+      post: jsonResponse({ response: { data: [CREATED] } }),
+      patch: jsonResponse({
+        error: {
+          message: 'The quota check failed; nothing was saved. Try again.',
+          status: 500,
+          code: 'QUOTA_CHECK_FAILED',
+        },
+      }, false),
+    });
+    const user = userEvent.setup();
+    const props = await createRecord(user);
+    await screen.findByTestId('record-create-post-tabs');
+
+    await user.click(screen.getByTestId('fill-name'));
+    await user.click(screen.getByTestId('blur-name'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('translated:backendError.quotaCheckFailed');
+    expect(error).not.toHaveTextContent('The quota check failed');
+    expect(error).not.toHaveTextContent('createProductError');
+    await waitFor(() => expect(formProps.principal.savingField).toBeNull());
+
+    // Nothing was saved: finishing hands back the CREATE's record, not a half-applied PATCH.
+    await user.click(screen.getByTestId('record-create-finish'));
+    expect(props.onCreated).toHaveBeenCalledWith(CREATED);
+  });
+
+  it('keeps the backend message of any other 500 on a field PATCH', async () => {
+    installApiFetch({
+      post: jsonResponse({ response: { data: [CREATED] } }),
+      patch: jsonResponse({
+        error: { message: 'Unexpected failure while saving', status: 500, code: 'INTERNAL_ERROR' },
+      }, false),
+    });
+    const user = userEvent.setup();
+    await createRecord(user);
+    await screen.findByTestId('record-create-post-tabs');
+
+    await user.click(screen.getByTestId('fill-name'));
+    await user.click(screen.getByTestId('blur-name'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent('Unexpected failure while saving');
+    expect(error).not.toHaveTextContent('backendError.quotaCheckFailed');
+  });
+
+  it('shows an unknown NEO error message of a field PATCH as is', async () => {
+    installApiFetch({
+      post: jsonResponse({ response: { data: [CREATED] } }),
+      patch: jsonResponse({
+        error: { message: 'Field locked by workflow step 7', status: 403, code: 'FORBIDDEN' },
+      }, false),
+    });
+    const user = userEvent.setup();
+    await createRecord(user);
+    await screen.findByTestId('record-create-post-tabs');
+
+    await user.click(screen.getByTestId('fill-name'));
+    await user.click(screen.getByTestId('blur-name'));
+
+    const error = await screen.findByTestId('record-create-error');
+    expect(error).toHaveTextContent(/^Field locked by workflow step 7$/);
   });
 
   it('falls back to the target error when the PATCH throws', async () => {
@@ -1327,6 +1564,14 @@ describe('buildRecordCreatePayload', () => {
 
   it.each([[null], [undefined], [{}]])('returns an empty object for %s', (input) => {
     expect(buildRecordCreatePayload(input)).toEqual({});
+  });
+
+  it.each([
+    ['drops an untouched listed key and keeps a touched one', new Set(['vendor']), { name: 'A', vendor: 'N' }],
+    ['drops every listed key when nothing was touched', null, { name: 'A' }],
+  ])('omitUntouched: %s, never touching unlisted keys', (_label, touched, expected) => {
+    const data = { name: 'A', customer: 'Y', vendor: 'N' };
+    expect(buildRecordCreatePayload(data, { omitUntouched: ['customer', 'vendor'], touched })).toEqual(expected);
   });
 });
 

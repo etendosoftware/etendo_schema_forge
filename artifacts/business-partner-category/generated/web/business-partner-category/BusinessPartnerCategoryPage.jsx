@@ -2,7 +2,7 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import BusinessPartnerCategoryTable from './BusinessPartnerCategoryTable';
+import BusinessPartnerCategoryTable from '../../../custom/BpCategoryTable';
 import BusinessPartnerCategoryForm from './BusinessPartnerCategoryForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
@@ -38,7 +38,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:businessPartnerCategory
 
 // @sf-generated-start requiredHeaderFields:businessPartnerCategory
-const requiredHeaderFields = ['searchKey', 'name', 'default'];
+const requiredHeaderFields = ['searchKey', 'name', 'default', 'etgoIscustomer'];
 // @sf-generated-end requiredHeaderFields:businessPartnerCategory
 
 // @sf-generated-start addLineFields:accounting
@@ -342,6 +342,7 @@ export default function BusinessPartnerCategoryPage({ windowName, recordId, ...p
         toolbarPaddingX="px-2"
         formCardPadding="p-2"
         formScrollPaddingX="px-2"
+        detailVisibleWhenCapability="showAccountingFields"
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_BP_Group", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}

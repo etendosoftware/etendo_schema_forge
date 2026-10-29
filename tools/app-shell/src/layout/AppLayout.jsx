@@ -16,6 +16,9 @@ import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext'
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 import TopBar from '@/components/layout/TopBar';
+import { BillingStatusBanner } from '@/components/billing/BillingStatusBanner.jsx';
+import { QuotaStatusBanner } from '@/components/billing/QuotaStatusBanner.jsx';
+import { useEnvironmentListFreshness } from '@/hooks/useEnvironmentListFreshness.js';
 import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchContext.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
@@ -43,9 +46,18 @@ import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
 import { WALKTHROUGH_FLOWS, walkthroughFlowsForPlan } from '@/walkthrough/flows';
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
+import { SupportSessionBanner } from '@/components/layout/SupportSessionBanner.jsx';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
+import { SUPPORT_ACCOUNT_EMAIL, hideSupportRestrictedMenuItems } from '@/lib/supportSession.js';
 import { periodRecoveryFor, setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { NEO_BASE } from '@/lib/neoWebhookClient.js';
+import { detectBaseUrl } from '@/components/copilot/copilotApi.js';
+import { canReactivateSubscription, isCanceledSubscription } from '@/lib/environmentPresentation.js';
+import {
+  ReactivateSubscriptionButton,
+  ReactivationPendingNotice,
+} from '@/components/access/SubscriptionReactivation.jsx';
 
 /**
  * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
@@ -106,6 +118,7 @@ function NoAccessScreen() {
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="NoAccessScreen__488148"
     >
+      <SupportSessionBanner className="fixed inset-x-0 top-0 z-50" data-testid="SupportSessionBanner__488148" />
       <p className="text-base font-medium text-foreground" data-testid="no-access-title">
         {hasRole ? ui('noAccessRoleTitle') : ui('noAccessNoRoleTitle')}
       </p>
@@ -245,6 +258,22 @@ const BLOCKED_ACCESS_CONTENT = {
   },
 };
 
+// ETP-5742 — a SUBSCRIPTION_REQUIRED environment whose subscription was CANCELED, not left unpaid:
+// the portal behind "Manage subscription" has nothing to fix there, so the owner re-subscribes the
+// environment instead (ReactivateSubscriptionButton) and an invited member is told to ask the owner.
+const CANCELED_SUBSCRIPTION_CONTENT = {
+  titleKey: 'blockedAccessSubscriptionCanceledTitle',
+  ownerMessageKey: 'blockedAccessSubscriptionCanceledMessage',
+  memberMessageKey: 'blockedAccessSubscriptionCanceledMemberMessage',
+};
+
+/** The paid re-subscription the provider sent the browser back with, if any. */
+function returningReactivationRequestId(searchParams) {
+  return searchParams.get('reactivation') === 'success'
+    ? searchParams.get('requestId') || null
+    : null;
+}
+
 // ETP-5443 follow-up — both routes resolve through the account's own platform token
 // (SubscriptionSection.jsx / UpgradePage.jsx), independent of the blocked tenant NEO
 // session, and are literally where this screen's own CTA sends the user. They must stay
@@ -269,13 +298,31 @@ function BlockedAccessScreen({ decision }) {
   const ui = useUI();
   const logout = useLogout();
   const navigate = useNavigate();
-  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
+  const {
+    environments, loading: environmentsLoading, switchTo, switching, currentClientId,
+  } = useEnvironmentSwitch();
+  // ETP-5351 — both CTAs (/upgrade, /account) are the customer's billing, which a support session
+  // does not touch; the explanation stays, so the operator knows why the tenant is blocked.
+  const { isSupportMode } = useSupportSession();
   const companies = [...new Map(
     environments.filter((env) => env.clientId).map((env) => [env.clientId, env])
   ).values()];
   const companyName = companies.find((env) => env.clientId === currentClientId)?.clientName
     || ui('yourCompany');
   const canSwitch = companies.some((env) => env.clientId !== currentClientId);
+  // ETP-5742 — a re-subscription paid in this visit (a second click after paying) or the one the
+  // provider sent the browser back with: either way the screen waits for it to apply.
+  const [searchParams] = useSearchParams();
+  const [paidReactivationId, setPaidReactivationId] = useState(null);
+  const subscriptionBlocked = decision === 'SUBSCRIPTION_REQUIRED';
+  const pendingReactivationId = subscriptionBlocked
+    ? paidReactivationId || returningReactivationRequestId(searchParams)
+    : null;
+  const currentEnvironment = companies.find((env) => env.clientId === currentClientId);
+  const canceled = subscriptionBlocked && isCanceledSubscription(currentEnvironment);
+  // Whether the subscription was canceled or left unpaid is only known once the environment list
+  // has arrived; until then the screen shows neither story, rather than the wrong one first.
+  const awaitingEnvironment = subscriptionBlocked && environmentsLoading;
 
   // AppLayoutAccessGate only renders this for a decision BLOCKED_ACCESS_CONTENT knows
   // about (see isBlockingAccessDecision in lib/environmentAccessGate.js) — this is a
@@ -283,27 +330,57 @@ function BlockedAccessScreen({ decision }) {
   // learned yet.
   const content = BLOCKED_ACCESS_CONTENT[decision];
   if (!content) return null;
+  const owner = canReactivateSubscription(currentEnvironment);
+  const titleKey = canceled ? CANCELED_SUBSCRIPTION_CONTENT.titleKey : content.titleKey;
+  let messageKey = content.messageKey;
+  if (canceled) {
+    messageKey = owner
+      ? CANCELED_SUBSCRIPTION_CONTENT.ownerMessageKey
+      : CANCELED_SUBSCRIPTION_CONTENT.memberMessageKey;
+  }
 
   return (
     <div
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="BlockedAccessScreen__488148"
     >
-      <p className="text-base font-medium text-foreground" data-testid="blocked-access-title">
-        {ui(content.titleKey)}
-      </p>
-      <p className="max-w-md text-sm text-muted-foreground" data-testid="blocked-access-message">
-        {ui(content.messageKey)}
-      </p>
-
-      <Button
-        type="button"
-        className="mt-4"
-        onClick={() => navigate(content.ctaPath)}
-        data-testid="blocked-access-cta"
-      >
-        {ui(content.ctaKey)}
-      </Button>
+      <SupportSessionBanner className="fixed inset-x-0 top-0 z-50" data-testid="SupportSessionBanner__488148" />
+      {pendingReactivationId && (
+        <ReactivationPendingNotice
+          apiBaseUrl={detectBaseUrl()}
+          requestId={pendingReactivationId}
+          data-testid="ReactivationPendingNotice__488148" />
+      )}
+      {!pendingReactivationId && awaitingEnvironment && (
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"
+          data-testid="blocked-access-loading" />
+      )}
+      {!pendingReactivationId && !awaitingEnvironment && (
+        <>
+          <p className="text-base font-medium text-foreground" data-testid="blocked-access-title">
+            {ui(titleKey)}
+          </p>
+          <p className="max-w-md text-sm text-muted-foreground" data-testid="blocked-access-message">
+            {ui(messageKey)}
+          </p>
+          {canceled && owner && !isSupportMode && (
+            <ReactivateSubscriptionButton
+              apiBaseUrl={detectBaseUrl()}
+              onPaid={setPaidReactivationId}
+              data-testid="ReactivateSubscriptionButton__488148" />
+          )}
+          {!canceled && !isSupportMode && (
+            <Button
+              type="button"
+              className="mt-4"
+              onClick={() => navigate(content.ctaPath)}
+              data-testid="blocked-access-cta"
+            >
+              {ui(content.ctaKey)}
+            </Button>
+          )}
+        </>
+      )}
 
       {/* Same rationale as NoAccessScreen's own switcher: a blocked TENANT session does not
           mean a blocked ACCOUNT — the account may own other, unaffected environments. */}
@@ -396,8 +473,10 @@ function SessionConflictScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  const currentUser = auth?.account?.email || auth?.username || ui('sessionConflictThisAccount');
-  const otherUser = live?.account?.email || null;
+  // The support account's email is internal (.invalid): show a human label instead.
+  const named = (email) => (email === SUPPORT_ACCOUNT_EMAIL ? ui('sessionConflictSupportUser') : email);
+  const currentUser = named(auth?.account?.email) || auth?.username || ui('sessionConflictThisAccount');
+  const otherUser = named(live?.account?.email) || null;
   const withUsers = (text) => text.replace('{currentUser}', currentUser).replace('{otherUser}', otherUser);
 
   const continueAsOther = () => {
@@ -476,6 +555,12 @@ function AppLayoutInner({ menuGroups, embedded }) {
   const meta = usePageMeta();
   const marginLeft = expanded ? EXPANDED_W : COLLAPSED_W;
   const { state: supportState, actions: supportActions } = useSupportChat();
+  // ETP-5051 — the ONE app-level owner of the environment-list freshness triggers (focus, interval,
+  // quota refusal). Off in an embedded window: it shows no banner and is a page of its own.
+  useEnvironmentListFreshness({ enabled: !embedded });
+  // ETP-5351 — the operator in a support session IS support: no help chat (floating button and
+  // panel), and the provider below runs none of its conversation requests or polls.
+  const { isSupportMode } = useSupportSession();
 
   return (
     <>
@@ -493,6 +578,15 @@ function AppLayoutInner({ menuGroups, embedded }) {
         className="flex h-screen flex-col transition-[margin-left] duration-200 ease-in-out bg-page-bg"
         style={{ marginLeft: embedded ? 0 : marginLeft }}
       >
+        {/* ETP-5351 — first row of the content column, so it never covers the sidebar or the page
+            and stays in view on every route. Renders nothing outside a support session. */}
+        {!embedded && <SupportSessionBanner data-testid="SupportSessionBanner__488148" />}
+        {/* ETP-5049 — failed-payment warning during the grace period, above the whole chrome. */}
+        {!embedded && !isSupportMode && <BillingStatusBanner data-testid="BillingStatusBanner__488148" />}
+        {/* ETP-5051 — plan quotas near or at their limit, from the environment list (`quotas`).
+            Hidden in a support session like the payment banner (ETP-5351): its CTA is /account,
+            a route that session cannot reach. */}
+        {!embedded && !isSupportMode && <QuotaStatusBanner data-testid="QuotaStatusBanner__488148" />}
         {!embedded && (
           <TopBar
             onBack={meta?.onBack}
@@ -503,7 +597,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
             menuAction={meta?.menuAction}
             onAddToFavorites={meta?.onAddToFavorites}
             isFavorite={meta?.isFavorite}
-            onPageHelp={meta?.onPageHelp}
+            onPageHelp={isSupportMode ? null : meta?.onPageHelp}
             onAIClick={meta?.onAIClick}
             quickActions={meta?.quickActions}
             rightExtras={meta?.rightExtras}
@@ -529,7 +623,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
       </div>
       {!embedded && <CommandPalette data-testid="CommandPalette__488148" />}
       {!embedded && <CopilotWidget hideTrigger data-testid="CopilotWidget__488148" />}
-      {!embedded && <SupportChatWidget data-testid="SupportChatWidget__488148" />}
+      {!embedded && !isSupportMode && <SupportChatWidget data-testid="SupportChatWidget__488148" />}
     </>
   );
 }
@@ -571,6 +665,9 @@ function AppLayoutAccessGate({ menuGroups }) {
   // environment's commercial access cut off) is captured here, decoupled from AuthContext's
   // own windowAccess/capabilities/menuAccess shape.
   const environmentAccessDecision = useEnvironmentAccessGate();
+  // ETP-5351 — a support session drops the owner-only entries and the ones whose routes it cannot
+  // use (account, billing, long-lived credentials) before any other menu axis runs.
+  const { isSupportMode } = useSupportSession();
   // ETP-5489 — a gating request answered 401 with the session still alive (see lib/accessLoadError.js).
   const accessLoadError = useAccessLoadError();
   // The flag belongs to this mount: a later session (logout, login) must not inherit it.
@@ -712,7 +809,7 @@ function AppLayoutAccessGate({ menuGroups }) {
   // fetch failure, fail-open per useRoleMenu.js) — never pass a stand-in
   // Set to filterMenuGroupsByAccess() below.
   const filteredMenuGroups = filterMenuGroupsByAccess(
-    menuGroups,
+    isSupportMode ? hideSupportRestrictedMenuItems(menuGroups) : menuGroups,
     allowedIds,
     capabilities,
     windowAccess,

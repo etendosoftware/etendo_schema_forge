@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { describe, it, expect, vi } from 'vitest';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
@@ -107,6 +108,7 @@ import {
   getDetailContentContainerClassName,
   getLinesTabsSectionClassName,
   getSecondaryTabEntityKey,
+  gateDetailTab,
   renderNotesField,
   computeIsDirty,
   hasRecordForRoute,
@@ -120,6 +122,7 @@ import {
   isDeleteButtonVisible,
   renderPrimaryTabButtons,
   resolveHeaderContent,
+  resolveInitialCalloutTriggers,
   isBulkDeleteBarVisible,
   isCustomPrimaryTabActive,
   getDetailContentClassName,
@@ -154,6 +157,7 @@ import {
   buildLineRowClickHandler,
   mergeLineEdits,
   hasUnsavedEdits,
+  getTabStripBleedClassName,
 } from '../DetailView.jsx';
 
 describe('mergeSelectorContextFields', () => {
@@ -556,6 +560,41 @@ describe('getDetailContentContainerClassName', () => {
     expect(cls).toContain('px-10');
     expect(cls).not.toContain('px-6');
   });
+
+  it('keeps px-2 pb-2 for an inlineEditable window with a sidebar when no sidebar override is given', () => {
+    const cls = getDetailContentContainerClassName({
+      linesLayout: 'inlineEditable', sidePanel: () => null, activePrimaryTab: 'general',
+      formScrollPaddingX: '',
+    });
+    expect(cls).toContain('px-2 pb-2');
+  });
+
+  it('sidebarFormScrollPaddingX replaces the sidebar padding, including an empty string', () => {
+    const base = { linesLayout: 'inlineEditable', sidePanel: () => null, activePrimaryTab: 'general' };
+    const none = getDetailContentContainerClassName({ ...base, sidebarFormScrollPaddingX: '' });
+    expect(none).not.toMatch(/\bpx-2\b|\bpb-2\b/);
+    expect(getDetailContentContainerClassName({ ...base, sidebarFormScrollPaddingX: 'px-4' })).toContain('px-4');
+  });
+
+  it('sidebarFormScrollPaddingX is ignored when the window has no sidebar', () => {
+    const cls = getDetailContentContainerClassName({
+      linesLayout: 'readOnly', activePrimaryTab: 'general', sidebarFormScrollPaddingX: '',
+    });
+    expect(cls).toContain('px-6');
+  });
+});
+
+describe('getTabStripBleedClassName sidebar override', () => {
+  it('emits no bleed when the sidebar padding is overridden to empty', () => {
+    expect(getTabStripBleedClassName({
+      linesLayout: 'inlineEditable', sidePanel: () => null, sidebarFormScrollPaddingX: '',
+    })).toBe('');
+  });
+
+  it('still bleeds px-2 for a sidebar window without the override', () => {
+    expect(getTabStripBleedClassName({ linesLayout: 'inlineEditable', sidePanel: () => null }))
+      .toContain('-mx-2 px-2');
+  });
 });
 
 describe('getLinesTabsSectionClassName', () => {
@@ -590,6 +629,36 @@ describe('getSecondaryTabEntityKey', () => {
   it('returns null for an out-of-range index (undefined tab)', () => {
     expect(getSecondaryTabEntityKey([], 0)).toBeNull();
     expect(getSecondaryTabEntityKey([{ key: 'lines' }], 5)).toBeNull();
+  });
+
+  // ETP-5648: a capability-hidden tab must not be fetched in the background.
+  it('returns null for a capability-gated tab when the capability is missing', () => {
+    const tabs = [{ key: 'accounting', visibleWhenCapability: 'showAccountingFields' }];
+    expect(getSecondaryTabEntityKey(tabs, 0, { showAccountingFields: false })).toBeNull();
+    expect(getSecondaryTabEntityKey(tabs, 0, {})).toBeNull();
+    expect(getSecondaryTabEntityKey(tabs, 0)).toBeNull();
+  });
+
+  it('returns the key of a capability-gated tab when the capability is granted', () => {
+    const tabs = [{ key: 'accounting', visibleWhenCapability: 'showAccountingFields' }];
+    expect(getSecondaryTabEntityKey(tabs, 0, { showAccountingFields: true })).toBe('accounting');
+  });
+});
+
+describe('gateDetailTab (ETP-5648)', () => {
+  const Table = () => null;
+
+  it('keeps the detail entity and table when no capability is declared', () => {
+    expect(gateDetailTab('lines', Table, null, {})).toEqual(['lines', Table, null]);
+  });
+
+  it('keeps them when the declared capability is granted', () => {
+    expect(gateDetailTab('accounting', Table, 'showAccountingFields', { showAccountingFields: true }))
+      .toEqual(['accounting', Table, null]);
+  });
+
+  it('drops both (no tab, no fetch) when the capability is missing', () => {
+    expect(gateDetailTab('accounting', Table, 'showAccountingFields', {})).toEqual([null, null, null]);
   });
 });
 
@@ -792,6 +861,105 @@ describe('isLoadingRecordForRoute — new-record defaults gate (ETP-4741)', () =
       isLoadingRecordForRoute({ loading: false, defaultsLoading: true, selected: { id: '123' } }, false, '123'),
       'defaultsLoading only gates creation forms, never an existing record'
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-4744 — the initial-callout chain is armed by the arrival of the defaults
+// session, not by `editing` becoming non-empty.
+// ---------------------------------------------------------------------------
+describe('resolveInitialCalloutTriggers', () => {
+  const api = {
+    selectors: [
+      { field: 'businessPartner', entity: 'header', inputMode: 'search' },
+      { field: 'partnerAddress', entity: 'header', inputMode: 'dependent' },
+      { field: 'priceList', entity: 'header', inputMode: 'selector' },
+      { field: 'product', entity: 'lines', inputMode: 'selector' },
+      { field: 'warehouse', entity: 'header', inputMode: 'search' },
+    ],
+  };
+
+  it('resets (never arms) for a non-new record', () => {
+    expect(resolveInitialCalloutTriggers({
+      isNew: false, editing: { businessPartner: 'BP1' }, api, entity: 'header',
+    })).toEqual({ reset: true, ready: false, triggers: [] });
+  });
+
+  it('does NOT arm while the defaults session is still pending, even with a value present', () => {
+    // The regression: a keystroke in a plain field (here `documentNo`) while GET /defaults
+    // is in flight must not consume the one-shot latch.
+    expect(resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { documentNo: 'PO-TYPED' },
+      api,
+      entity: 'header',
+      defaultsPending: true,
+    })).toEqual({ reset: false, ready: false, triggers: [] });
+    expect(resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { businessPartner: 'BP1' },
+      api,
+      entity: 'header',
+      defaultsPending: true,
+    }).ready).toBe(false);
+  });
+
+  it('arms with the header non-dependent selectors once the session settled', () => {
+    const { reset, ready, triggers } = resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { documentNo: 'PO-TYPED', businessPartner: 'BP1', priceList: 'PL1' },
+      api,
+      entity: 'header',
+      defaultsPending: false,
+    });
+    expect(reset).toBe(false);
+    expect(ready).toBe(true);
+    expect(triggers.map(s => s.field)).toEqual(['businessPartner', 'priceList']);
+  });
+
+  it('excludes dependent selectors and selectors of another entity', () => {
+    const { triggers } = resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { businessPartner: 'BP1', partnerAddress: 'ADDR1', product: 'P1' },
+      api,
+      entity: 'header',
+      defaultsPending: false,
+    });
+    expect(triggers.map(s => s.field)).toEqual(['businessPartner']);
+  });
+
+  it('arms with an empty trigger list when the settled form holds only non-selector values', () => {
+    // The latch is allowed to be consumed here: a later manual selector pick fires its own
+    // callout through handleChange, and this effect must not fire a second one.
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: { documentNo: 'PO-1' }, api, entity: 'header', defaultsPending: false,
+    })).toEqual({ reset: false, ready: true, triggers: [] });
+  });
+
+  it('does not arm against an empty form (the latch must survive the initial /new render)', () => {
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: {}, api, entity: 'header', defaultsPending: false,
+    })).toEqual({ reset: false, ready: false, triggers: [] });
+  });
+
+  it('does not arm when editing is null or the api has no selectors', () => {
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: null, api, entity: 'header', defaultsPending: false,
+    }).ready).toBe(false);
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: { businessPartner: 'BP1' }, api: {}, entity: 'header', defaultsPending: false,
+    }).ready).toBe(false);
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: { businessPartner: 'BP1' }, api: null, entity: 'header',
+    }).ready).toBe(false);
+  });
+
+  it('treats an absent defaultsPending as "no defaults session" (prior behavior preserved)', () => {
+    const { ready, triggers } = resolveInitialCalloutTriggers({
+      isNew: true, editing: { businessPartner: 'BP1' }, api, entity: 'header',
+    });
+    expect(ready).toBe(true);
+    expect(triggers.map(s => s.field)).toEqual(['businessPartner']);
   });
 });
 

@@ -20,43 +20,27 @@ import {
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import {
-  formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349,
-  compute349Operators, fetchDeclarationIncidents, deriveResultKind, deleteDeclaration,
-  applyOverrides, recomputeDerivedBoxes, getBoxValue, resolveResultColors,
-  persistDeclarationStatus,
+  formatAmount, countUpcomingDeadlines, isUpcomingDeadline,
+  fetchDeclarationIncidents, deleteDeclaration, resolveResultColors,
+  persistDeclarationStatus, fetchDeclaration,
 } from './fiscalModelsUtils.js';
+import { isAnnualPeriod } from './fiscalPeriods.js';
 import { getIncidentSeverity, getIncidentIndicator } from './incidentSeverity.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
+import { listModels, isKnownModel, getModel, getModelOrDefault, modelTitleKey } from './modelRegistry.js';
+import { getListBehavior } from './modelRegistryList.js';
+import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { apiFetch } from '@/auth/api.js';
-// Real-mode only: throws on fetch failure instead of falling back to mock data.
-// Module-level helper (not the component/hook), so it uses the ambient `apiFetch`
-// bound to the session, taking the explicit `token` it already receives as an
-// override rather than a React hook it has no component body to call from.
-async function computeBoxes303Real(decl, { token, apiBaseUrl } = {}) {
-  if (!apiBaseUrl) throw new Error('missing credentials');
-  const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-  const params = new URLSearchParams({ year: decl.year, period: decl.period });
-  const res = await apiFetch(`${base}/fiscal303/boxes?${params}`, { baseUrl: '', token });
-  if (!res.ok) throw new Error(`boxes fetch failed: ${res.status}`);
-  return await res.json();
-}
+import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
 
-async function computeOperators349Real(decl, { token, apiBaseUrl } = {}) {
-  return compute349Operators(decl, { token, apiBaseUrl });
-}
+// committed-selection-ok: short, fully rendered lists that already set aria-selected from their value; nothing to page or centre.
 
-// ETP-5432 pt.2 — sums a 349 key-totals object (`summary` or `rectificativeSummary`,
-// both `{ totalE, totalS, totalA, totalI }`) via Math.abs on each key, so a
-// negative corrective delta contributes to the list's "Resultado" total instead of
-// silently cancelling a positive one (or a same-sized regular total) into 0 — the
-// exact anti-netting rule `RectificativeSubtotalCard` (FmModel349Page.jsx) already
-// applies when rendering these same two objects on the detail page.
-function sumAbsKeyTotals(obj) {
-  return ['totalE', 'totalS', 'totalA', 'totalI']
-    .reduce((s, k) => s + Math.abs(parseFloat(obj?.[k]) || 0), 0);
-}
+// Every registered model, in registry order (ETP-5716). A module-level constant of fixed length:
+// `useDeclarationsAutoCompute` below calls one `useFiscalAutoCompute` per (bucket × model) in a
+// loop over it, which is only legal because the number and order of those calls never changes
+// between renders.
+const LIST_MODELS = listModels();
 
 // ETP-5438 — a declaration in one of these statuses must never be silently recomputed from
 // current invoice data again: once presented, an invoice added or removed afterward must not
@@ -72,7 +56,7 @@ const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack
 // `submittedSnapshot` is served from it directly (see `snapshotMap` below).
 // Legacy (no snapshot): passed as `checkModifiedFn` for the legacy submitted-family buckets
 // below instead of omitting it
-// (the way the pre-existing `otherDecls303`/`otherDecls349` buckets do): omitting it makes
+// (the way the pre-existing "other" (ready/skipped) buckets do): omitting it makes
 // `useFiscalAutoCompute`'s mount effect skip its own cache-consult branch and unconditionally
 // recompute from live invoice data on every mount — which is exactly the ETP-5438 root cause
 // (FmListPage never truly unmounts, but its `decls` state — and therefore this bucket's own
@@ -200,7 +184,23 @@ const STATUS_FILTER_RAW = {
 function periodSortValue(period) {
   if (/^T\d$/.test(period)) return parseInt(period[1], 10) * 3;
   if (/^\d{2}$/.test(period)) return parseInt(period, 10);
+  // ETP-5716 — the annual summary closes the exercise: it sorts after December / T4.
+  if (isAnnualPeriod(period)) return 13;
   return 0;
+}
+
+// The "Periodo" cell: an annual declaration reads "Anual", every other period its code.
+function periodLabel(period, t) {
+  return isAnnualPeriod(period) ? t('fm.period.annual') : period;
+}
+
+// ETP-5716 — `POST /declarations` refused because the exercise already has its single ordinary
+// declaration (FiscalDeclCrudHandler#rejectDuplicateOrdinary): `{ error: { code, existingId } }`.
+// Returns the existing declaration's id, or `null` for any other failure.
+function duplicateOrdinaryId(status, body) {
+  if (status !== 409) return null;
+  const error = body?.error ?? body?.response?.error ?? body;
+  return error?.code === 'DUPLICATE_ORDINARY' ? (error.existingId ?? null) : null;
 }
 
 const STATUS_SORT_ORDER = ['pending', 'draft', 'ready', 'submitted', 'submitted_ack', 'submitted_ext', 'skipped'];
@@ -255,7 +255,9 @@ function ResultText({ isComputing, error, result, t }) {
       ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
       : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
   }
-  const label = t(`fm.result.${result.kind}`) ?? result.kind;
+  // A model may name its own badge text (`labelKey`, e.g. the 390's informative "Resultado
+  // positivo"); otherwise the shared `fm.result.<kind>` key.
+  const label = t(result.labelKey ?? `fm.result.${result.kind}`) ?? result.kind;
   // Resultado sign-coloring (ETP-5236 / M303-01): 'I' (a ingresar) green, 'V'/'C'
   // (a devolver / a compensar) blue — same rule as the Modelo 303 detail KPI, via
   // the shared fiscalModelsUtils.js helper so both call sites stay in sync.
@@ -491,17 +493,139 @@ function ResultCell({ isComputing, error, result, t }) {
 }
 
 // Resolves the auto-computed boxes/operators entry for a declaration row —
-// draft declarations read from the polling maps (computedMap/computedMap349),
-// any other status reads from the one-time-compute maps (see the
-// otherDecls303/otherDecls349 comment in the main component for why both are
-// needed). Extracted out of the table row's nested ternary (SonarQube S3358);
-// same values, same logic.
+// draft declarations read from their model's polling map, any other status reads
+// from their model's one-time-compute map (see `useDeclarationsAutoCompute` for why
+// both are needed). Extracted out of the table row's nested ternary (SonarQube S3358);
+// same values, same logic. An unknown model reads the default model's (303) maps, as
+// it always did ("anything that is not 349 reads the 303 maps").
 function getComputedForDecl(decl, isDraft, maps) {
-  const { computedMap, computedMapOther303, computedMap349, computedMapOther349 } = maps;
-  if (decl.model === '349') {
-    return isDraft ? computedMap349[decl.id] : computedMapOther349[decl.id];
+  const { draftMapById, otherMapById } = maps;
+  const modelId = getModelOrDefault(decl.model).id;
+  return isDraft ? draftMapById[modelId][decl.id] : otherMapById[modelId][decl.id];
+}
+
+// ── "Resultado" auto-compute (one bucket set per registered model) ──────────
+// Calls `useFiscalAutoCompute` once per (bucket × model), in this fixed order: every model's
+// draft bucket, then every model's "other" bucket, then every model's legacy-submitted bucket
+// (for 303 + 349: draft 303, draft 349, other 303, other 349, submitted 303, submitted 349 —
+// the same six calls, in the same order, this list made before the registry existed). Each
+// model's compute function, draft polling check and result derivation come from its list
+// behaviour (`modelRegistryList.js` → `models/<id>/listBehavior<id>.js`).
+//
+// Buckets, per model:
+//   - draft: `status === 'draft'` — their underlying invoices can still change, so they get the
+//     full compute-on-mount + poll-for-changes treatment (`checkModifiedFn`, 3 min).
+//   - other: non-draft, non-submitted declarations (ETP-4755 "Resultado" fix, narrowed by
+//     ETP-5438): `declToJson` (FiscalDeclCrudHandler, backend) never persists a computed result
+//     on the declaration record — GET /fiscal303/declarations always comes back with no `result`
+//     field, for every status. The draft-only hooks are correct for drafts (live-recompute +
+//     poll, since their underlying invoices can still change), but once a declaration leaves
+//     draft its boxes are otherwise NEVER computed at all in this list — the "Resultado" column
+//     stayed stuck on "—" forever, the same class of bug the "Incidencias" column had before
+//     this list fetched real data. Mirrors FmModel303Page.jsx's own already-shipped fix for its
+//     KPIs/boxes ("Auto-compute on mount when the list didn't hand us any precomputed data" —
+//     same ETP-4755, same `/fiscal303/boxes` and `/fiscal349/operators` endpoints, which
+//     recompute from invoice data regardless of declaration status). Computed once, never polled
+//     (no `checkModifiedFn`).
+//     ETP-5438 — submitted-family declarations (see SUBMITTED_STATUSES above) were carved OUT of
+//     this bucket into their own "submitted" bucket below: they still need the one bootstrap
+//     compute, but must never be recomputed again after that — see `neverModifiedFn`'s comment
+//     for why omitting `checkModifiedFn` (this bucket's own behavior, correct for `ready`) was
+//     the actual root cause of "still recalculating even though already presented".
+//   - submitted: ETP-5438 — legacy submitted-family declarations (presented BEFORE snapshots
+//     existed, so no `submittedSnapshot`; no data-fix for those, product decision): compute once
+//     (bootstrap, so "Resultado" is never stuck on "—"), then frozen via `neverModifiedFn` — see
+//     its comment above for the full rationale.
+//
+// ETP-5438 — submitted-family declarations WITH a persisted submission snapshot
+// (`decl.submittedSnapshot`, the exact boxes/operators payload the backend froze when the
+// declaration was presented): that snapshot IS their computed result. It is fed straight into
+// the non-draft computed map below — no compute call, no sessionStorage — so "Resultado" goes
+// through the exact same derivation (303 box 71 with manualOverrides included) as a live
+// compute, and can never pick up an invoice added/removed after submission.
+//
+// Returns `draftMapById` / `otherMapById`, keyed by model id. Each model's "other" map is the
+// union of its "other" (ready/skipped) and "submitted" one-time-compute maps plus `snapshotMap`
+// — `getComputedForDecl` only ever needs "the non-draft compute for this decl.id", it doesn't
+// care which hook produced it. `snapshotMap` is keyed by declaration id (unique across models),
+// so it is safe to spread into every model's map; it goes last so a persisted snapshot always
+// wins.
+//
+// A model whose registry entry sets `syncDraftComputeToDetail` (349) also pushes its draft map
+// to `onComputeUpdate`, so an open detail page picks up fresh operators.
+function useDeclarationsAutoCompute(decls, { token, apiBaseUrl, onComputeUpdate }) {
+  const bucketsById = useMemo(() => {
+    const byId = {};
+    for (const m of LIST_MODELS) {
+      byId[m.id] = {
+        draft: decls.filter(d => d.model === m.id && d.status === 'draft'),
+        other: decls.filter(d => d.model === m.id && d.status !== 'draft' && !SUBMITTED_STATUSES.has(d.status)),
+        submitted: decls.filter(d => d.model === m.id && SUBMITTED_STATUSES.has(d.status) && !hasSubmittedSnapshot(d)),
+      };
+    }
+    return byId;
+  }, [decls]);
+
+  const snapshotMap = useMemo(() => {
+    const map = {};
+    for (const d of decls) {
+      if (SUBMITTED_STATUSES.has(d.status) && hasSubmittedSnapshot(d)) map[d.id] = d.submittedSnapshot;
+    }
+    return map;
+  }, [decls]);
+
+  // The loops below call a hook per registered model. LIST_MODELS is a module-level constant, so
+  // the number and order of these calls is identical on every render — the rules of hooks hold.
+  const draftMapById = {};
+  for (const m of LIST_MODELS) {
+    const behavior = getListBehavior(m.id);
+    draftMapById[m.id] = useFiscalAutoCompute(bucketsById[m.id].draft, { // NOSONAR -- fixed-length registry loop, stable hook order.
+      computeFn:       behavior.computeFn,
+      checkModifiedFn: behavior.checkModifiedFn,
+      token,
+      apiBaseUrl,
+      pollIntervalMs:  180_000,
+      enabled: Boolean(apiBaseUrl),
+    }).computedMap;
   }
-  return isDraft ? computedMap[decl.id] : computedMapOther303[decl.id];
+
+  const otherMaps = [];
+  for (const m of LIST_MODELS) {
+    otherMaps.push(useFiscalAutoCompute(bucketsById[m.id].other, { // NOSONAR -- fixed-length registry loop, stable hook order.
+      computeFn: getListBehavior(m.id).computeFn,
+      token,
+      apiBaseUrl,
+      enabled: Boolean(apiBaseUrl),
+    }).computedMap);
+  }
+
+  const submittedMaps = [];
+  for (const m of LIST_MODELS) {
+    submittedMaps.push(useFiscalAutoCompute(bucketsById[m.id].submitted, { // NOSONAR -- fixed-length registry loop, stable hook order.
+      computeFn:       getListBehavior(m.id).computeFn,
+      checkModifiedFn: neverModifiedFn,
+      token,
+      apiBaseUrl,
+      enabled:         Boolean(token && apiBaseUrl),
+    }).computedMap);
+  }
+
+  const otherMapById = useMemo(
+    () => Object.fromEntries(LIST_MODELS.map((m, i) => [m.id, { ...otherMaps[i], ...submittedMaps[i], ...snapshotMap }])),
+    // Fixed-length dependency list (one entry per registered model, see LIST_MODELS).
+    [...otherMaps, ...submittedMaps, snapshotMap]
+  );
+
+  const syncedDraftMaps = LIST_MODELS.filter(m => m.syncDraftComputeToDetail).map(m => draftMapById[m.id]);
+  useEffect(() => {
+    if (!onComputeUpdate) return;
+    for (const map of syncedDraftMaps) {
+      if (Object.keys(map).length > 0) onComputeUpdate(map);
+    }
+    // Fixed-length dependency list (one entry per synced model, see LIST_MODELS).
+  }, [...syncedDraftMaps, onComputeUpdate]);
+
+  return { draftMapById, otherMapById };
 }
 
 // ── Main component ───────────────────────────────────────────────
@@ -560,10 +684,13 @@ function resolveDeclTypeLabel(decl, t, duplicatePeriodPresented = false) {
   const sustitutivaPersisted = ident?.sustitutiva === true || ident?.sustitutiva === 'Y';
   const neverSaved = decl.status === 'draft'
     && rectificativaPersisted === undefined && ident?.sustitutiva === undefined;
-  if (rectificativaPersisted || (neverSaved && duplicatePeriodPresented && decl.model === '303')) {
+  // Per-model fallback type for a never-saved draft on a presented period (modelRegistry.js).
+  const fallbackType = neverSaved && duplicatePeriodPresented
+    ? getModel(decl.model)?.duplicatePeriodType : null;
+  if (rectificativaPersisted || fallbackType === 'rectificative') {
     return t('fm.type.rectificative');
   }
-  if (sustitutivaPersisted || (neverSaved && duplicatePeriodPresented && decl.model === '349')) {
+  if (sustitutivaPersisted || fallbackType === 'substitutive') {
     return t('fm.type.substitutive');
   }
   return t('fm.type.ordinary');
@@ -587,7 +714,7 @@ function ListPageMeta({ title, breadcrumb, recordCount }) {
   return null;
 }
 
-export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl, active = true }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, declAdded, token, apiBaseUrl, active = true }) {
   const ui = useUI();
   const t  = ui;
   const { locale: appLocale } = useLocaleSwitch();
@@ -646,6 +773,16 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     setDecls(ds => ds.map(d => (d.id === declManualDataPatch.id ? { ...d, ...declManualDataPatch.patch } : d)));
   }, [declManualDataPatch]);
 
+  // ETP-5716 — a declaration created from a detail page ("Crear declaración sustitutiva"): a
+  // one-shot `{ decl }` (raw backend shape). It is added to the list and opened, normalized
+  // exactly like a declaration created from "Nueva declaración".
+  useEffect(() => {
+    if (!declAdded?.decl?.id) return;
+    const created = normDecl(declAdded.decl, bcpLocale);
+    setDecls(ds => (ds.some(d => d.id === created.id) ? ds : [created, ...ds]));
+    onSelect?.(created);
+  }, [declAdded]);
+
   // Real per-declaration incidents (ETP-4755 fix): GET /fiscal303/declarations above never
   // carries real blocking/warning counts — `FiscalDeclCrudHandler#declToJson` doesn't serialize
   // incidents at all, only the dedicated `GET /fiscal{model}/incidents?id=` endpoint does (the
@@ -676,151 +813,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [declIdsKey, token, apiBaseUrl]);
 
-  const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
+  // Shared catalog reader (ETP-5831): same endpoint, same `{}` = no model active rule as the
+  // Organization window's fiscal sections. `setActiveModels` stays local for the drawer's save.
+  const {
+    activeModels, setActiveModels, loaded: catalogLoaded,
+  } = useFiscalModelsCatalog(apiBaseUrl, token);
 
-  useEffect(() => {
-    if (!apiBaseUrl) return;
-    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    apiFetch(`${base}/fiscal-models-catalog`, { baseUrl: '' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setActiveModels(data ?? {}))
-      .catch(() => {})
-      .finally(() => setCatalogLoaded(true));
-  }, [token, apiBaseUrl, apiFetch]);
-
-  const draftDecls303 = useMemo(
-    () => decls.filter(d => d.model === '303' && d.status === 'draft'),
-    [decls]
-  );
-
-  const draftDecls349 = useMemo(
-    () => decls.filter(d => d.model === '349' && d.status === 'draft'),
-    [decls]
-  );
-
-  // Non-draft, non-submitted declarations (ETP-4755 "Resultado" fix, narrowed by ETP-5438):
-  // `declToJson` (FiscalDeclCrudHandler, backend) never persists a computed result on the
-  // declaration record — GET /fiscal303/declarations always comes back with no `result` field,
-  // for every status. The draft-only hooks above are correct for drafts (live-recompute + poll,
-  // since their underlying invoices can still change), but once a declaration leaves draft its
-  // boxes are otherwise NEVER computed at all in this list — the "Resultado" column stayed stuck
-  // on "—" forever, the same class of bug the "Incidencias" column had before this list fetched
-  // real data. Mirrors FmModel303Page.jsx's own already-shipped fix for its KPIs/boxes
-  // ("Auto-compute on mount when the list didn't hand us any precomputed data" — same ETP-4755,
-  // same `/fiscal303/boxes` and `/fiscal349/operators` endpoints, which recompute from invoice
-  // data regardless of declaration status).
-  //
-  // ETP-5438 — submitted-family declarations (see SUBMITTED_STATUSES above) were carved OUT of
-  // this bucket into their own `submittedDecls303`/`submittedDecls349` below: they still need the
-  // one bootstrap compute, but must never be recomputed again after that — see `neverModifiedFn`'s
-  // comment for why omitting `checkModifiedFn` (this bucket's own behavior, correct for `ready`)
-  // was the actual root cause of "still recalculating even though already presented".
-  const otherDecls303 = useMemo(
-    () => decls.filter(d => d.model === '303' && d.status !== 'draft' && !SUBMITTED_STATUSES.has(d.status)),
-    [decls]
-  );
-
-  const otherDecls349 = useMemo(
-    () => decls.filter(d => d.model === '349' && d.status !== 'draft' && !SUBMITTED_STATUSES.has(d.status)),
-    [decls]
-  );
-
-  // ETP-5438 — submitted-family declarations WITH a persisted submission snapshot
-  // (`decl.submittedSnapshot`, the exact boxes/operators payload the backend froze when the
-  // declaration was presented): that snapshot IS their computed result. It is fed straight into
-  // the non-draft computed map below — no compute call, no sessionStorage — so "Resultado" goes
-  // through the exact same derivation (303 box 71 with manualOverrides included) as a live
-  // compute, and can never pick up an invoice added/removed after submission.
-  const snapshotMap = useMemo(() => {
-    const map = {};
-    for (const d of decls) {
-      if (SUBMITTED_STATUSES.has(d.status) && hasSubmittedSnapshot(d)) map[d.id] = d.submittedSnapshot;
-    }
-    return map;
-  }, [decls]);
-
-  // ETP-5438 — legacy submitted-family declarations (presented BEFORE snapshots existed, so no
-  // `submittedSnapshot`; no data-fix for those, product decision): compute once (bootstrap, so
-  // "Resultado" is never stuck on "—"), then frozen via `neverModifiedFn` — see its comment
-  // above for the full rationale.
-  const submittedDecls303 = useMemo(
-    () => decls.filter(d => d.model === '303' && SUBMITTED_STATUSES.has(d.status) && !hasSubmittedSnapshot(d)),
-    [decls]
-  );
-
-  const submittedDecls349 = useMemo(
-    () => decls.filter(d => d.model === '349' && SUBMITTED_STATUSES.has(d.status) && !hasSubmittedSnapshot(d)),
-    [decls]
-  );
-
-  const { computedMap } = useFiscalAutoCompute(draftDecls303, {
-    computeFn:       computeBoxes303Real,
-    checkModifiedFn: checkModified303,
-    token,
-    apiBaseUrl,
-    pollIntervalMs:  180_000,
-    enabled: Boolean(apiBaseUrl),
-  });
-
-  const { computedMap: computedMap349 } = useFiscalAutoCompute(draftDecls349, {
-    computeFn:       computeOperators349Real,
-    checkModifiedFn: checkModified349,
-    token,
-    apiBaseUrl,
-    pollIntervalMs:  180_000,
-    enabled: Boolean(apiBaseUrl),
-  });
-
-  const { computedMap: computedMapOther303 } = useFiscalAutoCompute(otherDecls303, {
-    computeFn: computeBoxes303Real,
-    token,
-    apiBaseUrl,
-    enabled: Boolean(apiBaseUrl),
-  });
-
-  const { computedMap: computedMapOther349 } = useFiscalAutoCompute(otherDecls349, {
-    computeFn: computeOperators349Real,
-    token,
-    apiBaseUrl,
-    enabled: Boolean(apiBaseUrl),
-  });
-
-  const { computedMap: computedMapSubmitted303 } = useFiscalAutoCompute(submittedDecls303, {
-    computeFn:       computeBoxes303Real,
-    checkModifiedFn: neverModifiedFn,
-    token,
-    apiBaseUrl,
-    enabled:         Boolean(token && apiBaseUrl),
-  });
-
-  const { computedMap: computedMapSubmitted349 } = useFiscalAutoCompute(submittedDecls349, {
-    computeFn:       computeOperators349Real,
-    checkModifiedFn: neverModifiedFn,
-    token,
-    apiBaseUrl,
-    enabled:         Boolean(token && apiBaseUrl),
-  });
-
-  // Union the "other" (ready/skipped) and "submitted" one-time-compute maps into a single map
-  // per model — `getComputedForDecl` only ever needs "the non-draft compute for this decl.id",
-  // it doesn't care which of the two hooks produced it.
-  // `snapshotMap` is keyed by declaration id (unique across models), so it is safe to spread into
-  // both per-model maps; it goes last so a persisted snapshot always wins.
-  const computedMapOther303Merged = useMemo(
-    () => ({ ...computedMapOther303, ...computedMapSubmitted303, ...snapshotMap }),
-    [computedMapOther303, computedMapSubmitted303, snapshotMap]
-  );
-  const computedMapOther349Merged = useMemo(
-    () => ({ ...computedMapOther349, ...computedMapSubmitted349, ...snapshotMap }),
-    [computedMapOther349, computedMapSubmitted349, snapshotMap]
-  );
-
-  useEffect(() => {
-    if (onComputeUpdate && Object.keys(computedMap349).length > 0) {
-      onComputeUpdate(computedMap349);
-    }
-  }, [computedMap349, onComputeUpdate]);
+  // "Resultado" auto-compute, one bucket set per registered model — see
+  // `useDeclarationsAutoCompute` above for the draft / other / submitted split.
+  const { draftMapById, otherMapById } = useDeclarationsAutoCompute(decls, { token, apiBaseUrl, onComputeUpdate });
 
   const [modelFilter, setModelFilter]   = useState('all');
   const [yearFilter,  setYearFilter]    = useState('all');
@@ -859,6 +860,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     return () => document.removeEventListener('mousedown', handler);
   }, [showSortMenu]);
 
+  // Opens a declaration by id (ETP-5716 — "Abrir declaración" of a duplicate ordinary): from the
+  // list when it is loaded, otherwise re-read from the backend.
+  const openDeclarationById = useCallback(async (id) => {
+    if (!id) return;
+    const known = decls.find(d => d.id === id);
+    const decl = known ?? (await fetchDeclaration(id, { token, apiBaseUrl }));
+    if (decl) onSelect?.(known ? decl : normDecl(decl, bcpLocale));
+  }, [decls, token, apiBaseUrl, onSelect, bcpLocale]);
+
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
     if (apiBaseUrl) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -867,9 +877,45 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         baseUrl: '',
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(created => setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]))
-        .catch((status) => {
+        .then(async r => {
+                    if (r.ok) return r.json();
+          // ETP-5716 — a single-ordinary model (390) refuses a 2nd ordinary of the exercise
+          // with 409 DUPLICATE_ORDINARY + the existing declaration's id: say so and offer it.
+          // The body is read once and shared: a Response body cannot be consumed twice.
+          const body = r.status === 409 ? await r.json().catch(() => null) : undefined;
+          const existingId = duplicateOrdinaryId(r.status, body);
+          if (existingId) {
+            const toastId = toast.error(
+              <span>
+                {t('fm.new_decl.duplicate_ordinary', { model, year })}{' '}
+                <button
+                  type="button"
+                  className="fm-link-btn fm-link-btn--bold"
+                  onClick={() => { toast.dismiss(toastId); openDeclarationById(existingId); }}
+                  data-testid="FmListPage__openExistingDecl"
+                >
+                  {t('fm.new_decl.open_existing')}
+                </button>
+              </span>,
+            );
+            return null;
+          }
+          // ETP-5782: carry the backend error code along with the status.
+          const e = await parseBackendError(body === undefined ? r : {
+            json: async () => {
+              if (body === null) {
+                throw new Error('empty body');
+              }
+              return body;
+            },
+          });
+          return Promise.reject({ status: r.status, code: e.code });
+        })
+        .then(created => {
+          if (created) setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]);
+        })
+        // The rejection is an object `{status, code}`, not a bare status number.
+        .catch(({ status, code } = {}) => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a
           // closed modal with no created row and no explanation. Mirrors the exact toast pattern
@@ -883,7 +929,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           // response body's `error.message`, which is backend English text, not localized)
           // unambiguously identifies "a draft already exists for this period". Every other
           // failure (network error, 500, any other status) keeps the original generic toast.
-          if (status === 409) {
+          // (The ETP-5716 409 DUPLICATE_ORDINARY never reaches here: the first `.then` handles it.)
+          // ETP-5782: the hand-written guard answers a code-less 409; a classified 409 (duplicate_key
+          // included) from elsewhere in the chain must not claim "draft exists" unless it is one.
+          if (isDuplicateConflict(status, code)) {
             toast.error(t('fm.list.new_decl_draft_exists')
               ?? 'No se puede crear la declaración. Ya existe una declaración en borrador para el periodo seleccionado.');
             return;
@@ -891,7 +940,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           toast.error(t('fm.list.new_decl_failed') ?? 'No se pudo crear la declaración.');
         });
     }
-  }, [token, apiBaseUrl, apiFetch, t, bcpLocale]);
+  }, [token, apiBaseUrl, apiFetch, t, bcpLocale, openDeclarationById]);
 
   // Row hover "delete" action (ETP-5187) — draft declarations only, gated the same
   // way both here (caller only ever passes a draft decl into setDeleteTarget) and
@@ -954,10 +1003,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
 
   const statusOptions = STATUS_FILTER_OPTIONS;
 
-  const modelOptions = [
-    { value: '303', label: t('fm.config.m303.title') ?? 'Modelo 303', badge: '303' },
-    { value: '349', label: t('fm.config.m349.title') ?? 'Modelo 349', badge: '349' },
-  ].filter(opt => activeModels[opt.value]);
+  const modelOptions = LIST_MODELS
+    .map(m => ({ value: m.id, label: t(modelTitleKey(m.id)) ?? `Modelo ${m.id}`, badge: m.id }))
+    .filter(opt => activeModels[opt.value]);
 
   const activeDecls = decls.filter(d => activeModels[d.model]);
 
@@ -1052,61 +1100,24 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         </thead>
         <tbody>
           {sortedDecls.map(decl => {
-            // Draft declarations read from the polling maps (computedMap/computedMap349);
-            // any other status reads from the one-time-compute maps above — see the
-            // otherDecls303/otherDecls349 comment for why both are needed.
+            // Draft declarations read from their model's polling map; any other status
+            // reads from its model's one-time-compute map — see `useDeclarationsAutoCompute`
+            // for why both are needed.
             // (see `getComputedForDecl` above for the implementation)
             const isDraft = decl.status === 'draft';
-            const computed = getComputedForDecl(decl, isDraft, {
-              computedMap, computedMapOther303: computedMapOther303Merged,
-              computedMap349, computedMapOther349: computedMapOther349Merged,
-            });
+            const computed = getComputedForDecl(decl, isDraft, { draftMapById, otherMapById });
             const hasStoredResult = !!decl.result?.kind;
-            const isComputingThis = ['303', '349'].includes(decl.model)
+            const isComputingThis = isKnownModel(decl.model)
               && !computed && !hasStoredResult;
             const computeError = (computed?.error && !hasStoredResult) ? computed.error : null;
 
+            // The row's "Resultado" comes from its model's own derivation (303: box 71 with the
+            // row's manualOverrides merged; 349: the abs-summed key totals) — see
+            // `models/<id>/listBehavior<id>.js`. An unknown model uses the default model's (303)
+            // derivation, as it always did ("anything that is not 349 is derived as 303").
             let displayResult = decl.result;
             if (computed?.summary && !computed.error) {
-              if (decl.model === '349') {
-                // ETP-5432 pt.2 — a rectification-only period (no regular operators
-                // alongside it) has an all-zero regular `summary` (Fiscal349BoxesHandler
-                // always emits `summaryByKey` from the REGULAR aggregation only), so
-                // summing `summary` alone silently showed "Informativa"/0 here even
-                // though the declaration has real corrective operators — the detail
-                // page's own RectificativeSubtotalCard already renders the same
-                // `rectificativeSummary` correctly, so this was a list-only gap.
-                // Correctives are SIGNED deltas (can be negative), so they are summed
-                // via Math.abs — the same anti-cancellation rule RectificativeSubtotalCard
-                // documents for why E/S/A/I are never netted against each other; without
-                // it a -30 sales correction offset by a +30 purchase one would still sum
-                // to 0 and reproduce this exact bug.
-                const total = sumAbsKeyTotals(computed.summary) + sumAbsKeyTotals(computed.rectificativeSummary);
-                displayResult = { kind: 'info', amount: total };
-              } else {
-                // ETP-5272 pt.6 (4th finding) — GET /fiscal303/boxes (computeBoxes303Real above)
-                // computes purely from invoice data: no declaration id, no manualData input, so
-                // `computed.summary.result` is always box 46 ("Resultado régimen general", a
-                // sub-total under a "standard company" assumption), never the true final result
-                // (box 71, "Resultado de la liquidación"). Same class of bug already fixed in
-                // FmModel303Page.jsx's `applyComputeResult` — reuse its exact helpers (merge this
-                // row's manualOverrides, re-derive box 71) instead of trusting the raw summary, so
-                // the list and the detail page can never disagree on the same declaration's result.
-                const manualOverrides = decl.manualData?.manualOverrides ?? {};
-                const mergedBoxes = recomputeDerivedBoxes(
-                  applyOverrides(computed.boxes, manualOverrides),
-                  decl.manualData?.identification,
-                );
-                // ETP-5393 Bug B — `??` doesn't catch NaN; require a finite number before
-                // trusting the re-derived box 71 (same guard as FmModel303Page's applyComputeResult).
-                const box71Derived = getBoxValue(mergedBoxes, 71);
-                const r = Number.isFinite(box71Derived) ? box71Derived : computed.summary.result;
-                // A submission snapshot keeps only the invoice COUNT (`sourceCount`), not the
-                // per-invoice `sources` (ETP-5438) — either one answers "has invoices".
-                const hasInvoices = (computed.sources?.length ?? (Number(computed.sourceCount) || 0)) > 0;
-                const kind = deriveResultKind({ ...computed.summary, result: r }, { hasInvoices });
-                displayResult = { kind, amount: Math.abs(r) };
-              }
+              displayResult = getListBehavior(getModelOrDefault(decl.model).id).deriveListResult(decl, computed);
             }
 
             // ETP-5187 — flags this declaration as a 2nd/Nth one for the same
@@ -1151,7 +1162,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />
                   <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
                 </td>
-                <td><span className="fm-period">{decl.period}</span></td>
+                <td><span className="fm-period">{periodLabel(decl.period, t)}</span></td>
                 {/* ETP-5338 pt.3 / ETP-5456 — "Tipo" must reflect AEAT's rectificativa (303) and
                     sustitutiva (349) flags, which the user sets on each model's own detail page
                     ("Autoliquidación Rectificativa" / "Sustitutiva" checkboxes), both persisted
@@ -1380,6 +1391,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         onClose={() => setShowNewDecl(false)}
         activeModels={activeModels}
         existingDeclarations={decls}
+        onOpenExisting={(decl) => onSelect?.(decl)}
         data-testid="NewDeclModal__cb728e" />}
       {/* ── Catalog drawer (slides from right) ───────────────────── */}
       {showCatalog && (

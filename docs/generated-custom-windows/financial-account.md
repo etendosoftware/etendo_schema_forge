@@ -3408,7 +3408,7 @@ path** — no bespoke bulk-delete code in this window:
 | Row checkboxes | `DataTable`'s own `selectable` column (its default, `true`) |
 | Selection state | `ListView` (`selectedRows`, `clearSelectionCounter`, `deselectTrigger`, `deselectRowIds`) — forwarded read-only to the slot as `selectedRows` |
 | Selection bar (floating `SelectionToolbar`, ETP-4972) + icon-only delete | `ListView`, portaled to `document.body`, viewport-fixed bottom-center — not part of the `AccountsHeaderTable` slot's own DOM |
-| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
+| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` (thin wrapper since ETP-5758) → `hooks/useBatchDeleteDialog.jsx` → `DeleteConfirmDialog` + `lib/batchDelete.js` |
 
 **How the flow behaves.** Tick one or more row checkboxes → `ListView`'s floating
 `SelectionToolbar` pill appears bottom-center of the viewport (ETP-4972 — a true
@@ -3662,8 +3662,11 @@ offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo
   `bank-statements` actions and reconciled with the `bank-reconciliation` actions. The PSD2 buttons
   (`pSD2GetBankstatement`, `pSD2GetConsent`, `psd2ReconnectFa`, `psd2GetConnections`,
   `psd2RefreshConnections`) are excluded too: consent and reconnection need a person to authorize at
-  the bank (SCA). The account's own create, update and delete stay — the SPA uses them, and an agent
-  creates accounts with the same server-side rules (country required, see above).
+  the bank (SCA). Disconnecting the bank IS exposed, as the declared actions `disconnectBank`
+  (soft) and `deleteBankConnection` (permanent, the agent must ask the user first) — see
+  `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8. The account's own create, update and delete
+  stay — the SPA uses them, and an agent creates accounts with the same server-side rules (country
+  required, see above).
 - **`transaction` — read-only through MCP.** Create, update and delete answer 405 (its
   `view:"create"` had no field, and the UI never writes a movement through this entity: deposits,
   withdrawals and transfers go through the account's movement flow, the
@@ -3689,7 +3692,11 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
 - **Source:** one column, `FIN_Financial_Account.EM_PSD2_Last_Sync_Date` (psd2 module). It is
   stamped only by a sync that finished OK, including one that brought 0 new transactions. It is NOT
   stamped on an error, an expired consent, a connection that went inactive during the sync, a
-  missing API key, an `Import To Date` skip, or when the account has no active connection.
+  **stale** connection that brought nothing (ETP-5089: Salt Edge still says active but its last
+  failed fetch is newer than its last success — stamping it would show a fresh sync over frozen
+  data), a missing API key, an `Import To Date` skip, or when the account has no active connection.
+  The same rule holds on every path: the Classic button and Etendo GO "Sync now"
+  (`fetchAccountTransactions`) and the scheduled process (`BankStatementsSyncService`).
 - **Where it is exposed:**
   - `financial-accounts-page` (page endpoint): `accounts[].lastSyncDate`, see `financial-accounts-page.md`.
   - `GET bank-connection?action=status` and the `sync` response: `lastSyncDate`.
@@ -3755,3 +3762,56 @@ Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show A
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The new movement, the movement row kebab (Contabilizar, Confirmar, Reactivar — including a reconciled movement, whose core refusal used to arrive as a raw `@ETPR_PeriodClosedForUnRemovePayment@`), the funds transfer modal and the cash close (Conciliación tab) offer **Ir al calendario**. Cash close: a close-date refusal is dated by the close; a marked movement in a closed period keeps its own sentence naming the movement and is dated by that movement (`error.periodDate`). See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `FinancialAccountAccountingHandler` (now rolled back on refusal, including a row it had just created) (`com.etendoerp.go`, see `neo-headless.md`).
+
+Error display: `EditAccountModal` now passes the response's `messageKeys` / `messageParams` to `translateBackendError`, so every keyed backend refusal of this window is shown in the UI locale.
+
+## Personal account-grid views
+
+The account list is audited as the standard DataTable surface behind the exact
+`AccountsHeaderTable` contract slot. Under the shared `grid-column-views` flag
+(enabled by default), personal-view controls are reachable and use the existing
+visibility/order/width persistence contract. Existing column protection still
+applies: account columns carrying `headClass`/`cellClass` remain locked against
+hiding, resizing and reordering by useGridView; admitting the entry point does not
+remove those restrictions. Because this window hides ListView's
+normal toolbar and owns its scrolling, ListView places Columns and Save view in a
+separate region above the grid. The custom account toolbar, selection, row actions
+and scroll ownership retain their existing behavior. Unknown replacement header
+tables fail closed until audited. Automated execution and QA for this integration
+remain pending.
+
+### Reconciliation workspace personal column views
+
+Under `GRID_COLUMN_VIEWS`, both tables in `ReconciliationSplitPanel` offer the
+existing Columns and Save view controls. `ReconciliationTab` remains the same thin
+caller. Statement lines use `financial-account/bankStatementLines`; candidate rows
+use `financial-account/transaction` for movements or `sales-invoice/paymentPlan` /
+`purchase-invoice/paymentPlan` for invoice installments. The action endpoint
+`bank-reconciliation` is not used as a row entity.
+
+Scope resolution follows the actual candidate rows rather than assuming the source
+filter describes every row. Invoice candidates must carry `kind: 'invoice'`,
+`id === scheduleId`, and a boolean `isReceipt` selecting sales or purchase. Backend
+`ReconciliationHandler` emits statement-line IDs from `FIN_BankStatementLine`,
+movement IDs from `FIN_Finacc_Transaction`, and invoice-candidate IDs from
+`FIN_Payment_Schedule`; both invoice contracts declare the latter as `paymentPlan`.
+Mixed or unverifiable scopes keep the original candidate table without requesting
+preferences. Admitting them requires a homogeneous verifiable backend identity or
+an explicitly supported heterogeneous scope contract. Missing invoice-window access
+can cause a preference-load error; the original grid remains usable.
+
+Selection cells stay fixed and visible; in reconciled mode the amount/unlink cell
+is also locked. Matching, sorting, totals, selection, expansion, actions, and
+read-only write guards keep their existing behavior. Partial-match flex cards are
+unchanged. Views share the existing user/spec/entity persistence with other
+projections: saving a projection does not retain settings for absent columns.
+
+The full app-shell `npm run test:all` suite passed, including these reconciliation cases, and
+`npm run build` passed. Browser smoke covered Sales Order only, not financial-account grids;
+authenticated preference persistence and human QA remain pending. See the
+[`financial-account README`](../../tools/app-shell/src/windows/custom/financial-account/README.md)
+for the full inventory and fallback rules.

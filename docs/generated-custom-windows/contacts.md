@@ -37,6 +37,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - Detail tab styling (ETP-5600): the inactive General/Financial pill tab gets a light fill on hover (`hover:bg-card/60`, shared `renderPrimaryTabButtons`). The bottom tab strip shows an icon per tab, resolved from the shared `components/contract-ui/tabIcons.js` map: Persona `Users`, Cuenta bancaria `Landmark`, Dirección `MapPin`, Contabilidad cliente/proveedor `ReceiptText`, Attachments its own icon (see `docs/ui-customization.md` → *Bottom tab-strip icons*).
 - Secondary tab layout: the three child work areas use `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right. For `contact` (Persona) and `bankAccount` (Cuenta Bancaria), clicking pencil flips the row into inline edit. For `locationAddress` (Dirección), clicking pencil opens the `LocationEditorModal` instead of inline editing, and so does clicking the row's content; ticking the row's **selection checkbox** only selects the row and never opens the modal (ETP-5029 — the checkbox cell stops the click from reaching the row-body handler, the same way `DataTable` does). When one or more rows are checked, a compact selection bar (28 px buttons) appears anchored below the add-line button. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. See `docs/ui-customization.md` section 13 for the full reference.
+- **Create a payment term from Billing Preferences (ETP-5826):** both **Condiciones de pago** selectors of the Financial tab — `paymentTerms` (customer side, `C_PaymentTerm_ID`) and `pOPaymentTerms` (vendor side, `PO_PaymentTerm_ID`) — show the same pinned `+ Crear condición de pago` row as the document windows (sales/purchase invoice, order, quotation). `BillingPreferencesForm.jsx` is hand-built, so it spreads the shared `PAYMENT_TERM_CREATE_FIELD_PROPS` from `tools/app-shell/src/lib/inlineCreateVariants.js` instead of declaring the keys in `decisions.json`. It opens a small modal that asks only for the number of days until due — a whole number from 1 to 365, validated client-side (`lib/paymentTermDays.js`) — and POSTs `{ overduePaymentDaysRule: N }` to `/sws/neo/payment-term/header`; the backend derives the name ("N Días" / "1 Día"), the search key and the rest of the term. The new term is auto-selected on the field. If a term with the same number of days or the same name already exists, the server answers 409 (`ETGO_PaymentTermDaysDuplicate` / `ETGO_PaymentTermNameDuplicate`) and the modal names that term, or asks to reactivate it in Condiciones de pago when it is inactive (translated by the shared `lib/backendErrors.js`, like the Payment Term window); nothing is created and the existing term is not selected. A server failure never shows raw backend text. The selector's options are sorted by days, with terms whose name has no leading number (e.g. "Inmediato") first. A successful create marks every cached selector page stale, so the new term also appears in the other payment-term selectors on their next open. The row is shown only to roles that may write the Payment Term window (141) — tier `full` or admin / client-admin; the Sales and Purchasing templates hold 141 read-only, so their roles see a plain selector. Full reference: `docs/decisions-reference.md` (`allowCreate`, *Inline-create variants*) and `docs/ui-customization.md` §19c.
 
 ## Reactive behavior and dependencies
 
@@ -69,18 +70,23 @@ The Contacts window should let users maintain a shared business-partner master r
   - customer and vendor blocking are rendered as a `PillToggle` switch labelled **"Bloquear"** (label to the right of the switch), placed right after Condiciones de pago, not as checkboxes or radios (ETP-5519, see below);
   - the billing fields per side (Price List, Payment Method, Account, Condiciones de pago and the Bloquear switch — on both the customer and the vendor side) are rendered by ONE EntityForm in its default 3-column grid, Bloquear being the grid's `trailing` cell, so all five controls share the same column width and stay aligned (ETP-5519). The third selector in the top row uses `FIN_Financial_Account_ID` for customer and `PO_Financial_Account_ID` for vendor. Both are labelled **"Cuenta" / "Account"** (ETP-5328 reverted ETP-4017's vendor-side rename to "Cuenta contable de gastos" / "Expense Account"). The two labels are declared independently in `decisions.json → window.labelOverrides` and happen to share copy — they are still two different AD columns, so changing one does not change the other.
 - Before the header is saved, the financial panel suppresses effective billing-preference editing and clears prefilled billing values from the unsaved draft so those values are not posted too early.
+- The two type checkboxes of the financial panel read **Cliente** and **Proveedor** — with the `contact-category-type` flag on, **Cliente** and **Proveedor/Acreedor** (`contactVendorCreditor`, ETP-5791; the generic `vendor` key stays "Proveedor" for every other use), and on a saved contact changing the Contact Category overwrites both with the new category's flags — see *ETP-5791* below.
 - The discount selector (native `<select>`) is only visible after the header exists **and** there is at least one available discount option in the catalog. If the catalog returns no options the selector is not rendered, so the "Ninguno" empty state never appears without meaningful choices.
 - Customer-side and vendor-side account selectors are filtered by the selected payment method, mirroring Etendo Classic. The `selectorContext` passes `Fin_Paymentmethod_ID` (for customer) and `PO_Paymentmethod_ID` (for vendor) to the selector request, so the eligible financial account list is filtered in real time as the payment method changes. The filter is applied in NEO Headless by a dedicated selector policy (`FinancialAccountPaymentMethodSelectorPolicy` in `com.etendoerp.go`), which emits an HQL `EXISTS` over the `FinancialMgmtFinAccPaymentMethod` link table — the generic SQL→HQL validation-rule fallback cannot translate the Classic subquery rule, so it is handled by the policy instead.
 - Changing the payment method clears the account selection on that side (customer/vendor). `BillingPreferencesForm` wraps `EntityForm`'s `onChange` so that editing `paymentMethod`/`pOPaymentMethod` resets `account`/`pOFinancialAccount` (and its `$_identifier`), preventing a stale account that is no longer compatible with the new method. The wrapper fires only on user edits, so a compatible saved pair is preserved on initial load.
 - The payment method fields also carry a payment-method callout in the contract, so account-related behavior reacts to payment-method choice.
 - In the Location modal, country is required; choosing a country clears the region, reloads region options through country-filtered selectors, and keeps country/region option loading paginated behind searchable pickers.
 - New locations default shipping address and invoicing address to true, and the modal creates or updates the business-partner location plus underlying location data through the same `locationAddress` endpoint.
-- `LocationEditorModal` accepts an optional `initialValues` prop (`{ address, postalCode, city, countryName }`, ETP-5654) that prefills a NEW address only (ignored when editing). The Copilot OCR "Crear nuevo contacto" popup supplies it through `initialChildData`, and the modal opens automatically right after the contact's first save (the user reviews it and presses Guardar; nothing is created automatically); the country name is resolved against the selector and falls back to España, Región is never seeded, and the prefill does not count as an unsaved edit. Other callers omit it and behave as before. Reference: `docs/ui-customization.md` §19b.
-- The OCR "Crear nuevo contacto" popup also seeds the Contact Category from the document type (`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE` in `lookupCreateTargets.js`: purchase -> "Proveedor", sale -> "Cliente"). Limitation: the lookup matches the category by its exact name (the onboarding convention where `Name == Value`). A tenant that renamed or localized those groups gets no seed, and the form default applies.
+- **Structured address fields (ETP-5806), gated behind `structured-address-for-sepa`.** This is a backend-only flag (TTL 2026-11-15, see `docs/feature-flags.md` and `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`); the modal never evaluates it itself, it reads `capabilities.structuredAddressForSepa` (off `SFWindowAccessMap`, surfaced on `AuthContext` at role-selection time). **While off** (default pre-launch), the modal renders exactly the pre-ETP-5806 single-line editor: a free-text Address line, City, Country, Region, and Save is blocked only on a blank address or country — none of the behavior below applies, and the 3 structured fields are never rendered, requested or sent. **While on**, the modal no longer asks for Address Line 1/2 directly. It asks for **Calle** (Street, mandatory), **Número** (Number, mandatory), **Nombre de edificio** (Building Name, optional) and the existing City/Country/Region. Address Line 1/2 are read-only, computed client-side as a live preview (`composeAddressLines` in `LocationEditorModal.jsx`, a local port of `app-shell-core`'s canonical `locationAddress.js` — see "Known gaps" below) and recomputed/persisted server-side by `ContactsLocationAddressHandler` through `StructuredAddressComposer` (`com.etendoerp.go`), the exact algorithm Classic's `LocationSEPA.java::fillAddressLines` uses: everything fits on line 1 up to 60 characters, overflow moves to line 2. Save is blocked (button disabled) until Street, Number, City and Country are all filled; the inline "Este campo es obligatorio" messages only appear after a first failed save attempt, never on a freshly opened create form. An **existing address created before this change** (free-text Address1/Address2, none of the 3 structured fields filled) shows a legacy-address warning banner with the old free text as reference and a Copy button, and the same banner appears on a NEW address seeded from OCR free text (see `initialValues` below) until the user fills in the structured fields.
+- `LocationEditorModal` accepts an optional `initialValues` prop (`{ address, postalCode, city, countryName }`, ETP-5654) that prefills a NEW address only (ignored when editing). The Copilot OCR "Crear nuevo contacto" popup supplies it through `initialChildData`, and the modal opens automatically right after the contact's first save (the user reviews it and presses Guardar; nothing is created automatically); the country name is resolved against the selector and falls back to España, Región is never seeded, and the prefill does not count as an unsaved edit. Other callers omit it and behave as before. Since ETP-5806, an OCR-seeded `address` only fills the free-text reference shown by the legacy-address banner above — it does **not** fill Street/Number, so the user still has to break the OCR'd text down into the structured fields before Save unblocks. Reference: `docs/ui-customization.md` §19b.
+- **Known gap, accepted as technical debt:** `LocationEditorModal.jsx`'s `composeAddressLines` is currently a private, duplicated copy of the canonical implementation published from `schema_forge_core` (`@etendosoftware/app-shell-core/lib/locationAddress.js`). The duplication exists because this repo still consumes `app-shell-core` as a published package (see `docs/repo-topology.md`) and no new version carrying `locationAddress.js` had shipped as of this change. Resolve by importing the published helper once `schema_forge_core` is merged and a new `app-shell-core` version is released and bumped here — do not "fix" this by editing only one copy.
+- No optimistic-locking/concurrent-edit protection exists on this modal's save path (`ContactsLocationAddressHandler`): two users editing the same address at the same time can silently overwrite each other's change. Accepted limitation of this ticket, not addressed here.
+- The structured address fields (`streetName`/`buildingNumber`/`buildingName`) are injected into the GET response from Java (`ContactsLocationAddressHandler`) and are **not** published in `etendo_schema` for this entity — an MCP agent exploring the schema "blind" will not discover them; it must already know the field names (see `com.etendoerp.go/docs/neo-headless.md`'s entity-level `AGENT_PROMPT` note on `contacts/locationAddress`). This is independent of the flag: with `structured-address-for-sepa` off, the 3 fields are additionally omitted from the GET response and from `etendo_schema`/`etendo_selectors` entirely (`AddressVirtualSelectorPolicy`), not merely undiscoverable.
+- The OCR "Crear nuevo contacto" popup also seeds the Contact Category from the document type (`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE` in `lookupCreateTargets.js`: purchase -> "Proveedor", sale -> "Cliente"). The popup also seeds `vendor: true` (purchase) / `customer: true` (sale). With the `contact-category-type` flag on (ETP-5791) it seeds no `customer`/`vendor`: the seeded category is what makes the new contact a vendor or a customer, and the popup refuses a category that does not grant the document's type — see *ETP-5791* below. Limitation: the lookup matches the category by its exact name (the onboarding convention where `Name == Value`). A tenant that renamed or localized those groups gets no seed, and the form default applies.
 - The same `LocationEditorModal` is also reused by the shared partner-address picker for inline "+ Add address" flows in other windows. That reuse is proved in code/tests, but it is not a distinct extra screen inside `/contacts` itself.
 - The Location tab's own add-line button reads **"+ Añadir dirección"** (ETP-5021) — `secondaryTabs.locationAddress.addLineLabelKey: "addAddress"` in `decisions.json` swaps in the same standardized text used by the header-level partner-address picker mentioned above, instead of the generic tab-name-derived "Añadir Dirección". See `docs/decisions-reference.md`'s `addLineLabelKey` row for the mechanism.
 - Bank account defaults are partially visible in current evidence: country defaults from configuration and bank format defaults to `GENERIC`. A bank-account format field exists, but current evidence does not prove how the form reacts between generic, IBAN, SWIFT, and Spanish modes.
-- The detail view shows a **horizontal financial summary** in both primary tabs (no right-side sidebar): above the General form and at the top of the Financial tab. The summary widget shows three KPIs — **Balance Neto** (Net Balance, computed client-side as Income − Expenses), **Ingresos** (Income), and **Gastos** (Expenses) — each with a variation chip. Since the ETP-5600 QA fix the **amounts follow the period**: `ContactsFinanceContext` requests `bp-stats?businessPartnerId=…&months=3|6` (3M → 3, 6M → 6) and refetches it when the period changes, and the widget reads the `revenue` / `expenses` entries of the response (`{ value, previousValue, trend, hasPrevious }`; current window = last N calendar months including the current one, previous = the N months before; amounts net of VAT). Balance Neto = Ingresos − Gastos. **Variation chip** (Figma "Badge sm": pill, no border, 24px high, 4px/8px padding, 16px icon then Inter 400 12/16 text, rendered with the shared `StatusTag` `success`/`destructive` tones `#EEFBF4`/`#17663A` and `#FEF0F4`/`#D50B3E`): text "+8% vs últimos 3 meses" / "−5% vs últimos 6 meses" (real sign, rounded integer %). The **arrow** follows the real direction; the **colour** follows good/bad: Ingresos and Balance Neto up = green, down = red; Gastos up = red, down = green. The arrows are the Figma "Iconic" `IconicArrowUpIcon`/`IconicArrowDownIcon` (app-shell-core `custom-icons.jsx`, 16px, `currentColor`, so they take the chip text colour). A variation that rounds to 0% hides the chip (ETP-5600 QA round 2). Ingresos/Gastos use the backend `trend` and are shown only when `hasPrevious`; Balance Neto is computed client-side as `((revCur − expCur) − (revPrev − expPrev)) / |revPrev − expPrev| * 100` and hidden when the previous net is 0. A hidden chip is never replaced by "0%" or "∞". `bp-trend` (fixed 6 months) is **not** refetched on a period change; the chart slices it.
+- The detail view shows a **horizontal financial summary** in both primary tabs (no right-side sidebar): above the General form and at the top of the Financial tab. The summary widget shows three KPIs — **Balance Neto** (Net Balance, computed client-side as Income − Expenses), **Ingresos** (Income), and **Gastos** (Expenses) — each with a variation chip. **Narrow widths (ETP-5600, e.g. a 1280px viewport):** in each KPI block the amount stays on the first line; when amount and chip do not fit side by side, the chip (or the no-previous text) wraps below the amount, left-aligned (`flex-wrap`, 2px row gap); on wide screens the layout is one line as before. If even that line is too narrow the chip shrinks and its " vs últimos N meses" suffix truncates with an ellipsis (the `title` has the full text), and each block clips its own content, so a chip never paints over the next KPI; the period selector and "Ver gráfico" keep their size on the right. Since the ETP-5600 QA fix the **amounts follow the period**: `ContactsFinanceContext` requests `bp-stats?businessPartnerId=…&months=3|6` (3M → 3, 6M → 6) and refetches it when the period changes, and the widget reads the `revenue` / `expenses` entries of the response (`{ value, previousValue, trend, hasPrevious }`; current window = last N calendar months including the current one, previous = the N months before; amounts net of VAT). Balance Neto = Ingresos − Gastos. **Variation chip** (Figma "Badge sm": pill, no border, 24px high, 4px/8px padding, 16px icon then Inter 400 12/16 text, rendered with the shared `StatusTag` `success`/`destructive` tones `#EEFBF4`/`#17663A` and `#FEF0F4`/`#D50B3E`): text "+8% vs últimos 3 meses" / "−5% vs últimos 6 meses" (real sign, integer %, grouped with the instance thousands separator through `formatGroupedNumber` in `lib/formatCurrency.js`). **Digit cap (ETP-5600 QA pass 2):** up to |9.999| % the value shows in full; from |10.000| % only the **number** is cut with an ellipsis, inside a box exactly as wide as the rendered cap "±9.999%" (an invisible in-flow copy of the cap sizes it; the real number sits on top, `absolute inset-0 truncate`, both `tabular-nums`, so any 4-digit value fits and a 5-digit one always overflows); the "vs últimos N meses" suffix stays whole and the full value is the `title` tooltip. A `ch`-based max-width was tried first and never truncated (most glyphs are narrower than "0"). The **arrow and the colour both follow the sign**, for every KPI including Gastos (ETP-5600 QA pass 2): a positive % is green, a negative % red. The % is **rounded once**, to a whole number, half away from zero (−54.5 → −55), from the raw ratio of `value`/`previousValue` — never from the backend `trend`, which bp-stats pre-rounds to one decimal (−54.545 → −54.5, which a second rounding turned into −54). The arrows are the Figma "Iconic" `IconicArrowUpIcon`/`IconicArrowDownIcon` (app-shell-core `custom-icons.jsx`, 16px, `currentColor`, so they take the chip text colour). A variation that rounds to 0% hides the chip (ETP-5600 QA round 2). Ingresos/Gastos are computed client-side as `(value − previousValue) / |previousValue| * 100` and shown only when `hasPrevious` (the backend `trend` field is not read); Balance Neto is computed client-side as `((revCur − expCur) − (revPrev − expPrev)) / |revPrev − expPrev| * 100`. **No previous period (ETP-5600 QA pass 2):** when there is nothing to compare with — `hasPrevious` false, a previous value of 0, or a previous net of 0 — the chip is replaced by the muted text "Sin datos del período anterior" (`ui('financialSummaryNoPrevious')`, `data-testid="contacts-summary-no-trend"`), mirroring the dashboard `FinancialSummaryCard`'s `financial-summary-no-trend`: 24px box, 4px/8px padding, 12/16, muted foreground, no pill, no arrow, ellipsis. A variation that rounds to 0% still shows nothing. A chip is never "0%" or "∞". `bp-trend` (fixed 6 months) is **not** refetched on a period change; the chart slices it.
 - **Period selector** ("Últimos 3 meses" / "Últimos 6 meses", `ContactsPeriodButton.jsx`, ETP-5600). It sits **inside the summary widget**, at the right end, immediately left of **Ver gráfico**, so it appears in both the General and the Financial tab. Before ETP-5600 it sat in the tabs bar through the `DetailView` `tabsBarAfter` slot, which Contacts no longer uses. It is a 32px trigger (calendar icon, label, chevron) that keeps its focus ring while the list is open. The list marks the selected option with a check and is fully keyboard-operable: ArrowUp/ArrowDown on the trigger opens it; inside, ArrowUp/ArrowDown wrap, Home/End jump, Enter selects, Escape closes and returns focus to the trigger, Tab closes. Both widget instances share the period and the fetched data through `ContactsFinanceContext`, so changing it updates badges and chart everywhere.
 - **Ver gráfico** opens the "Ventas y compras" dialog (720px wide, popover surface `bg-popover`, `rounded-md`). Order is title, legend, chart. The dialog has **no** period toggle of its own: the chart shows the last 3 or 6 months of the summary's selected period. The hover tooltip is near-black (`--eg-ink`) with the floating-toolbar light text tokens, readable in both themes. Chart axis labels are localized based on the active locale.
 - Vertical spacing of the General tab (ETP-5600): 8px from the tabs bar to the summary (the widget has no top padding) and 20px from the summary to the first inputs (`pb-3` on the widget plus the form card's own 8px padding); header inputs are 20px apart (see `contacts.css` above).
@@ -119,7 +125,7 @@ The Contacts window should let users maintain a shared business-partner master r
 11. Add or edit a location and confirm the saved address is reflected back in the contact detail and list enrichment.
 11. In the Dirección tab, tick a row's selection checkbox and confirm the row is marked as selected (and the selection bar appears) while the `LocationEditorModal` stays **closed**; untick it and confirm the modal stays closed. Tick the header select-all and confirm the same. Then click the row's content (outside the checkbox) and confirm the modal **does** open for that address. Repeat the checkbox check in the Persona and Cuenta Bancaria tabs to confirm pencil/inline-edit is unaffected.
 12. Add a bank account and confirm the saved row stays linked to the current contact.
-13. In both the General and Financial tabs, confirm the horizontal summary shows three KPIs — Balance Neto, Ingresos (green), and Gastos (red) — each with a trend badge. Click the period selector inside the summary (left of **Ver gráfico**), switch between "Últimos 3 meses" and "Últimos 6 meses", and confirm the three KPI amounts AND the chips update ("vs últimos 3/6 meses"). Confirm chip colours: Ingresos rising = green, Gastos rising = red, Balance Neto rising = green; a contact with no activity in the previous window, or whose change rounds to 0%, shows no chip (never "0%"). Confirm the trigger keeps a focus ring while the list is open, the selected option shows a check, and the list works with the keyboard alone (ArrowDown on the trigger opens it, arrows move, Enter selects, Escape closes). Click **Ver gráfico** and confirm the dialog shows title, legend, then chart, has **no** 3/6-month toggle, and shows as many months as the selected period; hover a month and confirm a near-black tooltip. Confirm Balance Neto equals Ingresos − Gastos.
+13. In both the General and Financial tabs, confirm the horizontal summary shows three KPIs — Balance Neto, Ingresos (green), and Gastos (red) — each with a trend badge. Click the period selector inside the summary (left of **Ver gráfico**), switch between "Últimos 3 meses" and "Últimos 6 meses", and confirm the three KPI amounts AND the chips update ("vs últimos 3/6 meses"). Confirm chip colours follow the sign on all three KPIs: any positive % green, any negative % red (Gastos rising = green too); a variation of −54.545% reads −55%; a contact with no activity in the previous window shows the muted "Sin datos del período anterior" instead of a chip, and one whose change rounds to 0% shows nothing (never "0%"); a variation of 10.000% or more is cut with an ellipsis at the 4-digit chip width and shows its full value on hover. Confirm the trigger keeps a focus ring while the list is open, the selected option shows a check, and the list works with the keyboard alone (ArrowDown on the trigger opens it, arrows move, Enter selects, Escape closes). Click **Ver gráfico** and confirm the dialog shows title, legend, then chart, has **no** 3/6-month toggle, and shows as many months as the selected period; hover a month and confirm a near-black tooltip. Confirm Balance Neto equals Ingresos − Gastos.
 14. Reopen an existing person-like contact and verify the toggle shows Person mode (persisted via `EM_Etgo_IsPerson`). Create a new contact in Person mode, save it, and confirm the toggle stays in Person mode after the record is saved.
 15. Change the toggle on an existing contact, press **Save**, then reload the page; confirm the selection persists. Also confirm that changing the toggle and reloading WITHOUT pressing Save does NOT persist the change (the toggle no longer auto-PATCHes on click — it is saved with the explicit Save alongside the name fields).
 16. In **Person** mode, type a First Name and Last Name, then switch the toggle to **Empresa** (Company). Confirm **Razón Social** is pre-filled with `First Last`. Do NOT press Save yet and confirm no PATCH of `name` is sent on the switch (verify in the Network tab); the value persists only after pressing **Save**. Re-sync check: switch back to Person, **correct** the First/Last Name (without editing Razón Social manually), then switch to Empresa again — confirm Razón Social **updates** to match the corrected names. Manual-edit check: now **manually edit** Razón Social to a custom value, switch back to Person, change the First/Last Name, and switch to Empresa again — confirm the manually edited Razón Social is **NOT overwritten**. Also verify that opening an existing record whose Razón Social was entered directly (never auto-generated) and switching Person→Company does not clobber that value. Field-clearing check: in Person mode with First/Last Name filled, switch to Empresa and confirm First Name and Last Name are cleared (empty). Then switch back to Person and confirm Razón Social is cleared. Confirm neither clear is persisted until **Save**.
@@ -148,14 +154,14 @@ The Contacts window should let users maintain a shared business-partner master r
 - `artifacts/contacts/generated/web/contacts/BusinessPartnerForm.jsx` and `BusinessPartnerPage.jsx` confirm the header fields, top-bar slot usage, General/Financial tabs, and the Person/Bank Account/Location child areas. `BusinessPartnerForm.jsx` declares `required: true` on `etgoFirstname` and `etgoLastname`; `ContactsBusinessPartnerForm.jsx` excludes those fields in Company mode, so the `*` indicator only appears in Person mode.
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` confirms the new-header auto-save flow before opening require-saved secondary tabs. It also exposes `hideAddLineChevron` (hides the dropdown chevron on the Add Line button), `addLineButtonPaddingX` (left-padding wrapper around the button), `formScrollPaddingB` (bottom padding of the form scroll container), and `secondaryTabContentPaddingT` (top padding of secondary tab content areas). The previously inline nested ternary for `formScrollPaddingX` is extracted to `formScrollPaddingXResolved` before the JSX return to satisfy SonarQube's cognitive complexity rule.
 - `tools/app-shell/src/components/ui/add-line-button.jsx` exposes a `hideChevron` prop (default `false`). When `true`, the divider and dropdown trigger are omitted and the primary button receives `borderRadius: 7` on all corners. The contacts window passes `hideAddLineChevron={true}` and `addLineButtonPaddingX="pl-2"` via `DetailView` to achieve a flat, left-padded "Añadir…" button without a split-button chevron.
-- `tools/app-shell/src/windows/custom/contacts/contacts.css` provides scoped styles via the `.contacts-rows` class applied to the contacts wrapper. Key rules: `th button[role="checkbox"][aria-checked="false"]` receives `background-color: transparent` to prevent the unchecked select-all checkbox from covering the column header's `border-b` separator line; hover and focus-visible styles for inputs inside `.contacts-rows` use `rounded-lg` selectors consistent with Shadcn inputs. The file holds no list-row rules: the row hover (white + Shadows/lg, instant, top separator kept), the checked colour and the quick-actions fade are the shared `DataTable` default for every list since ETP-5600 (`docs/ui-customization.md` §13 → *List row visuals*), so the former Contacts-only rules (core `.contacts-rows tr:hover` drop-shadow, `transition: none`, `--row-hover-bg`, the inset top separator) were removed.
+- `tools/app-shell/src/windows/custom/contacts/contacts.css` provides scoped styles via the `.contacts-rows` class applied to the contacts wrapper. Key rules: `th button[role="checkbox"][aria-checked="false"]` receives `background-color: transparent` to prevent the unchecked select-all checkbox from covering the column header's `border-b` separator line; hover and focus-visible styles for inputs inside `.contacts-rows` use `rounded-lg` selectors consistent with Shadcn inputs. The file holds no list-row rules: the row hover (white + Shadows/lg, instant, no borders: its own and the previous row's line turn transparent; QA pass 2 reverted the earlier "top separator kept"), the checked colour and the quick-actions fade are the shared `DataTable` default for every list since ETP-5600 (`docs/ui-customization.md` §13 → *List row visuals*), so the former Contacts-only rules (core `.contacts-rows tr:hover` drop-shadow, `transition: none`, `--row-hover-bg`, the inset top separator) were removed.
 - `tools/app-shell/src/windows/custom/contacts/ContactsTable.jsx` confirms list enrichment and the following behavior: (a) eight always-visible columns — Commercial Name, First Name, Last Name, Type, Location, Website, Email, Phone; (b) hover actions (pencil/trash) for inline edit and single-row delete; (c) conditional inline editing where Persona rows expose `etgoFirstname`/`etgoLastname` inputs and Empresa rows expose the `name` input, with `etgoWeb`/`etgoEmail`/`etgoPhone` editable for both types; (d) a hidden virtual `__contactType` enum column with a `buildCriteria` hook that maps Cliente/Proveedor enum values to real backend boolean criteria (`customer`/`vendor`); (e) `TypeBadge` renders only the business-role badges (Cliente = purple, Proveedor = blue); (f) since ETP-5600, Razón Social renders semibold and the Website column renders `WebsiteCell` (a neutral `Tag` link built with `contactsWebUrl.js`: `stripUrlScheme` for the label, `toWebsiteHref` for an always-`https://` href, so a stored value can never become a `javascript:`/`data:` link; `target="_blank"`, `rel="noopener noreferrer"`, click and keydown stop propagation so the row does not navigate; an empty value falls back to the plain text cell; Figma "Página web" chip: radius md, 16px `#828FA3` link icon, `#3F3F50` 12/16 text on `#F5F7F9`, no border or underline, and on hover a `#121217` @ 5% overlay drawn as an inset box-shadow — the `Tag` sets its colours inline — 300ms ease-out; the Tipo chips have no hover change); (g) when `ListView` passes a non-null `emptyListContext`, the component returns `ContactsEmptyState` instead of the grid. `ContactsTable.jsx` still declares its own `confirmDelete`/`handleDeleteRow` (using `extractApiErrorMessage` and `toast.error`) and wires them into its internal `DataTable` as `onDeleteRow`, but this code path is unreachable in practice for this window: `hoverRowActions` is never set to `true` here (it defaults to `false` in `ListView.jsx`), and `rowQuickActions` is enabled, so `DataTable`'s `legacyDeleteEnabled` gate (`!!onDeleteRow && (hoverRowActions || !quickActionsEnabled)`) always resolves to `false` — the legacy hover-delete button is never rendered and `onDeleteRow` is never invoked. The pencil/trash icons actually visible in the UI (manual verification steps 19–23) are `RowQuickActions`'s overlay instead, whose `onDelete` resolves to `ListView`'s shared `defaultRequestDelete` (`useRowDelete`) — the same `extractErrorMessage`/`toast.error` pipeline bulk delete now uses (see the "Reactive behavior and dependencies" note above).
 - `tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx` and `BillingPreferencesForm.jsx` confirm post-save financial editing, customer/vendor-dependent sections, credit-limit persistence, and discount-row maintenance. The Financial tab layout uses a horizontal two-column design (descriptive text fixed-width on the left, interactive widget on the right) for both the Credit and Billing Preferences sections. `ContactsFinancialPanel.jsx` includes an inline `CreditLimitStepper` sub-component that renders a numeric input with − and + buttons; rapid clicks are debounced (400 ms via `useRef + setTimeout + clearTimeout`) so at most one PATCH is sent per burst. An `<hr>` separator divides the Credit section from the Billing Preferences section. The container uses `space-y-2` for tight vertical rhythm. `BillingPreferencesForm.jsx` renders each side's billing fields in a single EntityForm 3-column grid: price list, payment method and financial account on the first row; payment terms and the blocking `PillToggle` (passed as the grid's `trailing` cell, label to its right) on the second (ETP-5519). The Customer and Vendor flags are the shared `SquareCheckbox` (`windows/custom/shared/SquareCheckbox.jsx`), each at the top of its side's muted card; ticking one expands that side's billing fields.
 - `tools/app-shell/src/windows/custom/contacts/LocationEditorModal.jsx` confirms saved-header dependency, country/region selector dependency, paginated searchable country/region pickers, and atomic create/update/delete behavior through the `locationAddress` endpoint. All user-facing labels including the close button are i18n-driven via `useUI`.
 - `tools/app-shell/src/components/contract-ui/PartnerAddressPicker.jsx` and `tools/app-shell/src/components/contract-ui/__tests__/PartnerAddressPicker.test.js` confirm that the same contacts location modal now supports inline "+ Add address" creation for partner-address selectors outside the Contacts window.
 - `CreateContactModal.jsx` (and its `EntityCreationModal.jsx`/`AddressSection.jsx`/`FinancialSection.jsx`/`contactModalConfig.js` supporting files) — the shared quick-create flow's former hand-rolled reimplementation of this window — was deleted in ETP-5332. The "+ Crear contacto" affordance in other windows' partner/contact selectors now mounts this Contacts window itself via `RecordCreateModal` (`docs/ui-customization.md` §19b), so person/company create payload semantics for that flow are exercised through this window's own tests rather than a separate quick-create test suite; no contacts-window-specific automated test was found for the main detail-route save behavior.
 - `tools/app-shell/src/menu.json` and `tools/app-shell/src/windows/registry.js` confirm menu visibility and route-to-loader registration for `/contacts`.
-- `tools/app-shell/src/windows/custom/contacts/ContactsSummaryWidget.jsx`, `ContactsPeriodButton.jsx`, `ContactsFinanceContext.jsx`, and `ContactsFinancialPanel.jsx` implement the horizontal financial summary that replaced the former right-side sidebar (`BusinessPartnerSidebar.jsx`, deleted). `ContactsFinanceContext` holds the shared period state and fetches `bp-stats` (by record id AND `months`, part of the cache key's `filters`, refetched on a period change) and `bp-trend` (by record id only). `ContactsSummaryWidget` renders the three KPIs from the `bp-stats` `revenue` / `expenses` entries with good/bad-coloured variation chips (shared `StatusTag`, direction icon isolated in `TREND_ICONS`) and the "Ver gráfico" dialog (reusing the local `BPChartSVGContent` in `contacts/BPChartSVGContent.jsx`; `onOpenAutoFocus` is prevented so the close X shows no focus ring on open); Net Balance value and trend are computed client-side from the two blocks. In the General tab the widget is wired through `DetailView` `headerContent`; in the Financial tab it is rendered at the top of `ContactsFinancialPanel`, so the same summary is visible in both tabs. Since ETP-5600 `ContactsSummaryWidget` also renders `ContactsPeriodButton` (the period selector) left of its "Ver gráfico" button, so the selector appears wherever the widget does; `index.jsx` no longer passes `tabsBarAfter`. The chart dialog has no period state of its own and slices the `bp-trend` series to the context's `period`. The sidebar is removed by setting `window.sidebarLayout: false` in `decisions.json`, which stops the generator from emitting `sidebarContent`.
+- `tools/app-shell/src/windows/custom/contacts/ContactsSummaryWidget.jsx`, `ContactsPeriodButton.jsx`, `ContactsFinanceContext.jsx`, and `ContactsFinancialPanel.jsx` implement the horizontal financial summary that replaced the former right-side sidebar (`BusinessPartnerSidebar.jsx`, deleted). `ContactsFinanceContext` holds the shared period state and fetches `bp-stats` (by record id AND `months`, part of the cache key's `filters`, refetched on a period change) and `bp-trend` (by record id only). `ContactsSummaryWidget` renders the three KPIs from the `bp-stats` `revenue` / `expenses` entries with sign-coloured variation chips (positive green, negative red, rounded once from the raw values) (shared `StatusTag`, direction icon isolated in `TREND_ICONS`) and the "Ver gráfico" dialog (reusing the local `BPChartSVGContent` in `contacts/BPChartSVGContent.jsx`; `onOpenAutoFocus` is prevented so the close X shows no focus ring on open); Net Balance value and trend are computed client-side from the two blocks. In the General tab the widget is wired through `DetailView` `headerContent`; in the Financial tab it is rendered at the top of `ContactsFinancialPanel`, so the same summary is visible in both tabs. Since ETP-5600 `ContactsSummaryWidget` also renders `ContactsPeriodButton` (the period selector) left of its "Ver gráfico" button, so the selector appears wherever the widget does; `index.jsx` no longer passes `tabsBarAfter`. The chart dialog has no period state of its own and slices the `bp-trend` series to the context's `period`. The sidebar is removed by setting `window.sidebarLayout: false` in `decisions.json`, which stops the generator from emitting `sidebarContent`.
 - `tools/app-shell/src/components/contract-ui/__tests__/DetailView.autoSaveOnBlur.test.js` is a static regression guard (ETP-3660) that reads `DetailView.jsx` as a string and asserts: `autoSaveOnBlur` prop has a `false` default; `handleFieldBlur` exists alongside `hook.editing`, `hook.selected`, and `hook.handleSave` usage; `onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}` appears on both Form instances (principal and collapsed sections).
 - `modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/ContactNameSyncHandlerTest.java` contains 14 JUnit 5 unit tests (>80 % coverage) for `ContactNameSyncHandler`: happy paths (first-name-only change, last-name-only, both changed, trimming, null partial names), isPerson guards (false, null), no-changes guard, blank-name guard, isValidEvent guards (TriggerHandler disabled, wrong entity), and getObservedEntities caching. Uses `MockedStatic<ModelProvider>` and `MockedStatic<TriggerHandler>`; resets the static `entities` field via reflection in `@BeforeEach`.
 - `tools/app-shell/src/lib/apiError.js` is the shared utility for parsing non-ok fetch Responses into human-readable error messages. It supports NEO Headless format (`{error: {message}}`), Etendo JsonDataService format (`{response: {error: {message|string}}}`), top-level `{message}`, and falls back to `Error ${status}` for non-JSON bodies. `ContactsTable.jsx` is the only place in the app-shell that still imports it (its own `confirmDelete`), and that path is unreachable dead code for this window (see the `ContactsTable.jsx` bullet above) — bulk delete never uses it (it goes through `extractErrorMessage` from `useEntity.js` in the generic `useBulkRowDelete`, see above).
@@ -240,6 +246,8 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 **Row-level dedupe.** ⚠️ **Superseded by ETP-4995:** the key is now `["taxID"]`, not `["etgoEmail"]` — email is optional, and `dedupeRows` skips deduplication entirely when any key part is blank. `window.import.dedupe` was `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice. The first row remains importable; the later row is not sent to `/batch`. Backend unique-constraint rejections use the same skipped-row treatment. The importer does not merge or overwrite an already persisted contact without an explicit upsert policy.
 
 ## ETP-4905 — Contact category resolution during import
+
+⚠️ **With the `contact-category-type` flag on (ETP-5791) auto-creation is off:** an unknown category fails its row (`importErrorContactCategoryNotFound`); only existing categories are resolved. With the flag off (default) this section applies unchanged. See *ETP-5791* below.
 
 The Contacts CSV import supports the same dependent-category behavior as the Product import. ⚠️ **Superseded by ETP-4995:** the three columns described here (`categoryCode`, `categoryName`, `category`) collapsed into a single `category` column, whose cell is matched as an exact `C_BP_Group.Value` first and as an accent/case/whitespace-insensitive `C_BP_Group.Name` otherwise. The resolution and auto-creation semantics below are unchanged. The descriptor resolves an existing `businessPartnerCategory` and writes its ID into the `businessPartner` operation before the composite batch is sent.
 
@@ -953,7 +961,7 @@ That mock now reads `BusinessPartnerHandler.LOCATION_COLUMNS` / `CONTACT_COLUMNS
 arrays `queryChildData()` walks — so it can no longer disagree with the code it exercises, but a
 mock still cannot say whether those names exist in the database.
 
-`BusinessPartnerHandlerDbTest` (OBBaseTest) answers that half: it executes both statements against
+`BusinessPartnerHandlerChildDataSqlIntegrationTest` (OBBaseTest) answers that half: it executes both statements against
 the live schema with the same `= ANY(?)` varchar-array binding the handler uses, and asserts each
 result set exposes `c_bpartner_id` plus every column name read by name, and that each returned row
 is readable through them. A wrong column name now fails a test instead of silently emptying a
@@ -1033,7 +1041,7 @@ parity and a full re-import round trip asserted against `buildTemplateCsv`/`mapC
 a Spanish and an English session), `ListViewExport.vitest.js`, the `baseUrl` and
 non-CSV-response cases in `useCsvExport.vitest.jsx`, the `codeLabels` block in `codedValue.vitest.js`, the child-data block
 in com.etendoerp.go `BusinessPartnerHandlerTest` (attachment, a partner with no children, the
-flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerDbTest` (both child
+flag absent, a failing query, and a single-record GET), `BusinessPartnerHandlerChildDataSqlIntegrationTest` (both child
 statements executed against the live schema), and `NeoCsvExportServiceTest` — which now covers the flat list envelope, an absent
 column key, a `$_identifier` companion, a non-list GET that must still decline, value
 translation, and an unmapped/blank/malformed `valueMaps`.
@@ -1334,6 +1342,11 @@ ETP-5205 commit history for the fix and its test).
 
 ## ETP-5544 — Import: Customer / Vendor columns
 
+⚠️ **Hidden by the `contact-category-type` flag (ETP-5791):** with the flag on both columns leave the
+template, the review validator, the row resolution and the export (`"hiddenWhenFlag":
+"contact-category-type"` on the two `window.import.fields` entries), and the contact's type comes
+from its category. With the flag off (default) this section applies unchanged.
+
 **The bug.** The import template had no column for the business partner's role, and the
 descriptor never wrote `customer` / `vendor`. Every imported row therefore landed on the AD
 defaults (`IsCustomer='Y'`, `IsVendor='N'`), so a supplier list imported via CSV silently became a
@@ -1472,6 +1485,7 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 ## ETP-5758 — Bulk delete uses ListView's generic action
 
@@ -1499,6 +1513,14 @@ within its 30 s stale time.
 behavior itself is covered generically in `hooks/__tests__/useBulkRowDelete.vitest.jsx`. The
 E2E bulk-delete step in `e2e/tests/flows/contacts/contacts-integration.spec.js` now drives the
 generic `bulk-delete-selected` / `bulk-delete-confirm` testids.
+
+**In-progress state (ETP-5758, QA follow-up).** While the batch runs, the generic dialog's
+destructive button shows a spinner and *"Eliminando…"*, the description switches to
+*"Eliminando {count} registro(s). Esto puede tardar unos segundos."*, Cancel is disabled and the
+dialog carries `aria-busy`. This lives in the shared `DeleteConfirmDialog`, which every bulk delete
+in the app now goes through (`useBulkRowDelete` became a thin wrapper over `useBatchDeleteDialog`),
+so Contacts needs no window code for it — see `docs/ui-customization.md` §9c.
+
 ## ETP-5515 — Bottom tabs: "Más" menu with a dynamic slot
 
 At 1280x720 the six bottom tabs (Persona, Cuenta bancaria, Dirección, Contabilidad cliente,
@@ -1517,3 +1539,221 @@ with and without the sidebar variants.
 At narrower widths (browser zoom, side panel open) fewer than 4 tabs may fit; the strip then moves
 the extra tabs into "Más" and never overlaps the side panel. Manual check: zoom the browser in
 until a tab would not fit and confirm "Más" count grows and nothing overlaps.
+
+## ETP-5791 — The contact category defines the contact type
+
+**Behind the `contact-category-type` feature flag (default off).** Everything in this section is
+the flag-on behaviour. With the flag **off** Contacts behaves as before ETP-5791: the vendor
+checkbox reads "Proveedor"; changing the category does not touch the type checkboxes and no
+category is refused; the create popups (document Contacto selector, OCR) seed `customer` / `vendor`
+from the document's nature, POST every key and run no category check; the import keeps its Cliente /
+Proveedor columns (ETP-5544) and auto-creates an unknown category (ETP-4905). The backend evaluates
+the same key independently. Toggle points: `ContactsBusinessPartnerForm` (category sync),
+`BillingPreferencesForm` (label), `useContactCreateTypeGate` (both create popups),
+`contactsImportDescriptor.js` (`contactCategoryTypeEnabled`) and the `hiddenWhenFlag` import fields.
+Registry entry: `flags-registry.json` → `contact-category-type`.
+
+`C_BP_Group` carries two new flags, `EM_Etgo_Iscustomer` / `EM_Etgo_Isvendor` (NEO properties
+`etgoIscustomer` / `etgoIsvendor` on the `business-partner-category` spec). On contact **create**
+(REST single, `/batch`, MCP) the backend (`ContactTypeRules`, `com.etendoerp.go`) copies them into the
+new contact's `customer` / `vendor` **unless the request body carries the key** — key presence is
+what counts as explicit. A contact with neither type is refused
+(`ETGO_BPartnerContactTypeRequired`). A category with neither flag (legacy, before data-fix R55)
+defines nothing and is not inherited from.
+
+### Import (block D)
+
+- The **Cliente / Proveedor columns are hidden** (`hiddenWhenFlag: "contact-category-type"` on
+  `decisions.json → window.import.fields`, filtered at runtime by `lib/importFlagGates.js`), and the
+  review validator and the row resolution skip them. The descriptor never puts `customer` /
+  `vendor` in the `businessPartner` body, so every imported contact inherits its type from its
+  category. A template downloaded before ETP-5791 that still has those columns imports fine: the
+  headers map to no field and are ignored.
+- **Category resolution is lookup-only.** `allowCreate: false`, no `createFn`: the cell is matched
+  against the existing categories (exact code first, then accent/case-insensitive name — unchanged),
+  and an unknown category fails its row with `importErrorContactCategoryNotFound` ("La categoría de
+  contacto "X" no existe. Créala primero en Categoría de contacto o usa una existente."). An
+  auto-created category would carry neither flag, so every row pointing at it would be refused by the
+  backend anyway. An **empty** category cell still sends no category, so the backend default applies.
+- The template's category example is now **Cliente** (`importExampleContactCategory`), the name of
+  the category onboarding creates — "Clientes" would fail the template's own example row now that
+  categories are not created.
+
+### Contact form (block E)
+
+- **Label.** The vendor checkbox in Financiero reads **Proveedor/Acreedor** (`contactVendorCreditor`).
+- **Create payload.** On a new contact the type checkboxes are not on screen (billing preferences
+  show "Guarda el contacto…"), and `useEntity`'s create rule 1 drops a key no mounted form registers
+  unless it is user-authored — so the `/defaults` value `customer: 'Y'` never reaches the POST. The
+  leak was the create-from-document SEED: `buildContactSeed` put `vendor: true` / `customer: true` in
+  `initialData`, `useEntity.handleNew` marks seeded keys user-changed, and they always rode into the
+  POST, disabling inheritance. The seed now carries only the name (and the category from
+  `useContactCategorySeed`). The dormant fallback form of `RecordCreateModal` (used only when the
+  window module fails to load) posts everything `/defaults` returned; the contact target declares
+  `createOmitUntouched: ['customer', 'vendor']` so those two keys are sent only if the user set them.
+- **Category change on a saved contact** (`useContactCategoryTypeSync.js`, run by
+  `ContactsBusinessPartnerForm` for the `principal` section only): the new category's flags are read
+  with `GET /sws/neo/business-partner-category/businessPartnerCategory/{id}`
+  (`contactCategoryFlags.js`) and written onto `customer` / `vendor` with ordinary `onChange` calls,
+  without a prompt. The user can still flip either box before saving, and Save sends what is on
+  screen. A category with neither flag, or one whose flags cannot be read, leaves the boxes alone.
+  Unticking a type only hides its billing block; Tarifa, Método de pago, Cuenta and Condiciones de
+  pago stay in the record (nothing in the window clears them).
+- **Create from a document** (`useCreateContactModal`, OCR `CreateContactModalAdapter`): the flow
+  wraps `RecordCreateModal` in `ContactTypeRequirementContext` (`contactTypeRequirement.js`) —
+  purchase → `vendor`, sale → `customer`. Inside it, the Contacts header form **holds** a category
+  selection until its flags are known and applies it only when it grants the type; otherwise it
+  shows `contactCategoryNotVendor` / `contactCategoryNotCustomer` as a **toast only** and the field
+  keeps its previous value. No error is put under the field in that case: the value on screen is
+  still valid, and an inline error there outlived the successful save that followed, so the user
+  read it as a failed create. A category that arrived another way (the `/defaults` default when
+  the seed could not be resolved) is checked too and, if it does not grant the type, cleared with
+  the error under the field, so the required-field gate keeps Save disabled; that inline error is
+  cleared as soon as a granting category is accepted. Unknown flags (the
+  category read was refused) and a category with neither flag (legacy, before R55 — it defines
+  nothing, as on the backend) are let through; the backend still refuses a contact with no type.
+  `RecordCreateModal` and `EmbeddedWindowRoute` are unaware of any of this: the context crosses the
+  dialog portal and the embedded router on its own.
+- **Fallback form.** `RecordCreateModal` falls back to the generated `BusinessPartnerForm` whenever
+  the dynamic import of the Contacts window rejects (a stale chunk after a deploy, a network cut), so
+  the path is reachable. That form never runs `useContactCategoryTypeSync`, and its category is the
+  `/defaults` one (usually "Cliente"). The flow therefore also sets the target's
+  `validateBeforeCreate` (`buildContactTypeCreateCheck` in `contactTypeRequirement.js`): on Crear it
+  reads the chosen category's flags and, if they do not grant the type, shows the same
+  `contactCategoryNotVendor` / `contactCategoryNotCustomer` message and does not POST. Same rules:
+  unknown flags and a category with neither flag pass.
+
+### MCP schema hints
+
+`businessPartner.vendor` and `businessPartner.customer` declare a field `agentPrompt`
+(`agent-prompts/contacts/business-partner.vendor.md` / `business-partner.customer.md`, persisted to
+`ETGO_SF_FIELD.AGENT_PROMPT`). `etendo_schema` returns it on both fields. The prompt is
+flag-agnostic, because a static prompt cannot read the flag: on create the agent reads the category it
+sends (or the `default` category when it sends none) and sends `customer` / `vendor` matching its
+`etgoIscustomer` / `etgoIsvendor`, unless the user asked for a different type; on update, when it changes
+`businessPartnerCategory` it sends both flags matching the new category. Explicit values are honoured in
+both states, so with the flag on this gives the same result as inheritance, and with the flag off (no
+inheritance, AD defaults customer=Y / vendor=N) it still saves a vendor as a vendor. The prompt says a
+contact should end up with a type, without claiming the server always refuses one with neither.
+
+`etendo_schema view:"create"` lists `vendor` under `optional`. `IsVendor` is mandatory in AD with no
+AD default, so `McpSchemaFieldBuilder.addVisibility` would compute `userRequired: true`; the
+`ETGO_SF_FIELD` row of `contacts/businessPartner.vendor` carries
+`MCP_CONFIG = {"fields":{"userRequired":false,"reason":…}}` (com.etendoerp.go sourcedata), the generic
+override described in `neo-headless.md` §4.12.6. `customer` is optional with `serverDefaulted: true`
+because of its AD default `'Y'`. The raw `required` key (AD NOT NULL) is unchanged on both.
+
+### Category change through the API / MCP (parity with the form)
+
+An update of `businessPartner` that changes `businessPartnerCategory` to a different category and
+carries **neither** `customer` nor `vendor` gets **both** flags from the new category on the
+backend (`ContactTypeRules.inheritOnCategoryChangeAndValidateUpdate`), on REST PATCH/PUT and MCP
+`etendo_update` alike. A category with neither flag leaves them as they are. A request that carries
+either flag decides the type itself and nothing is inherited — the two travel together. The form is
+unaffected: `useContactCategoryTypeSync` already writes the differing flags with `onChange`, so its
+PATCH (a diff against the saved record) carries at least one flag whenever the category changes the
+type; a flag the user restores by hand to its saved value is dropped from the diff, and the
+"either flag" rule is what keeps the backend from overwriting it. The one case the backend cannot
+tell apart: the user changes the category and then restores **both** boxes by hand to their saved
+values — the PATCH then carries only the category and the backend applies the new category's flags.
+
+## ETP-5795 — "+ New Contact" on the Contacts overview points to /contacts
+
+The default action of the Contacts overview page (`artifacts/contacts/aggregate-contract.json`,
+`actions[0]`, label "+ New Contact") used to route to `/business-partner`. That path is the
+hidden raw Business Partner window, which is no longer reachable through URL routing (it is
+redirected through the menu, see `RedirectWindow`), so the button now routes to `/contacts`, the
+window this guide describes.
+
+Manual verification: open the Contacts overview, click "+ New Contact" and confirm the app lands
+on the Contacts window (`/contacts`), not on a Business Partner page or a redirect.
+
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the Customer Accounting and Vendor Accounting areas now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via `CustomerAccountingHandler` / `VendorAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+`employeeAccounting` (`C_BP_Employee_Acct`) is not guarded: both its account fields are `discarded`, so it accepts no write. Exposing them requires wiring the guard for `contacts/employeeAccounting` first.
+
+## Read-only role tier: sub-tabs, Financiero and attachments — ETP-5830
+
+With a `read-only` tier on Contactos:
+
+- **Persona / Cuenta bancaria / Dirección:** no "+ Añadir", no inline edit, no delete, no hover pencil.
+- **Dirección:** clicking a row opens nothing. `LocationEditorModal` has no read-only mode, so a read-only role cannot open the address popup at all; the row in the table is what it sees. Accepted trade-off.
+- **Financiero:** credit limit, Cliente/Proveedor, discount, payment selects, *Bloquear* and the SII/TicketBAI defaults are all disabled (`BillingPreferencesForm` and `FiscalDefaultsSection` read `editing === false`).
+- **Attachments:** files are listed and downloadable; no upload, no delete.
+- **`/contacts/new` by URL** redirects to the list.
+
+Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## ETP-5824 — Missing postal code and TicketBAI: completion block + address warning
+
+**Problem.** For a contact **not** flagged as *Factura simplificada* (`tbaiIssimplifiedinv = N`,
+the default for contacts created from GO), TicketBAI requires a postal code and address line 1 on
+the invoice partner address, and a tax ID on the contact. The check only ran while the TicketBAI XML was being built, after
+the invoice had already been completed. The invoice was completed but never sent, the error only
+went to the TicketBAI sync log (and Datadog, `tbai-tercero-sin-codigo-postal`), and the user got
+no feedback.
+
+**Backend (com.smf.ticketbai) — completion is blocked.** `ProcessInvoiceTbaiHook.preProcess` now
+runs the same rules (`XMLUtils.findRecipientDataError`) before an invoice is completed (`CO`). It
+returns an error, so the document stays in draft and the user sees `TBAI_EmptyPostalCode` /
+`TBAI_EmptyDir` / `TBAI_EmptyNifCode` (checked in that order; only the first failure is
+reported). A value made only of spaces counts as missing (a postal code `' '` used to slip
+through), and an invoice with no partner address at all is reported as a missing postal code.
+These three messages exist only in Spanish (the module's base language is `es_ES`), so a user on
+an English UI sees them in Spanish; an English translation needs a translation module and is out
+of scope for ETP-5824. The check applies when all of these hold:
+- it is a sales invoice;
+- the invoice organization resolves a TicketBAI configuration up the organization tree;
+- the invoice date is not earlier than the TicketBAI system date.
+
+The hook also runs the check on a void (`RC`), but that only matters in Classic: GO offers no void
+for TicketBAI invoices, by design. In Classic, this means an invoice that this bug left completed but never
+sent cannot be voided until the partner address is fixed: the reversal invoice is sent to
+TicketBAI and needs the recipient block.
+
+It does **not** depend on *auto-send*: an invoice sent later, with the send button or by the
+background process, fails just the same. Auto-send still decides only whether postProcess sends
+the invoice right away; that decision now also resolves the configuration by the invoice's
+organization, not the client. The same check still runs while the XML is built, as a last line of
+defence.
+
+**Address modal — non-blocking warning.** `LocationEditorModal` in `'bpartner'` mode (its
+default) shows the note wherever it is opened with a business partner: the Contactos *Dirección*
+tab, the invoice "+ Añadir dirección" picker (`PartnerAddressPicker`, sales and purchase invoice),
+and the fiscal monitor's contact detail (`ContactDetailModal`). The note is shown only for
+**customers**, because only sales invoices are blocked: a supplier-only contact (for example, an
+address added from the purchase invoice picker) never sees it, and a contact that is both customer
+and supplier does. The modal shows an inline note under *Código postal*
+(`data-testid="location-postalCode-tbai-warning"`, key `tbaiPostalCodeMissingWarning`) when all of
+these hold:
+- the contact is a customer (`/contacts/businessPartner/{bpId}` → `customer`, AD `IsCustomer`);
+- the contact is not simplified invoice (same record → `tbaiIssimplifiedinv`);
+- TicketBAI is in use: at least one ACTIVE `tbai-config/header` row is readable by the user;
+- the postal code is empty or only spaces.
+
+Why "TicketBAI is in use" and not the contact's organization: neither spec gives the browser an
+organization to match on. The contacts record has no organization field, and the `tbai-config`
+list ignores an `organization` parameter. A GO tenant normally has a single legal organization, so
+the simple criterion is right in practice. The note is advisory; the hard guarantee is the
+completion block above, which resolves the invoice's organization up the tree.
+
+The note disappears as soon as a postal code is typed. **It never blocks the save**: the postal code
+is not part of the save gate (address line 1 + country with the `structured-address-for-sepa` flag
+off, ETP-5103; street, number, city + country with it on, ETP-5806). The `'location'` mode (Warehouse) has no business
+partner and never asks for this data. A contact that is not a customer, or is simplified, never
+triggers the configuration lookup. If a lookup fails, or the record does not carry the customer or
+simplified flag, the note stays hidden. Logic:
+`tools/app-shell/src/windows/custom/shared/tbaiPostalCodeWarning.js`.
+
+**Manual check.**
+1. In a tenant with TicketBAI configured, open a customer contact with *Factura simplificada* off.
+   Add an address without a postal code (or with only spaces): the note appears, and Guardar still
+   works.
+2. Type a postal code: the note disappears.
+3. Create a sales invoice for that contact using the address without a postal code (or with a
+   postal code of only spaces), and complete it. Completion is refused with the postal code
+   message, and the invoice stays in draft.
+4. From a purchase invoice, use "+ Añadir dirección" on a supplier-only contact (not a customer)
+   and leave the postal code empty: no note appears.

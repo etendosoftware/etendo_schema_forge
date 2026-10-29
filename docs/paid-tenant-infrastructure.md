@@ -30,6 +30,8 @@ The canonical sources are:
 | The scorer: dimensions, points, registry schema | `docs/flag-debt.md` |
 | How to record debt, and the protocols around it | `docs/technical-debt-playbook.md` |
 | The backend: server-side flags, paywall, plan marker | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` |
+| Moving an environment to the subscription model (`ETGO_SubscriptionModel` + R37) | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` §3, "The subscription-model switch"; short procedure in §3.8 below |
+| After the purchase: subscription lifecycle, grace, blocking, the 402 and its kill switch | `com.etendoerp.go` → `docs/open-and-notable-topics.md` §3.7 (the subscription row lifecycle), §3.10 and §3.11; the environment-access check, its 402 and kill switch: `docs/feature-flags-and-tenant-upgrade.md` §1, including the operator page "Operating environment-access enforcement" |
 
 ---
 
@@ -82,21 +84,44 @@ Two consequences follow, and neither is hypothetical:
 6. **Branch B — the account lookup failed.** The checkout is shown anyway. The backend is the
    authority on whether payment is required, so a failed lookup in the browser must not block
    a legitimate upgrade.
-7. **Branch C — the account already owns at least one environment.** The page presents the
-   Free and Productive plans. Selecting Productive opens the Add-ons step, which remains in the
-   flow for every origin. When the current authenticated environment is a demo, this step offers
+7. **Branch C — the account already owns at least one environment.** The page is a three-step
+   checkout — **Plan → Add-ons → Payment**. The **Plan** step shows the plan catalog
+   (`GET /sws/go/plans`, ETP-5046) as one selectable card per plan, each with the catalog's name,
+   description and price, so a plan added to `ETGO_PLAN` appears with no frontend change
+   (ETP-5049). A single plan is preselected; with several, the user picks one, and nothing is
+   preselected for them. While the catalog loads, fails (with a retry), is empty, or answers
+   401, the step says so and offers no way forward — there is no plan key to send; on a 401 it
+   offers **Sign in again** (`upgrade-plans-sign-in-again`), which signs out to the login view as
+   the account page does for an expired session. Choosing a
+   card opens the Add-ons step, which remains in the flow for every origin. When the current authenticated environment is a demo, this step offers
    product and contact transfer choices. When the current environment is already productive, it
    explains that the new environment starts without demo data and offers no transfer controls.
    Back from Add-ons returns to the plan step; Continue opens payment. Back from payment returns
    to Add-ons, preserving the current form and transfer selections.
-8. **The user enters the new environment name on the payment step.** A productive-origin
+8. **The user enters the new environment name on the payment step.** The payment step shows the
+   plan chosen on the Plan step as a read-only summary (`upgrade-plan-summary`: name and price) —
+   it has no second chooser — and the checkout sends that plan's `planKey`, never a price. If a
+   catalog re-read drops the chosen plan, the summary gives way to **Choose a plan**
+   (`upgrade-plan-summary-choose`), which returns to the Plan step. A productive-origin
    purchase starts with a blank name so the current environment is not mistaken for the target.
    A demo-origin purchase can select an exact source environment; the request carries its
    `demoClientId`, not a name-based lookup. The backend validates that this ID is a demo owned by
-   the account. Productive-origin requests discard any demo selection. A demo originates at most
+   the account — its flagged owner, not a member invited into it (ETP-5743): `/environments`
+   reports an invited demo with `ownedByAccount: false`, the picker hides it, and a purchase made
+   from inside it is a clean productive environment. Productive-origin requests discard any demo
+   selection. A demo originates at most
    one productive environment: once it has, `/environments` reports it with
    `associatedWithProductive: true`, the picker hides it, and a purchase made from it is a clean
-   productive environment with no source or data transfer (ETP-5548).
+   productive environment with no source or data transfer (ETP-5548). A productive environment
+   is never a source either, including a canceled one: its closed subscription makes `plan` read
+   `free`, but `/environments` still reports `environmentType: 'PRODUCTIVE'`, so
+   `isPurchaseSourceDemo` (`lib/environmentPresentation.js`) keys on that type as well. Such an
+   environment is left out of the picker, a purchase made from it is a productive-origin purchase
+   (blank name, no self-preselect, no source or transfer), its badge stays "Productive", and the
+   backend refuses it as `demoClientId` (ETP-5047). The badge is the grey (muted) chip with the
+   "Productive" label, not the green one: that is intended (decided 2026-10-14, Martin Taal) and
+   means productive but not paying; the green chip keys on `plan`, the label on the type. An
+   environment with no reported type (it predates the lifecycle metadata) is still a demo.
 9. **The browser creates a durable billing purchase** through the account-scoped
    `POST /sws/go/billing/purchases` endpoint. The request describes the action, target name,
    locale and, only for a demo-origin purchase, the selected `demoClientId` and products/contacts
@@ -104,10 +129,13 @@ Two consequences follow, and neither is hypothetical:
    Stripe; the browser also carries the toggles through the redirect for the onboarding request.
    The browser does not collect or send card details. In Vite development, upgrade API calls
    remain same-origin (`/sws/...`) for the Vite proxy to forward to Etendo.
-10. **The backend creates hosted Stripe Checkout.** The configured Stripe Price is the source of
-    the amount, currency and billing interval returned by `GET /sws/go/billing/offers` for the
-    plan preview. Checkout uses the same server-configured Price ID. Stripe owns card entry and
-    payment; the Etendo GO page redirects to the returned hosted URL.
+10. **The backend creates hosted Stripe Checkout.** The browser names a plan by `planKey`, read
+    from `GET /sws/go/plans` (ETP-5046); the backend resolves that plan's Stripe Price, validates
+    it, and uses it as the single line item. The plan list quotes the amount, currency and
+    interval derived from that same Price, so the preview is the charge. While no plan carries a
+    provider price, the legacy price fallback sells `legacy-productive` at the configured
+    `etendo.go.checkout.price.id` instead. Stripe owns card entry and payment; the Etendo GO page
+    redirects to the returned hosted URL.
 11. **Stripe returns the browser to Etendo GO.** A successful return includes the durable
     checkout request ID. The page asks the backend for payment status and begins provisioning
     only after the backend confirms payment. A cancelled return clears the pending browser state
@@ -183,8 +211,8 @@ Labelling that case *Demo* would report a plan derived from a missing value.
 ## 1.5 Which token the account-scoped endpoints accept
 
 `GET /sws/go/environments` and its siblings — `/sws/go/me`, `/sws/go/login`,
-`/sws/go/checkout/sessions`, `/sws/go/onboarding/draft`, the company-invitation endpoints — are
-*account*-scoped, not tenant-scoped. They accept two different credentials and resolve both to one
+`/sws/go/checkout/sessions`, `/sws/go/plans`, `/sws/go/onboarding/draft`, the company-invitation
+endpoints — are *account*-scoped, not tenant-scoped. They accept two different credentials and resolve both to one
 `ETGO_ACCOUNT` (`EtendoGoJwtDalHelper.findActiveAccountByBearerToken`):
 
 1. the **account session token**, matched directly against `etgo_account.session_token`; and
@@ -380,7 +408,8 @@ The paid flow has separate contracts for the commercial purchase and environment
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /sws/go/billing/offers` | Returns the current productive offer's `amountMinor`, `currency`, and recurring `interval`. The backend retrieves these from the configured Stripe Price. |
+| `GET /sws/go/plans` | Lists the purchasable plans of the plan catalog (`planKey`, `name`, `description`, `displayPrice`, `currency`, `billingInterval`) — never a provider price id. The upgrade page's only quote source (§3.3). |
+| `GET /sws/go/billing/offers` | Quotes the plan catalog's default plan: the grandfathered `legacy-productive` plan at the configured legacy price while the legacy price fallback is active, otherwise the cheapest purchasable plan of `GET /sws/go/plans` at its own Stripe Price. Returns that plan's `planKey`, `amountMinor`, `currency`, and recurring `interval` read live from the chargeable price, and no provider price id (removed in ETP-5049). **No frontend caller since ETP-5049** — the upgrade page quotes the plan catalog only. |
 | `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. A company name the account already uses for a productive environment is refused with 409 `CLIENT_NAME_IN_USE` before Stripe is contacted; any other match (another account, the account's demo) is allowed. A name shaped like a provisioning name (`PEND-` + 32 hex) is reserved (400). |
 | `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |
 | `GET /sws/go/billing/purchases/{purchaseId}` | Reads one account-scoped purchase, including its fixed demo source and created `clientId` when available. |
@@ -426,19 +455,41 @@ visible sync retry; it does not trigger another payment or provisioning run.
 
 ## 3.3 Stripe offer and payment
 
-The backend reads the configured recurring Stripe Price using its server-side secret key and
-projects that same Price's `unit_amount`, `currency`, and recurring interval from
-`GET /sws/go/billing/offers`. Checkout submits the configured Price ID as its single line item.
-The projection rejects unavailable, inactive, non-recurring, or unsupported interval prices
-rather than displaying a locally maintained fallback that could disagree with checkout.
+What is sold comes from the Subscription Plan Catalog (`ETGO_PLAN`, ETP-5046). Each plan carries a
+Stripe Price id; its display price, currency and interval are derived from that Price when the plan
+is saved, never typed. `GET /sws/go/plans` lists the priced plans and checkout submits the chosen
+plan's Price ID as its single line item, re-validating it against Stripe first. While no plan
+carries a price, the **legacy price fallback** lists and sells `legacy-productive` at the
+configured `etendo.go.checkout.price.id`; the first priced plan retires it with no redeploy (design:
+`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6–§6.2).
 
-The browser formats Stripe's integer `amountMinor` using the returned currency, including
-zero-decimal and compatibility currencies, then displays the returned interval. If the offer
-cannot be retrieved, the page does not invent a fallback amount. Card details are entered on
-Stripe's hosted page; the Etendo GO browser neither collects nor mints payment tokens. The
+The upgrade page quotes **only** the plan catalog (ETP-5049). Its Plan step renders one card per
+catalog plan with the catalog's `displayPrice` (a decimal string, so no float rounding in transit)
+formatted through `formatCurrency` and phrased by `billingInterval`; an interval the page does not
+know renders as the bare amount rather than a wrong cadence. While the catalog is loading, has
+failed, is empty or answers 401, no price is shown and the checkout cannot proceed — the page never
+falls back to a second quote source, so it cannot advertise one price and charge another.
+`GET /sws/go/billing/offers` quotes the catalog's **default plan** from the Stripe Price checkout
+charges for it: while the legacy price fallback is active, the grandfathered `legacy-productive`
+plan at the configured legacy price (what a checkout that names no plan charges); otherwise the
+cheapest purchasable plan, the first entry of `GET /sws/go/plans`, at its own price. The answer
+carries that plan's `planKey` and no provider price id (both ETP-5049). Before ETP-5049 the page used
+this endpoint as a price preview while the catalog lookup was in flight or had failed; the SPA no
+longer calls it. Both projections reject unavailable, inactive, non-recurring, or unsupported
+interval prices rather than displaying a locally maintained fallback that could disagree with
+checkout. Full contract: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`, "The billing
+offer".
+
+Card details are entered on Stripe's hosted page; the Etendo GO browser neither collects nor mints
+payment tokens, and it never holds a provider price id — it sends the chosen plan's `planKey`. The
 checkout request ID is an internal correlation key, not proof of payment by itself.
 
 ## 3.4 The plan marker
+
+> **Snapshot from before ETP-5046.** On an environment that has switched to the subscription model
+> (§3.8) the subscription row (`ETGO_SUBSCRIPTION`) is the record of a paid tenant and the
+> preference below is only a transitional fallback; until then the preference is still written for
+> every purchase. See `feature-flags-and-tenant-upgrade.md` §3 in `com.etendoerp.go`.
 
 A tenant created through the paid flow is marked **productive**; every other tenant is
 **free**.
@@ -522,6 +573,110 @@ New event property names must also be added to `SAFE_EVENT_PROPERTY_KEYS` in
 `events.js`. A property missing from that list is silently stripped from the payload before it
 reaches Mixpanel; the event still fires, just without the property. There is no error and no log
 line, so a report that looks empty for one property but not others is the symptom.
+
+## 3.7 After the purchase: grace, blocking and the pay path (ETP-5443, ETP-5047)
+
+*Snapshot; the canonical sources are named in the header table.*
+
+A paid tenant stays usable while its subscription is `active`. When a renewal payment fails, Stripe
+tells Etendo through a webhook and the subscription becomes `past_due`: the tenant keeps working
+for a **grace period** (`etendo.go.billing.grace.days`, default 15 days) counted from the end of
+the period the customer already paid for. During grace the environment says so: a banner above
+its top bar (`BillingStatusBanner`, ETP-5049) warns that the last payment failed and names the day
+the environment will be blocked, offers the owner *Update payment* (`/account`) and tells anyone
+else to contact the company's administrator; it turns red and cannot be closed in the last 3 days.
+When an operator has switched enforcement off for the tenant (the per-environment `accessEnforced`
+of `GET /sws/go/environments` is `false`, ETP-5051) it names no day: it only says the payment is
+still overdue, never turns red, and stays up past the grace end, since no block will follow
+(`generated-custom-windows/app-shell-functional-flows.md` §3.2a). After that — or at once when the subscription is
+canceled, or when a demo's trial runs out — the tenant is **blocked**.
+
+Blocked means every request into the tenant's data is refused with HTTP 402, whatever the door:
+the web app's API (NEO), an AI agent over MCP, the smaller tenant endpoints and the endpoint that
+hands out a login token. The customer can still enter the environment, sees a screen that explains
+why and offers the way out — *Manage subscription* (the Stripe Customer Portal on `/account`) for
+an unpaid invoice, *Reactivar suscripción* (straight to Stripe Checkout, owner only) for a canceled
+subscription, or *Upgrade plan* (`/upgrade`) for a demo — and those paths keep working, because
+blocking the pay path would lock the customer out for good. Paying clears the block with the next
+`invoice.paid`; a canceled subscription is re-subscribed on the same environment, with its data
+(ETP-5742; `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` §3).
+
+Operations has one lever: a backend-only kill switch, `environment-access-enforcement-off`, which
+lets blocked tenants in (for one tenant or for all) during an incident and logs what it would have
+refused. Enforcement is on by default and stays on when the switch is unset or the control plane
+is unreachable.
+
+The polarity is inverted on purpose: every failure of the backend flag stack resolves to `false`,
+and `false` here means *enforcing*, so only a value that really resolves to `true` opens a blocked
+tenant; on ConfigCat it can be targeted per tenant through the `clientId` attribute. The SPA has no
+key for it in `flag-keys.js` and must never get one — it follows the 402 it is given: any 402 seen
+by `apiFetch` is recorded in the environment-access gate ([`request-policy.md`](request-policy.md)
+"402 and the blocked-access screen", ETP-5642), so with the switch on there is simply no 402 to
+block on. Registry entry: `environment-access-enforcement-kill-switch` in `flags-registry.json`.
+
+## 3.8 Installing ETP-5046/5047 and moving to the subscription model
+
+*A summary for orientation, not the procedure to execute. Follow the canonical operator page —
+"The subscription-model switch" in `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §3
+— which spells out the human gate that step 1 only names (re-verify that production Stripe
+checkout has not gone live, recorded in R37's `@report`, and settle the R37 edge cases of
+`open-and-notable-topics.md` §3.11) and gives the full verification queries. Checklist and rationale: design doc §6.2–§6.3
+(`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md`).*
+
+**Right after installing, nothing changes in how purchases are recorded.** The system preference
+`ETGO_SubscriptionModel` is OFF (no row ships with the module), and the backfill data-fix
+`R37-tenant-subscription-backfill` is opt-in (`-- @optIn: true`, so a plain `make data-fixes` never
+runs it). At the time of writing (2026-10-14, before ETP-5046 reaches develop) develop has no
+`SubscriptionService`, so a server built from develop has no `ETGO_SUBSCRIPTION` rows; a server that
+ran an ETP-5046/5047 feature-branch build may already have some. Every purchase by a tenant without
+a row keeps writing the `ETGO_TenantPlan` marker, exactly as before.
+
+**Moving an environment to the subscription model** — switch first, then backfill (decided
+2026-10-14):
+
+1. **Re-verify the R37 pre-check** on the target environment — the deliberate human gate
+   (canonical page, step 1).
+2. **Bring the data-fix chain current:** `make data-fixes`. R37 refuses a tenant whose earlier
+   chain fixes are not processed (`BLOCKED_CHAIN_BEHIND`, `optInChainGate` in
+   `cli/src/data-fixes/run.js`).
+3. **Set the switch:** System client, Property List checked, property *Billing: new purchases open
+   a subscription row (Y/N)* (`ETGO_SubscriptionModel`), value `Y`, Organization `*`, no role,
+   user or window, no Module. No restart; it is system-wide.
+4. **Run R37** — for every client at once, or client by client with `CLIENT=<ad_client_id>`; dry run
+   first:
+   ```bash
+   make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<ad_client_id>] DRY_RUN=1
+   make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<ad_client_id>]
+   ```
+5. **Done** when this returns 0 and the `ETP-5046-TRANSITIONAL-FALLBACK` WARN lines stop:
+   ```sql
+   select count(*) from ad_preference where attribute = 'ETGO_TenantPlan';
+   ```
+   Rows that remain are the worklist, not noise: a tenant with no subscription row whose marker is
+   inactive or not `productive` matches neither R37 branch and needs a decision by hand, and a
+   tenant onboarded later can get its marker back from R42 (`open-and-notable-topics.md` §3.13).
+
+**Why switch first.** Once the switch is ON every new purchase opens a row, so one R37 pass catches
+every legacy tenant. In the old order (R37, then the switch) a purchase made between the two steps
+still wrote the marker and needed a second R37 run. Both orders are safe. Migrating client by client
+*before* switching on has the same gap: a migrated tenant has a row and needs nothing more, but every
+other tenant that bought while the switch was OFF wrote the marker, so run R37 once more for the
+whole environment after enabling the switch.
+
+Notes:
+
+- **Both models coexist meanwhile.** The switch is system-wide; only R37 is per client. Readers take
+  the tenant's subscription row first and fall back to the preference, so a tenant R37 has not
+  reached keeps working.
+- **One-way per tenant.** Once a tenant has any `ETGO_SUBSCRIPTION` row it stays on rows whatever
+  the switch says (`hasAnySubscription`).
+- **What R37 touches.** It inserts the backfilled row and deletes `ETGO_TenantPlan`; it does not
+  create the `ETGO_SubscriptionModel` preference. `ETGO_EnvironmentType` and
+  `ETGO_SubscriptionStatus` are kept on purpose — every purchase writes them on both routes
+  (`TenantEnvironmentLifecycleService.markProductive`) and nothing reads them once a row exists. On
+  a tenant with a row `ETGO_SubscriptionStatus` goes stale: read `ETGO_SUBSCRIPTION` instead.
+- **Not picked up by R37:** a productive tenant without `ETGO_TenantPlan` (made productive by hand or
+  with a dev tool).
 
 ---
 
@@ -771,8 +926,9 @@ rare unexplained mismatch instead of an obvious failure.
 Stripe Checkout and the signed webhook are part of the current flow, not a future gateway
 integration. The webhook is the payment authority; a browser redirect cannot mark a purchase as
 paid. Billing records retain the request ID, account, target name, selected demo source, payment
-status, and the created client ID. The Stripe Price lookup that feeds the UI preview reads the
-same configured Price ID used as the hosted Checkout line item.
+status, the created client ID, the plan and the Stripe Price ID actually charged — a reopened
+checkout charges that stored Price, never the plan's current one. The plan list that feeds the UI
+preview is derived from the same Price the hosted Checkout line item uses.
 
 The purchase ID is also the idempotency and recovery key. A paid retry reuses that ID, and a
 conditional provisioning claim fences concurrent requests. On a failed or abandoned provisioning

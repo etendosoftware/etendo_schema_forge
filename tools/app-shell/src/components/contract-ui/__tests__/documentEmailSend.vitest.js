@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/documentEmailSend.js
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   buildEmailContractCommand,
@@ -79,8 +80,8 @@ describe('documentEmailSend', () => {
 
   // ETP-4315 — preview caching before send no longer POSTs base64 JSON to the
   // retired /preview-file endpoint. It now uploads the blob as a real, marked
-  // Attachment via uploadAndMarkMainAttachment (multipart FormData), keyed by
-  // WINDOW_ATTACHMENT_TABLE[windowName] (e.g. 'C_Invoice' for sales-invoice).
+  // Attachment via uploadAndMarkMainAttachment (multipart FormData), on the table of the
+  // window's primary entity read from its contract (C_Invoice for sales-invoice).
   it('caches a generated PDF before sending the email contract', async () => {
     global.fetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: { id: 'att-1' } } }) })

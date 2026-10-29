@@ -24,6 +24,11 @@ import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 export const UPGRADE_ERROR_CODES = {
   checkoutUnavailable: 'upgradeCheckoutUnavailable',
   checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
+  plansUnavailable: 'upgradePlansUnavailable',
+  // The server answered PLAN_NOT_AVAILABLE: the key this page sent is not for sale any more. The
+  // usual innocent cause is a plan list loaded before it changed (e.g. the legacy price fallback
+  // retired by the first priced plan), so the copy tells the user to reload.
+  planNotAvailable: 'upgradePlanNotAvailable',
   purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
   sessionExpired: 'upgradeSessionExpired',
   // ETP-5443 REVIEW N3: a failed READ of the subscription, or a failed portal-session
@@ -33,9 +38,17 @@ export const UPGRADE_ERROR_CODES = {
   // apart from "can't open the portal" apart from "checkout failed".
   subscriptionUnavailable: 'upgradeSubscriptionUnavailable',
   portalUnavailable: 'upgradePortalUnavailable',
+  // ETP-5051 O-1b: the portal found no subscription for the environment it was asked about
+  // (404 NO_SUBSCRIPTION) — a demo, or an environment with no purchase of its own. Not transient,
+  // so it is not `portalUnavailable`'s "please try again".
+  portalNoSubscription: 'upgradePortalNoSubscription',
   // ETP-5548: the account already has a productive environment with this company name. Refused
   // before the provider is contacted, because a paid checkout fixes its name.
   tenantNameInUse: 'upgradeTenantNameInUse',
+  // ETP-5742: refusals of the re-subscription. Only the owner may re-subscribe, and only an
+  // environment whose subscription was canceled has one to re-subscribe.
+  reactivationOwnerRequired: 'blockedAccessSubscriptionCanceledMemberMessage',
+  reactivationNotAvailable: 'blockedAccessReactivateFailed',
   failed: 'upgradeGenericError',
 };
 
@@ -47,11 +60,43 @@ function isClientNameInUse(response, data) {
 }
 
 /**
+ * Reads the server's plan catalog — the list of things that are actually purchasable.
+ *
+ * This exists because checkout sells plans by key: without a catalog the browser has no way to
+ * learn one, so there is no client-side list of keys to fall back on. Guessing a key here would be
+ * a purchase nobody reviewed, so a failed lookup raises instead, and the page disables checkout.
+ * While the server's legacy price fallback is active (no priced plan exists yet) the catalog is
+ * exactly the grandfathered `legacy-productive` plan, quoted from the configured Stripe price, and
+ * the page auto-selects it like any single plan.
+ *
+ * The server never sends a provider price id, and this client never sends one either.
+ *
+ * @returns {Promise<Array<{planKey: string, name: string, description: string,
+ *   displayPrice: string, currency: string, billingInterval: string}>>} possibly empty — an
+ *   empty catalog is an answer, not a failure.
+ */
+export async function fetchPlans(baseUrl) {
+  const response = await apiFetch('/sws/go/plans', { baseUrl, on401: 'ignore' });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.plansUnavailable, data?.error?.message || data?.message, response.status);
+  }
+  return Array.isArray(data?.plans) ? data.plans : [];
+}
+
+/**
  * Creates a provider-hosted checkout session for a known paid action.
  *
  * The browser sends product intent only. Pricing, currency, Stripe Price IDs,
  * and payment confirmation are server-owned. The returned URL is safe to use
  * as a redirect target because it is issued by the authenticated backend.
+ *
+ * `planKey` names a row in the server's plan catalog — a KEY, never a price.
+ * The server resolves it to a Stripe Price ID; there is no request field for a
+ * price and no code path that reads one, so a price added to this body would be
+ * ignored rather than honoured. A missing key asks for the server's legacy price
+ * fallback and is refused `PLAN_NOT_AVAILABLE` once a priced plan exists (ETP-5046).
  */
 export async function createCheckoutSession(baseUrl, input = {}) {
   const response = await apiFetch('/sws/go/checkout/sessions', {
@@ -61,6 +106,7 @@ export async function createCheckoutSession(baseUrl, input = {}) {
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.planKey ? { planKey: input.planKey } : {}),
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
@@ -73,8 +119,8 @@ export async function createCheckoutSession(baseUrl, input = {}) {
     if (isClientNameInUse(response, data)) {
       throw buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
     }
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+    throw buildError(checkoutFailureCode(response, data), data?.error?.message || data?.message,
+      response.status);
   }
   if (!data?.checkoutUrl || !data?.requestId) {
     throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
@@ -99,6 +145,9 @@ export async function createBillingPurchase(baseUrl, input = {}) {
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
+      // A catalog KEY, never a price: pricing is server-owned and the browser has no field that
+      // could influence it. Without one the server only sells under its legacy price fallback.
+      ...(input.planKey ? { planKey: input.planKey } : {}),
       ...(input.demoClientId ? { demoClientId: input.demoClientId } : {}),
       ...(input.dataTransfer && Object.keys(input.dataTransfer).length > 0
         ? { dataTransfer: input.dataTransfer }
@@ -130,8 +179,47 @@ function billingPurchaseError(response, data) {
   if (isClientNameInUse(response, data)) {
     return buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
   }
-  return buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-    : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+  return buildError(checkoutFailureCode(response, data), data?.error?.message || data?.message,
+    response.status);
+}
+
+/**
+ * ETP-5742 — re-subscribes the environment of the current session after its subscription was
+ * canceled. The body is empty on purpose: the environment is the session's, the plan is the one
+ * the canceled subscription had, and neither is the browser's to name.
+ *
+ * Resolves to `{ requestId, checkoutUrl }` to send the buyer to the provider, or to
+ * `{ requestId, status: 'paid' }` when the re-subscription is already paid and only waiting for the
+ * payment confirmation to be applied.
+ */
+export async function createSubscriptionReactivation(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/reactivation', {
+    method: 'POST',
+    baseUrl,
+    on401: 'ignore',
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(reactivationFailureCode(response, data),
+      data?.error?.message || data?.message, response.status);
+  }
+  if (data?.status === 'paid' && data?.requestId) {
+    return { requestId: data.requestId, status: 'paid' };
+  }
+  if (!data?.checkoutUrl || !data?.requestId) {
+    throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
+  }
+  return { requestId: data.requestId, checkoutUrl: data.checkoutUrl };
+}
+
+function reactivationFailureCode(response, data) {
+  if (data?.error?.code === 'REACTIVATION_OWNER_REQUIRED') {
+    return UPGRADE_ERROR_CODES.reactivationOwnerRequired;
+  }
+  if (data?.error?.code === 'REACTIVATION_NOT_AVAILABLE') {
+    return UPGRADE_ERROR_CODES.reactivationNotAvailable;
+  }
+  return checkoutFailureCode(response, data);
 }
 
 export async function getCheckoutStatus(baseUrl, requestId) {
@@ -169,28 +257,35 @@ export async function getSubscription(baseUrl) {
   return data;
 }
 
-/** Creates an authenticated customer portal session for the account subscription. */
-export async function createPortalSession(baseUrl) {
+/** Backend code of the portal's "no subscription to manage" refusal (EtendoGoJwtServlet). */
+const NO_SUBSCRIPTION = 'NO_SUBSCRIPTION';
+
+function portalFailureCode(response, data) {
+  if (response.status === 401) return UPGRADE_ERROR_CODES.sessionExpired;
+  if (response.status === 404 && data?.error?.code === NO_SUBSCRIPTION) {
+    return UPGRADE_ERROR_CODES.portalNoSubscription;
+  }
+  return UPGRADE_ERROR_CODES.portalUnavailable;
+}
+
+/**
+ * Creates an authenticated customer portal session.
+ *
+ * ETP-5051 O-1b — with a `clientId` the portal is that environment's own (a "Mis empresas" row);
+ * the backend checks the account bought it and answers 404 NO_SUBSCRIPTION otherwise. Without one
+ * no body is sent and the backend picks the entered environment, or the account's newest purchase
+ * when none is entered (/account).
+ */
+export async function createPortalSession(baseUrl, clientId = null) {
   const response = await apiFetch('/sws/go/billing/subscription/portal', {
     method: 'POST',
     baseUrl,
     on401: 'ignore',
+    ...(clientId ? { body: JSON.stringify({ clientId }) } : {}),
   });
   const data = await readJsonSafely(response);
   if (!response.ok) {
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.portalUnavailable, data?.error?.message, response.status);
-  }
-  return data;
-}
-
-/** Reads the server-owned productive offer used to render purchase terms. */
-export async function getBillingOffer(baseUrl) {
-  const response = await apiFetch('/sws/go/billing/offers', { baseUrl, on401: 'ignore' });
-  const data = await readJsonSafely(response);
-  if (!response.ok) {
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+    throw buildError(portalFailureCode(response, data), data?.error?.message, response.status);
   }
   return data;
 }
@@ -264,6 +359,13 @@ function consumeOnboardingLines(lines, onMessage, result) {
   return result;
 }
 
+
+/** Maps a refused checkout write onto the code the page translates. */
+function checkoutFailureCode(response, data) {
+  if (response.status === 401) return UPGRADE_ERROR_CODES.sessionExpired;
+  if (data?.error?.code === 'PLAN_NOT_AVAILABLE') return UPGRADE_ERROR_CODES.planNotAvailable;
+  return UPGRADE_ERROR_CODES.checkoutCreationFailed;
+}
 
 function buildError(code, message, status) {
   const error = new Error(message || code);

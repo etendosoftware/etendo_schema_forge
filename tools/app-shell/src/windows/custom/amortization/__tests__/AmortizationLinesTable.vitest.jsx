@@ -1,6 +1,32 @@
+const gridBoundary = vi.hoisted(() => ({ enabled: false, active: false, keys: null, widths: {}, last: null, save: vi.fn() }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => gridBoundary.enabled }));
+vi.mock('@/hooks/useGridView.js', () => ({
+  useGridView: (options) => {
+    gridBoundary.last = options;
+    const columns = (gridBoundary.keys ?? options.columns.map(column => column.key))
+      .map(key => options.columns.find(column => column.key === key)).filter(Boolean)
+      .map(column => ({ ...column, gridViewId: column.key, gridUserWidthPx: gridBoundary.widths[column.key] }));
+    return { active: options.enabled && gridBoundary.active, columns, columnSizing: gridBoundary.widths, save: gridBoundary.save,
+      reorderable: () => false, isResizable: () => false };
+  },
+}));
+vi.mock('@/components/contract-ui/GridViewControls.jsx', () => ({
+  GridViewControls: ({ gridView }) => <button data-testid="grid-view-save" onClick={gridView.save}>gridViewSave</button>,
+}));
+
+beforeEach(() => {
+  gridBoundary.enabled = false;
+  gridBoundary.active = false;
+  gridBoundary.keys = null;
+  gridBoundary.widths = {};
+  gridBoundary.save.mockClear();
+});
+
+// @covers tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 
 // ── mock heavy children so we exercise AmortizationLinesTable's own logic ──
 vi.mock('@/i18n', () => ({
@@ -640,6 +666,8 @@ describe('AmortizationLinesTable — onRefresh sync', () => {
 
     global.fetch.mockClear();
     fireEvent.click(screen.getByTitle('delete'));
+    // ETP-5758 — the bulk trash now opens the shared confirm dialog first.
+    fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
 
     await waitFor(() => {
       const deleteCalls = global.fetch.mock.calls.filter(([, opts]) => opts?.method === 'DELETE');
@@ -698,6 +726,8 @@ describe('AmortizationLinesTable — multi-select', () => {
     global.fetch.mockClear();
     // Click the delete button inside LinesSelectionBar (identified by its title prop).
     fireEvent.click(screen.getByTitle('delete'));
+    // ETP-5758 — the bulk trash now opens the shared confirm dialog first.
+    fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
 
     await waitFor(() => {
       const deleteCalls = global.fetch.mock.calls.filter(
@@ -802,6 +832,8 @@ describe('AmortizationLinesTable — delete failure feedback (ETP-4981)', () => 
 
       global.fetch.mockClear();
       fireEvent.click(screen.getByTitle('delete'));
+      // ETP-5758 — the bulk trash now opens the shared confirm dialog first.
+      fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed'));
       expect(toast.success).not.toHaveBeenCalled();
@@ -837,6 +869,8 @@ describe('AmortizationLinesTable — delete failure feedback (ETP-4981)', () => 
 
       global.fetch.mockClear();
       fireEvent.click(screen.getByTitle('delete'));
+      // ETP-5758 — the bulk trash now opens the shared confirm dialog first.
+      fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
 
       await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('bulkDeletePartialFailure'));
       expect(toast.success).not.toHaveBeenCalled();
@@ -871,6 +905,8 @@ describe('AmortizationLinesTable — delete failure feedback (ETP-4981)', () => 
       await waitFor(() => expect(screen.getByTitle('delete')).toBeInTheDocument());
 
       fireEvent.click(screen.getByTitle('delete'));
+      // ETP-5758 — the bulk trash now opens the shared confirm dialog first.
+      fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed'));
       expect(onRefresh).not.toHaveBeenCalled();
@@ -879,5 +915,186 @@ describe('AmortizationLinesTable — delete failure feedback (ETP-4981)', () => 
       const rowCheckboxes = screen.getAllByRole('checkbox', { name: 'selectRow' });
       rowCheckboxes.forEach(cb => expect(cb).toHaveAttribute('aria-checked', 'true'));
     });
+  });
+});
+
+// ETP-5758 — the bulk trash now goes through the generic useBatchDeleteDialog: it asks for
+// confirmation first (it used to delete straight away), the dialog stays open and locked while the
+// DELETEs run, and a one-line 4xx refusal toasts the backend's own reason.
+describe('AmortizationLinesTable — bulk delete confirmation (ETP-5758)', () => {
+  /** GETs return the rows; DELETEs follow `onDelete(id)` (default: pending until released). */
+  function mockFetch(rows, onDelete) {
+    const pending = [];
+    const fn = vi.fn((url, opts) => {
+      if (opts?.method === 'DELETE') {
+        const id = String(url).match(/\/lines\/([^/?]+)$/)?.[1];
+        if (onDelete) return onDelete(id);
+        return new Promise((resolve) => { pending.push(resolve); });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ response: { data: rows } }) });
+    });
+    fn.release = () => pending.forEach((r) => r({ ok: true }));
+    return fn;
+  }
+  const deleteCalls = () => global.fetch.mock.calls.filter(([, opts]) => opts?.method === 'DELETE');
+
+  async function selectAllAndOpen() {
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('checkbox', { name: 'selectAll' }));
+    await waitFor(() => expect(screen.getByTitle('delete')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('delete'));
+    return screen.findByTestId('batch-delete-confirm');
+  }
+
+  it('the bulk trash opens the shared confirmation with the selected count and sends no DELETE yet', async () => {
+    global.fetch = mockFetch([LINE_FILLED, LINE_EMPTY]);
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+
+    await selectAllAndOpen();
+
+    expect(screen.getByTestId('DialogTitle__batch-delete')).toHaveTextContent('bulkDeleteConfirmTitle');
+    expect(screen.getByTestId('DialogDescription__batch-delete')).toHaveTextContent('bulkDeleteConfirmMessage');
+    expect(deleteCalls()).toHaveLength(0);
+  });
+
+  it('Cancel closes the confirmation without sending any DELETE and keeps the selection', async () => {
+    global.fetch = mockFetch([LINE_FILLED, LINE_EMPTY]);
+    const onRefresh = vi.fn();
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} onRefresh={onRefresh} />);
+
+    await selectAllAndOpen();
+    fireEvent.click(screen.getByTestId('Button__batch-delete-cancel'));
+
+    await waitFor(() => expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument());
+    expect(deleteCalls()).toHaveLength(0);
+    expect(onRefresh).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    screen.getAllByRole('checkbox', { name: 'selectRow' })
+      .forEach((cb) => expect(cb).toHaveAttribute('aria-checked', 'true'));
+  });
+
+  it('stays open and locked (spinner, in-progress wording, aria-busy, disabled trash) until the batch settles', async () => {
+    global.fetch = mockFetch([LINE_FILLED, LINE_EMPTY]);
+    const onRefresh = vi.fn();
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} onRefresh={onRefresh} />);
+
+    await selectAllAndOpen();
+    fireEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(deleteCalls()).toHaveLength(2));
+    expect(screen.getByTestId('batch-delete-spinner')).toBeInTheDocument();
+    expect(screen.getByTestId('batch-delete-confirm')).toHaveTextContent('bulkDeleteInProgress');
+    expect(screen.getByTestId('batch-delete-confirm')).toBeDisabled();
+    expect(screen.getByTestId('Button__batch-delete-cancel')).toBeDisabled();
+    expect(screen.getByTestId('DialogDescription__batch-delete')).toHaveTextContent('bulkDeleteInProgressMessage');
+    expect(screen.getByTestId('DialogContent__batch-delete')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByTitle('delete')).toBeDisabled();
+    expect(onRefresh).not.toHaveBeenCalled();
+
+    // Escape is swallowed mid-batch.
+    fireEvent.keyDown(document.activeElement || document.body, { key: 'Escape' });
+    expect(screen.getByTestId('batch-delete-confirm')).toBeInTheDocument();
+
+    await act(async () => { global.fetch.release(); });
+
+    await waitFor(() => expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument());
+    expect(toast.success).toHaveBeenCalledWith('bulkDeleteAllSucceeded');
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+  });
+
+  it('a ONE-line 4xx refusal toasts the backend reason (not the counter) and keeps the line selected', async () => {
+    extractErrorMessage.mockResolvedValue('The amortization plan is already confirmed.');
+    global.fetch = mockFetch([LINE_FILLED, LINE_EMPTY], () => Promise.resolve({ ok: false, status: 409 }));
+    const onRefresh = vi.fn();
+    renderInRouter(<AmortizationLinesTable {...BASE_PROPS} onRefresh={onRefresh} />);
+
+    await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole('checkbox', { name: 'selectRow' })[0]);
+    await waitFor(() => expect(screen.getByTitle('delete')).toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('delete'));
+    fireEvent.click(await screen.findByTestId('batch-delete-confirm'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('The amortization plan is already confirmed.'));
+    expect(toast.error).not.toHaveBeenCalledWith('bulkDeleteAllFailed');
+    expect(deleteCalls()).toHaveLength(1);
+    expect(String(deleteCalls()[0][0])).toContain('/lines/line-1');
+    expect(onRefresh).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument());
+    expect(screen.getAllByRole('checkbox', { name: 'selectRow' })[0]).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+
+describe('AmortizationLinesTable personal columns', () => {
+  it('keeps default columns and structural cells with personalization disabled', async () => {
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    expect(container.querySelector('thead tr').children).toHaveLength(6);
+    expect(container.querySelector('[data-row-id="line-1"]').children).toHaveLength(6);
+    expect(screen.queryByTestId('grid-view-save')).not.toBeInTheDocument();
+    expect(gridBoundary.last.enabled).toBe(false);
+  });
+
+  it('moves the original editable cells and keeps expansion, selection and row actions fixed', async () => {
+    const user = userEvent.setup();
+    gridBoundary.enabled = true;
+    gridBoundary.active = true;
+    gridBoundary.keys = ['amortizationAmount', 'asset'];
+    gridBoundary.widths = { amortizationAmount: 230 };
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    const row = container.querySelector('[data-row-id="line-1"]');
+    expect([...row.querySelectorAll('[data-grid-column]')].map(cell => cell.dataset.gridColumn)).toEqual([
+      'amortizationAmount', 'asset',
+    ]);
+    expect(row.children).toHaveLength(5);
+    expect(row.children[2]).toHaveStyle({ width: '230px' });
+    expect(container.querySelector('th[data-grid-column="amortizationAmount"]')).toHaveStyle({ width: '230px' });
+    fireEvent.click(within(row.children[1]).getByRole('checkbox'));
+    expect(within(row.children[1]).getByRole('checkbox')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(row);
+    expect(row.nextElementSibling.querySelector('td')).toHaveAttribute('colspan', '5');
+    fireEvent.click(getPencilButton(container, 'line-1'));
+    expect(within(row.querySelector('[data-grid-column="asset"]')).getByTestId('selector-asset')).toBeInTheDocument();
+    const input = within(row.querySelector('[data-grid-column="amortizationAmount"]')).getByTestId('field-number');
+    // The amount mask keeps raw typing only while focused; idle display has two decimals.
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, '600');
+    await user.tab();
+    await waitFor(() => expect(global.fetch.mock.calls.some(([, request]) => request?.method === 'PUT'
+      && JSON.parse(request.body).amortizationAmount === '600')).toBe(true));
+    expect(gridBoundary.last).toMatchObject({ spec: 'amortization', entity: 'lines', enabled: true });
+    expect(gridBoundary.last.columns.filter(column => column.required).map(column => column.key)).toEqual(['asset', 'amortizationAmount']);
+  });
+
+  it('keeps default cells while the personal view is unavailable', async () => {
+    gridBoundary.enabled = true;
+    gridBoundary.keys = ['asset'];
+    const { container } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    expect(container.querySelector('thead tr').children).toHaveLength(6);
+    expect(screen.getByText('Amortization_Percentage')).toBeInTheDocument();
+  });
+});
+
+
+describe('AmortizationLinesTable late personal view activation', () => {
+  it('preserves an unfinished inline amount edit when a saved column order arrives', async () => {
+    const user = userEvent.setup();
+    gridBoundary.enabled = true;
+    const { container, rerender } = renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);
+    await screen.findByText('AS_Module');
+    fireEvent.click(getPencilButton(container, 'line-1'));
+    const input = amountInputs(container)[1];
+    await user.click(input);
+    await user.clear(input);
+    await user.type(input, '777');
+    gridBoundary.active = true;
+    gridBoundary.keys = ['amortizationAmount', 'asset'];
+    rerender(<AmortizationLinesTable {...BASE_PROPS} />);
+    const row = container.querySelector('[data-row-id="line-1"]');
+    expect(within(row.querySelector('[data-grid-column="amortizationAmount"]')).getByTestId('field-number')).toHaveValue('777');
+    expect(getPencilButton(container, 'line-1')).not.toBeNull();
   });
 });

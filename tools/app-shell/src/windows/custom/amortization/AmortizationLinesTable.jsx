@@ -1,3 +1,6 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -6,7 +9,7 @@ import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 import { extractErrorMessage } from '@/hooks/useEntity';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
@@ -24,7 +27,7 @@ import SelectionToolbar from '@/components/contract-ui/SelectionToolbar';
 // longer used here: the entry point moved into the row hover-action strip (the
 // Layers/"Edit dimensions" button below), mirroring the mechanism InlineLinesPanel
 // already uses for the other 5 generated windows (sales-invoice, purchase-invoice,
-// goods-shipment, goods-receipt, simple-g-l-journal). See docs/feedback.md and
+// goods-shipment, goods-receipt, manual-journals). See docs/feedback.md and
 // docs/ui-customization.md §14b for the generic pattern this now matches.
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
@@ -101,6 +104,30 @@ export default function AmortizationLinesTable({
   const location = useLocation();
   const apiFetch = useApiFetch(apiBaseUrl);
   const [lines, setLines] = useState([]);
+
+  const gridColumns = useMemo(() => [
+    { key: 'asset', column: 'A_Asset_ID', label: t('A_Asset_ID'), sourceIndex: 2, required: true },
+    { key: 'amortizationPercentage', column: 'Amortization_Percentage', label: t('Amortization_Percentage'), sourceIndex: 3 },
+    { key: 'amortizationAmount', column: 'Amortizationamt', label: t('Amortizationamt'), sourceIndex: 4, required: true },
+  ], [ui, t]);
+  const gridSpec = 'amortization';
+  const { gridView, gridColumnViews } = useFlaggedGridView({
+    spec: gridSpec, entity: 'lines', columns: gridColumns, data: lines,
+    enabled: Boolean(gridSpec), apiBaseUrl,
+  });
+  // Structural cells stay outside the personal view; existing editors and actions
+  // retain their handlers and React keys when data cells move.
+  const renderGridCells = (fragment) => (gridColumnViews && gridSpec
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 2, trailing: 1 })
+    : fragment);
+  const gridControls = gridColumnViews && gridSpec ? (
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      data-testid="GridViewControls__fecdcf" />
+  ) : null;
+
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [editingLineId, setEditingLineId] = useState(null);
@@ -110,7 +137,6 @@ export default function AmortizationLinesTable({
   const [addingLine, setAddingLine] = useState(false);
   const [newLine, setNewLine] = useState({});
   const [selectedRows, setSelectedRows] = useState(() => new Set());
-  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectionBarVisible, setSelectionBarVisible] = useState(false);
   const [selectionBarClosing, setSelectionBarClosing] = useState(false);
   const addRowRef = useRef(null);
@@ -307,31 +333,40 @@ export default function AmortizationLinesTable({
   // cleared the whole selection and refetched even when every request failed
   // (or was network-rejected via `.catch(() => null)`), so failed rows
   // vanished from the selection with no way to retry and no explanation.
-  // Reuses the shared ETP-4656 triage/toast helpers (runBatchDelete +
-  // toastBatchDeleteOutcome) and follows the same onSuccess contract as
-  // useBulkRowDelete: all succeeded -> clear selection; partial -> keep only
-  // the failed ids selected; all failed -> leave selection untouched (and
-  // skip the refetch, since nothing changed server-side).
-  async function bulkDelete() {
-    const ids = [...selectedRows];
-    if (ids.length === 0) return;
-    setBulkDeleting(true);
-    try {
-      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        apiFetch(`/lines/${id}`, {
-          method: 'DELETE',
-        }).then(async (res) => {
-          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
-          return id;
-        }),
-      );
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+  // Follows the same onSuccess contract as useBulkRowDelete: all succeeded ->
+  // clear selection; partial -> keep only the failed ids selected; all failed
+  // -> leave selection untouched (and skip the refetch, since nothing changed
+  // server-side).
+  //
+  // ETP-5758 — goes through the generic `useBatchDeleteDialog`: the trash button
+  // now asks for confirmation (it deleted straight away before), and the dialog
+  // stays open and locked until the batch settles. The refused DELETE carries
+  // its 4xx status so a one-line refusal toasts the backend's own reason.
+  const {
+    requestBatchDelete,
+    batchDeleteDialog,
+    deleting: bulkDeleting,
+  } = useBatchDeleteDialog({
+    deleteOneFn: (id) =>
+      apiFetch(`/lines/${id}`, {
+        method: 'DELETE',
+      }).then(async (res) => {
+        if (!res.ok) {
+          throw Object.assign(new Error(await extractErrorMessage(res, ui)), { status: res.status });
+        }
+        return id;
+      }),
+    onOutcome: (succeeded, failed) => {
       if (succeeded.length > 0) {
         setSelectedRows(new Set(failed));
         fetchLines();
         onRefresh?.();
       }
-    } finally { setBulkDeleting(false); }
+    },
+  });
+
+  function bulkDelete() {
+    requestBatchDelete([...selectedRows]);
   }
 
   // Inline draft-row submit (Sales Order InlineAddRow pattern).
@@ -379,10 +414,12 @@ export default function AmortizationLinesTable({
 
   return (
     <div className="flex-1 min-w-0" data-testid="inline-lines-panel">
-      <table className="w-full">
+      {gridControls}
+          <table className="w-full" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} /><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}<col style={{ width: 128 }} /></colgroup>}
         {/* header — matches inlineEditable: sticky top-0 z-20 bg-card */}
         <thead className="sticky top-0 z-20 bg-card">
-          <tr className="border-b border-border/40">
+          <tr className="border-b border-border/40">{renderGridCells(<>
             <th className="h-10 w-10 p-2 align-middle" />
             <th className="h-10 w-10 px-3 pr-0 align-middle">
               <Checkbox
@@ -413,18 +450,18 @@ export default function AmortizationLinesTable({
                 3 buttons (was 2) and needs the extra room so it stays inside its
                 own column instead of spilling over the Amount column on hover. */}
             <th className="h-10 w-32 px-2" />
-          </tr>
+          </>)}</tr>
         </thead>
 
         <tbody>
           {loading ? (
-            <tr>
+            <tr>{renderGridCells(<>
               <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                 <Loader2
                   className="h-4 w-4 animate-spin inline mr-1.5"
                   data-testid="Loader2__fecdcf" />
               </td>
-            </tr>
+            </>)}</tr>
           ) : (
             <>
               {lines.map(line => {
@@ -441,7 +478,7 @@ export default function AmortizationLinesTable({
                       data-row-id={line.id}
                       className={`relative transition-colors h-12 group/row border-b border-border/30 cursor-pointer ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}`}
                       onClick={() => !isEditing && setExpandedId(isExpanded ? null : line.id)}
-                    >
+                    >{renderGridCells(<>
                       {/* expand toggle — circular icon button (matches financial-account MovementsTable) */}
                       <td className="w-10 p-2 align-middle">
                         <RowExpandToggle
@@ -570,10 +607,10 @@ export default function AmortizationLinesTable({
                           </div>
                         )}
                       </td>
-                    </tr>
+                    </>)}</tr>
                     {/* ── dimension expand ── */}
                     {isExpanded && (
-                      <tr className="border-b border-border/30">
+                      <tr className="border-b border-border/30">{renderGridCells(<>
                         <td colSpan={6} className="bg-card px-10 pb-5 pt-3">
                           {line['organization$_identifier'] && (
                             <div className="mb-4 grid grid-cols-4 gap-4">
@@ -596,7 +633,7 @@ export default function AmortizationLinesTable({
                             labelOverrides={api?.labelOverrides}
                             data-testid="DimensionGrid__fecdcf" />
                         </td>
-                      </tr>
+                      </>)}</tr>
                     )}
                   </React.Fragment>
                 );
@@ -604,7 +641,7 @@ export default function AmortizationLinesTable({
 
               {/* ── inline add-line draft row (Sales Order InlineAddRow pattern) ── */}
               {addingLine && (
-                <tr ref={addRowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">
+                <tr ref={addRowRef} data-testid="inline-add-row" className="bg-status-info/50 border-t-2 border-primary/20">{renderGridCells(<>
                   <td className="w-10 p-2 align-middle" aria-hidden="true" />
                   <td className="px-3 pr-0" aria-hidden="true" />
                   <td className="py-1 px-2 align-middle">
@@ -645,7 +682,7 @@ export default function AmortizationLinesTable({
                   <td className="px-2 text-center text-muted-foreground align-middle">
                     {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
                   </td>
-                </tr>
+                </>)}</tr>
               )}
             </>
           )}
@@ -703,6 +740,7 @@ export default function AmortizationLinesTable({
           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fecdcf" />
         </button>
       </SelectionToolbar>
+      {batchDeleteDialog}
     </div>
   );
 }

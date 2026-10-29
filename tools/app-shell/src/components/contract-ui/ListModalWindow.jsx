@@ -1,6 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { useGridView } from '@/hooks/useGridView.js';
+import { GridViewControls } from './GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, X, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, X, Loader2 } from 'lucide-react';
+// Same Iconic set and row-action buttons as RowQuickActions (every other list), so the hover
+// actions never mix icon families or sizes across windows.
+import { IconicCopyIcon, IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } from './rowVisuals.js';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -13,17 +21,21 @@ import { PillToggle } from '@/components/PillToggle';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNeoResource, getApiBase } from '@/hooks/useNeoResource.js';
-import { useUI, useMenuLabel, useLabel } from '@/i18n';
+import { useUI, useMenuLabel, useLabel, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { EntityForm } from './EntityForm.jsx';
+import { ListModalCompactDialog } from './ListModalCompactDialog.jsx';
+import { extractSingleRow, extractErrorMessage } from '@/hooks/useEntity.js';
+import { numericFieldToastId } from '@/lib/numericValidation.js';
+import { firstFieldViolation } from './listModalSave.js';
+import { buildFilterColumns } from './listModalFilterColumns.js';
+import { columnWidthStyle, cellContentMaxWidth } from './listModalColumnWidth.js';
 import { InfoBanner } from '../InfoBanner.jsx';
 import { ListModalCell, cellAlignClass } from './listModalCells.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
-import { NUMERIC_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { ListProgressBar } from './ListProgressBar.jsx';
 import { RefreshButton } from './RefreshButton.jsx';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
@@ -79,9 +91,11 @@ function resolveModalLabels(editingRow, config, ui) {
   const subtitleKey = editingRow
     ? (config?.editSubtitleKey ?? config?.subtitleKey)
     : config?.subtitleKey;
+  // The compact popup's primary pill reads "Save" in both modes (Figma), unless a key says otherwise.
+  const createSubmitFallback = config?.modalVariant === 'compact' ? 'save' : 'createRecord';
   const submitLabel = editingRow
     ? labelOrFallback(ui, config?.editSubmitLabelKey, 'save')
-    : labelOrFallback(ui, config?.submitLabelKey, 'createRecord');
+    : labelOrFallback(ui, config?.submitLabelKey, createSubmitFallback);
   return { title, subtitle: subtitleKey ? ui(subtitleKey) : null, submitLabel };
 }
 
@@ -187,45 +201,148 @@ function filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filter
   return result;
 }
 
-// Builds the AdvancedFilterBuilder column metadata. The advanced filter offers EVERY
-// entity column — the union of grid columns AND modal fields — so columns hidden from
-// the grid (e.g. pattern, contact, dimensions) are still filterable. FK/selector columns
-// filter on their resolved `$_identifier` (the raw cell holds an opaque id); enums expose
-// their labels; numeric cells become number filters; toggles/booleans are skipped (covered
-// by the dedicated toolbar Active dropdown).
-function buildFilterColumns(columns, fields, ui, tMenu, tLabel) {
-  // ETP-5107 — unified with DataTable.jsx / InlineLinesPanel.jsx via the
-  // shared NUMERIC_FIELD_TYPES set (see lib/numericFieldTypes.js).
-  const NUMERIC = NUMERIC_FIELD_TYPES;
-  // Union by key; grid columns win on duplicates (richer cell metadata / gridLabelKey).
-  const byKey = new Map();
-  for (const f of (fields ?? [])) if (f && f.key) byKey.set(f.key, f);
-  for (const c of (columns ?? [])) if (c && c.key) byKey.set(c.key, c);
+/**
+ * Opt-in toolbar / modal / row options from `templateConfig` (all default to the historical
+ * match-rule look). Resolved here so their branching stays out of ListModalWindow's body.
+ *
+ * @param {object} config  the generated `listModalConfig`
+ * @param {string[]} filters  searchable column keys
+ */
+export function resolveListModalOptions(config, filters) {
+  return {
+    compact: config?.modalVariant === 'compact',
+    compactList: config?.listVariant === 'compact',
+    showBack: config?.hideBackButton !== true,
+    showSearch: (filters?.length ?? 0) > 0 && config?.hideSearch !== true,
+    primaryNew: config?.newButtonVariant === 'primary',
+    rowClickEdit: config?.rowClickEdit === true,
+  };
+}
 
-  const isFk = (col) => col.type === 'selector' || col.type === 'foreignKey'
-    || col.inputMode === 'selector' || col.inputMode === 'search';
-  const resolveLabel = (col) => (col.labelKey ? ui(col.labelKey) : null)
-    ?? (tLabel ? tLabel(col.column) : null) ?? tMenu(col.label) ?? col.label ?? col.key;
+/**
+ * Everything the render derives from the opt-in options, so the conditionals live here and not in
+ * ListModalWindow's body (Sonar javascript:S3776).
+ *
+ * @returns {{ showBack: boolean, showSearch: boolean, newButton: { button: string, icon: string },
+ *   onRowClick: Function|undefined, modalFields: Array<object>, compactOpen: boolean,
+ *   defaultOpen: boolean }}
+ */
+function resolveListModalView({ config, filters, readOnly, sections, fields, openEdit, modalOpen }) {
+  const options = resolveListModalOptions(config, filters);
+  return {
+    showBack: options.showBack,
+    showSearch: options.showSearch,
+    newButton: options.primaryNew ? NEW_BUTTON_CLASS.primary : NEW_BUTTON_CLASS.default,
+    compactList: options.compactList,
+    // Toolbar chrome of the compact list (Figma): white fill + xs shadow on the outline buttons,
+    // and the Filtros button's 12px / 16px side padding with an 8px icon gap.
+    toolbarButtonClass: options.compactList ? COMPACT_TOOLBAR_BUTTON : '',
+    filterButtonClass: options.compactList ? `${COMPACT_TOOLBAR_BUTTON} gap-2 pl-3 pr-4 text-foreground` : '',
+    // Row click opens the edit modal (opt-in). Never for a read-only role: it has no edit.
+    onRowClick: options.rowClickEdit && !readOnly ? openEdit : undefined,
+    // Fields shown in the compact popup, in section order (it has no section headings).
+    modalFields: options.compact
+      ? sections.flatMap((sec) => fields.filter((f) => (f.section || 'general') === sec.key))
+      : [],
+    compactOpen: options.compact && modalOpen,
+    defaultOpen: !options.compact && modalOpen,
+  };
+}
 
-  return [...byKey.values()]
-    .map((col) => {
-      if (col.cellType === 'toggle' || col.type === 'boolean') return null; // handled by the toolbar Active dropdown
-      const label = resolveLabel(col);
-      // FK/selector → 'selector' so the builder renders the value-list picker
-      // (resolveFilterMode → 'identifier'): it offers the distinct id/identifier
-      // pairs from the rows and matches on the FK id, not a typed string.
-      if (isFk(col)) {
-        return { key: col.key, column: col.column, label, type: 'selector' };
-      }
-      if (col.enumLabels && (col.type === 'enum' || col.type === 'status')) {
-        return { key: col.key, label, type: 'enum', enumLabels: col.enumLabels };
-      }
-      if (col.cellType === 'percent' || NUMERIC.has(col.type)) {
-        return { key: col.key, label, type: 'number' };
-      }
-      return { key: col.key, label, type: 'string' };
-    })
-    .filter(Boolean);
+/** Toolbar back button; renders nothing when the window hides it (`hideBackButton`). */
+function ToolbarBackButton({ show, onClick, label }) {
+  if (!show) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="list-modal-back"
+      className="inline-flex h-10 items-center rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
+    >
+      {label}
+    </button>
+  );
+}
+
+const COMPACT_TOOLBAR_BUTTON = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground)/0.05)]';
+
+const NEW_BUTTON_CLASS = {
+  // Historical list-modal look: ink button, lime on hover.
+  default: {
+    button: 'group inline-flex h-10 items-center gap-1.5 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]',
+    icon: 'h-4 w-4 text-primary-foreground/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]',
+  },
+  // Same button the generated lists (ListView) draw: primary blue.
+  primary: {
+    // Figma: padding 8px 12px, 4px gap + 4px label padding → 12px | icon | 8px | label | 16px.
+    button: 'inline-flex h-10 items-center gap-2 rounded-lg bg-primary pl-3 pr-4 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-primary/90',
+    icon: 'h-5 w-5 text-primary-foreground/90',
+  },
+};
+
+/**
+ * Grid column header text. An explicit `labelKey` wins; then the same chain every standard list
+ * and this window's own advanced filter use — per-locale `labels`, the window field label
+ * (`labelOverrides` / per-window label slice, via `tLabel(column)`), the translated AD label.
+ * The header used to stop at `tMenu(col.label)`, so it showed the raw AD name ("Overdue Payment
+ * Days Rule") while the filter of the same column showed the window's label.
+ */
+export function gridHeaderLabel(col, { ui, tLabel, tMenu, locale }) {
+  if (col.labelKey) return ui(col.labelKey);
+  return col.labels?.[locale]
+    ?? col.labels?.en_US
+    ?? (tLabel ? tLabel(col.column) : null)
+    ?? tMenu(col.label)
+    ?? col.label
+    ?? col.key;
+}
+
+/**
+ * Deep link: `/<window>/:recordId` renders the list with that record's edit modal open.
+ *
+ * The record is looked up in the loaded list first (no extra request); a record the list does
+ * not carry is read by id (`GET {entity}/{id}`, unwrapped with the shared `extractSingleRow`).
+ * One the server does not return is reported with a toast and the URL drops back to the list.
+ * Each `recordId` is handled once, so closing the modal does not reopen it. Disabled for a
+ * read-only role (`enabled: false`): the modal is an editor, and that role has no edit — the
+ * list is shown as for a plain `/<window>` URL.
+ */
+function useDeepLinkedRecord({ recordId, enabled, rows, loading, openEdit, apiFetch, entity, ui, onMissing }) {
+  const handledRef = useRef(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    // Back on the plain list URL: forget the handled id, so navigating to the same record again
+    // (no remount in between) reopens it.
+    if (!recordId) {
+      handledRef.current = null;
+      return;
+    }
+    if (!enabled || loading || handledRef.current === recordId) return;
+    handledRef.current = recordId;
+    const row = rows.find((r) => String(r?.id) === String(recordId));
+    if (row) {
+      openEdit(row);
+      return;
+    }
+    const fail = () => {
+      if (!mountedRef.current) return;
+      toast.error(ui('recordNotFoundTitle'));
+      onMissing();
+    };
+    apiFetch(`/${entity}/${encodeURIComponent(recordId)}`)
+      .then(async (res) => {
+        const record = res.ok ? extractSingleRow(await res.json()) : null;
+        if (!mountedRef.current) return;
+        if (record?.id == null) fail();
+        else openEdit(record);
+      })
+      .catch(fail);
+  }, [enabled, recordId, rows, loading, openEdit, apiFetch, entity, ui, onMissing]);
 }
 
 /**
@@ -280,6 +397,8 @@ function buildFilterColumns(columns, fields, ui, tMenu, tLabel) {
 export function ListModalWindow({
   entity,
   entityLabel,
+  windowName,
+  recordId,
   breadcrumb,
   columns = [],
   fields: fieldsProp = [],
@@ -294,6 +413,7 @@ export function ListModalWindow({
   const ui = useUI();
   const tMenu = useMenuLabel();
   const tLabel = useLabel(api?.labelOverrides);
+  const { locale } = useLocaleSwitch();
   const auth = useAuth();
   const navigate = useNavigate();
   const token = tokenProp ?? auth?.token;
@@ -330,6 +450,23 @@ export function ListModalWindow({
     label: `ListModalWindow:${entity}`,
   });
   const allRows = useMemo(() => rows ?? [], [rows]);
+  // Never derive persistence scope from a display label or a URL's last segment.
+  const spec = api?.specName || windowName;
+  const stableScope = typeof spec === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(spec)
+    && typeof entity === 'string' && entity.trim() === entity && entity.length > 0
+    && (!windowName || windowName === spec)
+    && (!api?.baseUrl || api.baseUrl === `/sws/neo/${spec}`);
+  const gridColumns = useMemo(() => columns.map(column => ({
+    ...column,
+    gridDefaultWidthPx: Number.isFinite(Number(column.minWidth)) && Number(column.minWidth) > 0 ? Number(column.minWidth) : 160,
+  })), [columns]);
+  const gridColumnViewsFlag = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridView = useGridView({
+    spec, entity, columns: gridColumns, data: allRows, apiBaseUrl,
+    enabled: gridColumnViewsFlag && stableScope && columns.length > 0,
+  });
+  const visibleColumns = gridView.active ? gridView.columns : columns;
+
 
   // --- Toolbar dropdown filters (declarative; applied client-side) ----------
   const toolbarFilters = config?.toolbarFilters ?? [];
@@ -341,8 +478,8 @@ export function ListModalWindow({
   // --- Advanced "by conditions" filter (shared AdvancedFilterBuilder) --------
   const [advancedFilter, setAdvancedFilter] = useState(null);
   const filterColumns = useMemo(
-    () => buildFilterColumns(columns, fields, ui, tMenu, tLabel),
-    [columns, fields, ui, tMenu, tLabel],
+    () => buildFilterColumns(columns, fields, ui, tMenu, tLabel, config?.toolbarFilters),
+    [columns, fields, ui, tMenu, tLabel, config],
   );
 
   // Declared type per filter column, so `applyConditions` routes date columns
@@ -414,15 +551,11 @@ export function ListModalWindow({
     toggleSelect, toggleSelectAll, clearSelection, keepOnly,
   } = useRowSelection(data);
 
-  // Read and translate a backend error message from a failed Response.
-  const errorMessage = useCallback(async (res) => {
-    let raw = `HTTP ${res.status}`;
-    try {
-      const json = await res.json();
-      raw = json?.error?.message || json?.response?.error?.message || raw;
-    } catch { /* non-JSON body */ }
-    return translateBackendError(raw, ui) || raw;
-  }, [ui]);
+  // A failed write is read with the shared `extractErrorMessage` (useEntity), which hands the
+  // body's `messageKeys` / `messageParams` to translateBackendError. The local reader this window
+  // had passed the message TEXT only, so every refusal resolvable only by key (e.g. payment-term's
+  // ETGO_PaymentTermDaysInvalid) reached the user in raw English.
+  const errorMessage = useCallback((res) => extractErrorMessage(res, ui), [ui]);
 
   // Suggested value for an auto-incrementing field (e.g. Priority = max + step),
   // computed entirely on the frontend from the loaded list — no backend endpoint.
@@ -477,12 +610,23 @@ export function ListModalWindow({
     setModalOpen(true);
   }, []);
 
+  // Back to the list URL once a deep-linked record is closed (or was not found), so a reload or a
+  // shared link does not reopen a popup the user already dismissed.
+  const leaveRecordUrl = useCallback(() => {
+    if (recordId && windowName) navigate(`/${windowName}`, { replace: true });
+  }, [recordId, windowName, navigate]);
+
   const closeModal = useCallback(() => {
     setModalOpen(false);
     setEditingRow(null);
     setFormData({});
     setFormError(null);
-  }, []);
+    leaveRecordUrl();
+  }, [leaveRecordUrl]);
+
+  useDeepLinkedRecord({
+    recordId, enabled: !readOnly, rows: allRows, loading, openEdit, apiFetch, entity, ui, onMissing: leaveRecordUrl,
+  });
 
   const handleFieldChange = useCallback((key, value) => {
     setFormData(prev => ({ ...prev, [key]: value }));
@@ -497,6 +641,14 @@ export function ListModalWindow({
   const handleSave = useCallback(async () => {
     if (missingRequired.length > 0) {
       setFormError(ui('requiredFieldsMissing'));
+      return;
+    }
+    // Client gate (min / integer): one message, in the modal's error box. The field's own blur
+    // toast says the same thing, so it is withdrawn rather than left stacked beside the box.
+    const violation = firstFieldViolation(fields, formData, ui);
+    if (violation) {
+      toast.dismiss?.(numericFieldToastId(violation.key));
+      setFormError(violation.message);
       return;
     }
     setSaving(true);
@@ -521,7 +673,7 @@ export function ListModalWindow({
     } finally {
       setSaving(false);
     }
-  }, [missingRequired, editingRow, entity, formData, apiFetch, ui, closeModal, reload, errorMessage]);
+  }, [missingRequired, fields, editingRow, entity, formData, apiFetch, ui, closeModal, reload, errorMessage]);
 
   // Inline toggle: PATCH {entity}/{id} with optimistic UI handled by reload.
   const handleToggle = useCallback(async (row, col, nextChecked) => {
@@ -611,7 +763,7 @@ export function ListModalWindow({
   const colsFor = (key) => sectionGrid[key] ?? 3;
 
   const showBanner = config?.bannerKey && !bannerDismissed;
-  const hasSearch = filters.length > 0;
+  const view = resolveListModalView({ config, filters, readOnly, sections, fields, openEdit, modalOpen });
 
   return (
     // Fills the shell's content area (which is `overflow-hidden`, so each window owns its own
@@ -622,14 +774,11 @@ export function ListModalWindow({
       {/* Toolbar — left: back + dropdown filters; right: search + New */}
       <div className="flex items-center justify-between gap-2 px-2 pt-2">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <ToolbarBackButton
+            show={view.showBack}
             onClick={handleBack}
-            data-testid="list-modal-back"
-            className="inline-flex h-10 items-center rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
-          >
-            {config?.backLabelKey ? ui(config.backLabelKey) : ui('cancel')}
-          </button>
+            label={labelOrFallback(ui, config?.backLabelKey, 'cancel')}
+            data-testid="ToolbarBackButton__19eda5" />
           {toolbarFilters.map(f => (
             <ListModalToolbarFilter
               key={f.key}
@@ -648,10 +797,11 @@ export function ListModalWindow({
             value={advancedFilter}
             onChange={setAdvancedFilter}
             testId="list-modal-advanced-filter"
+            className={view.filterButtonClass}
             data-testid="AdvancedFilterButton__19eda5" />
         </div>
         <div className="flex items-center gap-2">
-          {hasSearch && (
+          {view.showSearch && (
             <div className="relative w-[280px]">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--text-disabled))]"
@@ -666,29 +816,40 @@ export function ListModalWindow({
               />
             </div>
           )}
+          {gridView.enabled && (
+            <GridViewControls
+              gridView={gridView}
+              gridColumns={gridColumns}
+              ui={ui}
+              t={tLabel}
+              data-testid="GridViewControls__19eda5" />
+          )}
           <ListSortPopover
             columns={columns}
+            labelOverrides={api?.labelOverrides}
             sortColumn={sortKey}
             sortDirection={sortDirection}
             onSelect={selectSort}
             onClear={clearSort}
             isDefaultSort={isDefaultSort}
+            iconButtonHover={`hover:bg-[hsl(var(--muted))] ${view.toolbarButtonClass}`.trim()}
             data-testid="ListSortPopover__19eda5" />
           {/* Same slot a generated list gives it (between sort and the create button). This
               window draws its own toolbar, so it never inherited ListView's. */}
           <RefreshButton
             onRefresh={reload}
             label={ui('refresh')}
+            className={view.toolbarButtonClass}
             data-testid="RefreshButton__19eda5" />
           {!readOnly && (
           <button
             type="button"
             onClick={openCreate}
             data-testid="list-modal-new"
-            className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
+            className={view.newButton.button}
           >
             <Plus
-              className="h-4 w-4 text-primary-foreground/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
+              className={view.newButton.icon}
               data-testid="Plus__19eda5" />
             {config?.newLabelKey ? ui(config.newLabelKey) : ui('newRecord')}
           </button>
@@ -721,13 +882,18 @@ export function ListModalWindow({
         loading={loading}
         hasRows={allRows.length > 0}
         gridProps={{
-          columns,
+          columns: visibleColumns,
+          gridView,
           data,
           sortKey,
           sortDirection,
           onSort: toggleSort,
           tMenu,
+          tLabel,
+          locale,
           ui,
+          onRowClick: view.onRowClick,
+          compactList: view.compactList,
           ...rowActionProps({
             readOnly,
             allowClone: config.allowClone,
@@ -750,8 +916,28 @@ export function ListModalWindow({
       {/* Create / edit modal — Figma "Nueva Regla de matcheo" layout:
           wide container, header (title + subtitle), multi-column body grouped by
           section, and a footer with an optional toggle (left) + pill submit (right). */}
+      {/* Compact variant (templateConfig.modalVariant: "compact"); only one of the two opens. */}
+      <ListModalCompactDialog
+        open={view.compactOpen}
+        onClose={closeModal}
+        title={title}
+        subtitle={subtitle}
+        fields={view.modalFields}
+        entity={entity}
+        formData={formData}
+        onFieldChange={handleFieldChange}
+        api={api}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        formError={formError}
+        onSubmit={handleSave}
+        submitDisabled={saving || missingRequired.length > 0}
+        submitting={saving}
+        submitLabel={submitLabel}
+        ui={ui}
+        data-testid="ListModalCompactDialog__19eda5" />
       <Dialog
-        open={modalOpen}
+        open={view.defaultOpen}
         onOpenChange={(o) => (o ? setModalOpen(true) : closeModal())}
         data-testid="Dialog__19eda5">
         <DialogContent
@@ -923,6 +1109,113 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
 }
 
 /**
+ * Row props for `rowClickEdit`: click opens the edit modal, and the row is focusable so Enter /
+ * Space open it from the keyboard. Only when the row ITSELF has focus — a key pressed on the
+ * selection checkbox, a toggle or a hover action belongs to that control.
+ */
+function rowOpenProps(onRowClick, row) {
+  if (!onRowClick) return {};
+  return {
+    tabIndex: 0,
+    onClick: () => onRowClick(row),
+    onKeyDown: (e) => {
+      if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      onRowClick(row);
+    },
+  };
+}
+
+/**
+ * Cell content, capped so the cell (padding included) never grows past the column's `maxWidth`
+ * (ellipsis beyond it) when it declares one. Width rules: `listModalColumnWidth.js`.
+ */
+function CellContent({ col, capped = true, children }) {
+  // A personal grid view sizes the column itself: a user-resized width is never capped.
+  const cap = capped ? cellContentMaxWidth(col) : null;
+  if (cap == null) return children;
+  return <div className="truncate" style={{ maxWidth: cap }}>{children}</div>;
+}
+
+/**
+ * Inline width of a header / body cell. With a personal grid view active (ETP-5835) the user's
+ * width — or the view's default, which is the declared `columnWidth` (minWidth) — wins, in the
+ * fixed table layout the view uses; otherwise the declared fixed width (listModalColumnWidth.js).
+ */
+function gridColumnStyle(col, gridView, header = false) {
+  if (!gridView?.active) return columnWidthStyle(col);
+  const width = col.gridUserWidthPx ?? col.gridDefaultWidthPx;
+  return header
+    ? { width, overflowWrap: 'anywhere', whiteSpace: 'normal' }
+    : { width, overflowWrap: 'anywhere' };
+}
+
+/**
+ * Hover row actions (edit / clone / delete) — the RowQuickActions look: Iconic icons at 20px on
+ * the shared 32px row-action buttons (`rowVisuals.js`), a 20px spinner on the row being deleted.
+ * Each button renders only when its handler is given (a read-only role gets none).
+ */
+function ListModalRowActions({ row, onEdit, onClone, onDelete, deleting, className, ui }) {
+  return (
+    <div className={cn('flex items-center justify-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100', className)}>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={() => onEdit(row)}
+          aria-label={ui('edit')}
+          title={ui('edit')}
+          data-testid={`list-modal-edit-${row.id}`}
+          className={ROW_ACTION_BUTTON_NEUTRAL}>
+          <IconicEditIcon className="h-5 w-5" data-testid="IconicEditIcon__19eda5" />
+        </button>
+      )}
+      {onClone && (
+        <button
+          type="button"
+          onClick={() => onClone(row)}
+          aria-label={ui('clone')}
+          title={ui('clone')}
+          data-testid={`list-modal-clone-${row.id}`}
+          className={ROW_ACTION_BUTTON_NEUTRAL}>
+          <IconicCopyIcon className="h-5 w-5" data-testid="IconicCopyIcon__19eda5" />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(row)}
+          disabled={deleting}
+          aria-label={ui('delete')}
+          title={ui('delete')}
+          data-testid={`list-modal-delete-${row.id}`}
+          className={cn(ROW_ACTION_BUTTON_DESTRUCTIVE, deleting && 'opacity-60 cursor-wait')}>
+          {deleting
+            ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__19eda5" />
+            : <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__19eda5" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Row / header / checkbox-column density. `compact` (templateConfig.listVariant) is the Figma
+// list: 40px rows, a 32px checkbox column with 8px left padding, header tracking -0.005em.
+const GRID_DENSITY = {
+  default: {
+    cell: 'px-3 py-3',
+    select: 'w-10 px-3',
+    head: 'relative h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
+    selectPx: 40,
+  },
+  compact: {
+    cell: 'h-10 px-3 py-0',
+    select: 'w-8 pl-2 pr-0',
+    head: 'relative h-10 px-3 text-xs font-semibold leading-4 tracking-[-0.005em] text-[hsl(var(--foreground))]',
+    selectPx: 32,
+  },
+};
+
+/**
  * In-house grid for the list-modal layout. Renders the Figma row chrome (registry-driven
  * cells, hover edit action). Fully generic: structure comes from `columns` + each
  * `column.cellType`.
@@ -933,28 +1226,42 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
  * exist. Removed along with its header cell; the first data column now leads.
  */
 function ListModalGrid({
-  columns, data, sortKey, sortDirection, onSort, tMenu, ui,
+  columns, data, sortKey, sortDirection, onSort, tMenu, tLabel, locale, ui, onRowClick,
   onEdit, onClone, onDelete, deletingId, onToggle, savingToggles,
   readOnly = false, selectable = false, selectedIds, allSelected, someSelected,
-  onToggleSelect, onToggleSelectAll,
+  onToggleSelect, onToggleSelectAll, compactList = false, gridView,
 }) {
   const actionsColClass = onClone ? 'w-28' : 'w-20';
+  const actionsColWidthPx = onClone ? 112 : 80;
   const isEmpty = !data || data.length === 0;
   const hasRowActions = Boolean(onEdit || onClone || onDelete);
-  // columns + the leading checkbox + the trailing actions column, whichever are present.
-  const colSpan = columns.length + (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
+  const density = compactList ? GRID_DENSITY.compact : GRID_DENSITY.default;
+  // Fixed-width columns (decisions `columnWidth`) leave the free width to an empty spacer column,
+  // so no data column stretches and the hover actions stay at the far right. Only rendered when a
+  // column declares a width: a grid without widths lays out exactly as before.
+  // A personal grid view (fixed layout, table width = sum of its columns) leaves the free space
+  // empty on its own, so the spacer is not rendered there.
+  const hasSpacer = !gridView?.active && columns.some((col) => col.minWidth != null);
+  // columns + the leading checkbox + the spacer + the trailing actions column, whichever are present.
+  const colSpan = columns.length + (selectable ? 1 : 0) + (hasSpacer ? 1 : 0) + (hasRowActions ? 1 : 0);
 
   return (
     // [&>div]:overflow-visible cancels the base Table's inner overflow-auto so the
     // hovered row's shadow-lg isn't clipped on the last row (matches Cuentas).
     <div className="[&>div]:overflow-visible">
-      <Table data-testid="Table__19eda5">
+      <Table
+        style={gridView?.active ? {
+          tableLayout: 'fixed',
+          width: columns.reduce((sum, col) => sum + (col.gridUserWidthPx ?? col.gridDefaultWidthPx ?? 160), 0)
+            + (selectable ? density.selectPx : 0) + (hasRowActions ? actionsColWidthPx : 0),
+        } : undefined}
+        data-testid="Table__19eda5">
         <TableHeader data-testid="TableHeader__19eda5">
           <TableRow
             className="border-b border-[hsl(var(--border-subtle))] hover:bg-transparent"
             data-testid="TableRow__19eda5">
             {selectable && (
-              <TableHead className="w-10 px-3" data-testid="list-modal-select-all-head">
+              <TableHead className={density.select} data-testid="list-modal-select-all-head">
                 <Checkbox
                   checked={allSelected}
                   indeterminate={someSelected}
@@ -966,21 +1273,23 @@ function ListModalGrid({
             {columns.map((col) => (
               <TableHead
                 key={col.key}
-                className={cn(
-                  'h-10 px-3 text-xs font-semibold leading-4 text-[hsl(var(--foreground))]',
-                  cellAlignClass(col),
-                )}
+                className={cn(density.head, cellAlignClass(col))}
+                style={gridColumnStyle(col, gridView, true)}
+                {...gridHeaderProps(col, gridView)}
                 data-testid="TableHead__19eda5">
                 <SortableHeaderLabel
-                  label={col.labelKey ? ui(col.labelKey) : (tMenu(col.label) ?? col.label ?? col.key)}
+                  label={gridHeaderLabel(col, { ui, tLabel, tMenu, locale })}
                   sortKey={col.key}
                   activeKey={sortKey}
                   direction={sortDirection}
                   onSort={onSort}
                   align={cellAlignClass(col)?.includes('text-right') ? 'right' : undefined}
                   data-testid="SortableHeaderLabel__19eda5" />
+                {gridReorderHandle(col, gridView, gridHeaderLabel(col, { ui, tLabel, tMenu, locale }), ui)}
+                {gridResizeHandle(col, gridView, gridHeaderLabel(col, { ui, tLabel, tMenu, locale }), ui)}
               </TableHead>
             ))}
+            {hasSpacer && <TableHead className="p-0" aria-hidden="true" data-testid="list-modal-spacer-head" />}
             {/* Actions column header */}
             {hasRowActions && (
               <TableHead
@@ -1006,10 +1315,18 @@ function ListModalGrid({
             <TableRow
               key={row.id}
               data-testid={`list-modal-row-${row.id}`}
-              className="group/row relative border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
+              {...rowOpenProps(onRowClick, row)}
+              className={cn(
+                'group/row relative border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg',
+                onRowClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring',
+              )}
             >
               {selectable && (
-                <TableCell className="w-10 px-3" data-testid={`list-modal-select-cell-${row.id}`}>
+                // stopPropagation: ticking a row must not also open it (row click → edit).
+                <TableCell
+                  className={density.select}
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`list-modal-select-cell-${row.id}`}>
                   <Checkbox
                     checked={selectedIds?.has(row.id) ?? false}
                     onChange={() => onToggleSelect?.(row.id)}
@@ -1020,60 +1337,39 @@ function ListModalGrid({
               {columns.map((col) => (
                 <TableCell
                   key={col.key}
-                  className={cn('px-3 py-3', cellAlignClass(col))}
+                  className={cn(density.cell, cellAlignClass(col))}
+                  style={gridColumnStyle(col, gridView)}
                   data-testid="TableCell__19eda5">
+                  <CellContent col={col} capped={!gridView?.active} data-testid="CellContent__19eda5">
                   <ListModalCell
                     row={row}
                     col={col}
                     tMenu={tMenu}
                     ui={ui}
+                    locale={locale}
                     onToggle={onToggle}
                     readOnly={readOnly}
                     savingToggle={savingToggles[`${row.id}:${col.key}`]}
                     data-testid="ListModalCell__19eda5" />
+                  </CellContent>
                 </TableCell>
               ))}
+              {hasSpacer && <TableCell className="p-0" data-testid="list-modal-spacer-cell" />}
               {/* Hover row actions */}
               {hasRowActions && (
-              <TableCell className={cn(actionsColClass, 'p-0')} data-testid="TableCell__19eda5">
-                <div className={cn('flex items-center justify-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100', actionsColClass)}>
-                  {onEdit && (
-                  <button
-                    type="button"
-                    onClick={() => onEdit(row)}
-                    aria-label={ui('edit')}
-                    data-testid={`list-modal-edit-${row.id}`}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
-                  >
-                    <Pencil className="h-4 w-4" data-testid="Pencil__19eda5" />
-                  </button>
-                  )}
-                  {onClone && (
-                    <button
-                      type="button"
-                      onClick={() => onClone(row)}
-                      aria-label={ui('clone')}
-                      data-testid={`list-modal-clone-${row.id}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
-                    >
-                      <Copy className="h-4 w-4" data-testid="Copy__19eda5" />
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      type="button"
-                      onClick={() => onDelete(row)}
-                      disabled={deletingId === row.id}
-                      aria-label={ui('delete')}
-                      data-testid={`list-modal-delete-${row.id}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--destructive))] transition-colors hover:bg-[var(--status-destructive-bg)] disabled:opacity-50"
-                    >
-                      {deletingId === row.id
-                        ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__19eda5" />
-                        : <Trash2 className="h-4 w-4" data-testid="Trash2__19eda5" />}
-                    </button>
-                  )}
-                </div>
+              <TableCell
+                className={cn(actionsColClass, 'p-0')}
+                onClick={(e) => e.stopPropagation()}
+                data-testid="TableCell__19eda5">
+                <ListModalRowActions
+                  row={row}
+                  onEdit={onEdit}
+                  onClone={onClone}
+                  onDelete={onDelete}
+                  deleting={deletingId === row.id}
+                  className={actionsColClass}
+                  ui={ui}
+                  data-testid="ListModalRowActions__19eda5" />
               </TableCell>
               )}
             </TableRow>

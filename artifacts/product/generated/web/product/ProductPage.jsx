@@ -9,7 +9,6 @@ import CostingForm from './CostingForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
 import ProductStockDefaultsWatcher from '@/windows/custom/product/ProductStockDefaultsWatcher';
-import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import ProductCostBanner from '@/windows/custom/product/ProductCostBanner';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
@@ -45,7 +44,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:product
 
 // @sf-generated-start requiredHeaderFields:product
-const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'active', 'returnable'];
+const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'productType', 'stocked', 'active', 'returnable'];
 // @sf-generated-end requiredHeaderFields:product
 
 
@@ -512,10 +511,12 @@ export const api = {
       "M_Product_Category_ID": "Categoría",
       "ProductType": "Tipo",
       "Value": "Código",
+      "IsStocked": "Almacenable",
       "DateFrom": "Fecha de inicio",
       "DateTo": "Fecha de expiración"
     },
     "es_AR": {
+      "IsStocked": "Almacenable",
       "DateFrom": "Fecha de inicio",
       "DateTo": "Fecha de expiración"
     }
@@ -563,10 +564,6 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 500, visibleWhenCapability: 'showAccountingFields' },
         ]}
         formFooter={ProductStockDefaultsWatcher}
-        primaryTabs={[
-          { key: 'general', label: 'General' },
-          { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
-        ]}
         hidePrint
         hideMoreMenu
         noHeaderBorder
@@ -576,7 +573,6 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         autoSaveOnBlur
         sidebarClassName="w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
         tabsBarPaddingX="px-2"
-        primaryTabsVariant="pill"
         toolbarPaddingX="px-2"
         contentBg="bg-card"
         formCardPadding="px-2"
@@ -613,7 +609,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt","xlsx"],"limit":{"maxRows":5000,"concurrency":4,"batchSize":10},"dedupe":{"scope":"database","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"example":"SKU-1001","column":"Value","type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"example":"Tornillo hexagonal M8","exampleKey":"importExampleProductName","column":"Name","type":"string"},{"target":"description","aliases":["descripcion","descripción","description"],"example":"Tornillería inoxidable","exampleKey":"importExampleProductDescription","label":"Description","column":"Description","required":false,"type":"textarea"},{"target":"productType","aliases":["tipo","tipo de producto"],"label":"Product Type","required":false,"example":"Item","exampleKey":"importExampleProductType","column":"ProductType","type":"enum"},{"target":"uOM","aliases":["unidad de medida","unidad","um","uom"],"label":"Unit of Measure","matchEntity":"UOM","required":false,"example":"Unidad","exampleKey":"importExampleProductUom","column":"C_UOM_ID","type":"foreignKey","reference":"UOM"},{"required":false,"type":"string","target":"salesPrice","aliases":["precio de venta","precio venta","precio","pvp"],"label":"Sales Price","isNumeric":true,"example":"12,50","exampleKey":"importExampleProductSalesPrice","labelKey":"importHeaderSalesPrice"},{"required":false,"type":"string","target":"purchasePrice","aliases":["precio de compra","precio compra"],"label":"Purchase Price","isNumeric":true,"example":"8,20","exampleKey":"importExampleProductPurchasePrice","labelKey":"importHeaderPurchasePrice"},{"target":"cost","aliases":["costo","coste","coste estandar","coste estándar","costo estandar","costo estándar","standard cost"],"label":"Cost","required":false,"isNumeric":true,"example":"7,40","exampleKey":"importExampleProductCost","labelKey":"importHeaderCost","column":"Cost","type":"string"},{"required":false,"type":"string","target":"costStartingDate","aliases":["fecha de inicio","fecha inicio","vigente desde","fecha de inicio del coste","starting date"],"label":"Cost Starting Date","example":"01/01/2026","exampleKey":"importExampleProductCostStartingDate","labelKey":"importHeaderCostStartingDate"},{"required":false,"type":"string","target":"category","aliases":["categoria","categoría","codigo categoria","código categoría","nombre categoria","nombre categoría"],"label":"Category","example":"Herramientas","exampleKey":"importExampleProductCategory","column":"M_Product_Category_ID"}]}}
+      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt","xlsx"],"limit":{"maxRows":5000,"concurrency":4,"batchSize":10},"dedupe":{"scope":"database","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"example":"SKU-1001","column":"Value","type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"example":"Tornillo hexagonal M8","exampleKey":"importExampleProductName","column":"Name","type":"string"},{"target":"description","aliases":["descripcion","descripción","description"],"example":"Tornillería inoxidable","exampleKey":"importExampleProductDescription","label":"Description","column":"Description","required":false,"type":"textarea"},{"target":"productType","aliases":["tipo","tipo de producto"],"label":"Product Type","required":false,"example":"Item","exampleKey":"importExampleProductType","column":"ProductType","type":"enum"},{"target":"uOM","aliases":["unidad de medida","unidad","um","uom"],"label":"Unit of Measure","matchEntity":"UOM","matchMode":"strict","required":false,"example":"Unidad","exampleKey":"importExampleProductUom","column":"C_UOM_ID","type":"foreignKey","reference":"UOM"},{"required":false,"type":"string","target":"salesPrice","aliases":["precio de venta","precio venta","precio","pvp"],"label":"Sales Price","isNumeric":true,"example":"12,50","exampleKey":"importExampleProductSalesPrice","labelKey":"importHeaderSalesPrice"},{"required":false,"type":"string","target":"purchasePrice","aliases":["precio de compra","precio compra"],"label":"Purchase Price","isNumeric":true,"example":"8,20","exampleKey":"importExampleProductPurchasePrice","labelKey":"importHeaderPurchasePrice"},{"target":"cost","aliases":["costo","coste","coste estandar","coste estándar","costo estandar","costo estándar","standard cost"],"label":"Cost","required":false,"isNumeric":true,"example":"7,40","exampleKey":"importExampleProductCost","labelKey":"importHeaderCost","column":"Cost","type":"string"},{"required":false,"type":"string","target":"costStartingDate","aliases":["fecha de inicio","fecha inicio","vigente desde","fecha de inicio del coste","starting date"],"label":"Cost Starting Date","example":"01/01/2026","exampleKey":"importExampleProductCostStartingDate","labelKey":"importHeaderCostStartingDate"},{"required":false,"type":"string","target":"category","aliases":["categoria","categoría","codigo categoria","código categoría","nombre categoria","nombre categoría"],"label":"Category","example":"Herramientas","exampleKey":"importExampleProductCategory","column":"M_Product_Category_ID"},{"target":"taxCategory","aliases":["grupo de impuesto","grupo de impuestos","categoria de impuesto","categoría de impuesto","impuesto","tax category"],"label":"Tax Category","matchEntity":"FinancialMgmtTaxCategory","matchMode":"strict","required":false,"example":"IVA Normal","exampleKey":"importExampleProductTaxCategory","labelKey":"importHeaderTaxCategory","column":"C_TaxCategory_ID","type":"foreignKey","reference":"TaxCategory"},{"target":"stocked","aliases":["almacenable","stocked","is stocked"],"label":"Stocked","required":false,"example":"Sí","exampleKey":"importExampleYes","labelKey":"importHeaderStocked","column":"IsStocked","type":"boolean"},{"target":"returnable","aliases":["retornable","returnable"],"label":"Returnable","required":false,"example":"Sí","exampleKey":"importExampleYes","labelKey":"importHeaderReturnable","column":"Returnable","type":"boolean"}]}}
       {...props} window={effectiveWindow}
     />
   );

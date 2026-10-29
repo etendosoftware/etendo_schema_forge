@@ -18,7 +18,7 @@
  * Unlike its sibling DataTable suites, this spec deliberately does NOT stub
  * ProductSearchDrawer — the assertion is precisely that the real drawer opens.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -162,6 +162,40 @@ describe('DataTable add-row — the product control comes from addRow.fields, no
       expect(screen.getByTestId('inline-add-field-product')).toHaveTextContent('Agua mineral');
     });
     expect(screen.getByTestId('inline-add-field-product')).not.toHaveAttribute('data-placeholder');
+    // ETP-5133 — the add-row cell truncates until the line is saved, so the full name is on hover.
+    expect(within(screen.getByTestId('inline-add-field-product')).getByText('Agua mineral'))
+      .toHaveAttribute('title', 'Agua mineral');
+  });
+
+  // ETP-5948 — reopening the add-row lookup after a pick opens on that pick.
+  it('reopens the drawer marked on the product already picked in the add-row', async () => {
+    const user = userEvent.setup();
+    globalThis.fetch.mockImplementation((url) => {
+      if (String(url).includes('/image/')) return Promise.resolve({ ok: false });
+      if (String(url).includes('/product/product')) {
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          items: [
+            { id: 'p1', label: 'Agua mineral', searchKey: 'AGUA' },
+            { id: 'p2', label: 'Zumo', searchKey: 'ZUMO' },
+          ],
+          hasMore: false,
+        }),
+      });
+    });
+    renderAddRow();
+    await user.click(screen.getByTestId('inline-add-field-product'));
+    await user.click(await screen.findByText('Zumo'));
+    await waitFor(() => expect(screen.getByTestId('inline-add-field-product')).toHaveTextContent('Zumo'));
+    await waitFor(() => expect(screen.queryByTestId('product-search-drawer')).not.toBeInTheDocument());
+
+    await user.click(screen.getByTestId('inline-add-field-product'));
+
+    await waitFor(() => expect(screen.getByTestId('product-search-option-p2')).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.getByTestId('product-search-option-p1')).toHaveAttribute('aria-selected', 'false');
   });
 
   it('falls back to the selector combo when the add-row entry itself is not a lookup', async () => {

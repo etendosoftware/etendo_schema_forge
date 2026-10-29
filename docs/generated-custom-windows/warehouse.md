@@ -60,6 +60,8 @@ Visual separators: the toolbar's bottom rule is part of the standard record tool
 
 Discarded fields (not shown anywhere): `warehouseRule`, `storageBinSeparator`, `shipmentVehicle`, `shipperCode`, `fromDocumentNo`, `toDocumentNo`, `mReturnlocatorID`, `allocated`. The `discardPatterns: ["EM_*"]` rule additionally suppresses all Etendo module extension fields from the header form.
 
+**Structured address fields (ETP-5806), gated behind `structured-address-for-sepa`.** The flag is backend-only (TTL 2026-11-15 — see `docs/feature-flags.md` and `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`); the modal reads `capabilities.structuredAddressForSepa`, never the flag itself. **While off**, the field opens the pre-ETP-5806 single-line address editor (free-text Address line + City/Country/Region) exactly as before this ticket — `WarehouseLocationHandler` stays the plain, rule-free `C_Location` pass-through. **While on**, the "Location / Address" field opens the shared `LocationEditorModal` (`saveMode="location"`, served by `WarehouseLocationHandler`'s plain `C_Location` CRUD). It now asks for **Calle** (Street, mandatory), **Número** (Number, mandatory), **Nombre de edificio** (Building Name, optional) and City/Country/Region, instead of free-text Address Line 1/2; the two lines are computed and shown read-only (`StructuredAddressComposer`, same 60-char/truncation algorithm as Contacts). Save is blocked until Street, Number, City and Country are filled. `WarehouseLocationHandler` is consequently no longer a purely generic, rule-free pass-through: it validates and persists these fields the same way `ContactsLocationAddressHandler` does. A warehouse address created before this change (free-text only) shows the same legacy-address warning banner with a Copy button described in `contacts.md`'s "Structured address fields (ETP-5806)" note — see that file for the full field-by-field behavior, which applies here unchanged since both windows share `LocationEditorModal`. No optimistic-locking protection exists on this save path either (same accepted limitation as Contacts).
+
 ### After-create behavior
 
 On successful warehouse creation, the wrapper calls `createDefaultStorageBin`, which POSTs to `/sws/neo/warehouse/storageBin` with:
@@ -252,6 +254,12 @@ columns (`grid: true, form: false, visibility: "readOnly"`), and `aggregateProdu
 `etgoValuation` per product for the sidebar and warehouse totals (a `NULL` valuation counts
 as 0 in the total).
 
+**Cost and valuation display rule (Products tab).** `aggregateProducts` keeps `cost` and
+`valuation` as `null` while no row of the product carries a value, and keeps a real `0` as `0`.
+The tab renders `—` only for `null` (the product has no cost line) and formats a real `0` as a
+cost ("0,00 €"). This is the same rule the Inventory Stock Report uses, so a product reads the
+same in both places. A `null` valuation still counts as 0 in the warehouse total.
+
 ### One definition of "current cost"
 
 `etgo_product_cost(m_product_id)` is the single source of truth for every reader — the
@@ -295,6 +303,8 @@ panel reads the stored columns like any other field and `binContents` no longer 
 ## Accounting subtab (`accounting` entity)
 
 Added by ETP-4565 (scope-expanded follow-up to ETP-4402 — "Contabilidad tab: single record + non-deletable" across 8 master-data windows). The native AD `Warehouse and Storage Bins` window (`AD_Window_ID = 139`) has an "Accounting" tab (`ad_tab_id = 209`, table `M_Warehouse_Acct`); it is now wired into the custom warehouse window as a `secondaryTabs` entry, the same pattern used by `product`/`asset-group`.
+
+**Role gate (ETP-5648).** The custom `index.jsx` builds its own `secondaryTabs` list, so it declares `visibleWhenCapability: ACCOUNTING_CAPABILITY` on the `accounting` entry itself (the generated page's flag never reaches it). Without the `showAccountingFields` capability (e.g. the Inventory template role) the tab is hidden and its rows are never fetched; the server refuses `warehouse/accounting` with `403` anyway.
 
 The Accounting tab maps to `M_Warehouse_Acct` and exposes exactly one visible field:
 
@@ -392,4 +402,14 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
+## ETP-5693 — Posting accounts only, on write
+
+Saving an account field of the warehouse accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via the new `@NeoExtension` `WarehouseAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## Bespoke grid personal views
+
+The bespoke `WarehouseTransactionsTable` uses the existing personal-view contract for `warehouse` / `productTransactions`, preserving sorting and document navigation. `WarehouseProductsTab` remains blocked: its product/valuation rows aggregate `binContents` and have no single configured entity scope. The DataTable-based warehouse header is outside this migration.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

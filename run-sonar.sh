@@ -284,7 +284,9 @@ if [[ "$RUN_COVERAGE" == "true" ]]; then
   # right version if nvm is present.
   if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
     # shellcheck source=/dev/null
-    source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+    # `|| true`: nvm.sh is not `set -u` clean, so sourcing it under `set -euo pipefail`
+    # aborts this script silently before the Node check below can report anything.
+    source "${NVM_DIR:-$HOME/.nvm}/nvm.sh" || true
     nvm use 22 --silent 2>/dev/null || true
   fi
   NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null || echo "0")
@@ -337,7 +339,14 @@ else
   echo "==> Running sonar-scanner..."
 fi
 export SONAR_PR_KEY
-sonar-scanner "${SCANNER_ARGS[@]}"
+# The scanner's embedded JVM derives sun.jnu.encoding from the locale. Under
+# LANG=C or LC_ALL=C (e.g. a shell alias around git) it is ANSI_X3.4-1968 and the scan
+# aborts with InvalidPathException on any non-ASCII file name (e.g. an accented
+# ResultadoValidacionForm.jsx). Force UTF-8 for the scanner only.
+# C.UTF-8 is built into glibc but absent on macOS, where en_US.UTF-8 always exists.
+SCANNER_LOCALE="en_US.UTF-8"
+if locale -a 2>/dev/null | grep -qixE 'C\.UTF-?8'; then SCANNER_LOCALE="C.UTF-8"; fi
+LANG="$SCANNER_LOCALE" LC_ALL="$SCANNER_LOCALE" sonar-scanner "${SCANNER_ARGS[@]}"
 
 # ── Step 2: Get task ID from report-task.txt ───────────────────────
 REPORT_TASK_FILE=".scannerwork/report-task.txt"

@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
+import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Info, Loader2, Trash2, TriangleAlert, X } from 'lucide-react';
+import { Check, ExternalLink, Info, Loader2, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
-import { useActividadesIae } from './useActividadesIae.js';
+import { useActividadesIae, iaeCapState, IAE_MAX_SECONDARY_ACTIVITIES } from './useActividadesIae.js';
 
 // Field descriptors mirror `artifacts/organization/contract.json`'s
 // `actividadesDelIae` entity (ETP-4975) — same shape SelectorInput/DataTable
@@ -17,6 +20,21 @@ const EPGRAFE_FIELD = { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', type: 's
 const TYPE_FIELD = { key: 'epiaeType', column: 'Epiae_Type_ID', type: 'selector', reference: 'epiae_type', inputMode: 'selector' };
 const CODE_FIELD = { key: 'epiaeCode', column: 'Epiae_Code_ID', type: 'selector', reference: 'EPIAE_Code', inputMode: 'selector' };
 
+const GRID_COLUMN_DEFS = [
+  { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', labelKey: 'orgIaeEpigraphLabel' },
+  { key: 'epiaeType', column: 'Epiae_Type_ID', labelKey: 'orgIaeTypeLabel' },
+  { key: 'epiaeCode', column: 'Epiae_Code_ID', labelKey: 'orgIaeCodeLabel' },
+  { key: 'default', column: 'Isdefault', labelKey: 'orgIaeDefaultLabel', required: true },
+];
+
+const DEFAULT_COLUMN_WIDTHS = { default: 96, taxID: 112, powerDate: 112 };
+
+function headerCellStyle(column) {
+  if (column.gridUserWidthPx != null) return { width: column.gridUserWidthPx, overflowWrap: 'anywhere' };
+  const width = DEFAULT_COLUMN_WIDTHS[column.key];
+  return width == null ? undefined : { width };
+}
+
 function isDefaultTrue(value) {
   return value === true || value === 'Y';
 }
@@ -25,6 +43,22 @@ function isDefaultTrue(value) {
 // this is the field the Modelo 303 report reads off the default row for the
 // last period of the fiscal year (see module docstring in useActividadesIae.js
 // and docs/generated-custom-windows/organization.md "Actividades del IAE").
+/** Selector cell shared by the data rows and the add row: `record` holds the value and its `$_identifier`. */
+function IaeSelector({ field, record, onSelect, resolvedLabel = '', selectorUrlFor, token, 'data-testid': testId }) {
+  return (
+    <CreatableSearchSelect
+      field={field}
+      value={record[field.key] ?? ''}
+      displayValue={record[`${field.key}$_identifier`] ?? ''}
+      onChange={(val, label) => onSelect(field, val, label)}
+      resolvedLabel={resolvedLabel}
+      selectorUrl={selectorUrlFor(field)}
+      token={token}
+      serverSearch
+      data-testid={testId} />
+  );
+}
+
 function CodeHint() {
   const ui = useUI();
   return (
@@ -40,6 +74,27 @@ function CodeHint() {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+// ETP-5831 — the AEAT's public IAE heading search, linked next to the Epígrafe column header so a
+// user who does not know their heading can look it up without leaving the grid unexplained.
+export const AEAT_IAE_SEARCH_URL = 'https://sede.agenciatributaria.gob.es/Sede/buscador-iae.html';
+
+function EpigraphSearchLink() {
+  const ui = useUI();
+  return (
+    <a
+      href={AEAT_IAE_SEARCH_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={ui('orgIaeEpigraphSearchLinkAria')}
+      title={ui('orgIaeEpigraphSearchLinkAria')}
+      className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-normal text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+      data-testid="ActividadesIaeSection__epigraphSearchLink">
+      {ui('orgIaeEpigraphSearchLink')}
+      <ExternalLink size={12} aria-hidden="true" data-testid="ExternalLink__iaeEpigraphSearch" />
+    </a>
   );
 }
 
@@ -60,11 +115,18 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
   const { rows, loading, error, refetch, createRow, updateRow, deleteRow, enforceSingleDefault } =
     useActividadesIae(orgId, apiBaseUrl);
 
+  const gridColumns = useMemo(() => GRID_COLUMN_DEFS.map(({ labelKey, ...column }) => ({ ...column, label: ui(labelKey) })), [ui]);
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: 'organization', entity: 'actividadesDelIae', columns: gridColumns, data: rows, apiBaseUrl });
+  const columns = gridView.active ? gridView.columns : gridColumns;
+  const gridLabel = (key) => gridColumns.find(column => column.column === key)?.label ?? key;
+
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [addingRow, setAddingRow] = useState(false);
   const [newRow, setNewRow] = useState({});
   const [savingNew, setSavingNew] = useState(false);
+
+  const { atCap, overCap } = iaeCapState(rows);
 
   function selectorUrlFor(field) {
     return `${apiBaseUrl}/actividadesDelIae/selectors/${field.column}`;
@@ -109,6 +171,8 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     }
   }
 
+  const selectNewRow = (field, val, label) => setNewRow(p => ({ ...p, [field.key]: val, [`${field.key}$_identifier`]: label ?? '' }));
+
   function cancelAddRow() {
     setAddingRow(false);
     setNewRow({});
@@ -150,7 +214,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     if (loading) {
       return (
         <tr>
-          <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+          <td colSpan={columns.length + 1} className="py-8 text-center text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__iaeLoading" />
           </td>
         </tr>
@@ -159,7 +223,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     if (rows.length === 0 && !addingRow) {
       return (
         <tr>
-          <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground" data-testid="ActividadesIaeSection__empty">
+          <td colSpan={columns.length + 1} className="py-6 text-center text-sm text-muted-foreground" data-testid="ActividadesIaeSection__empty">
             {ui('orgIaeEmpty')}
           </td>
         </tr>
@@ -169,44 +233,34 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
       const rowDefault = isDefaultTrue(row.default);
       const missingCode = rowDefault && !row.epiaeCode;
       const rowSaving = savingId === row.id;
-      return (
-        <tr key={row.id} className="border-b border-border/50 last:border-b-0" data-testid={`ActividadesIaeSection__row-${row.id}`}>
-          <td className="py-1.5 px-2 align-middle">
-            <CreatableSearchSelect
+      const cells = {
+        epgrafeIAE: (<td className="py-1.5 px-2 align-middle">
+            <IaeSelector
               field={EPGRAFE_FIELD}
-              value={row.epgrafeIAE ?? ''}
-              displayValue={row['epgrafeIAE$_identifier'] ?? ''}
-              onChange={(val, label) => handleSelectorChange(row, EPGRAFE_FIELD, val, label)}
-              resolvedLabel=""
-              selectorUrl={selectorUrlFor(EPGRAFE_FIELD)}
+              record={row}
+              onSelect={(field, val, label) => handleSelectorChange(row, field, val, label)}
+              selectorUrlFor={selectorUrlFor}
               token={token}
-              serverSearch
               data-testid="CreatableSearchSelect__iaeEpgrafe" />
-          </td>
-          <td className="py-1.5 px-2 align-middle">
-            <CreatableSearchSelect
+          </td>),
+        epiaeType: (<td className="py-1.5 px-2 align-middle">
+            <IaeSelector
               field={TYPE_FIELD}
-              value={row.epiaeType ?? ''}
-              displayValue={row['epiaeType$_identifier'] ?? ''}
-              onChange={(val, label) => handleSelectorChange(row, TYPE_FIELD, val, label)}
-              resolvedLabel=""
-              selectorUrl={selectorUrlFor(TYPE_FIELD)}
+              record={row}
+              onSelect={(field, val, label) => handleSelectorChange(row, field, val, label)}
+              selectorUrlFor={selectorUrlFor}
               token={token}
-              serverSearch
               data-testid="CreatableSearchSelect__iaeType" />
-          </td>
-          <td className="py-1.5 px-2 align-middle">
+          </td>),
+        epiaeCode: (<td className="py-1.5 px-2 align-middle">
             <div className="flex items-center gap-1.5">
               <div className="flex-1 min-w-0">
-                <CreatableSearchSelect
+                <IaeSelector
                   field={CODE_FIELD}
-                  value={row.epiaeCode ?? ''}
-                  displayValue={row['epiaeCode$_identifier'] ?? ''}
-                  onChange={(val, label) => handleSelectorChange(row, CODE_FIELD, val, label)}
-                  resolvedLabel=""
-                  selectorUrl={selectorUrlFor(CODE_FIELD)}
+                  record={row}
+                  onSelect={(field, val, label) => handleSelectorChange(row, field, val, label)}
+                  selectorUrlFor={selectorUrlFor}
                   token={token}
-                  serverSearch
                   data-testid="CreatableSearchSelect__iaeCode" />
               </div>
               {missingCode && (
@@ -224,15 +278,19 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                 </TooltipProvider>
               )}
             </div>
-          </td>
-          <td className="py-1.5 px-2 align-middle">
+          </td>),
+        default: (<td className="py-1.5 px-2 align-middle">
             <Checkbox
               checked={rowDefault}
               disabled={rowSaving}
               onChange={() => handleDefaultToggle(row, !rowDefault)}
               aria-label={ui('orgIaeDefaultLabel')}
               data-testid="Checkbox__iaeDefault" />
-          </td>
+          </td>),
+      };
+      return (
+        <tr key={row.id} className="border-b border-border/50 last:border-b-0" data-testid={`ActividadesIaeSection__row-${row.id}`}>
+          {columns.map(column => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
           <td className="py-1.5 px-2 align-middle text-right">
             {rowSaving || deletingId === row.id ? (
               <Loader2 className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__iaeRowBusy" />
@@ -255,6 +313,12 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
 
   return (
     <div className="flex flex-col gap-3" data-testid="ActividadesIaeSection__root">
+      {gridColumnViews && <GridViewControls
+        gridView={gridView}
+        gridColumns={gridColumns}
+        ui={ui}
+        t={gridLabel}
+        data-testid="GridViewControls__93451b" />}
       <div className="overflow-x-auto rounded-lg border border-border">
         {/* table-fixed: keeps the 3 selector columns (Epígrafe/Clave/Código) evenly split
             and the 2 fixed columns (Principal/actions) at their w-24/w-10 from the first
@@ -266,63 +330,68 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeEpigraphLabel')}</th>
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeTypeLabel')}</th>
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">
-                {ui('orgIaeCodeLabel')}
-                <CodeHint data-testid="CodeHint__iae" />
-              </th>
-              <th className="h-9 w-24 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgIaeDefaultLabel')}</th>
+              {columns.map(column => {
+                const label = column.label;
+                return (
+                  <th key={column.key} className="relative h-9 px-3 text-left align-middle text-xs font-semibold text-foreground"
+                    style={headerCellStyle(column)}
+                    {...gridHeaderProps(column, gridView)}>
+                    {label}
+                    {column.key === 'epgrafeIAE' && <EpigraphSearchLink data-testid="EpigraphSearchLink__93451b" />}
+                    {column.key === 'epiaeCode' && <CodeHint data-testid="CodeHint__iaeCode" />}
+                    {gridReorderHandle(column, gridView, label, ui)}
+                    {gridResizeHandle(column, gridView, label, ui)}
+                  </th>
+                );
+              })}
               <th className="h-9 w-10 px-2" />
             </tr>
           </thead>
           <tbody>
             {renderRowsBody()}
-            {addingRow && (
-              <tr className="bg-status-info/40 border-t-2 border-primary/20" data-testid="ActividadesIaeSection__addRow">
-                <td className="py-1.5 px-2 align-middle">
-                  <CreatableSearchSelect
+            {addingRow && (() => {
+              const cells = {
+                epgrafeIAE: (<td className="py-1.5 px-2 align-middle">
+                  <IaeSelector
                     field={EPGRAFE_FIELD}
-                    value={newRow.epgrafeIAE ?? ''}
-                    displayValue={newRow['epgrafeIAE$_identifier'] ?? ''}
-                    onChange={(val, label) => setNewRow(p => ({ ...p, epgrafeIAE: val, 'epgrafeIAE$_identifier': label ?? '' }))}
+                    record={newRow}
+                    onSelect={selectNewRow}
                     resolvedLabel={ui('orgIaeEpigraphLabel')}
-                    selectorUrl={selectorUrlFor(EPGRAFE_FIELD)}
+                    selectorUrlFor={selectorUrlFor}
                     token={token}
-                    serverSearch
                     data-testid="CreatableSearchSelect__iaeNewEpgrafe" />
-                </td>
-                <td className="py-1.5 px-2 align-middle">
-                  <CreatableSearchSelect
+                </td>),
+                epiaeType: (<td className="py-1.5 px-2 align-middle">
+                  <IaeSelector
                     field={TYPE_FIELD}
-                    value={newRow.epiaeType ?? ''}
-                    displayValue={newRow['epiaeType$_identifier'] ?? ''}
-                    onChange={(val, label) => setNewRow(p => ({ ...p, epiaeType: val, 'epiaeType$_identifier': label ?? '' }))}
+                    record={newRow}
+                    onSelect={selectNewRow}
                     resolvedLabel={ui('orgIaeTypeLabel')}
-                    selectorUrl={selectorUrlFor(TYPE_FIELD)}
+                    selectorUrlFor={selectorUrlFor}
                     token={token}
-                    serverSearch
                     data-testid="CreatableSearchSelect__iaeNewType" />
-                </td>
-                <td className="py-1.5 px-2 align-middle">
-                  <CreatableSearchSelect
+                </td>),
+                epiaeCode: (<td className="py-1.5 px-2 align-middle">
+                  <IaeSelector
                     field={CODE_FIELD}
-                    value={newRow.epiaeCode ?? ''}
-                    displayValue={newRow['epiaeCode$_identifier'] ?? ''}
-                    onChange={(val, label) => setNewRow(p => ({ ...p, epiaeCode: val, 'epiaeCode$_identifier': label ?? '' }))}
+                    record={newRow}
+                    onSelect={selectNewRow}
                     resolvedLabel={ui('orgIaeCodeLabel')}
-                    selectorUrl={selectorUrlFor(CODE_FIELD)}
+                    selectorUrlFor={selectorUrlFor}
                     token={token}
-                    serverSearch
                     data-testid="CreatableSearchSelect__iaeNewCode" />
-                </td>
-                <td className="py-1.5 px-2 align-middle">
+                </td>),
+                default: (<td className="py-1.5 px-2 align-middle">
                   <Checkbox
                     checked={!!newRow.default}
                     onChange={() => setNewRow(p => ({ ...p, default: !p.default }))}
                     aria-label={ui('orgIaeDefaultLabel')}
                     data-testid="Checkbox__iaeNewDefault" />
-                </td>
+                </td>),
+              };
+              return (
+              <tr className="bg-status-info/40 border-t-2 border-primary/20" data-testid="ActividadesIaeSection__addRow">
+                {columns.map(column => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
                 <td className="py-1.5 px-2 align-middle">
                   <div className="flex items-center gap-1 justify-end">
                     {savingNew ? (
@@ -352,16 +421,33 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                   </div>
                 </td>
               </tr>
-            )}
+            ); })() }
           </tbody>
         </table>
       </div>
+      {/* Modelo 390 cap (1 main + 5 others, see IAE_MAX_SECONDARY_ACTIVITIES): existing rows are
+          never hidden — over the cap a warning asks to remove some; at the cap "Añadir" is off. */}
+      {!loading && overCap && (
+        <p
+          role="alert"
+          className="flex items-start gap-1.5 text-xs leading-[18px] text-[var(--status-warning-fg)]"
+          data-testid="ActividadesIaeSection__overCapWarning">
+          <TriangleAlert size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__iaeOverCap" />
+          <span>{ui('orgIaeOverCapWarning', { max: IAE_MAX_SECONDARY_ACTIVITIES })}</span>
+        </p>
+      )}
       {!addingRow && (
-        <div>
+        <div className="flex items-center gap-2">
           <AddLineButton
             onClick={() => setAddingRow(true)}
             label={ui('orgIaeAddRow')}
+            disabled={atCap}
             data-testid="ActividadesIaeSection__addButton" />
+          {atCap && !overCap && (
+            <span className="text-xs text-muted-foreground" data-testid="ActividadesIaeSection__capHint">
+              {ui('orgIaeCapHint', { max: IAE_MAX_SECONDARY_ACTIVITIES })}
+            </span>
+          )}
         </div>
       )}
     </div>

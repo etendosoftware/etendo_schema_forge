@@ -64,7 +64,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -482,6 +482,14 @@ export const api = {
       "reference": "GLAccount",
       "inputMode": "search",
       "url": "/sws/neo/purchase-invoice/lines/selectors/account"
+    },
+    {
+      "entity": "lines",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/purchase-invoice/lines/selectors/uOM"
     },
     {
       "entity": "lines",
@@ -1010,7 +1018,8 @@ export const api = {
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
       "em_etgo_tbai_status": "Estado Batuz",
-      "DocumentNo": "N° interno"
+      "DocumentNo": "N° interno",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "POReference": "Document No.",
@@ -1020,10 +1029,12 @@ export const api = {
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
       "em_etgo_tbai_status": "Batuz Status",
-      "DocumentNo": "Internal No."
+      "DocumentNo": "Internal No.",
+      "C_UOM_ID": "Unit"
     },
     "es_AR": {
-      "OutstandingAmt": "Saldo pendiente"
+      "OutstandingAmt": "Saldo pendiente",
+      "C_UOM_ID": "Unidad"
     }
   }
 };
@@ -1061,7 +1072,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
+          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50, visibleWhen: (record, ctx) => ctx['OrgCurrencyId'] != null && ((record['currency'] != null && record['currency'] !== '') && record['currency'] !== ctx['OrgCurrencyId']) },
         ]}
         hideDeleteWhenComplete
         hidePrintWhen={true}

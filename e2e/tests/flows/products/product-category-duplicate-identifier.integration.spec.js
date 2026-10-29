@@ -1,7 +1,9 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../../helpers/auth.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 
 /**
  * Product Category — Duplicate identifier error message (ETP-4597, integration).
@@ -60,9 +62,10 @@ const FRIENDLY_MESSAGE_PATTERN = /ya existe un registro con este identificador|a
 /** Wait for detail view fully loaded (spinner gone, data fetched). */
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
-  // Wait for any loading indicator to disappear (covers late-appearing spinners)
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
+  // Wait for EVERY loading indicator to disappear (covers late-appearing spinners
+  // and panels that load concurrently). Passes at once when none is shown; a
+  // still-visible indicator after the budget is tolerated, as before.
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 /**
@@ -78,10 +81,10 @@ function expectSaveResponse(page) {
 
 /**
  * Like expectSaveResponse but does NOT filter by status. The duplicate-key
- * save in this spec is expected to be REJECTED: NeoCrudHandler#handleDefault
- * (com.etendoerp.go) wraps the AD unique-constraint OBException in a generic
- * SC_INTERNAL_SERVER_ERROR (500), so a `status < 500` filter would never
- * match it and would silently time out instead of confirming the round trip.
+ * save in this spec is expected to be REJECTED: NEO classifies the AD
+ * unique-constraint failure as a 409 `duplicate_key` (ETP-5782; it used to be a
+ * generic 500), so a success filter (`status < 400`) would never match it and
+ * would silently time out instead of confirming the round trip.
  */
 function expectWriteAttemptResponse(page) {
   return page.waitForResponse(

@@ -11,11 +11,12 @@ import React, { createRef } from 'react';
 
 // --- Mocks (one block, no spreading across files) ---
 
-// The line delete button renders the Iconic trash from the core custom-icons barrel;
-// the published core may predate it, so stub it while keeping every other icon real.
+// The line edit/delete buttons render the Iconic edit/trash from the core custom-icons
+// barrel; the published core may predate them, so stub them while keeping every other icon real.
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -46,9 +47,13 @@ vi.mock('@/lib/resolveColumnLabel.js', () => ({
 }));
 
 vi.mock('@/lib/linesColumnWidth.js', () => ({
+  withLinesAbsorberColumn: (cols) => cols,
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
+  // Read by linesContentWidth.js to size a lookup selector (no-truncate) column; widths are
+  // pinned by the columnFlex stub above, so the measured value is irrelevant here.
+  measureTextPx: () => 0,
 }));
 
 // Stub the heavy sub-components that need their own providers
@@ -94,7 +99,12 @@ vi.mock('../ProductSearchDrawer.jsx', () => ({
 }));
 // ETP-5681 — the `account` lookup drawer, exposing its title while open.
 vi.mock('../AccountLookupPopup.jsx', () => ({
-  default: (props) => (props.open ? <div data-testid="account-lookup-popup-title">{props.title}</div> : null),
+  default: (props) => (props.open ? (
+    <div data-testid="account-lookup-popup-title" data-value={props.value ?? ''} data-value-label={props.valueLabel ?? ''}
+      data-committed-item={JSON.stringify(props.committedItem ?? null)}>
+      {props.title}
+    </div>
+  ) : null),
 }));
 vi.mock('./quickActionsStyle.js', () => ({
   QUICK_ACTIONS_PILL_CLASS: 'pill',
@@ -363,6 +373,8 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     // Edit (pencil) must still render — only delete is gated.
     expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
+    // ETP-5600 — the edit glyph is the Figma Iconic edit; the testid stays stable.
+    expect(within(actions).getByTestId('Pencil__3b7ec2')).toHaveAttribute('data-icon', 'iconic-edit');
     expect(within(actions).queryByTestId('IconicTrashIcon__3b7ec2')).toBeNull();
     expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
   });
@@ -378,7 +390,7 @@ describe('InlineLinesPanel', () => {
   });
 
   // The line action buttons are the list quick actions' Figma Icon Button sm: 32x32
-  // round, a #828FA3 neutral icon with the #121217 @ 5% hover overlay, and a
+  // round, a #828FA3 neutral icon (`--sf-icon-outline-secondary`) with the #121217 @ 5% hover overlay, and a
   // destructive delete that tints to the light destructive background on hover.
   describe('Figma action buttons in the line hover strip', () => {
     async function hoverRow(id) {
@@ -387,7 +399,7 @@ describe('InlineLinesPanel', () => {
       return row;
     }
 
-    const NEUTRAL_TOKENS = ['h-8', 'w-8', 'rounded-full', 'text-[#828FA3]', 'hover:bg-[rgba(18,18,23,0.05)]'];
+    const NEUTRAL_TOKENS = ['h-8', 'w-8', 'rounded-full', 'text-[hsl(var(--sf-icon-outline-secondary))]', 'hover:bg-[rgba(18,18,23,0.05)]'];
     const DESTRUCTIVE_TOKENS = [
       'h-8', 'w-8', 'rounded-full',
       'text-[var(--status-destructive-fg)]', 'hover:bg-[var(--status-destructive-bg)]', 'disabled:opacity-50',
@@ -420,7 +432,7 @@ describe('InlineLinesPanel', () => {
       const row = await hoverRow('L1');
       const del = within(row).getByRole('button', { name: 'deleteRowTooltip' });
       expect(del).toHaveClass(...DESTRUCTIVE_TOKENS);
-      expect(del).not.toHaveClass('text-[#828FA3]');
+      expect(del).not.toHaveClass('text-[hsl(var(--sf-icon-outline-secondary))]');
       const icon = within(del).getByTestId('IconicTrashIcon__3b7ec2');
       expect(icon).toHaveAttribute('data-icon', 'iconic-trash');
       expect(icon).toHaveClass('h-5', 'w-5');
@@ -1139,6 +1151,48 @@ describe('InlineLinesPanel', () => {
     expect(trigger).toHaveTextContent('Cuenta contable');
     await act(async () => { await userEvent.click(trigger); });
     expect(screen.getByTestId('account-lookup-popup-title')).toHaveTextContent('Cuenta contable');
+  });
+
+  // ETP-5948 — the line's committed value reaches the lookup drawer, which opens marked on it.
+  // Generated grid columns carry no onSelectMappings: the inline commit reads them from the entry
+  // fields (addRow.fields), so the committed item must be rebuilt from there too.
+  const LOC_MAPPINGS = [{ from: '_aux._LOC', to: 'storageBin' }];
+  it.each([
+    ['the column', { onSelectMappings: LOC_MAPPINGS }, undefined],
+    ['the entry fields (addRow.fields)', {}, { fields: [{ key: 'accountingCombination', onSelectMappings: LOC_MAPPINGS }] }],
+  ])('hands the line value and its label to the lookup drawer, mappings from %s', async (_label, columnExtra, addRow) => {
+    const columns = [{
+      key: 'accountingCombination', label: 'Account', type: 'selector',
+      column: 'C_ValidCombination_ID', lookup: true, lookupDrawer: 'account',
+      ...columnExtra,
+    }];
+    const rows = [{ id: 'AC2', accountingCombination: 'VC9', accountingCombination$_identifier: '572 - Bancos', storageBin: 'LOC-7' }];
+    render(
+      <InlineLinesPanel
+        ref={React.createRef()}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+        addRow={addRow}
+      />,
+    );
+    const row = screen.getByTestId('line-row-AC2');
+    await act(async () => { await userEvent.hover(row); });
+    const editBtn = within(within(row).getByTestId('line-actions')).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    await act(async () => { await userEvent.click(within(row).getByTestId('field-accountingCombination')); });
+
+    const popup = screen.getByTestId('account-lookup-popup-title');
+    expect(popup).toHaveAttribute('data-value', 'VC9');
+    expect(popup).toHaveAttribute('data-value-label', '572 - Bancos');
+    // The item the selection mapped onto the line, rebuilt from the field's onSelectMappings.
+    expect(JSON.parse(popup.getAttribute('data-committed-item'))).toEqual({ id: 'VC9', _aux: { _LOC: 'LOC-7' } });
   });
 
   it('renders percent column with percentage sign', () => {
@@ -2593,5 +2647,33 @@ describe('InlineLinesPanel — commitField error toast dedupe (ETP-5073 / DOC-04
     await editAndBlurProduct(row, 'Changed');
 
     expect(toast.error).toHaveBeenLastCalledWith('networkError');
+  });
+});
+
+describe('InlineLinesPanel — display: tag column (neutral pill)', () => {
+  const TAG_COLUMNS = [
+    { key: 'product', label: 'Product', type: 'string' },
+    { key: 'uOM', label: 'Unit', type: 'string', display: 'tag' },
+    { key: 'note', label: 'Note', type: 'string' },
+  ];
+  const TAG_ROWS = [
+    { id: 'T1', product: 'Widget', uOM: 'u1', 'uOM$_identifier': 'Centimeter', note: 'Centimeter' },
+    { id: 'T2', product: 'Gadget', uOM: '', note: 'x' },
+  ];
+
+  it('shows the unit as a pill on a saved line and nothing for an empty value', () => {
+    const { container } = renderPanel({ columns: TAG_COLUMNS, data: TAG_ROWS });
+    const pills = container.querySelectorAll('.status-tag.status-tag--neutral');
+    expect(pills).toHaveLength(1);
+    expect(pills[0]).toHaveTextContent('Centimeter');
+  });
+
+  it('leaves a column without display:tag as plain text (no pill)', () => {
+    const { container } = renderPanel({
+      columns: TAG_COLUMNS.map((c) => (c.key === 'uOM' ? { ...c, display: undefined } : c)),
+      data: TAG_ROWS,
+    });
+    expect(container.querySelector('.status-tag')).toBeNull();
+    expect(screen.getAllByText('Centimeter').length).toBeGreaterThan(0);
   });
 });

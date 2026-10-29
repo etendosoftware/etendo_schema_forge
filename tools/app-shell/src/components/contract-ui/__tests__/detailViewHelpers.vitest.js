@@ -1,4 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+// @covers tools/app-shell/src/components/contract-ui/toolbarClasses.js
+// @covers tools/app-shell/src/components/contract-ui/evalTabVisible.js
 //
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //
@@ -9,12 +11,14 @@
 // which is exactly the coupling ETP-4730 set out to remove.
 
 import { describe, it, expect, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
 
 vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (data, field) => (field ? data?.[field] : undefined),
 }));
 
 import {
+  useNewRouteEditingReset,
   evalDisplayLogicRaw,
   deriveTaxRateFromGross,
   normalizePatchFieldValues,
@@ -63,7 +67,12 @@ import {
   getProcessButtonVariant,
   getDangerIconClass,
   isDangerProcess,
+  panelEditing,
+  isSecondaryTabVisible,
+  buildTabVisibilityContext,
+  getSecondaryTabEntityKey,
 } from '../detailViewHelpers.jsx';
+import * as sharedToolbarClasses from '../toolbarClasses.js';
 
 describe('evalDisplayLogicRaw', () => {
   it('defaults to visible when there is no expression or no parseable clause', () => {
@@ -420,20 +429,16 @@ describe('class-name and small value helpers', () => {
     expect(getInlineEditableShrinkClassName('table')).toBe('');
   });
 
-  it('uses one constant record-toolbar class: p-2 plus the inset bottom rule, no border-b', () => {
-    const cls = getLinesToolbarClassName();
-    expect(cls).toContain('p-2');
-    expect(cls).toContain('shadow-[inset_0_-1px_0_var(--status-neutral-border)]');
-    expect(cls).not.toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', true)).toBe(cls);
+  // The class strings themselves are tested in toolbarClasses.vitest.js (ETP-5736 moved them there).
+  it('re-exports the shared record-toolbar classes', () => {
+    expect(getLinesToolbarClassName).toBe(sharedToolbarClasses.getLinesToolbarClassName);
+    expect(getSaveBtnCls).toBe(sharedToolbarClasses.getSaveBtnCls);
   });
 
-  it('always sizes square buttons h-10 w-10 and the save button h-10', () => {
+  it('always sizes square buttons h-10 w-10', () => {
     expect(getSqBtnSize()).toBe('h-10 w-10');
     expect(getSqBtnSize('default')).toBe('h-10 w-10');
     expect(getSqBtnSize('sm')).toBe('h-10 w-10');
-    expect(getSaveBtnCls()).toContain('h-10');
-    expect(getSaveBtnCls('sm')).toContain('h-10');
   });
 
   it('stacks the side panel below the content until lg', () => {
@@ -1228,5 +1233,153 @@ describe('buildCustomAddModalSeed / buildCustomAddModalOnParentRefresh (ETP-5654
     buildCustomAddModalOnParentRefresh({ hook, parentRecordId: 'p1' })();
     expect(hook.invalidateEntityCache).toHaveBeenCalled();
     expect(hook.fetchById).toHaveBeenCalledWith('p1', { force: true });
+  });
+});
+
+describe('useNewRouteEditingReset — read-only role on the creation route (ETP-5830)', () => {
+  const run = (props) => renderHook(() => useNewRouteEditingReset({
+    recordId: 'new', editing: null, handleNew: vi.fn(), ...props,
+  }));
+
+  it('sends a read-only role on /new back via onReadOnlyNew', () => {
+    const onReadOnlyNew = vi.fn();
+    run({ isNew: true, accessReadOnly: true, onReadOnlyNew });
+    expect(onReadOnlyNew).toHaveBeenCalled();
+  });
+
+  it('redirects once and skips the defaults fetch, even when re-rendered with a new callback', () => {
+    const handleNew = vi.fn();
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = renderHook(({ cb }) => useNewRouteEditingReset({
+      isNew: true, recordId: 'new', editing: null, handleNew, accessReadOnly: true, onReadOnlyNew: cb,
+    }), { initialProps: { cb: first } });
+    rerender({ cb: second });
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+    expect(handleNew).not.toHaveBeenCalled();
+  });
+
+  it('leaves a writable role on /new, and a read-only role on an existing record, alone', () => {
+    const onReadOnlyNew = vi.fn();
+    run({ isNew: true, accessReadOnly: false, onReadOnlyNew });
+    run({ isNew: false, recordId: 'R1', accessReadOnly: true, onReadOnlyNew });
+    expect(onReadOnlyNew).not.toHaveBeenCalled();
+  });
+  it('never redirects an embedded form, and runs its defaults fetch as usual', () => {
+    const onReadOnlyNew = vi.fn();
+    const handleNew = vi.fn();
+    run({ isNew: true, accessReadOnly: true, embedded: true, onReadOnlyNew, handleNew });
+    expect(onReadOnlyNew).not.toHaveBeenCalled();
+    expect(handleNew).toHaveBeenCalled();
+  });
+});
+
+describe('panelEditing (ETP-5830)', () => {
+  it('locks a custom panel for a read-only role and passes the record through otherwise', () => {
+    const record = { id: 'R1' };
+    expect(panelEditing(true, record)).toBe(false);
+    expect(panelEditing(false, record)).toBe(record);
+  });
+});
+
+describe('record-gated secondary tabs (visibleWhen)', () => {
+  const foreign = (record, ctx) =>
+    ctx['OrgCurrencyId'] != null &&
+    ((record['currency'] != null && record['currency'] !== '') && record['currency'] !== ctx['OrgCurrencyId']);
+  const ratesTab = { key: 'exchangeRates', label: 'Rates', visibleWhen: foreign, tabOrder: 50 };
+  const plainTab = { key: 'notes', label: 'Notes' };
+  const ctxEur = { OrgCurrencyId: 'EUR', OrgCurrencyCode: 'EUR' };
+
+  describe('buildTabVisibilityContext', () => {
+    it('maps the org currency into the ctx keys the predicates read', () => {
+      expect(buildTabVisibilityContext({ orgCurrencyId: '102', orgCurrencyCode: 'EUR' }))
+        .toEqual({ OrgCurrencyId: '102', OrgCurrencyCode: 'EUR' });
+    });
+    it('defaults undefined to null (loading state must read as null, not undefined)', () => {
+      expect(buildTabVisibilityContext({})).toEqual({ OrgCurrencyId: null, OrgCurrencyCode: null });
+    });
+    it('keeps an empty string as-is only for non-nullish input', () => {
+      expect(buildTabVisibilityContext({ orgCurrencyId: '', orgCurrencyCode: null }))
+        .toEqual({ OrgCurrencyId: '', OrgCurrencyCode: null });
+    });
+  });
+
+  describe('isSecondaryTabVisible', () => {
+    it('a tab with neither gate is visible', () => {
+      expect(isSecondaryTabVisible(plainTab, {}, {}, {})).toBe(true);
+    });
+    it('visibleWhen alone decides: shown for a foreign currency, hidden for the org currency', () => {
+      expect(isSecondaryTabVisible(ratesTab, {}, { currency: 'USD' }, ctxEur)).toBe(true);
+      expect(isSecondaryTabVisible(ratesTab, {}, { currency: 'EUR' }, ctxEur)).toBe(false);
+    });
+    it('is hidden while the org currency is loading', () => {
+      expect(isSecondaryTabVisible(ratesTab, {}, { currency: 'USD' }, { OrgCurrencyId: null })).toBe(false);
+    });
+    it('hidden for empty/null record currency and for a missing record or ctx', () => {
+      expect(isSecondaryTabVisible(ratesTab, {}, { currency: '' }, ctxEur)).toBe(false);
+      expect(isSecondaryTabVisible(ratesTab, {}, { currency: null }, ctxEur)).toBe(false);
+      expect(isSecondaryTabVisible(ratesTab, {}, undefined, undefined)).toBe(false);
+    });
+    it('composes capability AND visibleWhen', () => {
+      const tab = { ...ratesTab, visibleWhenCapability: 'showFx' };
+      const rec = { currency: 'USD' };
+      expect(isSecondaryTabVisible(tab, { showFx: true }, rec, ctxEur)).toBe(true);
+      expect(isSecondaryTabVisible(tab, { showFx: false }, rec, ctxEur)).toBe(false);
+      expect(isSecondaryTabVisible(tab, { showFx: true }, { currency: 'EUR' }, ctxEur)).toBe(false);
+    });
+    it('a throwing predicate hides the tab', () => {
+      expect(isSecondaryTabVisible({ key: 'x', visibleWhen: () => { throw new Error('x'); } }, {}, {}, {})).toBe(false);
+    });
+    it('tolerates an undefined tab', () => {
+      expect(isSecondaryTabVisible(undefined, {}, {}, {})).toBe(true);
+    });
+  });
+
+  describe('getSecondaryTabEntityKey', () => {
+    const tabs = [plainTab, ratesTab, { key: 'form', isFormTab: true }, { key: 'pan', Panel: () => null }];
+    it('returns the key of a visible tab and works without a vis arg for ungated tabs (regression)', () => {
+      expect(getSecondaryTabEntityKey(tabs, 0, {})).toBe('notes');
+    });
+    it('returns null for a hidden record-gated tab so its hook never fetches', () => {
+      expect(getSecondaryTabEntityKey(tabs, 1, {}, { record: { currency: 'EUR' }, ctx: ctxEur })).toBeNull();
+      expect(getSecondaryTabEntityKey(tabs, 1, {}, undefined)).toBeNull();
+    });
+    it('returns the key once the tab becomes visible', () => {
+      expect(getSecondaryTabEntityKey(tabs, 1, {}, { record: { currency: 'USD' }, ctx: ctxEur })).toBe('exchangeRates');
+    });
+    it('still returns null for form tabs, Panel tabs and out-of-range indexes', () => {
+      expect(getSecondaryTabEntityKey(tabs, 2, {})).toBeNull();
+      expect(getSecondaryTabEntityKey(tabs, 3, {})).toBeNull();
+      expect(getSecondaryTabEntityKey(tabs, 9, {})).toBeNull();
+    });
+    it('a capability-hidden tab is still null', () => {
+      expect(getSecondaryTabEntityKey([{ key: 'a', visibleWhenCapability: 'c' }], 0, { c: false })).toBeNull();
+    });
+  });
+
+  describe('buildInitialTabs with tabRecord/tabCtx', () => {
+    const make = (over = {}) => ({
+      secondaryTabs: [ratesTab, plainTab],
+      secondaryHooks: [{ children: [] }, { children: [] }],
+      panelCounts: {}, ui: (k) => k, DetailTable: null, detailLabel: null, detailEntity: null,
+      hook: { children: [] }, detailTabIndex: undefined, detailTabOrder: undefined, CustomLines: null,
+      customLinesLabel: null, customLinesCount: null, customTabsAfterBottom: false, tabCustomTabs: [],
+      customTabCounts: {}, customTabVisibility: {}, ...over,
+    });
+    const keys = (p) => buildInitialTabs(p).map(t => t.key);
+
+    it('omits the tab for the org currency and shows it for a foreign one, leaving secondaryTabs untouched', () => {
+      const p = make({ tabRecord: { currency: 'EUR' }, tabCtx: ctxEur });
+      expect(keys(p)).toEqual(['notes']);
+      expect(p.secondaryTabs).toHaveLength(2);
+      expect(keys(make({ tabRecord: { currency: 'USD' }, tabCtx: ctxEur }))).toEqual(['exchangeRates', 'notes']);
+    });
+    it('hides the gated tab when tabRecord/tabCtx are not supplied (fail-closed), ungated tabs unaffected', () => {
+      expect(keys(make())).toEqual(['notes']);
+    });
+    it('hides it while the org currency is loading', () => {
+      expect(keys(make({ tabRecord: { currency: 'USD' }, tabCtx: { OrgCurrencyId: null } }))).toEqual(['notes']);
+    });
   });
 });

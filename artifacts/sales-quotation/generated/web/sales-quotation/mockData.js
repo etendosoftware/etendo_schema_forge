@@ -253,6 +253,7 @@ export const quotationLine = [
     "discount": 6,
     "tax": "VAT 21%",
     "lineGrossAmount": 38907,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 38907,
     "quotationId": "mock-quotation-001"
@@ -266,6 +267,7 @@ export const quotationLine = [
     "discount": 21,
     "tax": "VAT 10%",
     "lineGrossAmount": 9306,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 9306,
     "quotationId": "mock-quotation-002"
@@ -279,6 +281,7 @@ export const quotationLine = [
     "discount": 0,
     "tax": "VAT 0%",
     "lineGrossAmount": 11544,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 11544,
     "quotationId": "mock-quotation-003"
@@ -292,6 +295,7 @@ export const quotationLine = [
     "discount": 6,
     "tax": "Sales Tax 8.5%",
     "lineGrossAmount": 11872,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 11872,
     "quotationId": "mock-quotation-004"
@@ -305,6 +309,7 @@ export const quotationLine = [
     "discount": 14,
     "tax": "Exempt",
     "lineGrossAmount": 48460,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 48460,
     "quotationId": "mock-quotation-005"
@@ -318,6 +323,7 @@ export const quotationLine = [
     "discount": 4,
     "tax": "Reduced Rate 5%",
     "lineGrossAmount": 45418,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 45418,
     "quotationId": "mock-quotation-006"
@@ -331,6 +337,7 @@ export const quotationLine = [
     "discount": 6,
     "tax": "Standard Rate 20%",
     "lineGrossAmount": 33840,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 33840,
     "quotationId": "mock-quotation-007"
@@ -344,6 +351,7 @@ export const quotationLine = [
     "discount": 10,
     "tax": "VAT 21%",
     "lineGrossAmount": 25716,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 25716,
     "quotationId": "mock-quotation-008"
@@ -357,6 +365,7 @@ export const quotationLine = [
     "discount": 17,
     "tax": "VAT 10%",
     "lineGrossAmount": 44780,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 44780,
     "quotationId": "mock-quotation-009"
@@ -370,6 +379,7 @@ export const quotationLine = [
     "discount": 14,
     "tax": "VAT 0%",
     "lineGrossAmount": 12483,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 12483,
     "quotationId": "mock-quotation-010"
@@ -383,6 +393,7 @@ export const quotationLine = [
     "discount": 19,
     "tax": "Sales Tax 8.5%",
     "lineGrossAmount": 46022,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 46022,
     "quotationId": "mock-quotation-011"
@@ -396,6 +407,7 @@ export const quotationLine = [
     "discount": 12,
     "tax": "Exempt",
     "lineGrossAmount": 38634,
+    "uOM": "Sample uOM",
     "unitPrice": "Sample unitPrice",
     "lineNetAmount": 38634,
     "quotationId": "mock-quotation-012"

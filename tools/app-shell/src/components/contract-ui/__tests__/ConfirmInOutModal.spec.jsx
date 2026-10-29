@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @covers tools/app-shell/src/components/contract-ui/ConfirmInOutModal.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ETP-5316 — the modal's only use of `useUI()` is `translateBackendError(err.message, ui, …)`,
@@ -10,6 +11,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const CONFIRM_UI_DICT = {
   'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
   'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
+  'backendError.quotaExceeded': 'Has alcanzado el límite de tu plan.',
+  'backendError.quotaCheckFailed': 'No se pudo comprobar la cuota del plan; no se ha guardado nada.',
 };
 vi.mock('@/i18n', async (importOriginal) => {
   const actual = await importOriginal();
@@ -510,6 +513,121 @@ describe('ConfirmInOutModal', () => {
     });
   });
 
+  // ETP-5051 — the NEO actions that create documents refuse with 403
+  // `{ error: { code: 'QUOTA_EXCEEDED', message, quota } }`. buildBackendError read only
+  // `response.message` / `message`, so the user read "Error (403)" and the quota banner was never
+  // told. The refusal must render as the translated quota sentence and be announced.
+  describe('plan-quota refusal of a document-creating action (ETP-5051)', () => {
+    it('shows the translated quota message and announces the refusal', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        const u = String(url);
+        if (u.includes('/action/documentAction')) {
+          return Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+        }
+        if (u.includes('/createInvoice')) {
+          return Promise.resolve({
+            ok: false,
+            status: 403,
+            json: async () => ({
+              error: {
+                code: 'QUOTA_EXCEEDED',
+                message: 'Quota exceeded: Posted sales invoices (100/100 Inv)',
+                quota: {
+                  resourceKey: 'CONFIRM_INOUT_INVOICES', resourceName: 'Posted sales invoices',
+                  unitLabel: 'Inv', includedQty: 100, consumed: 100, verdict: 'DENY',
+                },
+              },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Has alcanzado el límite de tu plan.')).toBeInTheDocument());
+        expect(screen.queryByText('Error (403)')).toBeNull();
+        expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+
+    /** documentAction answers `docBody`/`docStatus`; the invoice action answers `invBody`/`invStatus`. */
+    function routeLegs({ docStatus = 200, docBody = { response: { data: {} } }, invStatus = 200, invBody = { response: { data: { id: 'INV-1' } } } }) {
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        const u = String(url);
+        if (u.includes('/action/documentAction')) {
+          return Promise.resolve({ ok: docStatus < 400, status: docStatus, json: async () => docBody });
+        }
+        if (u.includes('/createInvoice')) {
+          return Promise.resolve({ ok: invStatus < 400, status: invStatus, json: async () => invBody });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+    }
+    const calledAction = (name) => globalThis.fetch.mock.calls.some(([url]) => String(url).includes(`/action/${name}`));
+
+    it('shows the check-failed sentence for a 500 QUOTA_CHECK_FAILED on the invoice leg', async () => {
+      routeLegs({
+        invStatus: 500,
+        invBody: { error: { code: 'QUOTA_CHECK_FAILED', status: 500, message: 'The quota check failed; nothing was saved. Try again.' } },
+      });
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(screen.getByText('No se pudo comprobar la cuota del plan; no se ha guardado nada.')).toBeInTheDocument());
+      expect(screen.queryByText('Error (500)')).toBeNull();
+    });
+
+    // Completing the document itself can be what the plan refuses: the invoice leg never runs.
+    it('shows the quota sentence when documentAction is refused, and creates no invoice', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      routeLegs({
+        docStatus: 403,
+        docBody: {
+          error: {
+            code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Goods shipments (50/50)',
+            quota: { resourceKey: 'CONFIRM_INOUT_SHIPMENTS', resourceName: 'Goods shipments', includedQty: 50, consumed: 50, verdict: 'DENY' },
+          },
+        },
+      });
+      const onConfirmed = vi.fn();
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} onConfirmed={onConfirmed} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Has alcanzado el límite de tu plan.')).toBeInTheDocument());
+        expect(screen.queryByText('Error (403)')).toBeNull();
+        expect(calledAction('createInvoice')).toBe(false);
+        expect(onConfirmed).not.toHaveBeenCalled();
+        expect(announced).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+
+    // Any other 403 reads exactly as before this change, and is not announced as a quota refusal.
+    it('keeps "Error (403)" for a 403 that is not a quota refusal', async () => {
+      const announced = vi.fn();
+      window.addEventListener('etendo:quota-refused', announced);
+      routeLegs({ invStatus: 403, invBody: { error: { status: 403, message: 'Access denied' } } });
+      try {
+        render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+        fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+        await waitFor(() => expect(screen.getByText('Error (403)')).toBeInTheDocument());
+        expect(announced).not.toHaveBeenCalled();
+      } finally {
+        window.removeEventListener('etendo:quota-refused', announced);
+      }
+    });
+  });
+
   // ── ETP-5381 — rectifiable-invoice picker ──────────────────────────────────
   // The invoice this modal creates is now confirmed in the same request, and the
   // completion is rejected unless it declares which invoice it rectifies. So the
@@ -788,6 +906,66 @@ describe('ConfirmInOutModal', () => {
       render(<ConfirmInOutModal {...BASE_PROPS} />);
       expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.title))).toEqual([]);
       expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.cardTitle))).toEqual([]);
+    });
+  });
+
+  describe('footer button hover', () => {
+    const CANCEL_REST = 'hsl(var(--card))';
+    const CONFIRM_REST = 'var(--status-info-fg)';
+    const CONFIRM_DISABLED = 'var(--status-info-border)';
+
+    it('Cancel rests on the white card token, not transparent', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      expect(screen.getByTestId('confirm-modal-cancel-btn').style.background).toBe(CANCEL_REST);
+    });
+
+    it('Cancel hover changes the background (not the footer gray) and mouseLeave restores white', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      const btn = screen.getByTestId('confirm-modal-cancel-btn');
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).not.toBe(CANCEL_REST);
+      expect(btn.style.background).not.toBe('hsl(var(--muted))');
+      expect(btn.style.background).not.toBe('transparent');
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CANCEL_REST);
+    });
+
+    it('Confirm hover switches to --primary-hover and mouseLeave restores the rest colour', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      const btn = screen.getByTestId('confirm-modal-confirm-btn');
+      expect(btn.style.background).toBe(CONFIRM_REST);
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).toBe('var(--primary-hover)');
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CONFIRM_REST);
+    });
+
+    it('Confirm has no hover effect while disabled (price list required but not chosen)', async () => {
+      mockFetchRouter({ priceLists: [] });
+      render(<ConfirmInOutModal {...PRICE_LIST_PROPS} hasLinkedOrder={false} />);
+      await waitFor(() => expect(screen.getByTestId('confirm-modal-price-list-select')).toBeInTheDocument());
+      const btn = screen.getByTestId('confirm-modal-confirm-btn');
+      expect(btn).toBeDisabled();
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+      fireEvent.mouseEnter(btn);
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+      fireEvent.mouseLeave(btn);
+      expect(btn.style.background).toBe(CONFIRM_DISABLED);
+    });
+
+    it('neither button reacts to hover while loading', async () => {
+      let resolveFetch;
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(r => { resolveFetch = r; })));
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      const cancel = screen.getByTestId('confirm-modal-cancel-btn');
+      const confirm = screen.getByTestId('confirm-modal-confirm-btn');
+      await waitFor(() => expect(cancel).toBeDisabled());
+      fireEvent.mouseEnter(cancel);
+      expect(cancel.style.background).toBe(CANCEL_REST);
+      fireEvent.mouseEnter(confirm);
+      expect(confirm.style.background).toBe(CONFIRM_DISABLED);
+      resolveFetch?.({ ok: true, json: async () => ({ response: { data: {} } }) });
     });
   });
 });

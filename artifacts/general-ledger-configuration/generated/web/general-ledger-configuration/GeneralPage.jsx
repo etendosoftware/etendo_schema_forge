@@ -37,7 +37,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:General
 
 // @sf-generated-start requiredHeaderFields:General
-const requiredHeaderFields = ['organization', 'name', 'gAAP', 'currency'];
+const requiredHeaderFields = ['name', 'gAAP', 'currency'];
 // @sf-generated-end requiredHeaderFields:General
 
 // @sf-generated-start addLineFields:Dimensiones
@@ -95,13 +95,19 @@ export const api = {
     "Cuentas generales": {
       "get": true,
       "getById": true,
-      "post": true,
+      "post": false,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
       "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID",
+        "PUT",
+        "PATCH"
+      ]
     },
     "Valores por defecto": {
       "get": true,

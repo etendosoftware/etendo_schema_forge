@@ -39,7 +39,7 @@ All are navigable (`menu.json`), in `classic` mode, and render the **generic** s
 | **product** | Accounting | secondary tab | absent → `classic` | custom wrapper → generated `ProductPage` | **decisions** |
 | **assets** | Asset Accounting (`assetAcct`) | secondary tab | absent → `classic` | custom wrapper → generated `AssetsPage` | **decisions** |
 | **user** | User Roles | primary detail | absent → `classic` | generated `UserPage` | **decisions** |
-| **simple-g-l-journal** | Lines | primary detail | absent → `classic` | generated `GLJournalPage` | **decisions** |
+| **manual-journals** | Lines | primary detail | absent → `classic` | generated `GLJournalPage` | **decisions** |
 
 ### Notes on `product` and `assets` (custom wrappers)
 Both are registered to a custom `index.jsx`, but that wrapper only swaps the list table / adds toolbar props — it **still renders the generated page and does not override `linesLayout`**. Therefore the `decisions.json` fix flows through normally after regeneration.
@@ -58,7 +58,7 @@ Although `business-partner` is listed in `menu.json` with a `classic` generated 
 
 ## How to fix
 
-### Case A — Fix via `decisions.json` (tax, product, assets, user, simple-g-l-journal)
+### Case A — Fix via `decisions.json` (tax, product, assets, user, manual-journals)
 
 Add to the `window` block of the window's `artifacts/<window>/decisions.json`:
 
@@ -86,7 +86,7 @@ make regen ONLY=<window>
 ## Suggested priority
 
 Windows where inline is clearly the better UX (frequent multi-row editing):
-`tax`, `product`, `simple-g-l-journal`, `assets`.
+`tax`, `product`, `manual-journals`, `assets`.
 
 Windows where a form-style panel may be acceptable (config sub-records with many fields — decide per-window):
 `user`.

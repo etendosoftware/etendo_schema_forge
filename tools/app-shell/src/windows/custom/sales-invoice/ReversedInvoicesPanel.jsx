@@ -1,29 +1,67 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { parseCalendarDate } from '@/lib/dateOnly.js';
 import { toast } from 'sonner';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import SharedInvoicePickerModal from '@/components/contract-ui/InvoicePickerModal.jsx';
+import { useFiscalModelsCatalog, isModelActive } from '@/windows/custom/fiscal-models/useFiscalModelsCatalog.js';
 /* eslint-disable react/prop-types */
 
-const PERIOD_VALUES = ['0A', '1T', '2T', '3T', '4T',
-  '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+// ETP-5059 — the 349 period of a corrective is NOT free: AEAT349_CINVREV_TRG0 (module
+// org.openbravo.module.aeat349.es) accepts only the ORIGINAL invoice's month (`MM`) or its quarter
+// (`nT`), and the year only as the original's fiscal year; the annual `0A` is refused (annual 349
+// filing is no longer used). The picker lists exactly the month and the quarter, derived from the
+// original's invoice date. A legacy stored `0A` is still shown, never offered as a new choice.
+const QUARTER_LABEL_KEYS = { '1T': 'rectPeriodQ1', '2T': 'rectPeriodQ2', '3T': 'rectPeriodQ3', '4T': 'rectPeriodQ4' };
+const MONTH_CODE_RE = /^(0[1-9]|1[0-2])$/;
 
-// Localized labels for the AEAT-349 period list: quarters/annual via i18n keys,
-// month names via Intl for the active locale
-function buildPeriodOptions(ui, locale) {
-  const tag = (locale || 'es_ES').replace('_', '-');
-  const monthName = m => {
-    const name = new Intl.DateTimeFormat(tag, { month: 'long' }).format(new Date(2000, m - 1, 1));
-    return name.charAt(0).toUpperCase() + name.slice(1);
+/**
+ * The 349 year/month/quarter of an original invoice, from its invoice date — the same values the
+ * trigger computes with TO_CHAR(DateInvoiced, 'YYYY' | 'MM' | 'Q'). Parsed as a CALENDAR date
+ * (parseCalendarDate), never `new Date(string)`: a UTC-midnight parse would move an invoice dated
+ * the 1st into the previous month — and the previous quarter or year — west of Greenwich.
+ */
+function originalPeriods(invoiceDate) {
+  const d = parseCalendarDate(invoiceDate);
+  if (!d) return null;
+  const month = d.getMonth() + 1;
+  return {
+    year: String(d.getFullYear()),
+    month: String(month).padStart(2, '0'),
+    quarter: `${Math.ceil(month / 3)}T`,
   };
-  const fixed = {
-    '0A': ui('rectPeriodAnnual'), '1T': ui('rectPeriodQ1'), '2T': ui('rectPeriodQ2'),
-    '3T': ui('rectPeriodQ3'), '4T': ui('rectPeriodQ4'),
-  };
-  return PERIOD_VALUES.map(v => ({ value: v, label: `${v} - ${fixed[v] ?? monthName(Number(v))}` }));
+}
+
+// Localized label of one AEAT-349 period code: quarters via i18n keys, months via Intl for the
+// active locale. `0A` (annual) is refused by the module and never offered; a legacy row that still
+// stores it keeps its "0A - Anual" label. Any other code shows as-is.
+function periodLabel(code, ui, locale) {
+  if (QUARTER_LABEL_KEYS[code]) return `${code} - ${ui(QUARTER_LABEL_KEYS[code])}`;
+  if (code === '0A') return `${code} - ${ui('rectPeriodAnnual')}`;
+  if (MONTH_CODE_RE.test(code)) {
+    const tag = (locale || 'es_ES').replace('_', '-');
+    const name = new Intl.DateTimeFormat(tag, { month: 'long' }).format(new Date(2000, Number(code) - 1, 1));
+    return `${code} - ${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+  }
+  return code;
+}
+
+// The original's month and quarter, in that order (the month is the default). A stored value
+// outside that pair — a legacy `0A`, or any value saved before the rule existed — is kept as an
+// extra option so the select shows what is really stored instead of silently pretending it is the
+// month. Such a row is fixed by choosing the month or the quarter (the year goes as null and the
+// trigger fills it); a year-only change re-sends the stored value and the trigger refuses it.
+function buildPeriodOptions(ui, locale, orig, current) {
+  const codes = orig ? [orig.month, orig.quarter] : [];
+  if (current && !codes.includes(current)) codes.push(current);
+  return codes.map(v => ({ value: v, label: periodLabel(v, ui, locale) }));
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -33,6 +71,35 @@ function isCorrective(row) {
 
 function parseRows(json) {
   return json?.response?.data ?? json?.data ?? [];
+}
+
+// A single-record GET answers either a one-row list or the bare row, depending on the path.
+function firstRow(json) {
+  const d = json?.response?.data ?? json?.data ?? null;
+  return Array.isArray(d) ? (d[0] ?? null) : d;
+}
+
+/**
+ * Invoice date of the original invoice a rectification row points at, read from the same NEO
+ * header entity the picker lists (the original is always of the same flow). Read by id rather
+ * than parsed from `reversedInvoice$_identifier`, whose date part follows the server's display
+ * format. `loaded` stays false until the answer for THIS id arrived, so a stale date of a
+ * previously selected invoice is never used to build the period options.
+ */
+function useOriginalInvoiceDate(apiBaseUrl, invoiceId) {
+  const apiFetch = useApiFetch(apiBaseUrl);
+  const [state, setState] = useState({ id: null, date: null });
+  useEffect(() => {
+    if (!apiBaseUrl || !invoiceId) return undefined;
+    let cancelled = false;
+    apiFetch(`/header/${encodeURIComponent(invoiceId)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => { if (!cancelled) setState({ id: invoiceId, date: firstRow(json)?.invoiceDate ?? null }); })
+      .catch(() => { if (!cancelled) setState({ id: invoiceId, date: null }); });
+    return () => { cancelled = true; };
+  }, [apiFetch, apiBaseUrl, invoiceId]);
+  const loaded = !!invoiceId && state.id === invoiceId;
+  return { loaded, date: loaded ? state.date : null };
 }
 
 // NEO error bodies come in two shapes:
@@ -57,13 +124,33 @@ function draftSignature(draft) {
 
 // NEO does not send expanded reversedInvoice$documentNo/$invoiceDate/$grandTotalAmt
 // fields — parse them from the _identifier: "10000016 - 01-03-2021 - 14.52"
-function parseReversedRef(line) {
-  const ident = line?.['reversedInvoice$_identifier'] ?? '';
+// `field` lets the caller read either side of the C_Invoice_Reverse row: `reversedInvoice`
+// (the original, default) or `invoice` (the rectificativa — see isIncomingLine below).
+function parseReversedRef(line, field = 'reversedInvoice') {
+  const ident = line?.[`${field}$_identifier`] ?? '';
   const parts = ident.split(' - ');
   const docNo = parts[0] || ident || null;
   const date = parts[1] ? parts[1].replace(/-/g, '/') : null;
   const amount = parts[2] != null && parts[2] !== '' ? Number(parts[2]) : null;
   return { docNo, date, amount: Number.isNaN(amount) ? null : amount };
+}
+
+/**
+ * ETP-5745 CP-12 — a {@code C_Invoice_Reverse} row names the current invoice in one of two
+ * columns: `invoice` (it IS the rectificativa) or `reversedInvoice` (it is the ORIGINAL being
+ * rectified). `fetchLines` below now reads both directions, so this tells each row which side
+ * the current record is on: `true` means the row reached this invoice through `reversedInvoice`
+ * (an "incoming" rectification — this invoice is the original, the OTHER document is the one
+ * rectifying it) and the row must be displayed from the other side (`invoice`, not
+ * `reversedInvoice`) and treated as read-only — it is not this invoice's own child row to edit.
+ */
+function isIncomingLine(line, recordId) {
+  return line?.reversedInvoice === recordId && line?.invoice !== recordId;
+}
+
+/** The document to display for `line` from the perspective of `recordId` — see isIncomingLine. */
+function otherSideRef(line, recordId) {
+  return isIncomingLine(line, recordId) ? parseReversedRef(line, 'invoice') : parseReversedRef(line);
 }
 
 // ── CorrectivaBadge ───────────────────────────────────────────────────────────
@@ -227,12 +314,18 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, bpId, multiple, sele
 
 // ── YearPickerSelect ──────────────────────────────────────────────────────────
 // Loads fiscal years from /fiscal-calendar instead of the broken NEO selector.
-function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, readOnly }) {
+//
+// ETP-5059 — only the ORIGINAL invoice's fiscal year is offered (`originalYear`, its YYYY):
+// AEAT349_CINVREV_TRG0 refuses any other. When the calendar has no such year the select offers
+// nothing and the backend's own message (EM_AEAT349_CINVREV_NO_YEAR) explains why on save. While
+// the stored value is empty, the original's year is shown, since that is what the trigger fills.
+function YearPickerSelect({ apiBaseUrl, token, value, displayValue, originalYear, onChange, readOnly, disabled = false }) {
+  const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
   const [years, setYears] = useState(null);
 
   useEffect(() => {
-    if (!apiBaseUrl) return;
+    if (!apiBaseUrl || readOnly) return;
     // apiBaseUrl = /sws/neo/{spec} — strip spec to reach /sws/neo, then hit the year entity
     const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
     apiFetch(`${neoBase}/fiscal-calendar/year?_startRow=0&_endRow=100`, { baseUrl: '' })
@@ -245,7 +338,14 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
         setYears(opts);
       })
       .catch(() => setYears([]));
-  }, [apiBaseUrl, token, apiFetch]);
+  }, [apiBaseUrl, token, apiFetch, readOnly]);
+
+  const options = useMemo(() => {
+    const opts = originalYear ? (years || []).filter(y => y.label === originalYear) : [];
+    // A stored year outside the allowed one (a row saved before ETP-5059) stays visible as it is.
+    if (value && !opts.some(y => y.id === value)) opts.push({ id: value, label: displayValue || value });
+    return opts;
+  }, [years, originalYear, value, displayValue]);
 
   if (readOnly) {
     return (
@@ -257,30 +357,31 @@ function YearPickerSelect({ apiBaseUrl, token, value, displayValue, onChange, re
     );
   }
 
+  const shown = value || options[0]?.id || '';
   return (
     <select
-      value={value || ''}
-      disabled={years === null}
+      value={shown}
+      disabled={disabled || years === null || options.length === 0}
       onChange={e => {
-        const opt = (years || []).find(y => y.id === e.target.value);
+        const opt = options.find(y => y.id === e.target.value);
         onChange(e.target.value, opt?.label ?? '');
       }}
       className="flex h-10 w-full rounded-lg border border-border-control bg-card px-3 text-sm focus:outline-none disabled:opacity-70"
     >
-      <option value="">Seleccionar...</option>
-      {(years || []).map(y => <option key={y.id} value={y.id}>{y.label}</option>)}
+      {options.length === 0 && <option value="">{years === null ? ui('selectPlaceholder') : '—'}</option>}
+      {options.map(y => <option key={y.id} value={y.id}>{y.label}</option>)}
     </select>
   );
 }
 
 // ── AmountInput ──────────────────────────────────────────────────────────────
-// Read-only EUR amount display (349 base amounts are DB-trigger computed).
+// Read-only amount display (349 base amounts are DB-trigger computed); the value carries its
+// currency symbol from formatCurrency, so there is no separate currency prefix.
 function AmountInput({ label, value }) {
   return (
     <div className="space-y-1.5">
       <label className="text-sm font-medium text-foreground block">{label}</label>
       <div className="flex items-center h-10 rounded-lg border border-border-control bg-muted overflow-hidden">
-        <span className="px-3 text-sm text-muted-foreground border-r border-border-control flex items-center h-full">EUR</span>
         <input
           type="text"
           value={value}
@@ -295,12 +396,24 @@ function AmountInput({ label, value }) {
 
 // ── AeatGrid ─────────────────────────────────────────────────────────────────
 // Renders the 4 AEAT-349 conditional fields in a 4-column grid.
-function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, labelOverrides }) {
+function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, readOnly, saving = false, labelOverrides }) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
-  const periodOptions = useMemo(() => buildPeriodOptions(ui, locale), [ui, locale]);
-  const fmtEur = v => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+  // ETP-5059 — year and period are bound to the original invoice, so both pickers are built from
+  // its invoice date. On a multi-selection draft that is the FIRST selected invoice; the trigger
+  // still checks every row against its own original.
+  const { date: originalDate } = useOriginalInvoiceDate(apiBaseUrl, readOnly ? null : data?.reversedInvoice);
+  const orig = useMemo(() => originalPeriods(originalDate), [originalDate]);
+  const storedPeriod = data?.aEAT349Period || '';
+  const periodOptions = useMemo(
+    () => buildPeriodOptions(ui, locale, orig, storedPeriod),
+    [ui, locale, orig, storedPeriod],
+  );
+  // Empty period = the trigger will store the month, so the month is what is shown by default.
+  const shownPeriod = storedPeriod || orig?.month || '';
+  // 349 bases are always EUR; canonical formatter (CLAUDE.md, Currency & Amount Formatting).
+  const fmtEur = v => (v != null ? formatCurrency('EUR', v) : '');
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
@@ -315,7 +428,9 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
           token={token}
           value={data?.aEAT349CYear ?? ''}
           displayValue={data?.['aEAT349CYear$_identifier'] ?? ''}
+          originalYear={orig?.year}
           readOnly={readOnly}
+          disabled={saving}
           onChange={(val, lbl) => {
             onChange('aEAT349CYear', val);
             onChange('aEAT349CYear$_identifier', lbl ?? '');
@@ -323,22 +438,23 @@ function AeatGrid({ data, onChange, onFieldSave, apiBaseUrl, token, catalogs, re
           }}
           data-testid="YearPickerSelect__4395d6" />
       </div>
-      {/* Periodo */}
+      {/* Periodo — the original's month (default) or its quarter */}
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground block">
           {t('EM_AEAT349_Period') ?? 'Periodo'}
           {!readOnly && <span className="text-destructive ml-0.5">*</span>}
         </label>
         <select
-          value={data?.aEAT349Period ?? ''}
-          disabled={readOnly}
+          value={shownPeriod}
+          disabled={readOnly || saving || periodOptions.length === 0}
+          data-testid="select__aeat349Period"
           className="flex h-10 w-full rounded-lg border border-border-control bg-card px-3 text-sm focus:outline-none disabled:opacity-70"
           onChange={e => {
             onChange('aEAT349Period', e.target.value);
             onFieldSave?.('aEAT349Period', e.target.value);
           }}
         >
-          <option value="">—</option>
+          {periodOptions.length === 0 && <option value="">—</option>}
           {periodOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
@@ -367,6 +483,7 @@ function ExpandedForm({
   onSave,
   saving,
   model349Active,
+  aeatSaving = false,
 }) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
@@ -382,7 +499,7 @@ function ExpandedForm({
   const invoiceDisplayParts = [
     ref.docNo,
     ref.date,
-    ref.amount != null ? ref.amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    ref.amount != null ? formatCurrency('EUR', ref.amount) : null,
   ].filter(Boolean);
   const invoiceDisplay = invoiceDisplayParts.join(' · ');
 
@@ -412,6 +529,12 @@ function ExpandedForm({
         // stands in. For exactly one, the document number goes back in, or the field would read
         // as "nothing selected" while Save is enabled.
         onChange('reversedInvoice$_identifier', soleLabel || '');
+        // ETP-5059 — a year/period picked for the previous original belongs to THAT invoice; the
+        // trigger would refuse it for the new one. Clear them so the new original's defaults
+        // (its year, its month) apply again.
+        onChange('aEAT349CYear', undefined);
+        onChange('aEAT349CYear$_identifier', undefined);
+        onChange('aEAT349Period', undefined);
         setPickerOpen(false);
       } : undefined}
       onSelect={!isDraft ? (id, label) => {
@@ -503,9 +626,10 @@ function ExpandedForm({
               type="button"
               role="checkbox"
               aria-checked={corrective}
-              disabled={readOnly}
+              aria-busy={aeatSaving || undefined}
+              disabled={readOnly || aeatSaving}
               onClick={() => {
-                if (readOnly) return;
+                if (readOnly || aeatSaving) return;
                 const next = corrective ? 'N' : 'Y';
                 onChange('aEAT349IsCorrective', next);
                 onFieldSave?.('aEAT349IsCorrective', next);
@@ -514,11 +638,14 @@ function ExpandedForm({
                 'mt-0.5 h-5 w-5 shrink-0 rounded-sm border border-border-control shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
                 'flex items-center justify-center transition-colors focus-visible:outline-none',
                 corrective ? 'bg-primary text-primary-foreground border-primary' : 'bg-card',
-                readOnly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
+                readOnly || aeatSaving ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
               ].join(' ')}
               data-testid="checkbox__isCorrective"
             >
-              {corrective && (
+              {aeatSaving && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="checkbox__isCorrective-saving" />
+              )}
+              {!aeatSaving && corrective && (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
@@ -540,8 +667,8 @@ function ExpandedForm({
               onFieldSave={onFieldSave}
               apiBaseUrl={apiBaseUrl}
               token={token}
-              catalogs={catalogs}
               readOnly={readOnly}
+              saving={aeatSaving}
               labelOverrides={labelOverrides}
               data-testid="AeatGrid__4395d6" />
           )}
@@ -576,6 +703,11 @@ function ExpandedForm({
   );
 }
 
+/** The invoice spec whose reversed-invoices grid view is stored, or null outside the two supported specs. */
+function reversedInvoicesGridSpec(apiBaseUrl) {
+  return apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
+}
+
 // ── ReversedInvoicesPanel ─────────────────────────────────────────────────────
 export default function ReversedInvoicesPanel({
   recordId: recordIdProp,
@@ -591,11 +723,40 @@ export default function ReversedInvoicesPanel({
   onGoToSavedRecord,
   autoOpenAdd,
   restoreDraft,
+  accessReadOnly = false,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
+  // A request with no HTTP answer rejects with a NetworkError whose message is already translated
+  // (docs/request-policy.md); anything else keeps the generic save error.
+  const saveErrorMessage = err => (isNetworkError(err) ? err.message : ui('rectSaveError'));
 
   const [lines, setLines] = useState([]);
+
+  const gridColumns = useMemo(() => [
+    { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', label: ui('rectColOriginalInvoice'), sourceIndex: 1, required: true },
+    { key: 'invoiceDate', label: ui('rectColDate'), sourceIndex: 2 },
+    { key: 'documentNo', label: ui('rectColDocument'), sourceIndex: 3 },
+    { key: 'aEAT349IsCorrective', column: 'EM_AEAT349_IsCorrective', label: ui('rectColModel349'), sourceIndex: 4 },
+    { key: 'grandTotalAmount', label: ui('rectColTotal'), sourceIndex: 5 },
+  ], [ui]);
+  const gridSpec = reversedInvoicesGridSpec(apiBaseUrl);
+  const { gridView, gridColumnViews } = useFlaggedGridView({
+    spec: gridSpec, entity: 'reversedInvoices', columns: gridColumns, data: lines,
+    enabled: Boolean(gridSpec), apiBaseUrl,
+  });
+  const gridEnabled = gridColumnViews && Boolean(gridSpec);
+  const renderGridCells = (fragment) => (gridEnabled
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 1, trailing: 1 })
+    : fragment);
+  const gridControls = gridEnabled ? (
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      data-testid="GridViewControls__4395d6" />
+  ) : null;
+
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [pendingEdits, setPendingEdits] = useState({});
@@ -617,30 +778,13 @@ export default function ReversedInvoicesPanel({
   // Track whether data has been fetched at least once
   const fetchedRef = useRef(false);
 
-  // "Correctiva del 349" gating: the checkbox (and its dependent AEAT-349
-  // fields) is Modelo-349-specific and must stay hidden entirely unless 349 is
-  // active in the Fiscal Models catalog. The catalog is a generic, per-client
-  // AD_PREFERENCE (ETGO_FiscalModelsCatalog) exposed at the built-in
-  // /sws/neo/fiscal-models-catalog endpoint — not scoped to the fiscal-models
-  // spec — so it's reachable cross-spec exactly like YearPickerSelect's
-  // /fiscal-calendar lookup above. Mirrors FmListPage's own fetch/shape
-  // (activeModels + catalogLoaded) so "unconfigured catalog" behaves the same
-  // "all models inactive" way everywhere: fail-closed (hidden) until the
-  // fetch confirms 349 === true, never a flash of visible-then-hidden.
-  const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
-
-  useEffect(() => {
-    if (!apiBaseUrl) return;
-    const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-    apiFetch(`${neoBase}/fiscal-models-catalog`, { baseUrl: '' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(json => setActiveModels(json ?? {}))
-      .catch(() => {})
-      .finally(() => setCatalogLoaded(true));
-  }, [apiBaseUrl, token, apiFetch]);
-
-  const model349Active = catalogLoaded && activeModels?.['349'] === true;
+  // "Correctiva del 349" gating: the checkbox (and its dependent AEAT-349 fields) is
+  // Modelo-349-specific and stays hidden unless 349 is active in the Fiscal Models catalog.
+  // Read through the shared `useFiscalModelsCatalog` (ETP-5831): `{}` or a failed read means no
+  // model active, so the panel is fail-closed (hidden) until the catalog confirms 349 === true,
+  // never visible-then-hidden. Re-read on `token` change, as before.
+  const { activeModels, loaded: catalogLoaded } = useFiscalModelsCatalog(apiBaseUrl, token);
+  const model349Active = catalogLoaded && isModelActive(activeModels, '349');
 
   // On unsaved records the route passes recordId='new' — treat it as no record
   // so add/fetch stay disabled until the invoice is saved (a rectification row
@@ -677,19 +821,24 @@ export default function ReversedInvoicesPanel({
     ? ui('rectDocPurchase') : ui('rectDocSales');
 
   // ── data fetching ──────────────────────────────────────────────────────────
-  const fetchLines = useCallback(async () => {
+  // `silent`: re-read after a write without swapping the rows for the loading line, so an open
+  // row does not collapse and re-open around every save.
+  const fetchLines = useCallback(async ({ silent = false } = {}) => {
     if (!recordId || !apiBaseUrl) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await apiFetch(`/reversedInvoices?_startRow=0&_endRow=200`);
       if (!res.ok) return;
       const json = await res.json();
-      // NEO ignores query-param filters — keep only rows of THIS invoice
-      const rows = parseRows(json).filter(l => l.invoice === recordId);
+      // NEO ignores query-param filters — keep only rows touching THIS invoice, on EITHER side:
+      // `invoice === recordId` (this invoice rectifies another) or `reversedInvoice === recordId`
+      // (another invoice rectifies this one). Before ETP-5745 CP-12 only the first half was kept,
+      // so the ORIGINAL invoice never saw the rectificativas that point back at it.
+      const rows = parseRows(json).filter(l => l.invoice === recordId || l.reversedInvoice === recordId);
       setLines(rows);
       onCountChange?.(rows.length);
     } catch { /* silent */ } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [recordId, apiBaseUrl, token, onCountChange, apiFetch]);
 
@@ -720,25 +869,27 @@ export default function ReversedInvoicesPanel({
   }, [addingLine, newLine]);
 
   // ── PATCH helpers ──────────────────────────────────────────────────────────
+  // Drop only the sent keys (and their $_identifier companions) so the server values win without
+  // wiping other in-progress edits. On a refusal too: the row went unchanged, and keeping the
+  // local value would leave e.g. the corrective box ticked over a row the trigger refused.
+  function dropPendingKeys(lineId, payload) {
+    setPendingEdits(p => {
+      const edits = { ...(p[lineId] || {}) };
+      for (const k of Object.keys(payload)) {
+        delete edits[k];
+        delete edits[`${k}$_identifier`];
+      }
+      return { ...p, [lineId]: edits };
+    });
+  }
+
   async function patchLine(lineId, payload) {
     try {
       const res = await apiFetch(`/reversedInvoices/${lineId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        // Drop only the saved keys (and their $_identifier companions) so the
-        // fresh server values win without wiping other in-progress edits
-        setPendingEdits(p => {
-          const edits = { ...(p[lineId] || {}) };
-          for (const k of Object.keys(payload)) {
-            delete edits[k];
-            delete edits[`${k}$_identifier`];
-          }
-          return { ...p, [lineId]: edits };
-        });
-        fetchLines();
-      } else {
+      if (!res.ok) {
         // Without this branch a rejected PATCH (e.g. the AEAT349 corrective DB
         // trigger) failed completely silently: the checkbox just reverted on the
         // next fetchLines() with no explanation — ETP-5027.
@@ -747,34 +898,67 @@ export default function ReversedInvoicesPanel({
           msg = parseNeoError(await res.json()) || msg;
         } catch { /* keep default */ }
         toast.error(msg);
-        fetchLines();
       }
-    } catch {
-      toast.error(ui('rectSaveError'));
+      dropPendingKeys(lineId, payload);
+      await fetchLines({ silent: true });
+    } catch (err) {
+      toast.error(saveErrorMessage(err));
     }
   }
 
-  // The AEAT349 DB trigger validates the whole group at once: corrective='Y'
-  // requires year + period in the SAME statement, so per-field PATCH always
-  // fails. Accumulate the group locally and PATCH it together once complete.
+  // Line whose AEAT-349 group is being saved. While set, that row's checkbox and pickers are
+  // disabled and keep showing the SERVER values: the group is never applied optimistically on a
+  // saved row, so a refusal (e.g. EM_AEAT349_ORIG_NOT_POSTED) cannot flash the fields open and
+  // shut again. The row only changes once the re-read after the PATCH has landed.
+  const [aeatSavingId, setAeatSavingId] = useState(null);
+  // Synchronous twin of aeatSavingId: two clicks in the same task run before React re-renders, so
+  // the state alone would let the second one through and send a second PATCH. The state only
+  // drives the spinner/disabled UI; this ref is the actual in-flight guard.
+  const aeatInFlightRef = useRef(false);
+
+  async function patchAeatGroup(lineId, payload) {
+    if (aeatInFlightRef.current) return;
+    aeatInFlightRef.current = true;
+    setAeatSavingId(lineId);
+    try {
+      await patchLine(lineId, payload);
+    } finally {
+      aeatInFlightRef.current = false;
+      setAeatSavingId(null);
+    }
+  }
+
+  // ETP-5059 — AEAT349_CINVREV_TRG0 now owns the defaults: with the corrective box ticked and the
+  // year or period empty, it stores the ORIGINAL invoice's fiscal year and month. So ticking saves
+  // straight away (no more waiting for the user to fill a year and a period) and the re-read after
+  // the PATCH brings back what the trigger filled. Year and period go as explicit nulls: a row
+  // unticked earlier may still hold the values of a previous original, which the trigger would
+  // refuse instead of re-defaulting. A later change of either field saves the whole group, since
+  // the trigger validates corrective + year + period together.
   const AEAT_GROUP = ['aEAT349IsCorrective', 'aEAT349CYear', 'aEAT349Period'];
 
   function handleFieldSave(lineId, line, key, value) {
     if (AEAT_GROUP.includes(key)) {
-      const edits = { ...(pendingEdits[lineId] || {}), [key]: value };
-      const val = f => edits[f] ?? line?.[f];
+      if (aeatSavingId || aeatInFlightRef.current) return;
+      // The group is not kept as a pending edit (see aeatSavingId): the row holds server values.
+      const val = f => (f === key ? value : line?.[f]);
       const corr = val('aEAT349IsCorrective');
-      const isCorrectiveOn = corr === 'Y' || corr === true;
-      if (!isCorrectiveOn) {
-        patchLine(lineId, { aEAT349IsCorrective: 'N' });
+      if (corr !== 'Y' && corr !== true) {
+        patchAeatGroup(lineId, { aEAT349IsCorrective: 'N' });
         return;
       }
-      const year = val('aEAT349CYear');
-      const period = val('aEAT349Period');
-      if (year && period) {
-        patchLine(lineId, { aEAT349IsCorrective: 'Y', aEAT349CYear: year, aEAT349Period: period });
+      if (key === 'aEAT349IsCorrective') {
+        patchAeatGroup(lineId, { aEAT349IsCorrective: 'Y', aEAT349CYear: null, aEAT349Period: null });
+        return;
       }
-      // Group incomplete: keep the edit local until year AND period are set
+      patchAeatGroup(lineId, {
+        aEAT349IsCorrective: 'Y',
+        // A period change re-sends NO year: the stored one may be a legacy wrong year, which the
+        // trigger would refuse together with the new period. Null lets it fill the original's
+        // year — the only value it accepts anyway.
+        aEAT349CYear: key === 'aEAT349CYear' ? (value || null) : null,
+        aEAT349Period: val('aEAT349Period') || null,
+      });
       return;
     }
     if (String(line?.[key] ?? '') === String(value ?? '')) return;
@@ -782,6 +966,8 @@ export default function ReversedInvoicesPanel({
   }
 
   function handleChange(lineId, key, value) {
+    // AEAT-349 group keys (and the year's identifier) wait for the server — see aeatSavingId.
+    if (AEAT_GROUP.includes(key) || key === 'aEAT349CYear$_identifier') return;
     setPendingEdits(p => ({ ...p, [lineId]: { ...p[lineId], [key]: value } }));
   }
 
@@ -800,8 +986,8 @@ export default function ReversedInvoicesPanel({
         toast.error(msg);
       }
       fetchLines();
-    } catch {
-      toast.error(ui('rectSaveError'));
+    } catch (err) {
+      toast.error(saveErrorMessage(err));
     } finally { setDeleting(null); }
   }
 
@@ -886,8 +1072,8 @@ export default function ReversedInvoicesPanel({
       } else {
         await reportSaveFailure(res, savedHeader);
       }
-    } catch {
-      toast.error(ui('rectSaveError'));
+    } catch (err) {
+      toast.error(saveErrorMessage(err));
       failedDraftRef.current = draftSignature(newLine);
     } finally { setSaving(false); }
   }
@@ -899,18 +1085,20 @@ export default function ReversedInvoicesPanel({
   // get add/edit/delete — only explicit false blocks, so unsaved records
   // (field not yet enriched by the backend) keep the actions
   const notRectificative = data?.isRectificative === false || data?.isRectificative === 'false';
-  const isReadOnly = (processed && !isVoid) || notRectificative;
+  const isReadOnly = accessReadOnly || (processed && !isVoid) || notRectificative; // ETP-5830: role tier
 
   // ── render ─────────────────────────────────────────────────────────────────
   const showEmptyState = !loading && lines.length === 0 && !addingLine;
 
   return (
     <div className="flex-1 min-w-0" data-testid="reversed-invoices-panel">
+      {gridControls}
       {/* ── table ── */}
       {(lines.length > 0 || loading || addingLine) && (
-        <table className="w-full">
+        <table className="w-full" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}<col style={{ width: 40 }} /></colgroup>}
           <thead className="sticky top-0 z-20 bg-card">
-            <tr className="border-b border-border/40">
+            <tr className="border-b border-border/40">{renderGridCells(<>
               {/* expand toggle placeholder */}
               <th className="h-10 w-10 px-3" />
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColOriginalInvoice')}</th>
@@ -919,19 +1107,19 @@ export default function ReversedInvoicesPanel({
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColModel349')}</th>
               <th className="h-10 px-3 text-right text-xs font-semibold text-foreground">{ui('rectColTotal')}</th>
               <th className="h-10 w-10 px-2" />
-            </tr>
+            </>)}</tr>
           </thead>
 
           <tbody>
             {loading && (
-              <tr>
+              <tr>{renderGridCells(<>
                 <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   <Loader2
                     className="h-4 w-4 animate-spin inline mr-1.5"
                     data-testid="Loader2__4395d6" />
                   {ui('loading')}
                 </td>
-              </tr>
+              </>)}</tr>
             )}
 
             {!loading && lines.map(line => {
@@ -939,13 +1127,17 @@ export default function ReversedInvoicesPanel({
               const edits = pendingEdits[line.id] ?? {};
               const lineData = { ...line, ...edits };
               const corrective = isCorrective(lineData);
-              const ref = parseReversedRef(lineData);
-              const identifier = ref.docNo ?? lineData.reversedInvoice ?? '—';
+              const incoming = isIncomingLine(lineData, recordId);
+              const ref = otherSideRef(lineData, recordId);
+              const identifier = ref.docNo ?? (incoming ? lineData.invoice : lineData.reversedInvoice) ?? '—';
               const displayDate = ref.date ?? '—';
               const docNo = ref.docNo ?? identifier;
               const totalDisplay = ref.amount != null
                 ? formatCurrency('EUR', ref.amount)
                 : '—';
+              // An "incoming" row (this invoice is the ORIGINAL another document rectifies) is
+              // not this invoice's own child row — hide it from edit/delete (ETP-5745 CP-12).
+              const rowReadOnly = isReadOnly || incoming;
 
               return (
                 <React.Fragment key={line.id}>
@@ -953,7 +1145,7 @@ export default function ReversedInvoicesPanel({
                     className={`relative border-b border-border/30 group/row transition-colors cursor-pointer hover:bg-muted/30 ${isExpanded ? 'bg-muted/20' : ''}`}
                     onClick={() => setExpandedId(isExpanded ? null : line.id)}
                     style={{ height: 48 }}
-                  >
+                  >{renderGridCells(<>
                     {/* expand chevron */}
                     <td className="px-3 align-middle" onClick={e => e.stopPropagation()}>
                       <button
@@ -988,7 +1180,7 @@ export default function ReversedInvoicesPanel({
                     </td>
                     {/* Actions (three-dot menu placeholder — shows on hover) */}
                     <td className="px-2 align-middle opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                      {!isReadOnly && (
+                      {!rowReadOnly && (
                         <button
                           type="button"
                           onClick={() => deleteLine(line.id)}
@@ -1003,14 +1195,20 @@ export default function ReversedInvoicesPanel({
                         </button>
                       )}
                     </td>
-                  </tr>
+                  </>)}</tr>
                   {/* expanded form */}
                   {isExpanded && (
-                    <tr>
+                    <tr>{renderGridCells(<>
                       <td colSpan={7} className="p-0">
                         <ExpandedForm
-                          lineData={lineData}
-                          readOnly={isReadOnly}
+                          // ExpandedForm always reads the `reversedInvoice`/`reversedInvoice$_identifier`
+                          // fields to render "Factura original". For an incoming row those point at
+                          // THIS invoice (circular) — the document to show is `invoice` instead, so it
+                          // is remapped here rather than teaching ExpandedForm about both directions.
+                          lineData={incoming
+                            ? { ...lineData, reversedInvoice: lineData.invoice, 'reversedInvoice$_identifier': lineData['invoice$_identifier'] }
+                            : lineData}
+                          readOnly={rowReadOnly}
                           isDraft={false}
                           onChange={(k, v) => handleChange(line.id, k, v)}
                           onFieldSave={(k, v) => handleFieldSave(line.id, line, k, v)}
@@ -1021,9 +1219,10 @@ export default function ReversedInvoicesPanel({
                           bpId={data?.businessPartner}
                           recordId={recordId}
                           model349Active={model349Active}
+                          aeatSaving={aeatSavingId === line.id}
                           data-testid="ExpandedForm__4395d6" />
                       </td>
-                    </tr>
+                    </>)}</tr>
                   )}
                 </React.Fragment>
               );
@@ -1031,7 +1230,7 @@ export default function ReversedInvoicesPanel({
 
             {/* draft new-line row — auto-expanded */}
             {addingLine && (
-              <tr>
+              <tr>{renderGridCells(<>
                 <td colSpan={7} className="p-0">
                   <div ref={addRowRef}>
                     <ExpandedForm
@@ -1056,7 +1255,7 @@ export default function ReversedInvoicesPanel({
                       data-testid="ExpandedForm__4395d6" />
                   </div>
                 </td>
-              </tr>
+              </>)}</tr>
             )}
           </tbody>
         </table>

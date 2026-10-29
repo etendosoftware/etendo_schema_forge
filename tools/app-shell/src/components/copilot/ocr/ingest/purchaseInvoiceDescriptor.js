@@ -1,4 +1,5 @@
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { isBack } from '../ocrFlowSignals.js';
 import { buildSearchUrl, deriveSelectorUrl, deriveSpecBase, readSearchRows } from '../ocrQuery.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -197,22 +198,52 @@ async function runProductSimSearch({ token, lines }) {
     token,
     entityName: 'Product',
     items: productHints,
-    minSimPercent: 30,
+    minSimPercent: 50,
     // More than one so an ambiguous exact-name match (two products with the same name)
     // is detectable; the best candidate is still the first one.
     qtyResults: PRODUCT_SIM_QTY_RESULTS,
   });
 }
 
+/** Minimum similarity (0-100, inclusive) at which a catalog product is taken automatically. */
+export const PRODUCT_AUTO_MATCH_MIN_SIMILARITY = 90;
+
+// Defensive parse: simSearch hands the percentage over as a string (trailing '%' stripped), and
+// anything missing or non-numeric ('', undefined, '96.7%') must never count as a match.
+function parseSimilarity(candidate) {
+  const raw = candidate?.similarityPercent;
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return NaN;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : NaN;
+}
+
+// The candidate to take by similarity, or null when it is not safe: the highest valid similarity
+// must reach the threshold and be held by exactly ONE candidate (strict equality on the parsed
+// numbers). A tie at the top is ambiguous, so the user decides; a tie lower down does not matter.
+function pickBySimilarity(candidates) {
+  const scored = candidates
+    .map((c) => ({ c, sim: parseSimilarity(c) }))
+    .filter((x) => !Number.isNaN(x.sim));
+  if (scored.length === 0) return null;
+  const top = Math.max(...scored.map((x) => x.sim));
+  if (top < PRODUCT_AUTO_MATCH_MIN_SIMILARITY) return null;
+  const holders = scored.filter((x) => x.sim === top);
+  return holders.length === 1 ? holders[0].c : null;
+}
+
 /**
- * Decide what to do with the simSearch result of one line description.
- *  - exactly one candidate whose name equals the description (trim + case-insensitive)
- *    → `{ id }`: safe to auto-assign;
- *  - otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
- *    best one: the user must confirm it in the popup, it is never assigned silently
- *    (a partial name such as "Mantenimiento Web" vs "Servicio de desarrollo y mantenimiento
- *    web" is a different product);
- *  - no candidates → `{}`.
+ * Decide what to do with the simSearch result of one line description, in this order:
+ *  1. exactly one candidate whose name equals the description (trim + case-insensitive)
+ *     → `{ id }`; two or more exact names are ambiguous → suggestion;
+ *  2. the HIGHEST valid similarityPercent, when it is >= PRODUCT_AUTO_MATCH_MIN_SIMILARITY
+ *     (90, inclusive) and held by exactly one candidate → `{ id }` (ETP-5654), even if a
+ *     runner-up is also >= 90. A tie at the top (two or more with the same value) is ambiguous
+ *     → suggestion (the first candidate); a tie lower down does not block. A missing or
+ *     non-numeric similarity never qualifies;
+ *  3. otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
+ *     first one: the user must confirm it in the popup (a partial name such as "Mantenimiento
+ *     Web" vs "Servicio de desarrollo y mantenimiento web" is a different product);
+ *  4. no candidates → `{}`.
  * Exported for testing.
  */
 export function classifyProductMatch(description, match) {
@@ -223,6 +254,10 @@ export function classifyProductMatch(description, match) {
   const wanted = normalizeName(description);
   const exact = wanted ? candidates.filter((c) => normalizeName(c.name) === wanted) : [];
   if (exact.length === 1) return { id: exact[0].id };
+  if (exact.length === 0) {
+    const bySimilarity = pickBySimilarity(candidates);
+    if (bySimilarity) return { id: bySimilarity.id };
+  }
   const best = candidates[0];
   return { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
 }
@@ -346,12 +381,9 @@ function buildHeaderBody(safe, bpId, partnerAddress, extras = {}) {
   return headerBody;
 }
 
-/**
- * Map line idx → productId. Falls back to the product-resolver popup when
- * simSearch leaves a line unmatched. Returns `{ cancelled: true }` when the
- * user dismisses the popup.
- */
-async function resolveProductsForLines({ lines, productMatches, askUserForProducts, apiBaseUrl }) {
+// Splits the lines into those already matched to a product (`productByIdx`) and those the user
+// must pick one for (`needsUserPick`).
+function partitionLinesByProductMatch(lines, productMatches) {
   const productByIdx = {};
   const needsUserPick = [];
   lines.forEach((line, idx) => {
@@ -372,6 +404,16 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
       taxId: line?._tax_id || null,
     });
   });
+  return { productByIdx, needsUserPick };
+}
+
+/**
+ * Map line idx → productId. Falls back to the product-resolver popup when
+ * simSearch leaves a line unmatched. Returns `{ cancelled: true }` when the
+ * user dismisses the popup.
+ */
+async function resolveProductsForLines({ lines, productMatches, askUserForProducts, apiBaseUrl }) {
+  const { productByIdx, needsUserPick } = partitionLinesByProductMatch(lines, productMatches);
   if (needsUserPick.length === 0 || typeof askUserForProducts !== 'function') {
     return { productByIdx };
   }
@@ -387,6 +429,8 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
     ? deriveSelectorUrl(apiBaseUrl, 'purchase-invoice', 'intrastat', 'M_Product_ID')
     : null;
   const picks = await askUserForProducts({ unmatched: needsUserPick, selectorUrl, productSpecUrl });
+  // ETP-5654 — BACK is a navigation signal, not a cancel: nothing was decided or sent.
+  if (isBack(picks)) return { back: true };
   if (picks === null) return { cancelled: true };
   for (const [idxStr, productId] of Object.entries(picks || {})) {
     if (productId) productByIdx[Number(idxStr)] = productId;
@@ -483,6 +527,7 @@ export async function buildPurchaseInvoiceBatch(extracted, ctx) {
     askUserForProducts,
     apiBaseUrl,
   });
+  if (productResolution.back) return { back: true };
   if (productResolution.cancelled) return { cancelled: true };
   const { productByIdx } = productResolution;
 

@@ -230,6 +230,8 @@ export default function OcrReviewModal({
   preResolved = {},
   resolving,
   receiverTaxIdAbsent = false,
+  initialState = null,
+  onStateChange,
   contactsBase,
   apiBaseUrl,
   token,
@@ -237,7 +239,9 @@ export default function OcrReviewModal({
   onCancel,
 }) {
   const ui = useUI();
-  const [state, setState] = useState(() => Object.fromEntries(
+  // `initialState` (ETP-5654) restores the toggles and values of an earlier visit when the user
+  // comes back to this step from a later one; it wins over the freshly extracted values.
+  const [state, setState] = useState(() => initialState ?? Object.fromEntries(
     fields.map((field) => {
       const initialValue = getInitialValue(field, extracted, preResolved);
       return [field.key, {
@@ -270,6 +274,8 @@ export default function OcrReviewModal({
       const usable = entry?.enabled && hasUsableValue(field, entry?.value);
       result[field.key] = usable ? entry.value : null;
     }
+    // ETP-5654 — snapshot for the flow, so a later BACK to this step restores the toggles/values.
+    onStateChange?.(state);
     onSubmit(result);
   };
 

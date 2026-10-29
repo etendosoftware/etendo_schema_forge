@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 import EmbeddedWindowRoute from './EmbeddedWindowRoute.jsx';
 import { renderPrimaryTabButtons } from './detailViewHelpers.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { saveEmbeddedUnsavedChanges } from '@/lib/unsavedChanges.js';
 import { mergeDefaultsPreservingUserEdits } from '@/hooks/useEntity.js';
 import { LocaleProvider, useLocale, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
@@ -232,7 +233,7 @@ export default function RecordCreateModal({
         body: JSON.stringify({ [key]: data[key], updated: createdRecord.updated }),
       });
       if (!res.ok) {
-        setError((await readErrorBody(res)) || ui(target.errorKey));
+        setError((await readErrorBody(res, ui)) || ui(target.errorKey));
         return;
       }
       const saved = unwrapCreated(await res.json().catch(() => null));
@@ -268,12 +269,23 @@ export default function RecordCreateModal({
     setSaving(true);
     setError(null);
     try {
+      // Optional per-target veto (ETP-5791: Contacts' type-vs-category check, see
+      // `buildContactTypeCreateCheck`). A message means "do not create", shown like any error.
+      const refusal = await target.validateBeforeCreate?.(data);
+      if (refusal) {
+        setError(refusal);
+        setSaving(false);
+        return;
+      }
       const res = await apiFetch(`/${target.entity}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildRecordCreatePayload(data)),
+        body: JSON.stringify(buildRecordCreatePayload(data, {
+          omitUntouched: target.createOmitUntouched,
+          touched: userChangedKeysRef.current,
+        })),
       });
-      const body = res.ok ? await res.json().catch(() => null) : await readErrorBody(res);
+      const body = res.ok ? await res.json().catch(() => null) : await readErrorBody(res, ui);
       if (!res.ok) {
         setError(body || ui(target.errorKey));
         setSaving(false);
@@ -499,9 +511,11 @@ export default function RecordCreateModal({
                 variant, same menu dictionary — so the popup is not a lookalike of the
                 window but literally the same control.
               */}
-              <div className="flex items-center gap-2" data-testid="record-create-tabs">
-                {renderPrimaryTabButtons(target.tabsVariant, tabs, setActiveTab, activeTab, tMenu)}
-              </div>
+              {tabs.length > 1 && (
+                <div className="flex items-center gap-2" data-testid="record-create-tabs">
+                  {renderPrimaryTabButtons(target.tabsVariant, tabs, setActiveTab, activeTab, tMenu)}
+                </div>
+              )}
               {/*
                 Both panels stay MOUNTED — the inactive one is only hidden. Unmounting it
                 would fire EntityForm's registerFields cleanup and silently drop that tab's
@@ -669,11 +683,21 @@ function isBlank(value) {
 /**
  * Strips what must never reach a create payload: the id (a POST assigns it) and the
  * `<key>$_identifier` display siblings EntityForm writes alongside every FK value.
+ *
+ * `omitUntouched` (optional, from the target's `createOmitUntouched`) lists keys whose mere
+ * PRESENCE the backend reads as a decision, so a value that only came from `/defaults` must not
+ * be sent unless the user set it. Contacts' `customer` / `vendor` are the case (ETP-5791): the
+ * backend inherits them from the contact category only when the create body omits them, and
+ * `/defaults` always answers `customer: 'Y'`.
+ *
+ * @param {object} data
+ * @param {{ omitUntouched?: string[], touched?: Set<string> }} [options]
  */
-export function buildRecordCreatePayload(data) {
+export function buildRecordCreatePayload(data, { omitUntouched = [], touched = null } = {}) {
   const payload = {};
   for (const [key, value] of Object.entries(data ?? {})) {
     if (key === 'id' || key.endsWith('$_identifier')) continue;
+    if (omitUntouched?.includes(key) && !touched?.has(key)) continue;
     payload[key] = value;
   }
   return payload;
@@ -687,10 +711,20 @@ export function unwrapCreated(body) {
   return body?.response?.data?.[0] ?? body?.response?.data ?? body?.data?.[0] ?? body ?? null;
 }
 
-async function readErrorBody(res) {
+/**
+ * The user-facing message of a failed create/PATCH, or null when the body carries none (the
+ * caller then shows the target's own error key). Goes through `translateBackendErrorBody`, so a
+ * refusal the SPA knows — ETP-5051's plan-quota refusal (403 QUOTA_EXCEEDED) among them — reads
+ * in the UI locale instead of as the backend's English prose; an unknown message is shown as is.
+ */
+async function readErrorBody(res, ui) {
   try {
     const body = await res.json();
-    return body?.response?.error?.message || body?.error?.message || body?.message || null;
+    // QUOTA_EXCEEDED / QUOTA_CHECK_FAILED land here only on the fallback path: the standalone
+    // form (the target's window failed to load) and its phase-2 PATCH. Every current target
+    // declares `windowName`, so in windowMode the embedded window saves through `useEntity`,
+    // which shows the translated quota message itself; `record-create-error` is not rendered.
+    return translateBackendErrorBody(body, ui, null) || null;
   } catch {
     return null;
   }

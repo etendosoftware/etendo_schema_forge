@@ -1,8 +1,8 @@
 {
   "version": "0.16.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-09-24T10:36:51.931Z",
-  "checksum": "7c16e6750ba55ca0",
+  "updatedAt": "2026-10-22T17:16:47.922Z",
+  "checksum": "549aca6721562fbf",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -62,6 +62,9 @@
       },
       "detailEntity": null,
       "summaryFields": [],
+      "listViewOptions": {
+        "defaultDatePreset": "last30"
+      },
       "dateFilterKey": "paymentDate",
       "statusEnumLabels": {
         "RPAP": "statusDraft",
@@ -1230,8 +1233,7 @@
               "source": "N"
             }
           }
-        ],
-        "javaQualifier": "payment-reactivate"
+        ]
       },
       "lines": {
         "tableName": "FIN_Payment_ScheduleDetail",
@@ -2033,6 +2035,9 @@
       },
       "detailEntity": null,
       "summaryFields": [],
+      "listViewOptions": {
+        "defaultDatePreset": "last30"
+      },
       "dateFilterKey": "paymentDate",
       "statusEnumLabels": {
         "RPAP": "statusDraft",
@@ -2445,8 +2450,7 @@
             "visibility": "system",
             "required": true
           }
-        ],
-        "javaQualifier": "payment-reactivate"
+        ]
       },
       "lines": {
         "tableName": "FIN_Payment_ScheduleDetail",

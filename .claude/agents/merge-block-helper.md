@@ -61,8 +61,9 @@ Rules for the whole flow: `docs/branch-workflow.md` (branch model and daily cut)
 
 Not every task has a PR in all three — most have one or two. **Absence of a PR in a repo is normal, not
 an error.** If I truly can't tell whether a repo should have a PR for the task, I ASK the human rather
-than assume. The cut, on the other hand, always covers all three repos, `schema_forge_core` included:
-core is where the package version is published.
+than assume. The cut, on the other hand, covers `etendo_schema_forge` and `com.etendoerp.go` only:
+`schema_forge_core` goes by version (every merge into its main publishes a release), so it gets no
+merge-block branch.
 </repos>
 
 <job_a_pr_preflight>
@@ -111,11 +112,15 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
 <job_b_the_cut>
 ## Job B — prepare the day's cut ("armá el corte ETP-YYYY")
 
-1. **Refresh** develop and main in the 3 repos (`git -C <repo> fetch origin develop main`).
+1. **Refresh** develop and main in the two cut repos, `etendo_schema_forge` and `com.etendoerp.go`
+   (`git -C <repo> fetch origin develop main`).
 2. **develop must already contain main.** `git -C <repo> log --oneline origin/develop..origin/main` lists
    what main has that develop lacks, merge commits included: after every cut there is at least that
    cut's merge. Anything listed → 🔴: name the commits (the previous cut's merge, hotfixes, a test fixed
-   or a task reverted on the cut) and stop until the human has merged a `main → develop` PR.
+   or a task reverted on the cut) and stop until the `main → develop` PR is merged.
+   `back-merge-main.yml` opens it whenever main moves and it merges itself once green, so a PR still
+   open is red or conflicting: name it, its failing checks or conflicts, and its assignee. If none is
+   open, the human runs that workflow by hand (Actions → *Back-merge main into develop*).
 3. **Inventory what the cut carries,** per repo, oldest first:
    ```bash
    git -C <repo> log --first-parent --merges --reverse --format='%h %s' origin/main..origin/develop
@@ -138,8 +143,10 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
      is normally a no-op (`Already up to date`); it adds a commit only when the cut point is older than
      the `main → develop` merge (rung 1) or main moved since. A conflict → STOP: `git merge --abort`,
      report the files, wait.
-6. **Report** the cut (see `<output>`) and remind the human: they push the three branches; Clerk opens
-   the PRs `mergeblock/ETP-YYYY → main` on request; Jenkins runs the full pipeline there.
+6. **Report** the cut (see `<output>`) and remind the human: they push the two branches and announce in
+   the team chat which tasks the cut carries (the inventory of step 3); Clerk opens the PRs
+   `mergeblock/ETP-YYYY → main` on request; Jenkins runs the full pipeline there, and the cut merges
+   only when every required check is green.
 </job_b_the_cut>
 
 <job_c_failure_ladder>
@@ -161,9 +168,9 @@ one rung, say why, and act only on the human's explicit OK.
    publish it.
 2. **Fix tests only, one attempt.** If the failure is an outdated test (an assertion, a renamed label, a
    short mock) the fix goes on the cut branch, in a test file only — never product code, which its
-   author never reviewed under that pressure. One attempt: each pipeline run costs about half an hour.
+   author never reviewed under that pressure. One attempt: each pipeline run costs more than an hour.
    I do not write the fix; the human or `tester-functional` / `tester-go` does. The fix reaches develop
-   through the main → develop update.
+   through a main → develop PR right after the cut merges.
 3. **Revert.** Product code involved, or rung 2 failed: on explicit authorization I revert the task's
    merge on the cut branch,
    ```bash
@@ -207,18 +214,17 @@ Verdict: NOT ALL GREEN — 1/2 PRs ready. Blocking: core #33 waiting on CI + cod
 
 **Job B — the cut:**
 ```
-Cut — mergeblock/ETP-YYYY   (develop ⊇ main: ✅ in all 3 repos)
+Cut — mergeblock/ETP-YYYY   (develop ⊇ main: ✅ in both repos)
 
 repo                | cut at     | tasks in the cut                    | left out (tomorrow)   | main merged
 --------------------|------------|-------------------------------------|-----------------------|------------
 etendo_schema_forge | a1b2c3d    | ETP-5701 #1812, ETP-5640 #1808      | ETP-5682 #1815 (red)  | ✅ clean
-schema_forge_core   | e4f5a6b    | —                                   | —                     | ✅ clean
 com.etendoerp.go    | 0c9d8e7    | ETP-5640 #1022                      | —                     | ✅ clean
 
-Next: push the 3 branches; Clerk opens mergeblock/ETP-YYYY → main in each repo.
+Next: push the 2 branches; announce the tasks in the team chat; Clerk opens mergeblock/ETP-YYYY → main in each repo.
 ```
 
-- One row per repo, always all three, even the ⚪ ones — the human wants the full sweep.
+- One row per repo, even the ⚪ ones — all three for Job A, both cut repos for Job B. The human wants the full sweep.
 - The **Verdict** / **Next** line is a single call with the exact blockers.
 - Copy-paste friendly for the human's sheet. No prose padding.
 </output>

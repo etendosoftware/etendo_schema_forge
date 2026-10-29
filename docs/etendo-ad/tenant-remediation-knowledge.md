@@ -1452,7 +1452,7 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   `UserRoleCompositionService`'s write shape — the SQL-first criterion held.
 - **2026-08-26 — `AD_Role.EM_ETGO_Show_Acct_Fields` (ETP-4520) is READ as a flat stored column,
   never derived via a live join to `AD_Role_Inheritance`.** Confirmed by reading
-  `SFWindowAccessMap#resolveShowAccountingFields`: `SELECT em_etgo_show_acct_fields FROM ad_role
+  `NeoAccountingAccessPolicy#readShowAccountingFieldsFlag`: `SELECT em_etgo_show_acct_fields FROM ad_role
   WHERE ad_role_id = :roleId` — no join at all. So the column is a CACHE of "does this role
   currently inherit from Finance", and whoever last changed a role's `AD_Role_Inheritance` set is
   responsible for keeping it in sync — nothing did that for the ETP-4852 composition path before
@@ -3375,7 +3375,7 @@ restart — but it argues for running this fix close to a restart.
   **Apply:** before writing an `UPDATE` on `c_doctype`, dump `pg_get_functiondef` for its triggers
   and check which columns they read. An `isactive`-only flip is not automatically safe there.
 
-- **Dry-run result (2026-09-16, `etendo_go_new_2`):** `--fix R37 --dry-run` over the full 56-tenant
+- **Dry-run result (2026-09-16, `etendo_go_new_2`):** `--fix R37-deactivate-reversed-invoice-doctypes --dry-run` (this ETP-5274 R37; a bare `R37` matches no fix id and the runner rejects it) over the full 56-tenant
   universe → 48 `WOULD_APPLY`, 8 `SKIPPED_NOT_NEEDED`, which matches the 48 clients the
   discriminator query returns. Guard verified read-only (no write transaction) by simulating the
   post-step-1 state in a CTE.
@@ -3430,3 +3430,468 @@ restart — but it argues for running this fix close to a restart.
   **Apply:** R44 dry-run on the local DB (2026-10-01): 14 `WOULD_APPLY` / 105 `SKIPPED_NOT_NEEDED`;
   applied to Calendar1 (`A5C303F8CF314BBF85CDC90757C8DBD7`) → `APPLIED (430 rows)`, Jan–Oct all `'O'`,
   Nov/Dec `'N'` → re-run `SKIPPED_NOT_NEEDED — kept prior success state`.
+
+## ETP-5791 — Contact category type flags + "Cliente/Proveedor" (U1, R55+R56 (born R50/R51, then R53/R54), 2026-10-19)
+
+- **2026-10-19 — Supersedes the 2026-07-01 note "`C_BP_Group` has NO `iscustomer`/`isvendor`
+  columns".** ETP-5791 adds `EM_ETGO_ISCUSTOMER` / `EM_ETGO_ISVENDOR` (YesNo, NOT NULL, default
+  `'N'`) to `C_BP_Group`. The flags on `C_BPartner` (`iscustomer`/`isvendor`) are unrelated and
+  unchanged. **Apply:** a fix or dataset row that creates a `C_BP_Group` must set both flags; the
+  column default N/N produces a category the UI cannot save again.
+- **2026-10-19 — `c_bp_group_trg()` is the ONLY trigger on `C_BP_Group`** (confirmed via
+  `pg_trigger`), so wrapping a group INSERT in `ad_disable_triggers()`/`ad_enable_triggers()` skips
+  nothing but the `C_BP_Group_Acct` defaulting. R55 does this so its own NOT EXISTS-guarded
+  `INSERT ... SELECT` that mirrors another category's posting rows is the single writer (otherwise
+  the trigger creates the rows from `C_AcctSchema_Default` first and the mirror INSERT silently
+  no-ops — the 2026-07-01 trap).
+- **2026-10-19 — "Cliente" and "Proveedor" `C_BP_Group_Acct` rows are byte-identical (all 21
+  `*_acct` columns) on all 211 tenants that have both**; "Acreedor" differs (R9/R35 overrides).
+  `C_BP_Group_Acct` has `UNIQUE (c_bp_group_id, c_acctschema_id)`; `C_BP_Group` has
+  `UNIQUE (value, ad_org_id, ad_client_id)` — NOT unique on name, hence `DISTINCT ON` in R55's
+  mirror inserts.
+- **2026-10-19 — `DemoDataTransferEntityCopier#targetBusinessPartnerCategory` maps categories by
+  NAME and, when the target lacks one, copies only Name/Value/Description.** A copied custom
+  category would land N/N once the flags exist. **Apply:** the copier must also copy the two flags
+  (open item for ETP-5791's code side; the four standard categories exist on both sides, so they
+  are always matched, never copied).
+- **2026-10-20 — Custom-category flags are derived from contacts (R56, product decision option
+  (a)).** Rule: customer=Y if any `C_BPartner` in the category has `IsCustomer='Y'`, vendor=Y if any
+  has `IsVendor='Y'`, Y/Y when the category is empty or holds neither (e.g. employees only);
+  inactive contacts count. Only N/N rows with a non-standard name are written, so a renamed
+  standard category is covered and a category already flagged by anyone is never touched.
+  **Apply:** a follow-up flag fix must stay dated after R55 (fail-fast chain ordering) and keep the
+  "only N/N" guard — it is what makes it idempotent and non-destructive. In `@report`,
+  `updated = now()` selects exactly the rows `@apply` wrote (same transaction, same `now()`).
+
+## ETP-5046 — S1 R37 retirement widened to every subscribed tenant: develop's R42 re-adds the plan marker (2026-10-05)
+
+- **Wrong assumption:** "once ETP-5046's paid upgrade stops writing `ETGO_TenantPlan`, no new tenant
+  ever carries the marker, so R37's retirement only needs to cover the tenants it backfills."
+  **Fact:** develop's `20260929T190000Z__R42-paid-provisioning-commercial-metadata.sql` (ETP-5548,
+  immutable) INSERTS an active `ETGO_TenantPlan='productive'` row (`ad_client_id='0'`, tenant in
+  `visibleat_client_id`) for every paid-provisioned owned tenant lacking one, decided from
+  `etgo_checkout_request` (`PROVISIONED`, `paid_at` set, no `REFUNDED/CANCELED/EXPIRED`), never from
+  `etgo_subscription`. With `ONBOARDING_PROVISIONED_THROUGH`=2026-09-02 it is a candidate for every
+  post-5046 paid tenant. Reproduced in a rolled-back tx: open row + no marker → R42 `@apply`
+  `INSERT:1` → old R37 `@check` = 0 (marker would survive forever).
+  **Apply:** R37 `@check` now has a branch (B) "any marker row visible at the tenant AND any
+  `etgo_subscription` row (no isactive/end_date filter)", and statement 3's DELETE guard is "any
+  subscription row". Any future fix that keys on the marker's ABSENCE has the same hazard — key on
+  `etgo_subscription` instead.
+- **Fact (runner ordering):** per tenant, the chain visits fixes in filename order and never looks
+  back below the watermark, so R42 (`20260929T190000Z`) always runs before R37 (`20261005T180000Z`),
+  including for tenants onboarded later (baseline 2026-09-02 < both). A FAILED R42 halts the chain
+  before R37 and the next run resumes at R42. Only `run.js --fix <R42>` (ignores order + watermark)
+  can run R42 after R37 — follow it with `--fix R37-tenant-subscription-backfill --client <tenant>`.
+- **Marker scoping re-verified:** the `ETGO_TenantPlan` marker is keyed by `VISIBLEAT_CLIENT_ID`
+  (R37 statement 3, `TenantPlanService#retireProductivePreference`, `TenantPlanPreferenceFallback`,
+  R42's INSERT). Only the lifecycle preferences (`ETGO_SubscriptionStatus/DueAt`) use `AD_CLIENT_ID`.
+- **Local DB (etendo_core3) 2026-10-05:** 6 markers, all active `productive`, none with a
+  subscription row; one `etgo_subscription` row, `canceled` with `end_date` set (E2E tenant
+  `769A5DE5…`, no marker) — so a closed-only row DOES exist locally even though no product code
+  writes `END_DATE` yet (test fixture). R37 dry-run: 6 `WOULD_APPLY`, all branch (A).
+
+## ETP-5047 — S1 R37 backfill guard narrowed to "no row at all": close-on-cancel made the R42 edge reachable (2026-10-06)
+
+- **Wrong assumption:** "R37 branch (A) keying on *no open row* is harmless, because nothing writes
+  `END_DATE`." **Fact:** ETP-5047 closes the row on `customer.subscription.deleted` (and on an
+  update to Stripe's terminal `canceled`), and on the row route that write touches only the row —
+  not `etgo_checkout_request.checkout_status`, not `ETGO_SubscriptionStatus`. Neither of R42's
+  exclusions therefore fires, so a tenant that pays and cancels before its first post-ETP-5046
+  data-fix chain gets an R42 marker, and the old branch (A) backfilled a fresh open
+  `legacy-productive` row seeded `active` (no status preference on the row route): a canceled
+  customer read as paying again.
+- **Apply:** branch (A) of `@check` and the guards of `@apply` statements 1-2 now require *no
+  subscription row at all* — `isactive` and `END_DATE` both ignored, the same "any row" predicate
+  as branch (B) and the retirement DELETE, so a tenant is either backfilled and retired or retired
+  only. Such a tenant now takes branch (B) only: marker retired, nothing inserted.
+- **Inactive rows block the backfill too (product decision, ETP-5047).** No product code ever sets
+  `isactive = 'N'` on an `etgo_subscription` row, so an inactive row is an operator's deliberate
+  switch-off; `findLatest` ignores it, but a backfilled active row would silently undo the
+  decision. Accepted consequence: a tenant whose only rows are inactive loses its marker without a
+  backfill and reads as free until the operator restores the row.
+- **Idempotency is unchanged in kind:** the inserted row is itself "a row", so `@check` (A) turns
+  false after one apply, and the guard still covers every row `etgo_sub_open_envclient_uq` counts.
+- R37 is edited in place (it has not reached a shared environment). Before ETP-5047 deploys no
+  tenant can have a closed row, so the only tenants whose outcome differs from the ETP-5046 text
+  are those an operator deactivated by hand — exactly the case the decision above changes on
+  purpose.
+
+## ETP-5046 — S1 R37 made opt-in: a full run never applies it (2026-10-14)
+
+- **Decision (user, 2026-10-14):** `R37-tenant-subscription-backfill` must never run in a full
+  `make data-fixes`; each environment switches to the subscription model once, when the operator
+  chooses: `make data-fixes FIX=R37-tenant-subscription-backfill`, then the system preference
+  `ETGO_SubscriptionModel` (order reversed the same day — switch first; see below). Delivered as a generic header `-- @optIn: true` (parse-fix.js;
+  `true`/`false` only, anything else throws).
+- **Verification = three checks** (R37 header; go design doc §6.2 must carry the same text):
+  R37's ledger rows all `APPLIED`/`SKIPPED_NOT_NEEDED`; 0 active `ETGO_TenantPlan='PRODUCTIVE'`
+  markers; and the `ETGO_SubscriptionModel` query returns exactly ONE row whose `trim(value)='Y'`.
+  That preference is a LIST property (`AD_Preference.Property`, `ISPROPERTYLIST='Y'`, NOT
+  `attribute`); no row ships as module data, so every environment starts OFF (local etendo_core3
+  2026-10-14: no row).
+  - **Correction (2026-10-14, Alex review):** the first version counted rows with `value = 'Y'` and
+    expected 1. Wrong: the reader `SubscriptionModelSwitch` filters active + `AD_CLIENT_ID='0'` +
+    visible-at client/org NULL or `'0'` + no role/user/window, takes the NEWEST row (`created desc,
+    updated desc, ad_preference_id desc` — deterministic tie-break, go follow-up 2026-10-14; max 1)
+    and TRIMS the value. A `'Y'` row plus a newer `'N'` row passed while the switch was OFF,
+    and `'Y '` (ON for the reader) counted 0. **Apply:** mirror the reader's filters exactly, never
+    filter on the value; select `ad_preference_id, value, created, updated ... order by created desc,
+    updated desc, ad_preference_id desc` (identical to go design doc §6.2);
+    expect one row with `trim(value)='Y'`.
+  - **The switch decides only a tenant's first row.** While it is OFF, a tenant with no
+    subscription row yet that pays still writes the marker and opens NO row, so "every tenant paid
+    since ETP-5046 has a row" / "R37 is a 0-row skip for a new tenant" hold only with
+    `ETGO_SubscriptionModel` ON. A tenant that already has ANY row, open or closed
+    (`SubscriptionService#hasAnySubscription`), is always recorded on a row, whatever the switch
+    (Sentinel QA correction, 2026-10-14: the first wording said every purchase writes the marker
+    while OFF). Run R37 after setting the switch (see the order bullet below).
+- **Order reversed — switch first, then R37 (user, 2026-10-14, ETP-5047).** The first version said
+  "R37, then the system preference". Recommended order now: (1) full `make data-fixes` (the
+  `optInChainGate` refuses a tenant whose chain is behind: `BLOCKED_CHAIN_BEHIND`); (2) set
+  `ETGO_SubscriptionModel=Y` (System, Property List, no org/role/user/window, no restart,
+  system-wide); (3) `make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<id>] DRY_RUN=1`,
+  then without `DRY_RUN`; done when `select count(*) from ad_preference where attribute =
+  'ETGO_TenantPlan'` is 0 and the `ETP-5046-TRANSITIONAL-FALLBACK` WARN lines stop. **Why:** once
+  the switch is ON a new purchase opens a row instead of writing the marker, so one R37 pass catches
+  every legacy tenant; in the old order a purchase between the two steps still wrote the marker and
+  needed a second run. Both orders are safe. Running R37 client by client (`CLIENT=`) before the
+  switch has the same gap: a migrated tenant has a row (one-way) and needs nothing more, but every
+  other tenant that bought while the switch was OFF wrote the marker, so R37 must run once more for
+  the whole environment after the switch (Alex review correction, 2026-10-14: the first wording said
+  the migrated tenant itself needed the re-run). **Apply:** R37's OPT-IN header, `sql/README.md`, the S1 rows and the go docs
+  (design doc §6.2/§8.3, `feature-flags-and-tenant-upgrade.md` §3, `open-and-notable-topics.md`
+  §2.3/§2.9) all state switch-first. R37 never creates the switch row, and it keeps
+  `ETGO_EnvironmentType` / `ETGO_SubscriptionStatus` (written on both routes by
+  `TenantEnvironmentLifecycleService#markProductive`, unread once a row exists — stale on a row
+  tenant). A productive tenant with no `ETGO_TenantPlan` marker (made productive by hand / dev tool)
+  is not picked up. Editing the header was safe: only `retired.json` fixes are checksummed, and R37
+  has never been applied on a shared environment (not on develop).
+- **Trap the naive version falls into — watermark.** A `--fix` run's `APPLIED` row used to count
+  toward the tenant's watermark like any other. Applying R37 (2026-10-05T18:00Z) to a tenant still
+  behind would have pushed its watermark past every unprocessed earlier chain fix (e.g. R47,
+  2026-10-05T16:04Z), skipping them forever with no row and no error. **Apply:** `computeWatermark`
+  now ignores opt-in fixes.
+- **Second trap — ordering invariant.** Excluding opt-in from the watermark alone would let R31
+  (forces test mode on a marker-less tenant — fiscal endpoints) and R42 (re-inserts the marker) run
+  AFTER R37 retired a tenant's marker, for any tenant whose chain was behind. **Apply:**
+  `optInChainGate` — `--fix` on an opt-in fix runs only where watermark >= the fix's timestamp;
+  else `BLOCKED_CHAIN_BEHIND`, no ledger row, exit 1. Then R31/R32/R42 are already at or below the
+  watermark and never run again for that tenant.
+- **Residual opened by opt-in (not fixed here):** before, R37 ran right after R42 in every chain, so
+  R37 branch (B) removed the marker R42 re-inserts for a paid tenant that already has a subscription
+  row. Out of the chain, a tenant that first reaches R42 AFTER its environment switched (onboarded
+  later; baseline 2026-09-02 < R42) keeps that marker until R37 is re-run for it with `CLIENT=`.
+  Real fix: a subscription-aware successor of R42 (`AND NOT EXISTS etgo_subscription row`) + retire
+  R42 via `retired.json`.
+- **Local DB (etendo_core3) 2026-10-14:** zero R37 rows in `etgo_data_fix_history` (the ledger holds
+  only `__baseline__` / `__costing-cadence-30s__` rows), so editing R37's header changed nothing
+  applied; R37 is not in `retired.json`, so no recorded checksum moved. `--fix R37-tenant-subscription-backfill --dry-run`
+  reports every local tenant `BLOCKED_CHAIN_BEHIND` (watermark none or the 2026-09-02 BASELINE).
+- **Correction (2026-10-14, Alex review) — opt-in gate.** The first gate (`watermark >= fix
+  timestamp`) was stricter than the intent "caught up to the opt-in fix's date": a tenant whose only
+  lagging fix is NEWER (R48 FAILED → watermark stays at R47 < R37) was blocked, and an opt-in fix
+  authored as the newest file could never run until a later chain fix shipped. **Apply:** block only
+  if a non-retired, non-opt-in chain fix dated <= the opt-in fix is above the watermark and not
+  PROCESSED (`optInChainGate` returns those as `lagging`). Same ordering guarantee for R31/R42: they
+  are dated before R37, so they must be at or below the watermark for the gate to open.
+- **`--mark-fixed` stored the id as typed (fixed 2026-10-14).** `--mark-fixed --fix R37-tenant-
+  subscription-backfill` wrote a ledger row under the SHORT id, which matches no catalog `fixId`, so
+  the watermark and `--list-clients` ignored it (OPT-IN stayed 0/1). Now resolved to the full
+  `fix_id` exactly like `--fix`, and an unknown id is rejected.
+- **2026-10-19 — Table name is `c_taxcategory` (no underscore before "category"), NOT `c_tax_category`.**
+  `FinancialMgmtTaxCategory` (AD entity) maps to `C_TaxCategory` (AD_Table 252), confirmed via
+  `information_schema.tables` — a first guess at `c_tax_category` returns "relation does not exist".
+  Sibling tables: `c_taxcategory_trl` (348), `c_bp_taxcategory` (800193). **Apply:** always verify
+  the exact table name via `ad_table`/`information_schema` before writing SQL for a `FinancialMgmt*`
+  entity; don't infer it by inserting underscores at every word boundary.
+- **2026-10-19 — `C_TaxCategory` is AccessLevel 7 ("All"), so a System-owned row (`ad_client_id='0'`)
+  is a legitimate, standard shape for shared fiscal reference data** — same pattern as O1's
+  `AEATSII_CAUSE_EXEMPTION` (R40). Module `com.etendoerp.go.localization.es.data`
+  ("Etendo Go - Spanish Fiscal Taxes Data") ships its `FinancialMgmtTaxCategory`/`FinancialMgmtTaxRate`
+  catalog entirely at `ad_client_id='0'` via `referencedata/standard/Spanish_Fiscal_Taxes_Go.xml` (a
+  **standard** reference-data file, imported once at module install/update — confirmed NOT reapplied
+  to an already-provisioned instance by `update.database` on its own, same "referencedata not
+  reapplied" pattern as H1/N6). **Apply:** when a gap's anchor row is already `ad_client_id='0'` in
+  live DB, don't force a per-tenant `.sql` shape — use the System-pseudo-tenant convention
+  (`sql/README.md` § "Fixes that target the System pseudo-tenant") and run it once via
+  `--fix <id> --client 0`.
+- **2026-10-19 — `com.etendoerp.go.localization.es.data` is a SEPARATE git repo**
+  (`etendosoftware/com.etendoerp.go.localization.es.data`, sibling checkout at
+  `{etendo_root}/modules/com.etendoerp.go.localization.es.data`), **not part of `com.etendoerp.go`**,
+  even though both ship under the `com.etendoerp.go*` namespace and a task may describe the fix as
+  "in com.etendoerp.go". Its default branch is `main` (not `develop`), and `main` was ahead of
+  `develop` at the time of checking (carried 3 unmerged `ETP-4944` commits touching this exact XML
+  file). **Apply:** before editing Spanish-fiscal reference data, `find` for the actual module
+  directory — don't assume it lives inside the `com.etendoerp.go` worktree a task names.
+- **2026-10-19 — Prior art before editing `Spanish_Fiscal_Taxes_Go.xml`: read `git log` on the file
+  first.** ETP-4944 (Sep 2026, commits `6ac024c`/`5ba6bf3` reverted then redone as `613005a`→`34f86b4`)
+  already cleaned up the Spanish tax-RATE catalog and specifically kept the "IVA Normal - Standard"
+  `FinancialMgmtTaxRate` (id `867FFFAC82CC44069FE6497E4C5C6348`) **inactive-but-undeleted** because a
+  live invoice already referenced it ("Keep IVA Normal, live invoice reference found", commit
+  `0e27a0f`) — it never touched the TAX CATEGORY itself. ETP-5802's gap (the category
+  `828E8E40DD3C4FA6A4F531569D26A6AF`, "OLD IVA Normal", left `active='Y'` with a stale `es_ES`
+  translation) is the piece ETP-4944 left behind. **Apply:** confirms deactivate-don't-delete is the
+  established convention for this file — never delete a `FinancialMgmtTax*` row, only flip `active`.
+
+## ETP-5729 — R50: rectificatives from a return document with duplicated tax and an order link (2026-10-16)
+
+Corrective-only (code bug, not an onboarding gap; preventive = com.etendoerp.go commit `e4a1a1a26`;
+CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-link.sql`.
+
+- **2026-10-16 — `C_InvoiceTax.Recalculate` tells a trigger-made row from a hand-made one.** The
+  core chain (`C_INVOICELINE_TRG2` → `C_INVOICELINETAX_TRG`) only ever creates/increments rows with
+  `Recalculate='Y'`, one per (invoice, `C_Tax_ID`). A row with `Recalculate='N'` is "manual":
+  `C_INVOICETAX_TRG2` adds its `TaxAmt` straight to `C_Invoice.GrandTotal` on INSERT and takes it
+  off on DELETE. A `Y` + `N` pair for the same tax on one invoice is never produced by the core — it
+  is the exact signature of the removed `CreateDraftInvoiceHandler#recalculateTotals`. On the local
+  DB every affected document had `N` and `Y` rows with identical base/tax and `Line=10`.
+  **Apply:** detect duplicated tax by that pair, never by amounts or document numbers.
+- **2026-10-16 — Processed invoices refuse every tax-row and line-link edit**:
+  `C_INVTAX_CHK_RESTRICTIONS_TRG` raises `@20501@` on any INSERT/DELETE of `C_InvoiceTax` when
+  `Processed='Y'`, `C_INVOICETAX_TRG` also when `Posted='Y'`, and `C_INVLINE_CHK_RESTRICTIONS_TRG`
+  on a `C_OrderLine_ID` change. All are gated by `AD_isTriggerEnabled()`, so a repair runs inside
+  `ad_disable_triggers()`/`ad_enable_triggers()` (transaction-local `set_config`). With triggers
+  off, `C_INVOICETAX_TRG2` does not adjust `GrandTotal` either — adjust it explicitly.
+  `C_ORDLINE_CHK_RESTRICTIONS_TRG` allows a `QtyInvoiced`-only change on a processed order, raising
+  only when |QtyInvoiced| > |QtyOrdered| on a sales order.
+- **2026-10-16 — Not gated by `AD_isTriggerEnabled()`: the `ad_scd_*` stored-computed-column
+  triggers and the module triggers on `C_Invoice`** (`etvfac_*`, `etblkp_*`, `etarc_vsrc_*`,
+  `aeatsii_deletion_*`, `tbai_deletion_*`). The `C_OrderLine` scd trigger behind
+  `C_Order.EM_ETGO_Invoice_Status` (the "% invoiced" chip = `ROUND(SUM|QtyInvoiced| /
+  SUM|QtyOrdered| * 100)`, `ETGO_GET_ORDER_INVOICE_STATUS`) watches `QtyInvoiced` and queues a
+  deferred refresh run at COMMIT. **Apply:** fixing `C_OrderLine.QtyInvoiced` in SQL refreshes the
+  chip by itself, even with AD triggers disabled — no explicit recompute needed.
+- **2026-10-16 — Where `C_INVOICE_POST` touches the order for an invoice line with
+  `C_OrderLine_ID`:** sales — the SO branch adds `QtyInvoiced` to `C_OrderLine.QtyInvoiced`, sets
+  `DateInvoiced`, and inserts `M_MatchSO`; purchase — the early `IsSOTrx='N'` loop adds it to
+  `C_OrderLine.QtyInvoiced` (and `DateInvoiced`), the MatchInv-PO loop inserts `M_MatchPO`. Both
+  match rows carry `M_InOutLine_ID = NULL`, so `M_MATCHSO_TRG`/`M_MATCHPO_TRG` (pending-storage
+  updates) are no-ops for them and they are safe to delete. Undoing a wrong link =
+  `QtyInvoiced -= line qty`, delete those match rows, null the line's `C_OrderLine_ID`.
+- **2026-10-16 — Return documents and rectificatives, as stored by GO.** The return
+  `M_InOut` uses a `C_DocType` with `IsReturn='Y'` (`MMS` sales / `MMR` purchase), but its
+  `MovementType` is not a reliable discriminator (`C-` / `V+` observed on returns). Each return
+  line points at the original shipment line via `M_InOutLine.Canceled_InOutLine_ID` and has NO
+  `C_OrderLine_ID` itself; the rectificative is tied to the invoice it rectifies by
+  `C_Invoice_Reverse` (`C_Invoice_ID` = the rectificative) and has no header `C_Order_ID`.
+- **2026-10-16 — Reading a module's `EM_` column without a hard dependency:**
+  `COALESCE(to_jsonb(r) ->> 'em_etvfac_senttoverifac', 'N')` on a row/CTE alias evaluates to the
+  default when the module (and column) is not installed, instead of failing the whole fix. Used by
+  R50 for the Verifactu (`com.etendoerp.verifactu`), SII (`org.openbravo.module.sii`) and
+  TicketBAI flags, which `com.etendoerp.go` does not all declare as dependencies.
+- **2026-10-16 — Posted documents are reported, not re-accounted.** On the local DB nearly every
+  affected rectificative was `Posted='Y'` with `Fact_Acct` carrying the doubled VAT and
+  receivable/payable (e.g. 12.00 + 5.04 VAT = 17.04 instead of 2.52 / 14.52). R50 repairs the
+  subledger only for unposted documents; posted ones go to `@report` with the procedure: GO
+  `unpost` action (`DocumentPostingService#unpost` → `ResetAccounting`, refuses a closed period)
+  → `--fix R50-rectificative-dup-tax-and-order-link --client <id>` → post again. The order unlink
+  is applied even to posted invoices: `C_OrderLine_ID` plays no part in the invoice's `Fact_Acct`.
+- **2026-10-16 — Local DB read-only simulation:** tenant `802509E12436405C86BA1FD5B1DF508C` →
+  tax repair for `REC-1000005` (posted `E`, -2.14 → -1.82), 5 order lines back to 100%
+  (e.g. 3 → 4 of 4), `REC-1000000…04` reported as POSTED, order `1000008` reported as
+  over-invoiced (returned quantity already invoiced again). Tenant
+  `DC22B59C30884D9BAFDD7BC5D05027C1` → both invoices POSTED (reported), PV1000002 0 → 1 of 1,
+  PC1000006 -1 → 0 of 1. Not executed against any DB.
+
+- **2026-10-19 — R50 now resets posted invoices instead of reporting them (CP-13).** Facts
+  verified in etendo_core sources, reusable by any fix that must "unpost" a document in SQL:
+  - `ResetAccounting.delete` for one record (`src/org/openbravo/financial/ResetAccounting.java`)
+    = clear `Fact_Acct.DateBalanced` on every fact sharing a `Record_ID2` with the record's facts
+    (strUpdateBalanced, ~l.402-413), DELETE the record's `Fact_Acct` rows (~l.440), then
+    `posted='N', processing='N'` on the document (updateTable, ~l.493-499). It refuses when any
+    fact's `C_Period_ID` has no `'O'` `C_PeriodControl` row for (`AD_PeriodControlAllowed_Org_ID`
+    of the fact org, fact `DocBaseType`) — validateNoFactsInClosedPeriods, ~l.351-384.
+  - `AD_ORG_GETPERIODCONTROLALLOW` / `AD_ORG_GETCALENDAROWNER` only READ
+    `AD_Org.AD_PeriodControlAllowed_Org_ID` / `AD_CalendarOwner_Org_ID` — no fallback logic. A
+    NULL there means no period-control row can match (treat as closed).
+  - `C_CHK_OPEN_PERIOD` uses `p_date >= StartDate AND p_date < EndDate+1` and does not filter by
+    calendar (it relies on the period-control org). In plain SQL write `EndDate + INTERVAL '1 day'`.
+  - `FACT_ACCT_CFS` is the only FK to `FACT_ACCT`: `FACT_ACCT_ID` cascades, `FACT_ACCT_REF_ID`
+    does NOT, so a DELETE of referenced facts fails. Guard on it. `Fact_Acct` has no triggers.
+  - Rectificatives already reported as POSTED by the earlier R50 build on a tenant whose ledger
+    row is APPLIED are not revisited by the watermark: re-run with `--fix` once this build ships.
+- **2026-10-20 — Never DELETE a posted M_MatchPO in a data-fix (R50 POSTED_MATCH guard).** Core
+  `C_INVOICE_POST` reactivation (~l.1074-1090) counts `Fact_Acct` rows whose `AD_Table_ID` is
+  M_MatchPO's (`'473'`, looked up by `UPPER(TABLENAME)`) and refuses with `@PostedMatchPO@`
+  before deleting the invoice's M_MatchPO rows; M_MatchSO (`AD_Table_ID`
+  `'1D1EE32EF6354DE7B4654C8D0CC78BE1'`) is deleted unconditionally on the SO branch. Both tables
+  carry a `Posted` column. Locally (2026-10-20) every row is `Posted='N'`, no `Fact_Acct` row
+  exists for either table and `C_AcctSchema_Table` has both inactive — but prod accounting
+  setups may differ. **Apply:** a fix that deletes match rows guards on `Posted <> 'N' OR EXISTS
+  Fact_Acct` for both tables and excludes the WHOLE document (never half of its lines), reporting
+  it under its own reason.
+- **2026-10-20 — Editing an APPLIED fix in place: what the runner actually does (verified in
+  `run.js`).** No checksum is computed or stored (column NULL for all 213 R50 rows), so no
+  warning/mismatch is ever raised. Every tenant with an R50 row (`APPLIED` or
+  `SKIPPED_NOT_NEEDED`) has a watermark >= the fix timestamp, so a normal run skips the edited
+  file silently; only `--fix` re-evaluates it, and the no-downgrade upsert keeps an `APPLIED` row
+  even when the re-check returns `SKIPPED_NOT_NEEDED`. An environment that never ran the fix
+  (prod) just runs the edited body. So an in-place edit is safe for the ledger only when it is
+  stricter than (or equal to) the version already applied — a guard that would have blocked a
+  row the old version already repaired cannot undo it. `--dry-run` never executes `@apply`/`@report`
+  (only `@check`): validate an edited `@apply` in a `BEGIN … ROLLBACK` session instead.
+
+## ETP-5806 — GOClient sampledata C_Location rows missing City (2026-10-21)
+
+- **Symptom:** ETP-5806 made City mandatory in the structured address editor
+  (`LocationEditorModal`). Testing the Warehouse address popup against the local GOClient tenant
+  showed its default warehouse's `C_Location` had `Address1`/`Country` populated but `City` empty —
+  a legacy row predating the new validation.
+- **Root cause confirmed in DB:** `referencedata/sampledata/GOClient/C_LOCATION.xml` ships several
+  rows with `ADDRESS1` set but no `CITY` at all: `5134850609604EC7889401AAE84EDE40` ("Victor Blanco
+  23", GOClient's own BP-location "home address") and `AF4C5646806C4F80A9397FA836296B30` ("Calle
+  Organización 76", `AD_ORGINFO.C_LOCATION_ID` for `GOOrg`, `AD_ORG_ID=61849243BE89460EB70866880A545D50`).
+  Both fixed in the XML by adding `<CITY>Madrid</CITY>` (no postal/region data exists anywhere in
+  this dataset to infer a more specific city from — Madrid matches the convention already used by
+  sibling rows in the same file, e.g. `1B79B1A05F384ABD85D2A31C5C1E01B7`).
+- **Two sampledata rows look like a City gap but are NOT, by the file's own content:**
+  `A72B4E2D0E5A4369B45219D3D83E4FDC` ("Almacen Principal" warehouse) and
+  `98F19CA220F648B7A9D47FEB41D90DA8` ("Almacén Secundario" warehouse) have **no `ADDRESS1` at all**
+  in the shipped XML (just `C_COUNTRY_ID`) — they are intentionally-blank placeholders meant to be
+  overwritten at onboarding time by `OnboardingWarehouseAddressService.alignWarehouseAddress()`,
+  which unconditionally copies the org's fiscal `Location` (incl. City) onto the default
+  warehouse's `Location` (see `src/com/etendoerp/go/onboarding/OnboardingWarehouseAddressService.java`).
+  **In the live local DB these two GOClient rows DO have `ADDRESS1` set** ("Avenida Siempreviva 44"
+  / "Pasaje Saenz 43") with no City — meaning the DB diverged from the checked-in XML (edited
+  directly in DB at some point, never re-exported). Fixed those two DB rows' `City='Madrid'` too
+  (matching the GOOrg fiscal address assigned above) but did **not** touch the XML for these two —
+  by the file's own content there is no "other address data loaded" to be consistent with, so
+  adding a City there would misrepresent the shipped template as having a real address when it
+  doesn't. If `export.database` is ever run from a GOClient-based env, re-check whether these two
+  rows' extra fields should be captured too (separate concern from this ETP-5806 City fix).
+- **IMPORTANT — do not confuse GOClient sampledata gaps with E2E test-run pollution.** The same
+  query pattern (City empty, Address1 non-empty) matches ~75 MORE rows across ~24 different
+  `ad_client_id` values named "E2E User 1 …" / "E2E User 2 …", with Address1 literally
+  `"Avenida Siempreviva 44"` (warehouses) or the BP-location's own name echoed as its address text
+  (`"E2E Vendor Fixture Address"`, `"E2E Address 178939…"`). These are **not sampledata** — no
+  occurrence of "Siempreviva" or the fixture-name strings exists anywhere in either repo's source,
+  so they were typed by hand or by Playwright UI automation through the real onboarding wizard
+  before City was mandatory, and accumulated in this local dev DB across many prior E2E runs. They
+  share the same visual symptom but have a different root (test-data accumulation, not a shipped
+  template gap) — left untouched per this task's scope (ETP-5806 asked only for the real
+  sampledata-origin GOClient records + the preventive file fix). If these need cleaning up it's a
+  separate local-env hygiene pass, not a tenant remediation data-fix (they are not real tenants).
+- **Useful discovery:** `OnboardingWarehouseAddressService` (already shipped, not part of this fix)
+  is itself the two-fronts answer for the warehouse-vs-fiscal-address gap going forward — now that
+  City is mandatory in the fiscal-address wizard step (ETP-5806), every NEW tenant's fiscal address
+  will carry a City, and this service propagates it to the default warehouse unconditionally. No
+  additional preventive code was needed for this particular gap.
+- **2026-10-22 — "live sample-data generator" hypothesis was wrong; it's the SAME static
+  `C_LOCATION.xml` as the City-missing fix above, just a different missing column.** User reported
+  that onboarding's "Incluir datos de prueba" checkbox creates contacts/warehouses with
+  unstructured addresses (no Street/Number/Building, "dirección sin desglosar" banner), and
+  hypothesized a separate live/code-driven address generator (reasoning: strings like "Pasaje Saenz
+  43", "Victor Blanco 23" looked chosen from a code list, not read from a static XML). They are in
+  fact literal `ADDRESS1` values inside
+  `modules/com.etendoerp.go/referencedata/sampledata/GOClient/C_LOCATION.xml` — there is no other
+  sample-address generator. Verified via `OnboardingSampleDataService`/`OnboardingSampleDataDefinition`
+  (`com.etendoerp.go/src/com/etendoerp/go/onboarding/`): the sample-data pass is a **second read of
+  the same `referencedata/sampledata/GOClient/*.xml` files** the base onboarding dataset already
+  reads (via `OnboardingDatasetNormalizer` with `OnboardingDatasetProfile.SAMPLE_DATA`), not a
+  separate dataset or runtime generator. `C_LOCATION` itself isn't even in
+  `OnboardingSampleDataDefinition.TRANSACTIONAL_TABLES`/`DEMO_MASTER_DATA_TABLES` — it's imported by
+  the BASE pass; only `C_BPARTNER_LOCATION` (and `M_WAREHOUSE`, from `AD_ORG_WAREHOUSE`/`M_WAREHOUSE`
+  demo rows) reference those location rows by FK.
+- **Confirmed: documents reference `C_Location`/`C_BPartner_Location` by FK, never duplicate the
+  address.** `C_ORDER`, `C_INVOICE`, `M_INOUT` in the GOClient sampledata only carry
+  `C_BPARTNER_LOCATION_ID` (FK) — no inline address columns. So fixing the 8 `C_LOCATION` rows in
+  `C_LOCATION.xml` is sufficient; no per-document duplication to chase.
+- **The fix:** added the 3 structured SEPA columns (`EM_OBSEPA_STRTNM`/`EM_OBSEPA_BLDGNB`/
+  `EM_OBSEPA_BLDGNM` — tags are ALWAYS fully uppercase in this XML regardless of the real DB column
+  casing, e.g. actual `AD_COLUMN.COLUMNNAME` is `EM_OBSEPA_StrtNm`; verified by querying `ad_column`)
+  to the 7 locations that had free-text `ADDRESS1` with no breakdown, parsing street/number (and
+  building name/floor for the one row that had one, "C/ EUSTASIO AMILIBIA 10, 7º 4ª" →
+  street="C/ Eustasio Amilibia", number="10", buildingName="7º 4ª"). Also filled `CITY=Madrid` for
+  `98F19CA220F648B7A9D47FEB41D90DA8` ("Pasaje Saenz 43", the Almacén Secundario location), which the
+  prior City-only fix (`e283418ad`) had missed. The 8th location (`A72B4E2D...`, blank, used by
+  Almacén Principal) was deliberately left untouched — it is always overwritten by
+  `OnboardingWarehouseAddressService.alignDefaultWarehouseAddress` with the org's own fiscal address
+  (which already carries the structured fields correctly, fixed in `bc54149b5`), so seeding it here
+  would be dead data. Commit: `6456ae64d` in `com.etendoerp.go`.
+- **DB repair scope for "the records the user just created this session":** with no explicit marker
+  for "this session's tenant" in the ledger, the reliable signal was `SELECT ad_client_id, created
+  FROM ad_client WHERE created > now() - interval '12 hours'` — exactly one hit in this shared local
+  dev DB (51 total tenants), `CF5730AB6DD0409CB272811E65AAD1F1` ("Pruebas Dirección SEPA", created
+  2026-10-22). Repaired only that client's 7 affected `C_LOCATION` rows, by exact `c_location_id`,
+  with `SET col = COALESCE(col, :new_value)` so a non-null existing value is never overwritten.
+
+## ETP-5801 — R50: return shipments with another tenant's RTV doctype (2026-10-21)
+
+Fix: `20261021T120000Z__R50-inout-foreign-return-doctype.sql` (corrective-only; preventive is
+ETP-5711 in com.etendoerp.go, CUT not bumped). Sibling of `R50-gl-journal-foreign-doctype`.
+
+- **2026-10-21 — `m_inout_chk_restrictions_trg` blocks a `C_DocType_ID` change on `Processed='Y'`
+  shipments** (RAISE `@20501@`) unless `AD_isTriggerEnabled()='N'`. Any fix repointing a completed
+  shipment's doctype must wrap that one UPDATE in `ad_disable_triggers()` / `ad_enable_triggers()`.
+  `fact_acct` has no triggers. `m_inout_trg_prov` recomputes `MovementType` from the doctype's
+  `IsSOTrx` (`N` -> `V+`) on every UPDATE, so the bypass leaves `MovementType` as stored.
+  Other m_inout triggers (`etblkp_m_inout_status_trg`, delete guards) are irrelevant.
+- **2026-10-21 — `M_InOut` is `AD_Table_ID` `319`** (the `fact_acct` marker for shipment facts).
+- **2026-10-21 — Sequence advance must not be tenant-wide.** Receipts and shipments may share a
+  sequence; the fix computes MAX(all-digit DocumentNo)+1 per `docnosequence_id` over the repointed
+  shipments plus the shipments already on the target doctype, forward-only, own tenant only.
+  Only all-digit DocumentNos of 1 to 9 digits count: `ad_sequence.currentnext` is numeric(10,0), so
+  a longer number would overflow the cast and abort the whole fix for that tenant. Prefixed/suffixed
+  and longer DocumentNos are left out of the MAX (their shipment is still repointed); 999999999
+  + 1 = 1000000000 still fits.
+- **2026-10-21 — `@report` only runs after `@apply`** (`run.js` ~l.406), so a tenant with no own RTV
+  doctype must keep matching `@check` for the report to list it; hence the `@check` does not
+  require a target doctype.
+- **2026-10-21 — Local simulation (BEGIN/ROLLBACK, nothing committed):** local DB has no affected
+  rows, so one processed shipment of tenant `802509E1...` was synthetically pointed at tenant
+  `4028E6C7...`'s RTV doctype: sequence 1000000 -> 10000004, 8 `fact_acct` rows, 1 `m_inout` row
+  updated; `@check` after = 0 rows; `@report` empty.
+- **2026-10-21 — R50-inout-foreign-return-doctype verified through the REAL runner on the local
+  DB** (`--client X --fix <id>`, synthetic shipments + facts, fully cleaned up, table hashes
+  identical afterwards): the `ad_disable_triggers()` flag set inside `@apply` holds for the
+  m_inout UPDATE and does not leak past COMMIT (a fresh connection still gets `@20501@`).
+  Runner needs no flags for the local DB (credentials from gradle.properties); set
+  `SF_DATA_FIX_LOG_DIR` to keep execution logs out of the repo's `logs/data-fixes`. With triggers
+  bypassed `MovementType` stays as stored (a `C-` shipment stayed `C-` on the `issotrx='N'` doctype).
+  These end-to-end runner runs (5 synthetic scenarios + the real-UI reproduction on GOClient) were
+  done on the version BEFORE the 1-to-9-digit length guard and the restriction of the `@report`
+  fact_acct branch to RTV shipments. Those two changes were checked afterwards only in
+  `BEGIN ... ROLLBACK` transactions on the local dev DB, with the real `@apply`/`@report` text and
+  `:client_id` inlined, NOT by a new runner execution: a 23-digit and an exactly 10-digit foreign
+  DocumentNo are still repointed without abort and ignored by the advance; 999999999 is accepted
+  and 1000000000 written; an own-doctype shipment 1000099 gives 1000100; a sequence preset to
+  2000000000 is not rewound; the restricted `@report` is empty on the repaired GOClient rows, still
+  fires for an RTV shipment with a foreign fact and stays silent for a non-RTV shipment.
+
+## ETP-5826 — Extended payment terms (G5 / R52, 2026-10-22)
+
+- **2026-10-22 — Onboarding-imported rows get NO `_TRL` rows from their table's translation
+  trigger.** `DataImportService.importDataFromXML` (core, used by `OnboardingDatasetImportService`)
+  calls `TriggerHandler.getInstance().disable()`, and `c_paymentterm_trg` (like every core `_TRL`
+  trigger) starts with `IF AD_isTriggerEnabled()='N' THEN RETURN`. So "translations come from the
+  trigger" is true for a data-fix or a Classic/NEO insert, NOT for the dataset import. Live: every
+  GO tenant's four seeded terms have exactly one `es_ES` `C_PaymentTerm_Trl` row, `createdby='0'`,
+  created hours/days after the term itself — a later core back-fill, not the import. A data-fix
+  insert, by contrast, gets one row per active system language at once (`en_US` + `es_ES` locally,
+  `IsTranslated='N'`, copy of the base name). **Apply:** don't promise `_TRL` rows at provisioning
+  time for a dataset-only seed; when the base `NAME` is already in the user language (Spanish GO
+  seeds) the gap is invisible, otherwise allowlist the `_TRL` table with real translations (N4).
+- **2026-10-22 — "Dataset-only adding needs no corrective" is about NEW tenants only.** The map's
+  ETP-4341 note read as if adding master data to the GOClient XML never needs a `.sql`. The dataset
+  is read only at provisioning, so existing tenants never see an added row. When the product wants
+  existing tenants to have it (ETP-5826: yes), ship a corrective; R52 is the precedent. Map §1 note
+  now says so.
+- **2026-10-22 — Duplicate rule for "simple" payment terms, shared with `PaymentTermHandler`:** a
+  term counts as "the N-day term" when it has no `C_PaymentTermLine`, `IsDueFixed='N'` and
+  `FixMonthOffset` 0/NULL — in ANY org of the client, active or not. R52's guard and the handler's
+  409 must keep this predicate in lockstep, or the fix seeds a term a user could never have created
+  (or vice versa). Separately, `c_paymentterm_name` is UNIQUE `(ad_client_id, ad_org_id, name)`,
+  so a same-named term of a different shape in the anchor org must be skipped (and reported), not
+  inserted.
+- **2026-10-22 — Anchor org for per-tenant master-data seeds = the org of an existing seeded row.**
+  GO tenants keep their seeded terms in the operative org (GOOrg for GOClient; the tenant org for
+  every other; a "PEND-…" pool-claimed client keeps its placeholder client name while its own org
+  already carries the company name, e.g. "Termos"). Using the org of the seeded `Inmediato`
+  (`Value='I'`, `NetDays=0`) instead of `:org_id` keeps new rows exactly where the existing ones
+  are visible, with no assumption about which org is "the" operative one.
+- **2026-10-22 — Label bookkeeping.** `R51` is already taken on an unmerged branch
+  (`20261021T120000Z__R51-etgo-survey-config-seed.sql`, found only via
+  `git ls-tree` over every `origin/*` ref), so this fix is `R52`. Gap series `G` (payment config)
+  continues with `G5`; the `G` gaps live only in `onboarding-and-datafixes-map.md` §4, not in
+  `onboarding-gaps.md`.

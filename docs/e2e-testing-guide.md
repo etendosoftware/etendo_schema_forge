@@ -46,6 +46,36 @@ E2E_CAPTURE_SCREENSHOTS=1 npx playwright test --project=mocked
 explicit evidence screenshots and Playwright's automatic failure screenshots are
 available. The default is disabled; `0` and any other value also leave capture off.
 
+### Running the specs of one cell
+
+Every spec lives in a folder under `e2e/tests/flows/`, and every folder belongs to a
+product cell. The cell names match the `com.etendoerp.go` Java cells (`src-test/cells/`):
+
+| Cell | Folders |
+|------|---------|
+| `ventas` | `sales`, `contacts`, `sales-purchases` |
+| `compras` | `purchases`, `sales-purchases` |
+| `almacenes` | `inventory`, `products` |
+| `contabilidad` | `accounting` |
+| `financiero` | `finance` |
+| `localizacion` | `fiscal` |
+| `plataforma` | `platform`, `system`, `dashboard`, `onboarding` |
+
+`sales-purchases` holds the specs that exercise both sales and purchase documents, so it
+runs with either cell. From `e2e/`:
+
+```bash
+npm run test:cell -- ventas                  # mocked + integration
+npm run test:cell -- compras mock            # projects mocked + mocked-serial
+npm run test:cell -- almacenes integration   # project integration
+npm run test:cell -- ventas mock --list      # anything after the kind goes to Playwright
+npm run test:cell -- --check                 # fails on a loose spec or a folder with no cell
+```
+
+A new spec goes in the folder of its cell, never loose in `tests/flows/`. A new folder must be
+added to `CELLS` in `e2e/support/test-cell.mjs`; `scripts/__tests__/e2e-test-cell.test.js`
+fails otherwise.
+
 ---
 
 ## Copilot Agent Navigation (`webmcp-agent-chat`)
@@ -118,6 +148,28 @@ Each of the 3 tests across those two spec files now calls `ensureOpenPeriod()` (
 - **Skips with a `console.warn`** (does not fail the suite) when the DB query itself fails — e.g. running against a remote/deployed environment with no local Postgres access. This guard is a local-dev convenience, not a hard requirement.
 
 See `e2e/tests/helpers/__tests__/period-helpers.test.js` for the guard's own unit tests (already-open no-op case, opens-closed-types case, missing-row throw case, DB-unreachable skip case).
+
+---
+
+## Document Creation Paths — `CREATION_PATHS` (ETP-5771)
+
+A new document's header can reach the server before its first line in two ways, and every integration spec that creates a document must **name the path it takes**. The helpers live in `e2e/tests/helpers/purchase-helpers.js` (generic despite the file name):
+
+| Helper | What it does |
+|---|---|
+| `CREATION_PATHS` | `['emptyState', 'save']`. `emptyState` is the real user flow: fill the header on `/<spec>/new` and go straight to an empty-lines action ("+ Añadir líneas", "Importar desde …"), which saves the header itself — no Guardar click. `save` clicks Guardar (`saveDraft`) first, then the same action on the saved record. |
+| `leaveNewDocumentThroughEmptyLines(page, { spec, via, trigger? })` | Runs the chosen path from `/<spec>/new` and returns the saved record id. With `emptyState` it asserts the action is offered on the UNSAVED document and that clicking it moves to `/<spec>/<id>`. `trigger` defaults to "+ Añadir líneas"; pass an import button for the import paths. An unknown `via` throws. |
+| `openFirstLineRow(page, { spec, via })` | The above, then waits for the inline-add row of the first line (re-clicking only if the click was lost to the redirect). For specs that fill the line themselves. |
+| `createDraftWithFirstLine(page, { spec, via, ...line })` | `openFirstLineRow` plus committing the product line (`productName`, `productIndex`, `quantity`, as in `addProductLine`). |
+
+Rules:
+
+- **Declare the path explicitly** in every spec that creates a document. Most use `emptyState`; a minority keep `save` (today `purchase-order-full-flow`, `sales-quotation-full-flow`, `sales-order-return-rectificativa`, `goods-receipt-stock-defaults`, `printable-download-purchase`) so both paths stay covered.
+- `addProductLine({ isFirst: true })` now **throws**. Add the first line with `createDraftWithFirstLine`; `addProductLine` is only for further lines through "+ Añadir línea".
+
+Why: every spec used to save first, so nothing noticed that "+ Añadir líneas" never rendered on an unsaved sales order, sales invoice, purchase order or quotation — the header totals sat in `requiredHeaderFields` and `/defaults` returned them null.
+
+`e2e/tests/flows/platform/new-movement-document-first-lines.integration.spec.js` covers the documents that had no from-scratch creation spec: goods shipment ("+ Añadir líneas" → the first product line persists), customer return ("Importar desde albarán" opens the shipment import) and return to vendor ("Añadir desde Albarán" opens the receipt import), all without Guardar. Gated by `E2E_SALES_INTEGRATION=1`.
 
 ---
 
@@ -1313,6 +1365,22 @@ test.describe('My feature — sales-order', () => {
 - **Custom field keys** — some windows expose the document number under a different field (e.g. purchase-invoice uses `orderReference`, not `documentNo`). Mirror the value into both keys when mocking so a single locator works across windows.
 - **Per-window expected buttons** — if your overlay/feature is gated by the custom window file (`onClone`, `onEmail`, `menuActions`, `documentPreview`), parametrize the asserts so each window verifies its own wiring (catches regressions where a custom window stops passing a handler).
 - **Numeric field clearing normalises to `defaultValue`** — when a user clears a numeric inline-add or inline-edit field and moves focus away, `DataTable.jsx` and `InlineLinesPanel.jsx` automatically substitute the field's `defaultValue` (or `min` if `defaultValue` is absent) before the save payload is built. In tests, assert the intercepted POST/PATCH body contains the expected numeric value (e.g. `0` for discount, `1` for quantity), never `undefined` or `''`. Do not assert that the input displays empty after blur — it will display the normalised value. See `docs/feedback.md` (ETP-4277) for the full root-cause explanation.
+
+### Mocking the shared `LoginStep` SSO button (Google)
+
+The shared `LoginStep` (`etendo-go-core`) renders its Google button only when
+`getConfiguredSsoProviders()` finds a non-empty `import.meta.env.VITE_GOOGLE_CLIENT_ID`
+(`src/onboarding/sso.js`), and a Vite build bakes that value at build time — so a mocked
+run has no SSO surface unless the E2E build is configured for it. `scripts/run-e2e-full.sh`
+sets a public placeholder for the mocked suite (`VITE_GOOGLE_CLIENT_ID`, a Google Web
+client id is a public identifier, not a secret).
+
+The provider SDK itself is the boundary a spec stubs, the way the unit test mocks
+`onboarding/sso`: define `window.google.accounts.id` with `page.addInitScript` — its
+`initialize` captures the credential callback and its `renderButton` renders a button whose
+click fires that callback. `loadGoogleIdentityScript()` short-circuits on an existing
+`window.google.accounts.id`, so Google's CDN is never contacted. Example:
+`e2e/tests/flows/system/user-invitation.mocked.spec.js`.
 
 ### Gotcha: a route pattern ending in a bare `word**` does NOT match a sub-path after `word`
 

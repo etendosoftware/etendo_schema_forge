@@ -509,3 +509,25 @@ describe('AttachmentsTab — selection bar (ETP-5526)', () => {
     expect(screen.queryByTestId('attachments-selection-bar')).not.toBeInTheDocument();
   });
 });
+
+// ETP-5830 — `accessReadOnly` is DetailView's role-tier signal (the role only has read access to
+// the window). Unlike `isDocumentReadOnly` (ETP-5526) and the fiscal `readOnly` (ETP-5432), it is
+// the one fully read-only view: no upload and no delete, while download stays.
+describe('AttachmentsTab — a read-only role cannot upload or delete (ETP-5830)', () => {
+  beforeEach(() => {
+    hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
+  });
+
+  it('renders no upload dropzone', () => {
+    render(<AttachmentsTab {...baseProps} accessReadOnly />);
+    expect(screen.queryByTestId('attachments-dropzone')).not.toBeInTheDocument();
+  });
+
+  it('hides the per-row and the selection bar delete but keeps download', () => {
+    render(<AttachmentsTab {...baseProps} accessReadOnly />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByTestId('row-1')).getByRole('checkbox'));
+    expect(screen.queryByTestId('attachments-delete-selected')).not.toBeInTheDocument();
+    expect(screen.getByTestId('attachment-download-1')).toBeInTheDocument();
+  });
+});

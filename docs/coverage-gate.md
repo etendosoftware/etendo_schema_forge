@@ -80,14 +80,12 @@ targets a branch other than `develop` or `main` (which are analysed on every
 push) and that branch has no coverage, the step still passes but emits a
 `::warning::` annotation saying the coverage drop was **not** checked.
 
-Bypass a block with `git push --no-verify` (WIP only, and by a human in their own
-terminal — the committed `PreToolUse` hook `.claude/hooks/block-push-no-verify.sh`
-denies that flag when an agent tries it through Claude Code's Bash tool. The
-companion `.claude/hooks/block-coverage-threshold-overrides.sh` also denies
-agent-run assignments or exports of `COVERAGE_MINIMUM` and
-`COVERAGE_TOLERANCE`; adjust their reviewed defaults in
-`scripts/compare-sonar-coverage.js` instead.
-See **Agent Guardrails** in `CLAUDE.md`).
+A block is fixed, not skipped. The committed `PreToolUse` hook
+`.claude/hooks/block-push-no-verify.sh` denies `git push --no-verify` when an agent
+tries it through Claude Code's Bash tool, and the companion
+`.claude/hooks/block-coverage-threshold-overrides.sh` denies agent-run assignments or
+exports of `COVERAGE_MINIMUM` and `COVERAGE_TOLERANCE`; adjust their reviewed defaults
+in `scripts/compare-sonar-coverage.js` instead. See **Agent Guardrails** in `CLAUDE.md`.
 
 ## Where it runs
 
@@ -108,7 +106,7 @@ Two CI jobs run it today, and a third consumes its output:
 
 | Job | Trigger | What happens to the outputs |
 |---|---|---|
-| Jenkins `Node Tests` stage (`etendo-go/schemaforge/Jenkinsfile` in the separate `com.etendoerp.jenkins.pipelines` repo) | Its `GenericTrigger` fires on push to `main`, on the daily cut (PRs `mergeblock/*` → `main`) and on PRs `hotfix/*` → `main` or `develop`. `feature/*` PRs and pushes to `develop` do **not** trigger it. The `local-validated` label no longer skips anything there: the cut is the only full run (ETP-5695) | Feeds the `SonarQube Analysis` (branch analysis) and `Compare Coverage Results` stages |
+| Jenkins `Node Tests` stage (`etendo-go/schemaforge/Jenkinsfile` in the separate `com.etendoerp.jenkins.pipelines` repo) | Its `GenericTrigger` fires on push to `main`, on the daily cut (PRs `mergeblock/*` → `main`) and on PRs `hotfix/*` → `main`. PRs into `develop` and pushes to `develop` do **not** trigger it (ETP-5886) | Feeds the `SonarQube Analysis` (branch analysis) and `Compare Coverage Results` stages |
 | GitHub Action `Tests` (`.github/workflows/test.yml`), job `test` | `pull_request` (opened / synchronize / reopened) and push to `main` / `develop` | JUnit published as the "Test Results" check; both files uploaded as the `unit-coverage` workflow artifact (7-day retention) |
 | GitHub Action `Tests`, job `sonar` (check name `Sonar Build`) | Same triggers, runs after `test` | Downloads `unit-coverage` (only when `test` succeeded) and runs the SonarQube scan, which reads `coverage/merged-lcov.info` via `sonar-project.properties` |
 

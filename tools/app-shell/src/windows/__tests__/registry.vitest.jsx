@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/registry.js
+// @covers tools/app-shell/src/windows/RedirectWindow.jsx
 import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess } from '../registry';
 import menuConfig from '../../menu.json';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, expectNavigation } from './navigationExpectations.js';
@@ -687,6 +689,28 @@ describe('registry', () => {
         expect(typeof entry.loader).toBe('function');
         expect(entry.contract).toBeNull();
       }
+    });
+
+    // ETP-5795 — the redirect loader built for `hidden: true` + `redirect` menu items.
+    it.each([
+      ['business-partner', '/contacts'],
+      ['fiscal-calendar', '/calendar'],
+      ['open-close-period-control', '/calendar'],
+    ])('%s loads a component that replaces the URL with %s', async (name, to) => {
+      const { default: Redirect } = await buildWindowMap()[name].loader();
+      const el = Redirect();
+      expect(el.props.to).toBe(to);
+      expect(el.props.replace).toBe(true);
+    });
+
+    // ETP-5720 — `redirectKeepPath` reaches makeRedirectWindow (behaviour covered in RedirectWindow.vitest.jsx).
+    it('simple-g-l-journal loads the record-keeping redirect', async () => {
+      const { default: Redirect } = await buildWindowMap()['simple-g-l-journal'].loader();
+      expect(Redirect.name).toBe('RedirectWindowKeepPath');
+    });
+
+    it('does not register a hidden window without redirect or routeOnly', () => {
+      expect(buildWindowMap()['hr']).toBeUndefined();
     });
 
     it('known windows have loaders', () => {

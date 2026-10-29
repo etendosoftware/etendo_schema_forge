@@ -250,6 +250,15 @@ reuse of existing background infra (vector outbox ETP-5664, onboarding import, b
 importer — not yet checked). Does not reduce per-row cost: Phase B still applies.
 If built, it can later host the SPA import too and make Phase C unnecessary.
 
+**Delivered by ETP-5677** (`com.etendoerp.go` docs `neo-headless.md` §4.3.7): `POST /sws/neo/batch` and
+`etendo_batch` accept `async:true` and answer a `jobId` at once; `GET|DELETE /sws/neo/batch/jobs/{id}` and
+`etendo_job_status` / `etendo_job_cancel` read and cancel it. The job commits **per row** (an operation plus
+what it references), keeps a per-row result in `ETGO_BATCH_JOB` and survives a restart as `INTERRUPTED`
+(heartbeat, not node identity). The SPA import (`useWindowImportDialog.postBatch` → `useBatch.runBatch
+{async:true}`) submits each chunk as a job and polls it; the core import engine settles every import row from
+its own result row, so Retry resends only rows that were not created, and the poll progress feeds the dialog's
+bar. This makes Phase C unnecessary.
+
 ## 4. Open questions
 1. ~~Should Phase A ship alone first?~~ Yes (2026-10-08).
 2. Phase C: go / no-go after measuring B. If go, failure policy: client-side bisection vs.
@@ -400,3 +409,73 @@ products already run at ~26 ms/row server-side. (2) Real production gain needs a
 Next (measure before building): confirm which run was timed; browser timeline (HAR) of the
 client-side share; profile BusinessPartner add (326 ms: triggers, flush, refreshBobsFromDb,
 sequence); try contacts concurrency 4 → 8 locally (server avg concurrency is only 3.8).
+
+## Per-row server cuts after QA (2026-10-14)
+
+QA's production `[NEO-PERF]` logs (1000 products, 10-row chunks): ~800 ms of server time per row —
+product create 515 ms (pre-hook 84, callout cascade 130 of which `SL_TaxCategory_Org` ~90, add 90,
+post-hook + response ~193), both prices 73 ms (each one updating the row the seed had just inserted),
+cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo-headless.md` §4.3.7:
+
+1. `_skipPricesSeed` — product create directive, read and stripped by `ProductDefaultsHandler`;
+   declared via `NeoHandler#createDirectives()` so MCP accepts and publishes it. The import sends
+   the list of versions the row prices; the server skips a direction only when its own default
+   version is listed (review W2: every GO price list has one version, so client and server can
+   only pick different tariffs when no list is flagged default, or when the selector leaves the
+   sales flag null and the client takes an unflagged list for sales).
+2. Per-batch callout skip — `NeoCalloutDiscardMemory` in `NeoBatchScope`: a create-cascade callout
+   whose every output was discarded (caller-sent or suppressed fields), with no message, is not re-run
+   for the same (tab, trigger, trigger value, kept-field set) within the batch. **Opt-in** since the
+   user's safety review: only a request sent with `_skipRedundantCallouts: true` (REST body, MCP
+   `etendo_batch`) gets it — the import sends it for products and contacts, OCR does not — and the
+   backend kill switch `batch-callout-skip-disabled` (registered in `flags-registry.json` as
+   `batch-redundant-callout-skip`, default off = skip allowed) turns it off for every batch. It is
+   flipped in ConfigCat; the local property / env var applies only where no ConfigCat SDK key is set.
+3. `_onlyReturnIds` — batch request option (REST body, MCP `etendo_batch`); skips locator
+   enrichment and the product's `etgoHasCost`. The batch response was already ids-only. Sent by the
+   import (`useWindowImportDialog`), not by OCR.
+4. Per-batch lookup memo — `findSpec`, `findEntity`, product default uOM/taxCategory and default
+   tariff version, keyed by everything they read; dropped when the DAL session changes.
+
+### Local measurement (2026-10-14, main checkout, local hardware)
+
+Run `MV8954W9`: 2 × 50 PERF5676 products through `POST /sws/neo/batch` from the logged-in SPA, the
+import's exact op shape (product + salesPrice + purchasePrice + cost), 10-row chunks, sequential.
+Server time per chunk = `[BATCH] received` → `committed` in `openbravo.log`.
+
+| Run | Flags | Server ms/row (chunks 2–5, warm) | Client ms/row (all chunks) |
+|---|---|---|---|
+| A | off | 104 (996–1084 ms per chunk; first chunk 2161 = warm-up) | 130 |
+| B | `_skipPricesSeed` + `_onlyReturnIds` | 71 (612–802 ms per chunk) | 72 |
+
+**Fixes 1 + 3 (A → B): −32 % server time per row.** In A the two price ops never reach
+`executePostCreate` — `ProductPriceHandler` finds the seeded zero row and updates it — while in B
+they are plain creates (6.7 ms each); product create 30.0 → 23.4 ms, costing create 19.0 → 9.5 ms
+(avg `executePostCreate` total).
+
+**Fix 2 (automatic, both runs):** every chunk of both runs logged `skip learned` for three callouts
+and then `skipped 9 time(s)` for each — 90 skips per callout over the 100 rows:
+
+| Tab | Trigger | Outputs (all kept) | Callout |
+|---|---|---|---|
+| Product (180) | `organization` | `taxCategory` | `SL_TaxCategory_Org` |
+| Product (180) | `productType` = I | `stocked` | `SL_Product_Type` |
+| Costing (800057) | `organization` | `currency` | `SL_Costing_Currency` |
+
+`SL_TaxCategory_Org` returned no `productCategory` (this org has no default category), so its only
+output was the `taxCategory` the product pre-hook injects. Callout cascade on the learning row vs the
+skipped rows: product 20.5 → 1.2 ms, costing 5.8 → 0 ms — about 25 ms per row locally, i.e. a row
+without the skip would be ≈ 127 ms in A. In production the same cascade measured 130 ms on the
+product alone (`SL_TaxCategory_Org` ~90, `SL_Product_Type` ~13), all of it on callouts this skips.
+
+**Fix 4:** the memo has no hit counter (not instrumented); its effect is inside the per-op numbers
+above and not separable without a code change.
+
+**Relative effect, all four fixes:** ≈ 127 → 71 ms/row locally (−44 %). Local hardware is ~6–8×
+faster than production (≈ 800 ms/row), so absolute savings do not transfer; the proportions are the
+estimate to check against the next production `[NEO-PERF]` capture.
+
+**Correctness (DB):** every product of both runs has exactly one sales and one purchase
+`M_ProductPrice` (no leftover zero row), one `M_Costing` at 5 EUR, a tax category and
+`IsStocked = Y` — the skipped callouts' outputs were indeed redundant.
+

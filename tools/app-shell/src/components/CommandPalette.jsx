@@ -23,6 +23,8 @@ import {
 } from '@/components/global-search/GlobalSearchPrimitives.jsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import menuConfig from '../menu.json';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
+import { isSupportRestrictedMenuItem } from '@/lib/supportSession.js';
 
 import {
   LayoutDashboard,
@@ -92,6 +94,9 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const location = useLocation();
   const { capabilities } = useAuth();
+  // ETP-5351 — the palette reads menu.json directly, so the support-mode menu rule is applied here
+  // too, not only to the sidebar's menuGroups.
+  const { isSupportMode } = useSupportSession();
   const accountingProcessMonitorEnabled = useFeatureFlag(ACCT_PROCESS_MONITOR);
   const publicApiKeysEnabled = useFeatureFlag(PUBLIC_API_KEYS);
   const proofOfConceptMenuEnabled = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
@@ -245,6 +250,22 @@ export function CommandPalette() {
     };
   }, []);
 
+  const {
+    exact: exactVectorMatches,
+    semantic: semanticVectorMatches,
+    related: relatedVectorMatches,
+    concentrated: vectorMatchesConcentrated,
+  } = rankVectorMatches(
+    vectorMatches,
+    query,
+    false,
+  );
+  // Visible = what the groups below actually render (related is hidden when concentrated),
+  // not the raw backend list, which may hold only noise the ranking discarded.
+  const hasVisibleVectorMatches = exactVectorMatches.length > 0
+    || semanticVectorMatches.length > 0
+    || (relatedVectorMatches.length > 0 && !vectorMatchesConcentrated);
+
   useEffect(() => {
     const items = Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [data-global-search-item="true"]'));
     items.forEach((item, index) => {
@@ -257,7 +278,7 @@ export function CommandPalette() {
         item.scrollIntoView?.({ block: 'nearest' });
       }
     });
-  }, [keyboardIndex, query, vectorMatches, recentSearches, open, isTargetPickerOpen]);
+  }, [keyboardIndex, query, exactVectorMatches.length, semanticVectorMatches.length, relatedVectorMatches.length, vectorMatchesConcentrated, recentSearches, open, isTargetPickerOpen]);
 
   useEffect(() => {
     const setExternalScope = (event) => {
@@ -346,17 +367,6 @@ export function CommandPalette() {
     if (!Array.isArray(item.targets) || item.targets.length === 0) return true;
     return item.targets.some((target) => requestedVectorSearchTargetKeys.includes(target));
   });
-  const {
-    exact: exactVectorMatches,
-    semantic: semanticVectorMatches,
-    related: relatedVectorMatches,
-    concentrated: vectorMatchesConcentrated,
-  } = rankVectorMatches(
-    vectorMatches,
-    query,
-    false,
-  );
-
   const featureFlagValues = {
     [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
     [PUBLIC_API_KEYS]: publicApiKeysEnabled,
@@ -369,7 +379,8 @@ export function CommandPalette() {
       ...group,
       items: group.items.filter((i) => !i.hidden
         && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
-        && (!i.capability || capabilities?.[i.capability] === true)),
+        && (!i.capability || capabilities?.[i.capability] === true)
+        && !(isSupportMode && isSupportRestrictedMenuItem(i))),
     }))
     .filter((group) => group.items.length > 0);
   // With a query only the matching windows are listed; they render above the record
@@ -475,7 +486,7 @@ export function CommandPalette() {
         </div>
       )}
       <CommandList data-testid="CommandList__73263e">
-        {query.trim().length > 0 && !isVectorSearchLoading && vectorMatches.length === 0 && matchingMenuGroups.length === 0 && (
+        {query.trim().length > 0 && !isVectorSearchLoading && !hasVisibleVectorMatches && matchingMenuGroups.length === 0 && (
           <CommandEmpty data-testid="CommandEmpty__73263e">{ui('noResultsFound')}</CommandEmpty>
         )}
         {query.trim().length === 0 && (

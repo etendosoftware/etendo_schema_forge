@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/copilot/ocr/useOcrFlow.jsx
 /**
  * End-to-end flow coverage for useOcrFlow.
  *
@@ -25,6 +26,9 @@ const H = vi.hoisted(() => ({
   reviewSubmitValue: { vendor: 'reviewed-vendor' },
   linesSubmitValue: [{ description: 'reviewed-line' }],
   popupSubmitValue: [{ picked: 'p1' }],
+  reviewState: { vendor: { enabled: true } },
+  linesState: [{ description: 'edited-line' }],
+  popupState: { 0: { id: 'p1' } },
   apiFetch: vi.fn(),
   toastError: vi.fn(),
   toastWarning: vi.fn(),
@@ -46,7 +50,13 @@ vi.mock('@/auth/useApiFetch.js', () => ({
 }));
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key, vars) => (vars ? `${key}|${JSON.stringify(vars)}` : key),
+  // A param-less key that has a translation must resolve to something OTHER than the key:
+  // `translateBackendError` treats "returned the key" as "no translation" and falls back to the
+  // backend's prose. `backendError.quotaCheckFailed` (ETP-5051) is such a key.
+  useUI: () => (key, vars) => {
+    if (vars) return `${key}|${JSON.stringify(vars)}`;
+    return key === 'backendError.quotaCheckFailed' ? `translated:${key}` : key;
+  },
   useLabel: () => (key) => key,
   useMenuLabel: () => (key) => key,
 }));
@@ -88,9 +98,10 @@ vi.mock('../OcrReviewModal', () => ({
         <span data-testid="review-resolving">{String(props.resolving)}</span>
         <span data-testid="review-pre-resolved">{JSON.stringify(props.preResolved)}</span>
         <span data-testid="review-contacts-base">{String(props.contactsBase)}</span>
-        <button type="button" data-testid="review-submit" onClick={() => props.onSubmit(H.reviewSubmitValue)}>
+        <button type="button" data-testid="review-submit" onClick={() => { props.onStateChange?.(H.reviewState); props.onSubmit(H.reviewSubmitValue); }}>
           submit
         </button>
+        <span data-testid="review-initial-state">{JSON.stringify(props.initialState)}</span>
         <button type="button" data-testid="review-cancel" onClick={() => props.onCancel()}>
           cancel
         </button>
@@ -105,8 +116,12 @@ vi.mock('../OcrLinesReviewModal', () => ({
     return (
       <div data-testid="lines-modal">
         <span data-testid="lines-payload">{JSON.stringify(props.lines)}</span>
-        <button type="button" data-testid="lines-submit" onClick={() => props.onSubmit(H.linesSubmitValue)}>
+        <span data-testid="lines-initial-rows">{JSON.stringify(props.initialRows)}</span>
+        <button type="button" data-testid="lines-submit" onClick={() => { props.onStateChange?.(H.linesState); props.onSubmit(H.linesSubmitValue); }}>
           submit
+        </button>
+        <button type="button" data-testid="lines-back" onClick={() => { props.onStateChange?.(H.linesState); props.onBack(); }}>
+          back
         </button>
         <button type="button" data-testid="lines-cancel" onClick={() => props.onCancel()}>
           cancel
@@ -122,8 +137,12 @@ vi.mock('../ProductResolverPopup', () => ({
     return (
       <div data-testid="popup">
         <span data-testid="popup-unmatched">{JSON.stringify(props.unmatched)}</span>
+        <span data-testid="popup-initial">{JSON.stringify(props.initialSelections)}</span>
         <button type="button" data-testid="popup-submit" onClick={() => props.onSubmit(H.popupSubmitValue)}>
           submit
+        </button>
+        <button type="button" data-testid="popup-back" onClick={() => { props.onStateChange?.(H.popupState); props.onBack(); }}>
+          back
         </button>
         <button type="button" data-testid="popup-cancel" onClick={() => props.onCancel()}>
           cancel
@@ -134,14 +153,17 @@ vi.mock('../ProductResolverPopup', () => ({
 }));
 
 import { useOcrFlow } from '../useOcrFlow.jsx';
+import { BACK } from '../ocrFlowSignals.js';
+
 
 const EVENT = 'ocr:test-event';
 
 /** Renders the hook and exposes its state in the DOM so it can be asserted on. */
 function Harness(props) {
-  const { result, loading, pendingModal } = useOcrFlow(props);
+  const { result, loading, pendingModal, clearResult } = useOcrFlow(props);
   return (
     <div>
+      <button type="button" data-testid="clear-result" onClick={clearResult}>clear</button>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="result">{JSON.stringify(result)}</span>
       {pendingModal}
@@ -185,6 +207,9 @@ describe('useOcrFlow — full flow', () => {
     H.reviewSubmitValue = { vendor: 'reviewed-vendor' };
     H.linesSubmitValue = [{ description: 'reviewed-line' }];
     H.popupSubmitValue = [{ picked: 'p1' }];
+    H.reviewState = { vendor: { enabled: true } };
+    H.linesState = [{ description: 'edited-line' }];
+    H.popupState = { 0: { id: 'p1' } };
     for (const key of Object.keys(H.preResolvers)) delete H.preResolvers[key];
     H.showResult.mockReset();
     H.toastError.mockReset();
@@ -333,39 +358,50 @@ describe('useOcrFlow — full flow', () => {
       await fireOcr({ receiver: { tax_id_raw: 'A99999999' }, issuer: { tax_id_raw: 'C11111111' } });
 
       await waitFor(() => expect(readResult()?.committed).toBe(false));
-      expect(readResult().error).toContain('ocrReceiverTaxIdMismatch');
-      expect(readResult().error).toContain('A99999999');
+      expect(readResult().blocked).toContain('ocrReceiverTaxIdMismatch');
+      expect(readResult().blocked).toContain('A99999999');
       // ETP-5654 — the organization's own tax id is no longer shown in the message.
-      expect(readResult().error).not.toContain('B12345674');
-      // Persistent: stays until the user closes it; the stable id makes a repeat replace it.
-      expect(H.toastError).toHaveBeenCalledWith(readResult().error, {
-        id: 'ocr-receiver-tax-id-mismatch',
-        duration: Infinity,
-        closeButton: true,
-      });
+      expect(readResult().blocked).not.toContain('B12345674');
+      // Shown inline by the uploader (result.blocked): no toast of any kind, and `error` stays
+      // unset because that field is reserved for failures that already toast via showResult.
+      expect(readResult().error).toBeUndefined();
+      expect(H.toastError).not.toHaveBeenCalled();
+      expect(H.toastDismiss).not.toHaveBeenCalled();
       expect(screen.queryByTestId('review-modal')).toBeNull();
       expect(H.buildBatch).not.toHaveBeenCalled();
       expect(H.showResult).not.toHaveBeenCalled();
       expect(screen.getByTestId('loading')).toHaveTextContent('false');
     });
 
-    it('dismisses the previous mismatch toast when a new validation run starts', async () => {
+    it('drops the blocking message when a new run starts with a valid invoice', async () => {
       renderFlow();
       await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
-      await waitFor(() => expect(readResult()?.committed).toBe(false));
-      H.toastDismiss.mockClear();
+      await waitFor(() => expect(readResult()?.blocked).toBeTruthy());
 
       await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
       await screen.findByTestId('review-modal');
-      expect(H.toastDismiss).toHaveBeenCalledWith('ocr-receiver-tax-id-mismatch');
-      expect(H.toastError).toHaveBeenCalledTimes(1);
+      expect(readResult()).toBeNull();
+      expect(H.toastError).not.toHaveBeenCalled();
     });
 
-    it('dismisses the stale mismatch toast even when the new invoice prints no receiver id', async () => {
+    it('clearResult drops the blocking message', async () => {
       renderFlow();
-      await fireOcr({ receiver: { tax_id_raw: null } });
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+      await waitFor(() => expect(readResult()?.blocked).toBeTruthy());
+
+      await userEvent.click(screen.getByTestId('clear-result'));
+      expect(readResult()).toBeNull();
+    });
+
+    it('does not set `blocked` for a non-validation failure', async () => {
+      H.docType = docType();
+      H.buildBatch.mockRejectedValueOnce(new Error('kaboom'));
+      renderFlow();
+      await fireOcr({});
       await screen.findByTestId('review-modal');
-      expect(H.toastDismiss).toHaveBeenCalledWith('ocr-receiver-tax-id-mismatch');
+      await userEvent.click(screen.getByTestId('review-submit'));
+      await waitFor(() => expect(readResult()?.committed).toBe(false));
+      expect(readResult().blocked).toBeUndefined();
     });
 
     it('continues to the review when the ids match despite the country prefix', async () => {
@@ -565,6 +601,231 @@ describe('useOcrFlow — full flow', () => {
 
       await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
       expect(H.runBatch).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5654 — back navigation: BACK is distinct from cancel and restores earlier edits.
+  describe('back navigation', () => {
+    const taxDocType = () => docType({
+      lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
+    });
+    const PAYLOAD = { line_items: [{ description: 'A', tax_label: 'iva' }] };
+
+    beforeEach(() => {
+      H.preResolvers.findDefaultTax = vi.fn(async () => ({ id: 'T1', label: 'IVA 21%', rate: 21 }));
+      H.docType = taxDocType();
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-1' }, invoiceDate: '2026-01-01' };
+    });
+
+    it('lines back reopens the header with its previous state, without cancelling or re-resolving', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+
+      await screen.findByTestId('review-modal');
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      expect(screen.getByTestId('review-resolving')).toHaveTextContent('false');
+      expect(readResult()).toBeNull();
+      expect(H.buildBatch).not.toHaveBeenCalled();
+    });
+
+    it('reuses the edited lines when the header inputs are unchanged', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent(JSON.stringify(H.linesState));
+      expect(H.findBpLocation).toHaveBeenCalledTimes(1);
+      expect(H.preResolvers.findDefaultTax).toHaveBeenCalledTimes(1);
+    });
+
+    it('recomputes the lines and drops the stale edits when the vendor or date changed', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-2' }, invoiceDate: '2026-01-01' };
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent('null');
+      expect(H.findBpLocation).toHaveBeenCalledTimes(2);
+      expect(H.preResolvers.findDefaultTax).toHaveBeenCalledTimes(2);
+    });
+
+    it('a descriptor back returns to the lines with the edits restored and builds once more', async () => {
+      const user = userEvent.setup();
+      H.buildBatch.mockResolvedValueOnce({ back: true });
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent(JSON.stringify(H.linesState));
+      expect(H.runBatch).not.toHaveBeenCalled();
+      expect(readResult()).toBeNull();
+
+      await user.click(screen.getByTestId('lines-submit'));
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalled());
+    });
+
+    it('a descriptor back goes straight to the header when no lines step was shown', async () => {
+      const user = userEvent.setup();
+      H.docType = docType();
+      H.buildBatch.mockResolvedValueOnce({ back: true });
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      await screen.findByTestId('review-modal');
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      expect(H.runBatch).not.toHaveBeenCalled();
+    });
+
+    it('the product popup receives the selections of an earlier visit and back keeps them', async () => {
+      const user = userEvent.setup();
+      let calls = 0;
+      H.buildBatch.mockImplementation(async (_payload, ctx) => {
+        calls += 1;
+        const picks = await ctx.askUserForProducts({ unmatched: [{ idx: 0, description: 'A' }] });
+        return picks === BACK ? { back: true } : { ops: [{ id: 'inv' }], unmatched: [] };
+      });
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+
+      await screen.findByTestId('lines-modal');
+      await user.click(screen.getByTestId('lines-submit'));
+      await screen.findByTestId('popup');
+      expect(calls).toBe(2);
+      expect(screen.getByTestId('popup-initial')).toHaveTextContent(JSON.stringify(H.popupState));
+      expect(readResult()).toBeNull();
+    });
+
+    // Descriptor stand-in: opens the products popup and reports BACK / the picks like the real one.
+    const popupDescriptor = (picksSeen) => async (_payload, ctx) => {
+      const picks = await ctx.askUserForProducts({ unmatched: [{ idx: 0, description: 'A' }] });
+      if (picks === BACK) return { back: true };
+      picksSeen?.push(picks);
+      return { ops: [{ id: 'inv' }], unmatched: [] };
+    };
+
+    it('a product created in the popup comes back as a selected pick after Back and is submitted by id', async () => {
+      const user = userEvent.setup();
+      const created = { 0: { id: 'prod-new', label: 'Widget Created' } };
+      H.popupState = created;
+      H.popupSubmitValue = { 0: 'prod-new' };
+      const picksSeen = [];
+      H.buildBatch.mockImplementation(popupDescriptor(picksSeen));
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+      await user.click(await screen.findByTestId('lines-submit'));
+
+      await screen.findByTestId('popup');
+      expect(screen.getByTestId('popup-initial')).toHaveTextContent(JSON.stringify(created));
+      await user.click(screen.getByTestId('popup-submit'));
+
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalledTimes(1));
+      expect(picksSeen).toEqual([{ 0: 'prod-new' }]);
+    });
+
+    // Documents TODAY's behavior: picks are keyed by row idx and the recompute rule (header changed
+    // -> lines rebuilt) does not clear them, so a vendor change keeps the earlier product picks.
+    it('keeps product picks by row idx after a vendor change rebuilds the lines, and never builds with stale lines', async () => {
+      const user = userEvent.setup();
+      const staleLines = [{ description: 'stale-line' }];
+      const freshLines = [{ description: 'fresh-line' }];
+      H.linesSubmitValue = staleLines;
+      H.buildBatch.mockImplementation(popupDescriptor());
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await screen.findByTestId('review-modal');
+      expect(H.buildBatch).toHaveBeenCalledTimes(1);
+
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-2' }, invoiceDate: '2026-01-01' };
+      H.linesSubmitValue = freshLines;
+      await user.click(screen.getByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent('null');
+      expect(H.buildBatch).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByTestId('lines-submit'));
+
+      await screen.findByTestId('popup');
+      expect(screen.getByTestId('popup-initial')).toHaveTextContent(JSON.stringify(H.popupState));
+      expect(H.buildBatch).toHaveBeenCalledTimes(2);
+      const second = H.buildBatch.mock.calls[1][1];
+      expect(second.reviewedLines).toBe(freshLines);
+      expect(second.reviewedHeader).toBe(H.reviewSubmitValue);
+      expect(H.buildBatch.mock.calls.slice(1).some(([, ctx]) => ctx.reviewedLines === staleLines)).toBe(false);
+    });
+
+    it('cancel from the lines step after backing out of the products popup marks the run cancelled', async () => {
+      const user = userEvent.setup();
+      H.buildBatch.mockImplementation(popupDescriptor());
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+      await user.click(await screen.findByTestId('lines-cancel'));
+
+      await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
+      expect(H.buildBatch).toHaveBeenCalledTimes(1);
+      expect(H.runBatch).not.toHaveBeenCalled();
+      expect(H.showResult).not.toHaveBeenCalled();
+    });
+
+    it('the header step never offers Back, and Continue after Back resubmits the restored header state unchanged', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.onBack).toBeUndefined();
+
+      await user.click(screen.getByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.onBack).toBeUndefined();
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      await user.click(screen.getByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      await user.click(screen.getByTestId('lines-submit'));
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      expect(H.buildBatch.mock.calls[0][1].reviewedHeader).toEqual({ vendor: { bpId: 'bp-1' }, invoiceDate: '2026-01-01' });
+      expect(H.findBpLocation).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancel after going back still marks the run cancelled', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await user.click(await screen.findByTestId('review-cancel'));
+
+      await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
+      expect(H.showResult).not.toHaveBeenCalled();
     });
   });
 
@@ -891,6 +1152,146 @@ describe('useOcrFlow — full flow', () => {
       });
     });
 
+    // A plan-quota refusal inside the batch envelope (`error.detail.error`, code QUOTA_EXCEEDED):
+    // the toast reads `message`, the translated sentence built from the quota, while `reason` and
+    // the flow result keep the backend text.
+    it('toasts the translated quota sentence when the batch is refused by a plan quota', async () => {
+      const user = userEvent.setup();
+      const quota = {
+        resourceKey: 'POSTED_PURCHASE_INVOICES',
+        resourceName: 'Purchase invoices',
+        unitLabel: 'Inv',
+        includedQty: 50,
+        consumed: 50,
+        verdict: 'DENY',
+        period: 'month',
+      };
+      const prose = 'Quota exceeded: Purchase invoices (50/50 Inv)';
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: prose,
+          detail: { error: { message: prose, status: 403, code: 'QUOTA_EXCEEDED', quota } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(readResult()).toEqual({
+        committed: false,
+        error: prose,
+        failedAt: { id: 'inv' },
+      }));
+      expect(H.showResult).toHaveBeenCalledTimes(1);
+      const [{ ok, failed }] = H.showResult.mock.calls[0];
+      expect(ok).toBe(0);
+      expect(failed).toHaveLength(1);
+      expect(failed[0].reason).toBe(prose);
+      expect(failed[0].message).toMatch(/^backendError\.quotaExceeded\|/);
+      expect(JSON.parse(failed[0].message.slice('backendError.quotaExceeded|'.length)))
+        .toEqual({
+          resource: 'Purchase invoices',
+          usage: `quotaUsage|${JSON.stringify({ consumed: '50', included: '50', unit: 'Inv' })}`,
+        });
+    });
+
+    // A failed quota check inside the batch envelope (`error.detail.error`, 500 QUOTA_CHECK_FAILED):
+    // nothing was saved, and the toast reads the translated sentence instead of the English prose
+    // or the generic "action failed"; `reason` and the flow result keep the backend text.
+    it('toasts the translated sentence when the batch quota check itself failed', async () => {
+      const user = userEvent.setup();
+      const prose = 'The quota check failed; nothing was saved. Try again.';
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: prose,
+          detail: { error: { message: prose, status: 500, code: 'QUOTA_CHECK_FAILED' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(readResult()).toEqual({
+        committed: false,
+        error: prose,
+        failedAt: { id: 'inv' },
+      }));
+      expect(H.showResult).toHaveBeenCalledTimes(1);
+      expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: prose, message: 'translated:backendError.quotaCheckFailed' }],
+      });
+    });
+
+    it('recognises the failed quota check by its code even when the envelope prose differs', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: 'Internal error',
+          detail: { error: { message: 'Internal error', status: 500, code: 'QUOTA_CHECK_FAILED' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: 'Internal error', message: 'translated:backendError.quotaCheckFailed' }],
+      }));
+    });
+
+    it('adds no translated message to any other 500 batch failure', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: 'Unexpected failure while saving',
+          detail: { error: { message: 'Unexpected failure while saving', status: 500, code: 'INTERNAL_ERROR' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: 'Unexpected failure while saving' }],
+      }));
+    });
+
+    it('adds no translated message to a batch failure that is not a quota refusal', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({
+        committed: false,
+        error: {
+          message: 'Access denied to spec for current role',
+          detail: { error: { status: 403, code: 'ACCESS_DENIED', message: 'Access denied to spec for current role' } },
+        },
+        failedAt: { id: 'inv' },
+      });
+
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.showResult).toHaveBeenCalledWith({
+        ok: 0,
+        failed: [{ reason: 'Access denied to spec for current role' }],
+      }));
+    });
+
     it('falls back to the failed operation id when the backend sends no message', async () => {
       const user = userEvent.setup();
       H.runBatch.mockResolvedValue({ committed: false, failedAt: { id: 'ln3' } });
@@ -978,6 +1379,22 @@ describe('useOcrFlow — full flow', () => {
         linesFailed: 0,
         unresolved: [],
       }));
+    });
+
+    // ETP-5676 — `_onlyReturnIds` is the import's opt-in; the OCR flow keeps the plain
+    // `{ operations }` body, so runBatch is called with the operations and no options.
+    it('posts the batch without asking for ids only', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({ committed: true, operations: [{ id: 'inv', recordId: 'INV-9' }] });
+
+      render(<Harness docTypeId="purchase-invoice" token="tok" apiBaseUrl="/api" />);
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalledTimes(1));
+      const args = H.runBatch.mock.calls[0];
+      expect(args).toHaveLength(1);
+      expect(Array.isArray(args[0])).toBe(true);
     });
 
     it('omits contactsBase when no apiBaseUrl is configured', async () => {

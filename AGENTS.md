@@ -125,6 +125,9 @@ Delegate all branch operations to Clerk. See `docs/branch-workflow.md` for full 
 Code change + doc update = one atomic unit. REVIEW must reject PRs that change behavior without updating docs. Full checklist and trigger list: `docs/self-documentation-policy.md`.
 Window-specific changes MUST update the matching `docs/generated-custom-windows/<window>.md` guide in the same change.
 
+## Module Repos and Branch Policy
+The README tables "Base repos" and "Module repos" are the team's record of which repos are base (`main`/`develop`) and which are **fixed on epic**. When you add a module, or a module stops being fixed on epic (its epic work merged to `develop`/`main`), or becomes fixed on epic, update in the same change: the README tables, `scripts/modules-policy.json` (used by `make check-modules`) and the clone commands in the README. Feature/hotfix branches must be cut from the base of their group (fixed on epic: the epic; others: features from `develop`, hotfixes from `main`). Run `make check-modules` to verify.
+
 ## Commit Conventions
 All commits MUST follow Etendo Git Police conventions as defined by the `/etendo-workflow-manager` skill.
 **This skill MUST be installed.** If it is not available, ask the user to install it before proceeding with any commits.
@@ -142,7 +145,8 @@ All commits MUST follow Etendo Git Police conventions as defined by the `/etendo
 - Branch naming: `feature/ETP-1234`, `hotfix/#N-ETP-1234`, `epic/ETP-1234`
 
 ## Resolving GitHub Issues
-Create a Jira task inside the current epic, then delegate branch + PR creation to Clerk. PR must reference the GitHub issue (e.g., `Fixes #141`).
+Create a Jira task inside the current epic, then delegate branch + PR creation to Clerk. PR must reference the GitHub issue (e.g., `Fixes etendosoftware/etendo-ai#141`; plain `#141` only for a same-repo issue).
+Only public ideas/bugs/features get a GitHub issue (internal work stays Jira-only). Etendo-product issues (schema_forge, schema_forge_core, com.etendoerp.go) are filed in `etendosoftware/etendo-ai`, Classic ones in their own repo; every one lands on the Etendo Roadmap with Product set. An accepted issue gets one or more cross-linked Jira tasks; a Jira task needs no issue. Procedure and IDs: the `etendo-roadmap` skill.
 
 </pipeline_rules>
 
@@ -178,6 +182,7 @@ Create a Jira task inside the current epic, then delegate branch + PR creation t
 | Assign Jira issue | ✅ |
 | Create / merge PR | ✅ |
 | Check epic status | ✅ |
+| Create / triage GitHub issue (Etendo → `etendo-ai`) + add to Etendo Roadmap, per `etendo-roadmap` skill | ✅ |
 
 Clerk agent file: `.claude/agents/workflow.md`
 Spawn with: `subagent_type="workflow"` and the operation to perform.
@@ -330,6 +335,7 @@ A computed column that reads a table from **another module** needs that module d
 - **Plain module:** `import { apiFetch } from '@etendosoftware/app-shell-core/auth/api'` — the core subpath, NEVER the `@/auth/api.js` barrel (it re-exports `.jsx`, which plain `node --test` cannot load).
 - Options beyond `fetch`'s own: `on401: 'ignore'` (the 401 is a domain answer, not an expired session), `baseUrl: ''` (the URL is already complete or points outside the base), `token` (a plain module was handed one), `credentials`.
 - A test that needs a token supplies a **session**, not a `token` prop — mock `useAuthOptional` from `@etendosoftware/app-shell-core/auth`, spreading the original, and return a stable object.
+- A request with no HTTP answer rejects with a `NetworkError` whose `message` is already translated (`networkErrorRetry`) — show `err.message`, detect it with `isNetworkError(err)`, never match `'Failed to fetch'`. `timeout` defaults to 60 s on `GET`/`HEAD`/`OPTIONS` only (writes wait, so a cut-off write cannot become a double submit); pass `timeout: 0` for a long read (a server-side export, a walk over thousands of rows, an on-demand archive). See `docs/request-policy.md` → *Network failures and the timeout* (ETP-5424).
 - Two guardrails fail the build on regression: `tools/app-shell/test/auth-header-policy.test.js` (hand-rolled `Authorization`) and `tools/app-shell/test/no-raw-fetch.test.js` (bare `fetch`). Genuine non-API calls (`blob:` URLs, the `/jsreport/*` container proxy) opt out with a `raw-fetch-ok: <reason>` comment; unauthenticated-by-design files are listed in the second test.
 
 Full reference (why, the 401-to-logout wiring, working without an `AuthProvider`, the documented exceptions): `docs/request-policy.md`.
@@ -573,9 +579,25 @@ Auto-memory (NOT committed) only for: GitHub usernames, local paths, personal pr
 
 ## Extending NEO Headless — NeoHandler Pattern (com.etendoerp.go)
 
-**Never add window-specific logic to generic Java services** (`NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandler`, `NeoServlet`). Any custom behavior for a specific window must live in a dedicated `NeoHandler` CDI bean.
+**Never add window-specific logic to shared Java code.** Any behavior belonging to a specific entity must live in that entity's own customization. This applies to **every channel** — REST single (`/sws/neo/*`), REST batch (`/sws/neo/batch`) and MCP — because all three resolve customizations through the one `NeoExtensionDispatcher`. A fix made on the REST side is subject to this rule exactly as an MCP fix is.
 
-**How it works:**
+**The criterion: structure yes, identity no.**
+- Shared code MAY branch on **structure** — generic AD metadata that means the same on every entity and names none: `column.isMandatory()`, `!column.isUpdatable()`.
+- Shared code MUST NOT branch on **identity** — a spec name (`"sales-order"`), a table name (`"C_OrderLine"`), or any comparison that names one entity. An identity literal in shared code is a review BLOCKER whatever it is guarding.
+- **A business property name is identity in disguise.** `dalEntity.hasProperty("unitPrice")` or "does the entity declare a `uOM`" looks structural but is an indirect way of naming a group of entities. That behaviour belongs in the customization of each entity that has the property (calling a shared util explicitly if several do the same — T12). The existing guards of this kind in the compensations below are tolerated until migration M4; do not write a new one.
+
+**What counts as shared code** (longer than the obvious services — being outside this list is not a licence; ask "would another entity want this exact behaviour?" and if the honest answer is no, it is a customization):
+- services: `NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandler`, `NeoServlet`, `NeoSubEndpointDispatcher`, `NeoHookDispatcher`, `McpToolRouter(Support)`;
+- the batch path: `BatchService` and its `OperationPreprocessor` hook;
+- the write-path compensations and policies: `McpLinePriceInjector`, `McpBillToInjector`, `McpWriteRequestSupport`, `NeoCommercialLinePolicy`, `DocTypeResolver`. These already hold behaviour selected by a property-name guard, pending migration M4. **Do not add a new one there, and do not add an entity name to an existing one.**
+
+**A divergence between paths must be declared, not discovered.** If two channels must genuinely behave differently, record it in `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.9 in the same change. Precedent: `etendo_batch` persisted order lines at price 0 while `etendo_create` priced them correctly, for months — the injection was present and simply ran too early to see the parent, and nothing in any response or log said so.
+
+**Two binding mechanisms, but only one is for new code.**
+- **`@NeoExtension(spec = "<spec>", entity = "<entity>")`** on the customization class, resolved by `NeoExtensionIndex`. **Use this for anything new.** Proxy-safe, annotation-first, the binding is visible in the file, splitting a handler needs no data change, and it covers every surface (CRUD, DEFAULTS, ACTION, SELECTOR, CALLOUT, READ) on every channel.
+- **`ETGO_SF_ENTITY.Java_Qualifier` + `@Named`** — the original binding. **On its way out.** Still resolved as the fallback, so existing handlers keep working, but **do not add a new one**, and **if you touch a qualifier-bound handler for any reason, migrate its pair to `@NeoExtension` in the same PR** (ETP-5588: "migrate when convenient" let the legacy keep growing, because every fix lands on the binding that exists). Recipe, reader inventory, audit catalog and traps: the `neo-extension-migration` skill. CI enforces it in com.etendoerp.go (`.github/workflows/extension-guardrails.yml`: `make extension-parity` ratchet + `scripts/check-extension-guardrails.py`). Code that needs an entity's customization outside a hook dispatch uses `NeoHandlerLookup.forEntity` / `hasCustomization`, never `SFEntity.getJavaQualifier()`. Full rule: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3.a.
+
+**How the qualifier binding works:**
 1. Set `Java_Qualifier` on the `ETGO_SF_ENTITY` record (e.g. `"internal-consumption-line"`).
 2. `NeoServlet` reads it and routes through `handleWithHooks(qualifier, context)`.
 3. Discovers handlers via `WeldUtils.getInstances(NeoHandler.class)`, matched by `@Named(qualifier)`.
@@ -588,13 +610,16 @@ public class InternalConsumptionLineHandler implements NeoHandler {
     @Override public NeoResponse afterHandle(NeoContext context) { return null; } // post-hook
 }
 ```
-**⚠️ `@Named` only — NEVER `@ApplicationScoped` (or any normal scope).** `lookupHandler()` reads `@Named` off `handler.getClass()`; a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry the (non-`@Inherited`) `@Named`, so it is silently skipped. `@Named`-only defaults to `@Dependent` (no proxy). See `docs/neo-headless-extensibility.md` §2.2.
+**⚠️ `@Named` only — NEVER `@ApplicationScoped` (or any normal scope).** `lookupHandler()` reads `@Named` off `handler.getClass()`; a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry the (non-`@Inherited`) `@Named`, so it is silently skipped. `@Named`-only defaults to `@Dependent` (no proxy). This trap is one of the reasons `@NeoExtension` exists: it binds by annotation index, not by reading `@Named` off the instance class. See `docs/neo-headless-extensibility.md` §2.2.
 
 - `handle()` → `null` continues to default CRUD; `NeoResponse` short-circuits.
 - `afterHandle()` → `null` keeps default result; `NeoResponse` replaces it.
 - Place handlers in: `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/`
 
-Full reference: `docs/neo-headless-extensibility.md`
+Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3.a — **start there**, it is
+the one that covers `@NeoExtension`. `docs/neo-headless-extensibility.md` documents the hook
+lifecycle (`handle`/`afterHandle`, contexts, examples) but predates the annotation, so its
+registration steps still describe the legacy binding only.
 
 ## Adding a New Etendo GO Webhook — NEO Pseudo-Spec Bridge Pattern (com.etendoerp.go)
 

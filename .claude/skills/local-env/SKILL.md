@@ -132,7 +132,10 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
 cd /Users/futit/Workspace/etendo_develop
 local-env worktree ETP-XXXX --module com.etendoerp.go=feature/ETP-XXXX   # add --base=origin/develop for a new branch
 cd ../.worktrees/ETP-XXXX
-local-env up > /tmp/ETP-XXXX-up.log 2>&1 &                                # after the user approves
+local-env up                                                               # after the user approves
+# Returns once Etendo answers (Tomcat keeps running in the background) and prints the URLs and
+# the Tomcat log path; `local-env log` follows it. `up --foreground` keeps Tomcat on the terminal.
+# An older local-env (before ETP-5588) still runs Tomcat in the foreground: background it there.
 ```
 
 Ports are printed at creation; `local-env worktree ls` lists them later. Expect on this
@@ -142,7 +145,10 @@ machine: Docker holds 8080/8081, so Tomcat lands on 8081/8082/8083…; PostgreSQ
 What the GO plugin adds on `up`:
 
 - after `install`, seeds **GOClient** (users `GOuser`, `goadmin@etendo.software`), so
-  the seed is baked into the DB snapshot;
+  the seed is baked into the DB snapshot. Login credentials for the seeded users are not
+  versioned: read them from `.claude/local-env-credentials.md` (gitignored, each developer
+  creates it on their own machine). If the file is missing, ask the user instead of guessing
+  passwords. The `F&B*` users are inactive in this seed;
 - starts the SPA with `make dev-local-core ETENDO_URL=<env Tomcat> SPA_PORT=… BFF_PORT=…`;
 - runs the environment's own `schema_forge` / `schema_forge_core`, not the main ones;
 - lets its Tomcat accept the SPA's origin: on a port other than 3100 it writes
@@ -156,8 +162,8 @@ Its config already points at the environment's DB.
 ## Stop and remove
 
 ```bash
-pkill -f -- "-Dcatalina.base=<env>/"        # Tomcat
-cd <env> && local-env stop                  # SPA + PostgreSQL
+cd <env> && local-env stop                  # Tomcat + SPA + PostgreSQL
+# (an older local-env stops only SPA + PostgreSQL: pkill -f -- "-Dcatalina.base=<env>/" first)
 cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # branches are kept
 ```
 

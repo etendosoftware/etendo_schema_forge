@@ -14,7 +14,8 @@ function run(fn, files) {
   return out.stdout.trim();
 }
 
-const SPEC = 'e2e/tests/flows/account-session-cookie.mocked.spec.js';
+const SPEC = 'e2e/tests/flows/platform/account-session-cookie.mocked.spec.js';
+const EVERYTHING = 'npm testid tests regen xml pw-mocked pw-integration';
 const OTHER_SPEC = 'e2e/tests/flows/sales/sales-order-confirm-idempotency.mocked.spec.js';
 
 describe('relevance_checks', () => {
@@ -30,6 +31,32 @@ describe('relevance_checks', () => {
   it('runs only the mocked suite for a changed mocked spec', () => {
     assert.equal(run('relevance_checks', [SPEC]), 'pw-mocked');
   });
+
+  it('runs nothing for the agent configuration and its mirrors', () => {
+    for (const path of ['.claude/agents/helper.md', '.claude/settings.json', '.codex/agents/helper.toml',
+      '.omp/agents/helper.md', '.opencode/agents/helper.md', '.agents/skills/helper/SKILL.md']) {
+      assert.equal(run('relevance_checks', [path]), '', path);
+    }
+  });
+
+  it('runs only the unit tests for workflows, scripts and Claude hooks', () => {
+    for (const path of ['.github/workflows/mini-pipeline.yml', 'scripts/back-merge-main.sh', 'scripts/select-tests.js',
+      '.claude/hooks/block-push-no-verify.sh']) {
+      assert.equal(run('relevance_checks', [path]), 'tests', path);
+    }
+  });
+
+  it('runs everything for the hooks and the scripts that run the pre-push suites', () => {
+    for (const path of ['.githooks/pre-push', 'run-sonar.sh', 'scripts/run-e2e-full.sh', 'scripts/run-remote-prepush.sh',
+      'unknown/file.txt']) {
+      assert.equal(run('relevance_checks', [path]), EVERYTHING, path);
+    }
+  });
+
+  it('keeps the checks of the rest of a change next to a workflow or an agent mirror', () => {
+    assert.equal(run('relevance_checks', [SPEC, '.github/workflows/mini-pipeline.yml', '.codex/agents/helper.toml']),
+      'tests pw-mocked');
+  });
 });
 
 describe('relevance_mocked_specs', () => {
@@ -42,6 +69,11 @@ describe('relevance_mocked_specs', () => {
       'e2e/quarantine.json', 'package.json', '.githooks/pre-push', 'unknown/file.txt']) {
       assert.equal(run('relevance_mocked_specs', [SPEC, other]), '', other);
     }
+  });
+
+  it('still names the changed mocked specs next to workflow, script or agent changes', () => {
+    assert.deepEqual(run('relevance_mocked_specs', [SPEC, '.github/workflows/mini-pipeline.yml', 'scripts/back-merge-main.sh',
+      '.codex/agents/helper.toml']).split('\n'), [SPEC]);
   });
 
   it('names nothing when no mocked spec changed', () => {

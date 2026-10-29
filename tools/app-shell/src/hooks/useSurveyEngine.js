@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { selectNextSurvey, SURVEY_TRIGGER_EVENT } from '../lib/surveys/survey-engine.js';
 import {
@@ -11,6 +11,8 @@ import { loadRemoteSurveyConfig, submitSurveyResponse } from '../lib/surveys/sur
 import { getApiBase } from './useNeoResource.js';
 import { track } from '../lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '../lib/observability/events.js';
+import { useSupportSession } from './useSupportSession.js';
+import { getSessionIdentity } from '../lib/sessionIdentity.js';
 
 function isAdminRole(selectedRole) {
   return selectedRole?.name?.toLowerCase().includes('admin') ?? false;
@@ -23,14 +25,32 @@ function trackSurveyEvent(eventDef, properties) {
   }
 }
 
-export function useSurveyEngine() {
-  const { isAuthenticated, selectedRole, username, selectedOrg, token } = useAuth();
-  const [activeSurvey, setActiveSurvey] = useState(null);
+// ETP-5808: deliberately NOT memoized. `account_id` comes from getSessionIdentity(),
+// which is a plain module-level mutation (setSessionIdentity in trackSessionStarted /
+// useAccountIdentity) — it does NOT trigger a React re-render when it resolves. A
+// useMemo keyed on [username, selectedOrg?.id] would freeze account_id at whatever
+// value existed the last time one of those actually-reactive inputs changed, which can
+// be before the identity resolves — permanently dropping account_id from every event
+// in the session once that memo had computed without it. Reading getSessionIdentity()
+// fresh, here, at the moment each event is built — independent of render timing —
+// is what QA's repro requires. orgId stays gated by `username` same as before (no
+// account/org context on an event fired while nobody is signed in).
+function getUserProps({ username, selectedOrg }) {
+  if (!username) return {};
+  const { clientId } = getSessionIdentity();
+  return {
+    ...(selectedOrg?.id ? { orgId: selectedOrg.id } : {}),
+    ...(clientId ? { account_id: clientId } : {}),
+  };
+}
 
-  const userProps = useMemo(() => {
-    if (!username) return {};
-    return { ...(selectedOrg?.id ? { orgId: selectedOrg.id } : {}) };
-  }, [username, selectedOrg?.id]);
+export function useSurveyEngine() {
+  const { isAuthenticated: signedIn, selectedRole, username, selectedOrg, token } = useAuth();
+  // ETP-5351 — a support session is not the customer: no NPS/CSAT is shown, loaded or marked as
+  // seen for it, so the engine treats it like no session at all.
+  const { isSupportMode } = useSupportSession();
+  const isAuthenticated = signedIn && !isSupportMode;
+  const [activeSurvey, setActiveSurvey] = useState(null);
 
   const checkAndShowSurvey = useCallback((source) => {
     if (!isAuthenticated) return;
@@ -41,10 +61,10 @@ export function useSurveyEngine() {
     trackSurveyEvent(OBSERVABILITY_EVENTS.SURVEY_SHOWN, {
       type: survey.type,
       source: survey.id,
-      ...userProps,
+      ...getUserProps({ username, selectedOrg }),
     });
     setActiveSurvey(survey);
-  }, [isAuthenticated, selectedRole, userProps]);
+  }, [isAuthenticated, selectedRole, username, selectedOrg?.id]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -77,9 +97,9 @@ export function useSurveyEngine() {
       type: activeSurvey.type,
       source: activeSurvey.id,
       score,
-      ...userProps,
+      ...getUserProps({ username, selectedOrg }),
     });
-  }, [activeSurvey, userProps]);
+  }, [activeSurvey, username, selectedOrg?.id]);
 
   const handleRespond = useCallback((score, feedback, tags) => {
     if (!activeSurvey) return;
@@ -90,7 +110,7 @@ export function useSurveyEngine() {
       score,
       hasComment: Boolean(feedback?.trim()),
       ...(tags?.length ? { tags: tags.join(',') } : {}),
-      ...userProps,
+      ...getUserProps({ username, selectedOrg }),
     });
     // The actual feedback text is never sent to Mixpanel (see hasComment above) — it's persisted
     // server-side instead so product can still read it. Fire-and-forget, same as the Mixpanel
@@ -103,7 +123,7 @@ export function useSurveyEngine() {
       feedback,
       tags,
     })).catch(() => {});
-  }, [activeSurvey, userProps, token]);
+  }, [activeSurvey, username, selectedOrg?.id, token]);
 
   const handleClose = useCallback(() => {
     setActiveSurvey(null);
@@ -115,10 +135,10 @@ export function useSurveyEngine() {
     trackSurveyEvent(OBSERVABILITY_EVENTS.SURVEY_DISMISSED, {
       type: activeSurvey.type,
       source: activeSurvey.id,
-      ...userProps,
+      ...getUserProps({ username, selectedOrg }),
     });
     setActiveSurvey(null);
-  }, [activeSurvey, userProps]);
+  }, [activeSurvey, username, selectedOrg?.id]);
 
   return { activeSurvey, handleScoreSelected, handleRespond, handleClose, handleDismiss };
 }

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -52,11 +53,11 @@ describe('CreatableSearchSelect — keyboard navigation (ETP-4600 Gap A)', () =>
     fireEvent.focus(input);
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('data-highlighted', 'true');
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(screen.getByTestId('option-contact-2')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('option-contact-2')).toHaveAttribute('data-highlighted', 'true');
+    expect(screen.getByTestId('option-contact-1')).not.toHaveAttribute('data-highlighted');
 
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onChange).toHaveBeenCalledWith('2', 'Bravo', OPTIONS[1]);
@@ -78,11 +79,11 @@ describe('CreatableSearchSelect — keyboard navigation (ETP-4600 Gap A)', () =>
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowUp' });
-    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('data-highlighted', 'true');
 
     // Clamped — does not go negative / wrap.
     fireEvent.keyDown(input, { key: 'ArrowUp' });
-    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('data-highlighted', 'true');
   });
 
   it('Escape closes the dropdown WITHOUT changing the selection', () => {
@@ -178,7 +179,7 @@ describe('CreatableSearchSelect — ArrowDown/ArrowUp open a closed dropdown wit
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
     expect(screen.getByTestId('options-contact')).toBeInTheDocument();
-    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('option-contact-1')).not.toHaveAttribute('data-highlighted');
   });
 
   it('ArrowUp on a closed dropdown also just opens it', () => {
@@ -198,7 +199,7 @@ describe('CreatableSearchSelect — ArrowDown/ArrowUp open a closed dropdown wit
     fireEvent.keyDown(input, { key: 'ArrowUp' });
 
     expect(screen.getByTestId('options-contact')).toBeInTheDocument();
-    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('option-contact-1')).not.toHaveAttribute('data-highlighted');
   });
 });
 
@@ -220,11 +221,11 @@ describe('CreatableSearchSelect — Home/End jump to the ends of the options lis
     fireEvent.focus(input);
 
     fireEvent.keyDown(input, { key: 'End' });
-    expect(screen.getByTestId('option-contact-3')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-contact-3')).toHaveAttribute('data-highlighted', 'true');
 
     fireEvent.keyDown(input, { key: 'Home' });
-    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('option-contact-3')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('data-highlighted', 'true');
+    expect(screen.getByTestId('option-contact-3')).not.toHaveAttribute('data-highlighted');
   });
 });
 
@@ -396,5 +397,63 @@ describe('CreatableSearchSelect — auto-width dropdown (ETP-4600 Gap C)', () =>
     fireEvent.focus(screen.getByTestId('field-contact'));
     expect(screen.getByTestId('option-contact-1').className).toMatch(/\bw-full\b/);
     expect(screen.getByTestId('option-contact-1').className).toMatch(/\bblock\b/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5903 — reopening a selector identifies the committed value (marked, separate from the
+// keyboard highlight) and the arrow keys move from it.
+// ---------------------------------------------------------------------------
+describe('CreatableSearchSelect — committed value on reopen (ETP-5903)', () => {
+  const field = { key: 'contact', required: false };
+
+  async function reopenWith(value) {
+    render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={field}
+        value={value}
+        displayValue={OPTIONS.find(o => o.id === value)?.name}
+        staticOptions={OPTIONS}
+        onChange={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByTestId('field-contact-chip'));
+    const input = await screen.findByTestId('field-contact');
+    await waitFor(() => expect(screen.getByTestId('options-contact')).toBeInTheDocument());
+    return input;
+  }
+
+  it('marks the committed option with aria-selected and a check icon, without highlighting it', async () => {
+    await reopenWith('2');
+
+    expect(screen.getByTestId('option-contact-2')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-contact-2-selected-indicator')).toBeInTheDocument();
+    expect(screen.getByTestId('option-contact-2')).not.toHaveAttribute('data-highlighted');
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('ArrowDown moves to the option AFTER the committed one; the selection stays put', async () => {
+    const input = await reopenWith('2');
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByTestId('option-contact-3')).toHaveAttribute('data-highlighted', 'true');
+    expect(screen.getByTestId('option-contact-2')).toHaveAttribute('aria-selected', 'true');
+    expect(input).toHaveAttribute('aria-activedescendant', 'contact-option-3');
+  });
+
+  it('ArrowUp moves to the option BEFORE the committed one', async () => {
+    const input = await reopenWith('2');
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('data-highlighted', 'true');
+  });
+
+  it('navigates a typed search from the top, even when the committed value is among the results', async () => {
+    const input = await reopenWith('2');
+
+    fireEvent.change(input, { target: { value: 'a' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('data-highlighted', 'true');
   });
 });

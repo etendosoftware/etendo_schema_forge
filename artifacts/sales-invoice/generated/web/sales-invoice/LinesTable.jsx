@@ -6,6 +6,7 @@ const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', lookup: true, noTruncate: true },
   { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 2000 },
   { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', label: 'Invoiced Quantity', required: true },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', display: 'tag', readOnly: true },
   { key: 'listPrice', column: 'PriceList', type: 'amount', label: 'List Price', required: true },
   { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', min: 0, max: 100 },
   { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax' },

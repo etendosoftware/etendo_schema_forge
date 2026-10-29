@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Invoice",
+    "agentPrompt": "#REF#agent-prompts/sales-invoice/spec.md",
     "documentDateField": "invoiceDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,
@@ -83,6 +84,7 @@
         "tabOrder": 50,
         "requireSavedRecord": true,
         "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+        "visibleWhenLogic": "@C_Currency_ID@!'' & @C_Currency_ID@!@#OrgCurrencyId@",
         "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags. ETP-5657: @Processed@='Y' was deliberately dropped from this rule, reversing the ETP-4030 completion lock for the tab only — exchange rates stay editable on a completed-but-unposted invoice and lock once it is posted (editable again after unpost) or reversed. Core's C_CONVERSION_RATE_DOCUMENT_TRG still rejects writes on posted invoices server-side. The header currency/rate picker keeps its own @Processed@='Y' lock."
       }
     },
@@ -104,7 +106,8 @@
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
-        "em_etgo_tbai_status": "Estado TicketBAI"
+        "em_etgo_tbai_status": "Estado TicketBAI",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
@@ -112,10 +115,12 @@
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
-        "em_etgo_tbai_status": "TicketBAI Status"
+        "em_etgo_tbai_status": "TicketBAI Status",
+        "C_UOM_ID": "Unit"
       },
       "es_AR": {
-        "OutstandingAmt": "Saldo pendiente"
+        "OutstandingAmt": "Saldo pendiente",
+        "C_UOM_ID": "Unidad"
       }
     },
     "subsetFilters": [
@@ -151,7 +156,6 @@
   },
   "entities": {
     "header": {
-      "javaQualifier": "salesInvoiceHeaderHandler",
       "namedFilters": [
         {
           "name": "completed",
@@ -226,7 +230,13 @@
           "inputMode": "selector",
           "section": "principal",
           "seq": 60,
-          "reference": "PaymentTerm"
+          "reference": "PaymentTerm",
+          "allowCreate": true,
+          "createSpec": "payment-term",
+          "createEntity": "header",
+          "createLabelKey": "paymentTermCreate",
+          "createTitleKey": "paymentTermCreateTitle",
+          "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "priceList": {
           "visibility": "editable",
@@ -260,7 +270,7 @@
         },
         "documentAction": {
           "visibility": "system",
-          "agentPrompt": "Document workflow action for this sales invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it assigns the final document number, computes taxes and totals and creates the payment plan; VO voids it. From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. CL closes it. Preconditions for CO: at least one line, a customer with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger, and posted is not a documentAction value (never send PO here): book a completed, not-posted invoice with etendo_action(action:'post'); remove the accounting entries of a completed AND posted invoice with etendo_action(action:'unpost'). Unposting is NOT reactivation (RE): the invoice stays CO, and only accountingDate, project, costcenter, line project/costcenter and the exchange rates become correctable — then post again. Do unpost, fix and post in one go, since a background accounting process may re-post an unposted invoice within ~5 minutes. Read documentStatus and posted with etendo_get before acting. The remaining values offered in actionValues (AP, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of this window's flow."
+          "agentPrompt": "Document workflow action for this sales invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it assigns the final document number, computes taxes and totals and creates the payment plan; a draft takes CO only (delete it to discard it). From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. RE is the only action of a completed invoice; correct an issued invoice by reactivating it or with a factura rectificativa made in the app. Only CO and RE are accepted as docAction: any other value is refused with 422 listing the allowed ones. Preconditions for CO: at least one line, a customer with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger, and posted is not a documentAction value (never send PO here): book a completed, not-posted invoice with etendo_action(action:'post'); remove the accounting entries of a completed AND posted invoice with etendo_action(action:'unpost'). Unposting is NOT reactivation (RE): the invoice stays CO, and only accountingDate, project, costcenter, line project/costcenter and the exchange rates become correctable — then post again. Do unpost, fix and post in one go, since a background accounting process may re-post an unposted invoice within ~5 minutes. Read documentStatus and posted with etendo_get before acting."
         },
         "createLinesFromOrder": {
           "visibility": "discarded"
@@ -324,14 +334,16 @@
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "defaultExpr": "0",
+          "form": false,
           "grid": true,
           "gridOrder": 6,
-          "section": "summary",
           "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
-          "section": "summary"
+          "defaultExpr": "0",
+          "form": false
         },
         "outstandingAmount": {
           "visibility": "readOnly",
@@ -642,7 +654,11 @@
           "min": false
         },
         "uOM": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 4,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "listPrice": {
           "visibility": "editable",
@@ -650,7 +666,7 @@
           "form": true,
           "inputMode": "number",
           "order": 4,
-          "gridOrder": 4,
+          "gridOrder": 5,
           "section": "principal",
           "columnType": "amount",
           "min": false
@@ -661,7 +677,7 @@
           "form": true,
           "inputMode": "number",
           "order": 5,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
@@ -675,7 +691,7 @@
         "tax": {
           "grid": true,
           "order": 6,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "section": "principal",
           "inputMode": "selector",
           "forceCalloutFields": [
@@ -707,7 +723,7 @@
         "grossAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": true,
           "section": "principal",
           "displayLogic": null
@@ -939,6 +955,7 @@
       "exclude": true
     },
     "exchangeRates": {
+      "publicApi": { "readOnly": true },
       "fields": {
         "active": {
           "visibility": "system"

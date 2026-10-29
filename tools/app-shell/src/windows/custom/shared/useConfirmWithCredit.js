@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 
 import { buildHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 export function useConfirmWithCredit({
   data,
   recordId,
@@ -22,11 +23,15 @@ export function useConfirmWithCredit({
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const status = data?.documentStatus;
   // ETP-5381: trust the backend flag. ReturnShipmentUtils computes it over every non-voided
-  // invoice of the return document, which is the same predicate the server-side duplicate guard
-  // uses — so the button and the guard can never disagree. The previous client-side override
-  // counted only 'CO' invoices, so a rectificative invoice still in draft read as "no invoice"
-  // and the create button stayed visible, allowing a second one. The array fallback is kept for
-  // responses that carry returnInvoices without the flag, but with the non-voided predicate.
+  // invoice of the return document (the same query that fills `returnInvoices`). This flag is what
+  // keeps the SPA from offering a second rectificative invoice (one per return); since ETP-5712
+  // the backend enforces the same rule (409 `returnInvoiceAlreadyExists` unless the request carries
+  // `allowDuplicate:true`, which this SPA never sends), so a stale screen gets a clean error
+  // instead of a duplicate. The previous
+  // client-side override counted only 'CO' invoices, so a rectificative invoice still in draft
+  // read as "no invoice" and the create button stayed visible, allowing a second one. The array
+  // fallback is kept for responses that carry returnInvoices without the flag, but with the
+  // non-voided predicate.
   const hasReturnInvoice = typeof data?.hasReturnInvoice === 'boolean'
     ? data.hasReturnInvoice
     : Array.isArray(data?.returnInvoices)
@@ -51,7 +56,9 @@ export function useConfirmWithCredit({
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Error (${res.status})`);
+        // ETP-5051 — a plan-quota refusal reads as the translated quota sentence.
+        throw new Error(translateQuotaRefusalBody(err, ui)
+          || err?.response?.message || err?.message || `Error (${res.status})`);
       }
       const invData = (await res.json())?.response?.data;
       setShowModal(false);

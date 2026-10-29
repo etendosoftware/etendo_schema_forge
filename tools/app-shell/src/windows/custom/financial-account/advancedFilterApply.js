@@ -175,6 +175,23 @@ export const OPERATORS = {
   },
 };
 
+// A YESNO value in any of its shapes (true / 'Y' / 'true' and false / 'N' / 'false'), or null.
+function toFlag(v) {
+  if (v === true || v === 'Y' || v === 'true') return true;
+  if (v === false || v === 'N' || v === 'false') return false;
+  return null;
+}
+
+/**
+ * Operator table for boolean columns (`booleanLabel` filter mode). The builder sends the picked
+ * value as `true` / `false`, while a row may carry the AD shape ('Y' / 'N'); the generic string
+ * `equals` compared "true" with "y" and never matched, so both sides are canonicalised first.
+ */
+export const BOOLEAN_OPERATORS = {
+  equals:   (raw, value) => toFlag(raw) !== null && toFlag(raw) === toFlag(value),
+  notEqual: (raw, value) => toFlag(raw) !== toFlag(value),
+};
+
 /**
  * Date columns. Operator set offered by the builder for `mode: 'date'`:
  * equals / lessThan ("Before") / greaterThan ("After") / between / null checks.
@@ -245,6 +262,7 @@ function tableFor(col) {
   const mode = resolveFilterMode(col);
   if (mode === 'date') return DATE_OPERATORS;
   if (mode === 'numeric') return NUMBER_OPERATORS;
+  if (mode === 'booleanLabel') return BOOLEAN_OPERATORS;
   return OPERATORS;
 }
 

@@ -322,6 +322,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
       <FiscalDefaultsSection
         data={data}
         onChange={onChange}
+        readOnly={editing === false}
         data-testid="FiscalDefaultsSection__d55d36" />
     </div>
   );

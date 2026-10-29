@@ -22,11 +22,14 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A8 | Accounting | `P_InvoicePriceVariance_Acct` NULL at all three levels that feed it (`C_ACCTSCHEMA_DEFAULT`, `M_Product_Category_Acct`, `M_Product_Acct`) — a match whose invoiced price differs from its receipt cost fails to post with a misleadingly BP/BP-Group-flavored "Account could not be found.", even though the only account genuinely missing is this one and it has nothing to do with the business partner | Both fronts closed: preventive step in `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (runs before the existing product/category copy-down inserts, so a new tenant's products/categories inherit a real account instead of propagating NULL); corrective data-fix (`R34`) backfills all three levels for already-onboarded tenants, each from that SAME row's own `P_Expense_Acct` | ETP-5075 |
 | A8b | Accounting | Product decision, made after A8/ETP-5075 shipped: the fleet-wide standard Invoice Price Variance account is a dedicated GL account (`99904000`), not each tenant's own `P_Expense_Acct` — A8's resolution was a reasonable unblocker but not the intended long-term value | Three fronts: preventive rewrites `backfillInvoicePriceVarianceDefault`'s SQL (same method/file as A8, no new step) to resolve `99904000`'s own NATURAL `C_ValidCombination` first (scoped through `C_AcctSchema_Element`/`elementtype='AC'`, filtered on all ~11 dimension columns being NULL), falling back to A8's `P_Expense_Acct`-derived value only when `99904000` doesn't resolve for that tenant's chart; a NEW dataset-baseline layer (Layer 0) bakes the same `99904000` combination directly into the bundled `C_ACCTSCHEMA_DEFAULT.xml` so a fresh tenant is correct from the dataset-import step itself, not merely by the time the Java step later runs; corrective is a NEW file, `R35`, which corrects any row R34 already touched (still `NULL` or still equal to R34's `P_Expense_Acct` value) to `99904000`'s resolved combination — R34 itself stays byte-identical, un-edited, and remains the sole source for a chart that genuinely lacks `99904000` | ETP-5222 |
 | A9 | Accounting | `FIN_Financial_Account_Acct.FIN_IN_CLEAR_ACCT` / `FIN_OUT_CLEAR_ACCT` ("Cleared payment account" IN/OUT) born pre-filled with the ledger asset account (`57200000`) instead of empty — a non-null cleared account is what makes `DocFINReconciliation` post a reconciliation, so reconciliations generated unwanted entries in Sumas y Saldos / Libro Mayor. NOT a missing-row gap (A2c) or a missing-account gap (A7): the row and the account both exist, the *value* is wrong | Both fronts closed: preventive in `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL` (stops selecting the two columns) + `FinancialAccountAccountingDefaultsSupport` (actively clears them after core's trigger seeds them, for the live create path); corrective data-fix (`R34`) blanks them on already-onboarded tenants, skipping accounts with posted reconciliations. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R34`'s `@check` returns 0 rows for it | ETP-5207 |
+| A10 | Accounting | Manual journals created before ETP-5682 carry **another tenant's** GLJ document type: numbered from the foreign sequence, so the tenant's own GLJ sequence fell behind and its next journal can hit `gl_journal_docno`; posted ones also carry the foreign doctype **and GL category** in `Fact_Acct` (posting copies both from the doctype) | Both fronts closed: preventive is ETP-5682 (client-scoped `manual-journals` `documentType.defaultExpr` + `NeoDefaultTenantGuard`); corrective data-fix (`R50-gl-journal-foreign-doctype`) advances the own GLJ sequences, repoints `Fact_Acct` (doctype + category) and the journal. CUT NOT bumped — not an onboarding gap: the bad rows come from a runtime default, not from provisioning | ETP-5719 |
+| A11 | Accounting | Spanish withholding, intra-community and reverse-charge child taxes post to the generic 477/472 instead of their dedicated account (4751 / 473 / 472 / 477) — onboarding copies `C_ACCTSCHEMA_DEFAULT` into every `C_TAX_ACCT` row | Both fronts closed: preventive `OnboardingAccountingWiringService.overrideSpanishTaxAccounts` (right after `TAX_ACCT_SQL`, `CHAIN_REVISION` bumped, CUT **not** moved); corrective data-fix `R53-spanish-tax-accounts` (per tenant, column-wise guard, `@report` lists only groups not on target). Future postings only — no repost | ETP-5902 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
+| S1 | Tenant subscription | A tenant marked productive before `ETGO_SUBSCRIPTION` existed has only the legacy `AD_Preference` `ETGO_TenantPlan='productive'` marker and NO subscription row, so every consumer of the new subscription model reads a paying tenant back as unsubscribed | Corrective-only data-fix (`R37-tenant-subscription-backfill`) — inserts one open row on the grandfathered `legacy-productive` plan per productive tenant with no subscription row at all (active or not, open or closed — since ETP-5047 a closed row answers for its tenant, so a canceled tenant is never backfilled back to paying, and an inactive row is an operator's deliberate switch-off that a backfill must not undo; such tenants only have the marker retired), copying the Stripe ids and the charged price id from its `ETGO_CHECKOUT_REQUEST` when one exists, seeding `STATUS` from `ETGO_SubscriptionStatus` (`PAST_DUE`→`past_due`, `EXPIRED`/`NONE`→`canceled`, else `active`) `GRACE_ANCHOR` from `ETGO_SubscriptionDueAt` and `LAST_EVENT_AT` from `ETGO_SubscriptionEventAt` (ETP-5047; the pre-ETP-5047 version wrote the anchor to `CURRENT_PERIOD_END`, still read through a fallback) so no tenant's effective access improves, and retiring the `ETGO_TenantPlan` preference in the same transaction for every tenant that has any `ETGO_SUBSCRIPTION` row (open or closed, backfilled here or not — this also removes the marker develop's `R42-paid-provisioning-commercial-metadata` re-inserts for paid tenants, R42 already below the tenant's watermark whenever R37 is allowed to run); aborts loudly (FAILED, so the tenant retries) if the plan row is missing. CUT deliberately NOT bumped — the paid upgrade never writes the marker once its row opens **while `ETGO_SubscriptionModel` is ON** (the switch decides only a tenant's first row: with it OFF — every environment's starting state — a tenant with no subscription row yet that pays still writes the marker and opens no row, so it is a backfill candidate like a legacy one; a tenant that already has any row, open or closed (`SubscriptionService#hasAnySubscription`), is always recorded on a row, whatever the switch), so `@check` is a 0-row skip for a new tenant unless R42 re-inserted the marker, which R37's retirement branch then removes. **Opt-in (`@optIn: true`, decided 2026-10-14):** a full `make data-fixes` never runs it — each environment switches to the subscription model once, when the operator chooses, by first setting the system preference `ETGO_SubscriptionModel` and then running `make data-fixes FIX=R37-tenant-subscription-backfill` (switch-first, decided 2026-10-14: once ON a new purchase opens a row instead of writing the marker, so one pass catches every tenant; if R37 runs client by client before the switch, a migrated tenant needs nothing more but the other tenants that bought while the switch was OFF wrote the marker, so run R37 once more for the whole environment after enabling it; after the module deploy — since ETP-5047, after the **ETP-5047** deploy, which adds those two columns, so run earlier it fails every tenant (`com.etendoerp.go/docs/open-and-notable-topics.md` §2.3, §3.11); only tenants whose chain is caught up to its date are processed); verify with the three checks: every tenant `APPLIED`/`SKIPPED_NOT_NEEDED` in `etgo_data_fix_history` for R37, zero active `ETGO_TenantPlan='PRODUCTIVE'` markers, and exactly ONE active, unrestricted System `ETGO_SubscriptionModel` list-property row whose trimmed value is `Y` (filtered like the go reader `SubscriptionModelSwitch`, which takes the newest such row — not on the value) (queries in R37's header). Out of the chain, R37 no longer follows R42 for a tenant that first reaches R42 after the switch (re-run R37 with `CLIENT=` for it until a subscription-aware successor of R42 ships). Design: `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §7–§8 | ETP-5046 |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
-| C4 | Period control | A demo cannot post during the rest of its trial: periods are open only through the month the tenant was built (a late-month signup, or a pooled tenant built in an earlier month) | Both fronts closed: preventive `OnboardingPeriodControlService.openDemoTrialWindow` (post-commit via `OnboardingInitialPeriodStateService`, retried on login, best effort, open-only, demos only) widens the window to the trial end; corrective `R44-demo-periods-open-through-oct-2026` opens the never-opened rows of existing demos through October 2026. CUT deliberately NOT bumped | ETP-5575 |
-| C5 | Period control | A productive tenant started with every period through its build month already open, so it could post into a calendar (fiscal-year start, years) nobody had chosen, and a pooled build fixed that window before anyone knew who would claim it | Preventive only (ETP-5577): the chain writes every control never-opened and normalizes them; after the commit a productive tenant gets its signup year(s) never-opened plus `ETGO_CalendarReviewRequired`, and the owner confirms or regenerates the calendar in First Steps ('Revisar calendario contable') before opening periods. No corrective data-fix: existing tenants keep their open periods and never see the review (no marker) | ETP-5577 |
+| C4 | Period control | A demo cannot post during the rest of its trial: periods are open only through the month the tenant was built (a late-month signup, or a pooled tenant built in an earlier month) | Both fronts closed: preventive `OnboardingPeriodControlService.openDemoTrialWindow` (post-commit via `OnboardingInitialPeriodStateService`, retried on login, best effort, open-only, demos only) widens the window to the trial end, creating the calendar years the trial needs (ETP-5744); corrective `R44-demo-periods-open-through-oct-2026` opens the never-opened rows of existing demos through October 2026. CUT deliberately NOT bumped | ETP-5575 |
+| C5 | Period control | A productive tenant started with every period through its build month already open, so it could post into a calendar (fiscal-year start, years) nobody had chosen, and a pooled build fixed that window before anyone knew who would claim it | Preventive only (ETP-5577): the chain writes every control never-opened and normalizes them; after the commit a productive tenant gets only its signup year(s) (ETP-5744 deletes the dataset's other never-opened years) never-opened plus `ETGO_CalendarReviewRequired`, and the owner confirms or regenerates the calendar in First Steps ('Revisar calendario contable') before opening periods. No corrective data-fix: existing tenants keep their open periods and never see the review (no marker) | ETP-5577 |
 | D1 | Legal entity | SII fields empty; legal-entity resolution returns NULL | *Initial Client Setup* — verify/recompute `AD_LegalEntity_Org_ID` after `AD_Org_Ready` | ETP-4177 |
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
 | H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
@@ -47,6 +50,8 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
 | O1 | SII / Fiscal Master Data | The "Causa de exencion" (exemption cause) selector on the invoice SIF/SII tab was empty for every tenant except GOClient and one other tenant that had already received a private copy via `R17-sii-cause-exemption` (ETP-4751) — `AEATSII_CAUSE_EXEMPTION` had no `ad_client_id='0'` rows at all | **Redesigned mid-flight** (2026-09-25) from a per-tenant onboarding-dataset addition to SIX SHARED SYSTEM ROWS: preventive is `modules/com.etendoerp.go/src-db/database/sourcedata/AEATSII_CAUSE_EXEMPTION.xml` (module system data, `ad_client_id='0'`, loaded independently of any tenant's onboarding run — no `OnboardingDatasetDefinition.INCLUDED_TABLES` entry); corrective is `R40-aeatsii-cause-exemption-catalog`, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover | ETP-5481 |
 | T1 | Demo data transfer | Contacts copied by the demo-to-production transfer land with `BP_Currency_ID` NULL, so Core refuses to complete any invoice, order, shipment or payment for them (`InitBPCurrencyLnk`). The copy runs through DAL as System and bypasses the NEO hook that defaults a new contact's currency | Both fronts closed: preventive `DemoDataTransferEntityCopier#targetContactCurrency` (source currency, else the target organization's); corrective data-fix (`R49-bpartner-currency-from-org`) for **every** partner without currency, migrated or not. CUT NOT bumped — not an onboarding gap: the transfer runs after provisioning, so the watermark says nothing about it | ETP-5768 |
+| U1 | SII / Fiscal Master Data | Module `com.etendoerp.go.localization.es.data` ships two `FinancialMgmtTaxCategory` ("Standard") rows that both read "IVA Normal" in Spanish — the obsolete one (`c_taxcategory_id` `828E8E40DD3C4FA6A4F531569D26A6AF`) was renamed "OLD IVA Normal" in English but its `es_ES` translation (`FinancialMgmtTaxCategoryTrl` id `FE6B21A01CB141818AD4F1A12E60F594`) was never updated and the row was left `isactive='Y'` — so the Tax Category selector (OCR "Nuevo producto" popup, Product window) shows "IVA Normal" twice for es_ES tenants. The row is SYSTEM-owned (`ad_client_id='0'`); `C_TaxCategory` (AD_Table 252) is AccessLevel 7, so it is visible to every client. No active tax rate hangs off it — the only `FinancialMgmtTaxRate` under it (`867FFFAC82CC44069FE6497E4C5C6348`, "IVA Normal") was already deactivated by ETP-4944 ("Keep IVA Normal, live invoice reference found"), which cleaned up the tax-rate catalog but never touched the category itself | Both fronts closed, shaped like O1 (single shared System row, not per-tenant): preventive is reference-data-only — `referencedata/standard/Spanish_Fiscal_Taxes_Go.xml` (module `com.etendoerp.go.localization.es.data`) flips `<active>` to `false` on the id-828E8E… `FinancialMgmtTaxCategory` element; corrective data-fix (`R50-tax-category-old-iva-normal-deactivate`) deactivates the already-provisioned System row, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. Deactivating (not deleting) means any product that already references this category keeps a valid FK and still opens. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover | ETP-5802 |
+| U2 | SII / Fiscal Master Data | System tax "Adquisiciones intracomunitarias 2% (+2%)" (`c_tax` `79F1D421039644E1B0648B98C3349284`) ships with rate **10** instead of 2 | Both fronts closed, shaped like U1: preventive `Spanish_Fiscal_Taxes_Go.xml` `<rate>2</rate>`; corrective `R53-tax-intracom-2pct-rate`, run once with `--client 0`, never swept per tenant | ETP-5902 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -1171,9 +1176,91 @@ scope change the corrected version only reaches the leftover rows through a targ
 `R34` was applied under the earlier, narrower scope, that targeted re-run is required to finish the
 job.
 
+### A10 — Manual journals on another tenant's document type (ETP-5719, 2026-10-19)
+
+**Symptom:** the next manual journal of a tenant fails with "ya existe un documento con este
+identificador" (`gl_journal_docno`, unique per org + period + number), and reports by GL category
+show entries under another tenant's category.
+
+**Root cause:** before ETP-5682 the `GL_Journal.C_DocType_ID` default had no `AD_Client_ID` filter
+(`docs/etendo-ad/unscoped-sql-defaults.md`), so a journal could be stored with another tenant's GLJ
+document type. `DocumentNoHandlerLegacy` numbered it from the foreign sequence, so the tenant's own
+GLJ sequence never moved past the numbers it already uses. Posting (`AcctServer`) copies
+`C_DocType_ID` **and** `GL_Category_ID` from the document type into every `Fact_Acct` row, so a
+posted journal also carries the foreign category there (`GL_Journal.GL_Category_ID` itself is the
+tenant's own).
+
+**Preventive front:** ETP-5682 (client-scoped `defaultExpr` on `manual-journals` +
+`NeoDefaultTenantGuard`). No journal created after its deploy used a foreign doctype in prod.
+
+**Corrective fix:** `20261019T141632Z__R50-gl-journal-foreign-doctype.sql`, three statements in
+this order:
+1. advance every own active GLJ sequence to `MAX(numeric documentno) + 1` (tenant-wide,
+   forward-only; foreign tenants' sequences are never rewound);
+2. repoint `Fact_Acct` (`AD_Table_ID = '224'`) of the affected journals: doctype and GL category;
+3. repoint `GL_Journal.C_DocType_ID` (last, because it erases the marker step 2 joins on).
+
+The target doctype mirrors the ETP-5682 `defaultExpr` order (`IsDefault DESC`, then the closest
+org), so a repointed journal lands where a new one in that org would. Amounts are untouched, so no
+unpost/repost, and no trigger reacts to these columns. A tenant with no own active GLJ doctype is
+left untouched and listed by the `@report`. Regression guard:
+`cli/test/data-fixes-r50-gl-journal-foreign-doctype.test.js`.
+
+**Running it in prod:** use the normal chain run (preceded by `--dry-run`), never `--fix R50…`
+without `--client`: a targeted run records R50 as processed and moves the tenant's watermark past
+any older fix it has not run yet. Do not create a test journal in a customer tenant to prove it;
+check that every own GLJ sequence is above the tenant's highest journal number instead.
+
+**Status:** written 2026-10-19. Verified on the local dev DB: R50 `WOULD_APPLY` on exactly the 4
+affected tenants (127 `SKIPPED_NOT_NEEDED`); applied, every journal and its 2 posted facts on the
+own doctype and category, sequences above the highest number; a re-run is `SKIPPED_NOT_NEEDED`.
+Prod scope on 2026-10-19: 17 journals in 11 tenants, 13 posted (32 fact rows).
+QA edge cases verified in rolled-back transactions: multi-org tenant with 2 `IsDefault` GLJ doctypes
+(target matches the ETP-5682 `defaultExpr` for every journal, both sequences advanced); tenant
+without an own GLJ doctype (untouched, listed by `@report`, one row per journal even with several
+fact rows); non-numeric `documentno` ignored by the advance; forward-only guard; other tenants
+unchanged; multi-line posted facts repointed with amounts unchanged.
+
+**Not in scope here:** RTV shipments (`M_InOut`) with another tenant's `MMR` doctype — a separate
+leak in `CreatePurchaseReturnHandler` (code fix ETP-5711), repaired by
+`R50-inout-foreign-return-doctype` (ETP-5801).
+
 ---
 
 ## B — Organization Hierarchy
+
+### A11 — Spanish tax accounts by rule (ETP-5902, 2026-10-27)
+
+**Symptom:** a purchase with withholding posts the retention to 477/472 instead of 4751; a sales
+withholding to 477 instead of 473; intra-community and reverse-charge self-assessed VAT to 477/472
+pairs instead of one account per side.
+
+**Root cause:** `TAX_ACCT_SQL` (onboarding) and `R7-tax-accounts` copy the schema's
+`C_ACCTSCHEMA_DEFAULT.t_due_acct` / `t_credit_acct` (477 / 472) into every `C_TAX_ACCT` row.
+
+**Rules** (active, non-summary system child taxes; first match wins; 51/8/15/15 = 89 taxes):
+purchase withholding → 47510000; sales withholding → 47300000; purchase intra-community and/or
+reverse charge with rate > 0 → 47200000, rate < 0 → 47700000. Both columns get the same account.
+
+**Preventive front:** `OnboardingAccountingWiringService.overrideSpanishTaxAccounts`, right after
+`TAX_ACCT_SQL`; warns when a rule tax is still off target afterwards (chart lacks the account).
+`OnboardingProvisioningChain.CHAIN_REVISION` was bumped so pooled tenants built before are retired;
+`ONBOARDING_PROVISIONED_THROUGH` was deliberately **not** moved (moving it past
+`20261022T150000Z` would make new tenants skip ~45 fixes with no onboarding twin; a new tenant
+simply gets `SKIPPED_NOT_NEEDED` from R53).
+
+**Corrective fix:** `20261027T120000Z__R53-spanish-tax-accounts.sql` — every schema of the tenant;
+a column changes only while it still holds the schema default and is not already on the rule
+account (by account VALUE, not combination id), so hand-chosen accounts are kept and listed in
+`@report`. Postings made before the fix keep their accounts (unpost/repost to change them).
+
+**Lockstep twins:** the Java `SPANISH_TAX_RULES_SQL`, R53, and the Classic trigger
+`ESTAX_TAX_ACCT_TRG` (ETP-5901, BEFORE INSERT on `C_TAX_ACCT`, reaches GO with the
+`localization.spain.extensions` bundle). Change all three together.
+
+**Same ticket, separate gap (U2):** the 2 % intra-community child shipped with rate 10 —
+`Spanish_Fiscal_Taxes_Go.xml` fixed, plus `20261027T120100Z__R53-tax-intracom-2pct-rate.sql`
+(`--client 0`, run by name).
 
 ### B1 — Empty `AD_ORG_TREE` (organization hierarchy)
 
@@ -3041,6 +3128,74 @@ create (ETP-3660). The paths that require them (`CreateDraftInvoiceHandler`,
 rolled-back transaction: `keepDataProd2` (a transfer of `keepDataDemo`) 3 rows, `QA Testing` 6
 rows (3 of them in organization `0`, resolved from the client base currency), re-check 0 rows.
 Not yet run against the full dev tenant universe.
+
+---
+
+## U — Contact Categories
+
+### U1 — Contact categories without customer/vendor type; no "Cliente/Proveedor" category (ETP-5791)
+
+**Change:** `C_BP_Group` gets two type flags, `EM_ETGO_ISCUSTOMER` and `EM_ETGO_ISVENDOR` (YesNo,
+NOT NULL, default `'N'`, created in `com.etendoerp.go`). The column default leaves every existing
+category N/N, and a category flagged N/N cannot be saved afterwards. The story also adds a fourth
+standard category, "Cliente/Proveedor", for contacts that are both customer and vendor.
+
+**Target state** (by name; onboarding ships Name == Value):
+
+| Category | Customer | Vendor | Default (new tenants) | Default (existing tenants) |
+|---|---|---|---|---|
+| Cliente | Y | N | N (flag on) / **Y** (flag off) | **Y** (unchanged) |
+| Proveedor | N | Y | N | N |
+| Acreedor | N | Y | N | N |
+| Cliente/Proveedor | Y | Y | **Y** (flag on) / N (flag off) | N |
+
+**Preventive front:** dataset plus one flag-gated onboarding step.
+`referencedata/sampledata/GOClient/C_BP_GROUP.xml` ships the flags on all four rows and the new
+`Cliente/Proveedor` row (Value = Name = `Cliente/Proveedor`), and keeps `Cliente` as the default, so
+a tenant created with the `contact-category-type` flag off is identical to one created before the
+ticket. With the flag on, `OnboardingDefaultContactCategoryService` (com.etendoerp.go) makes
+`Cliente/Proveedor` the default when the tenant is handed to the user (pool tenants included); see
+com.etendoerp.go `docs/onboarding-flow.md` "Default contact category". Its posting rows need no new
+code: `C_BP_GROUP_ACCT` is not imported, and
+`OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` (+ `patchBpGroupAcctMissingColumns`) creates
+a `C_BP_Group_Acct` row from `C_AcctSchema_Default` for every imported group. `Value` is given
+explicitly, so the `DocumentNo_C_BP_Group` sequence is not involved.
+`ONBOARDING_PROVISIONED_THROUGH` is not bumped: a newborn tenant already matches the target state,
+so the corrective `@check` returns 0 rows for it.
+
+**Corrective fix:** `20261026T120000Z__R55-bp-category-customer-vendor-flags.sql` — per client:
+creates `Cliente/Proveedor` (Y/Y, `ISDEFAULT='N'`) when missing; mirrors its `C_BP_Group_Acct`
+from the tenant's `Cliente` row (customer side and shared columns) and `Proveedor` row (vendor side:
+`V_Liability`, `V_Liability_Services`, `V_Prepayment`, `NotInvoicedReceipts`, `PayDiscount_Rev`),
+falling back to `C_AcctSchema_Default` only when the tenant has neither; sets the flags on the four
+standard categories. `Acreedor` is never a mirror source (its vendor accounts are creditor-specific,
+R9/R35). Contacts (`C_BPartner`) are not touched. The core `c_bp_group_trg()` is disabled around
+the group INSERT so the mirrored INSERT is the only writer of the posting rows.
+
+**DB state (2026-10-19, local dev DB, read-only):** 213 tenants, none has `Cliente/Proveedor`; 211
+have the three standard categories (with identical `Cliente`/`Proveedor` posting rows on every
+schema); 2 legacy Classic demo tenants (`QA Testing`, `F&B International Group`) have none of them.
+96 categories with other names across 86 tenants: 85 `E2E Contact Category <n>` (84 E2E tenants,
+2 contacts each, 1 tenant with 2 empty ones) and 11 in the two demo tenants.
+
+**Custom categories (decided 2026-10-20, option (a)):** R55 leaves every non-standard category
+N/N; a second fix, `20261026T130000Z__R56-bp-category-custom-flags-from-contacts.sql`, dated after
+R55 so the fail-fast chain runs it only once R55 is processed, flags each non-standard category
+still N/N from its contacts: customer = Y if any contact is a customer, vendor = Y if any is a
+vendor, Y/Y when it has no contacts or none of them is either (e.g. employees only). Inactive
+contacts count. Contacts are not touched; a category with any flag already `Y` is never touched.
+This also covers a standard category a tenant renamed (its name no longer matches R55's four).
+No preventive twin: a new tenant has only the four standard, already-flagged categories, and the
+UI requires a flag on any category created later. `@report` lists what each category received.
+Read-only preview on the local DB: 96 categories in 86 tenants — 85 E2E (83 → Y/N, 2 empty → Y/Y)
+and 11 in the two demo tenants (4 → Y/N, 3 → N/Y, 4 → Y/Y).
+
+**Tenant pool (decided 2026-10-20):** pooled tenants built before this deploy get R55 and keep
+`Cliente` as their default — accepted.
+
+**Status:** both fronts written (R55 2026-10-19, R56 2026-10-20). Not run: the flag columns do not
+exist yet in the local DB; the statements were plan-checked (`EXPLAIN`, no execution) with the
+flags shadowed.
 
 ---
 

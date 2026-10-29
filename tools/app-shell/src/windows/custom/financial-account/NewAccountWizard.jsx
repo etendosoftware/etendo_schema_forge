@@ -28,7 +28,12 @@ import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import {
+  translateBackendError,
+  isDuplicateConflict,
+  extractBackendMessageKeys,
+  extractBackendMessageParams,
+} from '@/lib/backendErrors.js';
 import { useBankConnectionActions } from '@/hooks/useBankConnectionActions';
 import { AccountFormStep } from './AccountFormStep.jsx';
 import { searchBanks, institutionsFor } from './bankCatalog.js';
@@ -191,12 +196,18 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
       onCreated?.();
       onClose?.();
     } catch (err) {
-      if (err.status === 409) {
+      if (isDuplicateConflict(err.status, err.code)) {
         setFormError(ui('financeAccountsNewNameExists'));
       } else {
         // ETP-4896 QA follow-up: this used to show the backend's raw English literal. Routed
         // through the shared translator so the create flow matches the edit modal.
-        toast.error(translateBackendError(err.message, ui) || ui('financeAccountsNewCreateError'));
+        // ETP-5473: the country refusals are answered in the request language and carry
+        // `messageKeys`, so pass the identity along — the same call shape as EditAccountModal.
+        toast.error(translateBackendError(err.message, ui, {
+          code: err.code,
+          messageKeys: extractBackendMessageKeys(err.body),
+          messageParams: extractBackendMessageParams(err.body),
+        }) || ui('financeAccountsNewCreateError'));
       }
     } finally {
       setSubmitting(false);

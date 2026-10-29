@@ -131,7 +131,7 @@ describe('ChipSelect keyboard navigation', () => {
     await user.click(input);
     expect(screen.getByTestId('options-test-chip')).toBeInTheDocument();
     await user.keyboard('{ArrowDown}');
-    expect(screen.getByTestId('option-test-chip-a')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-test-chip-a')).toHaveAttribute('data-highlighted', 'true');
     await user.keyboard('{Escape}');
     expect(screen.queryByTestId('options-test-chip')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();

@@ -23,6 +23,8 @@ line 2  [ Subset | Subset | Subset ]
 
 All four combine with AND at query time. Empty / default selections contribute nothing — a totally unfiltered list shows when every surface is at its default state.
 
+> Saved named filter presets (`useWindowFilterPresets`) store filters only. They are not column layouts; column width/order/visibility views are evaluated in [plans/grid-customization-evaluation.md](plans/grid-customization-evaluation.md) (ETP-5834, decision pending).
+
 ## Toolbar layout (ETP-5509)
 
 The idle list bar is a single flex-wrap row (`list-toolbar-main-row`), with no bottom border (ETP-5601).
@@ -104,7 +106,7 @@ their own layout.
 Radio-style segmented control. **Always one active**, mutually exclusive, applied first in the query chain.
 
 - Source: `decisions.json → window.subsetFilters` (propagated by `resolve-curated.js`, emitted by `generate-frontend.js`).
-- Visual: a single rounded group of connected buttons, separated by thin dividers.
+- Visual: the shared `SegmentedTabs` control (`components/contract-ui/SegmentedTabs.jsx`, also used by custom windows' top bars): a 40px muted `role="group"` of 32px tabs (`text-sm leading-6 font-medium`), the active one raised on a card. The group's `aria-label` is translated (`ui('filters')`).
 - Placement: the start of the toolbar row, before the quick filters; it moves to a line of its
   own only when the toolbar does not fit — see [Toolbar layout](#toolbar-layout-etp-5509).
 - Behavior: clicking a different entry switches selection. Clicking the currently active entry does nothing.
@@ -128,14 +130,37 @@ Automatic filters rendered by `ListFilterBar` based on the *types* of the column
 
 | Column type | Control | Options |
 |-------------|---------|---------|
-| `status` | Status dropdown | `All` + every status code declared in `enumLabels` (or the global `statuses` dictionary). Single-select. |
-| `date` (first date column) | Date range dropdown | `Any time`, `Today`, `Last 7 days`, `Last 30 days`, `Last 12 months` (default), `This year`. |
+| `status` | Status dropdown | `All` ("Todos los estados") + the status codes that have at least one record in the **current view** (see [Status dropdown options](#status-dropdown-options-etp-5561)). Single-select. |
+| `date` (first date column) | Date range dropdown | `Any time`, `Today`, `Last 7 days`, `Last 30 days`, `Last 12 months`, `All time`. No preset is applied by default (a window may opt in, see below). |
 
 - Source: auto-discovered from the table's columns array (`columns.find(c => c.type === 'status' | 'date')`).
-- Behavior: dropdown menus with a check-mark next to the active option.
-- Default: the first `date` column applies `Last 12 months` on first render; the status dropdown starts at `All`.
+- Behavior: the status dropdown is a searchable listbox popover (details below); the date dropdown shows its presets.
+- Default: no date filter on first render and the status dropdown starts at `All`. A window opts into a starting date range with `window.listViewOptions.defaultDatePreset` (e.g. `payment-in`/`payment-out` open on `Last 30 days`; ETP-5778). That default is the window's "declared default" in the persistence rules below: a saved snapshot wins over it, an explicit `All time` is saved and honoured, and a URL deep-link skips it.
 - All selections write into the shared `columnFilters` state, so they compose with AND against the backend.
 - **Option order is fixed, not alphabetical** (ETP-4696, extended by ETP-4913): the status options are sorted with `compareStatusCodes` / `STATUS_ORDER` from `lib/statusBadge.js`, so the list follows the document flow (Temporary → Draft → In process → Awaiting → Completed → Re-opened → Closed → Voided → Unknown) and never changes between openings. The advanced filter's value dropdown for the same column sorts with the identical comparator — see [`decisions-reference.md`](decisions-reference.md) §"Option order in the two status dropdowns" for why the sort is gated to `type: 'status'` columns only.
+
+### Status dropdown options (ETP-5561)
+
+The status popover is a `DistinctValuesList` (`contract-ui/DistinctValuesList.jsx`) fed by `useDistinctValues`, which calls the backend `?_distinct=<statusField>` endpoint while the menu is open.
+
+**Options follow the current view.** `ListView` passes `hook.buildDistinctQuery` (from `useEntity`) to `ListFilterBar`; the bar calls `buildDistinctQuery([statusCol.key])` and hands the result to `useDistinctValues` as `extraParams`. The distinct values are therefore requested with the same criteria as the list: subset tab (e.g. Factura / Factura rectificativa), date range, advanced filter and the other column filters. Only the status filter's own column filter is excluded, otherwise picking one status would hide all the others. Only statuses with at least one record in that view are offered. Sort and paging are never part of that query, and the hook's own `_distinct`, `_startRow`, `_endRow` and `_distinctSearch` params always win over `extraParams`.
+
+- An advanced-filter condition **on the status field itself** stays in the criteria (it is a separate layer from the column filter). An advanced filter "status = Completed" narrows the dropdown to that status.
+- Requires a NEO backend that honours `criteria` on `_distinct` (`docs/neo-headless.md` §5.3.4 in `com.etendoerp.go`). With an older backend the criteria is ignored and the options are unfiltered, with no error.
+- **The active status always stays listed**, even when the current view has no record with it, so the user can see it and clear it. This is intentional.
+- Blank or whitespace-only codes, and codes with no visible label, are never listed. With no records the menu shows only "Todos los estados", with no blank rows.
+- The order is the fixed document-flow order described below, not the backend's.
+
+**Rendering.** Status options render as the same `StatusTag` (same tone via `getStatusTone`) as the table's status column; "Todos los estados" is plain text. This is opt-in per caller through the `renderOption(code, label)` prop of `DistinctValuesList`; only the status popover of `ListFilterBar` passes it, so every other user of `DistinctValuesList` / `components/ui/distinct-values-filter` keeps plain-text options.
+
+**Visual rules.**
+- The menu is 240px wide (`w-60`), with a borderless search row (magnifier on the left) and a separator below it.
+- The selected row has a grey tint across the full row and a check on the right. Hover uses the same tint, so the selection is told apart by the check alone.
+- While a toolbar dropdown is open, its trigger button shows a dark border (`data-[state=open]` in `TOOLBAR_SELECT_CLASS`). It applies to the status, type and date buttons.
+
+**Search.** Filtering is live (server-side `_distinctSearch`, merged with the in-memory codes). With no match the menu shows "No results" (i18n key `noResults`) and the "Todos los estados" row is hidden. The search text is cleared when the menu closes.
+
+**Keyboard and accessibility.** The search input is an ARIA `combobox` that controls a `listbox` of `role="option"` rows (`aria-selected`, `aria-activedescendant`). ArrowUp / ArrowDown move the active option (no wrap), Enter selects it, and Escape closes the menu and returns focus to the trigger. The trigger carries `aria-haspopup="listbox"`.
 
 ## 4. Advanced filter popover (funnel icon)
 
@@ -421,7 +446,7 @@ All four toolbar surfaces use the same size tokens (`h-10`, `px-3`) so they alig
 
 The list toolbar follows Figma (ETP-5601): 56px tall — 8px padding on every side (`px-2 py-2`) around 40px controls — with no bottom border. Every text control (status/type/date filters, "Filtros", quick filters, "New …") uses one type style: `text-sm leading-6 font-medium` in `text-[#121217]` (white on the `bg-[#121217]` primary button). An active filter is told apart by its border, not by a different text color. Print, export and import are icon-only. Every toolbar icon is 20px (`h-5 w-5`) in `#828FA3` (`text-[#828FA3]`), except the primary button's "+", which is white at 90%. Figma draws them in a 24px frame, but its vectors fill only ~70% of it (~16.5px), while lucide glyphs fill ~83% of their box: a 20px lucide icon matches the Figma glyph, a 24px one renders visibly larger. Icons keep lucide's default stroke (2) and their original glyphs (the date filter uses `CalendarDays`) — only size and color follow Figma. The primary button ("New …", "Nueva cuenta") is spaced 8px left (`pl-2`), 8px between "+" and label (`gap-2`), 12px right (`pr-3`). Figma specifies 12px left and 16px right, but the "+" glyph carries ~3px of empty space on each side while the label carries almost none, so those numbers read unbalanced; these values make the three visible gaps (edge→"+", "+"→label, label→edge) optically equal at ~11–12px. Inside a core `Button` the size must be set with `[&_svg]:size-5`, because the Button's base forces `[&_svg]:size-4` on its children.
 
-The **record (form view) toolbar** — `DetailView`'s action bar (Cancel + status chips on the left; print / mail / link / clone / kebab / save on the right) — follows the same Figma standard on every window (ETP-5601). It is 56px tall: 8px padding on every side (`p-2`) around 40px controls, with the 1px `#E8EAEF` bottom rule drawn as an inset shadow (`shadow-[inset_0_-1px_0_var(--status-neutral-border)]`) instead of a `border-b`. The inset shadow paints inside the box, so the rule does not add a 57th pixel; a real border would. The classes come from `getLinesToolbarClassName()` in `detailViewHelpers.jsx`. Every icon button is 40x40 `rounded-lg` (`getSqBtnSize()` -> `h-10 w-10`); save / process / extra-action buttons are 40px (`getSaveBtnCls()` -> `h-10 gap-2 leading-6 [&_svg]:size-5`); icons are 20px in `#828FA3`; "Cancel" is `text-sm leading-6 font-medium text-[#121217]`. The shared buttons (`CopyRecordLinkButton`, `SendDocumentButton`, `CloneButton` mounted by `windows/custom/shared/DocumentSecondaryActions.jsx`, and `DetailMoreActionsMenu`) use the same sizes. The toolbar no longer varies per window: the `DetailView` props `toolbarPaddingX`, `toolbarBorderBottom` and `toolbarButtonSize` were removed, so the matching `decisions.json → window` keys are now inert (windows that still set them get the standard toolbar; the keys are pending cleanup). Status chips, per-window slot components (`topbarRight` / `topbarSecondary` / `topbarExtra`) and process-button color themes are not part of this standard.
+The **record (form view) toolbar** — `DetailView`'s action bar (Cancel + status chips on the left; print / mail / link / clone / kebab / save on the right) — follows the same Figma standard on every window (ETP-5601). It is 56px tall: 8px padding on every side (`p-2`) around 40px controls, with the 1px `#E8EAEF` bottom rule drawn as an inset shadow (`shadow-[inset_0_-1px_0_var(--status-neutral-border)]`) instead of a `border-b`. The inset shadow paints inside the box, so the rule does not add a 57th pixel; a real border would. The classes come from `getLinesToolbarClassName()` in `toolbarClasses.js` (a leaf module re-exported by `detailViewHelpers.jsx`, so custom windows can reuse it without importing the form view — General Ledger Configuration's top bar does, ETP-5736). Every icon button is 40x40 `rounded-lg` (`getSqBtnSize()` -> `h-10 w-10`); save / process / extra-action buttons are 40px (`getSaveBtnCls()` -> `h-10 gap-2 leading-6 [&_svg]:size-5`); icons are 20px in `#828FA3`; "Cancel" is `text-sm leading-6 font-medium text-[#121217]`. The shared buttons (`CopyRecordLinkButton`, `SendDocumentButton`, `CloneButton` mounted by `windows/custom/shared/DocumentSecondaryActions.jsx`, and `DetailMoreActionsMenu`) use the same sizes. The toolbar no longer varies per window: the `DetailView` props `toolbarPaddingX`, `toolbarBorderBottom` and `toolbarButtonSize` were removed, so the matching `decisions.json → window` keys are now inert (windows that still set them get the standard toolbar; the keys are pending cleanup). Status chips, per-window slot components (`topbarRight` / `topbarSecondary` / `topbarExtra`) and process-button color themes are not part of this standard.
 
 ## Related
 
@@ -430,5 +455,7 @@ The **record (form view) toolbar** — `DetailView`'s action bar (Cancel + statu
 - Source files:
   - `tools/app-shell/src/components/contract-ui/ListView.jsx` — filter state + toolbar layout.
   - `tools/app-shell/src/components/contract-ui/ListFilterBar.jsx` — document-type filters + advanced filter popover.
+  - `tools/app-shell/src/components/contract-ui/DistinctValuesList.jsx` — searchable option list of the status popover.
+  - `tools/app-shell/src/hooks/useDistinctValues.js` / `useEntity.js` (`buildDistinctQuery`) — view-scoped distinct values.
   - `tools/app-shell/src/lib/listViewSession.js` — session snapshot of the grid state (ETP-4994).
   - `tools/app-shell/src/lib/ListStateRouteGuard.jsx` — clears a window's snapshot when the user leaves it.

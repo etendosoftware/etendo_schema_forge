@@ -26,7 +26,12 @@ const windowLoaders = {
   'product-category': () => import('@/windows/custom/product-category/index.jsx'),
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
   'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
-  'business-partner-category': () => import('@generated/business-partner-category/generated/web/business-partner-category/index.jsx'),
+  // ETP-5791 — wraps the generated page: toggle point of the `contact-category-type` flag.
+  'business-partner-category': () => import('@/windows/custom/business-partner-category/index.jsx'),
+  // ETP-5806: AD Window 121 "Location" is inactive in the menu (no nav entry), but its NEO
+  // Headless API stays live via MCP — registered so F3 (pipeline validator) passes and so a
+  // direct navigation does not hit an unresolved lazy import.
+  'bp-location': () => import('@generated/bp-location/generated/web/bp-location/index.jsx'),
   'user': () => import('@/windows/custom/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
@@ -59,9 +64,7 @@ const windowLoaders = {
   'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
-  'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
-  'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
-  'fiscal-calendar': () => import('@/windows/custom/fiscal-calendar-redirect/index.jsx'),
+  'manual-journals': () => import('@generated/manual-journals/generated/web/manual-journals/index.jsx'),
   'end-year-close': () => import('@generated/end-year-close/generated/web/end-year-close/index.jsx'),
 };
 
@@ -286,6 +289,8 @@ export const apiOnlyWindows = new Set([
   'monitor-verifactu',
   'tbai-facturas-enviadas',
   'conversion-rate-downloader-log',
+  // Reason 1: calendar's PeriodsExpandablePanel calls its periodControl.openClose action.
+  'open-close-period-control',
 ]);
 
 /**
@@ -331,6 +336,33 @@ const customLoaders = {
   'amortization': () => import('./custom/amortization/index.jsx'),
 };
 
+// Audited custom entry points forward ListView grid props to the standard DataTable.
+// Custom column renderers are supported; unknown entry points fail closed.
+const standardListViewCustomEntryPoints = new Set([
+  'amortization', 'assets', 'goods-movements', 'goods-receipt',
+  'internal-consumption', 'physical-inventory', 'price-list', 'purchase-order',
+  'return-to-vendor-shipment', 'sales-order', 'sales-quotation',
+  'sales-invoice', 'purchase-invoice', 'payment-in', 'payment-out', 'user', 'warehouse',
+  'contacts', 'product', 'product-category', 'goods-shipment', 'return-material-receipt',
+  'financial-account',
+]);
+
+// The original loader map also contains custom paths; distinguish them explicitly.
+const customWindowLoaderEntryPoints = new Set([
+  'contacts', 'product', 'product-category', 'goods-shipment', 'return-material-receipt', 'user',
+]);
+
+// Exact audited contract slots: a replacement name must be inspected before admission.
+const standardListViewHeaderTables = {
+  contacts: 'ContactsTable',
+  'financial-account': 'AccountsHeaderTable',
+  'sales-invoice': 'InvoiceHeaderTable',
+  'purchase-invoice': 'InvoiceHeaderTable',
+  'payment-in': 'PaymentHeaderTable',
+  'payment-out': 'PaymentHeaderTable',
+  user: 'UserHeaderTable',
+};
+
 /**
  * Build window map with loaders for all windows in menu.json plus every
  * SDK-app menu entry from the catalog (so installing an app from the
@@ -345,14 +377,39 @@ export function buildWindowMap() {
       name: item.name,
       label: item.label,
       contract: null,
+      // Generated pages and audited custom wrappers are candidates. WindowLoader
+      // additionally requires the exact expected layout and header-table contract.
+      standardListViewSource: customLoaders[item.name] || customWindowLoaderEntryPoints.has(item.name)
+        ? standardListViewCustomEntryPoints.has(item.name)
+        : Boolean(windowLoaders[item.name]),
+      standardListViewLayout: item.name === 'product' ? 'gallery' : 'default',
+      standardListViewHeaderTable: standardListViewHeaderTables[item.name] ?? null,
       loader: customLoaders[item.name]
         || windowLoaders[item.name]
         || (() => import('./PlaceholderWindow.jsx')),
     };
   };
+  // ETP-5795 — a `hidden: true` item is not reachable by URL: the sidebar strips it, and so
+  // does the router unless the item says otherwise. `redirect` keeps a retired window's old
+  // links working; `routeOnly` keeps a window that is only reached through an in-app link
+  // (overview page buttons, row actions) registered while it stays out of the sidebar.
+  const registerRedirect = (item) => {
+    map[item.name] = {
+      name: item.name,
+      label: item.label,
+      contract: null,
+      loader: () => import('./RedirectWindow.jsx').then(
+        (mod) => ({ default: mod.makeRedirectWindow(item.redirect, item.redirectKeepPath) }),
+      ),
+    };
+  };
 
   for (const group of menuConfig.menu) {
-    for (const item of group.items) register(item);
+    for (const item of group.items) {
+      if (!(group.hidden || item.hidden)) register(item);
+      else if (item.redirect) registerRedirect(item);
+      else if (item.routeOnly) register(item);
+    }
   }
   for (const app of APP_CATALOG) {
     for (const entry of app.menuEntries) {

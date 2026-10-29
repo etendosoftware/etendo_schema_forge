@@ -62,7 +62,7 @@ Rules are grouped by the artifact kind they apply to (see [Artifact Classificati
 |------|----------|-----------------|------------|
 | F1 | BLOCK | `decisions.json` was modified but `contract.json` was not regenerated — `contract.sourceHashes.decisions` no longer matches. | Re-run `node cli/src/pipeline.js --menu-name "<window>"` to regenerate the contract. |
 | F2 | BLOCK | `contract.json` was modified but `generated/` was not regenerated — `generated/.manifest.json` checksum no longer matches. | Re-run the pipeline to regenerate frontend components. |
-| F3 | BLOCK | `contract.json` exists for a window that has no entry in `tools/app-shell/src/windows/registry.js`. | Add the window to `windowLoaders` or `customLoaders` in `registry.js`. |
+| F3 | BLOCK | `contract.json` exists for a window that has no entry in `tools/app-shell/src/windows/registry.js`. A retired window whose `menu.json` item declares `redirect` counts as registered: `registry.js` routes it from `menu.json` (ETP-5795, accepted by F3 since ETP-5592). | Add the window to `windowLoaders` or `customLoaders` in `registry.js`, or, for a retired window, give its `menu.json` item a `redirect`. |
 | F4 | WARN | `generated/` exists but `contract.json` is absent — orphaned output. | Either run the full pipeline to recreate `contract.json`, or remove `generated/` if the window was discarded. |
 | F5 | BLOCK | `decisions.json` schema version is stale — auto-migration would change it. | Run `node cli/src/pipeline.js --menu-name "<window>"` — the pipeline auto-migrates on startup. |
 | F6 | BLOCK | `contract.version` is lower than the baseline version tracked in the previous commit — a contract downgrade was committed. | Revert the contract change or re-run the pipeline so the version increments forward. |
@@ -81,6 +81,7 @@ Rules are grouped by the artifact kind they apply to (see [Artifact Classificati
 | F21 | BLOCK | The declared read-only intent in `decisions.json` (`window.readOnly`, `entities.<key>.readOnly`, `entities.<key>.methods`, and — since ETP-4745 — `window.hideDelete` / `entities.<key>.hideDelete`) does not match the HTTP methods the contract would push to `ETGO_SF_ENTITY` — i.e. `apiPrediction.crud.<entity>.methods` / `apiPrediction.window.readOnly` / `apiPrediction.crud.<entity>.delete` is stale. Also fires when an emitted `crud.<entity>.methods` array omits `GET`/`GETBYID` (an entity with no read access is never valid), or when a restricting `entities.<key>` declaration (including a `hideDelete`-only one) matches no contract entity (mistyped key → silent no-op). | Regenerate the contract (`make regen ONLY=<window>`). Both write paths — the live DB push and the offline XML delta — read the method flags off the contract, so a stale contract silently re-opens a read-only window (or re-enables DELETE on a `hideDelete` entity) for writes on the next push (ETP-4254 / ETP-4745). Never hand-edit `crud.methods`. See [`agentic-validation/agentic-write-exposure-criteria.md`](agentic-validation/agentic-write-exposure-criteria.md) for when an entity qualifies for write exposure at all. |
 | F22 | BLOCK | `decisions.json` sets `window.customTabsAfterBottom: true` while a `customPanelTabs[]`, `extraTabs[]`, or `attachments` entry also declares `tabOrder`. Those tabs render in a separate strip below `bottomSection`, entirely outside the sorted tab list `buildInitialTabs()` builds — the `tabOrder` has no effect and is a silent no-op. | Remove `customTabsAfterBottom`, or remove `tabOrder` from the listed custom tab(s). |
 | F23 | BLOCK / WARN | A pushed `ETGO_SF_FIELD` row whose `VISIBILITY` does not project to its own `ISINCLUDED`/`ISREADONLY` pair under `mapVisibility()`. The same curated decision is stored twice on purpose — the runtime enforces the two booleans, `etendo_schema` reports the word, and the booleans cannot recover it (`readOnly` and `system` both collapse to `Y`/`Y`) — so the two copies can disagree. Two classes, scored differently: **BLOCK** when `VISIBILITY` holds a curated value projecting to a *different* pair (only a writer bug or a hand-edit produces this, and it means the runtime and `etendo_schema` now describe the same field differently); **WARN** when `VISIBILITY` is absent while `ISINCLUDED='Y'` (harmless to the runtime, but agents cannot tell `readOnly` from `system`). An absent `VISIBILITY` on a closed row is **not** reported — `N`/`N` *is* `mapVisibility(null)`, which is what makes the ETP-4793 `exclude: true` rows coherent. `ISACTIVE='N'` rows are ignored. Runs on `window` **and** `aggregate` artifacts (an aggregate pushes its own spec; 340 of the 409 rows measured at ETP-4793 were inside two aggregates). | Re-push (`make regen ONLY=<window> PUSH_TO_NEO=1`) then `./gradlew export.database` in Etendo root — `populateSpec` writes `VISIBILITY` on the fields it revisits. If a BLOCK survives a clean push, the writer is at fault: fix `cli/src/neo-writer.js → populateSpec`, never the XML. See [`mcp-evaluation/imps/IMP-26.md`](mcp-evaluation/imps/IMP-26.md) §5 for why the asymmetry exists. |
+| F24 | BLOCK | `contract.json → apiPrediction.specName` differs from the artifact directory name. The directory is the registered NEO spec (`push-to-neo`, `etgo_sf_spec`), so every `api.crud.<entity>.detailUrl` built from the contract (child/inline saves) 404s with `Spec not found` while reads keep working. | Regenerate with `make regen ONLY=<window>`; the generator now receives the directory name as the spec name. |
 
 #### F23 and the runtime-module checkout
 
@@ -203,6 +204,9 @@ You ran the pipeline for a new window but did not add the entry to the frontend 
 'my-new-window': () => import('./my-new-window/index.jsx'),
 ```
 
+If the window is retired (its route now sends users elsewhere), don't add a loader: set
+`"hidden": true` and `"redirect": "/<new-route>"` on its `menu.json` item instead.
+
 If the window uses a custom loader, add it to `customLoaders` instead. See `docs/ui-customization.md` for the layout-type registry pattern.
 
 ---
@@ -225,6 +229,6 @@ These 22 pre-existing violations (found during P1 audit on 2026-04-16) are `prin
 
 ---
 
-**Bypassing the validator (last resort)**
+**No bypass**
 
-The pre-commit hook (installed in P4) can be bypassed with `git commit --no-verify`. The CI check (installed in P5/P6) will still catch violations on the PR. Document the reason in the PR description if you bypass locally.
+`git commit --no-verify` skips the pre-commit hook, but `.githooks/commit-msg` then leaves the commit without its `Hooks-Verified` trailer, and the pre-push and CI's `verify` check refuse it. Fix the violation instead.

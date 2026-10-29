@@ -133,6 +133,7 @@ import { useEffect } from 'react';
 import { CommandPalette } from '../CommandPalette.jsx';
 import { splitSearchHighlight } from '@/lib/globalSearchMenu.js';
 import { GlobalSearchProvider, useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
 function openPalette() {
   fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
@@ -507,6 +508,38 @@ describe('CommandPalette', () => {
     });
   });
 
+  describe('shows the empty state when the backend only returns noise', () => {
+    it('renders "noResultsFound" and no record groups for a flat, text-less result set', async () => {
+      vectorSearchOverride.current = {
+        matches: [0.80, 0.80, 0.79, 0.79, 0.79, 0.78, 0.78, 0.78, 0.78, 0.78].map((score, i) => ({
+          target: 'sales-invoice', id: `INV-${i}`, score, fields: { documentNo: `F-${i}` },
+        })),
+        isLoading: false,
+      };
+      renderWithQuery('zzzz');
+
+      expect(await screen.findByText('noResultsFound')).toBeInTheDocument();
+      expect(screen.queryByTestId('vector-search-exact')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('vector-search-relevant')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('vector-search-related')).not.toBeInTheDocument();
+    });
+
+    it('does not open a discarded noise row on Enter', async () => {
+      vectorSearchOverride.current = {
+        matches: [0.80, 0.80, 0.79, 0.79, 0.78].map((score, i) => ({
+          target: 'sales-invoice', id: `INV-${i}`, score, fields: { documentNo: `F-${i}` },
+        })),
+        isLoading: false,
+      };
+      renderWithQuery('zzzz');
+      await screen.findByText('noResultsFound');
+
+      fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+  });
+
   // ETP-5602: under "related" results the window tag sat inline after short labels, while
   // in the other groups it looked right-aligned only because long labels filled the row. The
   // similarity score ("74%") was shown on every row and means nothing to users.
@@ -672,5 +705,50 @@ describe('CommandPalette', () => {
     fireEvent.click(screen.getByText('open'));
     fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
     expect(screen.getByTestId('bridge-state')).toHaveTextContent('true');
+  });
+});
+
+// ETP-5351 — the palette reads menu.json on its own, so the support-mode menu rule has to hold here
+// as well as in the sidebar: an admin with the flag on still sees no API keys in a support session,
+// neither in the full list nor among the windows that match a query.
+describe('CommandPalette in a support session', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vectorSearchOverride.current = null;
+    mockUseFeatureFlag.mockReturnValue(true);
+    mockUseAuth.mockReturnValue({ capabilities: { isAdminOrClientAdmin: true } });
+    applySupportSessionFromServer(
+      { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+      { storage: localStorage },
+    );
+  });
+
+  afterEach(() => {
+    resetSupportSessionForTests();
+    localStorage.clear();
+  });
+
+  it('hides public API keys from the menu list and keeps the other windows', () => {
+    render(<CommandPalette />);
+    openPalette();
+
+    expect(screen.queryByText('translated:Public API Keys')).not.toBeInTheDocument();
+    expect(screen.getByText('translated:Sales Order')).toBeInTheDocument();
+  });
+
+  // "Sales" matches the whole section, which holds API keys next to two windows that stay.
+  it('does not offer public API keys among the windows matching a query', async () => {
+    renderWithQuery('Sales');
+
+    await waitFor(() => expect(renderedWindowNames()).toEqual(['sales-order', 'acct-process-monitor']));
+  });
+
+  it('offers public API keys again once /me reports no support session', () => {
+    applySupportSessionFromServer(null, { storage: localStorage });
+
+    render(<CommandPalette />);
+    openPalette();
+
+    expect(screen.getByText('translated:Public API Keys')).toBeInTheDocument();
   });
 });

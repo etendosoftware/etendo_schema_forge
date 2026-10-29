@@ -83,13 +83,15 @@ The provider names are the gateway's adapter names: `datadog`, `aws-rum`, `mixpa
 
 ### Verifying egress in a browser
 
-`e2e/tests/flows/telemetry-egress.mocked.spec.js` aborts and records every request to the
+`e2e/tests/flows/platform/telemetry-egress.mocked.spec.js` aborts and records every request to the
 providers' hosts (Datadog intake, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
 are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
 one and passes `VITE_*` through to it. The fake values below never reach a real account.
 
 Scenario 1 is the default bundle, so the regular mocked suite (and the pre-push) already runs
-it. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
+it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_ENABLED`,
+`VITE_DATADOG_ENABLED` and `VITE_RUM_ENABLED` forced to `false`, so a developer's gitignored
+`tools/app-shell/.env.local` no longer leaks real providers into the default bundle. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
 
 ```bash
 # 2. Positive control, providers configured and NOT killed: requests are attempted.
@@ -148,6 +150,33 @@ Run 2 before trusting 3: if the control sees no request, the interceptor is what
   `gateway.page` and the adapters through a route-aware sanitize. Anchor:
   `KNOWN_COLLAPSED` in `tools/app-shell/src/lib/__tests__/observability-routes.test.js`, which
   turns red when it is fixed.
+
+### Support sessions silence product analytics (ETP-5351)
+
+An Etendo operator can enter a tenant as "Soporte Etendo" from Classic (see
+`lib/supportSession.js`). Nothing that session does may count as the customer's activity, so
+while it lasts product events are suppressed, and monitoring keeps running. The cut is a single
+switch in the facade, `setAnalyticsSuppressed(true)` (`observability/core.js`), on top of the gateway:
+
+- A pure product-analytics adapter is tagged `analytics: true` (today only Mixpanel, in
+  `providers/mixpanel.js`). The facade kills it by name on the gateway kill switch: its SDK is
+  never started and it receives no event, `page`, `identify`, `group`, `reset` or flag exposure.
+  Lifting the suppression starts it. The flag-driven `enable(name)` cannot revive it meanwhile.
+- `track` is dropped for every provider, so no shared business event (`session_started`,
+  `document_created`, `transaction_posted`, KPIs, ...) becomes a Datadog custom action either.
+  Errors, views, resources, long tasks, session replay, feature-flag evaluations and
+  `identify`/`group` (error attribution) keep flowing. AWS RUM has no `track` and is not affected.
+- Monitoring adapters are marked through the gateway context: `support_session: true` (allowlisted
+  boolean and a gateway/adapter `trustedKeys` entry, because its name contains `session`). Datadog
+  sets it as its RUM global context; the facade re-applies it after `reset`, which replaces the
+  whole global context. Automatic click actions cannot be cut without turning
+  `trackUserInteractions` off for every user, so they still arrive: dashboards over customer usage
+  must exclude `@context.support_session:true`.
+- The switch is driven by the support-session store, wired once in `lib/observability.js`.
+  `main.jsx` calls `bootSupportSession()` first, so a support load never starts the Mixpanel SDK
+  and is marked in Datadog from its first view (the store starts in support mode on the handoff
+  route and whenever the `sf_support_session` marker is still live).
+- NPS/CSAT surveys are off in the same session (`useSurveyEngine`), see `docs/surveys.md`.
 
 ## Events
 

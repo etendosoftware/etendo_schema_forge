@@ -7,7 +7,7 @@ import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { uploadAndMarkMainAttachment } from './listAttachments';
-import { buildOcrSchema } from './buildOcrSchema';
+import { useOcrConfig } from './useOcrConfig';
 import {
   useOcrExtraction,
   OCR_NO_DATA_ERROR,
@@ -17,6 +17,9 @@ import {
 } from './useOcrExtraction';
 import { hasExtractedData } from './hasExtractedData';
 import { useOcrFlow } from './useOcrFlow';
+import { useAttachmentPolicy } from '@/components/attachments/useAttachmentPolicy';
+import { OCR_ACCEPT_ATTR, isOcrFileAllowed, sniffOcrMimeType, nameForOcrMime } from './ocrFileTypes';
+import { toast } from 'sonner';
 
 /* eslint-disable react/prop-types */
 
@@ -52,10 +55,15 @@ export default function OcrInlineUploader({
   const docType = getOcrDocType(docTypeId);
   const inputRef = useRef(null);
   // Snapshot of the dropped file at the moment the user triggered extraction.
-  // Used post-commit to attach the source PDF to the just-created record —
+  // Used post-commit to attach the source file to the just-created record —
   // we cannot rely on `file` state because the component unmounts on nav.
   const fileAtExtractRef = useRef(null);
+  // Sniffed MIME of that same snapshot, so a later pick cannot change the upload name.
+  const mimeAtExtractRef = useRef(null);
+  const pickSeqRef = useRef(0);
+  const { maxSizeMB } = useAttachmentPolicy({ apiBaseUrl, token });
   const [file, setFile] = useState(null);
+  const [fileMime, setFileMime] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [pickError, setPickError] = useState(null);
@@ -72,7 +80,7 @@ export default function OcrInlineUploader({
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  const { result, loading: applying, pendingModal } = useOcrFlow({
+  const { result, loading: applying, pendingModal, clearResult } = useOcrFlow({
     docTypeId,
     token,
     apiBaseUrl,
@@ -80,7 +88,7 @@ export default function OcrInlineUploader({
   });
 
   // After a successful batch commit:
-  //   1. upload the source PDF to the new record and mark it as its "main"
+  //   1. upload the source file to the new record and mark it as its "main"
   //      document (ETP-4315) in one NEO request — safe without a heuristic
   //      because the record just came into existence, so it has no other
   //      attachment to compete with
@@ -94,45 +102,71 @@ export default function OcrInlineUploader({
     if (!result?.committed || !result?.recordId || !docType?.routePrefix) return;
     const newId = result.recordId;
     const sourceFile = fileAtExtractRef.current;
+    const sourceMime = mimeAtExtractRef.current;
     (async () => {
       if (sourceFile && docType.tableName) {
         const created = await uploadAndMarkMainAttachment({
           token, tableName: docType.tableName, recordId: newId, file: sourceFile, apiBaseUrl,
+          fileName: nameForOcrMime(sourceFile.name, sourceMime),
         });
         if (!created) {
-          console.warn('[OCR] Attaching the scanned document failed (non-fatal)');
+          toast.error(ui('ocrAttachFailed'));
         }
       }
       navigate(`${docType.routePrefix}${newId}`, { replace: true });
     })();
+  // `ui` is intentionally not a dependency: its identity may change per render and a re-run would upload twice.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result?.committed, result?.recordId, docType, navigate, token, apiBaseUrl]);
+  // What the extraction asks the model lives on the server, once, shared with the MCP's
+  // document-reading tools (ETP-5715): the application keeps no copy of it.
+  const ocrConfig = useOcrConfig(docType ? docTypeId : null, isNew);
   const { extract, status, error, reset } = useOcrExtraction({
     token,
-    toolName: docType?.toolName,
-    question: docType?.question,
-    structuredOutput: docType?.structuredOutput,
-    structuredOutputSchema: docType ? buildOcrSchema(docType) : null,
-    // An all-null payload (blank/corrupt PDF) must not open the review modal.
+    toolName: ocrConfig.config?.toolName,
+    question: ocrConfig.config?.question,
+    structuredOutputSchema: ocrConfig.config?.schema ?? null,
+    // An all-null payload (blank/corrupt document) must not open the review modal.
     hasData: (payload) => hasExtractedData(docType, payload),
   });
 
   if (!isNew || !docType) return null;
 
+  const configReady = ocrConfig.status === 'ready';
   const isBusy = applying || status === 'uploading' || status === 'extracting';
 
-  const loadFile = (picked) => {
+  const rejectPick = (message) => {
+    setFile(null);
+    setFileMime(null);
+    setPickError(message);
+    reset();
+    clearResult();
+  };
+
+  const loadFile = async (picked) => {
     if (!picked) return;
-    const isPdf = picked.type === 'application/pdf'
-      || /\.pdf$/i.test(picked.name || '');
-    if (!isPdf) {
-      setFile(null);
-      setPickError(ui('ocrInlinePdfOnly'));
-      reset();
+    const pickId = ++pickSeqRef.current;
+    if (picked.size > maxSizeMB * 1024 * 1024) {
+      rejectPick(ui('attachmentsFileTooLarge', { max: maxSizeMB }));
+      return;
+    }
+    if (!isOcrFileAllowed(picked)) {
+      rejectPick(ui('ocrInlineUnsupportedType'));
+      return;
+    }
+    // The declared type comes from the extension; the real one decides the viewer.
+    const realMime = await sniffOcrMimeType(picked);
+    // Any newer pick (even a rejected one) supersedes a pending sniff.
+    if (pickId !== pickSeqRef.current) return;
+    if (!realMime) {
+      rejectPick(ui('ocrInlineUnsupportedType'));
       return;
     }
     setPickError(null);
+    setFileMime(realMime);
     setFile(picked);
     reset();
+    clearResult();
   };
 
   const handleDrop = (event) => {
@@ -144,9 +178,12 @@ export default function OcrInlineUploader({
   const handleExtract = async () => {
     if (!file || isBusy) return;
     // Snapshot the file before kicking off extraction. The post-commit effect
-    // reads this ref to attach the PDF to the new record; it cannot use the
+    // reads this ref to attach the file to the new record; it cannot use the
     // `file` state directly because the component unmounts on navigation.
     fileAtExtractRef.current = file;
+    mimeAtExtractRef.current = fileMime;
+    // A blocking message from the previous run must not stay on screen during a new extraction.
+    clearResult();
     try {
       const payload = await extract(file);
       window.dispatchEvent(new CustomEvent(docType.eventName, { detail: payload }));
@@ -156,8 +193,11 @@ export default function OcrInlineUploader({
   };
 
   const clearFile = () => {
+    pickSeqRef.current += 1;
     setFile(null);
+    setFileMime(null);
     reset();
+    clearResult();
   };
 
   let buttonLabel;
@@ -203,7 +243,7 @@ export default function OcrInlineUploader({
                 )}
                 data-testid="Suspense__5fab8d">
                 <LazyUploadedFileViewer
-                  file={{ objectUrl: previewUrl, fileName: file.name, mimeType: 'application/pdf' }}
+                  file={{ objectUrl: previewUrl, fileName: file.name, mimeType: fileMime }}
                   onReplace={openPicker}
                   onDelete={clearFile}
                   actionsDisabled={isBusy}
@@ -214,7 +254,7 @@ export default function OcrInlineUploader({
           <button
             type="button"
             onClick={handleExtract}
-            disabled={isBusy}
+            disabled={isBusy || !configReady}
             className="w-full shrink-0 rounded-md border border-foreground px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-foreground hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             {buttonLabel}
@@ -274,10 +314,31 @@ export default function OcrInlineUploader({
           )}
         </div>
       )}
+      {/* ETP-5654 — the blocking receiver-tax-id mismatch, inline like the extraction error. */}
+      {result?.blocked && !applying && (
+        <div className="flex items-start gap-2 text-xs text-destructive" data-testid="ocr-blocked-message">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <span>{result.blocked}</span>
+        </div>
+      )}
       {pickError && (
-        <div className="flex items-start gap-2 text-xs text-destructive">
+        <div role="alert" className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{pickError}</span>
+        </div>
+      )}
+      {ocrConfig.status === 'error' && (
+        <div className="flex items-start gap-2 text-xs text-destructive" data-testid="ocr-config-error">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <span>{ui('ocrConfigUnavailable')}</span>
+          <button
+            type="button"
+            onClick={ocrConfig.retry}
+            className="shrink-0 font-medium underline hover:no-underline"
+            data-testid="ocr-config-retry"
+          >
+            {ui('retry')}
+          </button>
         </div>
       )}
       {/* ETP-5289 — only a created invoice is "done"; a cancelled or failed flow also leaves a
@@ -298,7 +359,7 @@ export default function OcrInlineUploader({
       <input
         ref={inputRef}
         type="file"
-        accept="application/pdf"
+        accept={OCR_ACCEPT_ATTR}
         className="hidden"
         onChange={(event) => { loadFile(event.target.files?.[0]); event.target.value = ''; }}
       />

@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-15T12:37:56.770Z",
-  "checksum": "c6b4c9fb8c9e1e41",
+  "updatedAt": "2026-10-22T12:49:24.246Z",
+  "checksum": "f978347774a8cb3b",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -58,25 +58,16 @@
           "M_Product_Category_ID": "Categoría",
           "ProductType": "Tipo",
           "Value": "Código",
+          "IsStocked": "Almacenable",
           "DateFrom": "Fecha de inicio",
           "DateTo": "Fecha de expiración"
         },
         "es_AR": {
+          "IsStocked": "Almacenable",
           "DateFrom": "Fecha de inicio",
           "DateTo": "Fecha de expiración"
         }
       },
-      "primaryTabs": [
-        {
-          "key": "general",
-          "label": "General"
-        },
-        {
-          "key": "additionalInfo",
-          "label": "Additional Info",
-          "panel": "ProductAdditionalInfoPanel"
-        }
-      ],
       "noHeaderBorder": true,
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
@@ -84,7 +75,6 @@
       "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
-      "primaryTabsVariant": "pill",
       "toolbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "attachments": true,
@@ -184,6 +174,7 @@
             ],
             "label": "Unit of Measure",
             "matchEntity": "UOM",
+            "matchMode": "strict",
             "required": false,
             "example": "Unidad",
             "exampleKey": "importExampleProductUom",
@@ -273,6 +264,56 @@
             "example": "Herramientas",
             "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "grupo de impuesto",
+              "grupo de impuestos",
+              "categoria de impuesto",
+              "categoría de impuesto",
+              "impuesto",
+              "tax category"
+            ],
+            "label": "Tax Category",
+            "matchEntity": "FinancialMgmtTaxCategory",
+            "matchMode": "strict",
+            "required": false,
+            "example": "IVA Normal",
+            "exampleKey": "importExampleProductTaxCategory",
+            "labelKey": "importHeaderTaxCategory",
+            "column": "C_TaxCategory_ID",
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          },
+          {
+            "target": "stocked",
+            "aliases": [
+              "almacenable",
+              "stocked",
+              "is stocked"
+            ],
+            "label": "Stocked",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderStocked",
+            "column": "IsStocked",
+            "type": "boolean"
+          },
+          {
+            "target": "returnable",
+            "aliases": [
+              "retornable",
+              "returnable"
+            ],
+            "label": "Returnable",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderReturnable",
+            "column": "Returnable",
+            "type": "boolean"
           }
         ]
       },
@@ -371,7 +412,7 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 8,
+            "seq": 11,
             "explicitType": true,
             "validation": {
               "maxLength": 32
@@ -449,7 +490,8 @@
             "sourceRequired": true,
             "reference": "TaxCategory",
             "inputMode": "selector",
-            "section": "other",
+            "section": "principal",
+            "seq": 6,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -465,7 +507,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -488,7 +530,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
             "derivation": {
               "type": "computed",
@@ -513,7 +555,7 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 7,
+            "seq": 10,
             "span": 3,
             "explicitType": true,
             "validation": {
@@ -606,10 +648,15 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other",
+            "section": "principal",
+            "seq": 7,
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "displayLogic": {
+              "js": "record.productType === 'I'",
+              "evaluable": true
             },
             "readOnlyLogic": {
               "raw": "@ProductType@='R' | @ProductType@='E' | @ProductType@='O'",
@@ -627,7 +674,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "section": "other",
             "validation": {
               "maxLength": 22
@@ -647,7 +694,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "UOM",
             "inputMode": "selector",
             "section": "other",
@@ -669,7 +716,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "AttributeSet",
             "inputMode": "selector",
             "section": "other",
@@ -695,7 +742,7 @@
             },
             "defaultValue": "Y",
             "section": "principal",
-            "seq": 6,
+            "seq": 9,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -711,7 +758,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "section": "other",
             "validation": {
               "maxLength": 30
@@ -727,7 +774,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "Brand",
             "inputMode": "selector",
             "section": "other",
@@ -752,10 +799,15 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "section": "other",
+            "section": "principal",
+            "seq": 8,
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "displayLogic": {
+              "js": "record.productType === 'I'",
+              "evaluable": true
             }
           },
           {
@@ -768,7 +820,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "ProductStatus",
             "inputMode": "selector",
             "section": "other",
@@ -2561,25 +2613,16 @@
           "M_Product_Category_ID": "Categoría",
           "ProductType": "Tipo",
           "Value": "Código",
+          "IsStocked": "Almacenable",
           "DateFrom": "Fecha de inicio",
           "DateTo": "Fecha de expiración"
         },
         "es_AR": {
+          "IsStocked": "Almacenable",
           "DateFrom": "Fecha de inicio",
           "DateTo": "Fecha de expiración"
         }
       },
-      "primaryTabs": [
-        {
-          "key": "general",
-          "label": "General"
-        },
-        {
-          "key": "additionalInfo",
-          "label": "Additional Info",
-          "panel": "ProductAdditionalInfoPanel"
-        }
-      ],
       "noHeaderBorder": true,
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
@@ -2587,7 +2630,6 @@
       "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
-      "primaryTabsVariant": "pill",
       "toolbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "attachments": true,
@@ -2687,6 +2729,7 @@
             ],
             "label": "Unit of Measure",
             "matchEntity": "UOM",
+            "matchMode": "strict",
             "required": false,
             "example": "Unidad",
             "exampleKey": "importExampleProductUom",
@@ -2776,6 +2819,56 @@
             "example": "Herramientas",
             "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "grupo de impuesto",
+              "grupo de impuestos",
+              "categoria de impuesto",
+              "categoría de impuesto",
+              "impuesto",
+              "tax category"
+            ],
+            "label": "Tax Category",
+            "matchEntity": "FinancialMgmtTaxCategory",
+            "matchMode": "strict",
+            "required": false,
+            "example": "IVA Normal",
+            "exampleKey": "importExampleProductTaxCategory",
+            "labelKey": "importHeaderTaxCategory",
+            "column": "C_TaxCategory_ID",
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          },
+          {
+            "target": "stocked",
+            "aliases": [
+              "almacenable",
+              "stocked",
+              "is stocked"
+            ],
+            "label": "Stocked",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderStocked",
+            "column": "IsStocked",
+            "type": "boolean"
+          },
+          {
+            "target": "returnable",
+            "aliases": [
+              "retornable",
+              "returnable"
+            ],
+            "label": "Returnable",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleYes",
+            "labelKey": "importHeaderReturnable",
+            "column": "Returnable",
+            "type": "boolean"
           }
         ]
       },
@@ -6384,10 +6477,12 @@
         "M_Product_Category_ID": "Categoría",
         "ProductType": "Tipo",
         "Value": "Código",
+        "IsStocked": "Almacenable",
         "DateFrom": "Fecha de inicio",
         "DateTo": "Fecha de expiración"
       },
       "es_AR": {
+        "IsStocked": "Almacenable",
         "DateFrom": "Fecha de inicio",
         "DateTo": "Fecha de expiración"
       }
@@ -6760,6 +6855,22 @@
         "description": "Default value for 'organization' in transactions should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-product-returnable",
+        "category": "displaylogic-evaluable",
+        "entity": "product",
+        "field": "returnable",
+        "runner": "node",
+        "description": "Display logic for 'returnable' in product should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-product-stocked",
+        "category": "displaylogic-evaluable",
+        "entity": "product",
+        "field": "stocked",
+        "runner": "node",
+        "description": "Display logic for 'stocked' in product should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-product-uOMForWeight",
         "category": "displaylogic-evaluable",
         "entity": "product",
@@ -6798,6 +6909,22 @@
         "field": "totalCost",
         "runner": "node",
         "description": "Display logic for 'totalCost' in transactions should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-product-returnable",
+        "category": "displaylogic-valid",
+        "entity": "product",
+        "field": "returnable",
+        "runner": "node",
+        "description": "Display logic for 'returnable' in product should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-product-stocked",
+        "category": "displaylogic-valid",
+        "entity": "product",
+        "field": "stocked",
+        "runner": "node",
+        "description": "Display logic for 'stocked' in product should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-product-uOMForWeight",
@@ -11567,13 +11694,13 @@
       }
     ],
     "summary": {
-      "total": 667,
+      "total": 671,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
         "default-value-type": 26,
-        "displaylogic-evaluable": 5,
-        "displaylogic-valid": 5,
+        "displaylogic-evaluable": 7,
+        "displaylogic-valid": 7,
         "field-presence": 80,
         "field-type": 80,
         "readonlylogic-evaluable": 5,
@@ -11585,7 +11712,7 @@
         "visibility": 12
       },
       "byRunner": {
-        "node": 667,
+        "node": 671,
         "junit": 0
       }
     }

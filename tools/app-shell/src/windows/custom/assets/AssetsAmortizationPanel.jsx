@@ -1,3 +1,6 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight, Trash2 } from 'lucide-react';
@@ -5,7 +8,7 @@ import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
 import { extractErrorMessage } from '@/hooks/useEntity';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
@@ -35,11 +38,36 @@ function StatusBadge({ isProcessed, ui }) {
   );
 }
 
-export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, token, apiBaseUrl, onCountChange }) {
+export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, token, apiBaseUrl, onCountChange, accessReadOnly = false }) {
   const ui = useUI();
   const navigate = useNavigate();
   const orgCurrency = useCurrency() ?? 'USD';
   const [lines, setLines] = useState([]);
+
+  const gridColumns = useMemo(() => [
+    { key: 'amortization', column: 'A_Amortization_ID', label: ui('assetsPeriod'), sourceIndex: 1, required: true },
+    { key: 'amortizationPercentage', column: 'Amortization_Percentage', label: ui('assetsPercentage'), sourceIndex: 2 },
+    { key: 'amortizationAmount', column: 'Amortizationamt', label: ui('amount'), sourceIndex: 3 },
+    { key: 'processed', label: ui('assetsStatus'), sourceIndex: 4 },
+  ], [ui]);
+  const gridSpec = 'assets';
+  const { gridView, gridColumnViews } = useFlaggedGridView({
+    spec: gridSpec, entity: 'amortizationLine', columns: gridColumns, data: lines,
+    enabled: Boolean(gridSpec), apiBaseUrl,
+  });
+  // Structural cells stay outside the personal view; existing editors and actions
+  // retain their handlers and React keys when data cells move.
+  const renderGridCells = (fragment) => (gridColumnViews && gridSpec
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 1 })
+    : fragment);
+  const gridControls = gridColumnViews && gridSpec ? (
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      data-testid="GridViewControls__34159c" />
+  ) : null;
+
   const [processedMap, setProcessedMap] = useState(new Map());
   const [loading, setLoading] = useState(false);
   const recordId = recordIdProp ?? data?.id;
@@ -48,7 +76,6 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [barVisible, setBarVisible] = useState(false);
   const [barClosing, setBarClosing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (selectedRows.size > 0) {
@@ -115,26 +142,30 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   // onSuccess contract as AmortizationLinesTable.bulkDelete: all succeeded
   // -> clear selection; partial -> keep only the failed ids selected; all
   // failed -> leave selection untouched and skip the refetch.
-  const handleDeleteSelected = useCallback(async () => {
-    if (!apiBaseUrl || selectedRows.size === 0) return;
-    setDeleting(true);
-    try {
-      const ids = [...selectedRows];
-      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        apiFetch(`/amortizationLine/${id}`, { method: 'DELETE' }).then(async (res) => {
-          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
-          return id;
-        }),
-      );
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+  //
+  // ETP-5758 — goes through the generic `useBatchDeleteDialog`: the trash button
+  // now asks for confirmation (it deleted straight away before), and the dialog
+  // stays open and locked until the batch settles. The refused DELETE carries
+  // its 4xx status so a one-line refusal toasts the backend's own reason.
+  const { requestBatchDelete, batchDeleteDialog, deleting } = useBatchDeleteDialog({
+    deleteOneFn: (id) =>
+      apiFetch(`/amortizationLine/${id}`, { method: 'DELETE' }).then(async (res) => {
+        if (!res.ok) {
+          throw Object.assign(new Error(await extractErrorMessage(res, ui)), { status: res.status });
+        }
+        return id;
+      }),
+    onOutcome: (succeeded, failed) => {
       if (succeeded.length > 0) {
         setSelectedRows(new Set(failed));
         fetchLines();
       }
-    } finally {
-      setDeleting(false);
-    }
-  }, [apiFetch, selectedRows, fetchLines, ui]);
+    },
+  });
+  const handleDeleteSelected = useCallback(() => {
+    if (!apiBaseUrl || selectedRows.size === 0) return;
+    requestBatchDelete([...selectedRows]);
+  }, [apiBaseUrl, selectedRows, requestBatchDelete]);
 
   useEffect(() => {
     fetchLines();
@@ -195,9 +226,11 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
 
     return (
       <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          {gridControls}
+          <table className="w-full text-sm" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}</colgroup>}
             <thead>
-              <tr className="border-b border-border/50">
+              <tr className="border-b border-border/50">{renderGridCells(<>
                 <th className="py-2.5 pr-2" style={{ width: 40, flexShrink: 0 }}>
                   <Checkbox
                     aria-label={ui('selectAll')}
@@ -210,7 +243,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                 <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">{ui('assetsPercentage')}</th>
                 <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">{ui('amount')}</th>
                 <th className="text-left text-sm font-semibold text-foreground py-2.5">{ui('assetsStatus')}</th>
-              </tr>
+              </>)}</tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {lines.map((line) => {
@@ -228,7 +261,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                     className={isSelected
                       ? 'bg-primary/5 hover:bg-primary/5'
                       : 'hover:bg-muted/30'}
-                  >
+                  >{renderGridCells(<>
                     <td className="py-3 pr-2" style={{ width: 40 }}>
                       <Checkbox
                         aria-label={ui('selectRow') ?? 'Select row'}
@@ -258,12 +291,12 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                         ui={ui}
                         data-testid="StatusBadge__34159c" />
                     </td>
-                  </tr>
+                  </>)}</tr>
                 );
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t border-border/50 font-semibold">
+              <tr className="border-t border-border/50 font-semibold">{renderGridCells(<>
                 <td className="py-3 pr-2" style={{ width: 40 }} />
                 <td className="py-3 pr-4" />
                 <td className="py-3 pr-4" />
@@ -275,7 +308,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                   {formatCurrency(orgCurrency, totalAmortizationAmount)}
                 </td>
                 <td className="py-3" />
-              </tr>
+              </>)}</tr>
             </tfoot>
           </table>
         </div>
@@ -286,7 +319,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     <div className="pt-2 pb-5">
       {renderBody()}
       <SelectionToolbar
-        visible={barVisible}
+        visible={barVisible && !accessReadOnly /* ETP-5830: its only action is delete */}
         closing={barClosing}
         onClose={clearSelection}
         closeTitle={ui('close') ?? 'Cerrar'}
@@ -309,6 +342,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__34159c" />
         </button>
       </SelectionToolbar>
+      {batchDeleteDialog}
     </div>
   );
 }
