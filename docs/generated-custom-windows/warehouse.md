@@ -254,6 +254,12 @@ columns (`grid: true, form: false, visibility: "readOnly"`), and `aggregateProdu
 `etgoValuation` per product for the sidebar and warehouse totals (a `NULL` valuation counts
 as 0 in the total).
 
+**Cost and valuation display rule (Products tab).** `aggregateProducts` keeps `cost` and
+`valuation` as `null` while no row of the product carries a value, and keeps a real `0` as `0`.
+The tab renders `—` only for `null` (the product has no cost line) and formats a real `0` as a
+cost ("0,00 €"). This is the same rule the Inventory Stock Report uses, so a product reads the
+same in both places. A `null` valuation still counts as 0 in the warehouse total.
+
 ### One definition of "current cost"
 
 `etgo_product_cost(m_product_id)` is the single source of truth for every reader — the
@@ -396,7 +402,14 @@ the report filters use for "Desde la cuenta") instead of a dropdown that cut lon
 popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
+Reopening the popup on a field that already holds an account opens on that account: it is marked with a check and centred, and arrows start from it (ETP-5948, see `docs/ui-customization.md`).
 
 ## ETP-5693 — Posting accounts only, on write
 
 Saving an account field of the warehouse accounting tab now refuses a summary (heading) account, an inactive account or combination, and an account of another accounting schema than the row's; on update the row's accounting schema cannot change. The account selectors already hide those accounts (ETP-5681), so in the UI this only shows up in a race, as a translated toast (`backendError.accountIsSummary` / `accountIsInactive` / `accountWrongLedger` / `ledgerNotUpdatable`); REST and MCP callers get a 400 whose text names the field and the account. A value already stored is not re-checked, so existing rows stay saveable. Backend: `PostingAccountGuard` via the new `@NeoExtension` `WarehouseAccountingHandler` (`com.etendoerp.go`, see `neo-headless.md`).
+
+## Bespoke grid personal views
+
+The bespoke `WarehouseTransactionsTable` uses the existing personal-view contract for `warehouse` / `productTransactions`, preserving sorting and document navigation. `WarehouseProductsTab` remains blocked: its product/valuation rows aggregate `binContents` and have no single configured entity scope. The DataTable-based warehouse header is outside this migration.
+
+The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not these grids; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.

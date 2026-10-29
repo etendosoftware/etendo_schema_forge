@@ -1,0 +1,1 @@
+export { useCurrencyId } from '@etendosoftware/app-shell-core/hooks/useCurrency.jsx';

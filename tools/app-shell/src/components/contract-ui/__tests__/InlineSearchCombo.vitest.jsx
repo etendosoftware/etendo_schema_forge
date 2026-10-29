@@ -453,11 +453,11 @@ describe('InlineSearchCombo — ETP-5846 current selection is identified on reop
     await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    // The highlight moved to row 1...
-    expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('data-highlighted', 'true');
+    // The highlight moved to the row after the committed one (ETP-5903)...
+    expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('data-highlighted', 'true');
     // ...while the committed value stays selected. Two independent states.
     expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveAttribute('aria-selected', 'true');
-    expect(input).toHaveAttribute('aria-activedescendant', 'tax-inline-option-iva10');
+    expect(input).toHaveAttribute('aria-activedescendant', 'tax-inline-option-exento');
   });
 });
 
@@ -666,5 +666,34 @@ describe('InlineSearchCombo — chip mode (ETP-4600)', () => {
 
     const chip = screen.getByTestId('inline-add-field-tax-chip');
     expect(chip.querySelector('[aria-label="clear"]')).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5902 — labelPrefix is rendered before the name, never saved
+// ---------------------------------------------------------------------------
+
+describe('InlineSearchCombo — ETP-5902 labelPrefix', () => {
+  const PREFIXED = [
+    { id: 'iva21', name: 'IVA 21%', labelPrefix: '21%' },
+    { id: 'exento', name: 'Exento' },
+  ];
+
+  it('shows "<labelPrefix> - <name>" only for options that carry a prefix', async () => {
+    const user = userEvent.setup();
+    const { input } = renderCombo({ options: PREFIXED });
+    await user.click(input);
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+    expect(screen.getByTestId('inline-add-option-tax-iva21')).toHaveTextContent('21% - IVA 21%');
+    expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveTextContent(/^Exento$/);
+  });
+
+  it('passes the plain name (without the prefix) to onChange', async () => {
+    const user = userEvent.setup();
+    const { input, onChange } = renderCombo({ options: PREFIXED });
+    await user.click(input);
+    await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
+    await user.pointer({ target: screen.getByTestId('inline-add-option-tax-iva21'), keys: '[MouseLeft>]' });
+    expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21%' }));
   });
 });

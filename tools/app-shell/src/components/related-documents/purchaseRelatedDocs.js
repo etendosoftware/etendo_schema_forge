@@ -15,9 +15,19 @@ import {
   selectSource,
   originInvoicesSource,
   originInvoicesDepsKey,
+  invoiceOrdersFetch,
+  invoiceOrdersDepsKey,
   movementDefinition,
   returnDefinition,
+  idsOf,
 } from './relatedSources.js';
+
+/** The header order of a purchase invoice (`salesOrder`, C_Order_ID), read from the order itself. */
+async function fetchHeaderOrder({ record, token, apiBaseUrl }) {
+  if (!record?.salesOrder) return [];
+  const order = await fetchById('purchase-order', 'header', record.salesOrder, token, apiBaseUrl);
+  return order ? [order] : [];
+}
 
 export const PURCHASE_RELATED_DOCS = {
   'purchase-order': {
@@ -34,19 +44,24 @@ export const PURCHASE_RELATED_DOCS = {
     spec: 'purchase-invoice',
     entity: 'header',
     refreshEvent: 'purchase-invoice:document-created',
-    depsKey: record => [record?.salesOrder ?? '', originInvoicesDepsKey(record)].join('|'),
+    depsKey: record => [
+      invoiceOrdersDepsKey(record),
+      originInvoicesDepsKey(record),
+      idsOf(record?.rectifyingInvoices),
+    ].join('|'),
     sources: [
       {
+        // ETP-5828: every order the invoice's lines come from (`linkedOrders`), plus the
+        // header order when it is not one of them.
         key: 'order',
         type: 'order',
-        fetch: async ({ record, token, apiBaseUrl }) => {
-          if (!record?.salesOrder) return [];
-          const order = await fetchById('purchase-order', 'header', record.salesOrder, token, apiBaseUrl);
-          return order ? [order] : [];
-        },
+        fetch: invoiceOrdersFetch(fetchHeaderOrder),
       },
       selectSource('receipts', doc => (doc.isReturn === true ? 'return-to-vendor' : 'goods-receipt'), 'linkedReceipts'),
       originInvoicesSource('purchase-invoice'),
+      // The mirror of originInvoicesSource: the rectificativa(s) that rectify THIS invoice
+      // (PurchaseInvoiceHeaderHandler#enrichRectifyingInvoices, ETP-5745 CP-12).
+      selectSource('rectifyingInvoices', 'purchase-invoice', 'rectifyingInvoices'),
     ],
   },
 

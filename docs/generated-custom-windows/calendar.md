@@ -1,5 +1,19 @@
 # Calendar
 
+## Personal secondary-grid views
+
+With `GRID_COLUMN_VIEWS` enabled, the Accounting and Periods secondary panels expose the
+existing column visibility/order/width controls and explicit personal-view save action.
+The fiscal-year list also supplies local controls for `fiscal-calendar/year` when its parent
+does not supply a controller; an inherited controller retains ownership even while loading.
+Their scopes are `end-year-close/accounting` and
+`open-close-period-control/periodControl`, respectively; changing the selected fiscal year
+changes the rows, not the saved-view identity. The combined `/calendar` route is not a NEO
+spec. Loading/error/empty states, period selection, read-only restrictions, confirmation and
+bulk open/close actions retain their existing behavior. See the
+[standalone DataTable inventory](../standalone-datatable-grid-views.md) for scope constraints
+and the pending validation status.
+
 ## Intent
 Unifies **Fiscal Calendar** and **Periods** (`open-close-period-control`) — previously two
 separate windows connected only by a "Go to Fiscal Calendar" cross-navigation modal (ETP-4452
@@ -253,7 +267,8 @@ ever changes, this needs revisiting.
   is a frontend-only visibility gate on top of it, not a change to the process itself.
 - **Row actions: Abrir / Cerrar / Cerrar permanentemente…** (`periodControl.openClose`, on `open-close-period-control`) call AD
    Process `167` (`C_Period_Process`) via `PeriodOpenCloseHandler`
-   (`JAVA_QUALIFIER = 'period-openclose'`) — the exact same handler and URL base
+   (bound by `@NeoExtension(spec = "open-close-period-control", entity = "periodControl")` since
+   ETP-5588; it used `JAVA_QUALIFIER = 'period-openclose'` before) — the exact same handler and URL base
    (`/sws/neo/open-close-period-control/...`) this window has always used; nothing about this action
    changed for ETP-4478. This process opens/closes **every** `C_PeriodControl` row for the period
    in one transaction — already the global mechanism — so `PeriodsExpandablePanel.jsx` only needs

@@ -1,3 +1,6 @@
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
@@ -121,13 +124,33 @@ function draftSignature(draft) {
 
 // NEO does not send expanded reversedInvoice$documentNo/$invoiceDate/$grandTotalAmt
 // fields — parse them from the _identifier: "10000016 - 01-03-2021 - 14.52"
-function parseReversedRef(line) {
-  const ident = line?.['reversedInvoice$_identifier'] ?? '';
+// `field` lets the caller read either side of the C_Invoice_Reverse row: `reversedInvoice`
+// (the original, default) or `invoice` (the rectificativa — see isIncomingLine below).
+function parseReversedRef(line, field = 'reversedInvoice') {
+  const ident = line?.[`${field}$_identifier`] ?? '';
   const parts = ident.split(' - ');
   const docNo = parts[0] || ident || null;
   const date = parts[1] ? parts[1].replace(/-/g, '/') : null;
   const amount = parts[2] != null && parts[2] !== '' ? Number(parts[2]) : null;
   return { docNo, date, amount: Number.isNaN(amount) ? null : amount };
+}
+
+/**
+ * ETP-5745 CP-12 — a {@code C_Invoice_Reverse} row names the current invoice in one of two
+ * columns: `invoice` (it IS the rectificativa) or `reversedInvoice` (it is the ORIGINAL being
+ * rectified). `fetchLines` below now reads both directions, so this tells each row which side
+ * the current record is on: `true` means the row reached this invoice through `reversedInvoice`
+ * (an "incoming" rectification — this invoice is the original, the OTHER document is the one
+ * rectifying it) and the row must be displayed from the other side (`invoice`, not
+ * `reversedInvoice`) and treated as read-only — it is not this invoice's own child row to edit.
+ */
+function isIncomingLine(line, recordId) {
+  return line?.reversedInvoice === recordId && line?.invoice !== recordId;
+}
+
+/** The document to display for `line` from the perspective of `recordId` — see isIncomingLine. */
+function otherSideRef(line, recordId) {
+  return isIncomingLine(line, recordId) ? parseReversedRef(line, 'invoice') : parseReversedRef(line);
 }
 
 // ── CorrectivaBadge ───────────────────────────────────────────────────────────
@@ -680,6 +703,11 @@ function ExpandedForm({
   );
 }
 
+/** The invoice spec whose reversed-invoices grid view is stored, or null outside the two supported specs. */
+function reversedInvoicesGridSpec(apiBaseUrl) {
+  return apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
+}
+
 // ── ReversedInvoicesPanel ─────────────────────────────────────────────────────
 export default function ReversedInvoicesPanel({
   recordId: recordIdProp,
@@ -704,6 +732,31 @@ export default function ReversedInvoicesPanel({
   const saveErrorMessage = err => (isNetworkError(err) ? err.message : ui('rectSaveError'));
 
   const [lines, setLines] = useState([]);
+
+  const gridColumns = useMemo(() => [
+    { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', label: ui('rectColOriginalInvoice'), sourceIndex: 1, required: true },
+    { key: 'invoiceDate', label: ui('rectColDate'), sourceIndex: 2 },
+    { key: 'documentNo', label: ui('rectColDocument'), sourceIndex: 3 },
+    { key: 'aEAT349IsCorrective', column: 'EM_AEAT349_IsCorrective', label: ui('rectColModel349'), sourceIndex: 4 },
+    { key: 'grandTotalAmount', label: ui('rectColTotal'), sourceIndex: 5 },
+  ], [ui]);
+  const gridSpec = reversedInvoicesGridSpec(apiBaseUrl);
+  const { gridView, gridColumnViews } = useFlaggedGridView({
+    spec: gridSpec, entity: 'reversedInvoices', columns: gridColumns, data: lines,
+    enabled: Boolean(gridSpec), apiBaseUrl,
+  });
+  const gridEnabled = gridColumnViews && Boolean(gridSpec);
+  const renderGridCells = (fragment) => (gridEnabled
+    ? renderGridViewCells(fragment, { gridView, gridColumns, ui, leading: 1, trailing: 1 })
+    : fragment);
+  const gridControls = gridEnabled ? (
+    <GridViewControls
+      gridView={gridView}
+      gridColumns={gridColumns}
+      ui={ui}
+      data-testid="GridViewControls__4395d6" />
+  ) : null;
+
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [pendingEdits, setPendingEdits] = useState({});
@@ -777,8 +830,11 @@ export default function ReversedInvoicesPanel({
       const res = await apiFetch(`/reversedInvoices?_startRow=0&_endRow=200`);
       if (!res.ok) return;
       const json = await res.json();
-      // NEO ignores query-param filters — keep only rows of THIS invoice
-      const rows = parseRows(json).filter(l => l.invoice === recordId);
+      // NEO ignores query-param filters — keep only rows touching THIS invoice, on EITHER side:
+      // `invoice === recordId` (this invoice rectifies another) or `reversedInvoice === recordId`
+      // (another invoice rectifies this one). Before ETP-5745 CP-12 only the first half was kept,
+      // so the ORIGINAL invoice never saw the rectificativas that point back at it.
+      const rows = parseRows(json).filter(l => l.invoice === recordId || l.reversedInvoice === recordId);
       setLines(rows);
       onCountChange?.(rows.length);
     } catch { /* silent */ } finally {
@@ -1036,11 +1092,13 @@ export default function ReversedInvoicesPanel({
 
   return (
     <div className="flex-1 min-w-0" data-testid="reversed-invoices-panel">
+      {gridControls}
       {/* ── table ── */}
       {(lines.length > 0 || loading || addingLine) && (
-        <table className="w-full">
+        <table className="w-full" style={gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) ? { tableLayout: 'fixed' } : undefined}>
+          {gridView.active && gridView.columns.some((column) => column.gridUserWidthPx != null) && <colgroup><col style={{ width: 40 }} />{gridView.columns.map((column) => <col key={column.key} style={{ width: column.gridUserWidthPx }} />)}<col style={{ width: 40 }} /></colgroup>}
           <thead className="sticky top-0 z-20 bg-card">
-            <tr className="border-b border-border/40">
+            <tr className="border-b border-border/40">{renderGridCells(<>
               {/* expand toggle placeholder */}
               <th className="h-10 w-10 px-3" />
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColOriginalInvoice')}</th>
@@ -1049,19 +1107,19 @@ export default function ReversedInvoicesPanel({
               <th className="h-10 px-3 text-left text-xs font-semibold text-foreground">{ui('rectColModel349')}</th>
               <th className="h-10 px-3 text-right text-xs font-semibold text-foreground">{ui('rectColTotal')}</th>
               <th className="h-10 w-10 px-2" />
-            </tr>
+            </>)}</tr>
           </thead>
 
           <tbody>
             {loading && (
-              <tr>
+              <tr>{renderGridCells(<>
                 <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   <Loader2
                     className="h-4 w-4 animate-spin inline mr-1.5"
                     data-testid="Loader2__4395d6" />
                   {ui('loading')}
                 </td>
-              </tr>
+              </>)}</tr>
             )}
 
             {!loading && lines.map(line => {
@@ -1069,13 +1127,17 @@ export default function ReversedInvoicesPanel({
               const edits = pendingEdits[line.id] ?? {};
               const lineData = { ...line, ...edits };
               const corrective = isCorrective(lineData);
-              const ref = parseReversedRef(lineData);
-              const identifier = ref.docNo ?? lineData.reversedInvoice ?? '—';
+              const incoming = isIncomingLine(lineData, recordId);
+              const ref = otherSideRef(lineData, recordId);
+              const identifier = ref.docNo ?? (incoming ? lineData.invoice : lineData.reversedInvoice) ?? '—';
               const displayDate = ref.date ?? '—';
               const docNo = ref.docNo ?? identifier;
               const totalDisplay = ref.amount != null
                 ? formatCurrency('EUR', ref.amount)
                 : '—';
+              // An "incoming" row (this invoice is the ORIGINAL another document rectifies) is
+              // not this invoice's own child row — hide it from edit/delete (ETP-5745 CP-12).
+              const rowReadOnly = isReadOnly || incoming;
 
               return (
                 <React.Fragment key={line.id}>
@@ -1083,7 +1145,7 @@ export default function ReversedInvoicesPanel({
                     className={`relative border-b border-border/30 group/row transition-colors cursor-pointer hover:bg-muted/30 ${isExpanded ? 'bg-muted/20' : ''}`}
                     onClick={() => setExpandedId(isExpanded ? null : line.id)}
                     style={{ height: 48 }}
-                  >
+                  >{renderGridCells(<>
                     {/* expand chevron */}
                     <td className="px-3 align-middle" onClick={e => e.stopPropagation()}>
                       <button
@@ -1118,7 +1180,7 @@ export default function ReversedInvoicesPanel({
                     </td>
                     {/* Actions (three-dot menu placeholder — shows on hover) */}
                     <td className="px-2 align-middle opacity-0 group-hover/row:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                      {!isReadOnly && (
+                      {!rowReadOnly && (
                         <button
                           type="button"
                           onClick={() => deleteLine(line.id)}
@@ -1133,14 +1195,20 @@ export default function ReversedInvoicesPanel({
                         </button>
                       )}
                     </td>
-                  </tr>
+                  </>)}</tr>
                   {/* expanded form */}
                   {isExpanded && (
-                    <tr>
+                    <tr>{renderGridCells(<>
                       <td colSpan={7} className="p-0">
                         <ExpandedForm
-                          lineData={lineData}
-                          readOnly={isReadOnly}
+                          // ExpandedForm always reads the `reversedInvoice`/`reversedInvoice$_identifier`
+                          // fields to render "Factura original". For an incoming row those point at
+                          // THIS invoice (circular) — the document to show is `invoice` instead, so it
+                          // is remapped here rather than teaching ExpandedForm about both directions.
+                          lineData={incoming
+                            ? { ...lineData, reversedInvoice: lineData.invoice, 'reversedInvoice$_identifier': lineData['invoice$_identifier'] }
+                            : lineData}
+                          readOnly={rowReadOnly}
                           isDraft={false}
                           onChange={(k, v) => handleChange(line.id, k, v)}
                           onFieldSave={(k, v) => handleFieldSave(line.id, line, k, v)}
@@ -1154,7 +1222,7 @@ export default function ReversedInvoicesPanel({
                           aeatSaving={aeatSavingId === line.id}
                           data-testid="ExpandedForm__4395d6" />
                       </td>
-                    </tr>
+                    </>)}</tr>
                   )}
                 </React.Fragment>
               );
@@ -1162,7 +1230,7 @@ export default function ReversedInvoicesPanel({
 
             {/* draft new-line row — auto-expanded */}
             {addingLine && (
-              <tr>
+              <tr>{renderGridCells(<>
                 <td colSpan={7} className="p-0">
                   <div ref={addRowRef}>
                     <ExpandedForm
@@ -1187,7 +1255,7 @@ export default function ReversedInvoicesPanel({
                       data-testid="ExpandedForm__4395d6" />
                   </div>
                 </td>
-              </tr>
+              </>)}</tr>
             )}
           </tbody>
         </table>

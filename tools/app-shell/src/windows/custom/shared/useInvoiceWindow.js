@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 // (Vite's alias resolution is unavailable there), and preUnpost.js is a
 // dependency-free leaf module, so the relative path costs nothing.
 import { isPosted as isRowPosted } from '../../../lib/preUnpost.js';
+import { joinWithConjunction } from '../../../lib/backendErrors.js';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 import { buildMenuActionExecutedHandler } from './buildDocumentRowQuickActions.js';
 // Plain (hook-free) module, never the `@/auth/api.js` barrel — see
@@ -219,8 +220,13 @@ export const makeInvoiceReactivateRowFilter = ({ apiBaseUrl, token }) => async (
     const json = await res.json().catch(() => null);
     const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? null;
     if (!record?.reactivationBlocked) return true;
+    // ETP-5745: reactivationBlockedFiscalSystem is a real array (like the live 422's own
+    // messageParams.fiscalSystem) — joined with the same locale-aware conjunction so this
+    // preview reads identically to the action's own refusal ("SII y TicketBAI", not a comma).
     return ui('backendError.invoiceReactivateFiscalRectified', {
-      fiscalSystem: record.reactivationBlockedFiscalSystem,
+      fiscalSystem: Array.isArray(record.reactivationBlockedFiscalSystem)
+        ? joinWithConjunction(record.reactivationBlockedFiscalSystem, ui)
+        : record.reactivationBlockedFiscalSystem,
       rectificativas: Array.isArray(record.reactivationBlockedRectificativas)
         ? record.reactivationBlockedRectificativas.join(', ')
         : record.reactivationBlockedRectificativas,

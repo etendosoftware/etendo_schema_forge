@@ -1,3 +1,6 @@
+// @covers artifacts/contacts/decisions.json
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -107,6 +110,7 @@ describe('ETP-5350 — the template example keys', () => {
       'firstName', 'lastName', 'oBTIKTaxIDKey', 'phone', 'postal', 'region', 'taxID',
       // ETP-5544: "No" is the same word in English and Spanish (and a valid YES_NO_VALUES
       // synonym in both), so the vendor example needs no key. `customer` ("Yes"/"Sí") has one.
+      // The column is in the contract while `contact-category-type` is OFF (`hiddenWhenFlag`).
       'vendor',
     ]);
   });

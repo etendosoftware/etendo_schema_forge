@@ -5,6 +5,10 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
 import { SelectorChip } from './SelectorChip.jsx';
+import {
+  resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, pinSearchTerms,
+} from './selectorSelection.js';
+import { useLocateCommittedValue } from './useLocateCommittedValue.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // Page size for the server-side search's paginated fetches (initial load, search, and
@@ -30,36 +34,8 @@ const TYPED_SEARCH_DEBOUNCE_MS = 1000;
 // match several rows and the exact id may be behind a look-alike; the response is filtered by id.
 const CURRENT_SELECTION_SEARCH_LIMIT = 20;
 
-/**
- * Index of the row that holds the committed `value`, or -1 when it is not among `rows`.
- *
- * The committed option is marked with a check icon + a bolder label, never with the highlight
- * background: a colour-only cue would be indistinguishable from hover in a monochrome/high-contrast
- * rendering, and would collide with the keyboard highlight state.
- *
- * ETP-5846 — the component's ONLY source of truth for "which option is the current selection" is
- * the `value` prop, so this marker can never drift from what the parent holds. Pure and exported
- * for direct unit coverage.
- *
- * @param {Array<{id?: string}>} rows the rendered option rows
- * @param {string} value the committed id
- * @returns {number} index of the current option, or -1
- */
-export function resolveSelectedIndex(rows, value) {
-  if (value == null || value === '') return -1;
-  return rows.findIndex(o => String(o.id) === String(value));
-}
-
-/**
- * Rows resolved for the committed value but absent from the loaded pages, kept in front of the
- * list. Deduplicated by id so the pinned row can never render twice.
- */
-function prependCurrentSelection(rows, pinned, value) {
-  if (pinned.length === 0 || resolveSelectedIndex(rows, value) !== -1) return rows;
-  const known = new Set(rows.map(o => String(o.id)));
-  const missing = pinned.filter(o => !known.has(String(o.id)));
-  return missing.length === 0 ? rows : [...missing, ...rows];
-}
+// Kept exported from here: existing callers and tests import it from this module.
+export { resolveSelectedIndex };
 
 /**
  * Compact inline combobox for search-type FK fields in rapid line entry.
@@ -108,6 +84,17 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // list so reopening a cell identifies what it holds. Cleared whenever `value` changes, when a new
   // search starts, and on close — a previous selection must never be shown as the current one.
   const [pinnedOptions, setPinnedOptions] = useState([]);
+  // ETP-5903 — bumped every time a page fetch has fully settled. The walk that looks for the
+  // committed value keys on it: `fetchInFlightRef` is cleared in the fetch's `finally`, AFTER the
+  // page was applied, so an effect keyed on the rows alone runs in between, is turned away by the
+  // in-flight guard, and never runs again — stalling the walk and, with it, the ETP-5846 pin. A
+  // counter (not an in-flight boolean, whose true->false React may batch into "no change")
+  // guarantees one more run after the guard is down.
+  const [settledFetches, setSettledFetches] = useState(0);
+  // ETP-5903 — the walk for the committed value ended (found, list exhausted, cap reached, or the
+  // user took over). The ETP-5846 pin waits for it, so it only covers a value the walk could not
+  // bring into view in its own place.
+  const [locateDone, setLocateDone] = useState(false);
   const rootRef = useRef(null);
   const dropdownRef = useRef(null);
   // ETP-4600: `inputRef` is caller-supplied and OPTIONAL — DataTable only wires it up for the
@@ -166,6 +153,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // on none of the loaded pages would be looked up again on every page. Cleared on open/close and
   // whenever `value` or the query changes (see the reset effect), so each open resolves at most once.
   const pinAttemptedRef = useRef(null);
+  // ETP-5903 — the user typed or pressed a key during this open: the walk stops and the list is not
+  // re-centred under them. Reset on every open.
+  const interactedRef = useRef(false);
 
   // Resets pagination state before a fresh search (new typed query, or reopening with an
   // empty query) — mirrors the resets CreatableSearchSelect.jsx performs at each of its
@@ -212,7 +202,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     const runFetch = () => {
       fetchInFlightRef.current = true;
       apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-        .then(r => r.ok ? r.json() : null)
+        .then(r => {
+          if (!r.ok) throw new Error(`Selector request failed: ${r.status}`);
+          return r.json();
+        })
         .then(data => {
           if (!data?.items) return;
           if (searchGenerationRef.current !== requestGeneration) return;
@@ -223,9 +216,16 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           hasMoreRef.current = more;
           setHasMore(more);
         })
-        .catch(() => {})
+        .catch(() => {
+          // ETP-5948 — a failed "load more" ends the paging, as in CreatableSearchSelect: left
+          // `true`, the ETP-5903 walk re-requested the same page after every failure, forever.
+          if (offset === 0 || searchGenerationRef.current !== requestGeneration) return;
+          hasMoreRef.current = false;
+          setHasMore(false);
+        })
         .finally(() => {
           fetchInFlightRef.current = false;
+          setSettledFetches(n => n + 1);
           // Only the CURRENT generation's first page may lower the flag. A stale request
           // resolving after a newer search started would otherwise hide the spinner while
           // that newer search is still in flight — the same reasoning as the result guard
@@ -267,18 +267,24 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     pinAttemptedRef.current = id;
     const generation = searchGenerationRef.current;
     pinRequestRef.current = { id, generation };
-    const queryParams = { ...selectorContext, q: label, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
-    apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
+    // ETP-5948 — a "<code> - <name>" label finds nothing as a whole; the code retry does.
+    const lookup = async () => {
+      for (const term of pinSearchTerms(label)) {
+        const queryParams = { ...selectorContext, q: term, limit: CURRENT_SELECTION_SEARCH_LIMIT, offset: 0 };
+        const r = await apiFetch(buildUrlWithParams(selectorUrl, queryParams), { baseUrl: '' });
+        const data = r.ok ? await r.json() : null;
+        const match = (data?.items ?? []).filter(it => String(it.id) === id);
+        if (match.length) return match;
+      }
+      return [];
+    };
+    lookup()
+      .then(match => {
         const request = pinRequestRef.current;
         // Abandoned: the value changed, a new search started, or this answer is late.
         if (!request || request.id !== id || request.generation !== generation) return;
         if (searchGenerationRef.current !== generation) return;
-        const items = (data?.items ?? [])
-          .filter(it => String(it.id) === id)
-          .map(it => ({ id: it.id, name: it.label || it.name, ...it }));
-        setPinnedOptions(items);
+        setPinnedOptions(match.map(it => ({ id: it.id, name: it.label || it.name, ...it })));
       })
       .catch(() => {})
       .finally(() => {
@@ -447,7 +453,17 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setPinnedOptions([]);
     pinRequestRef.current = null;
     pinAttemptedRef.current = null;
+    setLocateDone(false);
   }, [value, query, open]);
+
+  // ETP-5903 — locate the committed value in place (walk), then centre it; see the hook.
+  const selectedIndex = resolveSelectedIndex(filtered, value);
+  useLocateCommittedValue({
+    open, query, value, excludeId, dropdownRef, interactedRef, selectorUrl, rows: serverResults,
+    hasMore, pageSize: SERVER_SEARCH_PAGE, settledFetches, locateDone, setLocateDone,
+    fetchPage: fetchServerResults, offsetRef,
+    selectedIndex, renderedCount: filtered.length, layoutKey: dropdownStyle,
+  });
 
   // ETP-5846 — when the combo OPENS with a committed value that is nowhere in what it can already
   // show, resolve its row. "Nowhere" covers BOTH catalogs, because the option list is fed by
@@ -473,10 +489,11 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     //    until that page resolves;
     //  - the user has typed -> a query is its own explicit search, its results are what the list
     //    shows, and the pin is cleared anyway (see the reset effect above).
-    if (!open || currentValueIsShown) return;
+    //  - ETP-5903: the walk for the value has not finished -> it may still find it in place.
+    if (!open || currentValueIsShown || !locateDone) return;
     if (!selectorUrl || serverResults == null || query.trim() !== '') return;
     fetchCurrentSelection();
-  }, [open, currentValueIsShown, serverResults, selectorUrl, query, fetchCurrentSelection]);
+  }, [open, currentValueIsShown, locateDone, serverResults, selectorUrl, query, fetchCurrentSelection]);
 
   // Keep the highlighted option scrolled into view (mirrors CreatableSearchSelect).
   useEffect(() => {
@@ -485,15 +502,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     el?.scrollIntoView?.({ block: 'nearest' });
   }, [activeIndex]);
 
-  // ETP-5846 — "clearly identified" also means VISIBLE: a committed option sitting at row 40 of a
-  // scrollable panel is marked but off-screen on reopen. Scroll it into view without moving focus
-  // or changing the keyboard highlight (`block: 'nearest'` only scrolls when it is out of view).
-  const selectedIndex = resolveSelectedIndex(filtered, value);
-  useEffect(() => {
-    if (!open || selectedIndex < 0) return;
-    const el = dropdownRef.current?.querySelector(`[data-option-index="${selectedIndex}"]`);
-    el?.scrollIntoView?.({ block: 'nearest' });
-  }, [open, selectedIndex]);
+  // ETP-5903 — arrows start from the committed option while no search is typed; with a query the
+  // list is that search's results, from the top (AC4).
+  const arrowStartIndex = arrowStartIndexFor(query, selectedIndex);
 
   useEffect(() => {
     if (!open) {
@@ -534,6 +545,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         type="text"
         value={inputValue}
         onChange={(e) => {
+          interactedRef.current = true;
           setQuery(e.target.value);
           setOpen(true);
           setServerResults(null);
@@ -572,6 +584,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           setQuery('');
         }, 150)}
         onKeyDown={(e) => {
+          interactedRef.current = true;
           // ArrowUp/Down/Home/End/Enter are only intercepted while the dropdown panel is
           // actually rendered (ETP-4600 Gap A parity, ported from CreatableSearchSelect's
           // handleInputKeyDown). Escape, and every key while the combo is closed or has no
@@ -584,12 +597,12 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               case 'ArrowDown':
                 e.preventDefault();
                 e.stopPropagation();
-                setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+                setActiveIndex((i) => nextActiveIndex(i, arrowStartIndex, 1, filtered.length));
                 return;
               case 'ArrowUp':
                 e.preventDefault();
                 e.stopPropagation();
-                setActiveIndex((i) => Math.max(i - 1, 0));
+                setActiveIndex((i) => nextActiveIndex(i, arrowStartIndex, -1, filtered.length));
                 return;
               case 'Home':
                 e.preventDefault();
@@ -776,7 +789,11 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                       className="h-4 w-4 shrink-0 text-primary"
                       data-testid={`inline-add-option-${field.key}-${opt.id}-selected-indicator`} />
                   )}
-                  <span className="whitespace-nowrap">{opt.name || opt.label || opt._identifier || opt.id}</span>
+                  <span className="whitespace-nowrap">
+                    {/* ETP-5902: render-only prefix (e.g. the tax rate); never part of the saved name */}
+                    {opt.labelPrefix ? `${opt.labelPrefix} - ` : ''}
+                    {opt.name || opt.label || opt._identifier || opt.id}
+                  </span>
                 </button>
               );
             })}

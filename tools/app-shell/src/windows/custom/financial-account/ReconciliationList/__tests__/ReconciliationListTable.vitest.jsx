@@ -1,5 +1,13 @@
+import { gridViewColumnId } from '@/hooks/useGridView.js';
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+
+// Exercise personal views through the real shared hook; only the session/API boundary is mocked.
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
 // @covers tools/app-shell/src/windows/custom/financial-account/ReconciliationList/ReconciliationListTable.jsx
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 
 // The translator echoes the key, so assertions read on key strings.
 // ETP-5684 — the posting column is gated on showAccountingFields (fail closed).
@@ -166,7 +174,8 @@ describe('ReconciliationListTable — posting status pill', () => {
     const labels = (tone) => screen.queryAllByTestId(`status-${tone}`).map((el) => el.dataset.label);
     expect(labels('success')).toContain('postedStatus');
     expect(labels('warning')).toContain('notPostedStatus');
-    expect(labels('destructive')).toEqual(expect.arrayContaining(['postedStatusError', 'postedStatusPeriodClosed']));
+    expect(labels('destructive')).toContain('postedStatusError');
+    expect(labels('caution')).toContain('postedStatusPeriodClosed');
     expect(labels('neutral')).toContain('postedStatusDocumentDisabled');
   });
 });
@@ -212,5 +221,31 @@ describe('ReconciliationListTable — accounting capability gate (ETP-5684)', ()
     expect(screen.getByTestId('column-header-sort-documentNo')).toBeInTheDocument();
     expect(screen.queryByText('financeAccountReconciliationsPosted_Y')).not.toBeInTheDocument();
     expect(buildReconciliationSortColumns((k) => k, ACCOUNTING_HIDDEN).map((c) => c.key)).not.toContain('posted');
+  });
+});
+
+describe('ReconciliationListTable — personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    const column = getContractGridColumns('reconciliations').find((item) => item.name === 'documentNo');
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: gridViewColumnId({ ...column, key: 'documentNo' }), visible: false, order: 5 },
+        { id: 'list:field:expand', visible: false, order: 20 },
+      ],
+    }) });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('retains expansion and row order when a saved layout hides document numbers', async () => {
+    renderTable();
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/reconciliations', { baseUrl: '' });
+    expect(screen.queryByText('REC-003')).toBeNull();
+    expect(rowIds()).toEqual(['r1', 'r2', 'r3']);
+    fireEvent.click(screen.getByTestId('reconciliation-row-r1'));
+    expect(screen.getByTestId('stub-cleared-r1')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('reconciliation-row-r1'));
+    expect(screen.queryByTestId('stub-cleared-r1')).toBeNull();
   });
 });

@@ -1029,6 +1029,222 @@
       ]
     },
     {
+      "id": "billing-reconciliation-schedule",
+      "description": "Opt-in schedule of the billing reconciliation (ETP-5048): the Process Request that reconciles stored subscriptions against Stripe. The flag is a backend-only, environment-level gate, strictly off by default (and off on every failure of GoFeatureFlags): while it is off BillingReconciliationScheduleStartup plants no System process request, and every SCHEDULED run (timing S) does nothing, ends as ERROR in Process Monitor and raises one internal alert per UTC day. A run an operator starts from the Classic menu, or one fired as part of a Process Group, is not gated. Go-live is the flag AND the production Process Request together. The reconciliation itself is permanent and is not owned by this entry. Registered late: the flag shipped with ETP-5048 without a registry entry.",
+      "owner": "mtaal",
+      "jira": "ETP-5048",
+      "created": "2026-10-19",
+      "flag": {
+        "key": "billing-reconciliation-schedule",
+        "defaultValue": false,
+        "ttlNote": "Permanent operational switch — decided by Martin Taal 2026-10-24; no retirement planned. An operator turns the schedule on per environment (together with that environment's Process Request), so `ttl` is deliberately absent: the scorer reports 'no TTL declared' and scores lifecycle 0. The registry has no dedicated field for a permanent flag; this note is the record. If the decision is ever revisited, retiring means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes.",
+        "symbols": [
+          "billing-reconciliation-schedule",
+          "FLAG_BILLING_RECONCILIATION_SCHEDULE",
+          "ETGO_FLAG_BILLING_RECONCILIATION_SCHEDULE",
+          "etendo.go.flags.billing-reconciliation-schedule",
+          "BillingReconciliationScheduleStartup"
+        ],
+        "$symbolsComment": "Backend-only flag: never declare it in flag-keys.js. Property and env-var spellings listed for Openbravo.properties and the ECS task definition. The gate method `scheduleEnabled` is deliberately NOT a symbol: the usage-aggregation-schedule gates use the same name, so it would count their files as touch points here; each gate already names FLAG_BILLING_RECONCILIATION_SCHEDULE. Evaluated with an empty (environment) context."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "No owned code: BillingReconciliationScheduleStartup and BillingReconciliationProcess stay when the flag retires. Toggle points: BillingReconciliationScheduleStartup.runPass()/scheduleEnabled(), and in BillingReconciliationProcess the scheduled-run gate in doExecute() with scheduleEnabled() plus the once-per-UTC-day internal alert for a request firing while the flag is off, which exists only because of the flag and goes with it. GoFeatureFlags is shared framework code. Docs: com.etendoerp.go docs/open-and-notable-topics.md '2.10 Billing reconciliation go-live: the flag and the Process Request go together', docs/feature-flags-and-tenant-upgrade.md 'billing-reconciliation-schedule (ETP-5048) — backend-only, strictly off by default'.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/startup/BillingReconciliationScheduleStartupTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/reconcile/BillingReconciliationProcessTest.java",
+            "note": "The scheduled-run gate: a scheduled run with the flag off does nothing and reports 'billing-reconciliation-schedule flag is off'."
+          }
+        ],
+        "e2e": []
+      }
+    },
+    {
+      "id": "usage-aggregation-schedule",
+      "description": "Opt-in schedule of the usage aggregation job (ETP-5051): the Process Request that recomputes the stored per-period usage every quota with consumption source 'aggregate' is evaluated against. The flag is a backend-only, environment-level gate, strictly off by default (and off on every failure of GoFeatureFlags): while it is off UsageAggregationScheduleStartup plants no System process request, and every SCHEDULED run (timing S) of the process does nothing and ends as ERROR in Process Monitor, whoever created the request. A run started from the Classic menu or once from a Process Request is not gated. Go-live is the flag AND the production Process Request together (production is never restarted, so the request is created by hand). The job, its service and the quota evaluator are permanent and are not owned by this entry.",
+      "owner": "mtaal",
+      "jira": "ETP-5051",
+      "created": "2026-10-24",
+      "flag": {
+        "key": "usage-aggregation-schedule",
+        "defaultValue": false,
+        "ttlNote": "Permanent operational switch — decided by Martin Taal 2026-10-24; no retirement planned. An operator turns the schedule on per environment (together with that environment's Process Request), so `ttl` is deliberately absent: the scorer reports 'no TTL declared' and scores lifecycle 0. The registry has no dedicated field for a permanent flag; this note is the record. If the decision is ever revisited, retiring means shipping the schedule: the startup plants the request unconditionally and the scheduled-run gate in the process goes.",
+        "symbols": [
+          "usage-aggregation-schedule",
+          "FLAG_USAGE_AGGREGATION_SCHEDULE",
+          "ETGO_FLAG_USAGE_AGGREGATION_SCHEDULE",
+          "etendo.go.flags.usage-aggregation-schedule",
+          "UsageAggregationScheduleStartup",
+          "TITLE_SCHEDULE_OFF"
+        ],
+        "$symbolsComment": "Backend-only flag: nothing in the browser evaluates it, so it must never be declared in flag-keys.js. The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. The gate method `scheduleEnabled` is deliberately NOT a symbol: BillingReconciliationScheduleStartup/BillingReconciliationProcess use the same name for their own flag, so it would count the other flag's files as touch points here; each gate already names FLAG_USAGE_AGGREGATION_SCHEDULE. Evaluated with an empty (environment) context."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "No owned code: the startup (UsageAggregationScheduleStartup, which plants the System request) and the process (UsageAggregationProcess) stay when the flag retires, the startup then planting unconditionally. Toggle points: UsageAggregationScheduleStartup.runPass()/scheduleEnabled() and the scheduled-run gate in UsageAggregationProcess.doExecute() with scheduleEnabled() and TITLE_SCHEDULE_OFF. GoFeatureFlags is shared framework code. Docs: com.etendoerp.go docs/plan-quotas.md '5.1 Turning the usage schedule on', docs/feature-flags-and-tenant-upgrade.md 'usage-aggregation-schedule (ETP-5051) — backend-only, strictly off by default', docs/open-and-notable-topics.md 'Billing reconciliation go-live' (the shape this schedule repeats).",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/usage/UsageAggregationProcessTest.java",
+            "note": "The scheduled-run gate: a scheduled run with the flag off does no work and fails with 'usage-aggregation-schedule flag is off'; the flag is evaluated with the key the process declares."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/startup/UsageAggregationScheduleStartupTest.java",
+            "note": "The startup hook, with the flag stubbed: flag off plants nothing; flag on plants the fixed System request at the configured cadence (two hours by default, floored); an active scheduled request is not planted twice and an unscheduled one is never reinserted; a missing process definition is skipped; scheduleEnabled() follows usage-aggregation-schedule; a scheduler failure while registering does not break the startup."
+          }
+        ],
+        "e2e": []
+      }
+    },
+    {
+      "id": "contact-category-type",
+      "description": "The contact category (C_BP_Group) decides the contact type. Contact Category window: required 'Tipo de contacto' group (Cliente / Proveedor-Acreedor), Accounting tab grouped by type, list with the type columns, 'category saved with associated contacts' notice. Contacts: type inherited from the category on create and on category change, document/OCR create popups refuse a category that does not grant the document's type, 'Proveedor/Acreedor' label, import without Cliente/Proveedor columns and with lookup-only category resolution. Backend (com.etendoerp.go) inherits the flags on create and refuses a category or contact with no type.",
+      "owner": "IrinaUrri",
+      "jira": "ETP-5791",
+      "created": "2026-10-26",
+      "flag": {
+        "key": "contact-category-type",
+        "defaultValue": false,
+        "ttl": "2026-11-15",
+        "ttlNote": "About 15 days of testing with the flag on in the experimental environment; then the flag is turned on everywhere and its code removed (ship branch of the technical debt playbook: unwrap every toggle point, delete the flag object, keep this entry).",
+        "symbols": [
+          "contact-category-type",
+          "CONTACT_CATEGORY_TYPE",
+          "FLAG_CONTACT_CATEGORY_TYPE",
+          "contactCategoryTypeEnabled",
+          "useContactCreateTypeGate",
+          "useContactCategoryTypeSync",
+          "contactVendorCreditor",
+          "BpCategoryAccountingPanel",
+          "BpCategoryTable",
+          "ContactTypeField",
+          "windows/custom/business-partner-category"
+        ],
+        "$symbolsComment": "Frontend toggle points that never name the key: the registry.js line that loads the window wrapper (windows/custom/business-partner-category), the decisions.json/generated references to BpCategoryTable and ContactTypeField, and the contactVendorCreditor locale key. contactCategoryTypeEnabled is the descriptor's toggle point; useContactCreateTypeGate the create popups' one. FLAG_CONTACT_CATEGORY_TYPE is the backend constant in GoFeatureFlags (framework)."
+      },
+      "paths": {
+        "frontend": [
+          "artifacts/business-partner-category/custom/",
+          "tools/app-shell/src/windows/custom/business-partner-category/index.jsx",
+          "tools/app-shell/src/windows/custom/contacts/useContactCategoryTypeSync.js",
+          "tools/app-shell/src/components/contract-ui/contactTypeRequirement.js",
+          "tools/app-shell/src/components/contract-ui/contactCategoryFlags.js",
+          "tools/app-shell/src/components/contract-ui/useContactCreateTypeGate.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/handlers/ContactTypeRules.java",
+          "src/com/etendoerp/go/schemaforge/handlers/BusinessPartnerCategoryHandler.java",
+          "src/com/etendoerp/go/schemaforge/handlers/ContactTypeFlagGuardHandler.java",
+          "src/com/etendoerp/go/schemaforge/handlers/ContactCustomerTabHandler.java",
+          "src/com/etendoerp/go/schemaforge/handlers/ContactVendorTabHandler.java",
+          "src/com/etendoerp/go/schemaforge/handlers/ContactTypeTelemetry.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost): ContactsBusinessPartnerForm.jsx (category sync), BillingPreferencesForm.jsx (label), contactsImportDescriptor.js (both import variants side by side), useCreateContactModal.jsx and copilot/ocr/CreateContactModalAdapter.jsx (owned by lookup-create-contact; they call useContactCreateTypeGate), lookupCreateTargets.js (createOmitUntouched), registry.js (window wrapper), both decisions.json files (ContactTypeField, BpCategoryTable, hiddenWhenFlag on customer/vendor) and the locales. Generic capabilities added by ETP-5791 are NOT owned and stay when the flag goes: importFlagGates.js (hiddenWhenFlag), useFeatureFlags/readFeatureFlag (lib/flags, framework), RecordCreateModal validateBeforeCreate/omitUntouched, EntityForm customRenderer ownsLabel/onFieldChange/onCommit, gateDetailTab CustomLines gating, SectionShell/useAccountSelectorPages, backendErrors mappings. Backend: BusinessPartnerHandler.java is a touch point (shared handler that calls ContactTypeRules); GoFeatureFlags.java is framework.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/BpCategoryAccountingPanel.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/ContactTypeField.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/useAssociatedContactsNotice.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/contacts/__tests__/useContactCategoryTypeSync.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/contactTypeRequirement.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/contacts/__tests__/contactsImportDescriptor.vitest.js",
+            "note": "Shared spec; must cover both flag states of the descriptor (Cliente/Proveedor + auto-create OFF, lookup-only ON)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/RecordCreateModal.vitest.jsx",
+            "note": "Shared spec; covers validateBeforeCreate and omitUntouched."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/index.vitest.jsx",
+            "note": "Window wrapper: flag OFF excludes etgoIscustomer (and its gate) and keeps the generated Accounting table; ON passes CustomLines={BpCategoryAccountingPanel} with DetailTable={null}."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/business-partner-category/__tests__/BpCategoryTable.vitest.jsx",
+            "note": "List columns per flag state (OFF: searchKey, name; ON: name, etgoIscustomer, etgoIsvendor, default)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/useContactCreateTypeGate.vitest.jsx",
+            "note": "Both create popups: OFF seeds customer/vendor and drops createOmitUntouched/validateBeforeCreate/requirement; ON the reverse."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/importFlagGates.vitest.js",
+            "note": "Generic hiddenWhenFlag filter, used here to hide the contacts Cliente/Proveedor columns."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/handlers/ContactTypeRulesTest.java"
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/contacts/contacts-import-category-resolution.mocked.spec.js",
+            "note": "Runs in both flag states, chosen by the dev server: OFF (plain server, what CI runs) covers category auto-create plus the Cliente/Proveedor columns; ON (VITE_FEATURE_FLAGS='{\"contact-category-type\":true}' plus E2E_CONTACT_CATEGORY_TYPE_FLAG=on) covers lookup-only resolution. The test of the other state skips itself."
+          },
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/contacts/contacts-import-category-resolution.integration.spec.js",
+            "note": "Live backend (E2E_USE_MOCK=0); runs in both flag states, and both halves of the flag must agree: backend etendo.go.flags.contact-category-type in Openbravo.properties (Tomcat restart) and frontend VITE_FEATURE_FLAGS. OFF (default) covers category auto-create, the contacts persisted on it and the Cliente/Proveedor roles, cleaning up its QA5791-prefixed records; ON (property true, VITE_FEATURE_FLAGS='{\"contact-category-type\":true}' plus E2E_CONTACT_CATEGORY_TYPE_FLAG=on) covers existing-category resolution and rows naming an unknown category failing. The test of the other state skips itself."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "db-columns-and-datafixes-before-flag-on",
+          "kind": "precondition",
+          "note": "Not gated: the C_BP_Group columns EM_Etgo_Iscustomer / EM_Etgo_Isvendor exist (default N) and data-fixes R55/R56 flag the categories regardless of the flag. Categories created while the flag is OFF are saved N/N (the type group is hidden and the backend does not refuse them), and with the flag ON an N/N category defines no type and cannot be saved again without choosing one. Therefore R55/R56 must be re-run (or a follow-up fix repeating R56's rule) right before the flag is turned on in each environment.",
+          "refs": [
+            "cli/src/data-fixes/sql/20261026T120000Z__R55-bp-category-customer-vendor-flags.sql",
+            "cli/src/data-fixes/sql/20261026T130000Z__R56-bp-category-custom-flags-from-contacts.sql",
+            "docs/etendo-ad/onboarding-gaps.md — 'U1 — Contact categories without customer/vendor type'"
+          ]
+        },
+        {
+          "id": "mcp-exposed-category-fields",
+          "kind": "cosmetic",
+          "note": "Not gated: with the flag OFF the MCP/REST schema of business-partner-category still exposes etgoIscustomer / etgoIsvendor, which the UI hides. Harmless: the C_BP_Group columns exist and R55/R56 are re-run before the flag is turned on (see db-columns-and-datafixes-before-flag-on). The agentPrompts of those fields and of contacts customer/vendor are state-agnostic since ETP-5791 (the agent sends customer/vendor matching the category instead of relying on inheritance), so they are no longer part of this item.",
+          "refs": [
+            "artifacts/business-partner-category/decisions.json"
+          ]
+        }
+      ]
+    },
+    {
       "id": "structured-address-for-sepa",
       "description": "Relaunch flag for ETP-5806 (structured Street/Number/Building Name address fields, replacing the single-line free-text address) across Etendo GO's 4 address popups (Contacts, Warehouse, Business Partner location, Organization via the optional locationAddress pointer), the onboarding Company step, MCP schema/selectors, and the onboarding mandatory-address check. The feature was built, reviewed and QA'd once already in schema_forge/schema_forge_core/com.etendoerp.go, then reverted in schema_forge_core at product's request before shipping (schema_forge_core commit d9ed186f9, PR #332) while the schema_forge and com.etendoerp.go PRs (#1966, #1424) were left open and unreverted. This relaunch reintroduces the schema_forge_core UI and gates all three repos' implementations behind this flag rather than shipping unconditionally again. Renamed from the original `structured-address` during this relaunch to reference the regulatory driver (see $ttlComment) -- the key carries no ticket number, matching `bp-portal-link`/`onboarding-tenant-pool`.",
       "owner": "ruben.danielle",
@@ -1149,6 +1365,74 @@
           }
         ]
       }
+    },
+    {
+      "id": "grid-column-views",
+      "description": "Personal column views for list, lines and bespoke business grids: the user hides, reorders and resizes data columns and saves the result explicitly per user, spec and entity. TanStack Table (headless) holds the column state while the markup stays Schema Forge's own. Persistence is a user-scoped AD_Preference behind /sws/neo/grid-views/{spec}/{entity} in com.etendoerp.go.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5835",
+      "created": "2026-10-20",
+      "flag": {
+        "key": "grid-column-views",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER, not a decision: the date to retire the flag has not been set. The feature ships dark (default off); the real TTL depends on the rollout phases a human still has to approve (see the contract-approval-not-recorded item).",
+        "symbols": [
+          "grid-column-views",
+          "GRID_COLUMN_VIEWS",
+          "useGridView",
+          "useFlaggedGridView",
+          "GridViewControls",
+          "renderGridViewCells"
+        ],
+        "$symbolsComment": "useGridView, useFlaggedGridView, GridViewControls and renderGridViewCells are the toggle points that never name the key: the bespoke grids call useFlaggedGridView and render GridViewControls only when the flag is on."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/hooks/useGridView.js",
+          "tools/app-shell/src/hooks/useFlaggedGridView.js",
+          "tools/app-shell/src/components/contract-ui/GridViewControls.jsx",
+          "tools/app-shell/src/components/contract-ui/GridColumnHeaderControls.jsx"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/NeoGridViewsService.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost, deliberately not owned): DataTable.jsx, ListView.jsx, ListModalWindow.jsx, InlineLinesPanel.jsx, ReconciliationSplitPanel.jsx, windows/registry.js, and the bespoke grids listed in docs/bespoke-grid-views.md. NeoBuiltInEndpointHandler.java routes the endpoint but also serves unrelated built-in endpoints.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/hooks/__tests__/useFlaggedGridView.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.gridViews.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/flags/__tests__/useFeatureFlag.vitest.jsx",
+            "note": "Shared spec; covers the default-off state and the explicit on override of this flag."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/platform/grid-column-views.mocked.spec.js",
+            "note": "The flag-off half runs on the plain server (what CI runs) and proves the grids are inert; the flag-on half skips itself unless E2E_GRID_COLUMN_VIEWS_FLAG=on and the server was started with VITE_FEATURE_FLAGS."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "contract-approval-not-recorded",
+          "kind": "precondition",
+          "note": "The human approval of the ETP-5834 contract (surfaces, view content, storage, rollout, width precedence) is still recorded as PENDING, so the flag must not be turned on beyond a test environment, and the TTL above stays a placeholder until a person decides.",
+          "refs": [
+            "docs/plans/grid-customization-evaluation.md — 'Decision record'"
+          ]
+        }
+      ]
     }
   ]
 }

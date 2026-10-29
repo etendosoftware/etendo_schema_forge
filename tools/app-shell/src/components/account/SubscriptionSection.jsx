@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CreditCard, Loader2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,6 +10,97 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { getSubscription, createPortalSession } from '@/lib/upgrade/api.js';
 import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
+import {
+  QUOTA_VERDICT_DENY,
+  quotaResourceLabel,
+  quotaStateKey,
+  quotaUsageWithPeriod,
+} from '@/lib/planQuotas.js';
+
+const QUOTA_PERIOD_DATE = { day: 'numeric', month: 'short', year: 'numeric' };
+const QUOTA_WARNING_BADGE = 'border-status-warning-border bg-status-warning text-status-warning-foreground';
+
+/**
+ * ETP-5051 — the plan's quotas, read-only: what the plan includes and how much of it the current
+ * billing period has used. The data is `planQuotas` of `GET /sws/go/billing/subscription`, the full
+ * `QuotaItem` (see `lib/planQuotas.js`). Rules the copy follows:
+ *
+ * - a plan with an empty `planQuotas` has no limits — unlimited (`open-and-notable-topics.md` §5.1);
+ * - `consumed: null` is "not measured yet", never zero;
+ * - the period word is always shown, so a quota on a yearly plan reads yearly (§5.8);
+ * - WARN / DENY get a state badge; ALLOW and not-evaluated (`verdict: null`, mode `off`) get none.
+ *
+ * `periodStart` / `periodEnd` are the subscription's current period, the same on every item, so
+ * the range is shown once. They are date-only `yyyy-MM-dd` strings, formatted through
+ * `formatCalendarDate`.
+ */
+function PlanQuotas({ planName, quotas, ui, locale }) {
+  if (!planName) return null;
+  const items = Array.isArray(quotas) ? quotas.filter(Boolean) : [];
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="SubscriptionSection__quotasUnlimited">
+        {ui('subscriptionPlanUnlimited')}
+      </p>
+    );
+  }
+  const withPeriod = items.find((item) => item.periodStart && item.periodEnd);
+  return (
+    <div className="space-y-2" data-testid="SubscriptionSection__quotas">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium">{ui('subscriptionPlanLimits')}</h3>
+        {withPeriod && (
+          <span
+            className="text-xs text-muted-foreground"
+            data-testid="SubscriptionSection__quotaPeriod"
+          >
+            {ui('quotaCurrentPeriod', {
+              start: formatCalendarDate(withPeriod.periodStart, locale, QUOTA_PERIOD_DATE),
+              end: formatCalendarDate(withPeriod.periodEnd, locale, QUOTA_PERIOD_DATE),
+            })}
+          </span>
+        )}
+      </div>
+      <ul className="divide-y rounded-md border">
+        {items.map((item, index) => {
+          const stateKey = quotaStateKey(item);
+          const notMeasured = item.consumed === null || item.consumed === undefined;
+          return (
+            <li
+              key={item.resourceKey || `${item.resourceName}-${index}`}
+              className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+              data-testid="SubscriptionSection__quota"
+              data-verdict={item.verdict || ''}
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium" data-testid="SubscriptionSection__quotaName">
+                  {quotaResourceLabel(item)}
+                </p>
+                <p className="text-xs text-muted-foreground" data-testid="SubscriptionSection__quotaUsage">
+                  {quotaUsageWithPeriod(item, ui)}
+                  {notMeasured && (
+                    <span className="ml-1" data-testid="SubscriptionSection__quotaNotMeasured">
+                      {ui('quotaNotMeasured')}
+                    </span>
+                  )}
+                </p>
+              </div>
+              {stateKey && (
+                <Badge
+                  variant={item.verdict === QUOTA_VERDICT_DENY ? 'destructive' : 'outline'}
+                  className={item.verdict === QUOTA_VERDICT_DENY ? undefined : QUOTA_WARNING_BADGE}
+                  data-testid="SubscriptionSection__quotaState"
+                >
+                  {ui(stateKey)}
+                </Badge>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * Maps Stripe's live subscription `status` (lowercase, provider-defined — see
@@ -68,6 +160,12 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
   const [subscription, setSubscription] = useState(null);
   const [managing, setManaging] = useState(false);
   const [manageError, setManageError] = useState(false);
+  // ETP-5051 O-1 — inside an environment the subscription endpoint answers THAT environment's own
+  // subscription, so `hasSubscription: false` there means the environment has none (a demo, an
+  // environment the user was invited into), even when the account pays for another one. Only an
+  // account-level session (no environment entered: `clientId` null) reads the account-wide line.
+  // `useAuthOptional`: the section must still render without an AuthProvider above it.
+  const insideEnvironment = Boolean(useAuthOptional()?.clientId);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -143,8 +241,15 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
   // drive neither: Stripe's own status vocabulary (active/past_due/trialing/canceled/...) can
   // disagree in timing with the stored grace window.
   const graceDaysRemaining = subscription?.graceDaysRemaining ?? 0;
-  const showsGraceRemaining = graceDaysRemaining > 0;
-  const showsAccessPaused = !showsGraceRemaining && subscription?.graceEndsAt != null;
+  const inGraceWindow = graceDaysRemaining > 0 || subscription?.graceEndsAt != null;
+  // ETP-5051 (contract §4c, `open-and-notable-topics.md` §4.17) — `accessEnforced: false` means the
+  // environment-access kill switch is on for this tenant: access will not be paused, so neither the
+  // countdown nor "access is paused" is true. One neutral line says only that the payment is
+  // overdue. A missing field (older backend) keeps today's copy.
+  const enforcementOff = subscription?.accessEnforced === false;
+  const showsPaymentOverdue = enforcementOff && inGraceWindow;
+  const showsGraceRemaining = !enforcementOff && graceDaysRemaining > 0;
+  const showsAccessPaused = !enforcementOff && !showsGraceRemaining && subscription?.graceEndsAt != null;
   // Only English/Spanish need a singular form today (no language here inflects further at N=2+),
   // matching the manual `_one`/`_many` key-selection convention already used for this kind of
   // count-driven copy — see `fm.m349.vies.result.processed_one`/`_many` in FmModel349Page.jsx.
@@ -192,7 +297,7 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
 
         {status === 'loaded' && !hasSubscription && (
           <p className="mt-4 text-sm text-muted-foreground" data-testid="SubscriptionSection__none">
-            {ui('subscriptionNoActive')}
+            {ui(insideEnvironment ? 'subscriptionNoneInEnvironment' : 'subscriptionNoActive')}
           </p>
         )}
 
@@ -203,8 +308,10 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
                 className="h-4 w-4 text-muted-foreground"
                 data-testid="CreditCard__769a8e" />
               <span className="text-xs text-muted-foreground">{ui('subscriptionPlan')}</span>
+              {/* ETP-5051 — the catalog plan name when the subscription has a plan row; the live
+                  provider product name (`plan`) otherwise. */}
               <span className="text-sm font-medium" data-testid="SubscriptionSection__plan">
-                {subscription.plan}
+                {subscription.planName || subscription.plan}
               </span>
               <span
                 className="text-sm text-muted-foreground"
@@ -242,6 +349,15 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
               </p>
             )}
 
+            {showsPaymentOverdue && (
+              <p
+                className="text-sm text-destructive"
+                data-testid="SubscriptionSection__paymentOverdue"
+              >
+                {ui('subscriptionPaymentOverdue')}
+              </p>
+            )}
+
             {showsAccessPaused && (
               <p
                 className="text-sm text-destructive"
@@ -250,6 +366,13 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
                 {ui('subscriptionAccessPaused')}
               </p>
             )}
+
+            <PlanQuotas
+              planName={subscription.planName}
+              quotas={subscription.planQuotas}
+              ui={ui}
+              locale={locale}
+              data-testid="PlanQuotas__769a8e" />
 
             <div>
               <Button

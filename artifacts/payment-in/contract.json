@@ -1,8 +1,8 @@
 {
   "version": "0.14.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-10-16T17:29:24.321Z",
-  "checksum": "2094cb3dcd79cf4a",
+  "updatedAt": "2026-10-22T17:16:40.750Z",
+  "checksum": "425c9c1d73a62121",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -843,7 +843,6 @@
             }
           }
         ],
-        "javaQualifier": "payment-reactivate",
         "formCols": 3
       },
       "finPaymentScheduleDetail": {
@@ -1430,8 +1429,7 @@
             "visibility": "system",
             "required": true
           }
-        ],
-        "javaQualifier": "payment-reactivate"
+        ]
       },
       "finPaymentScheduleDetail": {
         "tableName": "FIN_Payment_ScheduleDetail",

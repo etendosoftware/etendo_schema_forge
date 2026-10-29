@@ -114,4 +114,42 @@ describe('buildWindowMap', () => {
     const map = buildWindowMap();
     for (const name of ['project', 'time-tracking', 'document']) assert.ok(map[name], `${name} is linked from /projects`);
   });
+
+  it('marks generated windows and audited standard DataTable wrappers as grid-view candidates', () => {
+    const map = buildWindowMap();
+
+    assert.equal(map['goods-shipment'].standardListViewSource, true);
+    assert.equal(map.amortization.standardListViewSource, true);
+    assert.equal(map['financial-account'].standardListViewSource, true);
+    for (const name of [
+      'amortization', 'assets', 'goods-movements', 'goods-receipt', 'internal-consumption',
+      'physical-inventory', 'price-list', 'purchase-order', 'return-to-vendor-shipment',
+      'sales-order', 'sales-quotation', 'sales-invoice', 'purchase-invoice',
+      'payment-in', 'payment-out', 'user', 'warehouse', 'contacts', 'product',
+      'product-category', 'goods-shipment', 'return-material-receipt', 'financial-account',
+    ]) assert.equal(map[name].standardListViewSource, true, name);
+    for (const name of ['calendar', 'organization', 'fiscal-monitor']) {
+      assert.equal(map[name].standardListViewSource, false, name);
+    }
+  });
+});
+
+
+describe('audited standard table contract slots', () => {
+  it('declares the exact forwarding header wrapper for each audited custom table', () => {
+    const map = buildWindowMap();
+    for (const [name, headerTable] of Object.entries({
+      contacts: 'ContactsTable',
+      'financial-account': 'AccountsHeaderTable',
+      'sales-invoice': 'InvoiceHeaderTable',
+      'purchase-invoice': 'InvoiceHeaderTable',
+      'payment-in': 'PaymentHeaderTable',
+      'payment-out': 'PaymentHeaderTable',
+      user: 'UserHeaderTable',
+    })) assert.equal(map[name].standardListViewHeaderTable, headerTable, name);
+    assert.equal(map['sales-order'].standardListViewHeaderTable, null);
+    assert.equal(map.warehouse.standardListViewHeaderTable, null);
+    assert.equal(map.product.standardListViewLayout, 'gallery');
+    assert.equal(map.contacts.standardListViewLayout, 'default');
+  });
 });
