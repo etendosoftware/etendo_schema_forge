@@ -22410,6 +22410,7 @@
     "fm.catalog.title": "Form catalog",
     "fm.catalog.sub": "Enable or disable the tax forms you need to file.",
     "fm.catalog.active_count": "active forms",
+    "fm.catalog.save_unavailable": "The model catalog could not be loaded, so your changes were not saved. Reload the page and try again.",
     "fm.catalog.activate": "Enable",
     "fm.catalog.deactivate": "Disable",
     "fm.catalog.cat.iva": "VAT",

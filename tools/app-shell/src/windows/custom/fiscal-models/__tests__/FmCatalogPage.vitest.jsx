@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // Vitest component tests for FmCatalogPage.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -35,7 +36,7 @@ vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
   };
 });
 
-import FmCatalogPage from '../FmCatalogPage.jsx';
+import FmCatalogPage, { catalogSelectionChanged } from '../FmCatalogPage.jsx';
 
 const defaultProps = {
   onBack: vi.fn(),
@@ -198,7 +199,9 @@ describe('FmCatalogPage — toggle', () => {
 // ── Close / Save ──────────────────────────────────────────────────────────────
 
 describe('FmCatalogPage — close and save', () => {
-  it('calls onSave and onBack when close button is clicked', () => {
+  // ETP-5716: closing saves only a real change, so opening and closing the drawer never rewrites
+  // the catalog (a PUT replaces the whole catalog).
+  it('closes without saving when the close button is clicked with no change', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
@@ -206,7 +209,7 @@ describe('FmCatalogPage — close and save', () => {
     );
     const closeBtn = container.querySelector('.fm-catalog-header__back');
     fireEvent.click(closeBtn);
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
+    expect(onSave).not.toHaveBeenCalled();
     expect(onBack).toHaveBeenCalled();
   });
 
@@ -232,15 +235,16 @@ describe('FmCatalogPage — close and save', () => {
   // FmCatalogPage owns its own overlay + drawer wrapper, and a single
   // handleClose (calling onSave then onBack) backs BOTH the backdrop click
   // and the X button, so both close paths save consistently.
-  it('calls onSave and onBack when the backdrop overlay is clicked (not just the X button)', () => {
+  it('calls onSave and onBack when the backdrop overlay is clicked after a change (not just the X button)', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // toggle 303 off
     const overlay = container.querySelector('.fm-catalog-overlay');
     fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': false, '349': true }));
     expect(onBack).toHaveBeenCalled();
   });
 
@@ -272,7 +276,7 @@ describe('FmCatalogPage — close and save', () => {
     expect(onBack).not.toHaveBeenCalled();
   });
 
-  it('calls onSave/onBack with the unchanged activeModels when the backdrop is clicked without any toggle', () => {
+  it('does not save when the backdrop is clicked without any toggle', () => {
     // Edge case: closing via backdrop when `active` state is identical to the
     // original `activeModels` prop — no toggles made before closing.
     const onBack = vi.fn();
@@ -283,9 +287,21 @@ describe('FmCatalogPage — close and save', () => {
     );
     const overlay = container.querySelector('.fm-catalog-overlay');
     fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
+    expect(onSave).not.toHaveBeenCalled();
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggling a model on and back off is no change: nothing is saved', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true }} />
+    );
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '349');
+    fireEvent.click(card349.querySelector('[role="switch"]'));
+    fireEvent.click(card349.querySelector('[role="switch"]'));
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   // Gap: handleClose has no idempotency guard (no "already closed" flag). In
@@ -300,6 +316,7 @@ describe('FmCatalogPage — close and save', () => {
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
     const overlay = container.querySelector('.fm-catalog-overlay');
     fireEvent.click(overlay);
     fireEvent.click(overlay);
@@ -313,6 +330,7 @@ describe('FmCatalogPage — close and save', () => {
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
     const closeBtn = container.querySelector('.fm-catalog-header__back');
     fireEvent.click(closeBtn);
     fireEvent.click(closeBtn);
@@ -428,5 +446,118 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     expect(switchOf(container, '349').getAttribute('aria-checked')).toBe('true');
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(sii.calls).toBe(0);
+  });
+});
+
+// ── Models the backend marks unavailable (backend-only flag `fiscal-model-390`) ──
+
+describe('FmCatalogPage — unavailable models', () => {
+  const badges = (container) => Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+    .map(b => b.textContent);
+  // The header renders the catalog size in the badge next to the title, and the active count in
+  // the subtitle ("• N fm.catalog.active_count").
+  const headerTitleBadge = (container) =>
+    container.querySelector('.fm-catalog-header__titles span').textContent;
+  const headerActiveLine = (container) =>
+    container.querySelector('.fm-catalog-header__sub').textContent;
+
+  it('renders no 390 card when the 390 is unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} unavailableModels={['390']} />);
+    expect(badges(container).sort()).toEqual(['303', '349']);
+    expect(document.body.textContent).not.toContain('fm.catalog.390.name');
+  });
+
+  it('does not count the 390 in the header when it is unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} unavailableModels={['390']} />);
+    expect(headerTitleBadge(container)).toBe('2');
+    expect(headerActiveLine(container)).toContain('2');
+  });
+
+  it('does not save a 390 value when it is unavailable and there is no stored catalog', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={['390']} />
+    );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    const saved = onSave.mock.calls[0][0];
+    expect('390' in saved).toBe(false);
+    expect(Object.keys(saved).sort()).toEqual(['303', '349']);
+  });
+
+  it('does not save a 390 value after toggling the other models while it is unavailable', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true }} unavailableModels={['390']} />
+    );
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '349');
+    fireEvent.click(card349.querySelector('[role="switch"]'));
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
+  });
+
+  it('shows the 390 card, counts it and saves it when it is available (no marker)', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={[]} />
+    );
+    expect(badges(container).sort()).toEqual(['303', '349', '390']);
+    expect(headerTitleBadge(container)).toBe('3');
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave.mock.calls[0][0]).toHaveProperty('390');
+  });
+
+  it('treats a missing unavailableModels prop as nothing unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    expect(badges(container)).toContain('390');
+  });
+});
+
+// ── catalogSelectionChanged: the "save only on a real change" rule ───────────
+
+describe('catalogSelectionChanged', () => {
+  it('is false for the same selection', () => {
+    expect(catalogSelectionChanged({ 303: true, 349: false }, { 303: true, 349: false })).toBe(false);
+  });
+
+  it('is true when a model flips', () => {
+    expect(catalogSelectionChanged({ 303: true }, { 303: false })).toBe(true);
+    expect(catalogSelectionChanged({ 349: false }, { 349: true })).toBe(true);
+  });
+
+  it('treats a missing key and an explicit false as the same', () => {
+    expect(catalogSelectionChanged({ 303: true }, { 303: true, 349: false })).toBe(false);
+    expect(catalogSelectionChanged({ 303: true, 390: false }, { 303: true })).toBe(false);
+  });
+
+  it('is true when a model missing before is now active', () => {
+    expect(catalogSelectionChanged({ 303: true }, { 303: true, 349: true })).toBe(true);
+  });
+
+  it('is true when an active model disappears', () => {
+    expect(catalogSelectionChanged({ 303: true, 349: true }, { 303: true })).toBe(true);
+  });
+
+  it('compares values as booleans', () => {
+    expect(catalogSelectionChanged({ 303: 1, 349: 0 }, { 303: true, 349: false })).toBe(false);
+    expect(catalogSelectionChanged({ 303: 'Y' }, { 303: true })).toBe(false);
+    expect(catalogSelectionChanged({ 303: null, 349: undefined }, {})).toBe(false);
+    expect(catalogSelectionChanged({ 303: '' }, { 303: true })).toBe(true);
+  });
+
+  it('defaults missing arguments to an empty selection', () => {
+    expect(catalogSelectionChanged()).toBe(false);
+    expect(catalogSelectionChanged(undefined, { 303: false })).toBe(false);
+    expect(catalogSelectionChanged({ 303: true }, undefined)).toBe(true);
+  });
+
+  it('does not mutate its arguments', () => {
+    const before = { 303: true };
+    const after = { 303: false, 349: true };
+    catalogSelectionChanged(before, after);
+    expect(before).toEqual({ 303: true });
+    expect(after).toEqual({ 303: false, 349: true });
   });
 });

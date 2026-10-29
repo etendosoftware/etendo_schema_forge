@@ -114,7 +114,7 @@
           "searchable": true,
           "section": "principal",
           "seq": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "required": true }
         },
         "name": {
           "grid": true,
@@ -129,7 +129,7 @@
               { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
             ]
           },
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null, "required": true }
         },
         "description": {
           "type": "textarea",

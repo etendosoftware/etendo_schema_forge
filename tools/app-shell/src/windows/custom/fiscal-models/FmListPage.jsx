@@ -816,7 +816,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   // Shared catalog reader (ETP-5831): same endpoint, same `{}` = no model active rule as the
   // Organization window's fiscal sections. `setActiveModels` stays local for the drawer's save.
   const {
-    activeModels, setActiveModels, loaded: catalogLoaded,
+    activeModels, setActiveModels, unavailableModels, loaded: catalogLoaded, error: catalogError,
   } = useFiscalModelsCatalog(apiBaseUrl, token);
 
   // "Resultado" auto-compute, one bucket set per registered model — see
@@ -1397,10 +1397,17 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       {showCatalog && (
         <FmCatalogPage
           activeModels={activeModels}
+          unavailableModels={unavailableModels}
           onBack={() => setShowCatalog(false)}
           onSave={(newActive) => {
-            setActiveModels(newActive);
             setShowCatalog(false);
+            // The PUT replaces the whole catalog: never send one built without a successful read
+            // (it would switch off every model the drawer could not see).
+            if (!catalogLoaded || catalogError) {
+              toast.error(t('fm.catalog.save_unavailable'));
+              return;
+            }
+            setActiveModels(newActive);
             if (apiBaseUrl) {
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
               apiFetch(`${base}/fiscal-models-catalog`, {
