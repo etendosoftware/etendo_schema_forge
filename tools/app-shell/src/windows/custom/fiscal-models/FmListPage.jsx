@@ -952,12 +952,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       .then((result) => {
         if (result.ok) {
           setDecls(ds => ds.filter(d => d.id !== deleteTarget.id));
-          setDeleteTarget(null);
         } else {
           toast.error(t('fm.list.delete_failed') ?? 'No se pudo eliminar la declaración.');
         }
       })
-      .finally(() => setDeletingId(null));
+      // ETP-5725 (QA CP-20) — the confirmation closes on BOTH outcomes, next to the busy
+      // flag it is paired with. Clearing it only inside the `result.ok` branch left the
+      // modal stranded on top of its own error toast, so the user had to dismiss the
+      // dialog by hand to even read the row again. Same shape as handleConfirmReactivate.
+      .finally(() => { setDeletingId(null); setDeleteTarget(null); });
   }, [deleteTarget, token, apiBaseUrl, t]);
 
   // Row hover "reactivate" action (ETP-5338) — reverts a submitted/submitted_ack declaration
@@ -974,7 +977,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         if (result.ok) {
           // The backend cleared the submission snapshot (ETP-5438): a draft computes live again.
           setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft', submittedSnapshot: null } : d));
-          setReactivateTarget(null);
         } else if (result.reason === 'corrective_sibling_presented') {
           // ETP-5725 (reopened QA fix, UX follow-up) — the precise, commonly-hit case: a
           // rectificativa/sustitutiva sibling is already presented for this period, so
@@ -992,7 +994,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           toast.error(t('fm.list.reactivate_failed') ?? 'No se pudo reactivar la declaración.');
         }
       })
-      .finally(() => setReactivatingId(null));
+      // ETP-5725 (QA CP-20) — the confirmation closes whether the reactivation succeeded or
+      // was rejected. It used to be cleared only in the `result.ok` branch above, so the
+      // common "ya existe una rectificativa/sustitutiva presentada" rejection showed its
+      // toast WITH the modal still open on top of the list. The busy flag and the dialog
+      // are the same lifecycle, so they are cleared in the same place.
+      .finally(() => { setReactivatingId(null); setReactivateTarget(null); });
   }, [reactivateTarget, token, apiBaseUrl, t]);
 
   const yearOptions = useMemo(

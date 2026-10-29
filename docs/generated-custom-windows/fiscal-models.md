@@ -1102,6 +1102,17 @@ bare status code was ever propagated) via the existing `parseServerMessage` help
 `fm.list.reactivate_failed` when no reason is present (network error, or any future 409 this
 mechanism doesn't tag).
 
+**QA CP-20 — the confirmation popup must close on BOTH outcomes.** The toast above was shown
+*underneath a still-open modal*: `handleConfirmReactivate` cleared `reactivateTarget` only inside
+its `result.ok` branch, so every rejected reactivation (the common
+`corrective_sibling_presented` one included) left the dialog on screen and the user had to cancel
+it by hand to read the list again. The target is now cleared in `.finally`, next to the
+`reactivatingId` busy flag it shares a lifecycle with — the row itself is still left untouched on
+failure, so the action can simply be retried. `handleConfirmDelete` (the sibling confirmation in
+the same component) had the identical shape and was fixed the same way in the same change.
+Guarded by `FmListPage.reactivate.vitest.jsx` (all three rejection reasons) and
+`FmListPage.rowActions.vitest.jsx` (delete).
+
 **4 — Display regression: the Bug 3 fix needed a second layer.** ETP-5725's original Bug 3 fix
 (see "Tipo column derivation" above) only patched `FmListPage.jsx`'s `resolveDeclTypeLabel` — its
 "never-saved" fallback now requires `decl.status === 'draft'` before defaulting to
