@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/incidentSeverity.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // Vitest component tests for FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -1034,25 +1035,16 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
   });
 
-  it('BUG: a non-empty string GET body produces a nonsensical positive active-models count', async () => {
-    // Object.values('abc') → ['a','b','c'] (all truthy) so `activeCount` reports
-    // 3 "active" models even though modelOptions/activeDecls correctly see none
-    // (string indexing by '303'/'349' is `undefined`). Consequences, both visible
-    // in this test: (1) the toolbar shows a misleading "(3)" and the
-    // '+ fm.action.new_declaration' CTA becomes visible, AND (2) because `activeCount`
-    // (not `modelOptions.length`) gates the table-vs-empty-state branch, the UI
-    // skips the intended "no active models, configure from the Catálogo" empty
-    // state and instead falls through to the plain/generic empty table — an
-    // inconsistent, unhelpful state for a case that should read as "nothing
-    // active". See FmListPage.jsx `setActiveModels(data ?? {})` and the
-    // `activeCount === 0 ? ... : filtered.length === 0 ? <EmptyState /> ...` branch.
+  it('shows 0 active models when the GET body is a non-empty string', async () => {
+    // A string body used to leak through as the active-models map (Object.values('abc') gave a
+    // nonsensical "(3)"). The catalog reader now splits every answer through
+    // `splitCatalogAnswer` (catalogAvailability.js, ETP-5716), which treats any non-object body
+    // as "nothing active", so this reads like the array case above.
     globalThis.fetch = mockCatalogFetch('abc');
     const { getByText, container } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
-    expect(getByText(/fm\.catalog\.title.*\(3\)/)).toBeTruthy();
-    expect(getByText('+ fm.action.new_declaration')).toBeTruthy();
-    // Falls through to the generic/plain empty state, NOT the "no active models" one.
-    expect(container.querySelector('.fm-empty-state').textContent).toBe('empty');
+    expect(getByText(/fm\.catalog\.title.*\(0\)/)).toBeTruthy();
+    expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
   });
 });
 

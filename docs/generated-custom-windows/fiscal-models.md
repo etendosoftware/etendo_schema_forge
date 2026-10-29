@@ -3819,6 +3819,7 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
 | Surface | 390 behaviour | Driven by |
 |---|---|---|
 | Catalog | Card "390" with the single chip "Anual"; SII warning on activation (see "Model catalog") | `periodicities: ['annual']`, `siiWarningOnActivate` |
+| Every surface | Hidden while the backend-only flag `fiscal-model-390` is off for the tenant (the default): the catalog answer drops 390 and marks it `_unavailable` (see "Model catalog › Modelo 390 behind the backend-only flag") | `FiscalModel390Flag` (backend), `catalogAvailability.js` |
 | Nueva declaración | Subtitle "Elige el modelo y el ejercicio que quieres declarar." (`fm.new_decl.subtitle_annual`; the others keep the "período" one). Year only (no Frecuencia / Período), the Año field full width (`.fm-newdecl-row--single`): under Año a grey "Anual" pill + "El Modelo 390 no tiene frecuencia ni periodo: se declara el ejercicio completo." (`fm.new_decl.annual_hint`); footer "Se creará como Modelo 390 · Anual <año>" (`fm.new_decl.preview_annual`); period sent is `'0A'` | `isAnnualOnlyModel` (`fiscalPeriods.js`) |
 | Nueva declaración | An ordinary 390 of the selected year already in the list → inline notice "Ya existe el Modelo 390 de <año>" + **Abrir declaración** (`onOpenExisting`) and "Crear declaración" disabled. A substitute (`type: 'com'`) does not block | `singleOrdinaryPerYear` |
 | Nueva declaración | Amber, non-blocking notice with a `TriangleAlert`: bold "Faltan Modelos 303 de <año> (T4)." (`fm.m390.new_decl.missing_303_lead`, the hook's `key`) + "El 390 se calculará igualmente, pero el resultado podría no cuadrar." (`…_body`, the hook's optional `bodyKey`) when 303s of the year are not in the list. The duplicate-ordinary notice has the same icon with its sentence in bold. Quarterly filer by default (T1-T4); once the year has a monthly 303, every month 01-12 is expected; any status counts | `newDeclWarning` → `newDeclWarning390.js` |
@@ -4720,6 +4721,38 @@ The catalog drawer lists the tax forms the tenant can enable/disable — no lock
 | `303` | Modelo 303 - Autoliquidación IVA | Trimestral + Mensual | Autoliquidación del IVA |
 | `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
 | `390` | Modelo 390 - Resumen anual de IVA | Anual | Declaración resumen anual de las autoliquidaciones de IVA del ejercicio (ETP-5716) |
+
+### Modelo 390 behind the backend-only flag `fiscal-model-390` (ETP-5716)
+
+The whole Modelo 390 is hidden until the backend-only flag `fiscal-model-390` is on for the tenant
+(default **off**; TTL 2027-01-01; registry entry `fiscal-model-390` in `flags-registry.json`). The
+flag is evaluated only in `com.etendoerp.go` (`FiscalModel390Flag`, called by
+`NeoFiscalModelsCatalogService`); the SPA has no key for it in `flag-keys.js` and only reacts to the
+catalog answer:
+
+- **Catalog answer, flag off:** `GET <neo>/fiscal-models-catalog` drops the `390` key and adds
+  `"_unavailable": ["390"]`, e.g. `{"303": true, "_unavailable": ["390"]}` (and
+  `{"_unavailable": ["390"]}` for a never-saved catalog). Flag on, the answer is exactly the stored
+  catalog, with no marker.
+- **The SPA:** `useFiscalModelsCatalog` splits the marker off (`splitCatalogAnswer`,
+  `catalogAvailability.js`), so `activeModels` never contains it and exposes `unavailableModels`.
+  Because `390` is never active, the declarations list, the "Modelo" filter and "Nueva declaración"
+  hide it, so the 390 detail page cannot be reached (it has no URL of its own). The catalog drawer
+  drops unavailable models from its cards and from its count (`filterAvailableModels`). The
+  Organization window's "Representante legal / Modelo 390" section hides for the same reason (see
+  the organization guide, "Fiscal section visibility").
+- **Catalog save, flag off:** `PUT` ignores any `390` value the client sends and keeps the stored one,
+  and never persists `_unavailable`. A tenant that had 390 active before the flag was turned off
+  gets it back when it is turned on again.
+- **Not gated:** the `/fiscal390/*` and legal-representative endpoints answer whatever the flag says.
+  The flag is a visual gate, not authorization; those endpoints stay protected by the role's
+  window access. Existing 390 declarations are never touched.
+- **Failure:** any failure of the flag provider resolves to off (hidden). A failed catalog read in the
+  SPA shows no active model, as before.
+
+Turning it on locally: `etendo.go.flags.fiscal-model-390=true` in `Openbravo.properties` (or the JVM
+property, or the environment variable `ETGO_FLAG_FISCAL_MODEL_390=true`), then restart Tomcat. Full
+reference: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`, "`fiscal-model-390`".
 
 ### SII warning when activating the 390 (ETP-5716)
 
