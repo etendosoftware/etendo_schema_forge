@@ -17012,6 +17012,7 @@
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
     "saveMissingRequired": "Completa primero los campos obligatorios: {fields}",
+    "saveCalculating": "Calculando…",
     "saveBlockedFieldsNotAllowedWhenCompleted": "No se puede guardar: {fields} no se puede modificar junto con los campos permitidos en un documento completado",
     "journalUnbalancedCompleteBlocked": "El debe y el haber deben ser iguales y distintos de cero antes de completar",
     "totalCredit": "Total haber",
@@ -18592,7 +18593,9 @@
     "processReactivate": "Reactivar",
     "statusColumnLabel": "Estado",
     "cobrosNoun": "cobros",
+    "cobroNoun": "cobro",
     "pagosNoun": "pagos",
+    "pagoNoun": "pago",
     "cobroReactivadoOk": "Cobro reactivado correctamente",
     "pagoReactivadoOk": "Pago reactivado correctamente",
     "cobroReactivadoError": "Error al reactivar el cobro",
@@ -23254,6 +23257,9 @@
     "matchRuleTypeNamePlaceholder": "ej. Comisión bancaria",
     "paymentTermCreate": "+ Crear condición de pago",
     "paymentTermCreateTitle": "Crear condición de pago",
+    "paymentTermNewTitle": "Nueva condición de pago",
+    "paymentTermEditTitle": "Editar condición de pago",
+    "paymentTermNew": "Nueva condición de pago",
     "paymentTermDaysLabel": "Días hasta el vencimiento",
     "paymentTermDaysPlaceholder": "ej. 12",
     "paymentTermDaysSuffix": "días",
@@ -26185,7 +26191,9 @@
     "currencyRateSelectPlaceholder": "Seleccionar {label}...",
     "currencyRateEdit": "Editar tipo de cambio",
     "currencyRateNotAvailable": "No hay tipo de cambio para esta fecha. Puedes indicarlo manualmente.",
-    "currencyRatesAtDate": "Tipos al {date}"
+    "currencyRatesAtDate": "Tipos al {date}",
+    "stepperDecrease": "Disminuir",
+    "stepperIncrease": "Aumentar"
   },
   "menus": {
     "Goods Movement": {

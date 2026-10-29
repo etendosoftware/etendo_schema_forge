@@ -478,7 +478,7 @@ every page of the same query. While the summary is missing the panel shows a ske
 added up in the browser, because they may be in different currencies.
 
 - **Title:** fixed "Pagado" plus an info tooltip (same blue tooltip as the Cuentas "Saldo"). The old "este mes" wording is gone.
-- **Subtitle:** `<period> · <N> pagos`. The period is the active `paymentDate` filter: a preset shows its own label
+- **Subtitle:** `<period> · <N> pagos` — `1 pago` for exactly one (English: `payment` / `payments`; ETP-5978, it used to read `1 pagos`). The period is the active `paymentDate` filter: a preset shows its own label
   ("Hoy", "Últimos 30 días", ...), no filter or "Cualquier fecha" shows "Todo el tiempo", and a custom range shows
   `dd/mm/yyyy – dd/mm/yyyy`. N counts every non-voided payment in the period, drafts included.
 - **Total (Pagado):** deposited payments (`DEPOSITED_STATUSES`, which includes PPM), converted to the organization
