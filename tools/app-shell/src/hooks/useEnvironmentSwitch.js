@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
@@ -7,6 +8,55 @@ import { sortEnvironments } from '../lib/environmentPresentation.js';
 import { useSupportSession } from './useSupportSession.js';
 
 export const ENVIRONMENT_LIST_REFRESH_EVENT = 'etendo:refresh-environments';
+
+/** Query-key entity of the account's environment list in the app's shared DataProvider cache. */
+const ENVIRONMENT_LIST_ENTITY = 'go-environments';
+
+/**
+ * ETP-5051 O-3 — the environment list, read through the app's shared query cache when there is
+ * one. The hook is mounted by the banners, the side menu, the top bar, the tenant plan and the
+ * layout at once, so a page load used to send ~6 identical `GET /sws/go/environments`, and since
+ * ETP-5051 each of them runs the live quota counts of every listed tenant on the backend.
+ * `cache.fetchQuery` gives every caller the same in-flight request and the same result for the
+ * freshness window (the provider's record stale time), and `force` is the refresh event.
+ *
+ * Why the DataProvider cache rather than a module-level promise: it already owns the two hard
+ * parts. It never stores a failed read, so a failure is retried by the next mount or refresh
+ * instead of pinning an empty list; and it is cleared whenever the session identity
+ * (csrf token, client, role, org) changes, and its keys carry that identity, so a list cannot
+ * outlive a logout or leak into another account. A tenant switch is a hard navigation anyway
+ * (`switchTo`), which drops the cache with the page.
+ *
+ * Without a DataProvider (InviteAcceptancePage in trees with no AuthProvider above it, isolated
+ * unit tests) every caller reads the network directly, as before.
+ *
+ * Known limit: a refresh that fires while an earlier read is still in flight joins that read
+ * rather than starting a new one — `fetchQuery` coalesces a forced read with a pending one. The
+ * refresh is dispatched after a provisioning or an upgrade has completed, long after the
+ * page-load read settled.
+ */
+function readEnvironmentList(dataCache, { force = false } = {}) {
+  const apiBase = getApiBase();
+  const fetcher = async () => sortEnvironments(await fetchEnvironments(fetch, apiBase));
+  if (!dataCache?.cache || !dataCache.scope) return fetcher();
+  return dataCache.cache.fetchQuery({
+    key: environmentListKey(dataCache, apiBase),
+    fetcher,
+    force,
+    staleTime: dataCache.recordStaleTime,
+  });
+}
+
+function environmentListKey(dataCache, apiBase) {
+  return createQueryKey({ ...dataCache.scope, apiBase, entity: ENVIRONMENT_LIST_ENTITY });
+}
+
+/** The cached list when it is still fresh, so a late mount starts with it instead of loading. */
+function peekEnvironmentList(dataCache) {
+  if (!dataCache?.cache || !dataCache.scope) return null;
+  const key = environmentListKey(dataCache, getApiBase());
+  return dataCache.cache.isFresh(key, dataCache.recordStaleTime) ? dataCache.cache.getData(key) : null;
+}
 
 /**
  * Lists the environments the signed-in account owns and switches between them.
@@ -53,14 +103,22 @@ export function useEnvironmentSwitch({
   // a new ticket from Classic, with its own audit row. So it lists the current company alone and
   // never switches, whatever the backend answers (it refuses /session/environment anyway).
   const { isSupportMode } = useSupportSession();
-  const [environments, setEnvironments] = useState([]);
+  // ETP-5051 O-3 — read through a ref so the effect below keeps its [enabled, isAuthenticated]
+  // identity: a session change clears the provider's cache and changes the key, and the next
+  // read (refresh or a later mount) uses the new one.
+  const dataCache = useOptionalDataCache();
+  const dataCacheRef = useRef(dataCache);
+  dataCacheRef.current = dataCache;
+  const initialList = useState(() => (enabled && isAuthenticated ? peekEnvironmentList(dataCache) : null))[0];
+  const [environments, setEnvironments] = useState(initialList ?? []);
   const [switching, setSwitching] = useState(null);
   // ETP-5190 — additive. `environments` alone cannot tell "still fetching" from "cannot know"
   // (both are the empty array), and a caller that derives the tenant plan from this list needs
   // that difference: rendering a plan-dependent view against a list that has not arrived yet
   // shows the wrong one and then swaps it under the user. Ends up false in EVERY exit path,
-  // including no token and a thrown request.
-  const [loading, setLoading] = useState(enabled);
+  // including no token and a thrown request. Starts false when a fresh shared list is already
+  // in the cache (ETP-5051 O-3): there is nothing to wait for.
+  const [loading, setLoading] = useState(enabled && !initialList);
 
   useEffect(() => {
     if (!enabled || !isAuthenticated) {
@@ -75,18 +133,44 @@ export function useEnvironmentSwitch({
     // environment list would come back empty for every authenticated user.
     // `isAuthenticated` above is the gate; `sortEnvironments` is kept.
     let cancelled = false;
-    const refreshEnvironments = async () => {
-      setLoading(true);
+    // Review MINOR-1 — when the session identity changes while the shared read is in flight (a
+    // role or org switch, an `authRevision` bump), the DataProvider clears the cache and core's
+    // `fetchQuery` rejects that read with an `AbortError` (a DOMException) once it settles. That is
+    // not a failure of the list: re-read ONCE through the provider's current cache and key. Every
+    // instance that shared the aborted read retries at the same moment, so they share the retry too
+    // (or are handed a list a refresh already stored under the new key). Only once: a second abort
+    // falls through to the catch below, so a run of identity changes cannot loop.
+    const readSurvivingIdentityChange = async ({ force }) => {
       try {
-        const envs = await fetchEnvironments(fetch, getApiBase());
-        if (!cancelled) setEnvironments(sortEnvironments(envs));
+        return await readEnvironmentList(dataCacheRef.current, { force });
+      } catch (err) {
+        if (cancelled || err?.name !== 'AbortError' || !dataCacheRef.current?.cache) throw err;
+        return readEnvironmentList(dataCacheRef.current);
+      }
+    };
+    // Never rejects: the whole body is inside the try, and every failure lands in the catch below,
+    // so callers can start it without handling the returned promise.
+    const loadEnvironments = async ({ force = false } = {}) => {
+      try {
+        // A fresh shared list is applied without a loading flip (no flash on a late mount).
+        const fresh = force ? null : peekEnvironmentList(dataCacheRef.current);
+        if (fresh) {
+          setEnvironments(fresh);
+          return;
+        }
+        setLoading(true);
+        const envs = await readSurvivingIdentityChange({ force });
+        if (!cancelled) setEnvironments(envs);
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
-    void refreshEnvironments();
+    // Every mounted instance listens and forces: the first forced read starts the request and the
+    // others join it, so one refresh is one request and every instance receives the new list.
+    const refreshEnvironments = () => loadEnvironments({ force: true });
+    loadEnvironments();
     window.addEventListener(ENVIRONMENT_LIST_REFRESH_EVENT, refreshEnvironments);
     return () => {
       cancelled = true;
