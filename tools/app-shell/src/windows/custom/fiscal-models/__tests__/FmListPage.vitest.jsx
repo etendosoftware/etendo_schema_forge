@@ -61,7 +61,9 @@ vi.mock('../FmCatalogPage.jsx', () => ({
   // the real component's self-contained overlay/drawer markup (FmCatalogPage
   // now owns its own wrapper — FmListPage no longer renders one externally).
   // `data-unavailable-models` exposes what FmListPage hands the drawer (fiscal-model-390 flag).
-  default: ({ onSave, unavailableModels }) =>
+  // `catalog-toggle-349` mirrors the real drawer: it saves the catalog it was opened with plus
+  // one toggle, so the PUT body is built from what FmListPage hands the drawer.
+  default: ({ onSave, unavailableModels, activeModels }) =>
     React.createElement(
       'div',
       { className: 'fm-catalog-drawer', 'data-unavailable-models': JSON.stringify(unavailableModels ?? null) },
@@ -74,6 +76,14 @@ vi.mock('../FmCatalogPage.jsx', () => ({
         'button',
         { 'data-testid': 'catalog-save-303-only', onClick: () => onSave({ '303': true, '349': false }) },
         'activate-303-only',
+      ),
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'catalog-toggle-349',
+          onClick: () => onSave({ ...activeModels, '349': !activeModels?.['349'] }),
+        },
+        'toggle-349',
       ),
     ),
 }));
@@ -1471,5 +1481,29 @@ describe('FmListPage — models marked unavailable by the catalog', () => {
 
     fireEvent.click(getByText(/fm\.catalog\.title/));
     expect(drawerUnavailable(container)).toEqual([]);
+  });
+});
+
+describe('FmListPage — catalog save while the 390 is unavailable', () => {
+  const putBodies = () => globalThis.fetch.mock.calls
+    .filter(([url, init]) => String(url).includes('fiscal-models-catalog') && init?.method === 'PUT')
+    .map(([, init]) => JSON.parse(init.body));
+
+  it.each([
+    ['the answer omits the 390', { '303': true, '349': false, '_unavailable': ['390'] }],
+    ['the answer also sends the 390 as active', { '303': true, '349': false, '390': true, '_unavailable': ['390'] }],
+  ])('the PUT body carries neither 390 nor _unavailable when %s', async (_name, answer) => {
+    globalThis.fetch = mockCatalogFetch(answer);
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-toggle-349"]'));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    const [body] = putBodies();
+    expect(body).toEqual({ '303': true, '349': true });
+    expect(body).not.toHaveProperty('390');
+    expect(body).not.toHaveProperty('_unavailable');
   });
 });

@@ -26,19 +26,28 @@ import { login, MOCK_ORG_ID } from '../../helpers/auth.js';
 const FLAG_OFF_CATALOG = { 303: true, 349: false, _unavailable: ['390'] };
 const FLAG_ON_CATALOG = { 303: true, 349: false, 390: true };
 
+/** Answers the catalog GET with `catalog` and records the body of every PUT in the returned list. */
 async function installCatalog(page, catalog) {
+  const puts = [];
   await page.route('**/sws/neo/fiscal-models-catalog', async (route) => {
-    if (route.request().method() !== 'GET') {
+    const request = route.request();
+    if (request.method() === 'PUT') {
+      puts.push(JSON.parse(request.postData() ?? 'null'));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: request.postData() ?? '{}' });
+      return;
+    }
+    if (request.method() !== 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) });
   });
+  return puts;
 }
 
 async function openFiscalModels(page, catalog) {
   await login(page);
-  await installCatalog(page, catalog);
+  const puts = await installCatalog(page, catalog);
   // An empty declarations list keeps the page on its toolbar; the catalog alone drives it.
   for (const pattern of ['**/fiscal303/declarations', '**/fiscal303/declarations?**']) {
     await page.route(pattern, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
@@ -46,6 +55,22 @@ async function openFiscalModels(page, catalog) {
   await page.goto('/fiscal-models');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await expect(page.getByTestId('fm-list-new-declaration-button')).toBeVisible({ timeout: 15_000 });
+  return puts;
+}
+
+/** Opens the catalog drawer, toggles the cards of `ids` (if any) and closes it with the X. */
+async function toggleInDrawerAndClose(page, ids = []) {
+  await page.getByTestId('fm-list-catalog-button').click();
+  const drawer = page.locator('.fm-catalog-drawer');
+  await expect(drawer).toBeVisible();
+  for (const id of ids) {
+    const card = drawer.locator('.fm-catalog-card').filter({
+      has: page.locator('.fm-catalog-card__badge', { hasText: new RegExp(`^${id}$`) }),
+    });
+    await card.getByRole('switch').click();
+  }
+  await drawer.locator('.fm-catalog-header__back').click();
+  await expect(drawer).toHaveCount(0);
 }
 
 /** The option texts of the list's "Modelo" filter (2nd toolbar pill: year, model, status). */
@@ -134,6 +159,27 @@ test.describe('Modelo 390 availability — flag off (catalog marks 390 unavailab
     await openFiscalModels(page, FLAG_OFF_CATALOG);
 
     expect(await catalogDrawerModels(page)).toEqual(['303', '349']);
+  });
+
+  test('a drawer change saves a catalog with neither 390 nor the _unavailable marker', async ({ page }) => {
+    const puts = await openFiscalModels(page, FLAG_OFF_CATALOG);
+
+    await toggleInDrawerAndClose(page, ['349']);
+
+    await expect.poll(() => puts.length, { timeout: 10_000 }).toBe(1);
+    expect(puts[0]).toEqual({ 303: true, 349: true });
+    expect(puts[0]).not.toHaveProperty('390');
+    expect(puts[0]).not.toHaveProperty('_unavailable');
+  });
+
+  test('closing the drawer with no change sends no PUT', async ({ page }) => {
+    const puts = await openFiscalModels(page, FLAG_OFF_CATALOG);
+
+    await toggleInDrawerAndClose(page);
+    // A save would fire on close; give it the time a PUT would need before asserting none came.
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+
+    expect(puts).toEqual([]);
   });
 
   test('the Organization window shows no "Representante legal / Modelo 390" section', async ({ page }) => {

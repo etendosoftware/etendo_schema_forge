@@ -1299,12 +1299,12 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmCatalogPage.vitest.jsx",
-            "note": "Shared spec; extended for ETP-5716: unavailableModels=['390'] removes the 390 card, the header catalog count and the saved payload's 390 (defaults and after toggling); with no marker the 390 card is shown, counted and saved; a missing prop hides nothing."
+            "note": "Shared spec; extended for ETP-5716: unavailableModels=['390'] removes the 390 card, the header catalog count and the saved payload's 390 (defaults and after toggling); with no marker the 390 card is shown, counted and saved; a missing prop hides nothing; closing saves only a real change, and catalogSelectionChanged compares as booleans (missing key = false, 1/'Y' = true, null/undefined/'' = false), defaults missing arguments to {} and never mutates them."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmListPage.vitest.jsx",
-            "note": "Shared spec; its string-body case goes through splitCatalogAnswer. Extended for ETP-5716: a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 row, no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels ['390']; a 390 sent as active with the marker stays hidden; a failed catalog GET hands the drawer ['390']; with no marker the 390 is counted, offered and the drawer hides nothing."
+            "note": "Shared spec; its string-body case goes through splitCatalogAnswer. Extended for ETP-5716: a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 row, no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels ['390']; a 390 sent as active with the marker stays hidden; a failed catalog GET hands the drawer ['390']; with no marker the 390 is counted, offered and the drawer hides nothing; with 390 unavailable (omitted, or sent as active with the marker) the PUT body sent to /fiscal-models-catalog carries neither 390 nor _unavailable; no PUT after a failed GET."
           },
           {
             "root": "frontend",
@@ -1316,7 +1316,7 @@
           {
             "root": "frontend",
             "path": "e2e/tests/flows/fiscal/fiscal-models-390-availability.mocked.spec.js",
-            "note": "Written for ETP-5716 (new file: no existing fiscal spec drives the catalog across list, drawer and Organization): mocked catalog answer with and without _unavailable: off -> list count (1), no 390 in the Modelo filter / Nueva declaración, no 390 card in the drawer, no Modelo 390 section in Organization; on -> all present."
+            "note": "Written for ETP-5716 (new file: no existing fiscal spec drives the catalog across list, drawer and Organization): mocked catalog answer with and without _unavailable: off -> list count (1), no 390 in the Modelo filter / Nueva declaración, no 390 card in the drawer, no Modelo 390 section in Organization, a drawer toggle PUTs a body with neither 390 nor _unavailable, closing the drawer with no change sends no PUT; on -> all present."
           }
         ]
       },

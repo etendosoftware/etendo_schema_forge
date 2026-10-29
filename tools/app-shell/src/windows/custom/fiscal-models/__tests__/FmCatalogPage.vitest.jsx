@@ -36,7 +36,7 @@ vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
   };
 });
 
-import FmCatalogPage from '../FmCatalogPage.jsx';
+import FmCatalogPage, { catalogSelectionChanged } from '../FmCatalogPage.jsx';
 
 const defaultProps = {
   onBack: vi.fn(),
@@ -512,5 +512,52 @@ describe('FmCatalogPage — unavailable models', () => {
   it('treats a missing unavailableModels prop as nothing unavailable', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     expect(badges(container)).toContain('390');
+  });
+});
+
+// ── catalogSelectionChanged: the "save only on a real change" rule ───────────
+
+describe('catalogSelectionChanged', () => {
+  it('is false for the same selection', () => {
+    expect(catalogSelectionChanged({ 303: true, 349: false }, { 303: true, 349: false })).toBe(false);
+  });
+
+  it('is true when a model flips', () => {
+    expect(catalogSelectionChanged({ 303: true }, { 303: false })).toBe(true);
+    expect(catalogSelectionChanged({ 349: false }, { 349: true })).toBe(true);
+  });
+
+  it('treats a missing key and an explicit false as the same', () => {
+    expect(catalogSelectionChanged({ 303: true }, { 303: true, 349: false })).toBe(false);
+    expect(catalogSelectionChanged({ 303: true, 390: false }, { 303: true })).toBe(false);
+  });
+
+  it('is true when a model missing before is now active', () => {
+    expect(catalogSelectionChanged({ 303: true }, { 303: true, 349: true })).toBe(true);
+  });
+
+  it('is true when an active model disappears', () => {
+    expect(catalogSelectionChanged({ 303: true, 349: true }, { 303: true })).toBe(true);
+  });
+
+  it('compares values as booleans', () => {
+    expect(catalogSelectionChanged({ 303: 1, 349: 0 }, { 303: true, 349: false })).toBe(false);
+    expect(catalogSelectionChanged({ 303: 'Y' }, { 303: true })).toBe(false);
+    expect(catalogSelectionChanged({ 303: null, 349: undefined }, {})).toBe(false);
+    expect(catalogSelectionChanged({ 303: '' }, { 303: true })).toBe(true);
+  });
+
+  it('defaults missing arguments to an empty selection', () => {
+    expect(catalogSelectionChanged()).toBe(false);
+    expect(catalogSelectionChanged(undefined, { 303: false })).toBe(false);
+    expect(catalogSelectionChanged({ 303: true }, undefined)).toBe(true);
+  });
+
+  it('does not mutate its arguments', () => {
+    const before = { 303: true };
+    const after = { 303: false, 349: true };
+    catalogSelectionChanged(before, after);
+    expect(before).toEqual({ 303: true });
+    expect(after).toEqual({ 303: false, 349: true });
   });
 });
