@@ -4748,6 +4748,16 @@ answer:
 - **Catalog save, flag off:** `PUT` ignores any `390` value the client sends and keeps the stored one,
   and never persists `_unavailable`. A tenant that had 390 active before the flag was turned off
   gets it back when it is turned on again.
+- **Catalog save, flag on:** only an explicit `390` value changes it; a body without the key keeps
+  the stored value (absent is not `false`). So a page loaded while the flag was off, saved after the
+  flag was turned on at runtime, does not erase the tenant's 390. If the stored catalog cannot be
+  read, the save is refused in both flag states.
+- **When the drawer saves (all models, ETP-5716):** closing the drawer saves only a real change
+  (`catalogSelectionChanged` in `FmCatalogPage.jsx`, comparing as booleans, so toggling a model on
+  and back off is no change). And it never saves after a failed or unfinished catalog read: the PUT
+  replaces the whole catalog, so a drawer built from `{}` would switch every model off.
+  `FmListPage` closes the drawer, discards the change and shows `fm.catalog.save_unavailable`
+  ("No se pudo cargar el catálogo de modelos, así que los cambios no se han guardado…").
 - **Not gated:** the `/fiscal390/*` and legal-representative endpoints answer whatever the flag says.
   The flag is a visual gate, not authorization; those endpoints stay protected by the role's
   window access. Existing 390 declarations are never touched.

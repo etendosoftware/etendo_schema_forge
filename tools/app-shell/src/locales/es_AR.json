@@ -21415,6 +21415,7 @@
     "fm.catalog.title": "Catálogo de modelos",
     "fm.catalog.sub": "Activa o desactiva los modelos fiscales que necesitas presentar.",
     "fm.catalog.active_count": "modelos activos",
+    "fm.catalog.save_unavailable": "No se pudo cargar el catálogo de modelos, así que los cambios no se guardaron. Recargá la página e intentá de nuevo.",
     "fm.catalog.activate": "Activar",
     "fm.catalog.deactivate": "Desactivar",
     "fm.catalog.cat.iva": "IVA",

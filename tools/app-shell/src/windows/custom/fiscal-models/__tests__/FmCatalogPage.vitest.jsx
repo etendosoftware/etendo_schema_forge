@@ -199,7 +199,9 @@ describe('FmCatalogPage — toggle', () => {
 // ── Close / Save ──────────────────────────────────────────────────────────────
 
 describe('FmCatalogPage — close and save', () => {
-  it('calls onSave and onBack when close button is clicked', () => {
+  // ETP-5716: closing saves only a real change, so opening and closing the drawer never rewrites
+  // the catalog (a PUT replaces the whole catalog).
+  it('closes without saving when the close button is clicked with no change', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
@@ -207,7 +209,7 @@ describe('FmCatalogPage — close and save', () => {
     );
     const closeBtn = container.querySelector('.fm-catalog-header__back');
     fireEvent.click(closeBtn);
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
+    expect(onSave).not.toHaveBeenCalled();
     expect(onBack).toHaveBeenCalled();
   });
 
@@ -233,15 +235,16 @@ describe('FmCatalogPage — close and save', () => {
   // FmCatalogPage owns its own overlay + drawer wrapper, and a single
   // handleClose (calling onSave then onBack) backs BOTH the backdrop click
   // and the X button, so both close paths save consistently.
-  it('calls onSave and onBack when the backdrop overlay is clicked (not just the X button)', () => {
+  it('calls onSave and onBack when the backdrop overlay is clicked after a change (not just the X button)', () => {
     const onBack = vi.fn();
     const onSave = vi.fn();
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // toggle 303 off
     const overlay = container.querySelector('.fm-catalog-overlay');
     fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': true, '349': true }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '303': false, '349': true }));
     expect(onBack).toHaveBeenCalled();
   });
 
@@ -273,7 +276,7 @@ describe('FmCatalogPage — close and save', () => {
     expect(onBack).not.toHaveBeenCalled();
   });
 
-  it('calls onSave/onBack with the unchanged activeModels when the backdrop is clicked without any toggle', () => {
+  it('does not save when the backdrop is clicked without any toggle', () => {
     // Edge case: closing via backdrop when `active` state is identical to the
     // original `activeModels` prop — no toggles made before closing.
     const onBack = vi.fn();
@@ -284,9 +287,21 @@ describe('FmCatalogPage — close and save', () => {
     );
     const overlay = container.querySelector('.fm-catalog-overlay');
     fireEvent.click(overlay);
-    expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
+    expect(onSave).not.toHaveBeenCalled();
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggling a model on and back off is no change: nothing is saved', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true }} />
+    );
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '349');
+    fireEvent.click(card349.querySelector('[role="switch"]'));
+    fireEvent.click(card349.querySelector('[role="switch"]'));
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   // Gap: handleClose has no idempotency guard (no "already closed" flag). In
@@ -301,6 +316,7 @@ describe('FmCatalogPage — close and save', () => {
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
     const overlay = container.querySelector('.fm-catalog-overlay');
     fireEvent.click(overlay);
     fireEvent.click(overlay);
@@ -314,6 +330,7 @@ describe('FmCatalogPage — close and save', () => {
     const { container } = render(
       <FmCatalogPage onBack={onBack} onSave={onSave} activeModels={{ '303': true, '349': true }} />
     );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
     const closeBtn = container.querySelector('.fm-catalog-header__back');
     fireEvent.click(closeBtn);
     fireEvent.click(closeBtn);
@@ -461,6 +478,7 @@ describe('FmCatalogPage — unavailable models', () => {
     const { container } = render(
       <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={['390']} />
     );
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
     fireEvent.click(container.querySelector('.fm-catalog-header__back'));
     const saved = onSave.mock.calls[0][0];
     expect('390' in saved).toBe(false);
@@ -486,6 +504,7 @@ describe('FmCatalogPage — unavailable models', () => {
     );
     expect(badges(container).sort()).toEqual(['303', '349', '390']);
     expect(headerTitleBadge(container)).toBe('3');
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // a change, so close saves
     fireEvent.click(container.querySelector('.fm-catalog-header__back'));
     expect(onSave.mock.calls[0][0]).toHaveProperty('390');
   });

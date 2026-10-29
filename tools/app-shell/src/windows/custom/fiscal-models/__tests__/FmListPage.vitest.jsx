@@ -124,6 +124,7 @@ vi.mock('../FmCommon.jsx', () => ({
 }));
 
 import FmListPage from '../FmListPage.jsx';
+import { toast } from 'sonner';
 // ETP-5030 — shared row-shading assertion helper (see @/test/rowShading.js).
 import { classesOf } from '@/test/rowShading.js';
 
@@ -1002,6 +1003,28 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     // Falls back to the default empty activeModels — "no active models" empty state, not stuck loading.
     expect(container.textContent).not.toContain('loading');
     expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
+  });
+
+  // ETP-5716 repro: the PUT replaces the whole catalog, so a drawer opened after a failed GET must
+  // not save (it used to PUT a catalog built from `{}` and switch every model off).
+  it('does not PUT the catalog after a failed GET, and says why', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const calls = [];
+    globalThis.fetch = vi.fn((url, init) => {
+      calls.push({ url: String(url), method: init?.method ?? 'GET' });
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+      }
+      return Promise.reject(new Error(`unmocked fetch: ${url}`));
+    });
+    const { container } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-none')); // the drawer saves a change
+    expect(calls.filter(c => c.method === 'PUT')).toEqual([]);
+    expect(container.querySelector('.fm-catalog-drawer')).toBeNull();
+    expect(toastError).toHaveBeenCalledWith('fm.catalog.save_unavailable');
+    toastError.mockRestore();
   });
 
   it('clears the "loading" gate when the catalog GET rejects outright (network error)', async () => {

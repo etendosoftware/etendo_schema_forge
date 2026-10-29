@@ -70,15 +70,26 @@ function ToggleSwitch({ checked, onChange, disabled }) {
   );
 }
 
+/**
+ * Whether the drawer's selection differs from the one it opened with. Values are compared as
+ * booleans, so an absent model and an explicit `false` are the same (toggling a model on and back
+ * off is no change). Exported for tests.
+ */
+export function catalogSelectionChanged(before = {}, after = {}) {
+  const ids = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...ids].some(id => Boolean(before[id]) !== Boolean(after[id]));
+}
+
 export default function FmCatalogPage({ onBack, onSave, activeModels, unavailableModels, token, apiBaseUrl }) {
   const t = useUI();
   // ETP-5716 — models the backend marks unavailable (catalogAvailability.js) are not offered.
   const catalog = filterAvailableModels(CATALOG, unavailableModels);
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
-  const [active, setActive] = useState(
+  const [initialActive] = useState(
     () => activeModels ?? Object.fromEntries(catalog.map(m => [m.id, m.defaultActive]))
   );
+  const [active, setActive] = useState(initialActive);
   const [configModel, setConfigModel] = useState(null);
   // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null, and
   // the formatted SII date when the organization joined during the current year.
@@ -86,7 +97,11 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, unavailabl
   const [siiSinceLabel, setSiiSinceLabel] = useState(null);
   const getSiiStatus = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
 
-  const handleClose = () => { onSave?.(active); onBack?.(); };
+  // Closing saves only a real change: opening and closing the drawer never rewrites the catalog.
+  const handleClose = () => {
+    if (catalogSelectionChanged(initialActive, active)) onSave?.(active);
+    onBack?.();
+  };
 
   // ETP-5187 (adjacent scope) — Modelo 303 needs a default IAE activity configured for its
   // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
