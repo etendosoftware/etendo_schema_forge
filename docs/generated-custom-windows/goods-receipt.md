@@ -800,3 +800,7 @@ With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing i
 ## Agent prompt on the movement date — ETP-5852
 
 `movementDate.agentPrompt`: a completed receipt keeps its date, as in the app; it is corrected with `createPurchaseReturn` and a new receipt. Feedback M-163.
+
+## Alternative units hidden from agents — ETP-5852
+
+`lines.operativeUOM` and `lines.operativeQuantity` carry a field-level `MCP_CONFIG` (`fields.visibility:"discarded"`, `included:false`): agents do not see them in `etendo_schema`, cannot send them, and `etendo_defaults` no longer offers them. Exposed, it suggested an unrelated operative unit (Centímetro for a beer). The app and REST are unchanged; the form already hid them. Feedback M-119.
