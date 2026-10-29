@@ -175,6 +175,7 @@
   },
   "entities": {
     "businessPartner": {
+      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app.",
       "fields": {
         "tbaiIssimplifiedinv": {
           "visibility": "editable",

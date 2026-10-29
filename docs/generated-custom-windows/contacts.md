@@ -1769,3 +1769,7 @@ An address created over MCP without `name` gets the name the address editor give
 ## Agent prompts on accounting accounts — ETP-5852
 
 The account fields of `customerAccounting` and `vendorAccounting` tell agents they take an accounting combination id, found with `etendo_selectors` by account number, not a chart-of-accounts `elementValue` id. Feedback M-129.
+
+## Billing preferences of a new contact over MCP — ETP-5852
+
+As in the app, a new contact is saved without billing preferences (`priceList`, `paymentTerms`, `paymentMethod`, `account`, `customerBlocking` and their purchase twins): the form fills them in after the contact exists. Over MCP a value the agent itself sends on create is now kept (it was dropped without a word); the defaults pass still does not fill them. `etendo_schema(view:"create")` no longer marks them `serverDefaulted` and `etendo_defaults` no longer offers them (`BusinessPartnerHandler#createUnsetFields`). The entity `agentPrompt` says so. REST and the app are unchanged. Feedback M-106.
