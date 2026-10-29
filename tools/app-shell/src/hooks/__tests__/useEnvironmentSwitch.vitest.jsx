@@ -1,5 +1,8 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
+// @covers tools/app-shell/src/hooks/useEnvironmentSwitch.js
+import { render, renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { AuthProvider, createMemoryAuthStorage, useAuth as useCoreAuth } from '@etendosoftware/app-shell-core/auth';
+import { DataProvider, createQueryCache } from '@etendosoftware/app-shell-core/data';
 
 /**
  * ETP-5202 phase 2 — entering a tenant the user has no role in.
@@ -30,13 +33,16 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
 // localStorage as it did when these cases were written. `csrfToken` is what it forwards to
 // `loginEnvironment` as the third argument, which is why the assertions below still name
 // 'platform-jwt' there: the slot survived, its meaning changed from credential to proof.
-const SESSION = { isAuthenticated: true, csrfToken: 'platform-jwt', clientId: 'CLIENT-HOME' };
+// Mutable on purpose: the logout case flips `isAuthenticated`; `beforeEach` restores it.
+const SESSION_DEFAULTS = { isAuthenticated: true, csrfToken: 'platform-jwt', clientId: 'CLIENT-HOME' };
+const SESSION = { ...SESSION_DEFAULTS };
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => SESSION,
   useAuthOptional: () => SESSION,
 }));
 
 import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '../useEnvironmentSwitch.js';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
 const ACME = {
   clientId: 'CLIENT-ACME',
@@ -64,11 +70,74 @@ function renderDisabled() {
   return renderHook(() => useEnvironmentSwitch({ enabled: false }));
 }
 
+const BETA = { clientId: 'CLIENT-BETA', clientName: 'Beta Ltd', adminUserId: 'USER-B', adminUserName: 'beta.admin' };
+const NEW_CO = { clientId: 'CLIENT-NEW', clientName: 'New Co', adminUserId: 'USER-N', adminUserName: 'new.admin' };
+
+/** One hook instance; records every render so a test can read the state of the FIRST one. */
+function Consumer({ slot, seen, history, options }) {
+  const state = useEnvironmentSwitch(options);
+  seen[slot] = state;
+  (history[slot] ??= []).push({ loading: state.loading, environments: state.environments });
+  return null;
+}
+
+/** Hands the test the real core session actions, so it can change the DataProvider identity. */
+function CaptureAuth({ into }) {
+  into.current = useCoreAuth();
+  return null;
+}
+
+const ids = (envs) => envs.map((env) => env.clientId);
+
+/**
+ * Mounts `slots` hook instances under the real AuthProvider + DataProvider, as the app does.
+ * `mount(slots)` re-renders with another set of slots: a slot that was not there before is a
+ * NEW mount, the existing ones stay mounted. Pass `withProvider: false` for the provider-free
+ * tree (InviteAcceptancePage).
+ */
+function renderInstances({ slots = [0], cache = createQueryCache(), optionsFor = () => undefined, withProvider = true } = {}) {
+  const seen = [];
+  const history = [];
+  const auth = { current: null };
+  const session = { csrfToken: 'csrf-1', clientId: 'CLIENT-HOME' };
+  const storage = createMemoryAuthStorage(session);
+  const consumers = (list) => list.map((slot) => (
+    <Consumer key={slot} slot={slot} seen={seen} history={history} options={optionsFor(slot)} />
+  ));
+  const tree = (list) => (withProvider ? (
+    <AuthProvider storage={storage} initialSession={session} restoreSession={null}>
+      <DataProvider cache={cache}>
+        <CaptureAuth into={auth} />
+        {consumers(list)}
+      </DataProvider>
+    </AuthProvider>
+  ) : <>{consumers(list)}</>);
+  const view = render(tree(slots));
+  return { seen, history, auth, mount: (list) => view.rerender(tree(list)) };
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
+async function refreshEvent() {
+  await act(async () => {
+    window.dispatchEvent(new Event(ENVIRONMENT_LIST_REFRESH_EVENT));
+  });
+}
+
 describe('useEnvironmentSwitch', () => {
   let fakeLocation;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // `mockReset`, not only `clearAllMocks`: a `mockResolvedValueOnce` queue a test did not
+    // consume (the in-flight case leaves one on purpose) must not leak into the next test.
+    fetchEnvironments.mockReset();
+    loginEnvironment.mockReset();
+    Object.assign(SESSION, SESSION_DEFAULTS);
     globalThis.localStorage.clear();
     // `switchTo` navigates by assigning `location.href`; jsdom refuses a real navigation, and
     // `getApiBase()` reads `pathname`, so both live on the stub.
@@ -99,6 +168,262 @@ describe('useEnvironmentSwitch', () => {
     });
     await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.environments).toEqual([newlyProvisioned]));
+  });
+
+  // ETP-5051 O-3 — the hook is mounted by the banners, the side menu, the top bar, the tenant
+  // plan and the layout, so one page load used to send ~6 identical `GET /sws/go/environments`,
+  // each of which runs the live quota counts of every listed tenant on the backend. Under the
+  // app's DataProvider every mounted instance must share one request and one result, and the
+  // refresh event must still reach all of them with ONE new request. The AuthProvider and the
+  // DataProvider are the real ones: they own the cache and its session scope.
+  it('shares one request across mounted instances and one more per refresh event', async () => {
+    const first = [ACME];
+    const refreshed = [ACME, { ...ACME, clientId: 'CLIENT-NEW', clientName: 'New Co' }];
+    fetchEnvironments.mockResolvedValueOnce(first).mockResolvedValueOnce(refreshed);
+    const seen = [];
+    function Consumer({ slot }) {
+      seen[slot] = useEnvironmentSwitch();
+      return null;
+    }
+    const session = { csrfToken: 'csrf-1', clientId: 'CLIENT-HOME' };
+    render(
+      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
+        <DataProvider cache={createQueryCache()}>
+          {[0, 1, 2, 3, 4, 5].map((slot) => <Consumer key={slot} slot={slot} />)}
+        </DataProvider>
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 1)).toBe(true));
+    expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event(ENVIRONMENT_LIST_REFRESH_EVENT));
+    });
+    await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 2)).toBe(true));
+    expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+    expect(seen.map((s) => s.environments.map((env) => env.clientId)))
+      .toEqual(Array(6).fill(['CLIENT-ACME', 'CLIENT-NEW']));
+  });
+
+  // ETP-5051 O-3 — the edges of the shared read. The cache is the core's real
+  // `createQueryCache` under the real AuthProvider/DataProvider; only the network is mocked.
+  describe('shared environment list', () => {
+    it('does not cache a failed read: the next mount retries and gets the list', async () => {
+      fetchEnvironments.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce([ACME]);
+      const { seen, mount } = renderInstances();
+
+      await waitFor(() => expect(seen[0].loading).toBe(false));
+      expect(seen[0].environments).toEqual([]);
+
+      mount([0, 1]);
+      await waitFor(() => expect(seen[1].loading).toBe(false));
+      expect(ids(seen[1].environments)).toEqual(['CLIENT-ACME']);
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache a failed read: a refresh event retries and gets the list', async () => {
+      fetchEnvironments.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce([ACME]);
+      const { seen } = renderInstances();
+
+      await waitFor(() => expect(seen[0].loading).toBe(false));
+      expect(seen[0].environments).toEqual([]);
+
+      await refreshEvent();
+      await waitFor(() => expect(ids(seen[0].environments)).toEqual(['CLIENT-ACME']));
+      expect(seen[0].loading).toBe(false);
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+    });
+
+    // A late mount (the banner that appears after the menu) must not flash a loading state
+    // or send a request for a list another instance just read.
+    it('starts a mount made while the list is fresh with the list, not loading, and no request', async () => {
+      fetchEnvironments.mockResolvedValue([ACME]);
+      const { seen, history, mount } = renderInstances();
+      await waitFor(() => expect(ids(seen[0].environments)).toEqual(['CLIENT-ACME']));
+
+      mount([0, 1]);
+      expect(history[1][0].loading).toBe(false);
+      expect(ids(history[1][0].environments)).toEqual(['CLIENT-ACME']);
+      await act(async () => {});
+      expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+    });
+
+    // The freshness window is the DataProvider's record stale time, 30 s by default. The cache
+    // clock is injected rather than faked, so the AuthProvider's own timers are left alone.
+    it('reads again for a mount made once the 30 s freshness window has passed', async () => {
+      let clock = 0;
+      fetchEnvironments.mockResolvedValueOnce([ACME]).mockResolvedValueOnce([ACME, NEW_CO]);
+      const { seen, history, mount } = renderInstances({ cache: createQueryCache({ now: () => clock }) });
+      await waitFor(() => expect(ids(seen[0].environments)).toEqual(['CLIENT-ACME']));
+
+      clock = 29_999;
+      mount([0, 1]);
+      expect(history[1][0].loading).toBe(false);
+      await act(async () => {});
+      expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+
+      clock = 30_000;
+      mount([0, 1, 2]);
+      expect(history[2][0]).toEqual({ loading: true, environments: [] });
+      await waitFor(() => expect(ids(seen[2].environments)).toEqual(['CLIENT-ACME', 'CLIENT-NEW']));
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+    });
+
+    // The DataProvider clears its cache and changes its key when the session identity changes;
+    // these pin that the hook really reads through that identity, so a list read for one
+    // session is never handed to the next one.
+    it.each([
+      ['a new csrf token', (auth) => auth.setCsrfToken('csrf-2')],
+      ['another client', (auth) => auth.setSession({ clientId: 'CLIENT-OTHER' })],
+    ])('does not hand the previous list to a mount or a refresh after %s', async (_label, changeIdentity) => {
+      fetchEnvironments
+        .mockResolvedValueOnce([ACME])
+        .mockResolvedValueOnce([BETA])
+        .mockResolvedValueOnce([BETA, NEW_CO]);
+      const { seen, history, auth, mount } = renderInstances();
+      await waitFor(() => expect(ids(seen[0].environments)).toEqual(['CLIENT-ACME']));
+
+      act(() => changeIdentity(auth.current));
+      mount([0, 1]);
+      expect(history[1][0]).toEqual({ loading: true, environments: [] });
+      await waitFor(() => expect(ids(seen[1].environments)).toEqual(['CLIENT-BETA']));
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+
+      await refreshEvent();
+      await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 2)).toBe(true));
+      expect(seen.map((s) => ids(s.environments))).toEqual(Array(2).fill(['CLIENT-BETA', 'CLIENT-NEW']));
+      expect(fetchEnvironments).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not let a refresh after an identity change join the previous session read', async () => {
+      const oldRead = deferred();
+      fetchEnvironments.mockReturnValueOnce(oldRead.promise).mockResolvedValueOnce([BETA]);
+      const { seen, history, auth } = renderInstances();
+      await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(1));
+
+      act(() => auth.current.setCsrfToken('csrf-2'));
+      await refreshEvent();
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+
+      // The old session's answer lands late: it must not reach the instance.
+      await act(async () => { oldRead.resolve([ACME]); });
+      await waitFor(() => expect(seen[0].loading).toBe(false));
+      expect(ids(seen[0].environments)).toEqual(['CLIENT-BETA']);
+      expect(history[0].some((h) => ids(h.environments).includes('CLIENT-ACME'))).toBe(false);
+    });
+
+    // Review MINOR-1 — an identity change (role/org switch, an `authRevision` bump) WHILE the shared
+    // read is in flight: the DataProvider clears the cache, core's `fetchQuery` rejects the pending
+    // read with an AbortError when it settles, and without a re-read every instance stayed at `[]`
+    // with nothing to trigger another read. Every instance must re-read once under the new key
+    // (sharing that one request) and end with the new session's list.
+    it('re-reads once under the new identity when it changes while the read is in flight', async () => {
+      const oldRead = deferred();
+      fetchEnvironments.mockReturnValueOnce(oldRead.promise).mockResolvedValueOnce([BETA]);
+      const { seen, history, auth } = renderInstances({ slots: [0, 1, 2] });
+      await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(1));
+
+      act(() => auth.current.setCsrfToken('csrf-2'));
+      await act(async () => { oldRead.resolve([ACME]); });
+
+      await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 1)).toBe(true));
+      expect(seen.map((s) => ids(s.environments))).toEqual(Array(3).fill(['CLIENT-BETA']));
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+      expect(history.flat().some((h) => ids(h.environments).includes('CLIENT-ACME'))).toBe(false);
+    });
+
+    // The hook reads `isAuthenticated` from the mocked `@/auth/AuthContext.jsx`, so the test
+    // signs out on BOTH sides: the core provider (which clears the cache) and the mocked session.
+    it('empties the list on logout, and neither a mount nor a refresh reads while signed out', async () => {
+      fetchEnvironments.mockResolvedValue([ACME]);
+      const { seen, auth, mount } = renderInstances();
+      await waitFor(() => expect(ids(seen[0].environments)).toEqual(['CLIENT-ACME']));
+
+      act(() => auth.current.logout());
+      SESSION.isAuthenticated = false;
+      mount([0, 1]);
+      await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 0)).toBe(true));
+
+      await refreshEvent();
+      expect(seen.map((s) => s.environments)).toEqual([[], []]);
+      expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+    });
+
+    // InviteAcceptancePage can mount with no AuthProvider/DataProvider above it.
+    it('without a DataProvider every instance reads the network itself', async () => {
+      fetchEnvironments.mockResolvedValue([ACME]);
+      const { seen } = renderInstances({ slots: [0, 1, 2], withProvider: false });
+
+      await waitFor(() => expect(seen.every((s) => !s.loading && s.environments.length === 1)).toBe(true));
+      expect(fetchEnvironments).toHaveBeenCalledTimes(3);
+
+      await refreshEvent();
+      await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(6));
+    });
+
+    // Documented limit, pinned on purpose: `fetchQuery` coalesces a forced read with a pending
+    // one, so a refresh dispatched while the first read is still in flight gets THAT read's
+    // answer, not a new one. If the core starts honouring `force` over a pending read, this
+    // fails — revisit the hook's comment and this test together.
+    it('joins the in-flight read when a refresh fires before the first read settled', async () => {
+      const firstRead = deferred();
+      fetchEnvironments.mockReturnValueOnce(firstRead.promise).mockResolvedValueOnce([ACME, NEW_CO]);
+      const { seen } = renderInstances();
+      await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(1));
+
+      await refreshEvent();
+      expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+
+      await act(async () => { firstRead.resolve([ACME]); });
+      await waitFor(() => expect(seen[0].loading).toBe(false));
+      expect(ids(seen[0].environments)).toEqual(['CLIENT-ACME']);
+      expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+    });
+
+    // The just-provisioned tenant cannot be in a list cached before it existed.
+    it('enterByClientName reads the network even when a fresh list is cached', async () => {
+      fetchEnvironments.mockResolvedValueOnce([ACME]).mockResolvedValueOnce([ACME, NEW_CO]);
+      loginEnvironment.mockResolvedValue({ status: 'success', roleList: [{ id: 'ROLE-1' }] });
+      const cache = createQueryCache({ now: () => 0 }); // never goes stale
+      const { seen } = renderInstances({ cache });
+      await waitFor(() => expect(ids(seen[0].environments)).toEqual(['CLIENT-ACME']));
+
+      let entered;
+      await act(async () => {
+        entered = await seen[0].enterByClientName('New Co');
+      });
+
+      expect(entered).toBe(true);
+      expect(fetchEnvironments).toHaveBeenCalledTimes(2);
+      expect(loginEnvironment).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(String),
+        'platform-jwt',
+        expect.objectContaining({ clientId: 'CLIENT-NEW' }),
+      );
+    });
+
+    it('never reads for an enabled:false instance, nor hands it the shared list', async () => {
+      fetchEnvironments.mockResolvedValue([ACME]);
+      const { seen, history, mount } = renderInstances({
+        slots: [0, 1],
+        optionsFor: (slot) => (slot === 2 ? undefined : { enabled: false }),
+      });
+
+      await refreshEvent();
+      expect(fetchEnvironments).not.toHaveBeenCalled();
+      expect(seen.map((s) => [s.loading, s.environments])).toEqual([[false, []], [false, []]]);
+
+      // An enabled sibling fills the cache; a disabled instance mounted afterwards ignores it.
+      mount([0, 1, 2]);
+      await waitFor(() => expect(ids(seen[2].environments)).toEqual(['CLIENT-ACME']));
+      mount([0, 1, 2, 3]);
+      expect(history[3][0]).toEqual({ loading: false, environments: [] });
+      await act(async () => {});
+      expect(fetchEnvironments).toHaveBeenCalledTimes(1);
+      expect([0, 1, 3].map((slot) => seen[slot].environments)).toEqual([[], [], []]);
+    });
   });
 
   describe('switchTo', () => {
@@ -276,6 +601,41 @@ describe('useEnvironmentSwitch', () => {
 
       expect(entered).toBe(false);
       expect(fetchEnvironments).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5351 — a support session is pinned to the tenant its ticket was issued for. Changing company
+  // means a new ticket from Classic (a new audit row), so the hook offers nothing to switch to and
+  // refuses to switch even if a caller asks.
+  describe('in a support session', () => {
+    beforeEach(() => {
+      applySupportSessionFromServer(
+        { clientId: 'CLIENT-HOME', clientName: 'Home Corp', expiresAt: '2026-10-05T11:00:00Z' },
+        { storage: globalThis.localStorage },
+      );
+    });
+
+    afterEach(() => {
+      resetSupportSessionForTests();
+    });
+
+    it('lists the current company alone and never switches', async () => {
+      fetchEnvironments.mockResolvedValue([
+        { clientId: 'CLIENT-HOME', clientName: 'Home Corp', adminUserId: 'USER-0' },
+        ACME,
+      ]);
+      const { result } = renderHook(() => useEnvironmentSwitch({ enabled: true }));
+
+      await waitFor(() => expect(result.current.environments.map((env) => env.clientId)).toEqual(['CLIENT-HOME']));
+
+      let entered;
+      await act(async () => {
+        entered = await result.current.switchTo(ACME);
+      });
+
+      expect(entered).toBe(false);
+      expect(loginEnvironment).not.toHaveBeenCalled();
+      expect(fakeLocation.href).toBe('');
     });
   });
 });

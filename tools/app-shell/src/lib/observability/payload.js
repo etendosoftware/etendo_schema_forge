@@ -85,6 +85,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'step',
   'stepId',
   'supportRequested',
+  'support_session',
   'tags',
   'timestamp',
   'total',

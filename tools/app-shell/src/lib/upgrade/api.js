@@ -38,6 +38,10 @@ export const UPGRADE_ERROR_CODES = {
   // apart from "can't open the portal" apart from "checkout failed".
   subscriptionUnavailable: 'upgradeSubscriptionUnavailable',
   portalUnavailable: 'upgradePortalUnavailable',
+  // ETP-5051 O-1b: the portal found no subscription for the environment it was asked about
+  // (404 NO_SUBSCRIPTION) — a demo, or an environment with no purchase of its own. Not transient,
+  // so it is not `portalUnavailable`'s "please try again".
+  portalNoSubscription: 'upgradePortalNoSubscription',
   // ETP-5548: the account already has a productive environment with this company name. Refused
   // before the provider is contacted, because a paid checkout fixes its name.
   tenantNameInUse: 'upgradeTenantNameInUse',
@@ -253,17 +257,35 @@ export async function getSubscription(baseUrl) {
   return data;
 }
 
-/** Creates an authenticated customer portal session for the account subscription. */
-export async function createPortalSession(baseUrl) {
+/** Backend code of the portal's "no subscription to manage" refusal (EtendoGoJwtServlet). */
+const NO_SUBSCRIPTION = 'NO_SUBSCRIPTION';
+
+function portalFailureCode(response, data) {
+  if (response.status === 401) return UPGRADE_ERROR_CODES.sessionExpired;
+  if (response.status === 404 && data?.error?.code === NO_SUBSCRIPTION) {
+    return UPGRADE_ERROR_CODES.portalNoSubscription;
+  }
+  return UPGRADE_ERROR_CODES.portalUnavailable;
+}
+
+/**
+ * Creates an authenticated customer portal session.
+ *
+ * ETP-5051 O-1b — with a `clientId` the portal is that environment's own (a "Mis empresas" row);
+ * the backend checks the account bought it and answers 404 NO_SUBSCRIPTION otherwise. Without one
+ * no body is sent and the backend picks the entered environment, or the account's newest purchase
+ * when none is entered (/account).
+ */
+export async function createPortalSession(baseUrl, clientId = null) {
   const response = await apiFetch('/sws/go/billing/subscription/portal', {
     method: 'POST',
     baseUrl,
     on401: 'ignore',
+    ...(clientId ? { body: JSON.stringify({ clientId }) } : {}),
   });
   const data = await readJsonSafely(response);
   if (!response.ok) {
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.portalUnavailable, data?.error?.message, response.status);
+    throw buildError(portalFailureCode(response, data), data?.error?.message, response.status);
   }
   return data;
 }

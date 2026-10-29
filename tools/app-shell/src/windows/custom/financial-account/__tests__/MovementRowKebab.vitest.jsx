@@ -1,7 +1,7 @@
 // Mocks must be declared before imports.
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (params?.financialAccount ? `${key}:${params.financialAccount}` : key),
 }));
 
 const toastSuccess = vi.fn();
@@ -173,6 +173,22 @@ describe('MovementRowKebab — Post action', () => {
     await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
     expect(onReload).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  // ETP-5591: the reason's params reach the translation, no raw {financialAccount}.
+  it('names the financial account in the error toast of a disabled post', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [{ success: false, message: 'raw',
+        messageKeys: ['ETGO_PostingDisabledNoDepositAccount'], messageParams: { financialAccount: 'Caja' } }] } }),
+    });
+
+    const user = userEvent.setup();
+    renderKebab(NOT_POSTED);
+    await user.click(screen.getByText('financeAccountMovementsRowPost'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+    expect(toastError.mock.calls[0][0]).toBe('backendError.finAccNoDepositAccount:Caja');
   });
 
   // 6. On network error (fetch throws) → toast.error

@@ -1,5 +1,6 @@
 // @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/lib/backendErrors.js
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -591,6 +592,120 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
 
     // 15. "Crear Factura" button must NOT render (isFullyInvoiced = true)
     await expect(page.getByRole('button', { name: 'Crear Factura' })).toHaveCount(0);
+  });
+});
+
+/**
+ * ETP-5051 — "Crear Factura" refused by the plan quota (403 QUOTA_EXCEEDED). The toast is the
+ * SPA's translated quota sentence, never "Failed (403)" nor the backend's English prose, and the
+ * refusal makes the app re-read the shared environment list exactly once (QUOTA_REFUSED_EVENT →
+ * useEnvironmentListFreshness), so the quota banner can turn red.
+ */
+test.describe('Goods Shipment — Crear Factura refused by the plan quota (ETP-5051)', () => {
+  test('shows the translated quota sentence and re-reads the environment list once', async ({ page }) => {
+    const shipment = makeShipment({
+      id: 'gs-quota-001',
+      documentNo: 'GS-QUOTA-001',
+      documentStatus: 'CO',
+      'documentStatus$_identifier': 'Completado',
+      processed: true,
+      invoiceStatus: 0,
+      linkedOrders: [{ id: 'order-quota', grandTotalAmount: 120, 'currency$_identifier': 'EUR' }],
+      resolvedPriceListId: 'pl-001',
+    });
+
+    await login(page);
+    await installGoodsShipmentMock(page, [shipment]);
+
+    // The shared environment list, counted apart from the "Mis empresas" details read.
+    const environmentReads = { shared: 0 };
+    const environmentsHandler = async (route) => {
+      const url = new URL(route.request().url());
+      if (route.request().method() !== 'GET' || !url.pathname.endsWith('/sws/go/environments')) return route.fallback();
+      if (url.searchParams.get('details') !== 'true') environmentReads.shared += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ environments: [{ clientId: 'e2e-mock-client', clientName: 'E2E', plan: 'productive', quotas: [] }] }),
+      });
+    };
+    await page.route('**/sws/go/environments/**', environmentsHandler);
+    await page.route('**/sws/go/environments**', environmentsHandler);
+
+    await page.route(
+      (url) => url.href.includes('/sws/neo/goods-shipment/goodsShipment/gs-quota-001/action/pendingInvoiceLines'),
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [{ lineId: 'sl-001', pendingQty: 2 }] } }),
+        });
+      }
+    );
+
+    let createCalls = 0;
+    await page.route(
+      (url) => url.href.includes('/sws/neo/goods-shipment/goodsShipment/gs-quota-001/action/createDraftInvoice'),
+      async (route) => {
+        createCalls += 1;
+        await route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              status: 403,
+              code: 'QUOTA_EXCEEDED',
+              message: 'Quota exceeded: Facturas de venta (100/100 fact.)',
+              quota: {
+                resourceKey: 'POSTED_SALES_INVOICES', resourceName: 'Facturas de venta', unitLabel: 'fact.',
+                includedQty: 100, consumed: 100, verdict: 'DENY', period: 'month',
+              },
+            },
+          }),
+        });
+      }
+    );
+
+    await page.route('**/sws/neo/price-list/priceList{/**,}**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: { data: [{ id: 'pl-001', name: 'Tarifa venta', active: true, salesPriceList: true, default: true }] },
+        }),
+      });
+    });
+
+    await page.goto('/goods-shipment/gs-quota-001');
+    await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+    await page.getByRole('button', { name: 'Crear Factura' }).click();
+    const createDocsBtn = page.getByRole('button', { name: 'Crear →' });
+    await expect(createDocsBtn).toBeEnabled({ timeout: 10_000 });
+
+    // Settle the page-load reads before counting: nothing to wait ON for an absence.
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.waitForTimeout(1_500);
+    const readsBefore = environmentReads.shared;
+    expect(readsBefore).toBe(1);
+
+    await createDocsBtn.click();
+
+    const errorToast = page.locator('[data-type="error"]').first();
+    await expect(errorToast).toBeVisible({ timeout: 10_000 });
+    // backendError.quotaExceeded — es_ES (mocked default).
+    await expect(errorToast).toContainText(/Facturas de venta: has alcanzado el límite de tu plan \(100 de 100 fact\.\)/);
+    await expect(errorToast).not.toContainText('Failed (403)');
+    await expect(errorToast).not.toContainText('Quota exceeded:');
+    // The modal stays open for a retry, and no result modal claims an invoice.
+    await expect(createDocsBtn).toBeVisible();
+    await expect(page.getByTestId('confirm-result-modal')).toHaveCount(0);
+    expect(createCalls).toBe(1);
+
+    await expect.poll(() => environmentReads.shared, { timeout: 10_000 }).toBe(readsBefore + 1);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.waitForTimeout(1_500);
+    expect(environmentReads.shared).toBe(readsBefore + 1);
   });
 });
 

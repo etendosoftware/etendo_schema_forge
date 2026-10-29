@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/shared/LocationEditorModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/tbaiPostalCodeWarning.js
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // --- Global stubs for browser APIs not available in jsdom -----------------
@@ -1352,6 +1353,164 @@ describe('LocationEditorModal — initialValues seed (ETP-5654 x ETP-5806)', () 
     expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
     expect(screen.getByTestId('location-field-streetName')).toHaveValue('');
     expect(hasUnsavedChanges()).toBe(false);
+  });
+});
+
+/**
+ * ETP-5824 — a non-simplified CUSTOMER business partner with no postal code cannot have its sales
+ * invoices completed in an organization with TicketBAI (com.smf.ticketbai blocks the completion;
+ * purchase invoices are never blocked, so a supplier-only partner is not warned). The modal warns
+ * about it next to the postal code, but never blocks the save: the postal code is not part of the
+ * save gate (ETP-5103/ETP-5806).
+ */
+describe('LocationEditorModal — TicketBAI postal code warning (ETP-5824)', () => {
+  const WARNING_TESTID = 'location-postalCode-tbai-warning';
+
+  /**
+   * Mirrors the REAL payloads: the contacts `businessPartner` record carries no
+   * `organization`, and `tbai-config/header` ignores query parameters and returns every
+   * readable row (active or not).
+   */
+  function mockBackend({
+    simplified = false, customer = true, vendor, omitCustomer = false,
+    tbaiRows = [{ id: 'cfg-1', active: true }],
+  } = {}) {
+    const partner = { id: 'bp-1', tbaiIssimplifiedinv: simplified };
+    if (!omitCustomer) partner.customer = customer;
+    if (vendor !== undefined) partner.vendor = vendor;
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/businessPartner/bp-1')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: [partner] } }),
+        });
+      }
+      if (url.includes('/tbai-config/header')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: tbaiRows } }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }),
+      });
+    });
+  }
+
+  function tbaiConfigUrls() {
+    return fetchedUrls().filter(u => u.includes('/tbai-config/header'));
+  }
+
+  /** Let pending fetch promises settle before asserting that nothing appeared. */
+  function flush() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('warns for a non-simplified contact with an empty postal code when TicketBAI is in use', async () => {
+    mockBackend();
+    renderModal();
+
+    expect(await screen.findByTestId(WARNING_TESTID)).toHaveTextContent('tbaiPostalCodeMissingWarning');
+    expect(new URL(tbaiConfigUrls()[0], 'http://localhost').searchParams.get('organization')).toBeNull();
+  });
+
+  it('warns when the postal code is only whitespace', async () => {
+    mockBackend();
+    renderModal();
+    await screen.findByTestId(WARNING_TESTID);
+
+    fireEvent.change(screen.getByTestId('location-field-postalCode'), { target: { value: '   ' } });
+
+    expect(screen.getByTestId(WARNING_TESTID)).toBeInTheDocument();
+  });
+
+  it('does not block the save while the warning is shown', async () => {
+    mockBackend();
+    renderModal();
+    await screen.findByTestId(WARNING_TESTID);
+
+    // Every selector page answers Spain, so the ETP-5103 default-country prefill fills the
+    // country; with the ETP-5806 structured fields typed (street, number, city), every mandatory
+    // field is set.
+    typeStreetName();
+    typeBuildingNumber();
+    typeCity();
+
+    await vi.waitFor(() => expectSaveAllowed());
+    expect(screen.getByTestId(WARNING_TESTID)).toBeInTheDocument();
+  });
+
+  it('hides the warning once a postal code is typed', async () => {
+    mockBackend();
+    renderModal();
+    await screen.findByTestId(WARNING_TESTID);
+
+    fireEvent.change(screen.getByTestId('location-field-postalCode'), { target: { value: '20001' } });
+
+    expect(screen.queryByTestId(WARNING_TESTID)).not.toBeInTheDocument();
+  });
+
+  it('does not warn when only inactive TicketBAI configurations exist', async () => {
+    mockBackend({ tbaiRows: [{ id: 'cfg-old', active: false }] });
+    renderModal();
+    await vi.waitFor(() => expect(tbaiConfigUrls()).toHaveLength(1));
+    await flush();
+
+    expect(screen.queryByTestId(WARNING_TESTID)).not.toBeInTheDocument();
+  });
+
+  it('does not warn for a simplified-invoice contact, and does not ask for the configuration', async () => {
+    mockBackend({ simplified: true });
+    renderModal();
+    await vi.waitFor(() => expect(fetchedUrls().some(u => u.includes('/businessPartner/bp-1'))).toBe(true));
+    await flush();
+
+    expect(screen.queryByTestId(WARNING_TESTID)).not.toBeInTheDocument();
+    expect(tbaiConfigUrls()).toHaveLength(0);
+  });
+
+  /** Wait until the partner record was requested and every pending promise settled. */
+  async function partnerLoaded() {
+    await vi.waitFor(() => expect(fetchedUrls().some(u => u.includes('/businessPartner/bp-1'))).toBe(true));
+    await flush();
+  }
+
+  it('does not warn for a supplier-only partner, and does not ask for the configuration', async () => {
+    mockBackend({ customer: false, vendor: true });
+    renderModal();
+    await partnerLoaded();
+
+    expect(screen.queryByTestId(WARNING_TESTID)).not.toBeInTheDocument();
+    expect(tbaiConfigUrls()).toHaveLength(0);
+  });
+
+  it('does not warn when the partner record carries no customer flag (fail closed)', async () => {
+    mockBackend({ omitCustomer: true });
+    renderModal();
+    await partnerLoaded();
+
+    expect(screen.queryByTestId(WARNING_TESTID)).not.toBeInTheDocument();
+    expect(tbaiConfigUrls()).toHaveLength(0);
+  });
+
+  it('warns for a partner that is both customer and vendor', async () => {
+    mockBackend({ customer: true, vendor: true });
+    renderModal();
+
+    expect(await screen.findByTestId(WARNING_TESTID)).toHaveTextContent('tbaiPostalCodeMissingWarning');
+    expect(tbaiConfigUrls()).toHaveLength(1);
+  });
+
+  it("never asks for TicketBAI data in 'location' mode (no business partner)", async () => {
+    mockBackend();
+    renderModal({ saveMode: 'location', showAddressTypeCheckboxes: false, bpId: undefined });
+    await screen.findByText('locationSelectorTitle');
+    await flush();
+
+    expect(fetchedUrls().some(u => u.includes('/tbai-config/header') || u.includes('/businessPartner/'))).toBe(false);
+    expect(screen.queryByTestId(WARNING_TESTID)).not.toBeInTheDocument();
   });
 });
 

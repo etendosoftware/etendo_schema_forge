@@ -54,6 +54,7 @@ import {
   expectNoAuthorizationHeader,
 } from '@/test/sessionContract.js';
 import UpgradePage from '../UpgradePage.jsx';
+import { UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
 import { ENVIRONMENT_LIST_REFRESH_EVENT } from '../../hooks/useEnvironmentSwitch.js';
 import enUs from '@/locales/en_US.json';
 import esEs from '@/locales/es_ES.json';
@@ -390,6 +391,22 @@ describe('UpgradePage — hosted checkout', () => {
       expect(customerMessages[2]).toMatch(/charged again|sin volver a pagar|no se te volverá a cobrar|cobrar de nuevo|cobrar otra vez/i);
       expect(customerMessages[3]).toMatch(/company selector|selector de empresa/i);
     }
+  });
+
+  // The page shows `ui(error.code)` for every known code, and `useUI()` echoes the raw key when the
+  // active dictionary lacks it. There is no locale-to-locale fallback: `LocaleProvider` hands
+  // `useUI` only `dictionaries[locale]`, and `core.es_AR.json` is es_AR.json alone, so es_AR is
+  // checked like the other two. A code added without its copy fails here instead of reaching a user.
+  it.each([
+    ['en_US', enUs],
+    ['es_ES', esEs],
+    ['es_AR', esAr],
+  ])('%s translates every UPGRADE_ERROR_CODES value', (_name, locale) => {
+    const untranslated = Object.values(UPGRADE_ERROR_CODES).filter((key) => {
+      const value = locale.genericLabels?.[key];
+      return typeof value !== 'string' || value.trim() === '' || value === key;
+    });
+    expect(untranslated).toEqual([]);
   });
 
   it('renders no raw card fields', async () => {

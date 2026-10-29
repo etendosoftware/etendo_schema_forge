@@ -22,7 +22,7 @@ Predates the `cli/config/regen-windows.json` convention — see [match-rule](mat
 ## Reactive behavior and dependencies
 
 - **Server-side enrichment**: `TransactionTypeHandler` (`@Named("transaction-type")`) is a NEO write pre-hook. On create it:
-  - requires a non-blank `name` (max 60) — HTTP 400;
+  - requires a non-blank `name` (max 60) — HTTP 400. Since ETP-5978 the generated `list-modal` page (`TransactionTypePage.jsx`) also carries `maxLength: 60` on `name` (the DB column length, emitted by the generator); the page has no route, so this is not user-visible today, but it would cap the input if the window were ever wired. Its save / toggle / delete refusals would likewise be translated through the shared `lib/backendErrors.js`, like every `list-modal` window;
   - derives the `Value` (search key) from the name as an uppercase, accent-stripped slug (e.g. "Comisión bancaria" → `COMISION_BANCARIA`) when the caller did not supply one, and injects it into the request body so the generic CRUD persists it (the create form only sends a name);
   - rejects a duplicate search key — HTTP 409.
 - **Referential integrity**: match-rule rows reference a transaction type through the `ETGO_MR_TRXTYPE_FK` foreign key; the value shown in the rule list/grid is the type's `Name`.
@@ -41,3 +41,10 @@ Predates the `cli/config/regen-windows.json` convention — see [match-rule](mat
 - `artifacts/transaction-type/decisions.json` (W spec config: `Name` editable, `Value` readOnly/auto, `javaQualifier`)
 - `tools/app-shell/src/components/contract-ui/InlineCreateSelector.jsx` + `InlineCreateModal.jsx` (the inline-create selector + modal)
 - match-rule `decisions.json` → `transactionType` field (`allowCreate`, `createSpec`, `createEntity`, `createTitleKey`, `createNamePlaceholderKey`)
+
+## Personal list-column views
+
+The Transaction Type list is also a `ListModalWindow` surface, with the same personal
+Columns and Save view controls behind `grid-column-views`; the inline-create flow
+above is unaffected. See the [shared grid-view policy](../feature-flags.md#personal-business-grid-views)
+for identity checks, failures and rollback.

@@ -19,6 +19,7 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { evalTabVisible } from './evalTabVisible.js';
 import { NUMERIC_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import {apiFetch} from '@/auth/api.js';
@@ -1185,7 +1186,7 @@ export function buildInitialTabs(p) {
       // in DetailView keep working. A filtered-out tab never appears in the nav
       // strip and the deep-link handler's `tabs.findIndex(...)` naturally no-ops
       // for it (see the `openSecondaryTab` effect in DetailView.jsx).
-      if (!isCapabilityVisible(p.capabilities, st.visibleWhenCapability)) return null;
+      if (!isSecondaryTabVisible(st, p.capabilities, p.tabRecord, p.tabCtx)) return null;
       const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
       const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
       const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
@@ -1309,10 +1310,24 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   ));
 }
 
-// ETP-5648: a capability-hidden tab gets no entity key, so its hook never fetches it.
-export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities) {
+/**
+ * A secondary tab shows only when its capability gate AND its record gate agree. The record gate
+ * (`visibleWhen(record, ctx)`, decisions.json `visibleWhenLogic`) reads the live header record,
+ * so it never depends on the record being saved.
+ */
+export function isSecondaryTabVisible(st, capabilities, record, ctx) {
+  return isCapabilityVisible(capabilities, st?.visibleWhenCapability) && evalTabVisible(st, record, ctx);
+}
+
+/** Session-level facts the generated `visibleWhen` predicates read as `ctx[...]`. */
+export function buildTabVisibilityContext({ orgCurrencyId, orgCurrencyCode }) {
+  return { OrgCurrencyId: orgCurrencyId ?? null, OrgCurrencyCode: orgCurrencyCode ?? null };
+}
+
+// ETP-5648: a hidden (capability- or record-gated) tab gets no entity key, so its hook never fetches it.
+export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities, vis) {
   const tab = secondaryTabs[index];
-  if (tab?.isFormTab || tab?.Panel || !isCapabilityVisible(capabilities, tab?.visibleWhenCapability)) return null;
+  if (tab?.isFormTab || tab?.Panel || !isSecondaryTabVisible(tab, capabilities, vis?.record, vis?.ctx)) return null;
   return tab?.key ?? null;
 }
 
