@@ -2644,3 +2644,7 @@ The full app-shell `npm run test:all` suite and `npm run build` passed. Browser 
 ## Agent prompts on dates, line tax and installments — ETP-5852
 
 `invoiceDate`/`accountingDate` explain the server proposes today and the user's own date must be sent (M-31); `lines.tax` says the server resolves the tax from product and customer tax categories, Recargo de Equivalencia included, and points to `etendo_selectors` for the line's options instead of the tax catalogue (M-35, M-79). `paymentPlan` allows `etendo_list(allParents:true)` (MCP_CONFIG.parent.allParents) to find installments by `dueDate`/`daysOverdue` across invoices (M-50).
+
+## Journal entries for agents — ETP-5852
+
+`entities.accounting` is no longer excluded: it publishes the invoice's posted entries read-only for NEO/MCP (`etendo_list(spec:"sales-invoice", entity:"accounting", parentId:<invoice>)`), the same entity purchase invoices have. `renderTab:false` keeps the window as it was: neither invoice window shows an accounting tab. Feedback M-81.

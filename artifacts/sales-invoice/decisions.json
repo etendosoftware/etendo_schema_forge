@@ -955,7 +955,39 @@
       }
     },
     "accounting": {
-      "exclude": true
+      "readOnly": true,
+      "name": "accounting",
+      "renderTab": false,
+      "_note": "ETP-5852 (M-81): read-only journal lines of the invoice for agents, as purchase-invoice/accounting. renderTab:false — the app shows no accounting tab on either invoice window.",
+      "fields": {
+        "account": {
+          "grid": true,
+          "reference": null,
+          "inputMode": null
+        },
+        "accountingDate": {
+          "grid": true
+        },
+        "postingType": {
+          "visibility": "readOnly"
+        },
+        "debit": {
+          "grid": true
+        },
+        "credit": {
+          "grid": true
+        },
+        "description": {
+          "visibility": "readOnly"
+        },
+        "accountingFact": {
+          "name": "factAcct"
+        },
+        "table": {
+          "name": "adTable"
+        }
+      },
+      "javaQualifier": "factAcctHandler"
     },
     "exchangeRates": {
       "publicApi": { "readOnly": true },
