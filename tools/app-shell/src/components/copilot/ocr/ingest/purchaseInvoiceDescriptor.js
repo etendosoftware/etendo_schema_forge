@@ -207,7 +207,7 @@ async function runProductSimSearch({ token, lines }) {
 
 // The whitespace set of ECMAScript String.prototype.trim (WhiteSpace + LineTerminator), spelled out
 // so the Java mirror can use the very same set (String.strip/trim differ: NBSP, control chars).
-const PRODUCT_NAME_EDGE_SPACE = /^[\t\n\u000B\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+|[\t\n\u000B\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+$/g;
+const PRODUCT_NAME_EDGE_SPACE = /(?:^[\t\n\u000B\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+)|(?:[\t\n\u000B\f\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+$)/g;
 
 /**
  * Normalizer for the EXACT-name step of the product classification (ETP-5654, CP-7): NFC, trim
