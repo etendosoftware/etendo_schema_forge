@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // Vitest component tests for FmCatalogPage.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -428,5 +429,69 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     expect(switchOf(container, '349').getAttribute('aria-checked')).toBe('true');
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
     expect(sii.calls).toBe(0);
+  });
+});
+
+// ── Models the backend marks unavailable (backend-only flag `fiscal-model-390`) ──
+
+describe('FmCatalogPage — unavailable models', () => {
+  const badges = (container) => Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+    .map(b => b.textContent);
+  // The header renders the catalog size in the badge next to the title, and the active count in
+  // the subtitle ("• N fm.catalog.active_count").
+  const headerTitleBadge = (container) =>
+    container.querySelector('.fm-catalog-header__titles span').textContent;
+  const headerActiveLine = (container) =>
+    container.querySelector('.fm-catalog-header__sub').textContent;
+
+  it('renders no 390 card when the 390 is unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} unavailableModels={['390']} />);
+    expect(badges(container).sort()).toEqual(['303', '349']);
+    expect(document.body.textContent).not.toContain('fm.catalog.390.name');
+  });
+
+  it('does not count the 390 in the header when it is unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} unavailableModels={['390']} />);
+    expect(headerTitleBadge(container)).toBe('2');
+    expect(headerActiveLine(container)).toContain('2');
+  });
+
+  it('does not save a 390 value when it is unavailable and there is no stored catalog', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={['390']} />
+    );
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    const saved = onSave.mock.calls[0][0];
+    expect('390' in saved).toBe(false);
+    expect(Object.keys(saved).sort()).toEqual(['303', '349']);
+  });
+
+  it('does not save a 390 value after toggling the other models while it is unavailable', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={{ '303': true }} unavailableModels={['390']} />
+    );
+    const card349 = Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '349');
+    fireEvent.click(card349.querySelector('[role="switch"]'));
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave).toHaveBeenCalledWith({ '303': true, '349': true });
+  });
+
+  it('shows the 390 card, counts it and saves it when it is available (no marker)', () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <FmCatalogPage onBack={vi.fn()} onSave={onSave} activeModels={undefined} unavailableModels={[]} />
+    );
+    expect(badges(container).sort()).toEqual(['303', '349', '390']);
+    expect(headerTitleBadge(container)).toBe('3');
+    fireEvent.click(container.querySelector('.fm-catalog-header__back'));
+    expect(onSave.mock.calls[0][0]).toHaveProperty('390');
+  });
+
+  it('treats a missing unavailableModels prop as nothing unavailable', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    expect(badges(container)).toContain('390');
   });
 });

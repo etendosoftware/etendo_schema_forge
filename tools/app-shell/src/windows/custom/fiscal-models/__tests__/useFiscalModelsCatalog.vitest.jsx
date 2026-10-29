@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/useFiscalModelsCatalog.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // The shared reader of the fiscal models catalog (GET <neo base>/fiscal-models-catalog).
 
 import { renderHook, waitFor, act } from '@testing-library/react';
@@ -186,5 +187,97 @@ describe('useFiscalModelsCatalog', () => {
 
     act(() => result.current.setActiveModels({ 349: true }));
     expect(result.current.activeModels).toEqual({ 349: true });
+  });
+});
+
+// Backend-only flag `fiscal-model-390`: the answer may carry an `_unavailable` marker, which the
+// hook splits off into `unavailableModels`. With no answer (loading, failed read) the 390 is hidden.
+describe('useFiscalModelsCatalog — unavailable models', () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+  });
+
+  it('exposes the marker as unavailableModels and never counts it as a model', async () => {
+    mockApiFetch.mockResolvedValue(jsonResponse({ 303: true, _unavailable: ['390'] }));
+    const { result } = renderHook(() => useFiscalModelsCatalog(API));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.unavailableModels).toEqual(['390']);
+    expect(result.current.activeModels).toEqual({ 303: true });
+    expect('_unavailable' in result.current.activeModels).toBe(false);
+    expect(isModelActive(result.current.activeModels, '390')).toBe(false);
+  });
+
+  it('keeps an unavailable model out of activeModels even if the answer sends it as active', async () => {
+    mockApiFetch.mockResolvedValue(jsonResponse({ 303: true, 390: true, _unavailable: ['390'] }));
+    const { result } = renderHook(() => useFiscalModelsCatalog(API));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.activeModels).toEqual({ 303: true });
+    expect(result.current.unavailableModels).toEqual(['390']);
+  });
+
+  it('hides the 390 before the read settles (fail hidden)', () => {
+    mockApiFetch.mockReturnValue(deferred().promise);
+    const { result } = renderHook(() => useFiscalModelsCatalog(API));
+
+    expect(result.current.loaded).toBe(false);
+    expect(result.current.unavailableModels).toEqual(['390']);
+  });
+
+  it('hides the 390 after a failed read', async () => {
+    mockApiFetch.mockRejectedValue(new Error('network down'));
+    const { result } = renderHook(() => useFiscalModelsCatalog(API));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.unavailableModels).toEqual(['390']);
+  });
+
+  it('hides the 390 after a non-ok answer, even if its body would list nothing unavailable', async () => {
+    mockApiFetch.mockResolvedValue(jsonResponse({ 390: true }, { ok: false, status: 500 }));
+    const { result } = renderHook(() => useFiscalModelsCatalog(API));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.unavailableModels).toEqual(['390']);
+    expect(result.current.activeModels).toEqual({});
+  });
+
+  it('a successful answer without the marker (flag on) clears it', async () => {
+    mockApiFetch.mockResolvedValue(jsonResponse({ 303: true, 390: true }));
+    const { result } = renderHook(() => useFiscalModelsCatalog(API));
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.unavailableModels).toEqual([]);
+    expect(result.current.activeModels).toEqual({ 303: true, 390: true });
+  });
+
+  it('a later successful answer without the marker clears the fail-hidden default of a failed read', async () => {
+    mockApiFetch.mockRejectedValueOnce(new Error('first'));
+    const { result, rerender } = renderHook(({ key }) => useFiscalModelsCatalog(API, key), {
+      initialProps: { key: 1 },
+    });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.unavailableModels).toEqual(['390']);
+
+    mockApiFetch.mockResolvedValueOnce(jsonResponse({ 390: true }));
+    rerender({ key: 2 });
+
+    await waitFor(() => expect(result.current.unavailableModels).toEqual([]));
+    expect(result.current.activeModels).toEqual({ 390: true });
+  });
+
+  it('a refresh that brings the marker back hides the 390 again', async () => {
+    mockApiFetch.mockResolvedValueOnce(jsonResponse({ 390: true }));
+    const { result, rerender } = renderHook(({ key }) => useFiscalModelsCatalog(API, key), {
+      initialProps: { key: 1 },
+    });
+    await waitFor(() => expect(result.current.unavailableModels).toEqual([]));
+
+    mockApiFetch.mockResolvedValueOnce(jsonResponse({ _unavailable: ['390'] }));
+    rerender({ key: 2 });
+
+    await waitFor(() => expect(result.current.unavailableModels).toEqual(['390']));
+    expect(result.current.activeModels).toEqual({});
   });
 });

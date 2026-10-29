@@ -1289,36 +1289,34 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/catalogAvailability.vitest.js",
-            "expected": true,
-            "note": "Pending (tester-functional): splitCatalogAnswer (marker split off, listed ids removed from activeModels even if sent, non-object/array/string bodies -> {}), filterAvailableModels (empty list returns the same array), unavailableWithoutAnswer returns a fresh ['390'] each call."
+            "note": "Written for ETP-5716: splitCatalogAnswer (marker split off, listed ids removed from activeModels even if sent, ids normalised to strings, no marker = plain catalog, input not mutated, null/undefined/string/number/boolean bodies -> empty split, an array body yields no active model), filterAvailableModels (same array when nothing is unavailable, order kept, no mutation), unavailableWithoutAnswer returns a fresh ['390'] each call."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/useFiscalModelsCatalog.vitest.jsx",
-            "note": "Shared spec; still missing (tester-functional, extension): an answer with _unavailable exposes unavailableModels and keeps the marker out of activeModels; before the read settles and after a failed read unavailableModels is ['390'] (fail hidden); a later successful answer without the marker clears it."
+            "note": "Shared spec; extended for ETP-5716: an answer with _unavailable exposes unavailableModels and keeps the marker (and a 390 sent as active) out of activeModels; before the read settles, after a rejected read and after a non-ok answer unavailableModels is ['390'] (fail hidden); a successful answer without the marker clears it, also after a failed read; a refresh that brings the marker back hides the 390 again."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmCatalogPage.vitest.jsx",
-            "note": "Shared spec; still missing (tester-functional, extension): unavailableModels=['390'] removes the 390 card, the header count and the saved payload's 390."
+            "note": "Shared spec; extended for ETP-5716: unavailableModels=['390'] removes the 390 card, the header catalog count and the saved payload's 390 (defaults and after toggling); with no marker the 390 card is shown, counted and saved; a missing prop hides nothing."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmListPage.vitest.jsx",
-            "note": "Shared spec; its string-body case now goes through splitCatalogAnswer. Still missing (tester-functional, extension): a failed catalog GET opens a drawer without the 390 card; a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels."
+            "note": "Shared spec; its string-body case goes through splitCatalogAnswer. Extended for ETP-5716: a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 row, no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels ['390']; a 390 sent as active with the marker stays hidden; a failed catalog GET hands the drawer ['390']; with no marker the 390 is counted, offered and the drawer hides nothing."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/organization/__tests__/useFiscalSectionVisibility.vitest.jsx",
-            "note": "Shared spec; still missing (tester-functional, extension): a catalog answer with _unavailable ['390'] keeps show390 false and does not let 390 drive showIae."
+            "note": "Shared spec; extended for ETP-5716 through the real catalog reader: a catalog answer with _unavailable ['390'] keeps show390 false; a 390 sent as active together with the marker drives neither the 390 section, IAE nor the certificate; with no marker the 390 section shows."
           }
         ],
         "e2e": [
           {
             "root": "frontend",
             "path": "e2e/tests/flows/fiscal/fiscal-models-390-availability.mocked.spec.js",
-            "expected": true,
-            "note": "Pending (tester-functional): mocked catalog answer with and without _unavailable: off -> no 390 card in the drawer, no 390 in the list/new declaration, no Modelo 390 section in Organization; on -> all present. Name is a placeholder; extend an existing fiscal spec if one fits."
+            "note": "Written for ETP-5716 (new file: no existing fiscal spec drives the catalog across list, drawer and Organization): mocked catalog answer with and without _unavailable: off -> list count (1), no 390 in the Modelo filter / Nueva declaración, no 390 card in the drawer, no Modelo 390 section in Organization; on -> all present."
           }
         ]
       },

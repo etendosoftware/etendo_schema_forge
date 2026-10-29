@@ -60,10 +60,11 @@ vi.mock('../FmCatalogPage.jsx', () => ({
   // FmCatalogPage's own UI. Wrapped in a `.fm-catalog-drawer` div to mirror
   // the real component's self-contained overlay/drawer markup (FmCatalogPage
   // now owns its own wrapper — FmListPage no longer renders one externally).
-  default: ({ onSave }) =>
+  // `data-unavailable-models` exposes what FmListPage hands the drawer (fiscal-model-390 flag).
+  default: ({ onSave, unavailableModels }) =>
     React.createElement(
       'div',
-      { className: 'fm-catalog-drawer' },
+      { className: 'fm-catalog-drawer', 'data-unavailable-models': JSON.stringify(unavailableModels ?? null) },
       React.createElement(
         'button',
         { 'data-testid': 'catalog-save-none', onClick: () => onSave({ '303': false, '349': false }) },
@@ -1372,3 +1373,80 @@ describe('FmListPage — incidents KPI severity variant (ETP-5597)', () => {
   });
 });
 
+// ── Models the backend marks unavailable (backend-only flag `fiscal-model-390`) ──
+// The catalog GET may answer `{ ..., "_unavailable": ["390"] }`: the 390 is then absent from the
+// list's count, the Modelo filter and Nueva declaración, and the drawer is told to hide it.
+
+describe('FmListPage — models marked unavailable by the catalog', () => {
+  const openModelFilter = (container) => {
+    fireEvent.click(container.querySelectorAll('.fm-toolbar__pill')[1]);
+    return Array.from(container.querySelectorAll('[role="option"]')).map(o => o.textContent);
+  };
+  const drawerUnavailable = (container) =>
+    JSON.parse(container.querySelector('.fm-catalog-drawer').getAttribute('data-unavailable-models'));
+
+  it('a 390 marked unavailable is absent from the count, the Modelo filter and Nueva declaración', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '_unavailable': ['390'] });
+    const decls = [
+      makeDecl({ id: '303-a', model: '303' }),
+      makeDecl({ id: '390-a', model: '390', period: '0A' }),
+    ];
+    const { container, getByText } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+
+    const options = openModelFilter(container);
+    expect(options.some(o => o.includes('303'))).toBe(true);
+    expect(options.some(o => o.includes('390'))).toBe(false);
+
+    fireEvent.click(getByText('+ fm.action.new_declaration'));
+    const modal = container.querySelector('[data-testid="new-decl-modal"]');
+    expect(JSON.parse(modal.getAttribute('data-active-models'))).toEqual({ '303': true });
+  });
+
+  it('a 390 sent as active together with the marker still stays hidden', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '390': true, '_unavailable': ['390'] });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    expect(openModelFilter(container).some(o => o.includes('390'))).toBe(false);
+  });
+
+  it('hands the drawer the unavailable models of the answer', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '_unavailable': ['390'] });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    expect(drawerUnavailable(container)).toEqual(['390']);
+  });
+
+  it('a failed catalog GET opens a drawer told to hide the 390 (fail hidden)', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+      }
+      return Promise.reject(new Error(`unmocked fetch: ${url}`));
+    });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    expect(drawerUnavailable(container)).toEqual(['390']);
+  });
+
+  it('with no marker (flag on) the 390 is counted, offered in the Modelo filter and the drawer hides nothing', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '390': true });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+    expect(openModelFilter(container).some(o => o.includes('390'))).toBe(true);
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    expect(drawerUnavailable(container)).toEqual([]);
+  });
+});
