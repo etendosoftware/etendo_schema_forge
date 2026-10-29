@@ -220,7 +220,7 @@
           "searchable": true,
           "section": "principal",
           "order": 2,
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null, "required": true }
         },
         "etgoFirstname": {
           "visibility": "editable",

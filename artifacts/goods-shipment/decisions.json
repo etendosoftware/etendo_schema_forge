@@ -72,7 +72,6 @@
   "entities": {
     "header": {
       "name": "goodsShipment",
-      "javaQualifier": "goodsShipmentHeaderHandler",
       "agentPrompt": "A goods shipment carries quantities only, no amounts, as in the app. Its value is each line's movementQuantity times the unit price of the sales order line it delivers (salesOrderLine, read in sales-order/lines); once invoiced, the invoice created from it has the amounts.",
       "draftMode": {
         "enabled": false

@@ -8,6 +8,7 @@ import {
   apiFetchToGlobalFetch,
 } from '../../../_test-support/loadCustomModule.js';
 import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
+import { translateImportRefusal } from '../../../../tools/app-shell/src/lib/backendErrors.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,9 +21,9 @@ const { helpers, source: src } = loadCustomModule(
   // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
   // binding the loader strips); the stub forwards to `globalThis.fetch`,
   // which is what the mocks below install.
-  { moduleApiFetch: apiFetchToGlobalFetch },
+  { moduleApiFetch: apiFetchToGlobalFetch, translateImportRefusal },
 );
-const { fetchDocuments, buildLineBody } = helpers;
+const { fetchDocuments, fetchLines, submitOrderImport } = helpers;
 
 // The invoice-line -> order-line FK key, read from the generated contract
 // (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID). Anchored to
@@ -56,11 +57,14 @@ describe('ImportFromOrderModal — source shape', () => {
     assert.match(src, /successMessageKey="linesImportedFromSalesOrder"/);
   });
 
-  it('injects fetch/build callbacks so the shared modal can drive line selection', () => {
+  // ETP-6002: one importOrderLines call instead of one line POST per order line.
+  it('imports through the submitImport callback, never one POST per line', () => {
     assert.match(src, /fetchDocuments=\{fetchDocuments\}/);
     assert.match(src, /fetchLines=\{fetchLines\}/);
     assert.match(src, /getDocDisplay=\{getDocDisplay\}/);
-    assert.match(src, /buildLineBody=\{buildLineBody\}/);
+    assert.match(src, /submitImport=\{submitImport\}/);
+    assert.doesNotMatch(src, /buildLineBody=/);
+    assert.doesNotMatch(src, /linesEndpoint=/);
   });
 
   it('spreads the shared global-discount props bound to the sales-invoice header', () => {
@@ -176,79 +180,98 @@ describe('ImportFromOrderModal — fetchDocuments currency filter', () => {
   });
 });
 
-describe('ImportFromOrderModal — buildLineBody', () => {
-  const line = {
-    id: 'ol1',
-    product: 'p1',
-    description: 'Entrega especial',
-    unitPrice: 10,
-    listPrice: 10,
-    tax: 't1',
-    uOM: 'u1',
-  };
-
-  it('carries the order line description into the built invoice line body', async () => {
-    const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.description, 'Entrega especial');
+// ETP-6002 — "Añadir desde pedido" is ONE call to the invoice's importOrderLines action, so the
+// window and the MCP share one rule (oldest pending shipment line first, one invoice line per
+// shipment line). Prices, discount, tax, UoM and the order-line link are set server-side.
+describe('ImportFromOrderModal — submitOrderImport (importOrderLines action)', () => {
+  afterEach(() => {
+    mock.reset();
   });
 
-  it('computes the line net amount from the unit price and the imported quantity', async () => {
-    const result = await buildLineBody({ line, qty: 3, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.invoicedQuantity, 3);
-    assert.equal(result.lineNetAmount, 30);
+  const carrying = () => ({ carryGlobalDiscount: true, afterImportResult: { carried: true, pct: 5 } });
+
+  it('sends every selected line in ONE call, grouped by order, with the carry decision', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, { importedCount: 3 }));
+    const result = await submitOrderImport({
+      lines: [
+        { line: { id: 'ol1' }, qty: 2, docId: 'o1' },
+        { line: { id: 'ol2' }, qty: 1, docId: 'o2' },
+        { line: { id: 'ol3' }, qty: 4, docId: 'o1' },
+      ],
+      base: '/b', invoiceId: 'inv1', selection: {}, serverCarry: carrying,
+    });
+
+    assert.equal(globalThis.fetch.mock.calls.length, 1);
+    const [url, opts] = globalThis.fetch.mock.calls[0].arguments;
+    assert.equal(url, '/b/sales-invoice/header/inv1/action/importOrderLines');
+    assert.equal(opts.method, 'POST');
+    assert.deepEqual(JSON.parse(opts.body), {
+      orders: [
+        { orderId: 'o1', lines: [{ sourceLineId: 'ol1', quantity: 2 }, { sourceLineId: 'ol3', quantity: 4 }] },
+        { orderId: 'o2', lines: [{ sourceLineId: 'ol2', quantity: 1 }] },
+      ],
+      carryGlobalDiscount: true,
+    });
+    assert.deepEqual(result, { ok: true, count: 3, afterImportResult: { carried: true, pct: 5 } });
   });
 
-  // ETP-5381 REGRESSION GUARD — this is the assertion that was missing.
-  //
-  // The FK must travel under the spec's key (`salesOrderLine`). Under the old
-  // `cOrderlineId`, NeoFieldFilter dropped it silently and the invoice line was
-  // created with C_OrderLine_ID NULL, which in turn:
-  //   1. kept M_MATCHSO empty (C_INVOICE_POST only matches lines that JOIN
-  //      C_ORDERLINE), so "Matched Sales Orders" stayed empty in GO; and
-  //   2. skipped the `UPDATE C_ORDERLINE SET QtyInvoiced = ...` guarded by
-  //      `IF C_OrderLine_ID IS NOT NULL`, so the order's invoiceStatus never
-  //      moved and it could be invoiced over and over.
-  it('sends the source order line under the spec API key for C_OrderLine_ID', async () => {
-    const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result[ORDER_LINE_FK], 'ol1');
+  // The `ui` stub renders `key:params`, so the assertions prove the CODE was translated (with its
+  // details), never the server's English prose.
+  const ui = (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key);
+
+  it('renders a refusal by its code and details, never the English server text', async () => {
+    globalThis.fetch = mock.fn(async () => ({
+      ok: false,
+      json: async () => ({ error: {
+        code: 'importQuantityExceedsPending', message: 'Cannot import 9 of Fernet: only 2 …',
+        product: 'Fernet', requested: 9, pending: 2,
+      } }),
+    }));
+    const result = await submitOrderImport({
+      lines: [{ line: { id: 'ol1' }, qty: 9, docId: 'o1' }],
+      base: '/b', invoiceId: 'inv1', selection: {}, serverCarry: carrying, ui,
+    });
+    assert.deepEqual(result, {
+      ok: false,
+      error: 'backendError.importQuantityExceedsPending:{"product":"Fernet","requested":9,"pending":2}',
+    });
   });
 
-  it('does not send the order line under a key the NEO spec would silently drop', async () => {
-    const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(Object.hasOwn(result, 'cOrderlineId'), false);
+  it('sends nothing when every selected quantity is 0, and asks for a positive quantity', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, { importedCount: 0 }));
+    const result = await submitOrderImport({
+      lines: [{ line: { id: 'ol1' }, qty: 0, docId: 'o1' }],
+      base: '/b', invoiceId: 'inv1', selection: {}, serverCarry: carrying, ui,
+    });
+    assert.equal(globalThis.fetch.mock.calls.length, 0);
+    assert.deepEqual(result, { ok: false, error: 'qtyMustBePositive' });
   });
 
-  // ETP-5710: an order line without a list price (e.g. created by an agent) but with a
-  // discount used to post U == L + etgoDiscount, which the server reads as "not yet
-  // discounted" and discounts a second time.
-  it('reconstructs the list price when the order line has none and a discount', async () => {
-    const discounted = { ...line, unitPrice: 90, listPrice: 0, discount: 10 };
-    const result = await buildLineBody({ line: discounted, qty: 1, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.unitPrice, 90);
-    assert.equal(result.listPrice, 100);
-    assert.equal(result.etgoDiscount, 10);
+  it('falls back to the generic import failure for an unknown import code', async () => {
+    globalThis.fetch = mock.fn(async () => ({
+      ok: false, json: async () => ({ error: { code: 'importSomethingNew', message: 'English text' } }),
+    }));
+    const result = await submitOrderImport({
+      lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
+      base: '/b', invoiceId: 'inv1', selection: {}, serverCarry: carrying, ui,
+    });
+    assert.deepEqual(result, { ok: false, error: 'failedToImportLines' });
   });
 
-  it('keeps the order line list price when it has one', async () => {
-    const withList = { ...line, unitPrice: 90, listPrice: 100, discount: 10 };
-    const result = await buildLineBody({ line: withList, qty: 1, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.listPrice, 100);
-  });
-
-  it('falls back to the unit price without a discount or with a 100 percent discount', async () => {
-    const plain = await buildLineBody({
-      line: { ...line, unitPrice: 10, listPrice: 0 }, qty: 1, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(plain.listPrice, 10);
-    const free = await buildLineBody({
-      line: { ...line, unitPrice: 0, listPrice: 0, discount: 100 }, qty: 1, invoiceId: 'inv1',
-      lineNo: 10 });
-    assert.equal(free.listPrice, 0);
-  });
-
-  it('rounds the reconstructed list price to 6 decimals', async () => {
-    const odd = { ...line, unitPrice: 10, listPrice: 0, discount: 3 };
-    const result = await buildLineBody({ line: odd, qty: 1, invoiceId: 'inv1', lineNo: 10 });
-    assert.equal(result.listPrice, 10.309278);
+  it('caps the selectable quantity with the action pending (drafts included)', async () => {
+    globalThis.fetch = mock.fn(async (url) => {
+      if (url.includes('/action/availableOrderLines')) return mockRes(true, [{ id: 'ol1', pendingQuantity: 2 }]);
+      return mockRes(true, [
+        { id: 'ol1', orderedQuantity: 5, invoicedQuantity: 0, unitPrice: 10 },
+        { id: 'ol2', orderedQuantity: 5, invoicedQuantity: 0, unitPrice: 10 },
+      ]);
+    });
+    const lines = await fetchLines({
+      base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1', alreadyImportedOrderLines: new Set() },
+    });
+    assert.equal(lines.find(l => l.id === 'ol1')._maxQty, 2);
+    assert.equal(lines.find(l => l.id === 'ol2')._maxQty, 0);
+    assert.equal(lines.find(l => l.id === 'ol2')._alreadyImported, true);
   });
 });
 

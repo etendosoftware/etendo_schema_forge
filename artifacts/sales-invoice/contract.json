@@ -1,8 +1,8 @@
 {
   "version": "0.94.0",
   "generatedAt": "2026-10-19T17:29:21.531Z",
-  "updatedAt": "2026-10-29T12:16:54.314Z",
-  "checksum": "c4ca324d1f80fbee",
+  "updatedAt": "2026-10-29T18:35:57.897Z",
+  "checksum": "7551fc2389c675cd",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -122,9 +122,10 @@
         {
           "key": "reversedInvoices",
           "labelKey": "rectificationsTab",
-          "component": "ReversedInvoicesPanel",
-          "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
-          "placement": "tab"
+          "component": "SalesRectificationsTab",
+          "importFrom": "@/windows/custom/sales-invoice/SalesRectificationsTab.jsx",
+          "placement": "tab",
+          "_note": "ETP-6002 (CP-26): shown only when the document type is a rectificative; an original invoice sees its rectificatives as related-documents chips instead (the ETP-5745 CP-12 in-tab view is dropped). An extraTabs entry is always visible unless its component reports onVisibilityChange(false); SalesRectificationsTab does that from the AR subtype (arInvoiceSubtype, or the selected document type on a new invoice). The reversedInvoices entity displayLogic below does NOT govern this tab (renderTab is false)."
         }
       ],
       "rowQuickActions": {
@@ -3307,9 +3308,10 @@
         {
           "key": "reversedInvoices",
           "labelKey": "rectificationsTab",
-          "component": "ReversedInvoicesPanel",
-          "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
-          "placement": "tab"
+          "component": "SalesRectificationsTab",
+          "importFrom": "@/windows/custom/sales-invoice/SalesRectificationsTab.jsx",
+          "placement": "tab",
+          "_note": "ETP-6002 (CP-26): shown only when the document type is a rectificative; an original invoice sees its rectificatives as related-documents chips instead (the ETP-5745 CP-12 in-tab view is dropped). An extraTabs entry is always visible unless its component reports onVisibilityChange(false); SalesRectificationsTab does that from the AR subtype (arInvoiceSubtype, or the selected document type on a new invoice). The reversedInvoices entity displayLogic below does NOT govern this tab (renderTab is false)."
         }
       ],
       "rowQuickActions": {
