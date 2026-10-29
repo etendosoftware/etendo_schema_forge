@@ -1353,7 +1353,7 @@
     },
     {
       "id": "doc-template-selection",
-      "description": "Lets an organization choose the printed template of the commercial documents (sales invoice, sales order, purchase order, quotation): variant classic/compact/modern plus common options (base color, font, text size, alternating rows, logo, footer) for the documents and, apart, for the list print, read from GET /sws/neo/doctemplateconfig. Visual gating only: the endpoint authorizes every read and write on its own. Off, the current shared template is rendered unchanged and no request is made. MVP for validation.",
+      "description": "Lets an organization choose the printed template of the commercial documents (sales invoice, sales order, purchase order, quotation): variant classic/compact/modern plus common options (base color, font, text size, alternating rows, logo, footer) for the documents and, apart, for the list print, read from GET /sws/neo/doctemplateconfig. Visual gating only: the flag hides the settings page; the endpoint authorizes every read and write on its own, and a saved choice is applied to every print regardless of the flag. With nothing saved the current templates are rendered unchanged. MVP for validation.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-5988",
       "created": "2026-10-28",

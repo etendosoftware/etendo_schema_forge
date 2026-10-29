@@ -279,14 +279,17 @@ export default function ReportDrawer({
 
   const apiFetch = useApiFetch(apiBaseUrl);
 
-  // ETP-5988 — behind the `doc-template-selection` flag; with it off no request is made and the
-  // answer is null at once. A failure is null too: printing a list never depends on this.
+  // ETP-5988 — the organization's saved list design. Not behind the settings flag (it only hides the
+  // page); nothing saved, or a failure, is null: printing a list never depends on this.
   useEffect(() => {
     if (!open) return undefined;
     let cancelled = false;
-    loadDocTemplateConfig('listing', apiBaseUrl, token).then(async (config) => {
+    // `apiBaseUrl` is the WINDOW's url (`.../sws/neo/sales-order`); the configuration lives on the NEO
+    // base, one segment up — the same strip `usePdfGenerator` does before it calls a data builder.
+    const neoBase = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
+    loadDocTemplateConfig('listing', neoBase, token).then(async (config) => {
       // The logo is read with the config, so the preview waits for both and renders once.
-      const logo = config?.showLogo === 'on' ? (config.logo || await loadCompanyLogo(apiBaseUrl, token)) : null;
+      const logo = config?.showLogo === 'on' ? (config.logo || await loadCompanyLogo(neoBase, token)) : null;
       if (cancelled) return;
       // Names what the list print will use, so "the style is not applied" is diagnosable from the console.
       console.info(`[list-print] ${config ? `saved design: ${config.variant}${config.color ? ` ${config.color}` : ''}` : 'no saved design (flag off, nothing saved or not readable): the current print'}`);

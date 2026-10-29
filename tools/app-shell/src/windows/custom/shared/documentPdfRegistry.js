@@ -48,7 +48,7 @@ import {
   generateReturnReceiptPdf, generateReturnReceiptHtml, getReturnReceiptPdfLabels,
 } from '@/windows/custom/return-material-receipt/useReturnReceiptPdf.js';
 
-/** The document's data and, with template selection on, the organization's template choice (ETP-5988). */
+/** The document's data and the organization's template choice, if it saved one (ETP-5988). */
 async function withTemplateConfig(docType, build, id, base, token) {
   const d = await build(id, base, token);
   return [d, await loadDocTemplateConfig(docType, base, token)];

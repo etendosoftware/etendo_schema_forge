@@ -69,7 +69,11 @@ describe('printableStyle — list print', () => {
     const NO_STRIPES = /nth-child\(even\) \{ background: transparent/;
     assert.match(resolveListingCss({ variant: 'classic' }, BASE), NO_STRIPES);
     assert.match(resolveListingCss({ variant: 'classic', rowStripes: 'off' }, BASE), NO_STRIPES);
-    assert.doesNotMatch(resolveListingCss({ variant: 'classic', rowStripes: 'on' }, BASE), NO_STRIPES);
+    const on = resolveListingCss({ variant: 'classic', rowStripes: 'on' }, BASE);
+    assert.doesNotMatch(on, NO_STRIPES);
+    // a concrete color: the base CSS's hsl(var(--muted)) does not exist inside jsreport
+    assert.match(on, /nth-child\(even\) \{ background: #F3F4F6/);
+    assert.match(resolveListingCss({ variant: 'classic', rowStripes: 'on', color: '#B91C1C' }, BASE), /nth-child\(even\) \{ background: #[0-9A-F]{6}/);
   });
 
   it('compact tightens the layout, modern carries its own accent', () => {

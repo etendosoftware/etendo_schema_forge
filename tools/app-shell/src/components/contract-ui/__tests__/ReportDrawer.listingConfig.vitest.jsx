@@ -14,9 +14,9 @@ vi.mock('@/lib/useAnimatedOpen.js', () => ({ useAnimatedOpen: (open) => ({ shoul
 vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (row, key) => row?.[key] ?? '' }));
 vi.mock('@/lib/statusBadge.js', () => ({ statusLabel: (raw) => raw }));
 
-const config = vi.hoisted(() => ({ value: null, logo: 'data:image/png;base64,AAA=' }));
+const config = vi.hoisted(() => ({ value: null, logo: 'data:image/png;base64,AAA=', calls: [] }));
 vi.mock('@/windows/custom/shared/docTemplateConfig.js', () => ({
-  loadDocTemplateConfig: async () => config.value,
+  loadDocTemplateConfig: async (...a) => { config.calls.push(a); return config.value; },
   loadCompanyLogo: async () => config.logo,
 }));
 
@@ -40,6 +40,7 @@ const reportCall = () => {
 describe('ReportDrawer — saved list design', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    config.calls = [];
     mockFetch.mockImplementation((url) => {
       if (url.includes('/jsreport/api/ping')) return Promise.resolve({ ok: true });
       if (url === '/jsreport/api/report') return Promise.resolve({ ok: true, text: async () => '<html></html>' });
@@ -55,6 +56,14 @@ describe('ReportDrawer — saved list design', () => {
     expect(data.css).toContain('variant: compact');
     expect(data.css).toContain('#B91C1C');
     expect(data.meta.logo).toBeNull();
+  });
+
+  it('reads the configuration from the NEO base, not from the window url', async () => {
+    config.value = null;
+    render(<ReportDrawer {...PROPS} apiBaseUrl="http://localhost:8080/etendo/sws/neo/sales-order" />);
+    await waitFor(() => expect(config.calls.length).toBeGreaterThan(0));
+    expect(config.calls[0][0]).toBe('listing');
+    expect(config.calls[0][1]).toBe('http://localhost:8080/etendo/sws/neo');
   });
 
   it('puts the logo in the payload only when the design shows it', async () => {

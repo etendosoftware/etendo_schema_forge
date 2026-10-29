@@ -135,9 +135,15 @@ export function resolveListingCss(config, baseCss) {
     css.push('\n/* style: large text */\nbody { font-size: 12pt; }\n.report-table { font-size: 11pt; }\n.report-table thead th { font-size: 9.5pt; }\n.cell-amount { font-size: 10.5pt; }\n');
   }
   if (config.showLogo === 'on') css.push('\n/* option: company logo */\n.report-brand { display: flex; align-items: center; gap: 4mm; }\n.report-logo { display: block; max-height: 14mm; max-width: 45mm; object-fit: contain; flex-shrink: 0; }\n');
-  // The list print does not stripe its rows unless the organization asks for it: with a saved
-  // configuration, only an explicit 'on' keeps the alternating rows the current print has.
-  if (config.rowStripes !== 'on') css.push('\n/* style: no stripes */\n.report-table tbody tr:nth-child(even) { background: transparent; }\n');
+  // The list print does not stripe its rows unless the organization asks for it. The base CSS stripes
+  // with `hsl(var(--muted))`, a variable that does not exist inside jsreport, so that background is
+  // invalid and was never drawn: "on" therefore has to bring a concrete color of its own.
+  if (config.rowStripes === 'on') {
+    const tint = accent ? softTint(accent) : '#F3F4F6';
+    css.push(`\n/* style: striped rows */\n.report-table tbody tr:nth-child(even) { background: ${tint}; }\n`);
+  } else {
+    css.push('\n/* style: no stripes */\n.report-table tbody tr:nth-child(even) { background: transparent; }\n');
+  }
   return css.join('');
 }
 

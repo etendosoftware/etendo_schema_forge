@@ -1,6 +1,4 @@
-import { useRef } from 'react';
-import { useFeatureFlag } from '@/lib/flags/useFeatureFlag.js';
-import { DOC_TEMPLATE_SELECTION } from '@/lib/flags/flag-keys.js';
+import { useEffect, useRef, useState } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { computeDocumentTotals } from '@/lib/documentTotals';
 import { ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
@@ -510,12 +508,26 @@ export function computeDiscountBreakdown(linesRaw, etgoTotalDiscount, getGrossLi
 export function useDocumentPdf(recordId, apiBaseUrl, token, buildDataFn, labels, cacheConfig, docType = null) {
   const labelsRef = useRef(labels);
   labelsRef.current = labels;
-  // ETP-5988: with template selection on, a cached PDF would hide a changed choice (no record edit
-  // invalidates it), so it is not served. Off: the cache config is passed through untouched.
-  const templateSelection = useFeatureFlag(DOC_TEMPLATE_SELECTION);
-  return usePdfGenerator(recordId, apiBaseUrl, token, async (id, base, tok) => {
+  // ETP-5988: the organization's saved template (undefined while it is being read, null when it has
+  // none). It is read BEFORE generating so a document that has one never serves a cached PDF
+  // (nothing a record edit does would invalidate it when only the configuration changed), while one
+  // that has none keeps the cache config untouched. A type with no template concept (docType null)
+  // is settled from the start.
+  const [templateConfig, setTemplateConfig] = useState(docType ? undefined : null);
+  const templateRef = useRef(null);
+  templateRef.current = templateConfig ?? null;
+  useEffect(() => {
+    if (!docType || !recordId || !apiBaseUrl) return undefined;
+    let cancelled = false;
+    setTemplateConfig(undefined);
+    // apiBaseUrl is the window's url; the configuration lives one segment up (as usePdfGenerator strips it).
+    loadDocTemplateConfig(docType, apiBaseUrl.replace(/\/[^/]+$/, ''), token)
+      .then((config) => { if (!cancelled) setTemplateConfig(config); });
+    return () => { cancelled = true; };
+  }, [docType, recordId, apiBaseUrl, token]);
+  const settled = templateConfig !== undefined;
+  return usePdfGenerator(settled ? recordId : null, apiBaseUrl, token, async (id, base, tok) => {
     const data = await buildDataFn(id, base, tok);
-    const templateConfig = await loadDocTemplateConfig(docType, base, tok);
-    return renderDocumentPdf({ ...data, labels: labelsRef.current }, templateConfig);
-  }, templateSelection && docType ? null : cacheConfig);
+    return renderDocumentPdf({ ...data, labels: labelsRef.current }, templateRef.current);
+  }, templateConfig ? null : cacheConfig);
 }
