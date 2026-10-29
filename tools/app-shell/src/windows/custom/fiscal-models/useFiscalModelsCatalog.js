@@ -14,11 +14,13 @@
 //
 // Unavailable models (ETP-5716, backend-only flag `fiscal-model-390`): the answer may carry a
 // `_unavailable` marker, split off by `splitCatalogAnswer` (catalogAvailability.js) so
-// `activeModels` only ever holds models; `unavailableModels` hides them in the catalog drawer.
+// `activeModels` only ever holds models; `unavailableModels` hides them in the catalog drawer. Until
+// an answer arrives, and after a failed read, `unavailableModels` is `unavailableWithoutAnswer()`
+// (fail hidden).
 import { useEffect, useState } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { splitCatalogAnswer } from './catalogAvailability.js';
+import { splitCatalogAnswer, unavailableWithoutAnswer } from './catalogAvailability.js';
 
 /** True when the catalog `activeModels` marks model `id` as active. */
 export function isModelActive(activeModels, id) {
@@ -38,7 +40,7 @@ export function isModelActive(activeModels, id) {
 export function useFiscalModelsCatalog(apiBaseUrl, refreshKey) {
   const apiFetch = useApiFetch(apiBaseUrl);
   const [activeModels, setActiveModels] = useState({});
-  const [unavailableModels, setUnavailableModels] = useState([]);
+  const [unavailableModels, setUnavailableModels] = useState(unavailableWithoutAnswer);
   const [loaded, setLoaded] = useState(!apiBaseUrl);
   const [error, setError] = useState(null);
 
@@ -54,7 +56,11 @@ export function useFiscalModelsCatalog(apiBaseUrl, refreshKey) {
         setUnavailableModels(answer.unavailableModels);
         setError(null);
       })
-      .catch(err => { if (!cancelled) setError(err ?? true); })
+      .catch(err => {
+        if (cancelled) return;
+        setError(err ?? true);
+        setUnavailableModels(unavailableWithoutAnswer());
+      })
       .finally(() => { if (!cancelled) setLoaded(true); });
     return () => { cancelled = true; };
   }, [apiBaseUrl, apiFetch, refreshKey]);

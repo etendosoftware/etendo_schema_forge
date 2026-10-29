@@ -4747,8 +4747,11 @@ catalog answer:
 - **Not gated:** the `/fiscal390/*` and legal-representative endpoints answer whatever the flag says.
   The flag is a visual gate, not authorization; those endpoints stay protected by the role's
   window access. Existing 390 declarations are never touched.
-- **Failure:** any failure of the flag provider resolves to off (hidden). A failed catalog read in the
-  SPA shows no active model, as before.
+- **Failure — always hidden:** any failure of the flag provider resolves to off. In the SPA, while
+  the catalog has not answered (first read in flight) and after a failed read, `unavailableModels`
+  is `unavailableWithoutAnswer()` (`catalogAvailability.js`, the only frontend place that names 390),
+  so the drawer does not offer the 390 card, and no model is active. Any successful answer replaces
+  that default.
 
 Turning it on locally: `etendo.go.flags.fiscal-model-390=true` in `Openbravo.properties` (or the JVM
 property, or the environment variable `ETGO_FLAG_FISCAL_MODEL_390=true`), then restart Tomcat. Full

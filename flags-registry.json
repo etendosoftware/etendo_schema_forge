@@ -1256,7 +1256,7 @@
           "filterAvailableModels",
           "unavailableModels"
         ],
-        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, and none must be added. The frontend trail is the catalog answer's split, not a flag key: splitCatalogAnswer (inside useFiscalModelsCatalog.js) and filterAvailableModels/unavailableModels (FmListPage.jsx -> FmCatalogPage.jsx). The `_unavailable` marker itself is NOT a symbol: it collides with unrelated code (backendErrors.js, SubscriptionSection.jsx); it is only spelled in the two owned files (FiscalModel390Flag.UNAVAILABLE_KEY, catalogAvailability.UNAVAILABLE_KEY) and in useFiscalModelsCatalog.js's comment. The Organization window has NO toggle point: its Modelo 390 section already renders only while the catalog marks 390 active (useFiscalSectionVisibility.js), so it hides without naming the flag."
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, and none must be added. The frontend trail is the catalog answer's split, not a flag key: splitCatalogAnswer (inside useFiscalModelsCatalog.js) and filterAvailableModels/unavailableModels (FmListPage.jsx -> FmCatalogPage.jsx). The frontend names model 390 in exactly one place, catalogAvailability.js UNAVAILABLE_WITHOUT_ANSWER: the fail-hidden default used while there is no catalog answer (loading, read failure), mirroring the backend default, not a second evaluator -- any answer replaces it. The `_unavailable` marker itself is NOT a symbol: it collides with unrelated code (backendErrors.js, SubscriptionSection.jsx); it is only spelled in the two owned files (FiscalModel390Flag.UNAVAILABLE_KEY, catalogAvailability.UNAVAILABLE_KEY) and in useFiscalModelsCatalog.js's comment. The Organization window has NO toggle point: its Modelo 390 section already renders only while the catalog marks 390 active (useFiscalSectionVisibility.js), so it hides without naming the flag."
       },
       "$gatingComment": "ONE evaluator, the backend (FiscalModel390Flag). Targeted PER USER and PER TENANT: the context is FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the NEO session user, via GoAccountResolver.findCurrentAccountEmail(), the same resolution bp-portal-link uses>).with(clientId), so the targeting key, `Email` and lowercase `email` carry the account and a Datadog rule matches the lowercase `email` attribute against lowercase values; with no resolvable account the context carries clientId only (tenant rules match, email rules do not, default hidden, never throws). GET /sws/neo/fiscal-models-catalog with the flag off answers the stored catalog minus `390` plus `\"_unavailable\": [\"390\"]`; flag on it answers exactly the stored catalog. PUT with the flag off ignores the client's 390 value and keeps the stored one (a tenant's earlier choice survives an off/on cycle); `_unavailable` is never persisted. Deliberately NOT gated (a flag is a visual gate, not authorization): /sws/neo/fiscal390/*, the fiscal303/declarations CRUD for model 390 and the organization's representanteLegal entity, all already protected by the role's window access. Local: etendo.go.flags.fiscal-model-390 / ETGO_FLAG_FISCAL_MODEL_390 (Tomcat restart).",
       "paths": {
@@ -1291,12 +1291,12 @@
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/catalogAvailability.vitest.js",
             "expected": true,
-            "note": "Pending (tester-functional): splitCatalogAnswer (marker split off, listed ids removed from activeModels even if sent, non-object/array/string bodies -> {}), filterAvailableModels (empty list returns the same array)."
+            "note": "Pending (tester-functional): splitCatalogAnswer (marker split off, listed ids removed from activeModels even if sent, non-object/array/string bodies -> {}), filterAvailableModels (empty list returns the same array), unavailableWithoutAnswer returns a fresh ['390'] each call."
           },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/useFiscalModelsCatalog.vitest.jsx",
-            "note": "Shared spec; still missing (tester-functional, extension): an answer with _unavailable exposes unavailableModels and keeps the marker out of activeModels."
+            "note": "Shared spec; still missing (tester-functional, extension): an answer with _unavailable exposes unavailableModels and keeps the marker out of activeModels; before the read settles and after a failed read unavailableModels is ['390'] (fail hidden); a later successful answer without the marker clears it."
           },
           {
             "root": "frontend",
@@ -1306,7 +1306,7 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmListPage.vitest.jsx",
-            "note": "Shared spec; its string-body case now goes through splitCatalogAnswer. Still missing (tester-functional, extension): a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels."
+            "note": "Shared spec; its string-body case now goes through splitCatalogAnswer. Still missing (tester-functional, extension): a failed catalog GET opens a drawer without the 390 card; a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels."
           },
           {
             "root": "frontend",
@@ -1324,15 +1324,6 @@
         ]
       },
       "deferredItems": [
-        {
-          "id": "spa-catalog-read-failure-shows-390-toggle",
-          "kind": "cosmetic",
-          "note": "When the catalog GET itself fails, the SPA has no answer to react to, so the drawer still offers the 390 card (the frontend has no flag key, by design). Therefore a user can toggle it, but the PUT is filtered by the backend (390 kept as stored) and the local state shows 390 active only until the next reload. Fix only if it is seen in practice: hide the drawer (or disable save) while the catalog read is in error.",
-          "refs": [
-            "tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx — FmCatalogPage onSave",
-            "com.etendoerp.go src/com/etendoerp/go/schemaforge/FiscalModel390Flag.java — applyToWrite"
-          ]
-        },
         {
           "id": "mcp-and-api-not-gated",
           "kind": "open",
