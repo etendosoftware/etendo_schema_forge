@@ -28,7 +28,6 @@
     "rxServicesAccess": { "exclude": true },
     "token": { "exclude": true },
     "user": {
-      "javaQualifier": "user",
       "fields": {
         "name": {
           "visibility": "editable",

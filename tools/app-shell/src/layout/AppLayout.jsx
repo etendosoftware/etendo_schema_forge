@@ -17,6 +17,8 @@ import { FavoritesProvider } from '@/components/layout/FavoritesContext';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 import TopBar from '@/components/layout/TopBar';
 import { BillingStatusBanner } from '@/components/billing/BillingStatusBanner.jsx';
+import { QuotaStatusBanner } from '@/components/billing/QuotaStatusBanner.jsx';
+import { useEnvironmentListFreshness } from '@/hooks/useEnvironmentListFreshness.js';
 import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchContext.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
@@ -553,6 +555,9 @@ function AppLayoutInner({ menuGroups, embedded }) {
   const meta = usePageMeta();
   const marginLeft = expanded ? EXPANDED_W : COLLAPSED_W;
   const { state: supportState, actions: supportActions } = useSupportChat();
+  // ETP-5051 — the ONE app-level owner of the environment-list freshness triggers (focus, interval,
+  // quota refusal). Off in an embedded window: it shows no banner and is a page of its own.
+  useEnvironmentListFreshness({ enabled: !embedded });
   // ETP-5351 — the operator in a support session IS support: no help chat (floating button and
   // panel), and the provider below runs none of its conversation requests or polls.
   const { isSupportMode } = useSupportSession();
@@ -578,6 +583,10 @@ function AppLayoutInner({ menuGroups, embedded }) {
         {!embedded && <SupportSessionBanner data-testid="SupportSessionBanner__488148" />}
         {/* ETP-5049 — failed-payment warning during the grace period, above the whole chrome. */}
         {!embedded && !isSupportMode && <BillingStatusBanner data-testid="BillingStatusBanner__488148" />}
+        {/* ETP-5051 — plan quotas near or at their limit, from the environment list (`quotas`).
+            Hidden in a support session like the payment banner (ETP-5351): its CTA is /account,
+            a route that session cannot reach. */}
+        {!embedded && !isSupportMode && <QuotaStatusBanner data-testid="QuotaStatusBanner__488148" />}
         {!embedded && (
           <TopBar
             onBack={meta?.onBack}

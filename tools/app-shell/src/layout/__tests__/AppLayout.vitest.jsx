@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/layout/AppLayout.jsx
 // @covers tools/app-shell/src/components/access/SessionConflictNotice.jsx
+// @covers tools/app-shell/src/hooks/useEnvironmentListFreshness.js
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -68,6 +69,8 @@ const useEnvironmentSwitchMock = vi.fn(() => ({
   currentClientId: 'CLIENT-CURRENT',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  // The layout's freshness triggers (`useEnvironmentListFreshness`) fire this event name.
+  ENVIRONMENT_LIST_REFRESH_EVENT: 'etendo:refresh-environments',
   useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
 }));
 
@@ -294,6 +297,7 @@ import { useAccessLoadError } from '@/hooks/useAccessLoadError.js';
 import { buildMenuGroups } from '@/windows/registry.js';
 import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
 import { useLocation, useSearchParams } from 'react-router-dom';
+import { QUOTA_REFUSED_EVENT } from '@/lib/planQuotas.js';
 import AppLayout from '../AppLayout.jsx';
 import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
@@ -1678,5 +1682,60 @@ describe('AppLayout — failed-payment banner mount (ETP-5049)', () => {
     expect(screen.getByTestId('outlet')).toBeInTheDocument();
     expect(screen.queryByTestId('billing-status-banner')).not.toBeInTheDocument();
     expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * ETP-5051 — AppLayout is the ONE owner of the environment-list freshness triggers
+ * (`useEnvironmentListFreshness`: focus, a 5-minute interval, a quota refusal). The real hook runs
+ * here; each trigger dispatches `etendo:refresh-environments` once per mounted instance, so a
+ * quota refusal producing exactly one refresh event proves the layout mounts it exactly once (a
+ * second mount anywhere in the tree would make it two). Embedded windows show no banner and are
+ * pages of their own, so the hook is off there.
+ */
+describe('AppLayout — environment-list freshness (ETP-5051)', () => {
+  const defaultProps = { menuGroups: [{ label: 'Sales', items: [] }] };
+  let refreshes;
+  const countRefresh = () => { refreshes += 1; };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    refreshes = 0;
+    useAuthOptionalMock.mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useAccessLoadError).mockReturnValue(false);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/sales-order/123' });
+    window.addEventListener('etendo:refresh-environments', countRefresh);
+  });
+
+  afterEach(() => {
+    window.removeEventListener('etendo:refresh-environments', countRefresh);
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
+  });
+
+  it('mounts the freshness triggers once: a quota refusal asks for exactly one refresh', () => {
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+
+    window.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+    expect(refreshes).toBe(1);
+  });
+
+  it('stops the triggers when the layout unmounts', () => {
+    const { unmount } = render(<AppLayout {...defaultProps} />);
+    unmount();
+
+    window.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+    expect(refreshes).toBe(0);
+  });
+
+  it.each(['1', 'interactive'])('does not mount the triggers when embedded=%s', (embedded) => {
+    vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(`embedded=${embedded}`), vi.fn()]);
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+
+    window.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+    expect(refreshes).toBe(0);
   });
 });
