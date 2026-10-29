@@ -37,7 +37,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:bpLocation
 
 // @sf-generated-start requiredHeaderFields:bpLocation
-const requiredHeaderFields = ['country', 'oBSEPABuildingNumber', 'oBSEPAStreetName'];
+const requiredHeaderFields = ['country', 'buildingNumber', 'streetName'];
 // @sf-generated-end requiredHeaderFields:bpLocation
 
 
