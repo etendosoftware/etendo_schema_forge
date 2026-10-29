@@ -21,7 +21,7 @@ import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmoun
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
-import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
+import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver, isFormCalculating } from './saveActions.jsx';
 import { DetailDeleteButton } from './DetailDeleteButton.jsx';
 import { translateBackendError, translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -446,7 +446,7 @@ export function DetailView({
   // even when called from a setTimeout scheduled before the React re-render committed.
   const handleFieldBlurRef = useRef(null);
   handleFieldBlurRef.current = async () => {
-    if (!hasUnsavedEdits(hook.editing, hook.selected)) return;
+    if (isFormCalculating(hook) || !hasUnsavedEdits(hook.editing, hook.selected)) return;
     // handleSave() resolves to the saved record on success, or null on any
     // failure (validation block, non-2xx PATCH, network error) — see
     // useEntity.js. A checkbox/toggle field autosaves immediately (ETP-4670:
