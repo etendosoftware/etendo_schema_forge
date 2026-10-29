@@ -422,7 +422,7 @@ Messages are English literals in Java on purpose (no `AD_MESSAGE` rows), localiz
 The rectificative invoice now arrives confirmed, so the "review the draft before
 confirming" step is gone. To change it the user **reactivates** it from the
 `purchase-invoice` window (`reactivate` menu action, `documentAction: 'RE'`,
-`preUnpost: true`, visible at `DocStatus='CO'`) — the only route back to `DR`.
+visible at `DocStatus='CO'`) — the only route back to `DR`.
 
 **Known residual gap (UI copy, not behavior):** the confirm card still describes
 the outcome as a draft —

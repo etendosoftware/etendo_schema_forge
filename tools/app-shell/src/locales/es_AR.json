@@ -3196,6 +3196,10 @@
       "label": "Contabilizado",
       "description": "Estado contable en el que figura si una transacción específica fue anotada en el Libro Mayor."
     },
+    "EM_Etblkp_Accountingstatus": {
+      "label": "Estado contable",
+      "description": "Estado contable del registro: si fue anotado en el Libro Mayor."
+    },
     "M_ProductionPlan_ID": {
       "label": "Plan de producción",
       "description": "Propuesta de cómo llevar a cabo la producción."
@@ -20103,6 +20107,7 @@
     "backendError.ibanRequired": "Para generar la Cuenta Mostrada con IBAN es necesario introducir el IBAN",
     "backendError.genericAccountRequired": "Para generar la Cuenta Mostrada con Número de Cuenta Genérica es necesario introducir un Número de Cuenta Genérica",
     "backendError.countryIban": "Se necesita el País para una cuenta IBAN.",
+    "backendError.accountingAccessDenied": "Tu rol no puede ver ni modificar la contabilidad. Pedile a un administrador que active Mostrar campos contables.",
     "backendError.countryRequired": "El país es obligatorio",
     "backendError.ibanInvalid": "El código IBAN introducido no es correcto. Por favor revise el código IBAN y el país definido para el banco",
     "backendError.swiftRequired": "Para generar la Cuenta Mostrada con Código SWIFT es necesario introducir un Código SWIFT y el Número de Cuenta Genérica",

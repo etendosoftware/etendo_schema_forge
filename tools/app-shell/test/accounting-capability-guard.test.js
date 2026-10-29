@@ -11,8 +11,14 @@
  * 1. Every `decisions.json` entity whose `posted` field is shown (not `discarded`/`system`)
  *    must carry the gate. Every entity, not just `header`: financial-account's
  *    reconciliations are a secondary entity rendered through the contract.
- * 2. Every hand-written list column declared as `key: 'posted'` with a `column:` (a DataTable
- *    column definition in a custom window) must carry the gate on the same declaration.
+ * 2. Every resolved `contract.json` field on an accounting-status column (`Posted`,
+ *    `EM_Etblkp_Accountingstatus` — the same set the backend's `NeoAccountingAccessPolicy`
+ *    hides) that the form or the grid shows must carry the gate. This is what catches a field
+ *    `decisions.json` never mentions: goods-shipment showed `etblkpAccountingstatus` in its
+ *    "Others" tab by default, so check 1 had nothing to read (QA CP-8).
+ * 3. Every hand-written list column declared as `key: 'posted'` or
+ *    `key: 'etblkpAccountingstatus'` with a `column:` (a DataTable column definition in a
+ *    custom window) must carry the gate on the same declaration.
  *
  * The posting ACTIONS (Contabilizar / Descontabilizar) are not checked here: the three action
  * renderers gate them structurally on `neoAction`/`value`, so a new window is covered without
@@ -26,6 +32,9 @@ import { fileURLToPath } from 'node:url';
 
 const ACCOUNTING_CAPABILITY = 'showAccountingFields';
 const HIDDEN_VISIBILITIES = new Set(['discarded', 'system']);
+// AD columns holding a posting status. They share no AD reference (Posted is a Button on list
+// 234, the bulk-posting extension a List on its own), so the set is explicit.
+const ACCOUNTING_STATUS_COLUMNS = new Set(['posted', 'em_etblkp_accountingstatus']);
 
 const appShellRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = join(appShellRoot, '..', '..');
@@ -34,6 +43,12 @@ const artifactsDir = join(repoRoot, 'artifacts');
 function listDecisionFiles() {
   return readdirSync(artifactsDir)
     .map((name) => join(artifactsDir, name, 'decisions.json'))
+    .filter((file) => existsSync(file));
+}
+
+function listContractFiles() {
+  return readdirSync(artifactsDir)
+    .map((name) => join(artifactsDir, name, 'contract.json'))
     .filter((file) => existsSync(file));
 }
 
@@ -64,7 +79,7 @@ function customSourceFiles() {
 function postedColumnDeclarations(source) {
   return source.split('\n')
     .map((line, i) => ({ line, lineNo: i + 1 }))
-    .filter(({ line }) => /key:\s*['"]posted['"]/.test(line) && /column:\s*['"]/.test(line));
+    .filter(({ line }) => /key:\s*['"](posted|etblkpAccountingstatus)['"]/.test(line) && /column:\s*['"]/.test(line));
 }
 
 describe('ETP-5684 — posted fields in decisions.json carry the accounting gate', () => {
@@ -88,8 +103,28 @@ describe('ETP-5684 — posted fields in decisions.json carry the accounting gate
   });
 });
 
-describe('ETP-5684 — hand-written posted list columns carry the accounting gate', () => {
-  it('every custom `posted` DataTable column declares visibleWhenCapability', () => {
+describe('ETP-5684 — shown accounting-status fields in contract.json carry the accounting gate', () => {
+  it('every form or grid field on an accounting-status column declares visibleWhenCapability', () => {
+    const offenders = [];
+    for (const file of listContractFiles()) {
+      const contract = JSON.parse(readFileSync(file, 'utf8'));
+      for (const [entityName, entity] of Object.entries(contract.frontendContract?.entities ?? {})) {
+        for (const field of entity?.fields ?? []) {
+          if (!ACCOUNTING_STATUS_COLUMNS.has(String(field.column ?? '').toLowerCase())) continue;
+          if (HIDDEN_VISIBILITIES.has(field.visibility)) continue;
+          const shown = field.form !== false || field.grid === true;
+          if (shown && field.visibleWhenCapability !== ACCOUNTING_CAPABILITY) {
+            offenders.push(`${relative(repoRoot, file)} → ${entityName}.${field.name}`);
+          }
+        }
+      }
+    }
+    assert.deepEqual(offenders, [], `accounting status shown without the gate:\n  ${offenders.join('\n  ')}`);
+  });
+});
+
+describe('ETP-5684 — hand-written accounting-status list columns carry the accounting gate', () => {
+  it('every custom `posted` / `etblkpAccountingstatus` DataTable column declares visibleWhenCapability', () => {
     const offenders = [];
     for (const file of customSourceFiles()) {
       const source = readFileSync(file, 'utf8');

@@ -104,6 +104,13 @@ export function isPostedBooleanValue(value) {
 }
 
 /**
+ * Whether a row's accounting entries exist: only the AD `Y` code (or a JSON-typed `true`)
+ * counts. Every other code — including the posting-failure ones — is not posted. Moved here
+ * from `preUnpost.js` (ETP-5684), whose un-post-before-reactivate step now runs on the server.
+ */
+export const isPosted = (row) => row?.posted === 'Y' || row?.posted === true;
+
+/**
  * Resolves a posting-status code that the plain boolean path cannot express.
  *
  * @param column AD column name of the cell/field being rendered (`col.column`)

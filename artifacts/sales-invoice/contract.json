@@ -1,8 +1,8 @@
 {
   "version": "0.93.0",
   "generatedAt": "2026-10-19T17:29:21.531Z",
-  "updatedAt": "2026-10-28T18:53:22.130Z",
-  "checksum": "dce13bbd46a8c9d6",
+  "updatedAt": "2026-10-29T13:31:35.452Z",
+  "checksum": "4f824a55a2cf49a7",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -32,8 +32,7 @@
           "labelKey": "reactivate",
           "visibleWhenStatus": "CO",
           "documentAction": "RE",
-          "successKey": "reactivated",
-          "preUnpost": true
+          "successKey": "reactivated"
         },
         {
           "key": "post",
@@ -2900,8 +2899,7 @@
           "labelKey": "reactivate",
           "visibleWhenStatus": "CO",
           "documentAction": "RE",
-          "successKey": "reactivated",
-          "preUnpost": true
+          "successKey": "reactivated"
         },
         {
           "key": "post",

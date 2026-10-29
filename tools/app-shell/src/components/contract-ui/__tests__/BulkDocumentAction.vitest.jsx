@@ -224,9 +224,8 @@ describe('postRowFilter — pre-blocks rows the Post action cannot touch', () =>
 
 // ETP-5302 — bulk "Descontabilizar". A SEPARATE pair from buildPostActions/postRowFilter
 // on purpose: goods-receipt and goods-shipment mount both, while sales-invoice and
-// purchase-invoice mount only the post pair — on an invoice the accounting reversal is a
-// step INSIDE Reactivar (see `preUnpostActions` at the bottom of this file), never a
-// standalone user action. Keeping the two pairs separate is what makes that difference
+// purchase-invoice mount only the post pair — on an invoice the accounting reversal was a
+// step INSIDE Reactivar (server-side since ETP-5684), never a standalone user action. Keeping the two pairs separate is what makes that difference
 // expressible per window instead of a flag inside one shared helper.
 describe('buildUnpostActions', () => {
   it('offers unpost when at least one selected row is posted', () => {
@@ -1158,313 +1157,38 @@ describe('BulkDocumentAction — neoActionName wire-name override (ETP-5414)', (
   });
 });
 
-// ETP-5302 — the reported bug. Reactivating a COMPLETED + POSTED invoice from the list's
-// bulk bar failed with {"status":"error","message":"Factura contabilizada"}, while the very
-// same action from the form's kebab worked. The kebab chained `unpost` → `documentAction: RE`
-// (its `decisions.json` marks the action `preUnpost: true`); the bulk bar sent a bare `RE`,
-// which Core rejects in C_INVOICE_POST (`IF (v_Posted='Y') THEN RAISE_APPLICATION_ERROR`).
-//
-// `preUnpostActions` is OPT-IN PER WINDOW, and that is the whole design: only sales-invoice
-// and purchase-invoice pass `['RE']`. Orders must NOT — C_ORDER_POST1's RE branch has no
-// `Posted` guard, so unposting there would be a gratuitous accounting reversal. The
-// "default = never unposts" test below is the guard for that.
-//
-// Every test here renders WITH `refresh` (the in-place path) unless it needs to read the
-// per-row failure MESSAGE, which only the fallback's persisted record carries — the toast
-// itself shows counts. Those few follow this file's mandatory hygiene rule: await your own
-// reload before finishing.
-describe('BulkDocumentAction — preUnpostActions unposts before a bulk reactivate (ETP-5302)', () => {
-  const STORAGE_KEY = 'bulkActionResult';
-  const POSTED_COMPLETED = { id: 'inv-1', documentNo: 'FV-001', documentStatus: 'CO', posted: 'Y' };
-
-  let reloadSpy;
-  let originalLocationDescriptor;
-
-  const run = (extraProps = {}) => {
-    const props = {
-      selectedRows: [POSTED_COMPLETED],
-      clearSelection: vi.fn(),
-      token: 'tok',
-      apiBaseUrl: '/api',
-      windowName: 'sales-invoice',
-      labelKey: 'process',
-      preUnpostActions: ['RE'],
-      refresh: vi.fn(),
-      ...extraProps,
-    };
-    render(<BulkDocumentAction {...props} />);
-    fireEvent.click(screen.getByText(props.labelKey));
-    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
-    return props;
-  };
-
+// ETP-5684 — the un-post that ETP-5302 chained before a bulk reactivate now runs on the server,
+// inside the RE (`ReactivationUnpost`, com.etendoerp.go): a role without the accounting
+// capability may reactivate but is refused `unpost`. A posted row therefore sends only its RE.
+describe('BulkDocumentAction — a posted row is reactivated with its RE alone (ETP-5684)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    sessionStorage.clear();
     mockNeoExecute.mockReset();
-    mockNeoExecute.mockResolvedValue({ success: true });
     mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
-    originalLocationDescriptor = Object.getOwnPropertyDescriptor(window, 'location');
-    reloadSpy = vi.fn();
-    Object.defineProperty(window, 'location', {
-      value: { reload: reloadSpy },
-      writable: true,
-      configurable: true,
-    });
   });
 
-  afterEach(() => {
-    if (originalLocationDescriptor) {
-      Object.defineProperty(window, 'location', originalLocationDescriptor);
-    }
-  });
-
-  // The ORDER is the fix. Asserted causally, not just by "both were called": the unpost is
-  // held on a deferred promise, and the document action must still be unfired while it is
-  // pending. A regression that fires them concurrently (or in the wrong order) fails here
-  // even though both calls eventually happen.
-  it('unposts FIRST and dispatches the RE document action only after the unpost resolves', async () => {
-    let resolveUnpost;
-    mockNeoExecute.mockImplementationOnce(() => new Promise((resolve) => { resolveUnpost = resolve; }));
-    const { refresh } = run();
-
-    await waitFor(() => expect(mockNeoExecute).toHaveBeenCalledWith('inv-1', 'unpost'));
-    // The document action is still gated behind the pending unpost.
-    expect(mockDocExecute).not.toHaveBeenCalled();
-
-    await act(async () => { resolveUnpost({ success: true }); });
+  it('never calls unpost before reactivating a posted, completed row', async () => {
+    const refresh = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'inv-1', documentNo: 'FV-001', documentStatus: 'CO', posted: 'Y' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="sales-invoice"
+        labelKey="process"
+        refresh={refresh}
+      />,
+    );
+    fireEvent.click(screen.getByText('process'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
 
     await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE'));
-    expect(mockNeoExecute.mock.invocationCallOrder[0])
-      .toBeLessThan(mockDocExecute.mock.invocationCallOrder[0]);
+    expect(mockNeoExecute).not.toHaveBeenCalled();
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
-    expect(reloadSpy).not.toHaveBeenCalled();
-  });
-
-  it('counts the reactivated row as ok when the unpost + document action both succeed', async () => {
-    const { refresh } = run();
-
-    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
-    expect(toast.success).toHaveBeenCalledWith('1 ok, 0 failed');
-    expect(mockNeoExecute).toHaveBeenCalledTimes(1);
-    expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE');
-  });
-
-  it('skips the unpost for a NOT-posted row and runs the document action directly', async () => {
-    const { refresh } = run({
-      selectedRows: [{ id: 'inv-2', documentNo: 'FV-002', documentStatus: 'CO', posted: 'N' }],
-    });
-
-    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-2', 'RE'));
-    expect(mockNeoExecute).not.toHaveBeenCalled();
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(toast.success).toHaveBeenCalledWith('1 ok, 0 failed');
-  });
-
-  // The gate is the ACTION LIST, not just the posted flag: this row IS posted, but the
-  // selected action is CO (confirm), which no window ever lists in `preUnpostActions`.
-  // Unposting before a confirm would be nonsense.
-  it('skips the unpost for an action that is not listed in preUnpostActions (CO)', async () => {
-    const { refresh } = run({
-      selectedRows: [{ id: 'inv-3', documentNo: 'FV-003', documentStatus: 'DR', posted: 'Y' }],
-    });
-
-    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-3', 'CO'));
-    expect(mockNeoExecute).not.toHaveBeenCalled();
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-  });
-
-  // GUARD for every window that does NOT opt in — sales-order / purchase-order and the
-  // return windows included. Without `preUnpostActions`, a bulk RE must reach the backend
-  // exactly as it did before ETP-5302: no accounting reversal, ever.
-  it('DEFAULT (prop omitted): never unposts, even for a posted row being reactivated', async () => {
-    const { refresh } = run({ preUnpostActions: undefined, windowName: 'sales-order' });
-
-    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE'));
-    expect(mockNeoExecute).not.toHaveBeenCalled();
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(toast.success).toHaveBeenCalledWith('1 ok, 0 failed');
-  });
-
-  it('an empty preUnpostActions array behaves exactly like the default', async () => {
-    const { refresh } = run({ preUnpostActions: [] });
-
-    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE'));
-    expect(mockNeoExecute).not.toHaveBeenCalled();
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-  });
-
-  it('a FAILED unpost fails the row and never dispatches the document action for it', async () => {
-    mockNeoExecute.mockResolvedValue({ success: false, message: 'Factura contabilizada' });
-    const { refresh } = run();
-
-    // Single-row total failure takes the ETP-5316 direct-error path — the raw
-    // backend message, not the templated "0 ok, 1 failed" count.
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Factura contabilizada'));
-    // The whole point: reactivating a still-posted document must not be attempted.
-    expect(mockDocExecute).not.toHaveBeenCalled();
-    // The list is still refetched — the unpost may have changed server-side state.
-    expect(refresh).toHaveBeenCalledTimes(1);
-    expect(reloadSpy).not.toHaveBeenCalled();
-  });
-
-  it('reports the TRANSLATED backend message for the failed row', async () => {
-    const raw = 'Factura contabilizada';
-    const translated = 'La factura ya está contabilizada';
-    mockNeoExecute.mockResolvedValue({ success: false, message: raw });
-    mockTranslateBackendError.mockImplementation((msg) => (msg === raw ? translated : msg));
-    // FALLBACK path (no `refresh`): the per-row message is only readable in the persisted
-    // record — the toast itself shows counts only.
-    const clearSelection = vi.fn();
-    render(
-      <BulkDocumentAction
-        selectedRows={[POSTED_COMPLETED]}
-        clearSelection={clearSelection}
-        token="tok"
-        apiBaseUrl="/api"
-        windowName="sales-invoice"
-        labelKey="process"
-        preUnpostActions={['RE']}
-      />,
-    );
-    fireEvent.click(screen.getByText('process'));
-    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
-
-    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
-    const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
-    expect(ok).toBe(0);
-    expect(failed).toEqual([{ documentNo: 'FV-001', message: translated }]);
-    expect(mockTranslateBackendError).toHaveBeenCalledWith(raw, expect.any(Function), expect.any(Object));
-    expect(mockDocExecute).not.toHaveBeenCalled();
-
-    // HYGIENE: consume this run's own reload timer, keyed on the test-local mock.
-    await waitFor(() => {
-      expect(clearSelection).toHaveBeenCalled();
-      expect(reloadSpy).toHaveBeenCalled();
-    }, { timeout: 3000 });
-  });
-
-  // ETP-5692 — a stale list can still show the invoice as posted after it was unposted
-  // elsewhere; the unpost refusal is English plus a messageKeys identity, which must reach
-  // translateBackendError or the row reports the English prose.
-  it('translates a refused pre-unpost by its messageKeys identity', async () => {
-    const raw = 'This invoice is not posted, so it has no accounting entries to remove.';
-    mockNeoExecute.mockResolvedValue({
-      success: false, message: raw, messageKeys: ['ETGO_InvoiceUnpostNotPosted'],
-    });
-    mockTranslateBackendError.mockImplementation((msg, _ui, opts) => (
-      opts?.messageKeys?.includes('ETGO_InvoiceUnpostNotPosted') ? 'FACTURA_NO_CONTABILIZADA' : msg));
-    const clearSelection = vi.fn();
-    render(
-      <BulkDocumentAction
-        selectedRows={[POSTED_COMPLETED]}
-        clearSelection={clearSelection}
-        token="tok"
-        apiBaseUrl="/api"
-        windowName="sales-invoice"
-        labelKey="process"
-        preUnpostActions={['RE']}
-      />,
-    );
-    fireEvent.click(screen.getByText('process'));
-    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
-
-    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
-    const { failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
-    expect(failed).toEqual([{ documentNo: 'FV-001', message: 'FACTURA_NO_CONTABILIZADA' }]);
-    expect(mockTranslateBackendError).toHaveBeenCalledWith(raw, expect.any(Function), {
-      messageKeys: ['ETGO_InvoiceUnpostNotPosted'], messageParams: undefined,
-    });
-    expect(mockDocExecute).not.toHaveBeenCalled();
-
-    await waitFor(() => {
-      expect(clearSelection).toHaveBeenCalled();
-      expect(reloadSpy).toHaveBeenCalled();
-    }, { timeout: 3000 });
-  });
-
-  it('falls back to the generic actionFailed label when the message cannot be translated', async () => {
-    mockNeoExecute.mockResolvedValue({ success: false, message: undefined });
-    mockTranslateBackendError.mockImplementation(() => '');
-    const clearSelection = vi.fn();
-    render(
-      <BulkDocumentAction
-        selectedRows={[POSTED_COMPLETED]}
-        clearSelection={clearSelection}
-        token="tok"
-        apiBaseUrl="/api"
-        windowName="sales-invoice"
-        labelKey="process"
-        preUnpostActions={['RE']}
-      />,
-    );
-    fireEvent.click(screen.getByText('process'));
-    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
-
-    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
-    const { failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
-    // The mocked useUI is the identity function, so `ui('actionFailed')` renders its key.
-    expect(failed).toEqual([{ documentNo: 'FV-001', message: 'actionFailed' }]);
-
-    await waitFor(() => {
-      expect(clearSelection).toHaveBeenCalled();
-      expect(reloadSpy).toHaveBeenCalled();
-    }, { timeout: 3000 });
-  });
-
-  // Per-row isolation: one row's failed unpost must not cancel the others. The unposted
-  // row goes straight to RE and succeeds; only the posted one fails.
-  it('isolates the failure per row in a mixed selection', async () => {
-    mockNeoExecute.mockResolvedValue({ success: false, message: 'Factura contabilizada' });
-    const { refresh } = run({
-      selectedRows: [
-        POSTED_COMPLETED,
-        { id: 'inv-9', documentNo: 'FV-009', documentStatus: 'CO', posted: 'N' },
-      ],
-    });
-
-    // ETP-5316 QA rejection — a multi-record run shows ONLY the generic count summary.
-    // The per-failed-row detail is never passed as a toast `description`: it does not
-    // scale past a handful of rows and the raw messages are not locatable from a toast.
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 failed'));
-    // The unpost was attempted only for the posted row…
-    expect(mockNeoExecute).toHaveBeenCalledTimes(1);
-    expect(mockNeoExecute).toHaveBeenCalledWith('inv-1', 'unpost');
-    // …and the document action ran only for the row that never needed one.
-    expect(mockDocExecute).toHaveBeenCalledTimes(1);
-    expect(mockDocExecute).toHaveBeenCalledWith('inv-9', 'RE');
-    expect(refresh).toHaveBeenCalledTimes(1);
-  });
-
-  // The pre-unpost always goes through useNeoAction's generic /action/{name} endpoint,
-  // even when the document action itself rides the DocAction endpoint (the invoice
-  // windows' default `actionMode`). Both executors are involved in one row's run.
-  it('routes the unpost through useNeoAction while the document action keeps the DocAction path', async () => {
-    const { refresh } = run();
-
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(mockUseNeoAction).toHaveBeenCalled();
-    expect(mockNeoExecute).toHaveBeenCalledWith('inv-1', 'unpost');
-    expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE');
-  });
-
-  // A row pre-blocked by `rowFilter` is never attempted at all — not even its unpost.
-  it('does not unpost a row that rowFilter already omitted', async () => {
-    const { refresh } = run({ rowFilter: () => 'cannotReactivateLinkedDocs' });
-
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('0 ok, 1 omitted, 0 failed'));
-    expect(mockNeoExecute).not.toHaveBeenCalled();
-    expect(mockDocExecute).not.toHaveBeenCalled();
-    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 
-// ETP-5316 — `handleDone` writes `failed[]` to sessionStorage and reloads the page;
-// useBulkActionToast then replays it after the reload and renders the single-failure toast.
-// The AD_MESSAGE keys therefore have to (a) be captured off the rejection in BOTH executor
-// modes and (b) survive JSON.stringify → sessionStorage → JSON.parse as plain strings. If
-// either half breaks, the toast silently falls back to core's own sentence — the exact
-// line-number-citing text this ticket removed — with nothing failing anywhere.
 describe('BulkDocumentAction — messageKeys reach the persisted failure (ETP-5316)', () => {
   const STORAGE_KEY = 'bulkActionResult';
   const CORE_SENTENCE = 'En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces '

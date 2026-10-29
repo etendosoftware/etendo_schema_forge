@@ -1780,6 +1780,14 @@ export function DetailView({
 
   const othersRef = useRef(null);
 
+  // ETP-5684 — a capability-gated field may be the only "other" one, and capabilities can
+  // arrive after the probe ran: probe again when they change. Declared before the probe so
+  // the mount pass ends with the probe's answer.
+  useEffect(() => {
+    if (!primaryTabs) setShowOthers(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capabilities]);
+
   useEffect(() => {
     if (showOthers === null && othersRef.current) {
       // Check if the hidden probe rendered any DOM content

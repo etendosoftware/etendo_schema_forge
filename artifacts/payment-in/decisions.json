@@ -229,6 +229,7 @@
           "form": false
         },
         "etblkpAccountingstatus": {
+          "visibleWhenCapability": "showAccountingFields",
           "form": false
         },
         "etblkpBulkposting": {
