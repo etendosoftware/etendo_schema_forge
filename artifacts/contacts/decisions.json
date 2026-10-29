@@ -219,7 +219,7 @@
           "searchable": true,
           "section": "principal",
           "order": 2,
-          "publicApi": { "exposed": true, "name": "name" }
+          "publicApi": { "exposed": true, "name": "name", "required": true }
         },
         "etgoFirstname": {
           "visibility": "editable",

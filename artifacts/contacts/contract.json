@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-29T16:56:20.332Z",
-  "checksum": "1c8efb36575ff1db",
+  "updatedAt": "2026-10-29T17:11:58.952Z",
+  "checksum": "a03eac03bed59ddb",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -552,7 +552,8 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "name"
+              "name": "name",
+              "required": true
             }
           },
           {

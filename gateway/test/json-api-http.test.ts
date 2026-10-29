@@ -85,6 +85,12 @@ test('upstreamException keeps the code and message of a 503 service_unavailable'
   assert.equal(errors[0].detail, 'Service temporarily unavailable');
 });
 
+test('upstreamException gives a code-less Etendo refusal the code of its status', () => {
+  const { errors } = toErrorDocument(upstreamException(400, { error: { status: 400, message: 'Invalid country: ES' } }));
+  assert.equal(errors[0].code, 'bad_request');
+  assert.equal(errors[0].detail, 'Invalid country: ES');
+});
+
 test('upstreamException turns a 500 with an after-commit hint into a 502 carrying meta.hint, not Retry later', () => {
   const hint = 'The record may already be saved. Read it before re-sending the request.';
   const { status, errors } = toErrorDocument(upstreamException(500, { error: { status: 500, message: 'ORA-00001 internal secret', hint } }));

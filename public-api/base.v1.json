@@ -92,7 +92,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "required": true
         },
         "tax_id": {
           "sourceVisibility": "editable",
@@ -168,7 +169,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -365,7 +366,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -490,7 +491,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -1985,7 +1986,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "required": true
         },
         "name": {
           "sourceVisibility": "editable",
@@ -1994,7 +1996,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "required": true
         },
         "category": {
           "sourceVisibility": "editable",
@@ -2077,7 +2080,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.16.0",
+        "contractVersion": "0.17.0",
         "backendEntity": true
       }
     },
@@ -2165,7 +2168,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.16.0",
+        "contractVersion": "0.17.0",
         "backendEntity": true
       }
     },
@@ -3090,102 +3093,6 @@
       },
       "functional": {
         "functionalName": "Purchase Order — Lines",
-        "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
-        "functionalCapabilities": [
-          "Create a purchase order for a selected vendor with the key commercial header data: vendor, vendor address, order date, scheduled delivery date, payment method, payment terms, and price list.",
-          "Start a new unsaved order with visible `Save`, `Save draft`, and `Cancel` controls while the order-line tab is already available before the first save.",
-          "Add and maintain order lines with at least product, description, ordered quantity, net list price, discount, tax, and the resulting line gross amount.",
-          "Review purchase progress from the order itself through reception status, invoice status, related receipts, related purchase invoices, and linked payments.",
-          "Confirm a draft order and, from the confirmation flow or later follow-up actions, create the operational documents that fulfill it.",
-          "Clone an existing order, and — once confirmed (`CO`) — send the document from the top bar.",
-          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
-        ],
-        "functionalDoc": "docs/generated-custom-windows/purchase-order.md"
-      },
-      "source": {
-        "artifact": "purchase-order",
-        "contractVersion": "0.56.0",
-        "backendEntity": true
-      }
-    },
-    "purchase-order-lineTax": {
-      "publicName": "purchase-order-lineTax",
-      "specName": "purchase-order",
-      "entityName": "lineTax",
-      "publicApi": true,
-      "operations": [
-        "GET",
-        "LIST"
-      ],
-      "fields": {
-        "line_no": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "lineNo",
-          "dataType": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reference": null
-        },
-        "tax": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "tax",
-          "dataType": {
-            "type": "string"
-          },
-          "reference": "Tax"
-        },
-        "taxable_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "taxableAmount",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null
-        },
-        "tax_amount": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
-          "internalPath": "taxAmount",
-          "dataType": {
-            "type": "number",
-            "format": "double"
-          },
-          "reference": null
-        },
-        "id": {
-          "sourceVisibility": "system",
-          "direction": "out",
-          "internalPath": "id",
-          "dataType": {
-            "type": "string"
-          },
-          "reference": null
-        },
-        "updated": {
-          "sourceVisibility": "system",
-          "direction": "out",
-          "internalPath": "updated",
-          "dataType": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "reference": null
-        }
-      },
-      "processes": [],
-      "parent": {
-        "resource": "purchase-order",
-        "entityName": "header",
-        "foreignKey": "salesOrder",
-        "pathSegment": "line-tax"
-      },
-      "functional": {
-        "functionalName": "Purchase Order — Line Tax",
         "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
         "functionalCapabilities": [
           "Create a purchase order for a selected vendor with the key commercial header data: vendor, vendor address, order date, scheduled delivery date, payment method, payment terms, and price list.",

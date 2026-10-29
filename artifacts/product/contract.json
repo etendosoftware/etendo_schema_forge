@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-29T16:56:20.645Z",
-  "checksum": "e5d2f63ec81386f6",
+  "updatedAt": "2026-10-29T17:11:59.275Z",
+  "checksum": "badacf19b42e07d5",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -346,7 +346,8 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "searchKey"
+              "name": "searchKey",
+              "required": true
             }
           },
           {
@@ -393,7 +394,8 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "name"
+              "name": "name",
+              "required": true
             }
           },
           {
