@@ -149,8 +149,13 @@ describe('NotPostedDocumentsPage — toolbar', () => {
     await user.click(screen.getByTestId('grid-view-column-organization'));
     expect(screen.queryByTestId('column-header-organization')).not.toBeInTheDocument();
     fireEvent.click(within(screen.getAllByTestId('column-header-documentTypeLabel')[0]).getAllByRole('button')[0]);
+    // Ascending by the DISPLAYED type label. Under the identity translator a renamed type shows
+    // its i18n key: GR, MI, SI and T have one (DOC_TYPE_LABEL_KEYS) — docTypeGoodsReceipt (doc-5),
+    // docTypeMatchedInvoices (doc-2), docTypeSalesInvoice (doc-1), docTypeTransaction (doc-3) —
+    // and doc-4 has no code, so it keeps its raw "Some Future Type". This order changes whenever
+    // a type gains or loses a rename key; it was written when only MI had one.
     expect(screen.getAllByTestId(/^row-doc-/).map((row) => row.getAttribute('data-testid')))
-      .toEqual(['row-doc-2', 'row-doc-1', 'row-doc-5', 'row-doc-4', 'row-doc-3']);
+      .toEqual(['row-doc-5', 'row-doc-2', 'row-doc-1', 'row-doc-3', 'row-doc-4']);
     selectRow('doc-1');
     expect(within(rowOf('doc-1')).getByRole('checkbox')).toBeChecked();
     expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
