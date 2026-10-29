@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-03-06T17:20:29.904Z",
-  "updatedAt": "2026-10-22T14:08:39.383Z",
-  "checksum": "038b57c0cee82ea7",
+  "updatedAt": "2026-10-28T17:46:02.435Z",
+  "checksum": "54c7a59a58729028",
   "frontendContract": {
     "window": {
       "id": "121",
@@ -130,8 +130,25 @@
             }
           },
           {
-            "name": "oBSEPABuildingNumber",
-            "apiKey": "oBSEPABuildingNumber",
+            "name": "buildingName",
+            "apiKey": "buildingName",
+            "column": "EM_OBSEPA_BldgNm",
+            "label": "EM_OBSEPA_BldgNm",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 25,
+            "validation": {
+              "maxLength": 35
+            }
+          },
+          {
+            "name": "buildingNumber",
+            "apiKey": "buildingNumber",
             "column": "EM_OBSEPA_BldgNb",
             "label": "EM_OBSEPA_BldgNb",
             "type": "string",
@@ -148,25 +165,8 @@
             }
           },
           {
-            "name": "oBSEPABuildingName",
-            "apiKey": "oBSEPABuildingName",
-            "column": "EM_OBSEPA_BldgNm",
-            "label": "EM_OBSEPA_BldgNm",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "principal",
-            "seq": 25,
-            "validation": {
-              "maxLength": 35
-            }
-          },
-          {
-            "name": "oBSEPAStreetName",
-            "apiKey": "oBSEPAStreetName",
+            "name": "streetName",
+            "apiKey": "streetName",
             "column": "EM_OBSEPA_StrtNm",
             "label": "EM_OBSEPA_StrtNm",
             "type": "string",
@@ -326,30 +326,6 @@
             "required": true
           },
           {
-            "name": "oBSEPABuildingNumber",
-            "apiKey": "oBSEPABuildingNumber",
-            "column": "EM_OBSEPA_BldgNb",
-            "type": "string",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "oBSEPABuildingName",
-            "apiKey": "oBSEPABuildingName",
-            "column": "EM_OBSEPA_BldgNm",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "oBSEPAStreetName",
-            "apiKey": "oBSEPAStreetName",
-            "column": "EM_OBSEPA_StrtNm",
-            "type": "string",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "updated",
             "apiKey": "updated",
             "column": "Updated",
@@ -363,6 +339,30 @@
             "column": "UpdatedBy",
             "type": "foreignKey",
             "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "buildingName",
+            "apiKey": "buildingName",
+            "column": "EM_OBSEPA_BldgNm",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "buildingNumber",
+            "apiKey": "buildingNumber",
+            "column": "EM_OBSEPA_BldgNb",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "streetName",
+            "apiKey": "streetName",
+            "column": "EM_OBSEPA_StrtNm",
+            "type": "string",
+            "visibility": "editable",
             "required": true
           }
         ]
@@ -479,11 +479,11 @@
           "cityName": {},
           "postalCode": {},
           "region": {},
-          "oBSEPABuildingNumber": {
+          "buildingName": {},
+          "buildingNumber": {
             "required": true
           },
-          "oBSEPABuildingName": {},
-          "oBSEPAStreetName": {
+          "streetName": {
             "required": true
           }
         }
@@ -500,8 +500,8 @@
     "minimumCreate": {
       "headerFields": [
         "country",
-        "oBSEPABuildingNumber",
-        "oBSEPAStreetName"
+        "buildingNumber",
+        "streetName"
       ],
       "recommendedOrder": [
         "createHeader"
@@ -531,8 +531,8 @@
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
           "country",
-          "oBSEPABuildingNumber",
-          "oBSEPAStreetName"
+          "buildingNumber",
+          "streetName"
         ]
       }
     ],
@@ -566,6 +566,22 @@
         "description": "Field 'addressLine2' should be present in bpLocation"
       },
       {
+        "id": "t-field-presence-bpLocation-buildingName",
+        "category": "field-presence",
+        "entity": "bpLocation",
+        "field": "buildingName",
+        "runner": "node",
+        "description": "Field 'buildingName' should be present in bpLocation"
+      },
+      {
+        "id": "t-field-presence-bpLocation-buildingNumber",
+        "category": "field-presence",
+        "entity": "bpLocation",
+        "field": "buildingNumber",
+        "runner": "node",
+        "description": "Field 'buildingNumber' should be present in bpLocation"
+      },
+      {
         "id": "t-field-presence-bpLocation-cityName",
         "category": "field-presence",
         "entity": "bpLocation",
@@ -580,30 +596,6 @@
         "field": "country",
         "runner": "node",
         "description": "Field 'country' should be present in bpLocation"
-      },
-      {
-        "id": "t-field-presence-bpLocation-oBSEPABuildingName",
-        "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "oBSEPABuildingName",
-        "runner": "node",
-        "description": "Field 'oBSEPABuildingName' should be present in bpLocation"
-      },
-      {
-        "id": "t-field-presence-bpLocation-oBSEPABuildingNumber",
-        "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "oBSEPABuildingNumber",
-        "runner": "node",
-        "description": "Field 'oBSEPABuildingNumber' should be present in bpLocation"
-      },
-      {
-        "id": "t-field-presence-bpLocation-oBSEPAStreetName",
-        "category": "field-presence",
-        "entity": "bpLocation",
-        "field": "oBSEPAStreetName",
-        "runner": "node",
-        "description": "Field 'oBSEPAStreetName' should be present in bpLocation"
       },
       {
         "id": "t-field-presence-bpLocation-postalCode",
@@ -622,6 +614,14 @@
         "description": "Field 'region' should be present in bpLocation"
       },
       {
+        "id": "t-field-presence-bpLocation-streetName",
+        "category": "field-presence",
+        "entity": "bpLocation",
+        "field": "streetName",
+        "runner": "node",
+        "description": "Field 'streetName' should be present in bpLocation"
+      },
+      {
         "id": "t-field-type-bpLocation-addressLine1",
         "category": "field-type",
         "entity": "bpLocation",
@@ -636,6 +636,22 @@
         "field": "addressLine2",
         "runner": "node",
         "description": "Field 'addressLine2' should have type 'string' in bpLocation"
+      },
+      {
+        "id": "t-field-type-bpLocation-buildingName",
+        "category": "field-type",
+        "entity": "bpLocation",
+        "field": "buildingName",
+        "runner": "node",
+        "description": "Field 'buildingName' should have type 'string' in bpLocation"
+      },
+      {
+        "id": "t-field-type-bpLocation-buildingNumber",
+        "category": "field-type",
+        "entity": "bpLocation",
+        "field": "buildingNumber",
+        "runner": "node",
+        "description": "Field 'buildingNumber' should have type 'string' in bpLocation"
       },
       {
         "id": "t-field-type-bpLocation-cityName",
@@ -654,30 +670,6 @@
         "description": "Field 'country' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-field-type-bpLocation-oBSEPABuildingName",
-        "category": "field-type",
-        "entity": "bpLocation",
-        "field": "oBSEPABuildingName",
-        "runner": "node",
-        "description": "Field 'oBSEPABuildingName' should have type 'string' in bpLocation"
-      },
-      {
-        "id": "t-field-type-bpLocation-oBSEPABuildingNumber",
-        "category": "field-type",
-        "entity": "bpLocation",
-        "field": "oBSEPABuildingNumber",
-        "runner": "node",
-        "description": "Field 'oBSEPABuildingNumber' should have type 'string' in bpLocation"
-      },
-      {
-        "id": "t-field-type-bpLocation-oBSEPAStreetName",
-        "category": "field-type",
-        "entity": "bpLocation",
-        "field": "oBSEPAStreetName",
-        "runner": "node",
-        "description": "Field 'oBSEPAStreetName' should have type 'string' in bpLocation"
-      },
-      {
         "id": "t-field-type-bpLocation-postalCode",
         "category": "field-type",
         "entity": "bpLocation",
@@ -692,6 +684,14 @@
         "field": "region",
         "runner": "node",
         "description": "Field 'region' should have type 'string' in bpLocation"
+      },
+      {
+        "id": "t-field-type-bpLocation-streetName",
+        "category": "field-type",
+        "entity": "bpLocation",
+        "field": "streetName",
+        "runner": "node",
+        "description": "Field 'streetName' should have type 'string' in bpLocation"
       },
       {
         "id": "t-rule-declared-AD-Client-Security-validation",

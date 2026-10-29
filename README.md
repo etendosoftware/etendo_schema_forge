@@ -169,6 +169,10 @@ Branch state of every module repo on the remote. **Fixed on epic** = the module'
 | `com.etendoerp.db.extended` | GitHub etendosoftware | yes | yes | +107 | GO | fixed on epic |
 | `com.etendoerp.go.template` | GitHub etendosoftware | yes | yes | +3 | GO | fixed on epic |
 | `com.etendoerp.go.localization.es.data` | GitHub etendosoftware | yes | yes | 0 | GO | fixed on epic |
+| `org.openbravo.sepa.iso20022` | Bitbucket koodu_software | no (`master`) | yes | +8 | GO | fixed on epic |
+| `org.openbravo.sepa.iso20022.template` | GitHub etendosoftware | yes | yes | +3 | GO | fixed on epic |
+| `org.openbravo.sepa.iso20022.credittransfer.customertobank` | Bitbucket koodu_software | no (`master`) | yes | +8 | GO | fixed on epic |
+| `org.openbravo.sepa.iso20022.coredirectdebit.customertobank` | Bitbucket koodu_software | no (`master`) | yes | +7 | GO | fixed on epic |
 | `com.etendoerp.service.integration.amazon.s3` | Bitbucket koodu_software | not checked | not checked | not checked | GO | in CI list; branches not verified |
 | `com.etendoerp.tomcat` | GitHub etendosoftware | yes | yes | 0 | none | usual model (epic exists, nothing ahead) |
 | `com.etendoerp.docker`, `com.etendoerp.copilot.devassistant` | GitHub etendosoftware | yes | yes | no epic | none | usual model; not tied to the DB model GO depends on |
@@ -223,6 +227,7 @@ git clone -b epic/ETP-3504 git@github.com:etendosoftware/com.etendoerp.go.templa
 git clone -b epic/ETP-3504 git@github.com:etendosoftware/com.etendoerp.go.localization.es.data.git
 git clone -b epic/ETP-3504 git@github.com:etendosoftware/com.etendoerp.db.extended.git
 git clone -b epic/ETP-3504 git@github.com:etendosoftware/com.etendoerp.copilot.git
+git clone -b epic/ETP-3504 git@github.com:etendosoftware/org.openbravo.sepa.iso20022.template.git
 
 # Bitbucket modules on the epic: localization (ES)
 for m in com.etendoerp.sif.general com.smf.ticketbai com.etendoerp.verifactu \
@@ -237,6 +242,13 @@ done
 # Bitbucket modules on the epic: currency conversion rates + PSD2
 for m in com.smf.currency.conversionrate com.smf.currency.apiconfig \
          com.etendoerp.psd2.bank.integration; do
+  git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/$m.git
+done
+
+# Bitbucket modules on the epic: SEPA ISO 20022 (structured address / SEPA direct debit & credit transfer)
+for m in org.openbravo.sepa.iso20022 \
+         org.openbravo.sepa.iso20022.credittransfer.customertobank \
+         org.openbravo.sepa.iso20022.coredirectdebit.customertobank; do
   git clone -b epic/ETP-3504 git@bitbucket.org:koodu_software/$m.git
 done
 ```
