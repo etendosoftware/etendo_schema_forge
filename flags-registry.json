@@ -1324,9 +1324,18 @@
         {
           "id": "mcp-and-api-not-gated",
           "kind": "open",
-          "note": "By decision the flag hides only the UI: /fiscal390/*, the 390 declarations CRUD and the representanteLegal entity keep answering, so a direct API caller with the window grant can still create or read a 390 while it is hidden. Therefore, if product wants the 390 unreachable outside the UI before 2027-01-01, that is an authorization change (a new decision), not a widening of this flag.",
+          "note": "By decision the flag hides only the UI: /fiscal390/*, the 390 declarations CRUD and the representanteLegal entity keep answering, so a direct API caller with the window grant can still create or read a 390 while it is hidden -- including through the MCP generic tools (etendo_list/etendo_get/etendo_update on organization/representanteLegal), since the MCP path never reads the flag. Therefore, if product wants the 390 unreachable outside the UI before 2027-01-01, that is an authorization change (a new decision), not a widening of this flag.",
           "refs": [
             "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`fiscal-model-390` (ETP-5716)', 'A visual gate, not authorization'"
+          ]
+        },
+        {
+          "id": "refused-save-silent-in-spa",
+          "kind": "open",
+          "note": "When the stored catalog cannot be read, the backend refuses the catalog PUT (IllegalStateException from NeoFiscalModelsCatalogService.saveActiveModels, answered as HTTP 500 by NeoServlet, nothing written) in both flag states. The SPA does not notice: FmListPage's onSave has already applied the new selection through setActiveModels and its fire-and-forget PUT swallows the error (.catch(() => {})), so the page shows the change as saved until the next reload. Not done yet: map the refusal to a distinct status (409 or 503) instead of the generic 500, and in the SPA show a toast and re-read the catalog on a non-ok PUT. Not accepted debt -- an open item.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`fiscal-model-390` (ETP-5716)', 'Stored catalog unreadable'",
+            "docs/generated-custom-windows/fiscal-models.md — 'Persistence (NEO Headless, per-Client)', 'On save'"
           ]
         }
       ]
