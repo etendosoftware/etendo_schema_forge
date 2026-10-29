@@ -2085,3 +2085,44 @@ describe('ListModalWindow — personal grid views', () => {
     expect(screen.getByTestId('list-modal-edit-GRID-1')).toBeInTheDocument();
   });
 });
+
+// The hover row actions drew lucide Pencil / Copy / Trash2 at 16px with their own button classes,
+// while every other list (RowQuickActions) uses the Iconic set at 20px on the shared row-action
+// buttons. Same icons, same buttons, same delete loader now.
+describe('ListModalWindow — row actions match the list quick actions', () => {
+  const ROW = { id: 'QA-1', name: 'Rule', priority: 10, active: true };
+
+  it('uses the shared row-action buttons and the Iconic icons at 20px', async () => {
+    const { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } = await import('../rowVisuals.js');
+    neoState.data = [ROW];
+    renderWindow({ config: { allowClone: true } });
+    const edit = screen.getByTestId('list-modal-edit-QA-1');
+    const clone = screen.getByTestId('list-modal-clone-QA-1');
+    const del = screen.getByTestId('list-modal-delete-QA-1');
+    expect(edit.className).toContain(ROW_ACTION_BUTTON_NEUTRAL);
+    expect(clone.className).toContain(ROW_ACTION_BUTTON_NEUTRAL);
+    expect(del.className).toContain(ROW_ACTION_BUTTON_DESTRUCTIVE);
+    // Keyboard parity with ROW_STICKY_ACTIONS: tabbing onto an action must reveal the band.
+    expect(edit.parentElement.className).toContain('focus-within:opacity-100');
+    for (const [button, label] of [[edit, 'edit'], [clone, 'clone'], [del, 'delete']]) {
+      expect(button).toHaveAttribute('aria-label', label);
+      expect(button).toHaveAttribute('title', label);
+      const icon = button.querySelector('svg');
+      // Iconic set (no lucide class), sized 20px by class like RowQuickActions.
+      expect(icon.getAttribute('class')).toContain('h-5 w-5');
+      expect(icon.getAttribute('class')).not.toContain('lucide');
+    }
+  });
+
+  it('shows a 20px spinner on the row being deleted', async () => {
+    neoState.data = [ROW];
+    apiFetchMock = vi.fn(() => new Promise(() => {}));
+    renderWindow();
+    fireEvent.click(screen.getByTestId('list-modal-delete-QA-1'));
+    fireEvent.click(screen.getByTestId('list-modal-delete-confirm'));
+    const del = await screen.findByTestId('list-modal-delete-QA-1');
+    await waitFor(() => expect(del).toBeDisabled());
+    expect(del.querySelector('svg').getAttribute('class')).toContain('animate-spin');
+    expect(del.querySelector('svg').getAttribute('class')).toContain('h-5 w-5');
+  });
+});

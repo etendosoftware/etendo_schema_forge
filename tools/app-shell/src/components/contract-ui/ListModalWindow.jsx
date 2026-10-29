@@ -4,7 +4,11 @@ import { useGridView } from '@/hooks/useGridView.js';
 import { GridViewControls } from './GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, X, Pencil, Copy, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, X, Loader2 } from 'lucide-react';
+// Same Iconic set and row-action buttons as RowQuickActions (every other list), so the hover
+// actions never mix icon families or sizes across windows.
+import { IconicCopyIcon, IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } from './rowVisuals.js';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -1146,6 +1150,54 @@ function gridColumnStyle(col, gridView, header = false) {
     : { width, overflowWrap: 'anywhere' };
 }
 
+/**
+ * Hover row actions (edit / clone / delete) — the RowQuickActions look: Iconic icons at 20px on
+ * the shared 32px row-action buttons (`rowVisuals.js`), a 20px spinner on the row being deleted.
+ * Each button renders only when its handler is given (a read-only role gets none).
+ */
+function ListModalRowActions({ row, onEdit, onClone, onDelete, deleting, className, ui }) {
+  return (
+    <div className={cn('flex items-center justify-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100', className)}>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={() => onEdit(row)}
+          aria-label={ui('edit')}
+          title={ui('edit')}
+          data-testid={`list-modal-edit-${row.id}`}
+          className={ROW_ACTION_BUTTON_NEUTRAL}>
+          <IconicEditIcon className="h-5 w-5" data-testid="IconicEditIcon__19eda5" />
+        </button>
+      )}
+      {onClone && (
+        <button
+          type="button"
+          onClick={() => onClone(row)}
+          aria-label={ui('clone')}
+          title={ui('clone')}
+          data-testid={`list-modal-clone-${row.id}`}
+          className={ROW_ACTION_BUTTON_NEUTRAL}>
+          <IconicCopyIcon className="h-5 w-5" data-testid="IconicCopyIcon__19eda5" />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(row)}
+          disabled={deleting}
+          aria-label={ui('delete')}
+          title={ui('delete')}
+          data-testid={`list-modal-delete-${row.id}`}
+          className={cn(ROW_ACTION_BUTTON_DESTRUCTIVE, deleting && 'opacity-60 cursor-wait')}>
+          {deleting
+            ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__19eda5" />
+            : <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__19eda5" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Row / header / checkbox-column density. `compact` (templateConfig.listVariant) is the Figma
 // list: 40px rows, a 32px checkbox column with 8px left padding, header tracking -0.005em.
 const GRID_DENSITY = {
@@ -1309,44 +1361,15 @@ function ListModalGrid({
                 className={cn(actionsColClass, 'p-0')}
                 onClick={(e) => e.stopPropagation()}
                 data-testid="TableCell__19eda5">
-                <div className={cn('flex items-center justify-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100', actionsColClass)}>
-                  {onEdit && (
-                  <button
-                    type="button"
-                    onClick={() => onEdit(row)}
-                    aria-label={ui('edit')}
-                    data-testid={`list-modal-edit-${row.id}`}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
-                  >
-                    <Pencil className="h-4 w-4" data-testid="Pencil__19eda5" />
-                  </button>
-                  )}
-                  {onClone && (
-                    <button
-                      type="button"
-                      onClick={() => onClone(row)}
-                      aria-label={ui('clone')}
-                      data-testid={`list-modal-clone-${row.id}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
-                    >
-                      <Copy className="h-4 w-4" data-testid="Copy__19eda5" />
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      type="button"
-                      onClick={() => onDelete(row)}
-                      disabled={deletingId === row.id}
-                      aria-label={ui('delete')}
-                      data-testid={`list-modal-delete-${row.id}`}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--destructive))] transition-colors hover:bg-[var(--status-destructive-bg)] disabled:opacity-50"
-                    >
-                      {deletingId === row.id
-                        ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__19eda5" />
-                        : <Trash2 className="h-4 w-4" data-testid="Trash2__19eda5" />}
-                    </button>
-                  )}
-                </div>
+                <ListModalRowActions
+                  row={row}
+                  onEdit={onEdit}
+                  onClone={onClone}
+                  onDelete={onDelete}
+                  deleting={deletingId === row.id}
+                  className={actionsColClass}
+                  ui={ui}
+                  data-testid="ListModalRowActions__19eda5" />
               </TableCell>
               )}
             </TableRow>
