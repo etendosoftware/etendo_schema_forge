@@ -22,12 +22,23 @@ export function isDocTemplateSelectionEnabled() {
  * @returns {Promise<{variant: string, logo: string|null, footerText: string|null}|null>}
  */
 export async function loadDocTemplateConfig(docType, base, token) {
-  if (!docType || !isDocTemplateSelectionEnabled()) return null;
+  if (!docType) return null;
+  if (!isDocTemplateSelectionEnabled()) {
+    // Printing never fails because of this, and a silent null made "the style is not applied"
+    // undiagnosable: the console says which of the three reasons it was.
+    console.info(`[doc-template] ${docType}: the doc-template-selection flag is off, no configuration read`);
+    return null;
+  }
   try {
     const config = await fetchJson(
       `${base}/doctemplateconfig?docType=${encodeURIComponent(docType)}`, token);
-    return config?.configured === true ? config : null;
-  } catch {
+    if (config?.configured !== true) {
+      console.info(`[doc-template] ${docType}: nothing saved for this organization`);
+      return null;
+    }
+    return config;
+  } catch (error) {
+    console.warn(`[doc-template] ${docType}: the configuration could not be read (${error.message})`);
     return null;
   }
 }
