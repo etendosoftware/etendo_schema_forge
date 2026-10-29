@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
+import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Info, Loader2, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -31,6 +34,21 @@ const FORM_FIELDS = [
   ['powerDate', 'orgRepPowerDateLabel', true],
   ['notaryName', 'orgRepNotaryLabel', true],
 ];
+
+const GRID_COLUMN_DEFS = [
+  { key: 'taxID', column: 'Taxid', labelKey: 'orgRepTaxIdLabel' },
+  { key: 'firstName', column: 'Firstname', labelKey: 'orgRepFullNameLabel' },
+  { key: 'powerDate', column: 'Power_Date', labelKey: 'orgRepPowerDateLabel' },
+  { key: 'notaryName', column: 'Notary_Name', labelKey: 'orgRepNotaryLabel' },
+];
+
+const DEFAULT_COLUMN_WIDTHS = { default: 96, taxID: 112, powerDate: 112 };
+
+function headerCellStyle(column) {
+  if (column.gridUserWidthPx != null) return { width: column.gridUserWidthPx, overflowWrap: 'anywhere' };
+  const width = DEFAULT_COLUMN_WIDTHS[column.key];
+  return width == null ? undefined : { width };
+}
 
 function RequiredMark() {
   return <span className="text-destructive"> *</span>;
@@ -143,6 +161,11 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
   const { rows, loading, error, refetch, createRow, updateRow, deleteRow } =
     useRepresentantesLegales(orgId, apiBaseUrl);
 
+  const gridColumns = useMemo(() => GRID_COLUMN_DEFS.map(({ labelKey, ...column }) => ({ ...column, label: ui(labelKey) })), [ui]);
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: 'organization', entity: 'representanteLegal', columns: gridColumns, data: rows, apiBaseUrl });
+  const columns = gridView.active ? gridView.columns : gridColumns;
+  const gridLabel = (key) => gridColumns.find(column => column.column === key)?.label ?? key;
+
   // null = no form open; 'new' = adding; otherwise the id of the row being edited.
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -200,7 +223,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
     if (loading) {
       return (
         <tr>
-          <td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+          <td colSpan={columns.length + 2} className="py-8 text-center text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__orgRepLoading" />
           </td>
         </tr>
@@ -209,7 +232,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
     if (rows.length === 0) {
       return (
         <tr>
-          <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground" data-testid="RepresentantesLegalesSection__empty">
+          <td colSpan={columns.length + 2} className="py-6 text-center text-sm text-muted-foreground" data-testid="RepresentantesLegalesSection__empty">
             {ui('orgRepEmpty')}
           </td>
         </tr>
@@ -219,6 +242,12 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
       const included = includedIds.has(row.id);
       const inactive = !isActiveRepresentative(row);
       const busy = deletingId === row.id;
+      const cells = {
+        taxID: (<td className="py-2 px-3 align-middle text-sm truncate" title={row.taxID ?? ''}>{row.taxID || '—'}</td>),
+        firstName: (<td className="py-2 px-3 align-middle text-sm truncate" title={representativeFullName(row)}>{representativeFullName(row) || '—'}</td>),
+        powerDate: (<td className="py-2 px-3 align-middle text-sm tabular-nums">{formatCalendarDate(row.powerDate, locale)}</td>),
+        notaryName: (<td className="py-2 px-3 align-middle text-sm truncate" title={row.notaryName ?? ''}>{row.notaryName || '—'}</td>),
+      };
       return (
         <tr
           key={row.id}
@@ -239,10 +268,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
               )}
             </div>
           </td>
-          <td className="py-2 px-3 align-middle text-sm truncate" title={row.taxID ?? ''}>{row.taxID || '—'}</td>
-          <td className="py-2 px-3 align-middle text-sm truncate" title={representativeFullName(row)}>{representativeFullName(row) || '—'}</td>
-          <td className="py-2 px-3 align-middle text-sm tabular-nums">{formatCalendarDate(row.powerDate, locale)}</td>
-          <td className="py-2 px-3 align-middle text-sm truncate" title={row.notaryName ?? ''}>{row.notaryName || '—'}</td>
+          {columns.map(column => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
           <td className="py-1.5 px-2 align-middle text-right whitespace-nowrap">
             {busy ? (
               <Loader2 className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__orgRepRowBusy" />
@@ -294,15 +320,29 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
           <span>{ui('orgRepLegalEntityHint')}</span>
         </p>
       )}
+      {gridColumnViews && <GridViewControls
+        gridView={gridView}
+        gridColumns={gridColumns}
+        ui={ui}
+        t={gridLabel}
+        data-testid="GridViewControls__f6a856" />}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-border bg-muted/40">
               <th className="h-9 w-20 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgRepLineLabel')}</th>
-              <th className="h-9 w-28 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgRepTaxIdLabel')}</th>
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgRepFullNameLabel')}</th>
-              <th className="h-9 w-28 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgRepPowerDateLabel')}</th>
-              <th className="h-9 px-3 text-left align-middle text-xs font-semibold text-foreground">{ui('orgRepNotaryLabel')}</th>
+              {columns.map(column => {
+                const label = column.label;
+                return (
+                  <th key={column.key} className="relative h-9 px-3 text-left align-middle text-xs font-semibold text-foreground"
+                    style={headerCellStyle(column)}
+                    {...gridHeaderProps(column, gridView)}>
+                    {label}
+                    {gridReorderHandle(column, gridView, label, ui)}
+                    {gridResizeHandle(column, gridView, label, ui)}
+                  </th>
+                );
+              })}
               <th className="h-9 w-20 px-2" />
             </tr>
           </thead>

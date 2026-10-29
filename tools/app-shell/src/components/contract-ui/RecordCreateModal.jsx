@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 import EmbeddedWindowRoute from './EmbeddedWindowRoute.jsx';
 import { renderPrimaryTabButtons } from './detailViewHelpers.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { saveEmbeddedUnsavedChanges } from '@/lib/unsavedChanges.js';
 import { mergeDefaultsPreservingUserEdits } from '@/hooks/useEntity.js';
 import { LocaleProvider, useLocale, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
@@ -232,7 +233,7 @@ export default function RecordCreateModal({
         body: JSON.stringify({ [key]: data[key], updated: createdRecord.updated }),
       });
       if (!res.ok) {
-        setError((await readErrorBody(res)) || ui(target.errorKey));
+        setError((await readErrorBody(res, ui)) || ui(target.errorKey));
         return;
       }
       const saved = unwrapCreated(await res.json().catch(() => null));
@@ -284,7 +285,7 @@ export default function RecordCreateModal({
           touched: userChangedKeysRef.current,
         })),
       });
-      const body = res.ok ? await res.json().catch(() => null) : await readErrorBody(res);
+      const body = res.ok ? await res.json().catch(() => null) : await readErrorBody(res, ui);
       if (!res.ok) {
         setError(body || ui(target.errorKey));
         setSaving(false);
@@ -710,10 +711,20 @@ export function unwrapCreated(body) {
   return body?.response?.data?.[0] ?? body?.response?.data ?? body?.data?.[0] ?? body ?? null;
 }
 
-async function readErrorBody(res) {
+/**
+ * The user-facing message of a failed create/PATCH, or null when the body carries none (the
+ * caller then shows the target's own error key). Goes through `translateBackendErrorBody`, so a
+ * refusal the SPA knows — ETP-5051's plan-quota refusal (403 QUOTA_EXCEEDED) among them — reads
+ * in the UI locale instead of as the backend's English prose; an unknown message is shown as is.
+ */
+async function readErrorBody(res, ui) {
   try {
     const body = await res.json();
-    return body?.response?.error?.message || body?.error?.message || body?.message || null;
+    // QUOTA_EXCEEDED / QUOTA_CHECK_FAILED land here only on the fallback path: the standalone
+    // form (the target's window failed to load) and its phase-2 PATCH. Every current target
+    // declares `windowName`, so in windowMode the embedded window saves through `useEntity`,
+    // which shows the translated quota message itself; `record-create-error` is not rendered.
+    return translateBackendErrorBody(body, ui, null) || null;
   } catch {
     return null;
   }
