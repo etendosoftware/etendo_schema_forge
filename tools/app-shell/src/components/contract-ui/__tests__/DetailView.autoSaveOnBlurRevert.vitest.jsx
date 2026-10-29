@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/saveActions.jsx
 /**
  * ETP-4670: a checkbox/toggle field under autoSaveOnBlur autosaves immediately
  * (EntityForm fires onFieldBlur right after onChange for those field types —
@@ -18,6 +20,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DetailView } from '../DetailView.jsx';
+import { registerPending } from '@/lib/formPendingWork.js';
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
@@ -205,5 +208,23 @@ describe('DetailView autosave-on-blur revert (ETP-4670)', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(mockHook.handleSave).not.toHaveBeenCalled();
     expect(mockHook.handleSelect).not.toHaveBeenCalled();
+  });
+  // ETP-5680 follow-up: a custom form component still has a result in flight (the product's
+  // tax-category lookup after a type change). The blur auto-save must not persist the record
+  // without it, and — unlike a rejected save — must not roll the user's edit back either.
+  it('(4) skips the autosave, without reverting, while the form is calculating', async () => {
+    mockHook.editing = { ...baseRecord, default: true };
+    mockHook.handleSave.mockResolvedValue({ ...baseRecord, default: true });
+    const release = registerPending(mockHook.handleChange);
+
+    renderView();
+    fireEvent.click(screen.getAllByTestId('default-checkbox')[0]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockHook.handleSave).not.toHaveBeenCalled();
+    expect(mockHook.handleSelect).not.toHaveBeenCalled();
+
+    release();
+    fireEvent.click(screen.getAllByTestId('default-checkbox')[0]);
+    await vi.waitFor(() => expect(mockHook.handleSave).toHaveBeenCalledTimes(1));
   });
 });
