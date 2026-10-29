@@ -662,17 +662,20 @@ through `etendo_update` (the sales order shares them; the first applies to every
 - **A required field cannot be cleared** (every window, not only orders). The form never lets a person empty a required input
   (for example `scheduledDeliveryDate`); an update that sends `null` or `""` for one is refused with
   `422 validation_error` and `missingFields[{name, column, type, label}]`, the label in the user's
-  language. A field that is left out of the update keeps its stored value. MCP only: REST single,
+  language (the message itself follows the user's AD language, ETP-5726 OBS-1: `es_ES` reads Spanish).
+  A field that is left out of the update keeps its stored value. MCP only: REST single,
   batch and the SPA are unchanged (parity is a declared follow-up).
-- **The currency must agree with the price list.** Changing the currency of a draft order to one
-  that differs from its price list's (the price list sent in the same update, else the stored one) is
-  refused with `422`, naming the currency and the price list; send a price list in the new currency in
-  the same call or keep the currency. MCP only: the form does not reset the price list and Etendo
-  core does not check it at completion.
+- **A currency change is saved like the window does.** Changing the currency of a draft order
+  through `etendo_update` is accepted: the exchange rate (`eTGOCurrencyRate`) follows the new currency (the rate of the
+  order date, or `1` back in the company's currency), but the price list is not changed and no amount
+  is converted (the line and the total keep their numbers, shown in the new currency), exactly as the
+  form does and as changing back restores. To price the order in the new currency, send a price list of that
+  currency in the same call. (ETP-5726 first refused this change over MCP; it was removed because
+  the screen allows it.)
 - **The order date is the accounting date** (ETP-4531, unified date): changing `orderDate` also
   updates the accounting date. No separate field is published; the agent prompt says so.
 
-Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP-5726 rows of §4.12.9.
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41 and the ETP-5726 row of §4.12.9.
 
 ## Manage-documents popup title follows the pending action — ETP-5688
 

@@ -749,8 +749,9 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 
 ## Header validations over MCP `etendo_update` — ETP-5726
 
-Same three rules as the purchase order (the first one applies to every window): a required field cannot be cleared (422), a draft's currency
-cannot differ from its price list's (422), and the order date is also the accounting date. See
-`purchase-order.md` ("Header validations over MCP `etendo_update`") and
-`modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41. The sales-order header calls the same
-`OrderCurrencyPriceListGuard` from its `handle()`.
+Same rules as the purchase order (the first one applies to every window): a required field cannot be
+cleared (422, the message in the user's language), a draft's currency change is saved like the
+window does (the exchange rate follows the currency, `1` in the company's own; no price list change, no amount converted; send a price list of the new currency to
+price the order in it) and the order date is also the accounting date. See `purchase-order.md`
+("Header validations over MCP `etendo_update`") and
+`modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41.
