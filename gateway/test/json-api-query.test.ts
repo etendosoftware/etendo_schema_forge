@@ -6,7 +6,7 @@ import type { PublicApiEntity } from '@etendosoftware/api-gateway-core';
 import { filterOperatorsFor, neoListParams, pagination, parseListQuery } from '../src/public-api/json-api-query.ts';
 
 const field = (internalPath: string, dataType: Record<string, string> | undefined, extra: Record<string, unknown> = {}) =>
-  ({ publicApi: true, direction: 'inout', internalPath, type: 'passthrough', handlerId: null, ...(dataType ? { dataType } : {}), ...extra });
+  ({ publicApi: true, direction: 'inout', internalPath, ...(dataType ? { dataType } : {}), ...extra });
 
 const entity = {
   publicApi: true,

@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-27T11:23:38.620Z",
-  "checksum": "31c2ecc5ba6a17e6",
+  "updatedAt": "2026-10-29T16:56:20.332Z",
+  "checksum": "1c8efb36575ff1db",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -530,8 +530,6 @@
             "publicApi": {
               "exposed": true,
               "name": "searchKey",
-              "type": "passthrough",
-              "handlerId": null,
               "readOnly": true
             }
           },
@@ -554,9 +552,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "name",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "name"
             }
           },
           {
@@ -716,9 +712,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "taxId",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "taxId"
             }
           },
           {
@@ -788,9 +782,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "web",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "web"
             }
           },
           {
@@ -810,9 +802,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "email",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "email"
             }
           },
           {
@@ -832,9 +822,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "phone",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "phone"
             }
           },
           {
@@ -4608,9 +4596,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "locationAddress",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "locationAddress"
             }
           },
           {
@@ -4630,9 +4616,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "phone",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "phone"
             }
           },
           {
@@ -4651,9 +4635,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "alternativePhone",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "alternativePhone"
             }
           },
           {
@@ -4684,9 +4666,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "name",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "name"
             }
           },
           {
@@ -4705,9 +4685,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "fax",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "fax"
             }
           },
           {
@@ -4738,9 +4716,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "shipToAddress",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "shipToAddress"
             }
           },
           {
@@ -4771,9 +4747,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "invoiceToAddress",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "invoiceToAddress"
             }
           },
           {
@@ -4799,9 +4773,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "active",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "active"
             }
           },
           {
@@ -4830,9 +4802,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "taxLocation",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "taxLocation"
             }
           }
         ],

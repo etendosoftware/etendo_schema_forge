@@ -113,6 +113,18 @@ export function publicFunctionalText({ summary, capabilities }) {
   };
 }
 
+// A field is published as its NEO value under a public name; nothing transforms it. The
+// `type` / `handlerId` keys of an earlier curation format promised custom handlers that were
+// never implemented, so they are refused rather than silently ignored.
+export function assertNoFieldMapping(field, where) {
+  for (const key of ['type', 'handlerId']) {
+    if (field.publicApi && Object.hasOwn(field.publicApi, key)) {
+      throw new Error(`${where}.${field.name}: publicApi.${key} is not supported; `
+        + 'a public field is its NEO value under a public name. Remove the key.');
+    }
+  }
+}
+
 // An entity is curated when at least one of its fields declares
 // `publicApi.exposed: true`. A curated entity publishes exactly its curation.
 export function isCurated(source) {
@@ -299,6 +311,7 @@ export function buildEntity({
   const fields = {};
   const curated = isCurated(source);
   for (const field of source.fields ?? []) {
+    assertNoFieldMapping(field, `${specName}/${entityName}`);
     if (!isPublicField(field, { curated, specName })) continue;
     const apiName = publicFieldName(field.publicApi?.name ?? field.name);
     if (fields[apiName]) {
@@ -308,10 +321,8 @@ export function buildEntity({
       sourceVisibility: field.visibility,
       direction: writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out',
       internalPath: field.name,
-      type: 'passthrough',
       dataType: openApiType(field.type),
       reference: field.reference ?? null,
-      handlerId: null,
     };
   }
 
@@ -324,10 +335,8 @@ export function buildEntity({
       sourceVisibility: 'editable',
       direction: input.readable === true ? 'inout' : 'in',
       internalPath: input.internalPath,
-      type: 'passthrough',
       dataType: { type: input.dataType ?? 'string' },
       reference: null,
-      handlerId: null,
       ...(input.required === true ? { required: true } : {}),
     };
   }
@@ -341,10 +350,8 @@ export function buildEntity({
         sourceVisibility: rawField.visibility,
         direction: 'out',
         internalPath: rawField.name,
-        type: 'passthrough',
         dataType: { type: 'string' },
         reference: null,
-        handlerId: null,
       };
     }
     if (rawField.name === 'updated' && !fields.updated) {
@@ -352,10 +359,8 @@ export function buildEntity({
         sourceVisibility: rawField.visibility,
         direction: 'out',
         internalPath: rawField.name,
-        type: 'passthrough',
         dataType: { type: 'string', format: 'date-time' },
         reference: null,
-        handlerId: null,
       };
     }
   }
@@ -368,10 +373,8 @@ export function buildEntity({
       sourceVisibility: 'system',
       direction: 'out',
       internalPath: 'id',
-      type: 'passthrough',
       dataType: { type: 'string' },
       reference: null,
-      handlerId: null,
     };
   }
 

@@ -1,10 +1,11 @@
 // @covers scripts/generate-base-public-api-manifest.mjs
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  assertNoFieldMapping,
   buildEntity,
   fiscalMonitorWindows,
   generateManifest,
@@ -522,5 +523,74 @@ describe('generateManifest — child tabs and functional texts', () => {
     const { functional } = (await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') })).entities.contacts;
     assert.equal(functional.functionalSummary, 'Public API resource for the Contacts window.');
     assert.deepEqual(functional.functionalCapabilities, ['Create a contact']);
+  });
+});
+
+describe('assertNoFieldMapping — removed publicApi type/handlerId keys', () => {
+  const field = (publicApi) => ({ name: 'orderDate', visibility: 'editable', type: 'date', publicApi });
+
+  for (const [key, value] of [['type', 'string'], ['handlerId', 'passthrough'], ['handlerId', null], ['type', null]]) {
+    it(`throws naming the field and the key for ${key}=${JSON.stringify(value)}`, () => {
+      assert.throws(
+        () => assertNoFieldMapping(field({ exposed: true, name: 'x', [key]: value }), 'spec/header'),
+        (err) => err instanceof Error && err.message.includes('spec/header.orderDate') && err.message.includes(`publicApi.${key}`)
+      );
+    });
+  }
+
+  it('does not throw for exposed/readOnly curation or a field without publicApi', () => {
+    assert.doesNotThrow(() => assertNoFieldMapping(field({ exposed: true, name: 'x' }), 'spec/header'));
+    assert.doesNotThrow(() => assertNoFieldMapping(field({ exposed: true, name: 'x', readOnly: true }), 'spec/header'));
+    assert.doesNotThrow(() => assertNoFieldMapping(field(undefined), 'spec/header'));
+  });
+
+  it('buildEntity rejects the keys even on a field that would not be published', () => {
+    const fields = [
+      { name: 'orderDate', visibility: 'editable', publicApi: { exposed: true, name: 'date' } },
+      { name: 'secret', visibility: 'discarded', publicApi: { handlerId: 'passthrough' } },
+    ];
+    assert.throws(() => build('contacts', fields), /contacts\/header\.secret.*publicApi\.handlerId/);
+  });
+
+  it('no emit site puts a type or handlerId key on a manifest field', () => {
+    const curated = [{ name: 'orderDate', visibility: 'editable', type: 'date', publicApi: { exposed: true, name: 'date' } }];
+    const inputFields = [
+      { name: 'city_name', internalPath: 'cityName', dataType: 'string', readable: true },
+      { name: 'secret_note', internalPath: 'secretNote', required: true },
+    ];
+    const rawEntity = { tableName: 'contacts_table', fields: [
+      { name: 'contactId', type: 'id', visibility: 'system' },
+      { name: 'updated', type: 'dateTime', visibility: 'system' },
+    ] };
+    const entities = [
+      // curated field + input-param fields + synthetic id/updated from schema-raw
+      buildEntity({ specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curated),
+        functional, parent: null, rawEntity, inputFields }),
+      // fallback id (no raw schema)
+      buildEntity({ specName: 'contacts', entityName: 'header', contract: contractFor('contacts', curated),
+        functional, parent: null, rawEntity: null }),
+    ];
+    const published = entities.flatMap((entity) => Object.entries(entity.fields));
+    const names = published.map(([name]) => name);
+    for (const expected of ['date', 'city_name', 'secret_note', 'id', 'updated']) {
+      assert.ok(names.includes(expected), `${expected} should be emitted`);
+    }
+    for (const [name, field] of published) {
+      assert.equal(Object.hasOwn(field, 'type'), false, `${name} has a type key`);
+      assert.equal(Object.hasOwn(field, 'handlerId'), false, `${name} has a handlerId key`);
+    }
+  });
+
+  it('the committed public-api/base.v1.json has no field with type or handlerId', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../../public-api/base.v1.json', import.meta.url), 'utf8'));
+    let checked = 0;
+    for (const [entityName, entity] of Object.entries(manifest.entities)) {
+      for (const [name, field] of Object.entries(entity.fields ?? {})) {
+        checked += 1;
+        assert.equal(Object.hasOwn(field, 'type'), false, `${entityName}.${name} has a type key`);
+        assert.equal(Object.hasOwn(field, 'handlerId'), false, `${entityName}.${name} has a handlerId key`);
+      }
+    }
+    assert.ok(checked > 0);
   });
 });

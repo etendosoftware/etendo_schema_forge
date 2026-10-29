@@ -114,7 +114,7 @@
           "searchable": true,
           "section": "principal",
           "seq": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "searchKey" }
         },
         "name": {
           "grid": true,
@@ -129,14 +129,14 @@
               { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
             ]
           },
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "name" }
         },
         "description": {
           "type": "textarea",
           "section": "principal",
           "seq": 10,
           "span": 3,
-          "publicApi": { "exposed": true, "name": "description", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "description" }
         },
         "productType": {
           "grid": true,
@@ -159,7 +159,7 @@
           "reference": "ProductCategory",
           "section": "principal",
           "seq": 4,
-          "publicApi": { "exposed": true, "name": "category", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "category" }
         },
         "uOM": {
           "grid": true,
@@ -209,7 +209,7 @@
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "salePrice" }
         },
         "eTGOPurchasePrice": {
           "visibility": "readOnly",
@@ -228,7 +228,7 @@
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "stock" }
         },
         "stocked": {
           "section": "principal",
