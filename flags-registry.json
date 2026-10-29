@@ -1419,6 +1419,14 @@
           {
             "root": "frontend",
             "path": "tools/app-shell/src/windows/custom/shared/__tests__/ListingTemplatePreview.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/useDocumentPdf.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ReportDrawer.listingConfig.vitest.jsx"
           }
         ]
       }
