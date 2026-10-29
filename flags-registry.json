@@ -1096,6 +1096,8 @@
           { "root": "backend", "path": "src-test/src/com/etendoerp/go/mcp/McpSchemaFieldBuilderTest.java" },
           { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/selector/policy/AddressVirtualSelectorPolicyTest.java" },
           { "root": "backend", "path": "src-test/src/com/etendoerp/go/onboarding/OnboardingOrgInfoServiceTest.java", "note": "Covers the structured-address branch of ensureOrgInfoLocation/createLocation added for this flag (flag on/off, legacy-address fallback)." },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/common/GoAccountResolverTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/mcp/McpHookExecutorTest.java", "note": "testRunReadHookInvokesAfterHandleOnAnAnnotationOnlyHandler/testRunReadHookWithNoResolvedHandlerKeepsTheOriginalBody cover the runReadHook dispatch-resolution regression fix." },
           { "root": "frontend", "path": "tools/app-shell/src/windows/custom/shared/__tests__/LocationEditorModal.vitest.jsx", "note": "Extended with a 'structured-address-for-sepa flag OFF' describe block (legacy address lines, legacy save-gating, save payload) plus a flag-ON default via the useAuth() mock for every pre-existing case." }
         ]
       }
