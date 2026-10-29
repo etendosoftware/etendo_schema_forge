@@ -43,9 +43,10 @@
       {
         "key": "reversedInvoices",
         "labelKey": "rectificationsTab",
-        "component": "ReversedInvoicesPanel",
-        "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
-        "placement": "tab"
+        "component": "SalesRectificationsTab",
+        "importFrom": "@/windows/custom/sales-invoice/SalesRectificationsTab.jsx",
+        "placement": "tab",
+        "_note": "ETP-6002 (CP-26): shown only when the document type is a rectificative; an original invoice sees its rectificatives as related-documents chips instead (the ETP-5745 CP-12 in-tab view is dropped). An extraTabs entry is always visible unless its component reports onVisibilityChange(false); SalesRectificationsTab does that from the AR subtype (arInvoiceSubtype, or the selected document type on a new invoice). The reversedInvoices entity displayLogic below does NOT govern this tab (renderTab is false)."
       }
     ],
     "menuActions": [

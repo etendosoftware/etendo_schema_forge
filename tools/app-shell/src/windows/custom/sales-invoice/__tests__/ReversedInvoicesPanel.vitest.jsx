@@ -7,6 +7,7 @@ import { resetGridBoundary } from '@/test/gridViewTestDoubles.jsx';
 beforeEach(() => resetGridBoundary(gridBoundary));
 
 // @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
+// @covers tools/app-shell/src/windows/custom/sales-invoice/SalesRectificationsTab.jsx
 //
 // ETP-4404 / ETP-5381 — ReversedInvoicesPanel unit suite (Jira TC map in each test title).
 //
@@ -1496,6 +1497,57 @@ describe('ETP-5027 — the rejected draft is not re-saved on every outside click
     clickAnotherTab();
     await waitFor(() => expect(postCalls()).toHaveLength(2));
     expect(postCalls()[1].body).toEqual({ invoice: RECORD_ID, reversedInvoice: 'inv-orig-8' });
+  });
+});
+
+// ETP-6002 (CP-26) — the sales "Rectificaciones" tab is an extraTabs entry, always shown unless
+// its component reports onVisibilityChange(false). SalesRectificationsTab reports it from the
+// document type only.
+import SalesRectificationsTab, { isRectificationsTabVisible } from '../SalesRectificationsTab.jsx';
+
+describe('SalesRectificationsTab — visibility follows the document type (CP-26)', () => {
+  it.each([
+    ['a new invoice of type Factura', { transactionDocument$_identifier: 'Factura' }, false],
+    ['a new invoice of type Factura rectificativa', { transactionDocument$_identifier: 'Factura rectificativa' }, true],
+    ['a read FAC invoice nothing rectifies', { arInvoiceSubtype: 'FAC', rectifyingInvoices: [] }, false],
+    ['a read RECTIFICATIVA invoice', { arInvoiceSubtype: 'RECTIFICATIVA' }, true],
+    // ETP-6002 drops the CP-12 in-tab view: the original sees its rectificatives as chips only.
+    ['an original invoice a rectificative rectifies', { arInvoiceSubtype: 'FAC', rectifyingInvoices: [{ id: 'r1' }] }, false],
+  ])('%s → %s', (_name, data, expected) => {
+    expect(isRectificationsTabVisible(data)).toBe(expected);
+  });
+
+  it('hides itself and renders nothing on a plain invoice', () => {
+    const onVisibilityChange = vi.fn();
+    render(
+      <SalesRectificationsTab
+        recordId="new"
+        data={{ transactionDocument$_identifier: 'Factura' }}
+        apiBaseUrl="/sws/neo/sales-invoice"
+        onVisibilityChange={onVisibilityChange}
+      />,
+    );
+    expect(onVisibilityChange).toHaveBeenLastCalledWith(false);
+    expect(screen.queryByTestId('reversed-invoices-panel')).toBeNull();
+  });
+
+  // The other direction, on a READ record, and across a data change: DetailView only drops the
+  // tab (and moves off it when it was active — DetailView.render.vitest.jsx, "redirects to the
+  // first tab…") if the component reports the new visibility when the document type changes.
+  it('on a read record shows the panel for a rectificativa and reports hidden once the type becomes Factura', async () => {
+    installFetch();
+    const onVisibilityChange = vi.fn();
+    const props = { recordId: RECORD_ID, token: 'tkn', apiBaseUrl: API_BASE, api: {}, catalogs: {}, isActive: true, onVisibilityChange };
+    const base = { id: RECORD_ID, processed: false, documentStatus: 'DR', businessPartner: BP_ID };
+    const { rerender } = render(<SalesRectificationsTab {...props} data={{ ...base, arInvoiceSubtype: 'RECTIFICATIVA' }} />);
+
+    expect(onVisibilityChange).toHaveBeenLastCalledWith(true);
+    expect(await screen.findByTestId('reversed-invoices-panel')).toBeInTheDocument();
+
+    rerender(<SalesRectificationsTab {...props} data={{ ...base, arInvoiceSubtype: 'FAC' }} />);
+
+    await waitFor(() => expect(onVisibilityChange).toHaveBeenLastCalledWith(false));
+    expect(screen.queryByTestId('reversed-invoices-panel')).toBeNull();
   });
 });
 

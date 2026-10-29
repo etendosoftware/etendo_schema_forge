@@ -1778,6 +1778,73 @@ function translateByCode(msg, t, code) {
  * @param {string|null|undefined} code failure code, see `extractBackendErrorCode`
  * @returns {boolean} whether to show the "already exists" message
  */
+// ETP-6002 — refusals of the declared line-import actions (`importOrderLines`, and the other
+// `import*Lines` actions built on `DocumentLineImport`): `{error:{code, message, ...details}}`, where
+// the message is English prose built by the server. The code is the identity, so the SPA renders
+// it in its own locale, interpolating the details it carries (`product`, `requested`, `pending`).
+// These codes mirror DocumentLineImport.ERROR_* and InvoiceGlobalDiscountRule in com.etendoerp.go;
+// a code added there and not here falls back to the caller's generic message, never to English.
+const IMPORT_REFUSAL_KEYS = {
+  importTargetNotDraft: 'backendError.importTargetNotDraft',
+  importSourceNotCompleted: 'backendError.importSourceNotCompleted',
+  importBusinessPartnerMismatch: 'backendError.importBusinessPartnerMismatch',
+  importCurrencyMismatch: 'backendError.importCurrencyMismatch',
+  importDirectionMismatch: 'backendError.importDirectionMismatch',
+  importQuantityExceedsPending: 'backendError.importQuantityExceedsPending',
+  importLineNotInDocument: 'backendError.importLineNotInDocument',
+  importNothingPending: 'backendError.importNothingPending',
+  importInvalidLine: 'backendError.importInvalidLine',
+  importDocumentNotFound: 'backendError.importDocumentNotFound',
+  importPriceListRequired: 'backendError.importPriceListRequired',
+  importQuantityNotHonoured: 'backendError.importQuantityNotHonoured',
+  importNoStorageBin: 'backendError.importNoStorageBin',
+  globalDiscountConflict: 'backendError.importGlobalDiscountConflict',
+};
+
+function importRefusalKey(code, details) {
+  // "nothing is pending on this line" is the same code with pending 0: its own sentence.
+  if (code === 'importQuantityExceedsPending' && Number(details?.pending) === 0) {
+    return 'backendError.importQuantityNothingPendingOnLine';
+  }
+  return IMPORT_REFUSAL_KEYS[code];
+}
+
+/**
+ * True when `code` belongs to a line-import action refusal (see IMPORT_REFUSAL_KEYS), mapped or
+ * not: an `import*` code is the family's, so an unmapped one still gets the generic fallback.
+ *
+ * @param {string|undefined} code failure code, see `extractBackendErrorCode`
+ * @returns {boolean}
+ */
+export function isImportRefusalCode(code) {
+  return typeof code === 'string'
+    && (Object.hasOwn(IMPORT_REFUSAL_KEYS, code) || /^import[A-Z]/.test(code));
+}
+
+/**
+ * Translates the refusal body of a line-import action (ETP-6002). A known code renders its own
+ * sentence with the details it carries; an unknown import code renders `fallback` (the server
+ * text is English); any other body goes through `translateBackendErrorBody`.
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @param {string} fallback generic, already translated message
+ * @returns {string} the message to show
+ */
+export function translateImportRefusal(body, t, fallback) {
+  const code = extractBackendErrorCode(body);
+  if (!isImportRefusalCode(code)) return translateBackendErrorBody(body, t, fallback);
+  const details = body?.error && typeof body.error === 'object' ? body.error : {};
+  const key = importRefusalKey(code, details);
+  if (!key || typeof t !== 'function') return fallback;
+  const translated = t(key, {
+    product: details.product ?? '',
+    requested: details.requested ?? '',
+    pending: details.pending ?? '',
+  });
+  return translated && translated !== key ? translated : fallback;
+}
+
 export function isDuplicateConflict(status, code) {
   return status === 409 && (!code || code === 'duplicate_key');
 }
