@@ -85,10 +85,13 @@ export function useActiveTabResolver(tabs, activeTab, setActiveTab) {
 export function useOthersProbe(primaryTabs, capabilities) {
   const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
   const othersRef = useRef(null);
+  // Keyed on the values, not the object: a caller that rebuilds an equal capabilities object on
+  // every render would otherwise reset and re-probe forever.
+  const capabilitiesKey = JSON.stringify(capabilities ?? {});
   useEffect(() => {
     if (!primaryTabs) setShowOthers(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [capabilities]);
+  }, [capabilitiesKey]);
   useEffect(() => {
     if (showOthers === null && othersRef.current) {
       setShowOthers(othersRef.current.childElementCount > 0);
