@@ -77,7 +77,7 @@ import {
   getAddLineWrapperStyle, buildDeleteRowHandler, getDraftModeCompleted, shouldRenderSaveActionsRow,
   onlySaveButtonForCompletedDoc, getDetailContentContainerClassName, getLinesTabsSectionClassName,
   computeIsDirty, shouldShowLinesEmptyState, DIMENSION_MACRO_KEYS, shouldShowLineActionButtons,
-  canShowAddLineArea, executeDetailProcessImpl,
+  canShowAddLineArea, executeDetailProcessImpl, computeIsDirtyForGuard,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -929,13 +929,13 @@ export function DetailView({
   // additionalDirtyState lets custom windows inject extra dirty sources via prop.
   const isDirty =
     computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
-  // ETP-5022: publish to the global registry so a language change (which reloads the page)
-  // and F5 / tab close both warn before discarding these edits.
+  // ETP-5022: publish to the global registry so a language change (which reloads the page) and F5 / tab close warn.
   // ETP-5073 / DOC-08 adds the saver, so the in-app navigation prompt can offer "Save and leave"
   // rather than only "Discard". `silent: true` suppresses the per-save toast: the user is leaving,
   // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
   // is what stops the navigation. ETP-5199: buildUnsavedChangesSaver also runs onAfterExistingSave/onAfterCreate.
-  useUnsavedChangesGuard(isDirty, buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
+  // ETP-5888: publishes only USER edits — an untouched new record (defaults + opening callouts) must not prompt.
+  useUnsavedChangesGuard(computeIsDirtyForGuard(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState), buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -1241,7 +1241,7 @@ export function DetailView({
   // Resolve $_identifier for default FK values.
   // NOTE: Mandatory defaults are now handled by the backend (NeoDefaultsService).
   // The frontend only ensures that if a value exists (from a default or callout),
-  // we resolve its $_identifier from the catalogs so it displays correctly.
+  // we resolve its $_identifier from the catalogs so it displays correctly. ETP-5888: not a user edit, hence the origin.
   useEffect(() => {
     if (!isNew || !hook.editing || !catalogsLoaded || !api?.selectors) return;
     for (const sel of api.selectors) {
@@ -1253,7 +1253,7 @@ export function DetailView({
       if (!Array.isArray(options) || options.length === 0) continue;
       const match = options.find(o => o.id === val);
       if (match) {
-        hook.handleChange(sel.field + '$_identifier', match.label || match.name || match._identifier);
+        hook.handleChange(sel.field + '$_identifier', match.label || match.name || match._identifier, { origin: 'callout' });
       }
     }
   }, [isNew, hook.editing, catalogsLoaded, catalogs, api]);
