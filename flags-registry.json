@@ -1284,7 +1284,7 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/NeoFiscalModelsCatalogServiceTest.java",
-            "note": "Shared spec. Adjusted for the flag's default (off) by counting only model keys; extended for ETP-5716: GET with the flag on returns the stored catalog unchanged, GET off with a stored 390:true hides it and adds the marker, PUT off keeps the stored 390, PUT never stores _unavailable (flag on and off), the tenant id reaches the gate."
+            "note": "Shared spec. Every case pins the flag (flag(...) helper), so none depends on local Openbravo.properties/env. Extended for ETP-5716: GET with the flag on returns the stored catalog unchanged, GET off with a stored 390:true hides it and adds the marker, GET off with an unreadable store (PropertyException or RuntimeException) answers exactly {_unavailable:[390]}, a failure building the answer fails hidden; PUT off keeps the stored 390, PUT on keeps it when the body omits it, PUT never stores _unavailable, an unreadable store (PropertyException or RuntimeException) refuses the save with IllegalStateException in both flag states and writes nothing, PUT off over a corrupt or blank store saves without 390 or marker; the tenant id reaches the gate. The refusal's HTTP mapping (500, not 400) is pinned in NeoBuiltInEndpointHandlerTest (propagates, no 400) and NeoServletProcessRequestTest (500)."
           },
           {
             "root": "frontend",
