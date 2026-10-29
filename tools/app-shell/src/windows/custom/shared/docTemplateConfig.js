@@ -1,6 +1,6 @@
 import { readFeatureFlag } from '@/lib/flags/useFeatureFlag.js';
 import { DOC_TEMPLATE_SELECTION } from '@/lib/flags/flag-keys.js';
-import { fetchJson } from './pdfUtils.js';
+import { fetchImageDataUrl, fetchJson, fetchOptionalJson } from './pdfUtils.js';
 
 /**
  * Whether commercial documents may use the organization's saved template choice (ETP-5988).
@@ -30,4 +30,14 @@ export async function loadDocTemplateConfig(docType, base, token) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The company logo as a data URL (the one the printed documents carry: the session's document
+ * image), or null when there is none or it cannot be read. For the list print's "show the logo"
+ * option, which only exists with the `doc-template-selection` flag on.
+ */
+export async function loadCompanyLogo(base, token) {
+  const session = await fetchOptionalJson(`${base}/session`, token);
+  return fetchImageDataUrl(session?.yourCompanyDocumentImageId, base, token);
 }

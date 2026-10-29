@@ -29,7 +29,7 @@ describe('DocumentTemplatePreview', () => {
   it('prints the sample with the company name and logo of the session', async () => {
     company.session = { organization: { name: 'Mi Empresa' }, yourCompanyDocumentImageId: 'LOGO1' };
     renderHtml.state.impl = async () => '<p>x</p>';
-    render(<DocumentTemplatePreview variant="classic" />);
+    render(<DocumentTemplatePreview settings={{ variant: 'classic' }} />);
     await waitFor(() => expect(renderHtml.state.calls.length).toBeGreaterThan(0));
     const data = renderHtml.state.calls[0][0];
     expect(data.companyName).toBe('Mi Empresa');
@@ -41,7 +41,7 @@ describe('DocumentTemplatePreview', () => {
 
   it('renders the current document (no configuration) for classic', async () => {
     renderHtml.state.impl = async () => '<p>classic</p>';
-    render(<DocumentTemplatePreview variant="classic" />);
+    render(<DocumentTemplatePreview settings={{ variant: 'classic' }} />);
     await waitFor(() => expect(screen.getByTestId('DocumentTemplatePreview__frame').getAttribute('srcdoc')).toBe('<p>classic</p>'));
     expect(renderHtml.state.calls[0][1]).toBeNull();
     expect(renderHtml.state.calls[0][0].documentNo).toBe('F-2026/0001');
@@ -49,15 +49,15 @@ describe('DocumentTemplatePreview', () => {
 
   it('renders with the chosen variant and no scripts allowed in the frame', async () => {
     renderHtml.state.impl = async () => '<p>modern</p>';
-    render(<DocumentTemplatePreview variant="modern" />);
+    render(<DocumentTemplatePreview settings={{ variant: 'modern', color: '#0F766E', footerText: 'IBAN' }} />);
     await waitFor(() => expect(renderHtml.state.calls.length).toBeGreaterThan(0));
-    expect(renderHtml.state.calls[0][1]).toEqual({ variant: 'modern' });
+    expect(renderHtml.state.calls[0][1]).toEqual({ variant: 'modern', color: '#0F766E', footerText: 'IBAN' });
     expect(screen.getByTestId('DocumentTemplatePreview__frame').getAttribute('sandbox')).toBe('');
   });
 
   it('shows the failure instead of an empty frame', async () => {
     renderHtml.state.impl = async () => { throw new Error('jsreport 502'); };
-    render(<DocumentTemplatePreview variant="compact" />);
+    render(<DocumentTemplatePreview settings={{ variant: 'compact' }} />);
     const error = await screen.findByTestId('DocumentTemplatePreview__error');
     expect(error.textContent).toContain('jsreport 502');
   });

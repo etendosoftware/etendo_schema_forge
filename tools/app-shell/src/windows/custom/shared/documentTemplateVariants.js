@@ -1,3 +1,5 @@
+import { documentStyleCss } from './printableStyle.js';
+
 /**
  * The anchor the custom footer is inserted before: the closing marker of the current template's
  * lines. A test asserts it is found, so editing DOCUMENT_TEMPLATE cannot drop the footer silently.
@@ -63,7 +65,7 @@ export function resolveDocumentTemplate(config, baseTemplate, baseCss) {
     template: hasFooter
       ? baseTemplate.replace(FOOTER_ANCHOR, CUSTOM_FOOTER_BLOCK + FOOTER_ANCHOR)
       : baseTemplate,
-    css: baseCss + variantCss + (hasFooter ? CUSTOM_FOOTER_CSS : ''),
+    css: baseCss + variantCss + documentStyleCss(config) + (hasFooter ? CUSTOM_FOOTER_CSS : ''),
   };
 }
 
