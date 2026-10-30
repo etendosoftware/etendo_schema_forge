@@ -73,6 +73,16 @@ export const GRID_COLUMN_VIEWS = 'grid-column-views';
 export const CONTACT_CATEGORY_TYPE = 'contact-category-type';
 
 /**
+ * ETP-5988 — choose the printed template of the commercial documents (sales invoice, sales order,
+ * purchase order, quotation) per organization: variant (classic / compact / modern), logo and
+ * footer, read from `GET /sws/neo/doctemplateconfig`. On: the shared document template is rendered
+ * with the organization's saved choice, and the cached PDF is not served (it would hide a changed
+ * choice). Off: the current template, byte for byte, and no request is made.
+ * Visual gating only: the endpoint authorizes every read and write on its own.
+ */
+export const DOC_TEMPLATE_SELECTION = 'doc-template-selection';
+
+/**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
  * safe default is `false` (today's shipped behaviour: providers run as configured). They are
  * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
@@ -104,6 +114,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [MY_COMPANIES_PAGE]: false,
   [GRID_COLUMN_VIEWS]: false,
   [CONTACT_CATEGORY_TYPE]: false,
+  [DOC_TEMPLATE_SELECTION]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });

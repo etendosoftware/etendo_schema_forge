@@ -81,7 +81,8 @@ const SESSION_MUTATION = /\/sws\/(?:go|neo)\/session(?:\/|$)/;
  * `AD_OrgInfo` tax id / logo reference, the address `C_Location`, the logo `AD_Image` —
  * `NeoSessionService.resolveBrandingUpdated`). In this SPA they are written by the Organization
  * screen: `PATCH .../organization/<id>` and `.../information/<id>` (spec `organization`),
- * `POST .../image` (logo upload), and the plain `C_Location` CRUD behind the address modal
+ * `POST .../image` (logo upload), the organization's printable design (`.../doctemplateconfig`,
+ * Settings → Printable documents), and the plain `C_Location` CRUD behind the address modal
  * (`.../<spec>/location[Address]`, reached through the warehouse spec). Matching is deliberately
  * a little wider than that (the whole `organization` spec) — dropping a memo too often costs one
  * request; too rarely shows a stale logo on a printed document.
@@ -90,6 +91,8 @@ const BRANDING_WRITE = [
   /\/sws\/neo\/organization(?:\/|$)/,
   /\/sws\/neo\/image(?:\/|$)/,
   /\/sws\/neo\/[^/]+\/location(?:Address)?(?:\/|$)/,
+  // ETP-5988 — the saved printable design counts toward `brandingUpdated` too (NeoSessionService).
+  /\/sws\/neo\/doctemplateconfig(?:\/|$)/,
 ];
 /** Any NEO request (the namespace every record write goes through). */
 const NEO_PATH = /\/sws\/neo\//;

@@ -2679,6 +2679,10 @@ The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contr
 
 The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.
 
+## Template selection per organization — ETP-5988
+
+The printed invoice uses the organization's saved design (variant, color, font, text size, alternating rows, logo, footer) through the shared commercial template; with nothing saved it is unchanged. The `doc-template-selection` feature flag (default off) only hides the settings page (Settings → Printable documents) where the design is chosen. See `docs/document-printables.md` (D26) and `neo-headless.md` §4.13 in com.etendoerp.go.
+
 ## Agent prompts on dates, line tax and installments — ETP-5852
 
 `invoiceDate`/`accountingDate` explain the server proposes today and the user's own date must be sent (M-31); `lines.tax` says the server resolves the tax from product and customer tax categories, Recargo de Equivalencia included, and points to `etendo_selectors` for the line's options instead of the tax catalogue (M-35, M-79). `paymentPlan` allows `etendo_list(allParents:true)` (MCP_CONFIG.parent.allParents) to find installments by `dueDate`/`daysOverdue` across invoices (M-50).

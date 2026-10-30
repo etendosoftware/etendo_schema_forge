@@ -112,5 +112,5 @@ export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = n
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels, cacheConfig);
+  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels, cacheConfig, 'sales-quotation');
 }

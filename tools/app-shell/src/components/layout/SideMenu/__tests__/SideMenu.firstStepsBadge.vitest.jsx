@@ -40,6 +40,7 @@ vi.mock('@/lib/flags', () => ({
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
   ACCT_PROCESS_MONITOR: 'acct-process-monitor',
   PUBLIC_API_KEYS: 'public-api-keys',
+  DOC_TEMPLATE_SELECTION: 'doc-template-selection',
   UNIFIED_CALENDAR_POC: 'unified-calendar-poc',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({

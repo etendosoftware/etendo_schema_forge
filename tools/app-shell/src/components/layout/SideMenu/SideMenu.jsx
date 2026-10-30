@@ -74,7 +74,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS, UNIFIED_CALENDAR_POC } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS, UNIFIED_CALENDAR_POC, DOC_TEMPLATE_SELECTION } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { isSupportRestrictedMenuItem } from '@/lib/supportSession.js';
@@ -651,6 +651,7 @@ export default function SideMenu({
   // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
   const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
   const showPublicApiKeys = useFeatureFlag(PUBLIC_API_KEYS);
+  const showDocTemplateSelection = useFeatureFlag(DOC_TEMPLATE_SELECTION);
   const showUnifiedCalendarPoc = useFeatureFlag(UNIFIED_CALENDAR_POC);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
@@ -677,6 +678,7 @@ export default function SideMenu({
   const featureFlagValues = useMemo(() => ({
     [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
     [PUBLIC_API_KEYS]: showPublicApiKeys,
+    [DOC_TEMPLATE_SELECTION]: showDocTemplateSelection,
     // ETP-5436 — an item can now ALSO declare featureFlag: PROOF_OF_CONCEPT_MENU (e.g.
     // quick-sales-order/quick-purchase-order in menu.json), so CommandPalette's generic
     // item-level filter hides them from search when the flag is off. This map must agree

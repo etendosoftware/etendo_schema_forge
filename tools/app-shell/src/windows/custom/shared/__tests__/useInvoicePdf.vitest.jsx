@@ -50,6 +50,7 @@ describe('useInvoicePdf', () => {
       expect.any(Function),
       expect.any(Object),
       null,
+      'sales-invoice',
     );
   });
 
@@ -85,6 +86,7 @@ describe('useInvoicePdf', () => {
       expect.any(Function),
       expect.any(Object),
       null,
+      'sales-invoice',
     );
   });
 });

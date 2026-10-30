@@ -30,6 +30,7 @@ describe('useOrderPdf', () => {
       expect.any(Function),
       expect.any(Object),
       null,
+      'sales-order',
     );
   });
 
@@ -65,6 +66,7 @@ describe('useOrderPdf', () => {
       expect.any(Function),
       expect.any(Object),
       null,
+      'sales-order',
     );
   });
 });

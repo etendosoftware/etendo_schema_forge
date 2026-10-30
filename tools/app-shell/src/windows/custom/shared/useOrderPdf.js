@@ -27,5 +27,5 @@ export function useOrderPdf(orderId, apiBaseUrl, token, currencyData = null, cac
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
   );
-  return useDocumentPdf(orderId, apiBaseUrl, token, buildSalesOrderData, labels, cacheConfig);
+  return useDocumentPdf(orderId, apiBaseUrl, token, buildSalesOrderData, labels, cacheConfig, 'sales-order');
 }

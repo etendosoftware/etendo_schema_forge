@@ -1537,6 +1537,86 @@
           ]
         }
       ]
+    },
+    {
+      "id": "doc-template-selection",
+      "description": "Lets an organization choose the printed template of the commercial documents (sales invoice, sales order, purchase order, quotation): variant classic/compact/modern plus common options (base color, font, text size, alternating rows, logo, footer) for the documents and, apart, for the list print, read from GET /sws/neo/doctemplateconfig. Visual gating only: the flag hides the settings page; the endpoint authorizes every read and write on its own, and a saved choice is applied to every print regardless of the flag. With nothing saved the current templates are rendered unchanged. MVP for validation.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5988",
+      "created": "2026-10-28",
+      "flag": {
+        "key": "doc-template-selection",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER: MVP validation window; the owner decides the real removal date once the owner decides to ship it.",
+        "symbols": [
+          "DocumentTemplatesPage",
+          "document-templates",
+          "documentTemplates",
+          "doc-template-selection",
+          "DOC_TEMPLATE_SELECTION",
+          "loadDocTemplateConfig",
+          "isDocTemplateSelectionEnabled",
+          "resolveDocumentTemplate",
+          "doctemplateconfig"
+        ]
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/shared/docTemplateConfig.js",
+          "tools/app-shell/src/windows/custom/shared/documentTemplateVariants.js",
+          "tools/app-shell/src/pages/DocumentTemplatesPage.jsx",
+          "tools/app-shell/src/lib/docTemplateConfigApi.js",
+          "tools/app-shell/src/pages/PrintableSettingsSection.jsx",
+          "tools/app-shell/src/windows/custom/shared/printableStyle.js",
+          "tools/app-shell/src/windows/custom/shared/documentTemplateSample.js",
+          "tools/app-shell/src/windows/custom/shared/DocumentTemplatePreview.jsx",
+          "tools/app-shell/src/windows/custom/shared/ListingTemplatePreview.jsx",
+          "tools/app-shell/src/windows/custom/shared/PrintablePreviewFrame.jsx"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. documentPdf.js, documentPdfRegistry.js, the four use*Pdf hooks and flag-keys.js are shared toggle points, as are menu.json, runtime-routes.jsx, SideMenu.jsx, CommandPalette.jsx, navigationExpectations.js and the locale files (the `document-templates` menu item and the documentTemplates* keys). The backend endpoint (NeoDocTemplateConfigEndpoint in com.etendoerp.go) is not gated by this flag.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/documentTemplateVariants.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/docTemplateConfig.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/DocumentTemplatesPage.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/docTemplateConfigApi.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/printableStyle.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/DocumentTemplatePreview.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/ListingTemplatePreview.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/useDocumentPdf.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ReportDrawer.listingConfig.vitest.jsx"
+          }
+        ]
+      }
     }
   ]
 }

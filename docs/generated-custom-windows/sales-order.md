@@ -781,6 +781,10 @@ price the order in it) and the order date is also the accounting date. See `purc
 ("Header validations over MCP `etendo_update`") and
 `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41.
 
+## Template selection per organization — ETP-5988
+
+The printed order uses the organization's saved design (variant, color, font, text size, alternating rows, logo, footer) through the shared commercial template; with nothing saved it is unchanged. The `doc-template-selection` feature flag (default off) only hides the settings page (Settings → Printable documents) where the design is chosen. See `docs/document-printables.md` (D26) and `neo-headless.md` §4.13 in com.etendoerp.go.
+
 ## Agent prompts on order date and line tax — ETP-5852
 
 `orderDate` (server proposes today; send the user's date, M-31) and `lines.tax` (resolved from product and customer tax categories, options through `etendo_selectors`, M-35/M-79).
