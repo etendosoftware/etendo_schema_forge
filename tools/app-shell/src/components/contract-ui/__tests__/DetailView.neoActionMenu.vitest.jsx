@@ -162,10 +162,9 @@ function setCurrentRecord(posted) {
   mockHook.editing = record;
 }
 
-const reactivatePreUnpostAction = {
+const reactivateProcessedAction = {
   key: 'reactivate',
   label: 'Reactivate',
-  preUnpost: true,
   columnName: 'Processed',
 };
 
@@ -255,46 +254,17 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it('unposts first, then dispatches the columnName process when the current record is posted', async () => {
-    const user = userEvent.setup();
-    setCurrentRecord('Y');
-    renderDetailView({ menuActions: [reactivatePreUnpostAction] });
-
-    await user.click(screen.getByTestId('action-more'));
-    await user.click(screen.getByTestId('menu-action-reactivate'));
-
-    await waitFor(() => {
-      expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
-      expect(mockHook.handleProcess).toHaveBeenCalledWith({ columnName: 'Processed', name: 'reactivate' });
-    });
-    expect(neoExecuteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      mockHook.handleProcess.mock.invocationCallOrder[0],
-    );
-    expect(toast.error).not.toHaveBeenCalled();
-  });
-
-  it('does not dispatch the columnName process when the pre-unpost step fails', async () => {
-    const user = userEvent.setup();
-    setCurrentRecord('Y');
-    neoExecuteMock.mockResolvedValue({ success: false, message: 'Cannot unpost' });
-    renderDetailView({ menuActions: [reactivatePreUnpostAction] });
-
-    await user.click(screen.getByTestId('action-more'));
-    await user.click(screen.getByTestId('menu-action-reactivate'));
-
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cannot unpost'));
-    expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
-    expect(mockHook.handleProcess).not.toHaveBeenCalled();
-  });
-
+  // ETP-5684 — a posted record is un-posted by the server inside the reactivation, so the
+  // menu never calls `unpost` itself, whatever the posted flag says.
   it.each([
+    ['Y'],
     ['N'],
     [false],
     [undefined],
-  ])('skips pre-unpost and dispatches the columnName process directly when posted is %s', async (posted) => {
+  ])('dispatches the columnName process directly, never unposting, when posted is %s', async (posted) => {
     const user = userEvent.setup();
     setCurrentRecord(posted);
-    renderDetailView({ menuActions: [reactivatePreUnpostAction] });
+    renderDetailView({ menuActions: [reactivateProcessedAction] });
 
     await user.click(screen.getByTestId('action-more'));
     await user.click(screen.getByTestId('menu-action-reactivate'));

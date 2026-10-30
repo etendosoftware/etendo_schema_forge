@@ -175,6 +175,7 @@
   },
   "entities": {
     "businessPartner": {
+      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app.",
       "fields": {
         "tbaiIssimplifiedinv": {
           "visibility": "editable",
@@ -219,7 +220,7 @@
           "searchable": true,
           "section": "principal",
           "order": 2,
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null, "required": true }
         },
         "etgoFirstname": {
           "visibility": "editable",
@@ -261,7 +262,8 @@
           "grid": false,
           "section": "principal",
           "order": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true }
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true },
+          "agentPrompt": "The contact's number, assigned automatically on create as in the app (the same value as etgoIdentifier). Do not send it when creating a contact: a value you send is replaced by the number and the answer says so in searchKeyNote. To find a contact, filter by name or taxID."
         },
         "businessPartnerCategory": {
           "visibility": "editable",
@@ -752,7 +754,8 @@
           "labels": {
             "en_US": "Receivables Account",
             "es_ES": "Cuenta a Cobrar"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         },
         "customerPrepayment": {
           "lookup": true,
@@ -763,7 +766,8 @@
           "labels": {
             "en_US": "Prepayment Account",
             "es_ES": "Cuenta de Anticipos"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         }
       }
     },
@@ -782,7 +786,8 @@
           "labels": {
             "en_US": "Liability Account",
             "es_ES": "Cuenta a Pagar"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         },
         "vendorPrepayment": {
           "lookup": true,
@@ -793,7 +798,8 @@
           "labels": {
             "en_US": "Prepayment Account",
             "es_ES": "Cuenta de Anticipos"
-          }
+          },
+          "agentPrompt": "An accounting combination id (an Etendo account record), not the chart-of-accounts elementValue id: find it with etendo_selectors on this field, searching by account number (for example 430)."
         }
       }
     },

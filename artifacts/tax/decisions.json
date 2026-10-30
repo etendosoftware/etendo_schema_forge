@@ -232,7 +232,8 @@
           "grid": false,
           "displayLogic": "@IsNoTaxable@='Y' & @isTaxExempt@='N'"
         }
-      }
+      },
+      "agentPrompt": "The catalogue of every tax rate of the tenant, including inactive and future ones and the variants with surcharge or for specific business partner tax categories. To know which tax applies to an order or invoice line, do not pick from here: omit tax on the line and the server resolves it, or call etendo_selectors for 'tax' on that line entity with recordContext {product, businessPartner, date}."
     }
   }
 }

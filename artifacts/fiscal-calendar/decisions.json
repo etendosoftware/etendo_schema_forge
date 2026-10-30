@@ -111,7 +111,8 @@
         "updatedBy": {
           "visibility": "discarded"
         }
-      }
+      },
+      "agentPrompt": "To know whether a date falls in an open period, do not walk the calendar: call etendo_list on spec 'open-close-period-control', entity 'periodControl', with filters {startingDate:{lte:<date>}, endingDate:{gte:<date>}}; its status says whether the period is open (O)."
     },
     "period": {
       "exclude": true,
