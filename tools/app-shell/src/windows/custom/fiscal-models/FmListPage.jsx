@@ -253,11 +253,16 @@ const RESULT_BADGE_STYLE = {
 // ordinaria with no new operations but real rectifications therefore reads "—" here (not
 // "Informativa") — the ETP-5432 pt.2 case, protected via the other column instead.
 function InfoResult({ result, t }) {
-  return result.amount > 0
-    ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
-    : (result.rectifications > 0
-      ? <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>
-      : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>);
+  // SonarQube java:S3358 — extracted out of a nested ternary into sequential early returns.
+  // Same three branches, same rendered output, just expressed as statements instead of a
+  // `cond ? a : (cond2 ? b : c)` chain.
+  if (result.amount > 0) {
+    return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>;
+  }
+  if (result.rectifications > 0) {
+    return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
+  }
+  return <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
 }
 
 // ETP-5725 (QA CP-19) — the "Rectificaciones" column: plain text, same typographic weight as
@@ -308,7 +313,7 @@ function ResultText({ isComputing, error, result, t }) {
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.N') ?? 'Sin resultado'}</span>;
   if (result.kind === 'zero') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.zero') ?? 'Resultado cero'}</span>;
-  if (result.kind === 'info') return <InfoResult result={result} t={t} />;
+  if (result.kind === 'info') return <InfoResult result={result} t={t} data-testid="InfoResult__cb728e" />;
   // A model may name its own badge text (`labelKey`, e.g. the 390's informative "Resultado
   // positivo"); otherwise the shared `fm.result.<kind>` key.
   const label = t(result.labelKey ?? `fm.result.${result.kind}`) ?? result.kind;
