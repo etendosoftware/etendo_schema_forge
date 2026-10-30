@@ -1,5 +1,6 @@
 import { track } from '@/lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
+import { getSessionIdentity } from '@/lib/sessionIdentity.js';
 
 const PRODUCT_USAGE_CATEGORY = 'product_usage';
 
@@ -33,6 +34,17 @@ export function trackSearchResultSelected(properties = {}) {
   send(OBSERVABILITY_EVENTS.SEARCH_RESULT_SELECTED, {
     source: 'table',
     type: 'filter',
+    ...properties,
+  });
+}
+
+// ETP-5889. `source` is 'tab' (the user opened the tab) or 'side_panel_link' (the "Ver movimientos"
+// link of the stock side panel); the account is the tenant from the session, never a person.
+export function trackProductMovementsTabOpened(properties = {}) {
+  const { clientId } = getSessionIdentity();
+  send(OBSERVABILITY_EVENTS.PRODUCT_MOVEMENTS_TAB_OPENED, {
+    source: 'tab',
+    account_id: clientId || undefined,
     ...properties,
   });
 }

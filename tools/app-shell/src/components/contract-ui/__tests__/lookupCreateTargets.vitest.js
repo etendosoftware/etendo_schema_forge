@@ -132,8 +132,15 @@ describe('post-create tabs mirror ProductPage customTabs', () => {
 
   // `\b` before `key` is what keeps `labelKey:` out of this list: `lK` is a word-to-word
   // transition, so there is no boundary there.
-  const pageKeys = matchAll(/\bkey:\s*'([^']+)'/g);
-  const pageLabelKeys = matchAll(/labelKey:\s*'([^']+)'/g);
+  const allPageKeys = matchAll(/\bkey:\s*'([^']+)'/g);
+  const allPageLabelKeys = matchAll(/labelKey:\s*'([^']+)'/g);
+
+  // Tabs the window has and the post-create dialog deliberately does not (each is justified in its own
+  // test below). The two lists run in parallel, so the labelKeys are filtered by the position of the key.
+  const DELIBERATELY_OMITTED = ['movements'];
+  const keep = (_, i) => !DELIBERATELY_OMITTED.includes(allPageKeys[i]);
+  const pageKeys = allPageKeys.filter(keep);
+  const pageLabelKeys = allPageLabelKeys.filter(keep);
 
   // The FIRST `loadPostCreateTabs()` call pays a heavy dynamic import (the whole
   // ProductPage panel tree); every later call is a module-cache hit. Charging that
@@ -151,6 +158,8 @@ describe('post-create tabs mirror ProductPage customTabs', () => {
     // every assertion below into a comparison against an empty list.
     expect(customTabsLiteral, 'customTabs literal not found in ProductPage.jsx').toBeTruthy();
     expect(pageKeys.length).toBeGreaterThan(0);
+    // Every omission must be a tab the window really has: an entry that no longer exists is a stale excuse.
+    for (const omitted of DELIBERATELY_OMITTED) expect(allPageKeys, `${omitted} is not a window tab`).toContain(omitted);
   });
 
   it('exposes the same tab keys, in the same order, as the window', () => {
@@ -186,6 +195,15 @@ describe('post-create tabs mirror ProductPage customTabs', () => {
     expect(accounting, 'Accounting is no longer a secondaryTabs entry — revisit the omission')
       .toBeTruthy();
     expect(accounting.visibleWhenCapability).toBe('showAccountingFields');
+  });
+
+  it('deliberately omits Movements', () => {
+    // Not an oversight: this dialog is shown for a product that has JUST been created, which by
+    // definition has no stock movements, so the tab would always be empty. It also hides itself for a
+    // product that is not stocked, which the dialog has no way to tell the tab strip about. If a flow
+    // ever opens it for an existing product, this test is the place that says so out loud.
+    expect(tabs.map(t => t.key)).not.toContain('movements');
+    expect(allPageKeys).toContain('movements');
   });
 
   it('is declared lazily so a document window does not pay for the panels up front', () => {

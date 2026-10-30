@@ -8,7 +8,10 @@ const columns = [
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true },
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true },
   { key: 'movementType', column: 'MovementType', type: 'enum', label: 'Movement Type', enumLabels: { 'V+': 'movementTypeVPlus', 'I+': 'movementTypeIPlus', 'M-': 'movementTypeMMinus', 'M+': 'movementTypeMPlus', 'I-': 'movementTypeIMinus', 'P-': 'movementTypePMinus', 'P+': 'movementTypePPlus', 'C-': 'movementTypeCMinus', 'D-': 'movementTypeDMinus', 'D+': 'movementTypeDPlus' }, required: true },
+  { key: 'transactionCost', column: 'TransactionCost', type: 'amount', label: 'Trx Original Cost' },
   { key: 'totalCost', column: 'TotalCost', type: 'amount', label: 'Total Cost' },
+  { key: 'etgoDocKind', column: 'EM_Etgo_Doc_Kind', type: 'string', label: 'EM_Etgo_Doc_Kind', maxLength: 40, computed: {"mode":"stored","refresh":"synchronous"} },
+  { key: 'etgoWarehouse', column: 'EM_Etgo_Warehouse_ID', type: 'selector', label: 'EM_Etgo_Warehouse_ID', computed: {"mode":"stored","refresh":"synchronous"} },
 ];
 // @sf-generated-end columns:transactions
 
