@@ -86,7 +86,6 @@
     },
     "taxParameter": { "exclude": true },
     "tax": {
-      "javaQualifier": "taxSifOverrideHandler",
       "fields": {
         "name": {
           "visibility": "readOnly",
