@@ -2,6 +2,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/modelRegistryList.js
 // @covers tools/app-shell/src/windows/custom/fiscal-models/modelRegistryPages.js
 // @covers tools/app-shell/src/windows/custom/fiscal-models/modelRegistryConfig.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/listBehavior349.js
 //
 // Contract of the fiscal model registry: every registered model carries every field the window
 // reads, with the right type, and has its list behaviour, detail page and config section bound.
@@ -237,6 +238,48 @@ describe('modelRegistry — bindings', () => {
     expect(derive(decl, { summary: {}, boxes: { 47: '50.00', 86: '1.00', 94: '25.00' }, mode: 'territory' }))
       .toEqual({ kind: 'positive', labelKey: 'fm.m390.result.positive', amount: 25 });
     expect(derive(decl, { summary: {}, boxes: {} })).toEqual({ kind: 'N', labelKey: 'fm.result.N', amount: 0 });
+  });
+
+  // ETP-5725 (QA pass 1) — `hasRectifications` is the flag `RectificationsCell`
+  // (FmListPage.jsx) reads to decide "—" vs. the figure, and it is deliberately NOT derived
+  // from `rectifications > 0`: a declaration can have real corrective rows whose
+  // `correctedBase` values sum to exactly 0,00, which must still render "0,00 €", not
+  // collapse to "—" as if there were no rectifications at all.
+  it('sets hasRectifications=true with rectifications=0 when corrective rows exist but their correctedBase sums to zero', () => {
+    const decl = { manualData: {} };
+    const res349 = getListBehavior('349').deriveListResult(decl, {
+      operators: [
+        { key: 'E', base: '10', rectificative: false },
+        { key: 'A', base: '30.00', correctedBase: '0.00', rectificative: true },
+      ],
+    });
+    expect(res349.hasRectifications).toBe(true);
+    expect(res349.rectifications).toBe(0);
+  });
+
+  it('sets hasRectifications=false and an empty origins label when the declaration has no corrective rows at all', () => {
+    const decl = { manualData: {} };
+    const res349 = getListBehavior('349').deriveListResult(decl, {
+      operators: [{ key: 'E', base: '10', rectificative: false }],
+    });
+    expect(res349.hasRectifications).toBe(false);
+    expect(res349.rectifications).toBe(0);
+    expect(res349.rectificationOriginsLabel).toBe('');
+  });
+
+  it('builds rectificationOriginsLabel from the distinct declaredYear/declaredPeriod of the corrective rows, qualifying a cross-year origin with its year', () => {
+    const decl = { manualData: {}, year: 2026 };
+    const res349 = getListBehavior('349').deriveListResult(decl, {
+      operators: [
+        { key: 'E', base: '10', rectificative: false },
+        { key: 'A', correctedBase: '30.00', rectificative: true, declaredYear: '2026', declaredPeriod: '09' },
+        { key: 'A', correctedBase: '20.00', rectificative: true, declaredYear: '2026', declaredPeriod: '10' },
+        { key: 'A', correctedBase: '15.00', rectificative: true, declaredYear: '2025', declaredPeriod: '12' },
+      ],
+    });
+    expect(res349.hasRectifications).toBe(true);
+    expect(res349.rectifications).toBe(65);
+    expect(res349.rectificationOriginsLabel).toBe('12 2025, 09, 10');
   });
 
   it('leaves the 303 and 349 list results on the shared kinds (no labelKey)', () => {

@@ -25,7 +25,7 @@ vi.mock('@/components/support/SupportChatContext.jsx', () => ({
 }));
 
 import {
-  KpiWidget, Tabs, Banner,
+  KpiWidget, Tabs, Banner, FmInfoTooltip,
   EmptyState, Stepper, NumberedStepper, SectionCard, SidePanel,
 } from '../FmCommon.jsx';
 // Tabs is fed by FmDetailChrome's counter helpers on both detail pages.
@@ -71,6 +71,42 @@ describe('KpiWidget', () => {
     const icon = <span data-testid="kpi-icon">icon</span>;
     render(<KpiWidget label="Test" value={0} icon={icon} />);
     expect(screen.getByTestId('kpi-icon')).toBeTruthy();
+  });
+});
+
+// ── FmInfoTooltip (ETP-5725 follow-up) — shared hover-info icon, portaled to document.body ──
+
+describe('FmInfoTooltip', () => {
+  it('renders the info icon', () => {
+    render(<FmInfoTooltip text="hello" data-testid="tip" />);
+    expect(screen.getByTestId('tip-icon')).toBeInTheDocument();
+  });
+
+  it('does not render the tooltip text before hover', () => {
+    render(<FmInfoTooltip text="origin periods" data-testid="tip" />);
+    expect(screen.queryByText('origin periods')).not.toBeInTheDocument();
+  });
+
+  it('shows the tooltip text on hover, portaled to document.body (not inside the anchor)', () => {
+    const { container } = render(<FmInfoTooltip text="de 09, 10, 11" data-testid="tip" />);
+    fireEvent.mouseEnter(screen.getByTestId('tip'));
+
+    const tooltip = screen.getByTestId('tip-tooltip');
+    expect(tooltip).toHaveTextContent('de 09, 10, 11');
+    // Portaled: the tooltip node is a child of document.body, not of the anchor's own subtree.
+    expect(container.contains(tooltip)).toBe(false);
+    expect(document.body.contains(tooltip)).toBe(true);
+  });
+
+  it('hides the tooltip again on mouse leave', () => {
+    render(<FmInfoTooltip text="de 09, 10, 11" data-testid="tip" />);
+    const anchor = screen.getByTestId('tip');
+
+    fireEvent.mouseEnter(anchor);
+    expect(screen.getByTestId('tip-tooltip')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(anchor);
+    expect(screen.queryByTestId('tip-tooltip')).not.toBeInTheDocument();
   });
 });
 

@@ -469,6 +469,41 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('970');
   });
 
+  // ETP-5725 (QA pass 1) — a stale/legacy corrective row that predates the backend emitting
+  // `correctedBase` (`Fiscal349BoxesHandler#appendOperators`) must still render SOMETHING for
+  // the Operadores row, falling back to the signed delta (`base`) rather than showing a blank
+  // cell. `correctedBase` is additive to `base`, never a replacement, so this is a genuine
+  // legacy-payload case, not a contrived one.
+  it('falls back to the signed delta (base) when a corrective row carries no correctedBase at all', () => {
+    const LEGACY_CORRECTIVE_OP = { ...REGULAR_OP, base: '-30.00', rectificative: true };
+    delete LEGACY_CORRECTIVE_OP.correctedBase;
+    render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, LEGACY_CORRECTIVE_OP] } })}
+        {...defaultProps}
+      />
+    );
+    const rows = document.querySelectorAll('.fm-table tbody tr');
+    expect(rows[1].textContent).toContain('-30');
+  });
+
+  // ETP-5725 (QA pass 1) — the restated base is never negative by AEAT convention ("Todos los
+  // importes serán positivos"), so `RectificativeSubtotalCard` must never apply the
+  // negative/red styling even on a defensively-malformed negative correctedBase — unlike the
+  // OLD delta-based card, where a negative amount was the expected, red-tinted case.
+  it('REGRESSION: RectificativeSubtotalCard never applies negative/red styling, even with a (malformed) negative correctedBase', () => {
+    const MALFORMED_NEGATIVE_OP = { ...CORRECTIVE_OP, correctedBase: '-5.00' };
+    render(
+      <FmModel349Page
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, MALFORMED_NEGATIVE_OP] } })}
+        {...defaultProps}
+      />
+    );
+    const card = screen.getByTestId('card__rectificativeSubtotal');
+    expect(card.querySelector('.fm-349-total-row__amount--negative')).toBeNull();
+    expect(card.innerHTML).not.toContain('--negative');
+  });
+
   it('the existing key filter picks corrective rows up for free', () => {
     render(
       <FmModel349Page
