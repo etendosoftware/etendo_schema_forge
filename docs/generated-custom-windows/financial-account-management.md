@@ -1250,7 +1250,7 @@ etendo_action {spec:"financial-account", entity:"account", id:<financial account
 
 | Action | Kind | Parameters (required in **bold**) | What the UI allows, and so the action |
 |---|---|---|---|
-| `listMovements` | read | — | the Movements list: `transactions[]` (`processed`, `posted`, `paymentId`, `transferTxnId`, …) and `totals` |
+| `listMovements` | read | optional `fromDate`/`toDate` (inclusive), `limit`/`offset` | the Movements list, newest first: `transactions[]` (`processed`, `posted`, `paymentId`, `transferTxnId`, …) narrowed to the range and paged, `totals`, `totalRows` (movements in the range) and `balanceAtToDate` (balance at the end of `toDate`; the current balance without it) |
 | `movementGlItems` | read | `search` | the G/L item picker |
 | `createMovement` | write | **`trxType`** (`BPD`\|`BPW`), **`amount`** (> 0), **`date`**, **`glItemId`**, `description` (≤ 255), `bpartnerId`, `projectId`, `costcenterId`, `productId`, `process` (`true` = *Confirmar*; default = *Guardar*, a draft) | no bank fee, a G/L item is mandatory, the date is also the accounting date |
 | `updateMovement` | write | **`movementId`** + only what changes | not on a posted movement nor on one of a payment/collection; a processed one takes only description, G/L item, contact and dimensions |

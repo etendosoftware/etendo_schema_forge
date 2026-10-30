@@ -58,25 +58,13 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * The product decision, confirmed against the code: try to unpost first, then reactivate;
  * if the unpost genuinely cannot happen (accounting already settled — irreversible), let
  * that failure surface naturally as a `failed` row with the server's own message, instead
- * of silently deciding up front that a posted row is never reactivatable. This mirrors
- * `preUnpostActions` — the SAME mechanism `sales-invoice`/`purchase-invoice` already use
- * for their own Reactivate (`preUnpost: true` on the `RE` `documentAction`,
- * `BulkDocumentAction.jsx`'s `preUnpostActions` prop, `tools/app-shell/src/lib/
- * preUnpost.js`). Verified this actually reaches amortization's accounting, not assumed:
- * `runPreUnpost` calls `neoAction.execute(recordId, 'unpost')` →
- * `POST /header/{id}/action/unpost`, which `AmortizationHeaderHandler.handle()`
- * intercepts via `postingService.handleAction(context)` — the SAME generic
- * `DocumentPostingService` bean `SalesInvoiceHeaderHandler`/`PurchaseInvoiceHeaderHandler`
- * wire, whose `unpost()` runs `ResetAccounting.delete(...)` (deletes the `Fact_Acct` rows,
- * sets `Posted='N'`). Once that succeeds, the follow-up `Processed` call re-reads the row
- * from the DB — now genuinely `Posted<>'Y'` — and `a_amortization_process`'s unprocess
- * branch (`Processed='Y' AND Posted<>'Y'`) runs for real. If the unpost step itself fails,
- * `BulkDocumentAction.jsx`'s `runRow` throws before ever calling the `Processed` action,
+ * of silently deciding up front that a posted row is never reactivatable. Since ETP-5684 the
+ * un-post runs on the server, inside the reactivation: `AmortizationHeaderHandler` calls
+ * `ReactivationUnpost.unpostFirst` when the `Processed` button hits an already-processed row
+ * (com.etendoerp.go), so the bulk bar sends only `Processed`. That also lets a role without
+ * the `showAccountingFields` capability reactivate, which the old client-side `unpost` call
+ * (now refused with a 403 for such a role) could not. A failed un-post is that row's answer,
  * so the row lands in `failed` with the server's message — never silently skipped.
- * `preUnpostActions` is keyed by the dropdown's `value` ('reactivate'), not by
- * `neoActionName` ('Processed') — confirmed by reading `BulkDocumentAction.jsx`'s
- * `preUnpostActions.includes(selectedAction)` check, which reads `selectedAction` (the
- * `value`) the same way `rowFilter` does.
  *
  * **Residual race — read the `rowFilter` comment below**, not fixable from the client:
  * the `confirm` branch is a STRICT whitelist read off the grid's (possibly stale) snapshot
@@ -176,10 +164,9 @@ export default function AmortizationBulkActions(props) {
     if (action === 'reactivate') {
       // Whitelist: only an affirmatively confirmed row passes — same reasoning as the
       // confirm branch's whitelist, inverted. Deliberately NO `posted` check here (see the
-      // file's top docblock): a posted row is allowed through, `preUnpostActions={['reactivate']}`
-      // below unposts it first, and if that genuinely cannot happen the row fails naturally
-      // instead of being pre-blocked. No lines fetch either way — reactivate's only
-      // precondition server-side is `Processed='Y' AND Posted<>'Y'`.
+      // file's top docblock): a posted row is allowed through, the server un-posts it inside
+      // the reactivation, and if that genuinely cannot happen the row fails naturally
+      // instead of being pre-blocked. No lines fetch either way.
       if (!isConfirmed(row)) return ui('amortizationBulkNotConfirmed');
       return true;
     }
@@ -197,10 +184,6 @@ export default function AmortizationBulkActions(props) {
         rowFilter={rowFilter}
         rowLabel={(row) => row.name || row.id}
         labelKey="process"
-        // Unpost-then-reactivate for a posted row — see the file's top docblock. Keyed by
-        // the dropdown VALUE ('reactivate'), matching `preUnpostActions.includes(selectedAction)`
-        // in BulkDocumentAction.jsx, never by `neoActionName`.
-        preUnpostActions={['reactivate']}
       />
       {/* ETP-5414 — bulk "Contabilizar", reusing the generic post gate verbatim (see file
           docblock). rowLabel repeated here too — amortización has no `documentNo`, and each

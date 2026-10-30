@@ -13,7 +13,7 @@ import ExchangeRatesForm from './ExchangeRatesForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import SifTab from '@/windows/custom/shared/SifTab.jsx';
-import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx';
+import SalesRectificationsTab from '@/windows/custom/sales-invoice/SalesRectificationsTab.jsx';
 import InvoiceBottomPanel from '../../../custom/InvoiceBottomPanel';
 import InvoiceTopbarExtra from '../../../custom/InvoiceTopbarExtra';
 import InvoiceDeliveryBadge from '../../../custom/InvoiceDeliveryBadge';
@@ -154,6 +154,21 @@ export const api = {
       "listUrl": "/sws/neo/sales-invoice/exchangeRates",
       "detailUrl": "/sws/neo/sales-invoice/exchangeRates/{id}",
       "supportedFilters": []
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
+      "listUrl": "/sws/neo/sales-invoice/accounting",
+      "detailUrl": "/sws/neo/sales-invoice/accounting/{id}",
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     }
   },
   "selectors": [
@@ -397,6 +412,92 @@ export const api = {
       "reference": "Currency",
       "inputMode": "search",
       "url": "/sws/neo/sales-invoice/exchangeRates/selectors/toCurrency"
+    },
+    {
+      "entity": "accounting",
+      "field": "accountingSchema",
+      "column": "C_AcctSchema_ID",
+      "reference": "AcctSchema",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/accountingSchema"
+    },
+    {
+      "entity": "accounting",
+      "field": "currency",
+      "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/currency"
+    },
+    {
+      "entity": "accounting",
+      "field": "period",
+      "column": "C_Period_ID",
+      "reference": "Period",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/period"
+    },
+    {
+      "entity": "accounting",
+      "field": "account",
+      "column": "Account_ID",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/account"
+    },
+    {
+      "entity": "accounting",
+      "field": "businessPartner",
+      "column": "C_BPartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/businessPartner"
+    },
+    {
+      "entity": "accounting",
+      "field": "product",
+      "column": "M_Product_ID",
+      "reference": "Product",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/product"
+    },
+    {
+      "entity": "accounting",
+      "field": "project",
+      "column": "C_Project_ID",
+      "reference": "Project",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/project"
+    },
+    {
+      "entity": "accounting",
+      "field": "costcenter",
+      "column": "C_Costcenter_ID",
+      "reference": "Costcenter",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/costcenter"
+    },
+    {
+      "entity": "accounting",
+      "field": "asset",
+      "column": "A_Asset_ID",
+      "reference": "Asset",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/asset"
+    },
+    {
+      "entity": "accounting",
+      "field": "stDimension",
+      "column": "User1_ID",
+      "reference": "User1",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/stDimension"
+    },
+    {
+      "entity": "accounting",
+      "field": "ndDimension",
+      "column": "User2_ID",
+      "reference": "User2",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/accounting/selectors/ndDimension"
     }
   ],
   "actions": [
@@ -690,13 +791,13 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         noHeaderBorder
         notesField="description"
         dimensionsPanelFieldKeys={["project","costcenter"]}
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }, { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: SalesRectificationsTab, placement: 'tab' }]}
         bottomSection={InvoiceBottomPanel}
         topbarRight={InvoiceTopbarExtra}
         topbarExtra={InvoiceDeliveryBadge}
         customMenuContent={SifSendMenuItem}
         menuActions={({ data, status }) => [
-          { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
+          { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', documentAction: 'RE',  },
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: status === 'CO' && (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}

@@ -221,7 +221,20 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
       return { message: ui(key, { count, pct: fmtPct(afterImportResult.pct) }) };
     };
 
+    // For a caller whose import is ONE server action that applies the discount itself (the sales
+    // order import, ETP-6002): whether to ask the server to carry it, and the result to toast once
+    // the server accepted. Nothing is patched from the browser on this path.
+    const serverCarry = (selection) => {
+      const decision = decide(selection);
+      const carry = isCarryingGlobalDiscount(decision, carryOnOf(selection?.extraState));
+      return {
+        carryGlobalDiscount: carry,
+        afterImportResult: carry ? { carried: true, pct: decision.pct } : { carried: false },
+      };
+    };
+
     return {
+      serverCarry,
       initialExtraState: { carryGlobalDiscount: true },
       renderDocAdornment,
       getDocTotal,

@@ -73,3 +73,7 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 ## Read-only role tier — ETP-5830
 
 The product-prices `CustomLines` now receive `editing=false` when the role tier is `read-only`, so the inline grid and the Price Detail panel cannot save or delete. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Agent prompt on prices — ETP-5852
+
+`priceListLine.agentPrompt`: there is no bulk price update (in the app either); agents list a version's prices, confirm the new ones with the user and update them one by one. Feedback M-175.

@@ -288,9 +288,11 @@ export function upstreamException(status: number, body: unknown): HttpException 
   if (upstream.message && upstream.detail) meta.detail = upstream.detail;
   if (upstream.hint) meta.hint = upstream.hint;
   if (upstream.field) meta.field = upstream.field;
+  // A refusal NeoServlet sends without a code (e.g. "Invalid country") still gets the status's one.
+  const code = upstream.code ?? DEFAULT_CODES[status];
   const error: JsonApiError = {
     status: String(status),
-    ...(upstream.code ? { code: upstream.code } : {}),
+    ...(code ? { code } : {}),
     title: titleFor(status),
     detail: upstream.message ?? upstream.detail ?? `Etendo refused the request with status ${status}.`,
     ...(Object.keys(meta).length ? { meta } : {}),

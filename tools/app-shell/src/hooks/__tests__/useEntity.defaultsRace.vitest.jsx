@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 // ETP-4741 — creation-form defaults race.
@@ -1308,6 +1309,74 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
         result.current.isValid,
         'a touched-and-emptied required field must still block once defaults settled'
       ).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // ETP-5888 — hasUserHeaderEdits: what the unsaved-changes guard asks
+  // ---------------------------------------------------------------------------
+
+  describe('hasUserHeaderEdits', () => {
+    async function openNewWithDefaults(defaults) {
+      globalThis.fetch.mockResolvedValue(jsonResponse({ defaults }));
+      const hook = renderEntity();
+      await act(async () => {
+        await hook.result.current.handleNew();
+      });
+      await waitFor(() => expect(hook.result.current.defaultsPending).toBe(false));
+      return hook;
+    }
+
+    it('is false for an untouched new record, although defaults make isDirtyHeader true', async () => {
+      const { result } = await openNewWithDefaults({ currency: 'EUR', paymentMethod: 'PM1' });
+
+      expect(result.current.isDirtyHeader).toBe(true);
+      expect(result.current.hasUserHeaderEdits).toBe(false);
+    });
+
+    it('stays false when an opening callout fills a value and its label', async () => {
+      const { result } = await openNewWithDefaults({ currency: 'EUR' });
+      act(() => {
+        result.current.handleChange('transactionDocument', 'DT1', { origin: 'callout' });
+        result.current.handleChange('transactionDocument$_identifier', 'Factura', { origin: 'callout' });
+      });
+
+      expect(result.current.hasUserHeaderEdits).toBe(false);
+    });
+
+    it('is true once the user edits a field', async () => {
+      const { result } = await openNewWithDefaults({ currency: 'EUR' });
+      act(() => {
+        result.current.handleChange('description', 'typed by the user');
+      });
+
+      expect(result.current.hasUserHeaderEdits).toBe(true);
+    });
+
+    it('is true when the user empties a defaulted field — isDirtyHeader alone would miss it', async () => {
+      const { result } = await openNewWithDefaults({ paymentMethod: 'PM1' });
+      act(() => {
+        result.current.handleChange('paymentMethod', null);
+      });
+
+      expect(result.current.dirtyHeaderFieldKeys).not.toContain('paymentMethod');
+      expect(result.current.hasUserHeaderEdits).toBe(true);
+    });
+
+    it('matches isDirtyHeader for a saved record', async () => {
+      globalThis.fetch.mockResolvedValue(jsonResponse({ data: [] }));
+      const { result } = renderEntity();
+      await act(async () => {
+        result.current.handleSelect({ id: 'REC-1', description: 'saved' });
+      });
+      await settle();
+      expect(result.current.hasUserHeaderEdits).toBe(false);
+
+      act(() => {
+        result.current.handleChange('description', 'edited');
+      });
+      expect(result.current.isDirtyHeader).toBe(true);
+      expect(result.current.hasUserHeaderEdits).toBe(true);
     });
   });
 });

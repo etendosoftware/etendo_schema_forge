@@ -374,7 +374,7 @@ test('a code-less single "Missing required field" message is coded missing_requi
   const mapped = await statusAndErrors(controllerAnswering(400, { error: { message: 'Missing required field: name' } }).create('product', { name: 'x' }, request));
   assert.equal(mapped.errors?.[0].source?.pointer, '/data/attributes/name');
   const other = await statusAndErrors(controllerAnswering(400, { error: { message: 'Something else' } }).create('product', { name: 'x' }, request));
-  assert.equal(other.errors?.[0].code, undefined);
+  assert.equal(other.errors?.[0].code, 'bad_request', 'any other refusal still carries the code of its status');
 });
 
 test('every plain 4xx exception carries a code', () => {
@@ -569,7 +569,7 @@ test('carries Etendo structured error details (nested and flat shapes) into the 
   const nested = await statusAndErrors(
     controllerAnswering(400, { error: { message: 'Name is required', status: 400 } }).create('product', { name: 'x' }, request),
   );
-  assert.deepEqual(nested, { status: 400, errors: [{ status: '400', title: 'Bad Request', detail: 'Name is required' }] });
+  assert.deepEqual(nested, { status: 400, errors: [{ status: '400', code: 'bad_request', title: 'Bad Request', detail: 'Name is required' }] });
 
   const flat = await statusAndErrors(controllerAnswering(409, {
     status: 409, error: 'stale_record', message: 'Record changed', detail: 'Modified by someone else.', hint: 'Read it again.',
@@ -609,7 +609,7 @@ test('falls back to a generic detail when Etendo answers an error without a JSON
   const result = await statusAndErrors(controllerAnswering(404, null).get('product', 'p-1', request));
   assert.deepEqual(result, {
     status: 404,
-    errors: [{ status: '404', title: 'Not Found', detail: 'Etendo refused the request with status 404.' }],
+    errors: [{ status: '404', code: 'not_found', title: 'Not Found', detail: 'Etendo refused the request with status 404.' }],
   });
 });
 
@@ -941,6 +941,31 @@ test('child list validates its own query, keeps parentId and builds links on the
   assert.equal((await statusAndErrors(controller.listChild('contacts', 'bp-1', 'contacts', request, { filter: { name: 'x' } }))).errors?.[0].source.parameter, 'filter[name]');
   assert.equal((await statusAndErrors(controller.listChild('contacts', 'bp-1', 'contacts', request, { parentId: 'other' } as any))).errors?.[0].source.parameter, 'parentId');
   assert.equal(urls.length, 1);
+});
+
+test('a child record links to its nested URL, a top-level record to its own resource path', async () => {
+  const { controller } = listing({ startRow: 0, endRow: 1, totalRows: 2, data: [{ id: 'k 1', phone: '1' }, { id: 'k-2', phone: '2' }] });
+  const list = await controller.listChild('contacts', 'bp 1', 'contacts', request) as any;
+  assert.deepEqual(list.data.map((resource: any) => resource.links.self), [
+    '/api/v1/contacts/bp%201/contacts/k%201',
+    '/api/v1/contacts/bp%201/contacts/k-2',
+  ]);
+
+  const single = listing({ data: [{ id: 'k-1', phone: '1' }] }).controller;
+  const child = await single.getChild('contacts', 'bp-1', 'contacts', 'k-1', request) as any;
+  assert.equal(child.data.links.self, '/api/v1/contacts/bp-1/contacts/k-1');
+
+  const top = await listing({ startRow: 0, endRow: 0, totalRows: 1, data: rows(1) }).controller.list('contacts', request) as any;
+  assert.equal(top.data[0].links.self, '/api/v1/contacts/c-1');
+});
+
+test('creating a child answers with the nested self link', async () => {
+  const childSchema = structuredClone(listSchema) as any;
+  childSchema.entities['contacts-contact'].operations = ['GET', 'LIST', 'POST'];
+  const fakeFetch = async () => new Response(JSON.stringify({ response: { data: { id: 'k-9', phone: '5' } } }), { status: 200 });
+  const controller = new PublicApiController(childSchema, 'http://neo.local/etendo', fakeFetch as typeof fetch);
+  const created = await controller.createChild('contacts', 'bp-1', 'contacts', { phone: '5' }, request) as any;
+  assert.equal(created.data.links.self, '/api/v1/contacts/bp-1/contacts/k-9');
 });
 
 test('a single-record read is not a list and carries no pagination', async () => {

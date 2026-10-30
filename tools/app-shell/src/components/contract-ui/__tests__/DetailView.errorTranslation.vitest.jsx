@@ -4,10 +4,9 @@
  *
  *  1. `confirmHeaderDelete` (deleteAction-backed header delete failure) — a
  *     dedicated toolbar Delete flow, separate from the "more" menu actions.
- *  2. `runDocumentAction`'s own `preUnpost` guard — used only when a menu
- *     action combines `documentAction` + `preUnpost: true`. This is a
- *     DIFFERENT code path from the `columnName` + `preUnpost` case already
- *     covered in DetailView.neoActionMenu.vitest.jsx (which never sets
+ *  2. `runDocumentAction` — used when a menu action carries `documentAction`.
+ *     This is a DIFFERENT code path from the `columnName` case covered in
+ *     DetailView.neoActionMenu.vitest.jsx (which never sets
  *     `action.documentAction`, so it never enters `runDocumentAction` at all).
  *
  * Harness mirrors DetailView.neoActionMenu.vitest.jsx.
@@ -74,7 +73,7 @@ vi.mock('@/hooks/useLineGrossAmount', () => ({
 }));
 
 // Controllable, unlike the fixed-resolve mock in DetailView.neoActionMenu.vitest.jsx —
-// runDocumentAction's preUnpost + doc-action-throw branches need per-test control.
+// runDocumentAction's doc-action-throw branch needs per-test control.
 const docExecuteMock = vi.fn().mockResolvedValue({});
 vi.mock('@/hooks/useDocumentAction', () => ({
   useDocumentAction: () => ({ execute: docExecuteMock, loading: false }),
@@ -218,44 +217,20 @@ describe('DetailView — deleteAction-backed header delete (ETP-4479/ETP-4706)',
   });
 });
 
-// ── runDocumentAction's own preUnpost guard — ETP-4706 ───────────────────────────
+// ── runDocumentAction on a reactivation — ETP-4706 / ETP-5684 ──────────────────────
 //
-// Distinct from the `columnName` + `preUnpost` path in DetailView.neoActionMenu
-// .vitest.jsx: this one requires `action.documentAction` to be set so the click
-// handler dispatches into `runDocumentAction` (not `runNeoMenuAction`, which
-// requires `action.neoAction`, nor the inline `columnName` branch).
-//
-// ETP-5302 — both branches now delegate to the shared `runPreUnpost` helper
-// (`@/lib/preUnpost.js`, unit-tested in src/lib/__tests__/preUnpost.test.js), which
-// the bulk bar uses too. These tests are deliberately unchanged: they assert the
-// OBSERVABLE behaviour of this menu, which the extraction had to preserve, and they
-// are what proves the refactor did not alter the kebab path that already worked.
+// Requires `action.documentAction` so the click handler dispatches into
+// `runDocumentAction` (not `runNeoMenuAction`, nor the inline `columnName` branch).
+// ETP-5684 — the client-side un-post before a reactivation (ETP-4706/5302) moved to the
+// server, inside the reactivation; the menu sends the document action alone.
 const reactivateDocumentAction = {
   key: 'reactivate-doc',
   label: 'Reactivate',
-  preUnpost: true,
   documentAction: 'RA',
 };
 
-describe('DetailView — more-menu documentAction with preUnpost (ETP-4706)', () => {
-  it('translates the pre-unpost failure message and never calls the document action', async () => {
-    const user = userEvent.setup();
-    setCurrentRecord('Y');
-    const raw = 'Account could not be found. (Business Partner: Acme Corp, BP Group: Suppliers)';
-    const translated = 'No se pudo encontrar la cuenta. (Contacto: Acme Corp, Grupos de terceros: Suppliers)';
-    neoExecuteMock.mockResolvedValue({ success: false, message: raw });
-    translateBackendError.mockImplementation((m) => (m === raw ? translated : m));
-    renderDetailView({ menuActions: [reactivateDocumentAction] });
-
-    await user.click(screen.getByTestId('action-more'));
-    await user.click(screen.getByTestId('menu-action-reactivate-doc'));
-
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(translated));
-    expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
-    expect(docExecuteMock).not.toHaveBeenCalled();
-  });
-
-  it('unposts then dispatches the document action, showing a success toast and refreshing', async () => {
+describe('DetailView — more-menu documentAction on a reactivation (ETP-4706)', () => {
+  it('dispatches the document action on a posted record without unposting, then refreshes', async () => {
     const user = userEvent.setup();
     setCurrentRecord('Y');
     renderDetailView({ menuActions: [reactivateDocumentAction] });
@@ -264,10 +239,8 @@ describe('DetailView — more-menu documentAction with preUnpost (ETP-4706)', ()
     mockHook.fetchById.mockClear();
     await user.click(screen.getByTestId('menu-action-reactivate-doc'));
 
-    await waitFor(() => {
-      expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
-      expect(docExecuteMock).toHaveBeenCalledWith('123', 'RA');
-    });
+    await waitFor(() => expect(docExecuteMock).toHaveBeenCalledWith('123', 'RA'));
+    expect(neoExecuteMock).not.toHaveBeenCalled();
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     // ETP-4563 cache fix: the post-action refresh forces a fresh network read.
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
@@ -287,7 +260,7 @@ describe('DetailView — more-menu documentAction with preUnpost (ETP-4706)', ()
     expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it('skips the pre-unpost step entirely when the record is not posted', async () => {
+  it('dispatches the document action alone when the record is not posted', async () => {
     const user = userEvent.setup();
     setCurrentRecord('N');
     renderDetailView({ menuActions: [reactivateDocumentAction] });

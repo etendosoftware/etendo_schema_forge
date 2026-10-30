@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/useSecondaryTabVisibility.js
 // @covers tools/app-shell/src/hooks/useCurrencyId.jsx
-import { renderHook } from '@testing-library/react';
+import { renderHook, render } from '@testing-library/react';
 
 const orgCurrencyRef = vi.hoisted(() => ({ current: null }));
 vi.mock('@/hooks/useCurrencyId.jsx', () => ({ useCurrencyId: () => orgCurrencyRef.current }));
@@ -9,6 +9,7 @@ import {
   useSecondaryTabVisibility,
   useRevealedTabFetch,
   useActiveTabResolver,
+  useOthersProbe,
 } from '../useSecondaryTabVisibility.js';
 
 const foreign = (record, ctx) =>
@@ -192,5 +193,40 @@ describe('useCurrencyId re-export (hooks/useCurrencyId.jsx)', () => {
     const core = await vi.importActual('@etendosoftware/app-shell-core/hooks/useCurrency.jsx');
     expect(typeof actual.useCurrencyId).toBe('function');
     expect(actual.useCurrencyId).toBe(core.useCurrencyId);
+  });
+});
+
+describe('useOthersProbe', () => {
+  function Probe({ capabilities, children, onRender }) {
+    const { showOthers, othersRef } = useOthersProbe(null, capabilities);
+    onRender(showOthers);
+    return <div ref={othersRef} data-testid="others-probe">{children}</div>;
+  }
+
+  it('settles when the caller passes an equal but new capabilities object on every render', () => {
+    let renders = 0;
+    let last;
+    function SelfProbe() {
+      // A fresh object on each of its own renders, as DetailView gets it from a mocked useAuth().
+      const { showOthers, othersRef } = useOthersProbe(null, { showAccountingFields: false });
+      renders += 1;
+      last = showOthers;
+      return <div ref={othersRef}><span /></div>;
+    }
+    render(<SelfProbe />);
+    expect(renders).toBeLessThan(10);
+    expect(last).toBe(true);
+  });
+
+  it('probes again when a capability value changes', () => {
+    const seen = [];
+    const { rerender } = render(
+      <Probe capabilities={{ showAccountingFields: false }} onRender={(v) => seen.push(v)} />,
+    );
+    expect(seen.at(-1)).toBe(false);
+    rerender(
+      <Probe capabilities={{ showAccountingFields: true }} onRender={(v) => seen.push(v)}><span /></Probe>,
+    );
+    expect(seen.at(-1)).toBe(true);
   });
 });

@@ -13,6 +13,8 @@ import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { getContactsTextFieldError, getContactsTaxIdError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveFkNavigation } from './fkNavigation.js';
@@ -809,6 +811,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const effectiveSelectorContext = useMemo(() => selectorContext ?? {}, [selectorContext]);
+  const capabilities = useCapabilitiesSafe();
   const visibleBaseFields = fields.filter(f => !excludeFields.includes(f.key));
   let displayFields;
   if (section) {
@@ -861,6 +864,11 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registerFields, formId, data, displayLogic, fields, excludeFields, section, layout]);
 
+  // ETP-5684 — a `visibleWhenCapability` field (e.g. the accounting status) is hidden at
+  // render only: it stays registered above, so save exclusions and the required gate keep
+  // knowing it and a read-only gated key never reaches the payload as an unknown field.
+  const shownFields = displayFields.filter(f => isCapabilityVisible(capabilities, f.visibleWhenCapability));
+
   // ETP-5513 — horizontal (header) grids size their columns from their own width,
   // not the viewport, and can be limited to their first `initialRows` rows behind a
   // "Show more details" toggle. Both stay inert until the grid is measured (jsdom,
@@ -868,7 +876,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   const responsiveGrid = layout === 'horizontal' && !cols && !renderAsFragment;
   const [gridRef, measuredCols] = useMeasuredFormColumns(responsiveGrid);
   const collapse = useInitialRowsCollapse({
-    fields: displayFields.filter(f => f.type !== 'image' || f.inline),
+    fields: shownFields.filter(f => f.type !== 'image' || f.inline),
     cols: measuredCols,
     initialRows,
     fieldErrors,
@@ -877,14 +885,14 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     isReadOnly: f => formReadOnly || f.readOnly || displayLogic?.readOnly?.[f.key] === true || evalReadOnlyLogic(f, data),
   });
 
-  if (displayFields.length === 0) return null;
+  if (shownFields.length === 0) return null;
 
   const gridClass = resolveGridClass(cols, layout, compact);
   const gridStyle = resolveGridStyle(cols, measuredCols, gap);
 
   // If there's an image field (not inline), pin it to the right — rest of fields render in a 3-col grid on the left
-  const imageField = displayFields.find(f => f.type === 'image' && !f.inline);
-  const fieldsToRender = imageField ? displayFields.filter(f => f.type !== 'image' || f.inline) : displayFields;
+  const imageField = shownFields.find(f => f.type === 'image' && !f.inline);
+  const fieldsToRender = imageField ? shownFields.filter(f => f.type !== 'image' || f.inline) : shownFields;
   // Cells actually placed in the grid: all of them, or the first rows + toggle.
   const gridCells = collapse.collapsible ? collapse.fields : fieldsToRender;
   const showMoreToggle = collapse.collapsible
@@ -1824,7 +1832,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
 
   return (
     <div ref={gridRef} className={gridClass} style={gridStyle}>
-      {(collapse.collapsible ? collapse.fields : displayFields).map(renderFieldWithError)}
+      {(collapse.collapsible ? collapse.fields : shownFields).map(renderFieldWithError)}
       {/* Additional grid item(s) rendered INSIDE the same grid container so they
           flow into the next free cell(s) after the native fields (opt-in; undefined
           for every existing caller → strictly additive). */}

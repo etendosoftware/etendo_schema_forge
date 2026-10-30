@@ -294,6 +294,7 @@
     },
     "lines": {
       "name": "gLJournalLine",
+      "agentPrompt": "A journal line has no description of its own, as in the app: write the note in the journal header's description (gLJournal.description), which covers the whole entry.",
       "fields": {
         "lineNo": {
           "visibility": "system",
