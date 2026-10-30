@@ -115,6 +115,22 @@ function MovementRow({ row, ui, currency }) {
   );
 }
 
+/** The empty state: a product that never moved, or filters that match none of its movements. */
+function EmptyMovements({ ui, noMovementsAtAll }) {
+  if (!noMovementsAtAll) {
+    return <p className="p-10 text-center text-sm text-muted-foreground" data-testid="product-movements-no-results">{ui('productMovementsNoResults')}</p>;
+  }
+  return (
+    <div className="flex flex-col items-center gap-1 p-10 text-center" data-testid="product-movements-empty">
+      <ArrowLeftRight
+        className="mb-2 h-8 w-8 text-muted-foreground"
+        data-testid="ArrowLeftRight__763719" />
+      <p className="font-semibold">{ui('noStockMovements')}</p>
+      <p className="max-w-sm text-sm text-muted-foreground">{ui('productMovementsEmptyText')}</p>
+    </div>
+  );
+}
+
 export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCountChange, onVisibilityChange }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -348,19 +364,11 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
           </div>
         ) : null}
 
-        {!state.loading && !state.error && state.rows.length === 0 ? (
-          noMovementsAtAll ? (
-            <div className="flex flex-col items-center gap-1 p-10 text-center" data-testid="product-movements-empty">
-              <ArrowLeftRight
-                className="mb-2 h-8 w-8 text-muted-foreground"
-                data-testid="ArrowLeftRight__763719" />
-              <p className="font-semibold">{ui('noStockMovements')}</p>
-              <p className="max-w-sm text-sm text-muted-foreground">{ui('productMovementsEmptyText')}</p>
-            </div>
-          ) : (
-            <p className="p-10 text-center text-sm text-muted-foreground" data-testid="product-movements-no-results">{ui('productMovementsNoResults')}</p>
-          )
-        ) : null}
+        {!state.loading && !state.error && state.rows.length === 0
+          ? <EmptyMovements
+          ui={ui}
+          noMovementsAtAll={noMovementsAtAll}
+          data-testid="EmptyMovements__763719" /> : null}
 
         {state.rows.map((row) => <MovementRow
           key={row.id}
