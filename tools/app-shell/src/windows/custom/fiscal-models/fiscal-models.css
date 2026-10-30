@@ -1115,12 +1115,19 @@
   font: 600 12px/16px var(--fm-font-sans, system-ui); color: hsl(var(--muted-foreground)); margin-bottom: 10px;
   display: flex; align-items: center; gap: 4px;
 }
-.fm-349-totals__info-wrap { position: relative; display: inline-flex; align-items: center; }
-.fm-349-totals__tooltip {
-  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+/* ETP-5725 — shared hover-info tooltip (FmCommon.jsx's `FmInfoTooltip`), used by "Totales por
+   clave" (FmModel349Page.jsx) and the list's "Rectificaciones" column (FmListPage.jsx). The
+   box is portaled to `document.body` (see FmCommon.jsx's own comment for the z-index bug this
+   replaces), so it is positioned with `position: fixed` + JS-computed coordinates instead of
+   `position: absolute` relative to an in-tree ancestor, and its z-index only has to clear the
+   app's OTHER top-level layers — `z-20` ("Floating" tier, `docs/ui-design-guidelines.md`: small
+   local floating elements / inline tooltips), not an arbitrary large number. */
+.fm-info-tooltip__anchor { position: relative; display: inline-flex; align-items: center; }
+.fm-info-tooltip__box {
+  position: fixed; transform: translate(-50%, calc(-100% - 6px));
   width: 230px; background: hsl(var(--foreground)); color: hsl(var(--card)); border-radius: 6px;
   padding: 8px 10px; font: 400 12px/16px var(--fm-font-sans, system-ui); white-space: normal;
-  z-index: 500; pointer-events: none; box-shadow: 0 4px 12px hsl(var(--foreground) / .15);
+  z-index: 20; pointer-events: none; box-shadow: 0 4px 12px hsl(var(--foreground) / .15);
 }
 .fm-349-total-row {
   display: flex; align-items: center; justify-content: space-between; padding: 8px 0;

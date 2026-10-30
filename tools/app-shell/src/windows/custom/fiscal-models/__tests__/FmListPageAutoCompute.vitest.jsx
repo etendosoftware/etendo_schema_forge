@@ -1,14 +1,25 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/listBehavior390.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/listBehavior349.js
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import React from 'react';
 import FmListPage from '../FmListPage.jsx';
 
 vi.mock('../useFiscalAutoCompute.js', () => ({
   default: vi.fn(() => ({ computedMap: {} })),
 }));
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
+// `(key, params)` echoes the key with its params substituted, so the "Rectificaciones" tooltip
+// tests below can assert on the actual copy committed in en_US.json/es_ES.json
+// (`fm.result.rectifications_origins`) rather than only on the raw key.
+vi.mock('@/i18n', () => ({
+  useUI: () => (key, params) => {
+    const copy = { 'fm.result.rectifications_origins': 'Importe de rectificaciones de periodos anteriores: {periods}' };
+    const raw = copy[key] ?? key;
+    return Object.keys(params ?? {}).reduce((acc, p) => acc.replace(`{${p}}`, params[p]), raw);
+  },
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
 
 import useFiscalAutoCompute from '../useFiscalAutoCompute.js';
 
@@ -373,8 +384,17 @@ describe('FmListPage — submitted declarations with a persisted submission snap
       id: 'snap-349',
       model: '349',
       status: 'submitted_ack',
+      // ETP-5725 (QA CP-19): the row's operations total is now reduced from the operator rows
+      // — the same reduction the detail KPI applies — so the fixture carries the rows its
+      // summary describes, which is the shape Fiscal349SnapshotSupport actually persists
+      // (`operators`, one row per partner, alongside `summary`/`rectificativeSummary`).
       submittedSnapshot: {
-        operators: [], summary: { totalE: '100.00', totalS: '20.00', totalA: '3.00', totalI: '0.00' },
+        operators: [
+          { key: 'E', base: '100.00', rectificative: false },
+          { key: 'S', base: '20.00', rectificative: false },
+          { key: 'A', base: '3.00', rectificative: false },
+        ],
+        summary: { totalE: '100.00', totalS: '20.00', totalA: '3.00', totalI: '0.00' },
       },
     });
     const { container } = render(
@@ -459,5 +479,142 @@ describe('FmListPage — submitted declarations with a persisted submission snap
     const texts = [...container.querySelectorAll('tbody tr')].map(r => r.querySelectorAll('td')[5].textContent);
     expect(texts).toContain('fm.result.zero');
     expect(texts).toContain('fm.result.N');
+  });
+});
+
+// ── "Rectificaciones" column (ETP-5725, QA CP-19 follow-up) ─────────────────────
+// Its own, separate column (td index 6, right after "Resultado" at index 5) — see
+// `RectificationsCell`/`deriveListResult349` (FmListPage.jsx / listBehavior349.js).
+describe('FmListPage — "Rectificaciones" column (349 only)', () => {
+  const TOKEN = 'test-token';
+  const API_BASE_URL = 'http://host/neo/fiscal-models';
+
+  const makeRow = (overrides) => ({
+    id: `row-${Math.random()}`,
+    model: '349',
+    year: 2026,
+    period: 'T1',
+    type: 'ord',
+    status: 'draft',
+    result: null,
+    incidents: { blocking: 0, warning: 0 },
+    updatedAt: '2026-01-20',
+    ...overrides,
+  });
+
+  function mockComputedFor(decls, operators) {
+    useFiscalAutoCompute.mockImplementation((hookDecls) => {
+      const map = {};
+      hookDecls.forEach(d => {
+        if (decls.some(target => target.id === d.id)) map[d.id] = { summary: {}, operators, error: null };
+      });
+      return { computedMap: map };
+    });
+  }
+
+  beforeEach(() => {
+    useFiscalAutoCompute.mockClear();
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: true, json: async () => ({ '303': true, '349': true }) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+  });
+
+  async function waitForCatalogLoad() {
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+  }
+
+  function rectificationsCell(container) {
+    return container.querySelector('tbody tr').querySelectorAll('td')[6];
+  }
+
+  it('renders a muted "—" when the declaration has no rectificative operator rows', async () => {
+    const decl = makeRow({ id: 'no-rectif' });
+    mockComputedFor([decl], [{ key: 'E', base: '10.00', rectificative: false }]);
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    expect(rectificationsCell(container).textContent).toBe('—');
+  });
+
+  // The edge case explicitly called out in ETP-5725's review: `hasRectifications` (not
+  // `rectifications > 0`) gates the cell, so a corrective row whose correctedBase sums to
+  // exactly 0,00 still renders the figure, never the "no rectifications" dash.
+  it('renders the amount (not "—") when corrective rows exist but their correctedBase sums to exactly 0,00', async () => {
+    const decl = makeRow({ id: 'zero-rectif' });
+    mockComputedFor([decl], [
+      { key: 'E', base: '10.00', rectificative: false },
+      { key: 'A', base: '30.00', correctedBase: '0.00', rectificative: true, declaredYear: '2026', declaredPeriod: '01' },
+    ]);
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    const cell = rectificationsCell(container);
+    expect(cell.textContent).not.toBe('—');
+    expect(cell.textContent).toContain('0');
+  });
+
+  it('renders the restated (correctedBase) amount with the origins tooltip icon', async () => {
+    const decl = makeRow({ id: 'with-rectif' });
+    mockComputedFor([decl], [
+      { key: 'E', base: '10.00', rectificative: false },
+      { key: 'A', base: '-30.00', correctedBase: '970.00', rectificative: true, declaredYear: '2026', declaredPeriod: '09' },
+    ]);
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    const cell = rectificationsCell(container);
+    expect(cell.textContent).toContain('970');
+    expect(container.querySelector('[data-testid="fm-rectifications-info-icon"]')).toBeInTheDocument();
+  });
+
+  it('the tooltip text names the distinct origin periods ("de 09, 10, 11") using the committed i18n copy', async () => {
+    const decl = makeRow({ id: 'multi-origin' });
+    mockComputedFor([decl], [
+      { key: 'A', base: '-10.00', correctedBase: '90.00', rectificative: true, declaredYear: '2026', declaredPeriod: '09' },
+      { key: 'A', base: '-20.00', correctedBase: '80.00', rectificative: true, declaredYear: '2026', declaredPeriod: '10' },
+    ]);
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    fireEvent.mouseEnter(container.querySelector('[data-testid="fm-rectifications-info"]'));
+    const tooltip = screen.getByTestId('fm-rectifications-info-tooltip');
+    expect(tooltip).toHaveTextContent('Importe de rectificaciones de periodos anteriores: 09, 10');
+  });
+
+  it('right-aligns the Rectificaciones column, same as Resultado', async () => {
+    const decl = makeRow({ id: 'align' });
+    mockComputedFor([decl], [{ key: 'E', base: '10.00', rectificative: false }]);
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    expect(rectificationsCell(container).style.textAlign).toBe('right');
+  });
+
+  it('renders nothing for a 303 declaration (only 349 rows ever carry rectifications)', async () => {
+    const decl303 = { ...makeRow({ id: 'a-303' }), model: '303' };
+    useFiscalAutoCompute.mockImplementation((hookDecls) => {
+      const map = {};
+      hookDecls.forEach(d => { if (d.id === 'a-303') map[d.id] = { summary: { result: 100 }, boxes: { 27: 100 }, error: null }; });
+      return { computedMap: map };
+    });
+    const { container } = render(
+      <FmListPage declarations={[decl303]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    expect(rectificationsCell(container).textContent).toBe('—');
   });
 });

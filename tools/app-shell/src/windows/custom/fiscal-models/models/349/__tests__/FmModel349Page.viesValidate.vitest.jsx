@@ -68,6 +68,7 @@ vi.mock('../use349Pdf.js', () => ({
   use349Pdf: () => ({ pdfUrl: null, loading: false, generatePdf: vi.fn(), clearPdf: vi.fn() }),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
+  FmInfoTooltip: () => null,
   StatusPillMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
