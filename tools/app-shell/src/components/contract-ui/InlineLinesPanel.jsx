@@ -25,10 +25,17 @@ import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
+import { committedItemFromRow } from './selectorSelection.js';
 import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { columnFlex, isLineGridColumn, withLinesAbsorberColumn } from '@/lib/linesColumnWidth.js';
+import { isNoTruncateColumn, withContentWidths, rowsWithDraft } from '@/lib/linesContentWidth.js';
+import { useFontsReady } from '@/hooks/useFontsReady.js';
+import { useGridView } from '@/hooks/useGridView.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { GridViewControls } from './GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
-import { registerLinesScrollHost, unregisterLinesScrollHost } from '@/lib/linesScrollHost.js';
+import { registerLinesScrollHost, unregisterLinesScrollHost, useLinesAddRowDraft } from '@/lib/linesScrollHost.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
@@ -62,6 +69,34 @@ const TOKENS = {
   cellFontSize: 14,
   cellFontWeight: 400,
 };
+
+// Personal widths apply to every flex track, including the aligned totals row.
+// Unconfigured columns retain the existing content/default sizing policy.
+function lineColumnFlex(column, index) {
+  return column.gridUserWidthPx != null
+    ? `0 0 ${column.gridUserWidthPx}px`
+    : columnFlex(column, index);
+}
+
+function projectLineGridColumns(defaults, viewColumns) {
+  const byKey = new Map(viewColumns.map(column => [column.key, column]));
+  const result = [];
+  let segment = [];
+  const flush = () => {
+    const keys = new Set(segment.map(column => column.key));
+    result.push(...viewColumns.filter(column => keys.has(column.key)));
+    segment = [];
+  };
+  for (const column of defaults) {
+    if (column.gridReorderable === false) {
+      flush();
+      // A persisted view cannot move or remove a locked structural/critical slot.
+      result.push({ ...column, gridViewId: byKey.get(column.key)?.gridViewId });
+    } else segment.push(column);
+  }
+  flush();
+  return result;
+}
 
 // Leading row columns, in order: [expand chevron?] [selection checkbox] [first data cell].
 // CHECKBOX_COLUMN_WIDTH mirrors its own `px-2` (8px each side) padding, already applied
@@ -305,7 +340,7 @@ const LINE_RIGHT_SPACER_PX = 48;
  */
 export function computeLineTrackWidthPx({ visibleColumns, hasDimensionsPanel, reserveActionSlot }) {
   const basisPx = (visibleColumns ?? []).reduce((sum, col, idx) => {
-    const basis = Number.parseFloat(String(columnFlex(col, idx)).trim().split(/\s+/).pop());
+    const basis = Number.parseFloat(String(lineColumnFlex(col, idx)).trim().split(/\s+/).pop());
     return sum + (Number.isFinite(basis) ? basis : 0);
   }, 0);
   return (hasDimensionsPanel ? CHEVRON_COLUMN_WIDTH : 0)
@@ -543,7 +578,7 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
             className="flex items-center tabular-nums"
             style={{
               padding: `0 ${TOKENS.cellPaddingX}px`,
-              flex: columnFlex(col, idx),
+              flex: lineColumnFlex(col, idx),
               justifyContent: (isDebit || isCredit) ? 'flex-end' : 'flex-start',
               minWidth: 0,
             }}
@@ -571,11 +606,13 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
  */
 // ETP-5133 — ellipsis policy is per-column, not a blanket default: most
 // columns (e.g. description) should ellipsize with a hover tooltip, but a
-// column can opt out via `noTruncate` (e.g. product) to show the FULL text
-// instead, scrolling horizontally within its own cell when it overflows
-// rather than being cut off. `overflowX: 'auto'` on the cell is what makes
-// that scroll possible; ReadCell and LookupTrigger (below) are what stop
-// clipping the text with `truncate` in the first place.
+// no-truncate column (`isNoTruncateColumn`: an explicit `noTruncate`, or by
+// default any lookup selector, e.g. product) shows the FULL text instead.
+// QA pass 3 (F-2) — the cell no longer scrolls on its own (`overflowX: 'auto'`
+// drew a mini scrollbar per cell and read as a cut name): the COLUMN widens to
+// its widest value (`withContentWidths` → `columnFlex`, the one width source the
+// header, every line and the add-row share) and the grid's own horizontal scroll
+// absorbs the overflow. ReadCell and LookupTrigger (below) drop `truncate` for it.
 //
 // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
 // + 1px border = 9px of internal padding. Reducing the cell's outer
@@ -585,14 +622,13 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
 //
 // Extracted out of renderLineCell so the truncate/numeric-alignment policy
 // scores against its own function, not the base cell renderer's.
-function computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx }) {
+function computeLineCellStyle({ editable, isNumeric, col, idx }) {
   return {
     padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
-    flex: columnFlex(col, idx),
+    flex: lineColumnFlex(col, idx),
     justifyContent: isNumeric ? 'flex-end' : 'flex-start',
     textAlign: isNumeric ? 'right' : 'left',
     minWidth: 0,
-    ...(noTruncate ? { overflowX: 'auto' } : null),
   };
 }
 
@@ -606,8 +642,8 @@ function renderLineCell({
   // table reserves its own slot, and a read-only one never shows the strip.
   const isNumeric = NUMERIC_TYPES.has(col.type);
   const editable = isEditing && isCellEditable(col);
-  const noTruncate = col.noTruncate === true;
-  const baseStyle = computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx });
+  const noTruncate = isNoTruncateColumn(col);
+  const baseStyle = computeLineCellStyle({ editable, isNumeric, col, idx });
 
   const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
   const cellContent = editable ? (
@@ -675,18 +711,35 @@ function renderLineCell({
  * `EntityForm.jsx` but rendered compactly inside a row cell — clicking the button opens
  * the same `ProductSearchDrawer` modal the side-panel form used.
  */
-function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+/**
+ * ETP-5948 — grid columns are generated without `onSelectMappings`. The inline commit
+ * applies them from the entry fields (buildInlineRowUpdateHandler's `fields`), so the lookup
+ * borrows the same mappings to rebuild the committed item (committedItemFromRow).
+ * shortcut: absent while the add-row form is open (the wrapper strips addRow); the stock
+ * drawer then marks the product group instead of the saved location row.
+ */
+function withEntryMappings(cols, entryFields) {
+  if (!entryFields?.length) return cols;
+  return cols.map(c => {
+    if (c.onSelectMappings) return c;
+    const mappings = entryFields.find(f => f.key === c.key)?.onSelectMappings;
+    return mappings ? { ...c, onSelectMappings: mappings } : c;
+  });
+}
+
+function LookupTrigger({ field, label, value, row, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
   // `label` is the locale-resolved column label (resolveColumnLabel); `field.label` is the raw
   // English AD name and must never reach the user (ETP-5681: the popup title read "Account").
   const resolvedLabel = label || field.label || '';
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const Drawer = resolveLookupDrawer(field.lookupDrawer);
-  // ETP-5133 — `noTruncate` (e.g. product) shows the full value instead of
-  // ellipsizing it: the button itself scrolls horizontally when the text
-  // overflows its width, rather than clipping it. Every other lookup/popup
-  // field (the default) keeps truncating with no behavior change.
-  const noTruncate = field.noTruncate === true;
+  // ETP-5133 — a no-truncate field (`isNoTruncateColumn`, e.g. product) shows
+  // the full value instead of ellipsizing it; its column is already sized for
+  // the widest value (see computeLineCellStyle's comment), so the button needs
+  // no scroll of its own. A lookup that opts out (`noTruncate: false`) keeps
+  // truncating with no behavior change.
+  const noTruncate = isNoTruncateColumn(field);
   const labelClassName = noTruncate ? 'flex-1 whitespace-nowrap' : 'flex-1 truncate';
   return (
     <>
@@ -694,10 +747,7 @@ function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContex
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className={[
-          'w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors',
-          noTruncate ? 'overflow-x-auto' : '',
-        ].filter(Boolean).join(' ')}
+        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors"
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -722,6 +772,10 @@ function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContex
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
+        // ETP-5948 — the line's committed value: the drawer opens marked and positioned on it.
+        value={value}
+        valueLabel={displayLabel}
+        committedItem={committedItemFromRow(field, row, value)}
         title={field.lookupTitle || resolvedLabel}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
@@ -809,14 +863,13 @@ function renderEnumReadCell(row, col, ui) {
   return <span className="block truncate" title={label || undefined}>{label}</span>;
 }
 
-// ETP-5133 — per-column ellipsis policy (see `noTruncate` in renderLineCell): most columns
-// ellipsize with a hover tooltip, but a column can opt out (e.g. product) to show the full
-// value instead — the cell itself scrolls horizontally when it overflows (see the
-// `overflowX: 'auto'` on renderLineCell's wrapper), so no `truncate` and no tooltip needed
-// here (the text is already fully visible/reachable). Extracted out of ReadCell so this
+// ETP-5133 — per-column ellipsis policy (see `isNoTruncateColumn` in renderLineCell): most
+// columns ellipsize with a hover tooltip, but a no-truncate column (e.g. product) shows the
+// full value instead — its column is sized for the widest value and the grid scrolls, so no
+// `truncate` and no tooltip needed here (the text is already fully visible). Extracted out of ReadCell so this
 // branch's own nested check scores against its own function, not the type-dispatcher's.
 function renderStringReadCell(display, col) {
-  if (col.noTruncate) {
+  if (isNoTruncateColumn(col)) {
     return <span className="block whitespace-nowrap">{display}</span>;
   }
   return <span className="block truncate" title={display || undefined}>{display}</span>;
@@ -979,6 +1032,8 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <LookupTrigger
           field={col}
           label={resolveColumnLabel(col, locale, t)}
+          value={value}
+          row={row}
           displayLabel={displayLabel}
           selectorUrl={selectorUrl}
           selectorContext={selectorContext}
@@ -1196,6 +1251,9 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // (or has no balanceFooter at all) renders exactly as before this prop
   // existed.
   lineFormActive = false,
+  // The add-row config. Only its `fields` are read here: the inline commit applies
+  // `onSelectMappings` from those entry fields, not from the grid columns.
+  addRow,
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -1352,12 +1410,50 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // `hasDimensionsPanel` below. ETP-4803 — the exclusion itself now lives in
   // `isLineGridColumn` (linesColumnWidth.js), shared with DataTable's hidden
   // add-row colgroup, so the two renderers can't diverge on this again.
-  const visibleColumns = useMemo(
-    () => withLinesAbsorberColumn((columns || []).filter(c => (
+  //
+  // ETP-5133 (QA pass 3, F-2) — `withContentWidths` sizes every no-truncate
+  // column (e.g. product) for its widest value in `data`; DataTable's add-row
+  // derives the same width from the same `columns` + `data` props. `fontsReady`
+  // re-measures once the web font has loaded — the same signal DataTable uses,
+  // so the rows and the add-row never measure with different faces.
+  // QA pass 3 — `addRowDraft` is the identifier the sibling add-row has picked
+  // but not saved yet (published by DataTable, lib/linesScrollHost.js), so the
+  // column widens on the pick; null again once the add-row closes.
+  const fontsReady = useFontsReady();
+  const addRowDraft = useLinesAddRowDraft(entity);
+  const defaultColumns = useMemo(
+    () => withContentWidths(withLinesAbsorberColumn(withEntryMappings((columns || []).filter(c => (
       isLineGridColumn(c) && !c.hidden && !hiddenColumns.includes(c.key)
-    ))),
-    [columns, hiddenColumns]
+    )), addRow?.fields)), rowsWithDraft(data, addRowDraft)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fontsReady only triggers the re-measure
+    [columns, hiddenColumns, data, addRowDraft, fontsReady, addRow?.fields]
   );
+  const gridColumnViewsFlag = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridViewEnabled = gridColumnViewsFlag && Boolean(specName && entity);
+  const gridColumns = useMemo(() => defaultColumns.map((column, index) => {
+    const locked = column.required === true || column.gridConfigurable === false
+      || column.gridReorderable === false || column.headClass != null || column.cellClass != null
+      || column.type === 'actions' || column.type === 'selection'
+      || (column.type === 'custom' && !column.column)
+      || column.key === balanceFooter?.debitField || column.key === balanceFooter?.creditField
+      || (isDocumentReadOnly && index === defaultColumns.length - 1 && column.type === 'amount');
+    return {
+      ...column,
+      gridConfigurable: locked || isNoTruncateColumn(column) ? false : column.gridConfigurable,
+      gridReorderable: locked ? false : column.gridReorderable,
+      gridDefaultWidthPx: Number.parseFloat(columnFlex(column, index).split(' ').pop()),
+    };
+  }), [defaultColumns, balanceFooter?.debitField, balanceFooter?.creditField, isDocumentReadOnly]);
+  const gridView = useGridView({
+    spec: specName, entity, columns: gridColumns, data: data ?? [],
+    enabled: gridViewEnabled && gridColumns.length > 0, apiBaseUrl,
+  });
+  // Generated wrappers mount a separate DataTable for the add-row portal. It still
+  // uses the original columns, so use the shared default track while it is open.
+  const activeGridView = lineFormActive ? { ...gridView, active: false } : gridView;
+  const visibleColumns = useMemo(() => activeGridView.active
+    ? projectLineGridColumns(gridColumns, gridView.columns)
+    : defaultColumns, [activeGridView.active, gridColumns, gridView.columns, defaultColumns]);
   // Whether the row reserves the 158px action slot after its last column. Until
   // ETP-5600 the LAST column, when an `amount`, disappeared on hover to make room
   // for the strip instead (monetary tables: sales-quotation, etc.); since then that
@@ -1626,6 +1722,18 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const cellStyle = buildLineCellStyle();
 
   return (
+    <>
+    {/* Rendered BEFORE the panel, not inside it: the panel's direct children are
+        the sticky header wrapper then the body scroll wrapper, and layout specs and
+        sticky math address them by position. */}
+    {gridViewEnabled && gridColumns.length > 0 && (
+      <GridViewControls
+        gridView={activeGridView}
+        gridColumns={gridColumns}
+        ui={ui}
+        t={t}
+        data-testid="GridViewControls__3b7ec2" />
+    )}
     <div ref={panelRef} className="w-full" data-testid="inline-lines-panel">
       {/* Header strip — sticky at the top of the scroll container so column
           labels stay visible while rows scroll. The white background and z-10
@@ -1660,16 +1768,19 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             <div
               key={col.key}
               data-testid={`column-header-${col.key}`}
-              className="flex items-center"
+              className="relative flex items-center"
+              {...gridHeaderProps(col, activeGridView)}
               style={{
                 padding: `0 ${TOKENS.cellPaddingX}px`,
-                flex: columnFlex(col, idx),
+                flex: lineColumnFlex(col, idx),
                 justifyContent: NUMERIC_TYPES.has(col.type) ? 'flex-end' : 'flex-start',
                 textAlign: NUMERIC_TYPES.has(col.type) ? 'right' : 'left',
                 minWidth: 0,
               }}
             >
               {resolveColumnLabel(col, locale, t)}
+              {gridReorderHandle(col, activeGridView, resolveColumnLabel(col, locale, t), ui)}
+              {gridResizeHandle(col, activeGridView, resolveColumnLabel(col, locale, t), ui)}
             </div>
           ))}
           {/* Reserve the same 158px slot the action strip will occupy so the
@@ -1826,6 +1937,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       {lineFormActive && <div ref={addRowHostRef} data-testid="inline-add-row-host" />}
       </div>
     </div>
+    </>
   );
 });
 

@@ -19,11 +19,9 @@ import { isProductiveEnvironment } from '../lib/environmentPresentation.js';
  * shows the full checklist. Use `loading` to hold off rendering a plan-dependent view rather
  * than rendering one and swapping it once the list lands.
  *
- * **Known cost:** this mounts its own `useEnvironmentSwitch`, so an app load that also renders
- * the `SideMenu` company switcher issues `/sws/go/environments` twice. It is one small
- * account-scoped GET and keeping the hook self-contained avoids threading the list through
- * `AppLayout` into both consumers; lifting `useEnvironmentSwitch` into a context shared by the
- * switcher and this hook is the follow-up if the second call ever matters.
+ * This mounts its own `useEnvironmentSwitch`, which costs no extra request: since ETP-5051 (O-3)
+ * every mounted instance shares one `/sws/go/environments` read through the app's DataProvider
+ * cache, so the company switcher and this hook see the same list from the same call.
  */
 export function useTenantPlan() {
   const { environments, loading, currentClientId } = useEnvironmentSwitch();

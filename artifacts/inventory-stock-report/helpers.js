@@ -38,3 +38,18 @@ function round2(value) {
 function numCellType(value) {
   return value == null || value === '' ? 'string' : 'number';
 }
+
+// dashIfBlank — a product with stock but no cost arrives with a null unitCost /
+// totalValuation. Every output of this report shows the same "—" placeholder the
+// Warehouse > Products tab uses, instead of an empty cell (ETP-5555). `raw` is the
+// value as the handler sent it and decides whether it is blank; `shown` is that
+// same value already rounded by round2. A real zero is a cost, not a blank, so it
+// keeps its value.
+//
+// Used by template-excel.hbs and template-csv.hbs only: jsreport loads this file
+// for those. The on-screen HTML preview does NOT load a report's helpers.js, so
+// template.hbs gets the same placeholder from the canonical `eq` helper instead
+// ({{#if (eq x null)}}), which every render path ships.
+function dashIfBlank(raw, shown) {
+  return raw == null || raw === '' ? '\u2014' : shown;
+}

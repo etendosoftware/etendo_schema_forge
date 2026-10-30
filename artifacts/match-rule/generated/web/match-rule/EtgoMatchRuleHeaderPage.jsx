@@ -16,8 +16,8 @@ const columns = [
 
 // @sf-generated-start fields:etgoMatchRuleHeader
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'general', placeholderKey: 'matchRuleNamePlaceholder' },
-  { key: 'textPattern', column: 'TextPattern', type: 'text', label: 'Text Pattern', required: true, section: 'general', placeholderKey: 'matchRulePatternPlaceholder' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'general', placeholderKey: 'matchRuleNamePlaceholder', maxLength: 200 },
+  { key: 'textPattern', column: 'TextPattern', type: 'text', label: 'Text Pattern', required: true, section: 'general', placeholderKey: 'matchRulePatternPlaceholder', maxLength: 200 },
   { key: 'financialAccount', column: 'FIN_Financial_Account_ID', type: 'selector', label: 'Financial Account', reference: 'Financial_Account', inputMode: 'selector', searchSelect: true, section: 'general', emptyOptionLabelKey: 'matchRuleAllAccounts' },
   { key: 'transactionType', column: 'ETGO_Transaction_Type_ID', type: 'selector', label: 'Transaction Type', reference: 'ETGO_Transaction_Type', inputMode: 'selector', searchSelect: true, allowCreate: true, createLabelKey: 'matchRuleTypeCreate', createTitleKey: 'matchRuleTypeCreateTitle', createNamePlaceholderKey: 'matchRuleTypeNamePlaceholder', createSpec: 'transaction-type', createEntity: 'transactionType', section: 'general', placeholderKey: 'matchRuleTypePlaceholder' },
   { key: 'accountingConcept', column: 'C_GLItem_ID', type: 'selector', label: 'Accounting account', required: true, reference: 'GLItem', inputMode: 'selector', searchSelect: true, section: 'general' },

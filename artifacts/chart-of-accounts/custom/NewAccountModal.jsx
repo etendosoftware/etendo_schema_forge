@@ -291,7 +291,8 @@ export default function NewAccountModal({
           ? prev.accountType
           : deriveDefaultAccountType(null, parentCode, accountRows),
       }));
-      setErrors((prev) => ({ ...prev, parentAccountId: undefined }));
+      // The code is reset to the new prefix, so a code error about the old one no longer applies.
+      setErrors((prev) => ({ ...prev, parentAccountId: undefined, searchKey: undefined }));
     },
     [parentOptions, accountRows],
   );
@@ -432,14 +433,10 @@ export default function NewAccountModal({
                 record={accountCodeRecord}
                 readOnly={false}
                 placeholder={lastUsedSuffix}
+                error={errors.searchKey}
                 data-testid="AccountCodeField__2c756f"
               />
             </div>
-            {errors.searchKey && (
-              <p className={ERROR_CLS} role="alert">
-                {errors.searchKey}
-              </p>
-            )}
           </div>
 
           {/* ── Account Type ── */}

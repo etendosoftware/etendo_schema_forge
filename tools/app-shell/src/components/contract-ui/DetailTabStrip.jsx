@@ -30,6 +30,11 @@ function ProbeTab({ iconKey, label, count, buttonProps }) {
   );
 }
 
+/** The strip is clipped, not scrollable: undo any programmatic scroll (focus, scrollIntoView). */
+function resetScroll(event) {
+  if (event.currentTarget.scrollLeft) event.currentTarget.scrollLeft = 0;
+}
+
 /**
  * Secondary tab strip of the Form View (ETP-5515): up to 4 tabs plus a "More" menu holding
  * the rest, with the last visible tab acting as a dynamic slot (see detailTabStripLayout.js).
@@ -51,9 +56,17 @@ export default function DetailTabStrip({
   return (
     // min-w-0 + overflow-hidden: the strip takes the room its container gives it and can
     // never paint over a neighbour (e.g. the side panel) even when nothing more can be hidden.
-    <div ref={wrapperRef} className="relative flex flex-1 min-w-0 items-center gap-0 overflow-hidden" data-testid="detail-tab-strip">
-      {/* Invisible natural-width probe for useFittingTabCount: every tab + the More trigger. */}
-      <div ref={measureRef} aria-hidden="true" className="invisible pointer-events-none absolute left-0 top-0 flex w-max items-center gap-0">
+    <div
+      ref={wrapperRef}
+      className="relative flex flex-1 min-w-0 items-center gap-0 overflow-hidden"
+      data-testid="detail-tab-strip"
+      onScroll={resetScroll}>
+      {/* Invisible natural-width probe for useFittingTabCount: every tab + the More trigger.
+          Wrapped in its own clip box: an absolutely positioned w-max row (wider than the strip)
+          would otherwise count as scrollable overflow of the strip, letting focus or
+          scrollIntoView scroll it and keeping scrollWidth inflated so it never scrolls back. */}
+      <div aria-hidden="true" className="invisible pointer-events-none absolute inset-0 overflow-hidden">
+      <div ref={measureRef} className="absolute left-0 top-0 flex w-max items-center gap-0">
         {tabs.map((tab) => (
           <ProbeTab
             key={tab.key}
@@ -68,6 +81,7 @@ export default function DetailTabStrip({
           <span className={COUNT_CHIP_CLS}><GhostText text={String(tabs.length)} data-testid="GhostText__detailTabStripProbeMoreCount" /></span>
           <ChevronDown className="h-4 w-4" data-testid="ChevronDown__detailTabStripProbe" />
         </span>
+      </div>
       </div>
       {visible.map(({ tab, index }) => (
         <TabStripButton

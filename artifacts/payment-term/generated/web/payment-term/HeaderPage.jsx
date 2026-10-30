@@ -1,45 +1,58 @@
-import { useMemo, useEffect } from 'react';
-import { ListView } from '@/components/contract-ui/ListView.jsx';
-import { DetailView } from '@/components/contract-ui/DetailView.jsx';
+import { useMemo } from 'react';
+import { ListModalWindow } from '@/components/contract-ui';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import HeaderTable from './HeaderTable';
-import HeaderForm from './HeaderForm';
-import { AttachmentsTab } from '@/components/attachments';
-import catalogs from './mockCatalogs';
 
+// @sf-generated-start columns:header
+const columns = [
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', cellType: 'boldText', minWidth: 164, maxWidth: 240 },
+  { key: 'overduePaymentDaysRule', column: 'NetDays', type: 'number', label: 'Overdue Payment Days Rule', minWidth: 124, maxWidth: 148 },
+  { key: 'nextBusinessDay', column: 'IsNextBusinessDay', type: 'boolean', label: 'Next Business Day', badge: true, labels: {"es_ES":"Siguiente día hábil","en_US":"Next Business Day"}, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, badgeVariants: {"true":"green","false":"neutral"}, minWidth: 158 },
+  { key: 'default', column: 'IsDefault', type: 'boolean', label: 'Default', badge: true, labels: {"es_ES":"Por defecto","en_US":"Default"}, badgeLabels: {"true":{"es_ES":"Sí","en_US":"Yes"},"false":{"es_ES":"No","en_US":"No"}}, badgeVariants: {"true":"green","false":"neutral"}, minWidth: 158 },
+];
+// @sf-generated-end columns:header
+
+// @sf-generated-start fields:header
+const fields = [
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal', maxLength: 60 },
+  { key: 'overduePaymentDaysRule', column: 'NetDays', type: 'number', label: 'Overdue Payment Days Rule', required: true, section: 'principal', min: 0, max: 365, integer: true, stepper: true, stepperRejectedKey: 'paymentTermDaysNotInteger' },
+  { key: 'default', column: 'IsDefault', type: 'checkbox', label: 'Default', section: 'principal' },
+  { key: 'nextBusinessDay', column: 'IsNextBusinessDay', type: 'checkbox', label: 'Next Business Day', section: 'principal', defaultValue: 'Y' },
+];
+
+const sections = [
+  { key: 'principal' },
+];
+
+const filters = ['name'];
+// @sf-generated-end fields:header
 
 const breadcrumb = 'Settings / Payment Term';
-
-
-// @sf-generated-start summary:header
-const summary = [
-
-];
-
-const statusField = null;
-// @sf-generated-end summary:header
-
-// @sf-generated-start extraBadges:header
-const extraBadges = [
-
-];
-// @sf-generated-end extraBadges:header
-
-// @sf-generated-start processes:header
-const processes = [
-
-];
-// @sf-generated-end processes:header
-
-// @sf-generated-start draftMode:header
-const draftMode = null;
-// @sf-generated-end draftMode:header
-
-// @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['searchKey', 'name', 'offsetMonthDue', 'overduePaymentDaysRule'];
-// @sf-generated-end requiredHeaderFields:header
-
-
+const listModalConfig = {
+  "titleKey": "paymentTermNewTitle",
+  "editTitleKey": "paymentTermEditTitle",
+  "subtitleKey": null,
+  "editSubtitleKey": null,
+  "submitLabelKey": null,
+  "editSubmitLabelKey": null,
+  "bannerKey": null,
+  "searchPlaceholderKey": null,
+  "newLabelKey": "paymentTermNew",
+  "autoPriorityField": null,
+  "autoPriorityStep": null,
+  "identifierField": null,
+  "footerToggleField": null,
+  "sectionGrid": {},
+  "allowClone": false,
+  "backLabelKey": null,
+  "backTo": null,
+  "toolbarFilters": [],
+  "modalVariant": "compact",
+  "hideBackButton": true,
+  "hideSearch": true,
+  "newButtonVariant": "primary",
+  "rowClickEdit": true,
+  "listVariant": "compact"
+};
 
 export const api = {
   "specName": "payment-term",
@@ -55,7 +68,6 @@ export const api = {
       "listUrl": "/sws/neo/payment-term/header",
       "detailUrl": "/sws/neo/payment-term/header/{id}",
       "supportedFilters": [
-        "searchKey",
         "name"
       ]
     }
@@ -86,15 +98,20 @@ export const api = {
       "FixMonthOffset": "Meses de desplazamiento",
       "NetDays": "Días",
       "IsDefault": "Por defecto",
+      "IsNextBusinessDay": "Siguiente día hábil",
       "IsActive": "Activo"
+    },
+    "en_US": {
+      "Name": "Name",
+      "NetDays": "Days",
+      "IsDefault": "Default",
+      "IsNextBusinessDay": "Next Business Day"
     }
   }
 };
 
-
-const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:HeaderPage
-export default function HeaderPage({ windowName, recordId, ...props }) {
+export default function HeaderPage({ windowName, ...props }) {
   const windowAccessTier = useWindowAccess('141');
   const effectiveWindow = useMemo(() => (
     windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
@@ -102,45 +119,18 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
   if (windowAccessTier === 'none') {
     return <WindowAccessGuard windowId="141" />;
   }
-  if (recordId) {
-    return (
-      <>
-      <DetailView
-        entity="header"
-        Form={HeaderForm}
-        summary={summary}
-        statusField={statusField}
-        extraBadges={extraBadges}
-        processes={processes}
-        catalogs={catalogs}
-        entityLabel="Header"
-        windowName={windowName}
-        recordId={recordId}
-        breadcrumb={breadcrumb}
-      api={api}
-        hidePrint
-        hideMoreMenu
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_PaymentTerm", config: {} } }]}
-        requiredHeaderFields={requiredHeaderFields}
-        labelOverrides={labelOverrides}
-        {...props} window={effectiveWindow}
-      />
-      </>
-    );
-  }
-
   return (
-    <ListView
+    <ListModalWindow
       entity="header"
-      Table={HeaderTable}
       entityLabel="Payment Term"
       windowName={windowName}
       breadcrumb={breadcrumb}
+      columns={columns}
+      fields={fields}
+      sections={sections}
+      filters={filters}
+      config={listModalConfig}
       api={api}
-      hidePrint
-      hideMoreMenu
-      labelOverrides={labelOverrides}
-      rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />
   );

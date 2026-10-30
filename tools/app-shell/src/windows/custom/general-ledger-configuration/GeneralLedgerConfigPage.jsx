@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import TabBar from './TabBar.jsx';
+import SegmentedTabs from '@/components/contract-ui/SegmentedTabs.jsx';
+import { getLinesToolbarClassName, getSaveBtnCls } from '@/components/contract-ui/toolbarClasses.js';
 import GeneralTab from './GeneralTab.jsx';
 import DefaultsTab from './DefaultsTab.jsx';
 import DimensionsTab from './DimensionsTab.jsx';
@@ -20,14 +21,17 @@ import { DEFAULTS_GROUPS } from './mockCatalogs.js';
 
 const REQUIRED_GENERAL = ['name', 'currency'];
 const REQUIRED_DEFAULTS = DEFAULTS_GROUPS.flatMap((g) => g.fields.filter((f) => f.required).map((f) => f.key));
+// [switch, account]: the account is required while its switch is on (ETP-5724, enforced by the backend too).
+const BALANCING_PAIRS = [['suspenseBalancingUse', 'suspenseBalancing'], ['currencyBalancingUse', 'currencyBalancingAcct']];
+const GENERAL_ACCOUNTS_TAB = 3;
 
 /**
  * General Ledger Configuration (AD window 125, "Esquema contable").
  * layoutType: custom — fiscal-config pattern. 4 tabs: General · Valores por
  * defecto · Dimensiones · Cuentas generales.
  *
- * Backend is greenfield (no NEO spec yet); data comes from mockCatalogs and the
- * save handler is a Phase 3 stub (see useGeneralLedgerConfig.save()).
+ * Loads and saves one org-scoped aggregate through the `General` entity
+ * (GeneralLedgerConfigurationHandler in com.etendoerp.go, see useGeneralLedgerConfig).
  */
 export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
   const ui = useUI();
@@ -44,6 +48,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
   const [savedOk, setSavedOk] = useState(false);
   const [generalErrors, setGeneralErrors] = useState({});
   const [defaultsErrors, setDefaultsErrors] = useState({});
+  const [generalAccountsErrors, setGeneralAccountsErrors] = useState({});
 
   useSetPageMeta({
     title: ui('glc.title'),
@@ -59,9 +64,15 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
     for (const k of REQUIRED_DEFAULTS) {
       if (!defaults[k]) dErr[k] = ui('glc.validation.required');
     }
+    const gaErr = {};
+    for (const [use, acct] of BALANCING_PAIRS) {
+      if (generalAccounts[use] && !generalAccounts[acct]) gaErr[acct] = ui('glc.validation.required');
+    }
     setGeneralErrors(gErr);
     setDefaultsErrors(dErr);
-    return { ok: Object.keys(gErr).length === 0 && Object.keys(dErr).length === 0, gErr, dErr };
+    setGeneralAccountsErrors(gaErr);
+    const ok = [gErr, dErr, gaErr].every((e) => Object.keys(e).length === 0);
+    return { ok, gErr, dErr };
   }
 
   async function handleSave() {
@@ -70,6 +81,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
       // Jump to the first tab that has an error so the user sees it.
       if (Object.keys(gErr).length > 0) setActiveTab(0);
       else if (Object.keys(dErr).length > 0) setActiveTab(1);
+      else setActiveTab(GENERAL_ACCOUNTS_TAB);
       return;
     }
     setSaving(true);
@@ -78,6 +90,18 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
     } catch (err) {
+      // The backend refused a balancing account the page could not see missing (e.g. cleared over
+      // the API meanwhile): mark it like the local check does; its English message is for API callers.
+      const error = err.body?.error;
+      const missing = error?.code === 'MISSING_REQUIRED_FIELDS'
+        ? BALANCING_PAIRS.map(([, acct]) => acct).filter((acct) => error.fields?.includes(acct))
+        : [];
+      if (missing.length > 0) {
+        setGeneralAccountsErrors(Object.fromEntries(missing.map((acct) => [acct, ui('glc.validation.required')])));
+        setActiveTab(GENERAL_ACCOUNTS_TAB);
+        toast.error(ui('requiredFieldsMissing'));
+        return;
+      }
       toast.error(translateBackendError(err.message, ui, {
         messageKeys: extractBackendMessageKeys(err.body),
         messageParams: extractBackendMessageParams(err.body),
@@ -87,28 +111,29 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
     }
   }
 
-  const tabs = useMemo(() => ([
-    { label: ui('glc.tab.general') },
-    { label: ui('glc.tab.defaults') },
-    { label: ui('glc.tab.dimensions') },
-    { label: ui('glc.tab.generalAccounts') },
-  ]), [ui]);
+  const tabs = useMemo(() => (
+    ['general', 'defaults', 'dimensions', 'generalAccounts'].map((key, i) => ({
+      key,
+      label: ui(`glc.tab.${key}`),
+      testId: `glc-tab-${i}`,
+    }))
+  ), [ui]);
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden">
-      {/* Tab row: tabs left, dirty-state save button right */}
-      <div className="flex-shrink-0 flex items-center justify-between border-b border-[hsl(var(--border-subtle))] pr-6">
-        <TabBar
-          tabs={tabs}
+      {/* ETP-5736 — top bar follows the record toolbar (56px, shared classes): tabs left, dirty-state save right */}
+      <div className={`flex-shrink-0 ${getLinesToolbarClassName()}`} data-testid="glc-toolbar">
+        <SegmentedTabs
+          items={tabs}
           active={activeTab}
           onChange={setActiveTab}
-          data-testid="TabBar__79cd86" />
+          ariaLabel={ui('glc.title')}
+          data-testid="SegmentedTabs__79cd86" />
         <Button
           onClick={handleSave}
           disabled={!selectedOrg?.id || !isDirty || saving || loading}
-          // ETP-5601 — same size as the record toolbar's Save (getSaveBtnCls): 40px, 8px radius,
-          // text-sm/leading-6, 20px icon with an 8px gap.
-          className={`h-10 gap-2 rounded-lg leading-6 [&_svg]:size-5 ${savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}`}
+          // ETP-5601 — the record toolbar's Save size (40px, leading-6, 20px icon), 8px radius.
+          className={`${getSaveBtnCls()} rounded-lg ${savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}`}
           data-testid="glc-save"
         >
           <Check data-testid="Check__79cd86" />
@@ -150,6 +175,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
               generalAccounts={generalAccounts}
               accountOptions={catalogs.accounts}
               setGeneralAccountsField={setGeneralAccountsField}
+              errors={generalAccountsErrors}
               data-testid="GeneralAccountsTab__79cd86" />
           )}
         </div>

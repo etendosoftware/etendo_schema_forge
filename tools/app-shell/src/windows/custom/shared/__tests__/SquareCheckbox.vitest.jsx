@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/SquareCheckbox.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SquareCheckbox } from '../SquareCheckbox.jsx';
 
@@ -41,5 +42,17 @@ describe('SquareCheckbox', () => {
     const input = screen.getByTestId('cb-x');
     expect(input.tagName).toBe('INPUT');
     expect(input).toHaveAttribute('aria-label', 'Toggle X');
+  });
+
+  it('when disabled, disables the input, dims the label and never fires onChange', () => {
+    const onChange = vi.fn();
+    render(<SquareCheckbox label="Cliente" checked={false} onChange={onChange} disabled />);
+    const input = screen.getByRole('checkbox', { name: 'Cliente' });
+    expect(input).toBeDisabled();
+    expect(input.closest('label')).toHaveClass('cursor-not-allowed', 'opacity-50');
+    fireEvent.click(input);
+    fireEvent.click(screen.getByText('Cliente'));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input.checked).toBe(false);
   });
 });

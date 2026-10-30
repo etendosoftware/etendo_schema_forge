@@ -23,6 +23,8 @@ import {
 } from '@/components/global-search/GlobalSearchPrimitives.jsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import menuConfig from '../menu.json';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
+import { isSupportRestrictedMenuItem } from '@/lib/supportSession.js';
 
 import {
   LayoutDashboard,
@@ -92,6 +94,9 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const location = useLocation();
   const { capabilities } = useAuth();
+  // ETP-5351 — the palette reads menu.json directly, so the support-mode menu rule is applied here
+  // too, not only to the sidebar's menuGroups.
+  const { isSupportMode } = useSupportSession();
   const accountingProcessMonitorEnabled = useFeatureFlag(ACCT_PROCESS_MONITOR);
   const publicApiKeysEnabled = useFeatureFlag(PUBLIC_API_KEYS);
   const proofOfConceptMenuEnabled = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
@@ -374,7 +379,8 @@ export function CommandPalette() {
       ...group,
       items: group.items.filter((i) => !i.hidden
         && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
-        && (!i.capability || capabilities?.[i.capability] === true)),
+        && (!i.capability || capabilities?.[i.capability] === true)
+        && !(isSupportMode && isSupportRestrictedMenuItem(i))),
     }))
     .filter((group) => group.items.length > 0);
   // With a query only the matching windows are listed; they render above the record

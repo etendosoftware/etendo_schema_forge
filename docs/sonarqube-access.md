@@ -75,4 +75,4 @@ from Sonar, and the push is blocked when `current < base`.
 ```
 
 If the base branch has no coverage on Sonar yet, the check skips without blocking (matching CI,
-which treats a missing baseline as 0%). Bypass for WIP only: `git push --no-verify`.
+which treats a missing baseline as 0%).

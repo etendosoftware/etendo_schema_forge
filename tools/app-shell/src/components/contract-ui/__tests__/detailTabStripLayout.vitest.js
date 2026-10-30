@@ -149,4 +149,40 @@ describe('computeFittingTabCount', () => {
     expect(computeFittingTabCount({ ...base, available: 1, max: 1 })).toBe(1);
     expect(computeFittingTabCount({ ...base, available: 10_000, max: 3 })).toBe(3);
   });
+
+  // CP-12: no fixed cap, every tab is shown when it fits.
+  describe('uncapped (max = tabs.length, count-only fallback)', () => {
+    const open = { ...base, max: tabs.length, fallback: MAX_VISIBLE_TABS };
+
+    it('shows every tab when they all fit, no More', () => {
+      expect(computeFittingTabCount({ ...open, available: 600 })).toBe(6);
+      expect(computeFittingTabCount({ ...open, available: 10_000 })).toBe(6);
+    });
+
+    it('with exactly one tab not fitting, hides one (More counted)', () => {
+      expect(computeFittingTabCount({ ...open, available: 599 })).toBe(5);
+      // 5 visible + More = 550
+      expect(computeFittingTabCount({ ...open, available: 550 })).toBe(5);
+      expect(computeFittingTabCount({ ...open, available: 549 })).toBe(4);
+    });
+
+    it('keeps the count-only fallback while geometry is unknown', () => {
+      expect(computeFittingTabCount({ ...open, available: 0 })).toBe(MAX_VISIBLE_TABS);
+      expect(computeFittingTabCount({ ...open, widths: [0, 0, 0, 0, 0, 0], available: 900 })).toBe(MAX_VISIBLE_TABS);
+    });
+
+    it('handles a single-tab record', () => {
+      expect(computeFittingTabCount({
+        widths: [100], moreWidth: 50, tabs: makeTabs(1), activeKey: 't0', available: 10, max: 1, fallback: 4,
+      })).toBe(1);
+    });
+
+    it('keeps the slot swap behaviour when the promoted tab is wider (594 vs 584)', () => {
+      const four = makeTabs(4);
+      const w = [128, 195, 115, 159];
+      const args = { widths: w, moreWidth: 112, tabs: four, activeKey: 't3', max: 4, fallback: 4 };
+      expect(computeFittingTabCount({ ...args, available: 584 })).toBe(2);
+      expect(computeFittingTabCount({ ...args, available: 594 })).toBe(3);
+    });
+  });
 });

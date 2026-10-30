@@ -1,9 +1,9 @@
 import { parseCalendarDate } from '@/lib/dateOnly.js';
 
 /**
- * Bulk open/close of the Periods tab (ETP-5682): the same per-period action as the
- * "Abrir/Cerrar Periodo" button (AD Process 167, every document type of the period at once),
- * run for several selected periods.
+ * Open/close of the Periods tab (ETP-5682): AD Process 167 (every document type of the period
+ * at once), run for several selected periods — or for the single period of a row link (ETP-5592),
+ * so a row and a bulk action run and report the same way.
  *
  * Only Open (O) and Close (C) are offered in bulk. "Permanently closed" (P) is irreversible, so
  * it stays a per-period decision; a permanently closed period cannot be selected at all.
@@ -28,7 +28,7 @@ function startTime(period) {
  * stops the run: every period gets its own outcome, so the user sees exactly which ones failed.
  *
  * @param {object[]} periods the selected periods (any order)
- * @param {'O'|'C'} action
+ * @param {'O'|'C'|'P'} action
  * @param {(periodId: string, action: string) => Promise<{ok: boolean, message?: string}>} postOne
  * @returns {Promise<{period: object, outcome: 'ok'|'skipped'|'failed', message?: string}[]>}
  */

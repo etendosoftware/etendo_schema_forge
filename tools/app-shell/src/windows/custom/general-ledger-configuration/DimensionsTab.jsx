@@ -1,6 +1,5 @@
 import { useUI } from '@/i18n';
-import { ToggleRow } from '@/components/contract-ui';
-import SectionShell from './SectionShell.jsx';
+import { ToggleRow, SectionShell } from '@/components/contract-ui';
 
 /**
  * Dimensiones tab — single "Dimensiones contables" section: a list of toggle rows

@@ -1,3 +1,9 @@
+
+// Exercise personal views through the real shared hook; only the session/API boundary is mocked.
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
 // @covers tools/app-shell/src/windows/custom/financial-account/MovementsTable.jsx
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
@@ -1248,5 +1254,50 @@ describe('MovementsTable — accounting capability gate (ETP-5684)', () => {
     expect(buildMovementSortColumns(ui, { showAccountingFields: true }).map((c) => c.key)).toContain('posted');
     expect(buildMovementSortColumns(ui, ACCOUNTING_HIDDEN).map((c) => c.key)).not.toContain('posted');
     expect(buildMovementSortColumns(ui, ACCOUNTING_HIDDEN).map((c) => c.key)).toContain('transactionType');
+  });
+});
+
+describe('MovementsTable — personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: 'list:field:description', visible: false, order: 9 },
+        { id: 'list:field:businessPartner', order: 0 },
+        { id: 'list:field:expand', visible: false, order: 20 },
+        { id: 'list:field:select', visible: false, order: 19 },
+        { id: 'list:field:actions', visible: false, order: -1 },
+      ],
+    }) });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('applies the saved view while preserving selection, sorting, actions and expandable dimensions', async () => {
+    const onSelectionChange = vi.fn();
+    renderTable({ movements: [baseMovement({ posted: 'Y', dimensions: { project: 'Project A' } })], enabledDimensions: ['project'], onSelectionChange });
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/transaction', { baseUrl: '' });
+    expect(screen.queryByText('office')).toBeNull();
+    const row = screen.getByTestId('movement-row-m1');
+    expect(within(row).getByRole('checkbox')).toBeInTheDocument();
+    expect(within(row).getByTestId('row-kebab')).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('checkbox'));
+    expect(onSelectionChange).toHaveBeenCalledWith('m1');
+    fireEvent.click(screen.getByTestId('column-header-sort-documentNo'));
+    expect(screen.getByTestId('movement-row-m1')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    const panel = screen.getByTestId('movement-moreinfo-m1');
+    expect(within(panel).getByDisplayValue('Project A')).toBeInTheDocument();
+    expect(panel.firstElementChild.colSpan).toBe(row.children.length);
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    expect(screen.queryByTestId('movement-moreinfo-m1')).toBeNull();
+  });
+
+  it('keeps the default grid and avoids preferences requests with the flag disabled', () => {
+    personalGrid.enabled = false;
+    renderTable();
+    expect(personalGrid.apiFetch).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('grid-view-controls')).toBeNull();
+    expect(screen.getByText('office')).toBeInTheDocument();
   });
 });

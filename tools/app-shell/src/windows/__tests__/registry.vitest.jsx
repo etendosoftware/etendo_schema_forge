@@ -703,6 +703,12 @@ describe('registry', () => {
       expect(el.props.replace).toBe(true);
     });
 
+    // ETP-5720 — `redirectKeepPath` reaches makeRedirectWindow (behaviour covered in RedirectWindow.vitest.jsx).
+    it('simple-g-l-journal loads the record-keeping redirect', async () => {
+      const { default: Redirect } = await buildWindowMap()['simple-g-l-journal'].loader();
+      expect(Redirect.name).toBe('RedirectWindowKeepPath');
+    });
+
     it('does not register a hidden window without redirect or routeOnly', () => {
       expect(buildWindowMap()['hr']).toBeUndefined();
     });

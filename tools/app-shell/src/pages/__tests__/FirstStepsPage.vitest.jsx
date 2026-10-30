@@ -401,6 +401,17 @@ describe('FirstStepsPage — accounting calendar review (ETP-5577)', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it('does not call a classified non-"in use" 409 an in-use calendar (ETP-5782)', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.fn(async () => {
+      throw Object.assign(new Error('busy'), { status: 409, code: 'retryable_conflict' });
+    });
+    setHook({ calendarReview: { ...PENDING, confirm } });
+    await openRow(user);
+    await user.click(screen.getByTestId('first-steps-calendar-review-confirm'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('genericError'));
+  });
+
   it('offers the Calendar tour when it is available, and starts it', async () => {
     const user = userEvent.setup();
     walkthrough.available = true;

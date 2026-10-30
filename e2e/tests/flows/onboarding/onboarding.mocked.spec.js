@@ -10,7 +10,6 @@ const LOCALE_LABELS = {
     createAccount: 'Crear cuenta',
     continue: 'Continuar',
     companyName: 'Nombre de la empresa*',
-    address: 'Dirección',
     start: 'Empezar',
     intro: /Vamos a dejar todo listo/i,
     heading: /Crea tu cuenta gratis/i,
@@ -23,7 +22,6 @@ const LOCALE_LABELS = {
     createAccount: 'Create account',
     continue: 'Continue',
     companyName: 'Company name*',
-    address: 'Address',
     start: 'Start',
     intro: /We will get everything ready/i,
     heading: /Create your free account/i,
@@ -182,7 +180,11 @@ async function completeOnboardingForm(page, emailPrefix, locale = 'es_ES') {
   // Check-digit-valid CIF: ETP-5190 guards "Empezar" with the NIF validator, so an invalid
   // value stops the wizard here and no onboarding request is ever sent.
   await page.locator('#fiscalIdValue').fill('B12345674');
-  await page.getByRole('textbox', { name: labels.address }).fill('QA Street 123');
+  // ETP-5806 — the free-text address field was replaced by a structured Street/Number/
+  // Building Name/City block that is optional as a whole (typing into any one of its cells
+  // makes Street+Number+City mandatory together — isAddressBlockStarted/isCompanyStepValid
+  // in etendo-go-core). This helper only needs company name + fiscal id to reach a
+  // submittable state, so the address block is deliberately left untouched.
   await page.getByRole('button', { name: labels.start }).click();
 }
 

@@ -21,6 +21,9 @@ export default function OnboardingPage() {
     apiBase: import.meta.env.VITE_API_BASE || '',
     background: <OnboardingDashboardBackdrop data-testid="OnboardingDashboardBackdrop__79cf84" />,
     brandLabel: ui('onboardingBrandName'),
+    // ETP-5847 — the logo and the name link back to the public website. Set at build time
+    // (Actions variable WEBSITE_URL in deploy-staging.yml); unset, the brand is not a link.
+    brandHref: import.meta.env.VITE_WEBSITE_URL || undefined,
     localeCodes: ['es_ES', 'en_US'],
     countryCodes: ['ES'],
     sectorCodes: ['technology', 'services', 'commerce', 'manufacturing'],

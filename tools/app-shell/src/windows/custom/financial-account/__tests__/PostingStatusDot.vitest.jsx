@@ -17,6 +17,7 @@ const DOT_VAR = {
   success: '--status-success-fg',
   warning: '--status-warning-fg',
   destructive: '--destructive',
+  caution: '--status-caution-fg',
 };
 
 function expectDotTone(container, tone) {
@@ -47,7 +48,7 @@ describe('PostingStatusDot', () => {
     const { container } = render(<PostingStatusDot posted="p" />);
     expect(screen.getByText('postedStatusPeriodClosed')).toBeInTheDocument();
     expect(screen.queryByText('financeAccountMovementsNotPosted')).not.toBeInTheDocument();
-    expectDotTone(container, 'destructive');
+    expectDotTone(container, 'caution');
   });
 
   it('appends a custom className to the wrapper', () => {

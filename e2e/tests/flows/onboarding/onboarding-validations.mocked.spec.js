@@ -232,9 +232,17 @@ test.describe('Onboarding — Full registration flow', () => {
     await page.locator('#fiscalIdValue').fill('B12345674');
     await expect(startBtn).toBeEnabled();
 
-    // Address label carries the "(opcional)" tag. Fiscal id also renders "opcional"
-    // now (core 0.3.8), so scope to the address field's SetupField label
-    // (<label for="address">…(opcional)</label>) instead of a bare text match.
+    // ETP-5806 — CompanyStep only renders the structured Street/Number/Building Name/City
+    // cells when `capabilities.structuredAddressForSepa` is true, and OnboardingFlow.jsx reads
+    // that capability exactly once, from the mount-time `GET /sws/go/session` response — never
+    // from registration (`handleRegisterSuccess` only calls `GET /sws/go/me`, which carries no
+    // capabilities). This test reaches Company step through a genuine register journey (PART 1-4
+    // above), which — like every anonymous registration in production — mounts before any
+    // session exists, so the flag is structurally always off here. It therefore still exercises
+    // the pre-ETP-5806 single-line, optional "address" field, which is the actual, reachable
+    // behavior of this flow (the structured-fields-on case is covered by the dedicated flag
+    // tests in onboarding-length-limits.mocked.spec.js, which land through an authenticated,
+    // capabilities-on session instead of a fresh register).
     await expect(page.locator('label[for="address"]')).toContainText(/opcional/i);
 
     // Sector dropdown visible
@@ -249,8 +257,10 @@ test.describe('Onboarding — Full registration flow', () => {
     await continueBtn.click();
     await expect(page.locator('#clientName')).toHaveValue('Mi Empresa E2E');
 
-    // Fill optional fields
-    await page.getByRole('textbox', { name: /direcci[oó]n|address/i }).fill('Calle QA 123');
+    // Leave "address" untouched — with `structuredAddressForSepa` off (see the capability note
+    // above), it is still the single, independently optional pre-ETP-5806 field. Not filling it
+    // at all is what proves it is genuinely optional — Start stays enabled and the submission
+    // below still goes through with no address data.
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 7: Start — verify the onboarding request fires

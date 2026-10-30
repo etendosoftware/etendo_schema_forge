@@ -1,4 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { gridViewColumnId } from '@/hooks/useGridView.js';
+import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+
+// Exercise personal views through the real shared hook; only the session/API boundary is mocked.
+const personalGrid = vi.hoisted(() => ({ enabled: false, apiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => personalGrid.apiFetch }));
+vi.mock('@/lib/flags', () => ({ GRID_COLUMN_VIEWS: 'grid-column-views', useFeatureFlag: () => personalGrid.enabled }));
+
+// @covers tools/app-shell/src/windows/custom/financial-account/StatementLinesTable.jsx
+import { render, screen, waitFor } from '@testing-library/react';
 
 // Echoes the raw key, and appends the interpolation values when the call site passes any — the
 // pending-amount caption is the only such call here, so this is what makes the money string it
@@ -162,5 +171,29 @@ describe('StatementLinesTable', () => {
       ).toBeInTheDocument();
       expect(screen.queryByTestId('statement-line-pending-amount')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('StatementLinesTable — personal column views', () => {
+  beforeEach(() => {
+    personalGrid.enabled = true;
+    personalGrid.apiFetch.mockReset().mockResolvedValue({ ok: true, status: 200, json: async () => ({
+      version: 1, surface: 'list', columns: [
+        { id: gridViewColumnId({ ...getContractGridColumns('bankStatementLines').find((column) => column.name === 'referenceNo'), key: 'referenceNo' }), order: 0 },
+        { id: gridViewColumnId({ ...getContractGridColumns('bankStatementLines').find((column) => column.name === 'description'), key: 'description' }), order: 1, visible: false },
+      ],
+    }) });
+  });
+  afterEach(() => { personalGrid.enabled = false; });
+
+  it('aligns header and cells to saved order and visibility using the statement-lines identity', async () => {
+    const { container } = render(<StatementLinesTable lines={LINES} loading={false} />);
+    await waitFor(() => expect(screen.getByTestId('grid-view-columns-trigger')).toBeEnabled());
+    expect(personalGrid.apiFetch).toHaveBeenCalledWith('/sws/neo/grid-views/financial-account/bankStatementLines', { baseUrl: '' });
+    expect(container.querySelector('thead tr').firstElementChild).toHaveTextContent('financeAccountStatementLinesColReference');
+    expect(screen.getByTestId('statement-line-row-l1').firstElementChild).toHaveTextContent('REF-1');
+    expect(screen.queryByText('Compra mensual')).toBeNull();
+    expect(screen.queryByText('financeAccountStatementLinesColDescription')).toBeNull();
+    expect(screen.getByTestId('money-1000-EUR-auto')).toBeInTheDocument();
   });
 });

@@ -252,16 +252,15 @@ describe('DetailMoreActionsMenu — accounting capability gate (ETP-5684)', () =
 
 // ETP-5745 follow-up — "if it can't reactivate, it must not do anything": a reactivation this
 // guard already knows will be refused (fiscally accepted + a completed rectificativa) must not
-// run maybeSaveBeforeConfirm, runPreUnpost, or docAction.execute — not even when the header is
-// dirty and the row is posted (which would otherwise both fire first).
+// run maybeSaveBeforeConfirm or docAction.execute — not even when the header is
+// dirty and the row is posted.
 describe('DetailMoreActionsMenu — reactivation blocked by a fiscal-accepted rectificativa (ETP-5745 follow-up)', () => {
-  const REACTIVATE_WITH_PREUNPOST = {
+  const REACTIVATE_ACTION = {
     key: 'reactivate',
     label: 'Reactivate',
     labelKey: 'reactivate',
     documentAction: 'RE',
     successKey: 'reactivated',
-    preUnpost: true,
   };
   const CONFIRM_ACTION = {
     key: 'confirm',
@@ -277,7 +276,7 @@ describe('DetailMoreActionsMenu — reactivation blocked by a fiscal-accepted re
     return params ? `${key}:${JSON.stringify(params)}` : key;
   }
 
-  function renderBlockedMenu({ data, menuActions = [REACTIVATE_WITH_PREUNPOST], hookOverrides = {} } = {}) {
+  function renderBlockedMenu({ data, menuActions = [REACTIVATE_ACTION], hookOverrides = {} } = {}) {
     const hook = makeHook({ isDirtyHeader: true, ...hookOverrides });
     const docAction = makeDocAction();
     const neoExecute = vi.fn().mockResolvedValue({ success: true });
@@ -302,13 +301,13 @@ describe('DetailMoreActionsMenu — reactivation blocked by a fiscal-accepted re
     return { hook, docAction, neoExecute };
   }
 
-  it('toasts the fiscal-rectified message and runs nothing else: no save, no preUnpost, no execute', async () => {
+  it('toasts the fiscal-rectified message and runs nothing else: no save, no unpost, no execute', async () => {
     vi.mocked(toast.error).mockClear();
     vi.mocked(toast.success).mockClear();
     const { hook, docAction, neoExecute } = renderBlockedMenu({
       data: {
         id: 'rec-1',
-        posted: 'Y', // posted on purpose — proves runPreUnpost (which WOULD fire for a posted row) never runs
+        posted: 'Y', // posted on purpose — proves no unpost is sent for a posted row
         reactivationBlocked: true,
         reactivationBlockedFiscalSystem: 'Verifactu',
         reactivationBlockedRectificativas: ['FR-0001', 'FR-0002'],
@@ -326,6 +325,33 @@ describe('DetailMoreActionsMenu — reactivation blocked by a fiscal-accepted re
     expect(neoExecute).not.toHaveBeenCalled();
     expect(docAction.execute).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // ETP-5745: reactivationBlockedFiscalSystem is a real array now (GET enrichment, matching the
+  // live 422's own messageParams.fiscalSystem shape) — this pre-unpost check must run it through
+  // the same joinWithConjunction the live action failure uses, not pass the raw array through
+  // (which would stringify as "SII,TicketBAI" with no spacing, or render literally as an array).
+  it('joins an array reactivationBlockedFiscalSystem via joinWithConjunction before interpolating', async () => {
+    vi.mocked(toast.error).mockClear();
+    await renderBlockedMenu({
+      data: {
+        id: 'rec-1',
+        reactivationBlocked: true,
+        reactivationBlockedFiscalSystem: ['SII', 'TicketBAI'],
+        reactivationBlockedRectificativas: ['REC-1000022'],
+      },
+    });
+
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    // paramUi has no real translations, so joinWithConjunction's `t('listConjunctionAnd')` call
+    // resolves to the bare key — proving the join ran (an untouched array would stringify
+    // differently, e.g. "SII,TicketBAI" with no spacing).
+    expect(toast.error).toHaveBeenCalledWith(
+      'backendError.invoiceReactivateFiscalRectified:'
+      + JSON.stringify({ fiscalSystem: 'SII listConjunctionAnd TicketBAI', rectificativas: 'REC-1000022' }),
+    );
   });
 
   it('passes a bare (non-array) rectificativas value through unchanged', async () => {

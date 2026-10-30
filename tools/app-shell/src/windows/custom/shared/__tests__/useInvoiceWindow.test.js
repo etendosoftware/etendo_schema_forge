@@ -254,7 +254,6 @@ describe('useInvoiceWindow', () => {
         labelKey: 'reactivate',
         documentAction: 'RE',
         successKey: 'reactivated',
-        preUnpost: true,
       };
       const POST = { key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' };
       // ETP-5378 — an invoice has no confirm popup: its form-view Confirm is DetailView's
@@ -268,7 +267,7 @@ describe('useInvoiceWindow', () => {
       const build = () => buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
 
       // ETP-5745 QA follow-up — the real `reactivate` entry now also carries a
-      // `preUnpostGuard` function (RowQuickActions.jsx's generic pre-preUnpost hook,
+      // `preUnpostGuard` function (RowQuickActions.jsx's generic pre-action guard hook,
       // wired via `reactivateRowFilter` below). A plain `deepEqual` against a REACTIVATE
       // object literal can never express "a function", so every assertion that used to
       // compare the full action list now asserts the function's presence/type on the
@@ -306,9 +305,10 @@ describe('useInvoiceWindow', () => {
         assert.deepEqual(withoutPreUnpostGuard(actions), [REACTIVATE, POST]);
       });
 
-      it('carries preUnpost so reactivating a posted invoice reverses its accounting first', () => {
+      // ETP-5684 — a posted invoice is un-posted by the server inside the RE, not by the kebab.
+      it('does not ask the kebab to un-post before reactivating a posted invoice', () => {
         const [reactivate] = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'Y' } });
-        assert.equal(reactivate.preUnpost, true);
+        assert.equal(reactivate.preUnpost, undefined);
         assert.equal(reactivate.documentAction, 'RE');
         assert.equal(typeof reactivate.preUnpostGuard, 'function');
       });
@@ -328,8 +328,8 @@ describe('useInvoiceWindow', () => {
       });
     });
 
-    // ETP-5745 QA follow-up — the row-hover kebab is a THIRD surface running the same
-    // preUnpost-then-reactivate sequence as the detail kebab and the bulk bar, and list rows
+    // ETP-5745 QA follow-up — the row-hover kebab is a THIRD surface offering the same
+    // reactivation as the detail kebab and the bulk bar, and list rows
     // are never GET-enriched with `reactivationBlocked`. `buildInvoiceRowQuickActions` now
     // wires the reactivate entry's `preUnpostGuard` to `makeInvoiceReactivateRowFilter` built
     // from the options' `apiBaseUrl`/`token`, which is the exact function already covered
@@ -729,6 +729,40 @@ describe('useInvoiceWindow', () => {
       const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
       const result = await rowFilter({ id: 'inv-1' }, 'RE', paramUi);
       assert.match(result, /FR-0003/);
+    });
+
+    // ETP-5745: reactivationBlockedFiscalSystem is a real array now (GET enrichment, matching
+    // the live 422's own messageParams.fiscalSystem shape) — this preview must join it with the
+    // SAME locale-aware conjunction the live action failure uses, not a flat comma, so a user who
+    // sees this bulk-bar preview and then tries the row anyway reads an identical message.
+    it('joins an array reactivationBlockedFiscalSystem with the locale-aware conjunction, consistent with the live 422', async () => {
+      stubFetch(() => jsonResponse({
+        response: {
+          data: [{
+            id: 'inv-1',
+            reactivationBlocked: true,
+            reactivationBlockedFiscalSystem: ['SII', 'TicketBAI'],
+            reactivationBlockedRectificativas: ['REC-1000022'],
+          }],
+        },
+      }));
+      // A minimal `ui` that actually interpolates `{var}` tokens and resolves
+      // `listConjunctionAnd`, so the array-join path (joinWithConjunction) can be observed
+      // end to end — `paramUi` above only serializes params, it never substitutes them.
+      const realUi = (key, params = {}) => {
+        const templates = {
+          listConjunctionAnd: 'y',
+          'backendError.invoiceReactivateFiscalRectified':
+            '...aceptada por {fiscalSystem} y está rectificada por: {rectificativas}.',
+        };
+        let text = templates[key] ?? key;
+        Object.keys(params).forEach(p => { text = text.replace(`{${p}}`, params[p]); });
+        return text;
+      };
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      const result = await rowFilter({ id: 'inv-1' }, 'RE', realUi);
+      assert.match(result, /SII y TicketBAI/);
+      assert.doesNotMatch(result, /SII, TicketBAI/);
     });
 
     it('fails OPEN (returns true) on a non-ok response', async () => {

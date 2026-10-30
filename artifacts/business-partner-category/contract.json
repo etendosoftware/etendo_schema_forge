@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.9.0",
   "generatedAt": "2026-07-01T17:11:14.893Z",
-  "updatedAt": "2026-10-15T18:58:29.600Z",
-  "checksum": "949bc65168395b52",
+  "updatedAt": "2026-10-26T18:25:24.744Z",
+  "checksum": "782f3dab18e602bd",
   "frontendContract": {
     "window": {
       "id": "192",
@@ -11,6 +11,9 @@
       "category": "contact",
       "hidePrint": true,
       "hideLink": true,
+      "customComponents": {
+        "headerTable": "BpCategoryTable"
+      },
       "detailEntity": "accounting",
       "detailVisibleWhenCapability": "showAccountingFields",
       "noHeaderBorder": true,
@@ -48,6 +51,7 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 1,
+            "gridOrder": 1,
             "validation": {
               "required": true,
               "maxLength": 40
@@ -67,6 +71,7 @@
             "sourceRequired": true,
             "section": "principal",
             "seq": 2,
+            "gridOrder": 2,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -101,11 +106,107 @@
             "tsType": "boolean",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "section": "principal",
             "seq": 4,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "neutral"
+            },
+            "gridOrder": 5,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "etgoIscustomer",
+            "apiKey": "etgoIscustomer",
+            "column": "EM_Etgo_Iscustomer",
+            "label": "Customer",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "customRenderer": "ContactTypeField",
+            "defaultValue": "N",
+            "section": "principal",
+            "seq": 5,
+            "span": 4,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "neutral"
+            },
+            "gridOrder": 3,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "etgoIsvendor",
+            "apiKey": "etgoIsvendor",
+            "column": "EM_Etgo_Isvendor",
+            "label": "Vendor/Creditor",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "neutral"
+            },
+            "gridOrder": 4,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -116,7 +217,22 @@
           "searchKey",
           "name"
         ],
-        "computedFields": []
+        "computedFields": [
+          {
+            "name": "etgoIscustomer",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "etgoIsvendor",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ]
       },
       "accounting": {
         "tableName": "C_BP_Group_Acct",
@@ -574,6 +690,9 @@
       "category": "contact",
       "hidePrint": true,
       "hideLink": true,
+      "customComponents": {
+        "headerTable": "BpCategoryTable"
+      },
       "detailEntity": "accounting",
       "detailVisibleWhenCapability": "showAccountingFields",
       "noHeaderBorder": true,
@@ -647,6 +766,22 @@
             "name": "default",
             "apiKey": "default",
             "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "etgoIscustomer",
+            "apiKey": "etgoIscustomer",
+            "column": "EM_Etgo_Iscustomer",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "etgoIsvendor",
+            "apiKey": "etgoIsvendor",
+            "column": "EM_Etgo_Isvendor",
             "type": "boolean",
             "visibility": "editable",
             "required": true
@@ -1285,6 +1420,22 @@
         "description": "CRUD flags for 'businessPartnerCategory' should all be booleans"
       },
       {
+        "id": "t-default-value-type-businessPartnerCategory-etgoIscustomer",
+        "category": "default-value-type",
+        "entity": "businessPartnerCategory",
+        "field": "etgoIscustomer",
+        "runner": "node",
+        "description": "Default value for 'etgoIscustomer' in businessPartnerCategory should be a string"
+      },
+      {
+        "id": "t-default-value-type-businessPartnerCategory-etgoIsvendor",
+        "category": "default-value-type",
+        "entity": "businessPartnerCategory",
+        "field": "etgoIsvendor",
+        "runner": "node",
+        "description": "Default value for 'etgoIsvendor' in businessPartnerCategory should be a string"
+      },
+      {
         "id": "t-field-presence-accounting-allowanceForDoubtfulDebtAccount",
         "category": "field-presence",
         "entity": "accounting",
@@ -1467,6 +1618,22 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be present in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-presence-businessPartnerCategory-etgoIscustomer",
+        "category": "field-presence",
+        "entity": "businessPartnerCategory",
+        "field": "etgoIscustomer",
+        "runner": "node",
+        "description": "Field 'etgoIscustomer' should be present in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-presence-businessPartnerCategory-etgoIsvendor",
+        "category": "field-presence",
+        "entity": "businessPartnerCategory",
+        "field": "etgoIsvendor",
+        "runner": "node",
+        "description": "Field 'etgoIsvendor' should be present in businessPartnerCategory"
       },
       {
         "id": "t-field-presence-businessPartnerCategory-name",
@@ -1667,6 +1834,22 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-type-businessPartnerCategory-etgoIscustomer",
+        "category": "field-type",
+        "entity": "businessPartnerCategory",
+        "field": "etgoIscustomer",
+        "runner": "node",
+        "description": "Field 'etgoIscustomer' should have type 'boolean' in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-type-businessPartnerCategory-etgoIsvendor",
+        "category": "field-type",
+        "entity": "businessPartnerCategory",
+        "field": "etgoIsvendor",
+        "runner": "node",
+        "description": "Field 'etgoIsvendor' should have type 'boolean' in businessPartnerCategory"
       },
       {
         "id": "t-field-type-businessPartnerCategory-name",
@@ -2051,12 +2234,13 @@
       }
     ],
     "summary": {
-      "total": 99,
+      "total": 105,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 2,
-        "field-presence": 25,
-        "field-type": 25,
+        "default-value-type": 2,
+        "field-presence": 27,
+        "field-type": 27,
         "rule-declared": 1,
         "searchable-filters": 2,
         "selector-endpoint": 21,
@@ -2064,7 +2248,7 @@
         "visibility": 2
       },
       "byRunner": {
-        "node": 99,
+        "node": 105,
         "junit": 0
       }
     }

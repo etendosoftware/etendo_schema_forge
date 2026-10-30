@@ -127,10 +127,6 @@ function PurchaseInvoiceBulkAction(props) {
       <BulkDocumentAction
         {...props}
         labelKey="process"
-        // ETP-5302 — Core's C_INVOICE_POST refuses RE while Posted='Y'. The detail kebab
-        // already unposts first (`preUnpost: true` in decisions.json); this makes the bulk
-        // bar run the same two steps instead of failing with "Factura contabilizada".
-        preUnpostActions={['RE']}
         rowFilter={reactivateRowFilter}
         data-testid="BulkDocumentAction__c20e53" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}

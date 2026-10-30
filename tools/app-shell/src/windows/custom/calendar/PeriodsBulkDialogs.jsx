@@ -4,10 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 
-const CONFIRM_TITLE_KEYS = { O: 'periodsBulkConfirmOpenTitle', C: 'periodsBulkConfirmCloseTitle' };
-const ACTION_LABEL_KEYS = { O: 'periodsBulkOpen', C: 'periodsBulkClose' };
-const OK_LABEL_KEYS = { O: 'periodsBulkResultOpened', C: 'periodsBulkResultClosed' };
-const SKIPPED_LABEL_KEYS = { O: 'periodsBulkResultAlreadyOpen', C: 'periodsBulkResultAlreadyClosed' };
+// 'P' (permanently closed) is only offered per row (ETP-5592): it is irreversible.
+const CONFIRM_TITLE_KEYS = {
+  O: 'periodsBulkConfirmOpenTitle', C: 'periodsBulkConfirmCloseTitle', P: 'periodsBulkConfirmPermanentTitle',
+};
+const ACTION_LABEL_KEYS = { O: 'periodsBulkOpen', C: 'periodsBulkClose', P: 'periodsBulkClosePermanently' };
+const OK_LABEL_KEYS = { O: 'periodsBulkResultOpened', C: 'periodsBulkResultClosed', P: 'periodsBulkResultPermanentlyClosed' };
+const SKIPPED_LABEL_KEYS = { O: 'periodsBulkResultAlreadyOpen', C: 'periodsBulkResultAlreadyClosed', P: 'periodsBulkResultAlreadyClosed' };
 
 /**
  * A counted label: `<key>One` when `count` is 1 ("Open 1 period?"), otherwise `<key>` with
@@ -18,8 +21,10 @@ export function countedLabel(ui, key, count) {
 }
 
 /**
- * Confirmation before a bulk open/close (ETP-5682): names every selected period, so the user
- * sees exactly what the action will touch before anything is posted.
+ * Confirmation before an open/close (ETP-5682), from the bulk bar or a row link (ETP-5592): names
+ * every target period, so the user sees exactly what the action will touch before anything is
+ * posted. The run order is only worth explaining for several periods; a permanent close warns
+ * that it cannot be undone.
  */
 export function PeriodsBulkConfirmDialog({ action, periodNames, onConfirm, onCancel }) {
   const ui = useUI();
@@ -33,15 +38,21 @@ export function PeriodsBulkConfirmDialog({ action, periodNames, onConfirm, onCan
               {countedLabel(ui, CONFIRM_TITLE_KEYS[action], periodNames.length)}
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground" data-testid="periods-bulk-confirm-body">
-            {ui('periodsBulkConfirmBody')}
-          </p>
+          {(action === 'P' || periodNames.length > 1) && (
+            <p className="text-sm text-muted-foreground" data-testid="periods-bulk-confirm-body">
+              {ui(action === 'P' ? 'periodsBulkConfirmPermanentBody' : 'periodsBulkConfirmBody')}
+            </p>
+          )}
           <p className="text-sm font-medium" data-testid="periods-bulk-confirm-names">{periodNames.join(', ')}</p>
           <DialogFooter className="gap-2 pt-2" data-testid="DialogFooter__periodsBulkConfirm">
             <Button type="button" variant="outline" onClick={onCancel} data-testid="periods-bulk-confirm-cancel">
               {ui('cancel')}
             </Button>
-            <Button type="button" onClick={onConfirm} data-testid="periods-bulk-confirm-ok">
+            <Button
+              type="button"
+              variant={action === 'P' ? 'destructive' : 'default'}
+              onClick={onConfirm}
+              data-testid="periods-bulk-confirm-ok">
               {ui(ACTION_LABEL_KEYS[action])}
             </Button>
           </DialogFooter>

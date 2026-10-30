@@ -17,13 +17,26 @@ export const getReturnDocDisplay = (doc) => ({ docNo: doc.documentNo || doc.id, 
 // Batch-submits the selected return lines to a NEO action endpoint shaped
 // POST {lines:[{sourceLineId, returnQuantity}]} -> {response:{data:{importedCount}}}.
 // `actionUrl(base, invoiceId)` is per-window (different action name/path).
+// ETP-5051 — a refusal hands back its parsed `body`, so ImportLinesModal can show a plan-quota
+// refusal as the quota sentence instead of its generic import error.
 export async function submitReturnImportBatch({ lines, base, invoiceId, actionUrl }) {
   const res = await apiFetch(actionUrl(base, invoiceId), {
     baseUrl: '',
     method: 'POST',
     body: JSON.stringify({ lines: lines.map(({ line, qty }) => ({ sourceLineId: line.id, returnQuantity: qty })) }),
   });
-  if (!res.ok) return { ok: false };
+  if (!res.ok) {
+    const body = await readJsonSafely(res);
+    return body ? { ok: false, body } : { ok: false };
+  }
   const body = await res.json();
   return { ok: true, count: body?.response?.data?.importedCount ?? lines.length };
+}
+
+async function readJsonSafely(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
 }

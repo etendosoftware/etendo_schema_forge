@@ -3,7 +3,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
+import { UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
 import MyCompaniesPage from '../MyCompaniesPage.jsx';
+import enUS from '@/locales/en_US.json';
+import esES from '@/locales/es_ES.json';
+import esAR from '@/locales/es_AR.json';
 
 const navigateMock = vi.fn();
 const switchToMock = vi.fn();
@@ -51,7 +55,10 @@ vi.mock('@/lib/myCompanies/telemetry.js', () => ({
   trackMyCompaniesEnterFailed: (...args) => trackEnterFailedMock(...args),
 }));
 
-vi.mock('@/lib/upgrade/api.js', () => ({
+// The real module's error table is kept: the page recognizes the portal's NO_SUBSCRIPTION refusal by
+// `UPGRADE_ERROR_CODES.portalNoSubscription`, so the test must share that constant with it.
+vi.mock('@/lib/upgrade/api.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   createPortalSession: (...args) => createPortalSessionMock(...args),
   getSubscription: (...args) => getSubscriptionMock(...args),
 }));
@@ -71,6 +78,11 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   ),
 }));
 
+const RENEWAL_AT = '2026-12-15T00:00:00Z';
+const SHORT_DATE = { day: 'numeric', month: 'short', year: 'numeric' };
+const RENEWAL_LABEL = formatCalendarDate(RENEWAL_AT, 'es_ES', SHORT_DATE);
+// ETP-5051 O-1b — `renewalAt` is per environment in `GET /sws/go/environments`, already null
+// unless that environment's own subscription is renewing.
 const OWNED_PRODUCTIVE = {
   clientId: 'own-1',
   clientName: 'GOClient',
@@ -78,6 +90,7 @@ const OWNED_PRODUCTIVE = {
   relationship: 'OWNER',
   plan: 'productive',
   subscriptionStatus: 'CURRENT',
+  renewalAt: RENEWAL_AT,
   userCount: 4,
 };
 const OWNED_DEMO = {
@@ -101,22 +114,11 @@ const INVITED = {
   roleTemplateNames: ['Finance'],
 };
 
-const RENEWAL_AT = '2026-12-15T00:00:00Z';
-const RENEWAL_LABEL = formatCalendarDate(RENEWAL_AT, 'es_ES', { day: 'numeric', month: 'short', year: 'numeric' });
-const SUBSCRIPTION = {
-  hasSubscription: true,
-  clientId: 'own-1',
-  status: 'active',
-  renewalAt: RENEWAL_AT,
-  cancelAtPeriodEnd: false,
-};
-
 beforeEach(() => {
   vi.clearAllMocks();
   environmentSwitch = {};
   fetchCompanyEnvironmentsMock.mockResolvedValue([OWNED_PRODUCTIVE, OWNED_DEMO, INVITED]);
   fetchMyInvitationsMock.mockResolvedValue([]);
-  getSubscriptionMock.mockResolvedValue(SUBSCRIPTION);
 });
 
 describe('MyCompaniesPage', () => {
@@ -142,38 +144,78 @@ describe('MyCompaniesPage', () => {
     expect(screen.getByText(/myCompaniesOwnedSection · 2/)).toBeInTheDocument();
   });
 
-  it('dates the renewal from the live subscription, never from the stored grace anchor', async () => {
+  it('dates the renewal from the environment, never from the stored grace anchor', async () => {
     fetchCompanyEnvironmentsMock.mockResolvedValue([
-      { ...OWNED_PRODUCTIVE, subscriptionStatus: 'PAST_DUE', renewalDueAt: '2026-09-01T00:00:00Z' },
+      {
+        ...OWNED_PRODUCTIVE,
+        subscriptionStatus: 'PAST_DUE',
+        renewalDueAt: '2026-09-01T00:00:00Z',
+        renewalAt: null,
+      },
     ]);
-    getSubscriptionMock.mockResolvedValue(null);
 
     render(<MyCompaniesPage />);
 
     const productive = await screen.findByTestId('my-companies-owned-own-1');
-    expect(productive).not.toHaveTextContent(formatCalendarDate('2026-09-01T00:00:00Z', 'es_ES', { day: 'numeric', month: 'short', year: 'numeric' }));
+    expect(productive).not.toHaveTextContent(formatCalendarDate('2026-09-01T00:00:00Z', 'es_ES', SHORT_DATE));
     expect(productive).toHaveTextContent('—');
     expect(screen.getByTestId('my-companies-commercial-own-1')).toHaveTextContent('environmentPaymentGrace');
   });
 
+  // The backend sends `renewalAt: null` for a subscription that is not renewing (past due,
+  // scheduled to cancel); an older backend sends no key at all. Both read as no date.
   it.each([
-    ['another company', { clientId: 'own-9' }],
-    ['a past-due subscription', { status: 'past_due' }],
-    ['a scheduled cancellation', { cancelAtPeriodEnd: true }],
+    ['a null renewalAt', { renewalAt: null }],
+    ['no renewalAt key', { renewalAt: undefined }],
   ])('shows no renewal date for %s', async (_case, override) => {
-    getSubscriptionMock.mockResolvedValue({ ...SUBSCRIPTION, ...override });
-
-    render(<MyCompaniesPage />);
-
-    expect(await screen.findByTestId('my-companies-owned-own-1')).not.toHaveTextContent(RENEWAL_LABEL);
-  });
-
-  it('still lists the companies when the subscription cannot be read', async () => {
-    getSubscriptionMock.mockRejectedValue(new Error('provider down'));
+    fetchCompanyEnvironmentsMock.mockResolvedValue([{ ...OWNED_PRODUCTIVE, ...override }]);
 
     render(<MyCompaniesPage />);
 
     expect(await screen.findByTestId('my-companies-owned-own-1')).toHaveTextContent('—');
+  });
+
+  it('does not read the account subscription: every row carries its own renewal date', async () => {
+    render(<MyCompaniesPage />);
+    await screen.findByTestId('my-companies-owned-own-1');
+
+    expect(getSubscriptionMock).not.toHaveBeenCalled();
+  });
+
+  // ETP-5051 O-1b — each row describes and manages ITS OWN environment, whatever environment the
+  // session is in: the subscription endpoint now answers only the entered one, so a row that read
+  // it would show the entered environment's date, and a portal opened without a client id would
+  // open the entered environment's portal from another company's row.
+  it('dates and manages every productive row as its own environment', async () => {
+    const otherRenewal = '2027-03-02T00:00:00Z';
+    const otherProductive = {
+      ...OWNED_PRODUCTIVE, clientId: 'own-3', clientName: 'GOClient Export', renewalAt: otherRenewal,
+    };
+    fetchCompanyEnvironmentsMock.mockResolvedValue([OWNED_PRODUCTIVE, otherProductive]);
+    createPortalSessionMock.mockResolvedValue({ url: 'https://billing.example/session-own-3' });
+    const assignMock = vi.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, assign: assignMock, pathname: '/' },
+    });
+    try {
+      render(<MyCompaniesPage />);
+
+      // The session is in own-1 (`currentClientId`); own-3 still shows its own date.
+      expect(await screen.findByTestId('my-companies-owned-own-1')).toHaveTextContent(RENEWAL_LABEL);
+      const other = screen.getByTestId('my-companies-owned-own-3');
+      expect(other).toHaveTextContent(formatCalendarDate(otherRenewal, 'es_ES', SHORT_DATE));
+      expect(other).not.toHaveTextContent(RENEWAL_LABEL);
+
+      await userEvent.click(screen.getByTestId('my-companies-manage-own-3'));
+
+      expect(createPortalSessionMock).toHaveBeenCalledTimes(1);
+      expect(createPortalSessionMock).toHaveBeenCalledWith(expect.anything(), 'own-3');
+      await waitFor(() => expect(assignMock).toHaveBeenCalledWith('https://billing.example/session-own-3'));
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    }
   });
 
   it('marks the current company and disables entering it', async () => {
@@ -269,6 +311,20 @@ describe('MyCompaniesPage', () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('subscriptionManageError'));
   });
 
+  // A row whose environment has no purchase of its own (404 NO_SUBSCRIPTION) is not a transient
+  // failure: "please try again" would send the user round in circles.
+  it('says the company has no subscription to manage when the portal finds none', async () => {
+    createPortalSessionMock.mockRejectedValue(Object.assign(new Error('no subscription'), {
+      code: UPGRADE_ERROR_CODES.portalNoSubscription, status: 404,
+    }));
+    render(<MyCompaniesPage />);
+
+    await userEvent.click(await screen.findByTestId('my-companies-manage-own-1'));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('upgradePortalNoSubscription'));
+    expect(toastErrorMock).not.toHaveBeenCalledWith('subscriptionManageError');
+  });
+
   it('shows an open invitation as a notice and not as an invited row', async () => {
     fetchCompanyEnvironmentsMock.mockResolvedValue([
       OWNED_PRODUCTIVE,
@@ -324,5 +380,28 @@ describe('MyCompaniesPage', () => {
     await userEvent.click(screen.getByTestId('my-companies-new'));
 
     expect(navigateMock).toHaveBeenCalledWith('/upgrade');
+  });
+
+  // The identity translator above cannot see a missing entry: useUI() would echo the raw key to
+  // the user. The per-row refusal is new copy, so its key is pinned in every shipped dictionary.
+  describe('copy in every shipped locale', () => {
+    it.each([
+      ['en_US', enUS],
+      ['es_ES', esES],
+      ['es_AR', esAR],
+    ])('%s defines the no-subscription-to-manage message', (_name, dict) => {
+      const value = dict.genericLabels?.[UPGRADE_ERROR_CODES.portalNoSubscription];
+      expect(typeof value).toBe('string');
+      expect(value.trim()).not.toBe('');
+    });
+
+    // Not a transient failure, so it must not read as the retry message it replaced.
+    it.each([
+      ['en_US', enUS],
+      ['es_ES', esES],
+    ])('%s does not reuse the try-again sentence for it', (_name, dict) => {
+      expect(dict.genericLabels[UPGRADE_ERROR_CODES.portalNoSubscription])
+        .not.toBe(dict.genericLabels.subscriptionManageError);
+    });
   });
 });

@@ -170,3 +170,70 @@ describe('DataTable — per-row currency (ETP-5245)', () => {
     expect(footerCells()[1]).toBe('198,47 €');
   });
 });
+
+describe('DataTable — server-side list totals (ETP-5757)', () => {
+  beforeEach(() => { sessionCurrency.value = null; });
+
+  const TOTAL_COL = { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total' };
+  const OTHER_COL = { key: 'other', column: 'Other', type: 'amount', label: 'Other' };
+  const ROWS = [
+    { id: 'r1', grandTotalAmount: 100, other: 1, 'cCurrencyID$_identifier': 'USD' },
+    { id: 'r2', grandTotalAmount: 50, other: 2, 'cCurrencyID$_identifier': 'EUR' },
+  ];
+  const metaOf = (over = {}) => ({
+    listTotals: {
+      orgCurrencyIso: 'EUR',
+      rowCount: 7,
+      columns: {
+        grandTotalAmount: { amount: 10960.18, iso: 'EUR', approximate: true, missingRateCurrencies: [], ...over },
+      },
+    },
+  });
+
+  it('shows the org-currency total with the approximate prefix, not the first row currency', () => {
+    render(<DataTable columns={[TOTAL_COL]} data={ROWS} meta={metaOf()} />);
+    expect(footerCells()[1]).toBe('≈ 10.960,18 €');
+  });
+
+  it('omits the approximate prefix when approximate is false', () => {
+    render(<DataTable columns={[TOTAL_COL]} data={ROWS} meta={metaOf({ approximate: false })} />);
+    expect(footerCells()[1]).toBe('10.960,18 €');
+  });
+
+  it('shows the missing-rate warning when currencies lack a rate (ui mock ignores params)', () => {
+    render(<DataTable columns={[TOTAL_COL]} data={ROWS} meta={metaOf({ missingRateCurrencies: ['GBP', 'CHF'] })} />);
+    expect(screen.getByTestId('footer-total-missing-rate-grandTotalAmount').textContent).toContain('financeAccountsBalanceMissingRate');
+  });
+
+  it('shows no warning when no currency is missing a rate', () => {
+    render(<DataTable columns={[TOTAL_COL]} data={ROWS} meta={metaOf()} />);
+    expect(screen.queryByTestId('footer-total-missing-rate-grandTotalAmount')).toBeNull();
+  });
+
+  it('keeps the client-side sum when there is no meta', () => {
+    render(<DataTable columns={[TOTAL_COL]} data={ROWS} />);
+    expect(footerCells()[1]).toBe('150,00 $');
+  });
+
+  it('keeps the client-side sum when meta carries no listTotals', () => {
+    render(<DataTable columns={[TOTAL_COL]} data={ROWS} meta={{ count: 2 }} />);
+    expect(footerCells()[1]).toBe('150,00 $');
+  });
+
+  it('falls back to the client-side sum when a rowFilter narrows the visible rows', () => {
+    render(<DataTable columns={[TOTAL_COL]} data={ROWS} meta={metaOf()} rowFilter={(r) => r.id === 'r2'} />);
+    expect(footerCells()[1]).toBe('50,00 €');
+  });
+
+  it('client-sums a column without a server total while the others use the server one', () => {
+    render(<DataTable columns={[TOTAL_COL, OTHER_COL]} data={ROWS} meta={metaOf()} />);
+    const cells = footerCells();
+    expect(cells[1]).toBe('≈ 10.960,18 €');
+    expect(cells[2]).toContain('3,00');
+  });
+
+  it('ignores a server total for a column declared summable: false', () => {
+    render(<DataTable columns={[{ ...TOTAL_COL, summable: false }]} data={ROWS} meta={metaOf()} />);
+    expect(footerCells()).toBeNull();
+  });
+});

@@ -136,6 +136,10 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   ],
   isCompanyStepValid: () => true,
   isProfileStepValid: () => true,
+  // ETP-5806 — CompanyStep now gates the structured Street/Number/City fields' required
+  // state on this; these page-level tests exercise the wizard shell, not CompanyStep's
+  // own address-block logic (covered in etendo-go-core), so it stays permissive (false).
+  isAddressBlockStarted: () => false,
   // ETP-5426: CompanyStep reads it to decide whether to render the sample-data opt-in. False keeps
   // the checkbox out of these flows, which predate it; its own coverage lives in etendo-go-core.
   isSampleDataOffered: () => false,
@@ -592,7 +596,15 @@ describe('OnboardingPage', () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
     // server. Declaring the session here is what puts these cases past the login view.
-    fetchSession.mockResolvedValue({ csrfToken: 'csrf-test', account: { name: 'Ada Lovelace' } });
+    // ETP-5806 — this test asserts against the structured Street/Number/Building Name fields,
+    // which only render when the backend-only `structured-address-for-sepa` flag is on. The
+    // flag is surfaced as `capabilities.structuredAddressForSepa` on the session response
+    // (OnboardingFlow.jsx reads `data.capabilities` and forwards it to CompanyStep).
+    fetchSession.mockResolvedValue({
+      csrfToken: 'csrf-test',
+      account: { name: 'Ada Lovelace' },
+      capabilities: { structuredAddressForSepa: true },
+    });
     fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
     fetchEnvironments.mockResolvedValue([]);
 
@@ -605,7 +617,10 @@ describe('OnboardingPage', () => {
     // so it is no longer changed here.
     fireEvent.click(await screen.findByText('onboardingBusinessTypeFreelancer'));
     fireEvent.click(screen.getByText('onboardingContinueAction'));
-    fireEvent.change(await screen.findByLabelText(/onboardingAddressLabel/), {
+    // ETP-5806 — the single free-text "Address" field (label "onboardingAddressLabel") was
+    // replaced by structured Street/Number/Building Name/City cells; "streetNameLabel" is the
+    // one carrying a real <label for="streetName">, so it is the one findByLabelText can locate.
+    fireEvent.change(await screen.findByLabelText(/streetNameLabel/), {
       target: { value: 'Secret Street 123' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingSectorLabel/), {

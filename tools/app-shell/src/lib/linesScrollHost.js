@@ -161,3 +161,72 @@ export function useAddRowScrollHostWidth(host) {
   }, [host]);
   return widthPx;
 }
+
+// ── Add-row draft (ETP-5133, QA pass 3) ────────────────────────────────────────────────
+// Same sibling pair, same `entity` key, second piece of shared state: the identifier the add-row
+// has picked for a no-truncate column (e.g. the product) BEFORE the line is saved. DataTable owns
+// the add-row values, InlineLinesPanel owns the header and saved lines; both must size the
+// no-truncate column from the same rows (`rowsWithDraft` in linesContentWidth.js), so DataTable
+// publishes its draft here and InlineLinesPanel subscribes. Published from a layout effect, like
+// the scroll host, so the widened header and the widened add-row paint in the same frame.
+
+const drafts = new Map();
+const draftListeners = new Map();
+
+function notifyDraft(key) {
+  const draft = drafts.get(key) ?? null;
+  for (const fn of draftListeners.get(key) ?? []) fn(draft);
+}
+
+/** Publishes the add-row draft row for `key` (`null` clears it). */
+export function publishLinesAddRowDraft(key, draft) {
+  if (!key) return;
+  if ((drafts.get(key) ?? null) === draft) return;
+  if (draft) drafts.set(key, draft);
+  else drafts.delete(key);
+  notifyDraft(key);
+}
+
+/**
+ * Clears the draft for `key`, but only if `draft` is still the current one — same out-of-order
+ * unmount guard as `unregisterLinesScrollHost`.
+ */
+export function clearLinesAddRowDraft(key, draft) {
+  if (!key || drafts.get(key) !== draft) return;
+  drafts.delete(key);
+  notifyDraft(key);
+}
+
+/** Live-subscribes to the add-row draft for `key`; `null` with no key or no draft. */
+export function useLinesAddRowDraft(key) {
+  const [draft, setDraft] = useState(() => (key ? drafts.get(key) ?? null : null));
+  useLayoutEffect(() => {
+    if (!key) {
+      setDraft(null);
+      return undefined;
+    }
+    setDraft(drafts.get(key) ?? null);
+    if (!draftListeners.has(key)) draftListeners.set(key, new Set());
+    const set = draftListeners.get(key);
+    set.add(setDraft);
+    return () => {
+      set.delete(setDraft);
+      if (set.size === 0) draftListeners.delete(key);
+    };
+  }, [key]);
+  return draft;
+}
+
+/**
+ * Publishes `draft` for `key` while both are set, and clears it on change/unmount — the producer
+ * side (DataTable's add-row), as a hook so its caller stays one line. `key` is null whenever the
+ * caller is not the add-row companion table or its add-row is closed, so a cancelled add-row
+ * clears the draft and the column falls back to the width `data` alone dictates.
+ */
+export function usePublishLinesAddRowDraft(key, draft) {
+  useLayoutEffect(() => {
+    if (!key || !draft) return undefined;
+    publishLinesAddRowDraft(key, draft);
+    return () => clearLinesAddRowDraft(key, draft);
+  }, [key, draft]);
+}

@@ -1,12 +1,10 @@
+// @covers tools/app-shell/src/hooks/useDistinctValues.js
 /**
  * Functional boundary test for useDistinctValues.
  *
- * Post-split, the hook itself lives in schema_forge_core; this repo only ships a
- * thin shim at `@/hooks/useDistinctValues.js` (re-export of
- * `@etendosoftware/app-shell-core/hooks/useDistinctValues.js`). Under plain
- * vitest the shim resolves to the published package; under LOCAL_CORE it resolves
- * to the moved core source. The exhaustive unit coverage now lives beside the
- * source in core (packages/app-shell-core/src/hooks/__tests__).
+ * The hook at `@/hooks/useDistinctValues.js` is a full local copy (it is NOT a shim of
+ * the core package): the functional copy is the one used at runtime by ListFilterBar, and
+ * core keeps its own copy for its own consumers (AdvancedFilterBuilder, distinct-values-filter).
  *
  * This suite is deliberately re-angled to verify the FUNCTIONAL boundary: the
  * shim resolves to the real hook AND `useAuth()` is satisfied by a REAL
@@ -260,5 +258,169 @@ describe('useDistinctValues', () => {
     await waitFor(() => expect(result.current.values).toHaveLength(1));
     await act(async () => { result.current.refresh(); });
     await waitFor(() => expect(callCount).toBeGreaterThanOrEqual(2));
+  });
+  describe('extraParams', () => {
+    function mockEmpty() {
+      return vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ response: { data: [], hasMore: false } }),
+      });
+    }
+    const distinctCalls = (spy) =>
+      spy.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('_distinct='));
+    const paramsOf = (url) => new URLSearchParams(url.split('?')[1] ?? '');
+
+    it('sends extraParams together with the distinct and paging params', async () => {
+      const spy = mockEmpty();
+      renderHook(() =>
+        useDistinctValues('entity', 'status', {
+          apiBaseUrl: '/api',
+          extraParams: 'criteria=%5B%7B%22a%22%3A1%7D%5D&active=true',
+        }),
+        { wrapper },
+      );
+      await waitFor(() => expect(distinctCalls(spy).length).toBeGreaterThanOrEqual(1));
+      const params = paramsOf(distinctCalls(spy)[0]);
+      expect(params.get('criteria')).toBe('[{"a":1}]');
+      expect(params.get('active')).toBe('true');
+      expect(params.get('_distinct')).toBe('status');
+      expect(params.get('_startRow')).toBe('0');
+      expect(params.has('_endRow')).toBe(true);
+    });
+
+    it('does not let extraParams override the hook own reserved params', async () => {
+      const spy = mockEmpty();
+      renderHook(() =>
+        useDistinctValues('entity', 'status', {
+          apiBaseUrl: '/api',
+          extraParams: '_distinct=other&_startRow=99&_endRow=999&_distinctSearch=zzz&active=true',
+        }),
+        { wrapper },
+      );
+      await waitFor(() => expect(distinctCalls(spy).length).toBeGreaterThanOrEqual(1));
+      const params = paramsOf(distinctCalls(spy)[0]);
+      expect(params.getAll('_distinct')).toEqual(['status']);
+      expect(params.getAll('_startRow')).toEqual(['0']);
+      expect(params.get('_endRow')).not.toBe('999');
+      expect(params.getAll('_endRow')).toHaveLength(1);
+      expect(params.has('_distinctSearch')).toBe(false);
+      expect(params.get('active')).toBe('true');
+    });
+
+    it('refetches page 1 when extraParams changes while enabled', async () => {
+      const spy = mockEmpty();
+      const { rerender } = renderHook(
+        ({ extra }) => useDistinctValues('entity', 'status', { apiBaseUrl: '/api', extraParams: extra }),
+        { wrapper, initialProps: { extra: 'active=true' } },
+      );
+      // The auth provider may re-issue the first request once; only the query string matters.
+      await waitFor(() => expect(distinctCalls(spy).length).toBeGreaterThanOrEqual(1));
+      expect(distinctCalls(spy).every((u) => paramsOf(u).get('active') === 'true')).toBe(true);
+      rerender({ extra: 'active=false' });
+      await waitFor(() => {
+        const calls = distinctCalls(spy);
+        expect(paramsOf(calls[calls.length - 1]).get('active')).toBe('false');
+      });
+      const calls = distinctCalls(spy);
+      expect(paramsOf(calls[calls.length - 1]).get('_startRow')).toBe('0');
+    });
+
+    it('yields exactly the plain distinct URL when extraParams is empty or omitted', async () => {
+      const spy = mockEmpty();
+      renderHook(() => useDistinctValues('entity', 'status', { apiBaseUrl: '/api', extraParams: '' }), { wrapper });
+      renderHook(() => useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }), { wrapper });
+      await waitFor(() => expect(distinctCalls(spy).length).toBeGreaterThanOrEqual(2));
+      const [a, b] = distinctCalls(spy);
+      expect(a).toBe(b);
+      expect([...paramsOf(a).keys()].sort()).toEqual(['_distinct', '_endRow', '_startRow']);
+    });
+  });
+
+  describe('failures and superseded requests', () => {
+    const okBody = (data, hasMore = false) => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data, hasMore } }),
+    });
+    const distinctCalls = (spy) =>
+      spy.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('_distinct='));
+    const paramsOf = (url) => new URLSearchParams(url.split('?')[1] ?? '');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    async function expectNoRetryLoop(spy) {
+      const settled = distinctCalls(spy).length;
+      await act(async () => { await sleep(400); });
+      expect(distinctCalls(spy).length).toBe(settled);
+    }
+
+    it('an HTTP 500 leaves an empty, idle, errored state and does not retry', async () => {
+      const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      });
+      const { result } = renderHook(() =>
+        useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.values).toEqual([]);
+      expect(result.current.hasMore).toBe(false);
+      await expectNoRetryLoop(spy);
+      expect(result.current.error).toBeTruthy();
+    });
+
+    it('a network rejection leaves an empty, idle, errored state and does not retry', async () => {
+      const spy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+      const { result } = renderHook(() =>
+        useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.values).toEqual([]);
+      expect(result.current.hasMore).toBe(false);
+      await expectNoRetryLoop(spy);
+    });
+
+    it('recovers after an error: a later successful refetch clears the error and shows the values', async () => {
+      let healthy = false;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+        healthy
+          ? okBody([{ id: 'CO', _identifier: 'Completed' }])
+          : { ok: false, status: 500, json: () => Promise.resolve({}) },
+      ));
+      const { result, rerender } = renderHook(
+        ({ extra }) => useDistinctValues('entity', 'status', { apiBaseUrl: '/api', extraParams: extra }),
+        { wrapper, initialProps: { extra: 'active=true' } },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+
+      healthy = true;
+      rerender({ extra: 'active=false' });
+      await waitFor(() => expect(result.current.values).toHaveLength(1));
+      expect(result.current.error).toBeNull();
+      expect(result.current.values[0].id).toBe('CO');
+    });
+
+    it('recovers after an error through refresh()', async () => {
+      let healthy = false;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(
+        healthy
+          ? okBody([{ id: 'DR', _identifier: 'Draft' }])
+          : { ok: false, status: 500, json: () => Promise.resolve({}) },
+      ));
+      const { result } = renderHook(() =>
+        useDistinctValues('entity', 'status', { apiBaseUrl: '/api' }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.error).toBeTruthy());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      healthy = true;
+      await act(async () => { result.current.refresh(); });
+      await waitFor(() => expect(result.current.values).toHaveLength(1));
+      expect(result.current.error).toBeNull();
+    });
   });
 });

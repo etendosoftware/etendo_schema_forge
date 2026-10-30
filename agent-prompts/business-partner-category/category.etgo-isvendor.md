@@ -1,0 +1,1 @@
+Whether contacts of this category are vendors/creditors. Contacts created in this category are expected to take it as their vendor flag, so set it on every category whose contacts are vendors or creditors. At least one of etgoIscustomer and etgoIsvendor should be true: both default to false, so on create set the one(s) that match the category instead of omitting both.

@@ -62,7 +62,7 @@ Rules are grouped by the artifact kind they apply to (see [Artifact Classificati
 |------|----------|-----------------|------------|
 | F1 | BLOCK | `decisions.json` was modified but `contract.json` was not regenerated — `contract.sourceHashes.decisions` no longer matches. | Re-run `node cli/src/pipeline.js --menu-name "<window>"` to regenerate the contract. |
 | F2 | BLOCK | `contract.json` was modified but `generated/` was not regenerated — `generated/.manifest.json` checksum no longer matches. | Re-run the pipeline to regenerate frontend components. |
-| F3 | BLOCK | `contract.json` exists for a window that has no entry in `tools/app-shell/src/windows/registry.js`. | Add the window to `windowLoaders` or `customLoaders` in `registry.js`. |
+| F3 | BLOCK | `contract.json` exists for a window that has no entry in `tools/app-shell/src/windows/registry.js`. A retired window whose `menu.json` item declares `redirect` counts as registered: `registry.js` routes it from `menu.json` (ETP-5795, accepted by F3 since ETP-5592). | Add the window to `windowLoaders` or `customLoaders` in `registry.js`, or, for a retired window, give its `menu.json` item a `redirect`. |
 | F4 | WARN | `generated/` exists but `contract.json` is absent — orphaned output. | Either run the full pipeline to recreate `contract.json`, or remove `generated/` if the window was discarded. |
 | F5 | BLOCK | `decisions.json` schema version is stale — auto-migration would change it. | Run `node cli/src/pipeline.js --menu-name "<window>"` — the pipeline auto-migrates on startup. |
 | F6 | BLOCK | `contract.version` is lower than the baseline version tracked in the previous commit — a contract downgrade was committed. | Revert the contract change or re-run the pipeline so the version increments forward. |
@@ -204,6 +204,9 @@ You ran the pipeline for a new window but did not add the entry to the frontend 
 'my-new-window': () => import('./my-new-window/index.jsx'),
 ```
 
+If the window is retired (its route now sends users elsewhere), don't add a loader: set
+`"hidden": true` and `"redirect": "/<new-route>"` on its `menu.json` item instead.
+
 If the window uses a custom loader, add it to `customLoaders` instead. See `docs/ui-customization.md` for the layout-type registry pattern.
 
 ---
@@ -226,6 +229,6 @@ These 22 pre-existing violations (found during P1 audit on 2026-04-16) are `prin
 
 ---
 
-**Bypassing the validator (last resort)**
+**No bypass**
 
-The pre-commit hook (installed in P4) can be bypassed with `git commit --no-verify`. The CI check (installed in P5/P6) will still catch violations on the PR. Document the reason in the PR description if you bypass locally.
+`git commit --no-verify` skips the pre-commit hook, but `.githooks/commit-msg` then leaves the commit without its `Hooks-Verified` trailer, and the pre-push and CI's `verify` check refuse it. Fix the violation instead.

@@ -171,10 +171,10 @@ describe('app-shell local UI primitives retained outside core', () => {
     const ui = (key) => ({
       dateRangeToday: 'Hoy',
       dateRangeLast30Days: 'Últimos 30 días',
-      dateRangeAnyTime: 'Cualquier fecha',
+      dateRangeAllTime: 'Todo el tiempo',
     }[key] ?? key);
 
-    expect(computeTriggerLabel(null, undefined, ui, 'es-ES')).toBe('Cualquier fecha');
+    expect(computeTriggerLabel(null, undefined, ui, 'es-ES')).toBe('Todo el tiempo');
     expect(computeTriggerLabel(null, 'Selecciona', ui, 'es-ES')).toBe('Selecciona');
     expect(computeTriggerLabel({ presetId: 'today' }, undefined, ui, 'es-ES')).toBe('Hoy');
     expect(computeTriggerLabel({ presetId: 'last30' }, undefined, ui, 'es-ES')).toBe('Últimos 30 días');

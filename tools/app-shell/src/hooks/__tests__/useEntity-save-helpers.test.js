@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -330,6 +331,48 @@ describe('extractErrorMessage', () => {
     const res = neoErrorRes('null value in column "name" of relation "c_order" violates not-null constraint');
     const msg = await extractErrorMessage(res, null);
     assert.equal(msg, 'The field "Name" is required.');
+  });
+
+  // The Payment Term window's save: PaymentTermHandler (com.etendoerp.go) refuses with everything
+  // under `error`, keyed by `messageKeys` + `messageParams`; the user must read Spanish, never the
+  // backend's prose. Real es_ES locale, so the wording is pinned.
+  describe('payment-term save refusals (real es_ES locale)', () => {
+    const esES = JSON.parse(readFileSync(resolve(SRC_DIR, 'locales', 'es_ES.json'), 'utf8')).genericLabels;
+    const es = interpolatingUi(esES);
+    const refusal = (status, messageKey, messageParams) => ({
+      status,
+      json: async () => ({
+        error: {
+          status, code: 'PAYMENT_TERM', message: 'English prose from the handler',
+          fields: ['overduePaymentDaysRule'], messageKeys: [messageKey], messageParams,
+        },
+      }),
+    });
+
+    it('days out of range → the Spanish range message with the entered value', async () => {
+      const msg = await extractErrorMessage(
+        refusal(400, 'ETGO_PaymentTermDaysOutOfRange', { field: 'overduePaymentDaysRule', min: 0, max: 365, value: 400 }), es);
+      assert.equal(msg, 'El número de días debe estar entre 0 y 365 (indicado: 400).');
+    });
+
+    it('days duplicate of an inactive term → the Spanish message naming it, with the reactivation hint', async () => {
+      const msg = await extractErrorMessage(
+        refusal(409, 'ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días', paymentTermActive: false }), es);
+      assert.equal(msg, 'Ya existe la condición de pago «30 Días» con esos días, pero está desactivada. '
+        + 'Reactívala en Condiciones de pago');
+    });
+
+    it('name duplicate of an active term → the Spanish message naming it', async () => {
+      const msg = await extractErrorMessage(
+        refusal(409, 'ETGO_PaymentTermNameDuplicate', { paymentTermName: '45 Días', paymentTermActive: true }), es);
+      assert.equal(msg, 'Ya existe una condición de pago llamada «45 Días» en esta organización');
+    });
+
+    it('never shows the backend prose for a keyed refusal it can translate', async () => {
+      const msg = await extractErrorMessage(
+        refusal(409, 'ETGO_PaymentTermDaysDuplicate', { paymentTermName: '30 Días', paymentTermActive: true }), es);
+      assert.doesNotMatch(msg, /English prose/);
+    });
   });
 
   it('ignores an unnamed column and keeps the generic not-null message', async () => {
@@ -1025,5 +1068,106 @@ describe('resolveSavedRecordAfterSave', () => {
     await resolveSavedRecordAfterSave({ id: '1' }, opts({ apiFetch }));
     assert.equal(seen[0][0], '/header/1');
     assert.equal(seen[0][1], undefined);
+  });
+});
+
+// The save path of every generated window: a NEO write refused because a plan quota is exhausted
+// (403 `error.code === 'QUOTA_EXCEEDED'`). The sentence is built from the quota the body carries,
+// in the user's language, never the backend's English prose nor a generic permission refusal.
+describe('extractErrorMessage — plan-quota refusal (real es_ES locale)', () => {
+  const esES = JSON.parse(readFileSync(resolve(SRC_DIR, 'locales', 'es_ES.json'), 'utf8')).genericLabels;
+  const es = interpolatingUi(esES);
+  const quota = {
+    resourceKey: 'POSTED_SALES_INVOICES',
+    resourceName: 'Facturas emitidas',
+    unitLabel: 'fact.',
+    includedQty: 100,
+    consumed: 100,
+    verdict: 'DENY',
+    period: 'month',
+  };
+  const refusal = (errorOverrides = {}) => ({
+    status: 403,
+    json: async () => ({
+      error: {
+        status: 403,
+        code: 'QUOTA_EXCEEDED',
+        message: 'Quota exceeded: Posted sales invoices (100/100 Inv)',
+        quota,
+        ...errorOverrides,
+      },
+    }),
+  });
+
+  it('builds the Spanish sentence from the structured quota, not from the English prose', async () => {
+    const msg = await extractErrorMessage(refusal(), es);
+    assert.equal(msg,
+      'Facturas emitidas: has alcanzado el límite de tu plan (100 de 100 fact.). '
+      + 'No se pueden crear más registros de este tipo.');
+    assert.doesNotMatch(msg, /Quota exceeded/);
+    assert.notEqual(msg, esES['backendError.accessDeniedToSpec']);
+  });
+
+  it('gives the generic quota sentence when the refusal carries no quota', async () => {
+    const msg = await extractErrorMessage(refusal({ quota: undefined }), es);
+    assert.equal(msg, esES['backendError.quotaExceededGeneric']);
+  });
+
+  it('leaves a plain 403 without the quota code on its existing path', async () => {
+    const res = { status: 403, json: async () => ({ error: { status: 403, message: 'Access denied to spec for current role' } }) };
+    assert.equal(await extractErrorMessage(res, es), esES['backendError.accessDeniedToSpec']);
+  });
+});
+
+// The same save path when the quota check ITSELF failed (500 `error.code === 'QUOTA_CHECK_FAILED'`):
+// nothing was saved, and the user reads the SPA's own "nothing was saved" sentence — never the
+// generic 500 text nor the backend's English prose. Any other 500 keeps its existing message.
+describe('extractErrorMessage — failed quota check (real es_ES locale)', () => {
+  const esES = JSON.parse(readFileSync(resolve(SRC_DIR, 'locales', 'es_ES.json'), 'utf8')).genericLabels;
+  const es = interpolatingUi(esES);
+  const prose = 'The quota check failed; nothing was saved. Try again.';
+  const failure = (error) => ({
+    status: 500,
+    clone() { return failure(error); },
+    json: async () => ({ error }),
+  });
+
+  it('shows the translated sentence instead of the English prose or the generic 500 text', async () => {
+    const msg = await extractErrorMessage(
+      failure({ status: 500, code: 'QUOTA_CHECK_FAILED', message: prose }), es);
+    assert.equal(msg, esES['backendError.quotaCheckFailed']);
+    assert.ok(msg, 'the es_ES locale carries backendError.quotaCheckFailed');
+    assert.doesNotMatch(msg, /quota check failed/i);
+    assert.notEqual(msg, `${esES.error ?? 'error'} 500`);
+  });
+
+  it('recognises the refusal by its code even when the prose is something else', async () => {
+    const msg = await extractErrorMessage(
+      failure({ status: 500, code: 'QUOTA_CHECK_FAILED', message: 'Internal error' }), es);
+    assert.equal(msg, esES['backendError.quotaCheckFailed']);
+  });
+
+  it('recognises the refusal inside a /sws/neo/batch failure envelope (error.detail.error)', async () => {
+    const msg = await extractErrorMessage(failure({
+      message: prose,
+      detail: { error: { status: 500, code: 'QUOTA_CHECK_FAILED', message: prose } },
+    }), es);
+    assert.equal(msg, esES['backendError.quotaCheckFailed']);
+  });
+
+  it('leaves any other 500 on its existing path', async () => {
+    const msg = await extractErrorMessage(
+      failure({ status: 500, code: 'INTERNAL_ERROR', message: 'Unexpected failure while saving' }), es);
+    assert.equal(msg, 'Unexpected failure while saving');
+    assert.notEqual(msg, esES['backendError.quotaCheckFailed']);
+  });
+
+  it('reaches the save error banner through handleSaveErrorResponse, with no field errors', async () => {
+    const setFieldErrors = spy();
+    const setSaveError = spy();
+    await handleSaveErrorResponse(
+      failure({ status: 500, code: 'QUOTA_CHECK_FAILED', message: prose }), es, setFieldErrors, setSaveError);
+    assert.deepEqual(setFieldErrors.calls, []);
+    assert.deepEqual(setSaveError.calls, [[esES['backendError.quotaCheckFailed']]]);
   });
 });

@@ -1,15 +1,21 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
+// @covers tools/app-shell/src/windows/custom/sales-invoice/SalesRectificationsTab.jsx
+// @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
+
 /**
  * Sales/Purchase Invoice — "Rectificaciones" custom tab visibility (mocked).
  *
- * ETP-4404 (TC-11 + tab rendering):
- *   - The reversedInvoices custom tab (ReversedInvoicesPanel, placement 'tab')
- *     is ALWAYS visible regardless of isRectificative — per user decision the
- *     original design does not hide it (TC-01/TC-02 gating intentionally not
- *     implemented). TC-13 still applies: non-rectificative invoices get a
- *     read-only panel (no add).
+ * ETP-4404 (TC-11 + tab rendering), gating per ETP-6002 (CP-26):
+ *   - On SALES the tab is the `reversedInvoices` extraTabs entry, rendered by
+ *     SalesRectificationsTab. It is shown ONLY when the document type is a
+ *     Factura rectificativa (`getArSubtype(data) === 'RECTIFICATIVA'`: the
+ *     server's `arInvoiceSubtype`, else the doc type identifier), on new and
+ *     saved records alike (TC-01). A plain invoice does not render the tab at
+ *     all (TC-02); an original invoice sees its rectifications as
+ *     related-documents chips instead.
+ *   - Purchase mounts ReversedInvoicesPanel directly (no gating wrapper).
  *   - The tab strip button testid is `tab-custom:reversedInvoices`
  *     (DetailView emits `tab-${customTabKey(ct)}` with customTabKey = `custom:{key}`).
  *   - The panel container testid is `reversed-invoices-panel`.
@@ -69,23 +75,29 @@ function baseInvoice(overrides = {}) {
 const SI_RECTIFICATIVE = baseInvoice({
   id: SI_RECTIFICATIVE_ID,
   documentNo: 'NC-00500',
+  arInvoiceSubtype: 'RECTIFICATIVA',
   isRectificative: true,
 });
 
-/** A regular sales invoice — tab must be hidden (TC-02). */
+/** A regular sales invoice — tab must not be rendered (TC-02). */
 const SI_NON_RECTIFICATIVE = baseInvoice({
   id: SI_NON_RECTIFICATIVE_ID,
   documentNo: 'FC-00600',
   transactionDocument: 'td-ar-001',
   'transactionDocument$_identifier': 'AR Invoice',
+  arInvoiceSubtype: 'FAC',
   isRectificative: false,
 });
 
-/** A record without the enrichment field — tab stays visible (TC-01 edge). */
+/**
+ * A credit memo without the server enrichment (`arInvoiceSubtype` and
+ * `isRectificative` absent) — the subtype falls back to the doc type
+ * identifier ('AR CreditMemo'), so the tab is visible (TC-01 edge).
+ */
 const SI_UNENRICHED = baseInvoice({
   id: SI_UNENRICHED_ID,
   documentNo: 'NC-00700',
-  // isRectificative intentionally absent
+  // arInvoiceSubtype and isRectificative intentionally absent
 });
 
 /** A rectificative purchase invoice — parity check (TC-11). */
@@ -181,7 +193,7 @@ async function installCatalogMock(page, activeModels) {
 
 test.describe('Sales Invoice — ETP-4404 Rectificaciones tab visibility (mocked)', () => {
 
-  test('rectificative sales invoice shows the Rectificaciones tab and the panel renders', async ({ page }) => {
+  test('TC-01: rectificative sales invoice shows the Rectificaciones tab and the panel offers add', async ({ page }) => {
     await login(page);
     await installDetailMocks(page, 'sales-invoice', SI_RECTIFICATIVE);
 
@@ -195,6 +207,8 @@ test.describe('Sales Invoice — ETP-4404 Rectificaciones tab visibility (mocked
     await expect(page.getByTestId('reversed-invoices-panel')).toBeVisible();
     // No lines mocked → the panel shows its empty state
     await expect(page.getByText('Sin rectificaciones todavía')).toBeVisible();
+    // … with the add action, since a rectificative invoice is editable here
+    await expect(page.getByTestId('btn__addFirstRectificacion')).toBeVisible();
   });
 
   test('ETP-4755: "Correctiva del 349" checkbox is visible when Modelo 349 is active in the catalog', async ({ page }) => {
@@ -214,24 +228,25 @@ test.describe('Sales Invoice — ETP-4404 Rectificaciones tab visibility (mocked
     await expect(panel.getByTestId('checkbox__isCorrective')).toBeVisible();
   });
 
-  test('TC-13: non-rectificative invoice keeps the tab but the panel is read-only (no add)', async ({ page }) => {
+  test('TC-02: non-rectificative sales invoice does not render the Rectificaciones tab', async ({ page }) => {
     await login(page);
     await installDetailMocks(page, 'sales-invoice', SI_NON_RECTIFICATIVE);
 
+    const headerLoaded = page.waitForResponse((res) =>
+      res.request().method() === 'GET'
+      && res.url().includes(`/sws/neo/sales-invoice/header/${SI_NON_RECTIFICATIVE_ID}`));
     await page.goto(`/sales-invoice/${SI_NON_RECTIFICATIVE_ID}`);
-    await page.waitForLoadState('domcontentloaded');
+    await headerLoaded;
 
-    // Tab stays visible (TC-01/02 gating intentionally not implemented) …
-    const tab = page.getByTestId(TAB_TESTID);
-    await expect(tab).toBeVisible({ timeout: 8_000 });
-    await tab.click();
-    await expect(page.getByTestId('reversed-invoices-panel')).toBeVisible();
-    // … but a non-rectificative invoice gets no add actions
-    await expect(page.getByTestId('btn__addFirstRectificacion')).toHaveCount(0);
-    await expect(page.getByTestId('btn__addReversedInvoice')).toHaveCount(0);
+    // The loaded form and its tab strip are on screen …
+    await expect(page.getByTestId('detail-view')).toHaveAttribute('data-doc-status', 'DR', { timeout: 8_000 });
+    await expect(page.getByTestId('tab-lines')).toBeVisible();
+    // … but a plain invoice gets no Rectificaciones tab and never mounts the panel.
+    await expect(page.getByTestId(TAB_TESTID)).toHaveCount(0);
+    await expect(page.getByTestId('reversed-invoices-panel')).toHaveCount(0);
   });
 
-  test('record without isRectificative enrichment keeps the tab visible', async ({ page }) => {
+  test('TC-01 edge: record without the server subtype falls back to the doc type and shows the tab', async ({ page }) => {
     await login(page);
     await installDetailMocks(page, 'sales-invoice', SI_UNENRICHED);
 
@@ -387,7 +402,8 @@ test.describe('Sales Invoice — ETP-4404 save-header-first from /new (mocked)',
     await page.goto('/sales-invoice/new');
     await page.waitForLoadState('domcontentloaded');
 
-    // The Rectificaciones tab is available on the new-record form.
+    // The Rectificaciones tab is available on the new-record form because the
+    // defaulted document type is a credit memo (subtype from its identifier).
     const tab = page.getByTestId(TAB_TESTID);
     await expect(tab).toBeVisible({ timeout: 8_000 });
     await tab.click();

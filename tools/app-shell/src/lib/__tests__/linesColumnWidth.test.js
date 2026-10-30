@@ -178,6 +178,45 @@ describe('linesColumnWidth', () => {
       });
     });
 
+    // ETP-5133 (QA pass 3, F-2) — a no-truncate column carries the width its widest value
+    // needs (`contentWidthPx`, set by linesContentWidth.js). It may only RAISE the basis, and
+    // must keep the grow/shrink terms so the absorber choice is unchanged.
+    describe('contentWidthPx (ETP-5133)', () => {
+      it('raises the basis above the type default, keeping the grow term', () => {
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 412.4 }, 0), '1 0 413px');
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 412 }, 1), '0 0 412px');
+      });
+
+      it('never shrinks the basis below the type default or an explicit minWidth', () => {
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 100 }, 1), '0 0 192px');
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280, contentWidthPx: 200 }, 1), '1 0 280px');
+      });
+
+      it('is ignored when absent or not positive', () => {
+        assert.equal(columnFlex({ type: 'selector', contentWidthPx: 0 }, 1), '0 0 192px');
+        assert.equal(columnFlex({ type: 'selector' }, 1), '0 0 192px');
+      });
+
+      // A lookup that also declares `minWidth` (the GL journal account column, 220px): the larger of
+      // the two wins as the basis, and the `minWidth` branch's grow term (1) is kept at any idx.
+      describe('combined with an explicit minWidth on a lookup (GL journal account)', () => {
+        const ACCOUNT = { type: 'selector', lookup: true, minWidth: 220 };
+
+        it('a measured content wider than minWidth raises the basis and keeps grow', () => {
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 301.2 }, 0), '1 0 302px');
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 301.2 }, 3), '1 0 302px');
+        });
+
+        it('a measured content narrower than minWidth leaves the minWidth basis', () => {
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 180 }, 1), '1 0 220px');
+        });
+
+        it('a measured content equal to minWidth leaves the basis unchanged', () => {
+          assert.equal(columnFlex({ ...ACCOUNT, contentWidthPx: 220 }, 1), '1 0 220px');
+        });
+      });
+    });
+
     // A `boolean`+`badge` column normally gets the generic 152px basis, but the
     // Posted-status column (`postedStatus.js`) needs a wider 240px basis — its
     // pill can also show one of 15 long reason codes, not just true/false.
@@ -363,6 +402,17 @@ describe('linesColumnWidth', () => {
           assert.equal(measureHeaderLabelPx('Contacto', FONT), 48, 'the fallback width was not cached');
           pxPerChar = 9;
           assert.equal(measureHeaderLabelPx('Contacto', FONT), 48, 'a width measured with the font loaded is cached');
+        } finally { uninstall(); }
+      });
+
+      it('bounds the width cache (cell values are unbounded, ETP-5133)', () => {
+        install();
+        try {
+          fontLoaded = true;
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 40);
+          for (let i = 0; i < 500; i += 1) measureHeaderLabelPx(`label ${i}`, FONT);
+          pxPerChar = 6;
+          assert.equal(measureHeaderLabelPx('Contacto', FONT), 48, 'the cache was reset once full');
         } finally { uninstall(); }
       });
 

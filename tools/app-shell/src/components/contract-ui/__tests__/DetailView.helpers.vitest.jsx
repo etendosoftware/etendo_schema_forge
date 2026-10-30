@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 /**
  * Tests for pure helper functions extracted from DetailView.jsx.
  * We import only the exported functions — internal ones are tested
@@ -68,6 +69,7 @@ import {
   renderSidePanel,
   buildLineRowClickHandler,
 } from '../DetailView.jsx';
+import { computeIsDirtyForGuard } from '../detailViewHelpers.jsx';
 
 // Mock all the heavy dependencies DetailView imports
 vi.mock('react-router-dom', () => ({
@@ -482,6 +484,31 @@ describe('DetailView helper functions', () => {
 
     it('returns false when nothing dirty', () => {
       expect(computeIsDirty({ isDirtyHeader: false }, false, {}, null, false)).toBe(false);
+    });
+  });
+
+  // ETP-5888 — what the unsaved-changes guard publishes: computeIsDirty with the header part
+  // reduced to the user's own edits, so an untouched new record no longer prompts.
+  describe('computeIsDirtyForGuard', () => {
+    it('ignores a header that only defaults and opening callouts filled', () => {
+      expect(computeIsDirtyForGuard({ isDirtyHeader: true, hasUserHeaderEdits: false }, false, {}, null, false)).toBe(false);
+    });
+
+    it('is dirty when the user edited the header', () => {
+      expect(computeIsDirtyForGuard({ isDirtyHeader: true, hasUserHeaderEdits: true }, false, {}, null, false)).toBe(true);
+    });
+
+    it('still counts line edits and open add-rows, which are always user work', () => {
+      const cleanHeader = { isDirtyHeader: true, hasUserHeaderEdits: false };
+      expect(computeIsDirtyForGuard(cleanHeader, true, {}, null, false)).toBe(true);
+      expect(computeIsDirtyForGuard(cleanHeader, false, { lines: true }, null, false)).toBe(true);
+      expect(computeIsDirtyForGuard(cleanHeader, false, {}, { qty: 5 }, false)).toBe(true);
+      expect(computeIsDirtyForGuard(cleanHeader, false, {}, null, true)).toBe(true);
+    });
+
+    it('falls back to isDirtyHeader for a hook without the user-edit signal', () => {
+      expect(computeIsDirtyForGuard({ isDirtyHeader: true }, false, {}, null, false)).toBe(true);
+      expect(computeIsDirtyForGuard({ isDirtyHeader: false }, false, {}, null, false)).toBe(false);
     });
   });
 
@@ -1359,7 +1386,7 @@ describe('DetailView helper functions', () => {
       };
       applyCalloutFieldUpdates({ warehouse: { value: 'W1', _identifier: 'Main Warehouse' } }, ctx);
       expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1', { origin: 'callout' });
-      expect(hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+      expect(hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse', { origin: 'callout' });
     });
   });
 
@@ -1374,8 +1401,8 @@ describe('DetailView helper functions', () => {
         hook,
       };
       applyCalloutComboUpdates({ paymentMethod: { selected: 'PM1', _identifier: 'Cash' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('paymentMethod', 'PM1');
-      expect(hook.handleChange).toHaveBeenCalledWith('paymentMethod$_identifier', 'Cash');
+      expect(hook.handleChange).toHaveBeenCalledWith('paymentMethod', 'PM1', { origin: 'callout' });
+      expect(hook.handleChange).toHaveBeenCalledWith('paymentMethod$_identifier', 'Cash', { origin: 'callout' });
       expect(ctx.appliedFields.get('paymentMethod')).toBe('PM1');
     });
 
@@ -1395,8 +1422,8 @@ describe('DetailView helper functions', () => {
           _identifier: null,
         },
       }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('address', 'ADDR1');
-      expect(hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Main Address');
+      expect(hook.handleChange).toHaveBeenCalledWith('address', 'ADDR1', { origin: 'callout' });
+      expect(hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Main Address', { origin: 'callout' });
     });
 
     it('auto-selects first entry using _identifier fallback', () => {
@@ -1415,7 +1442,7 @@ describe('DetailView helper functions', () => {
           _identifier: null,
         },
       }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Alt Addr');
+      expect(hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Alt Addr', { origin: 'callout' });
     });
 
     it('skips combo when no selected and no entries', () => {
@@ -1467,8 +1494,8 @@ describe('DetailView helper functions', () => {
         hook,
       };
       applyCalloutComboUpdates({ paymentMethod: { selected: 'PM1', _identifier: null } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('paymentMethod', 'PM1');
-      expect(hook.handleChange).not.toHaveBeenCalledWith('paymentMethod$_identifier', expect.anything());
+      expect(hook.handleChange).toHaveBeenCalledWith('paymentMethod', 'PM1', { origin: 'callout' });
+      expect(hook.handleChange.mock.calls.map(([key]) => key)).not.toContain('paymentMethod$_identifier');
     });
   });
 

@@ -158,3 +158,75 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     expect(requests[0].body.planKey).toBe(PRODUCTIVE_PLAN.planKey);
   });
 });
+
+/**
+ * The Plan step as a chooser (ETP-5049): with several catalog plans there is no default, the user
+ * picks a card, the next two steps summarize that plan read-only, and the purchase carries its KEY
+ * — never a price. Registered after the single-plan catalog of the beforeEach above, so this one
+ * wins (Playwright resolves routes LIFO).
+ */
+test.describe('Tenant upgrade — choosing among several catalog plans', () => {
+  const YEARLY_PLAN = {
+    planKey: 'productive-yearly',
+    name: 'Productive annual',
+    description: 'Twelve months up front',
+    displayPrice: '490.00',
+    currency: 'EUR',
+    billingInterval: 'year',
+  };
+  const PLUS_PLAN = {
+    planKey: 'productive-plus',
+    name: 'Productive Plus',
+    description: 'More users and storage',
+    displayPrice: '99.00',
+    currency: 'EUR',
+    billingInterval: 'month',
+  };
+  const CATALOG = [PRODUCTIVE_PLAN, YEARLY_PLAN, PLUS_PLAN];
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await declareCookieSession(page);
+    await installPlansMock(page, CATALOG);
+  });
+
+  test('shows one card per plan, none preselected, and buys the chosen key', async ({ page }) => {
+    await installEnvironmentsMock(page, [CURRENT_ENV]);
+    const requests = await installPurchaseMock(page);
+    await gotoUpgrade(page);
+
+    const catalog = page.getByTestId('upgrade-plan-catalog');
+    await expect(catalog).toBeVisible();
+    await expect(catalog.locator('[data-testid^="upgrade-plan-card-"]')).toHaveCount(CATALOG.length);
+    for (const plan of CATALOG) {
+      const card = page.getByTestId(`upgrade-plan-card-${plan.planKey}`);
+      await expect(card.getByTestId('upgrade-plan-name')).toHaveText(plan.name);
+      await expect(card.getByTestId('upgrade-plan-description')).toHaveText(plan.description);
+      await expect(card).toHaveAttribute('data-selected', 'false');
+    }
+    await expect(page.getByTestId('upgrade-plan-selected-badge')).toHaveCount(0);
+
+    await page.getByTestId(`upgrade-plan-card-${YEARLY_PLAN.planKey}`).getByTestId('upgrade-plan-select').click();
+    await expect(page.getByTestId('upgrade-checkout-summary-plan')).toHaveText(YEARLY_PLAN.name);
+    await expect(page.getByTestId('upgrade-checkout-summary-price')).toContainText('490');
+
+    // Back on the Plan step, the chosen card carries the selection.
+    await page.getByTestId('upgrade-checkout-step-plan').click();
+    const chosen = page.getByTestId(`upgrade-plan-card-${YEARLY_PLAN.planKey}`);
+    await expect(chosen).toHaveAttribute('data-selected', 'true');
+    await expect(chosen.getByTestId('upgrade-plan-select')).toHaveAttribute('aria-pressed', 'true');
+    await expect(chosen.getByTestId('upgrade-plan-selected-badge')).toBeVisible();
+    await page.getByTestId('upgrade-checkout-step-addons').click();
+
+    await page.getByTestId('upgrade-addons-continue').click();
+    await expect(page.getByTestId('upgrade-plan-summary-name')).toHaveText(YEARLY_PLAN.name);
+    await expect(page.getByTestId('upgrade-plan-catalog')).toHaveCount(0);
+    await page.getByTestId('upgrade-tenant-name-input').fill('Acme Productive');
+    await page.getByTestId('upgrade-submit').click();
+
+    await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.planKey).toBe(YEARLY_PLAN.planKey);
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/priceId|displayPrice|490/i);
+  });
+});

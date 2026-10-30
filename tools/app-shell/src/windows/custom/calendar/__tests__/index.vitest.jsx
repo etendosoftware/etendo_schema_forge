@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/calendar/index.jsx
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
@@ -111,15 +112,16 @@ describe('CalendarWindow', () => {
     expect(globalThis.__lastPeriodsPanelProps.parentId).toBe('year1');
   });
 
-  it('passes YearCloseStatusBadgeForCalendar as topbarRight to YearPage', () => {
+  it('passes YearCloseStatusBadgeForCalendar as topbarExtra (left, next to Cancel) to YearPage', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
-    expect(typeof globalThis.__lastCalendarPageProps.topbarRight).toBe('function');
+    expect(typeof globalThis.__lastCalendarPageProps.topbarExtra).toBe('function');
+    expect(globalThis.__lastCalendarPageProps.topbarRight).toBeUndefined();
   });
 
   it('rewrites the injected apiBaseUrl to end-year-close for the year-close status badge', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
-    const TopbarRightForCalendar = globalThis.__lastCalendarPageProps.topbarRight;
-    render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
+    const TopbarExtraForCalendar = globalThis.__lastCalendarPageProps.topbarExtra;
+    render(<TopbarExtraForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
     expect(globalThis.__lastYearCloseStatusBadgeProps.apiBaseUrl).toBe('https://api.test/end-year-close');
     expect(globalThis.__lastYearCloseStatusBadgeProps.recordId).toBe('year1');
   });
@@ -158,9 +160,9 @@ describe('CalendarWindow', () => {
     // endpoint so they can never disagree with each other about whether a year is closed.
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" />);
     const AccountingPanelForCalendar = globalThis.__lastCalendarPageProps.secondaryTabs[1].Panel;
-    const TopbarRightForCalendar = globalThis.__lastCalendarPageProps.topbarRight;
+    const TopbarExtraForCalendar = globalThis.__lastCalendarPageProps.topbarExtra;
     render(<AccountingPanelForCalendar parentId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
-    render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
+    render(<TopbarExtraForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
 
     expect(globalThis.__lastYearCloseStatusBadgeProps.apiBaseUrl).toBe(globalThis.__lastAccountingPanelProps.apiBaseUrl);
   });
@@ -195,8 +197,8 @@ describe('CalendarWindow', () => {
 
   it('reuses the same end-year-close derivation for menuActions as the badge/column (never re-derived)', () => {
     render(<CalendarWindow token="tok" apiBaseUrl="https://api.test/calendar" recordId="year1" />);
-    const TopbarRightForCalendar = globalThis.__lastCalendarPageProps.topbarRight;
-    render(<TopbarRightForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
+    const TopbarExtraForCalendar = globalThis.__lastCalendarPageProps.topbarExtra;
+    render(<TopbarExtraForCalendar recordId="year1" token="tok" apiBaseUrl="https://api.test/calendar" />);
     // Same apiBaseUrl computation is used for both the badge and the recordId-scoped
     // menuActions check — confirmed by construction (endYearCloseApiBaseUrl is a single
     // variable feeding both `useYearCloseStatus` calls in index.jsx).

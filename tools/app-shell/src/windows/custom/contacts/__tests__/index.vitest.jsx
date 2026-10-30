@@ -23,6 +23,9 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('../ContactsBusinessPartnerForm', () => ({ default: () => null }));
 vi.mock('../ContactsSummaryWidget', () => ({ default: () => null }));
 
+let mockSupportMode = false;
+vi.mock('@/hooks/useSupportSession.js', () => ({ useSupportSession: () => ({ isSupportMode: mockSupportMode }) }));
+
 // Captures the exact props ContactsWindow hands to the generated BusinessPartnerPage.
 let capturedProps = null;
 vi.mock('@generated/contacts/generated/web/contacts/BusinessPartnerPage', () => ({
@@ -42,6 +45,7 @@ function renderWindow(props = {}) {
 
 beforeEach(() => {
   capturedProps = null;
+  mockSupportMode = false;
 });
 
 describe('ContactsWindow — uses ListView generic bulk delete (ETP-5758)', () => {
@@ -68,5 +72,29 @@ describe('ContactsWindow — uses ListView generic bulk delete (ETP-5758)', () =
     renderWindow();
 
     expect(capturedProps.enableSecondaryRowDelete).toBe(true);
+  });
+});
+
+describe('ContactsWindow — support mode hides create and delete (ETP-5351)', () => {
+  it('leaves everything available outside support mode', () => {
+    renderWindow();
+
+    expect(capturedProps.hideCreate).toBe(false);
+    expect(capturedProps.hideDeleteButton).toBe(false);
+    expect(capturedProps.rowQuickActions).toEqual({ hideDeleteButton: false });
+    expect(capturedProps).not.toHaveProperty('import');
+    expect(capturedProps.enableSecondaryRowDelete).toBe(true);
+  });
+
+  it('hides create, import and every delete entry point in support mode', () => {
+    mockSupportMode = true;
+    renderWindow();
+
+    expect(capturedProps.hideCreate).toBe(true);
+    expect(capturedProps.hideDeleteButton).toBe(true);
+    expect(capturedProps.rowQuickActions).toEqual({ hideDeleteButton: true });
+    expect(capturedProps.listViewOptions.hideBulkDelete).toBe(true);
+    expect(capturedProps.import).toEqual({ enabled: false });
+    expect(capturedProps.enableSecondaryRowDelete).toBe(false);
   });
 });

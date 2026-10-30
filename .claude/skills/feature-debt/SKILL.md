@@ -10,7 +10,8 @@ description: >
   Triggers on: "technical debt", "tech debt", "deuda técnica", "feature flag", "new flag",
   "register a flag", "flags-registry", "flag-debt", "scorecard", "defer this", "leave it
   for later", "lo dejamos para después", "accepted debt", "known gap", "TODO for now",
-  "we won't test this", "retire the flag", "remove the flag", "sacar el flag", "TTL".
+  "we won't test this", "retire the flag", "remove the flag", "sacar el flag", "TTL",
+  "forAccount", "FeatureFlagContext", "GoFeatureFlags", "por usuario", "por email".
 ---
 
 # /feature-debt — Record Debt Against the Feature Flag That Owns It
@@ -41,6 +42,32 @@ by hindsight always reads clean.
 Then keep the layout rule (`docs/feature-flags.md` → *Architecture: flag code layout*):
 the flag's logic lives in its own files; shared files hold greppable toggle points only.
 Break it and the score keeps looking plausible while meaning nothing.
+
+**Decide the evaluation scope on day one — and ask if the request does not say.** A flag
+with backend logic is evaluated by the backend with an explicit `FeatureFlagContext`. The
+default an agent reaches for, `FeatureFlagContext.forAccount(null)`, carries no email, so
+every Datadog/ConfigCat rule targeted at a user silently never matches: the browser (which
+sends the email) shows the feature, the backend never runs it, and "flag off" looks the same
+as "flag deliberately off" (ETP-4966 family; reported by Irina and Rubén).
+
+| Scope | Backend context | Use when |
+|-------|-----------------|----------|
+| **Per account/user** | `forAccount(<ETGO_ACCOUNT email>)` — resolve it as `PortalLinkPolicy#currentAccountEmail` does (`GoAccountResolver.findAccountByUsername`, admin mode, null on failure ⇒ off) | the flag can be rolled out to specific users or percentages. **Default for any feature flag.** |
+| **Per tenant** | `forAccount(email).with(FeatureFlagContext.ATTRIBUTE_CLIENT_ID, clientId)` | rules by AD_Client |
+| **Environment-wide** | `FeatureFlagContext.environment()` (never bare `forAccount(null)`) | only operational kill switches / startup / scheduled jobs with no user (`*-disabled`, `*-off`, `billing-reconciliation-schedule`) |
+
+- Writing `environment()` / `forAccount(null)` for a new flag? Say in a comment why no user
+  exists there. No reason ⇒ reviewers treat it as the bug.
+- Do not cache a per-account result in a `static final` (the `ENVIRONMENT` constant
+  pattern): it has no user to cache for. Evaluate per request.
+- The request does not say who the flag targets? **Ask the human** — do not pick env-wide
+  because it is simpler.
+- A flag read by **both** the SPA and the backend must receive the same identity on both
+  ends; see `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account
+  targeting* and *Targeting key* (`targeting-key-divergence`).
+- Test it: assert the email reaches the context (see `PortalLinkPolicy`/
+  `EnvironmentAccessEnforcementFlagTest` for the pattern), and verify with a **per-email rule
+  in Datadog on both front and back**, not with the env-level boolean.
 
 ## Step 2 — Classify every gap. Do not invent a fifth place
 

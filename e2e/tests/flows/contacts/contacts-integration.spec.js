@@ -90,7 +90,7 @@ async function waitForDetailReady(page) {
  */
 function expectSaveResponse(page) {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/') && ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) && resp.status() < 400,
     { timeout: 15_000 },
   ).catch(() => {});
 }
@@ -115,7 +115,7 @@ function expectDeleteResponse(page, { urlIncludes = '' } = {}) {
     (resp) => resp.url().includes('/sws/neo/')
       && resp.url().includes(urlIncludes)
       && resp.request().method() === 'DELETE'
-      && resp.status() < 500,
+      && resp.status() < 400,
     { timeout: 15_000 },
   ).catch(() => null);
 }
@@ -126,7 +126,7 @@ function expectDeleteResponse(page, { urlIncludes = '' } = {}) {
  */
 function expectListResponse(page) {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'GET' && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'GET' && resp.status() < 400,
     { timeout: 6_000 },
   ).catch(() => {});
 }

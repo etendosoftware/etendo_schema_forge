@@ -22,15 +22,21 @@
  *   }
  *
  * `record` is always the DETAIL record (GET /<entity>/<id>): several fields read here
- * (`linkedShipments`, `sourceInvoice`, `originInvoices`, goods-shipment `linked*`) are
+ * (`linkedShipments`, `linkedOrders`, `originInvoices`, `rectifyingInvoices`, goods-shipment `linked*`) are
  * injected by the backend handlers on the detail GET only. `apiBaseUrl` is the
  * spec-scoped base (`.../sws/neo/<spec>`); cross-spec calls go through neoBase().
  *
  * Purchase documents live in purchaseRelatedDocs.js (ETP-5539), same shape.
  * Payments (cobros) are deliberately NOT related documents either: a sales order or
  * invoice never lists its payments as chips (functional decision, ETP-5527).
+ *
+ * A sales invoice relates to other invoices only through the official C_Invoice_Reverse
+ * link (ETP-6002): `originInvoices` (what a rectificative rectifies) and `rectifyingInvoices`
+ * (what rectifies an original). Nothing is deduced — not "the other invoices of the same
+ * order" (it listed invoices the rectificative does not rectify), not the invoice reached
+ * through return → shipment → invoice (a bare {id, documentNo} that won the dedupe over the
+ * full origin record, so the chip lost its amount and status).
  */
-import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
 import { fetchByCriteria, fetchById } from './helpers.js';
 import {
   criteriaSource,
@@ -38,8 +44,11 @@ import {
   selectSource,
   originInvoicesSource,
   originInvoicesDepsKey,
+  invoiceOrdersFetch,
+  invoiceOrdersDepsKey,
   movementDefinition,
   returnDefinition,
+  idsOf,
 } from './relatedSources.js';
 
 /**
@@ -73,17 +82,6 @@ async function fetchInvoiceOrigin({ record, token, apiBaseUrl }) {
   return order ? [order] : [];
 }
 
-/**
- * For a rectificative invoice (ETP-4737 unified subtype), the invoices it rectifies:
- * the other invoices of the same order.
- */
-async function fetchRectifiedInvoices({ id, record, token, apiBaseUrl }) {
-  const orderId = record?.salesOrder;
-  if (!orderId || getArSubtype(record) !== 'RECTIFICATIVA') return [];
-  const invoices = await fetchByCriteria('sales-invoice', 'header', 'salesOrder', orderId, token, apiBaseUrl);
-  return invoices.filter(inv => inv.id !== id);
-}
-
 export const SALES_RELATED_DOCS = {
   'sales-quotation': {
     spec: 'sales-quotation',
@@ -93,6 +91,11 @@ export const SALES_RELATED_DOCS = {
     sources: [
       criteriaSource('orders', 'sales-order', 'sales-order', 'header', 'quotation'),
       listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation'),
+      // ETP-6002 (IMP-3): shipments whose own lines point at this quotation's lines — a shipment
+      // made from an invoice that came straight from the quotation. Injected on the detail GET by
+      // SalesQuotationHeaderHandler (QuotationShipmentLinks); a direct line link only, never
+      // deduced through invoices. The mirror of the shipment's quotation chip below.
+      selectSource('shipments', doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'), 'linkedShipments'),
     ],
   },
 
@@ -116,29 +119,29 @@ export const SALES_RELATED_DOCS = {
     // the shipment; the record re-read that follows also refreshes `linkedShipments`.
     refreshEvent: 'sales-invoice:document-created',
     depsKey: record => [
-      record?.salesOrder ?? '',
-      getArSubtype(record),
+      invoiceOrdersDepsKey(record),
       originInvoicesDepsKey(record),
+      idsOf(record?.rectifyingInvoices),
     ].join('|'),
     sources: [
       {
+        // ETP-5828: every order the invoice's lines come from (`linkedOrders`), plus the
+        // header origin (order or quotation) when it is not one of them.
         key: 'origin',
-        type: doc => (doc._isQuotation ? 'sales-quotation' : 'sales-order'),
-        fetch: fetchInvoiceOrigin,
+        type: doc => (doc._isQuotation || doc.isQuotation === true ? 'sales-quotation' : 'sales-order'),
+        fetch: invoiceOrdersFetch(fetchInvoiceOrigin),
       },
       // Resolved server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each
       // invoice line's own M_InOutLine_ID: normal deliveries AND customer returns, told
       // apart by `isReturn` (ETP-4534). Never derived from `salesOrder`.
       selectSource('shipments', doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'), 'linkedShipments'),
-      { key: 'rectified', type: 'sales-invoice', fetch: fetchRectifiedInvoices },
-      {
-        // Injected only when this invoice traces back through a return to the original
-        // invoice being reversed (SalesInvoiceHeaderHandler#enrichSourceInvoice).
-        key: 'sourceInvoice',
-        type: 'sales-invoice',
-        select: record => (record?.sourceInvoice ? [record.sourceInvoice] : []),
-      },
+      // What this rectificative rectifies: its C_Invoice_Reverse links (`originInvoices`).
       originInvoicesSource('sales-invoice'),
+      // The mirror of originInvoicesSource: the rectificativa(s) that rectify THIS invoice
+      // (SalesInvoiceHeaderHandler#enrichRectifyingInvoices, ETP-5745 CP-12). Without this, the
+      // ORIGINAL invoice never showed its own rectifications here — only a rectificativa could
+      // show what it rectifies, via originInvoicesSource above.
+      selectSource('rectifyingInvoices', 'sales-invoice', 'rectifyingInvoices'),
     ],
   },
 
@@ -146,7 +149,10 @@ export const SALES_RELATED_DOCS = {
   'goods-shipment': movementDefinition({
     spec: 'goods-shipment',
     entity: 'goodsShipment',
-    orderType: 'sales-order',
+    // ETP-6002 (IMP-3): `linkedOrders` may hold a QUOTATION (a shipment made from an invoice that
+    // came straight from it); GoodsShipmentHeaderHandler flags it with `isQuotation`
+    // (DocSubTypeSO = 'OB'), so it renders as a quotation chip, not as "Pedido".
+    orderType: doc => (doc.isQuotation === true ? 'sales-quotation' : 'sales-order'),
     invoiceType: 'sales-invoice',
     returnType: 'return-material-receipt',
     returnsField: 'returnReceipts',

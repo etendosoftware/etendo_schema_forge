@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, joinWithConjunction } from '@/lib/backendErrors.js';
 import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
-import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 
@@ -104,8 +103,13 @@ export function DetailMoreActionsMenu({
     // exact same condition the backend 422 enforces — so this is a prediction of that same
     // refusal, not a separate rule.
     if (action.documentAction === 'RE' && data?.reactivationBlocked) {
+      // ETP-5745: reactivationBlockedFiscalSystem is a real array (like the live 422's own
+      // messageParams.fiscalSystem) — joined with the same locale-aware conjunction so this
+      // preview reads identically to the action's own refusal ("SII y TicketBAI", not a comma).
       toast.error(ui('backendError.invoiceReactivateFiscalRectified', {
-        fiscalSystem: data.reactivationBlockedFiscalSystem,
+        fiscalSystem: Array.isArray(data.reactivationBlockedFiscalSystem)
+          ? joinWithConjunction(data.reactivationBlockedFiscalSystem, ui)
+          : data.reactivationBlockedFiscalSystem,
         rectificativas: Array.isArray(data.reactivationBlockedRectificativas)
           ? data.reactivationBlockedRectificativas.join(', ')
           : data.reactivationBlockedRectificativas,
@@ -113,7 +117,7 @@ export function DetailMoreActionsMenu({
       return false;
     }
     // ETP-4783 / ETP-4940: Flush any pending header edit before running the document
-    // action (Complete/Void/etc., and before any preUnpost) so the server sees the
+    // action (Complete/Void/etc.) so the server sees the
     // latest field values. Without this, fields that are intentionally editable on a
     // completed document (e.g. aeatsiiErrorRegistral) cannot be saved — the "Guardar"
     // button is disabled for completed invoices — and the DB-level doc-action validator
@@ -121,17 +125,11 @@ export function DetailMoreActionsMenu({
     // edit made without clicking Save first was also silently discarded, the action
     // running against the last-persisted value. Mirrored from the maybeSaveBeforeProcess
     // pattern (ETP-4542). handleSave already surfaced the error on failure — abort
-    // without running preUnpost or the action.
+    // without running the action.
     if (!(await maybeSaveBeforeConfirm({ isDirty: hook.isDirtyHeader, handleSave: hook.handleSave }))) {
       return false;
     }
-    const preUnpost = await runPreUnpost({
-      recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
-    });
-    if (!preUnpost.success) {
-      toast.error(translateBackendError(preUnpost.message, ui, preUnpostErrorIdentity(preUnpost)) || ui('actionFailed'));
-      return false;
-    }
+    // ETP-5684 — reactivating a posted document un-posts it on the server, inside the RE.
     try {
       await docAction.execute(currentId, action.documentAction);
       const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
@@ -146,8 +144,8 @@ export function DetailMoreActionsMenu({
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
-      // ETP-5704 — translated like every other action failure of this menu (preUnpost above,
-      // runNeoMenuAction below): useDocumentAction carries the backend's English text and its
+      // ETP-5704 — translated like every other action failure of this menu
+      // (runNeoMenuAction below): useDocumentAction carries the backend's English text and its
       // AD_MESSAGE keys, and the toast must read in the UI locale.
       toast.error(translateBackendError(err.message, ui, {
         messageKeys: err.messageKeys,
@@ -231,13 +229,6 @@ export function DetailMoreActionsMenu({
                 }
                 if (action.neoAction) {
                   await runNeoMenuAction(action);
-                  return;
-                }
-                const preUnpost = await runPreUnpost({
-                  recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
-                });
-                if (!preUnpost.success) {
-                  toast.error(translateBackendError(preUnpost.message, ui, preUnpostErrorIdentity(preUnpost)) || ui('actionFailed'));
                   return;
                 }
                 if (action.columnName) {

@@ -181,6 +181,8 @@ import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -524,6 +526,34 @@ describe('UserWindow — newLabel fix (ETP-4830)', () => {
   it('passes the generic "newUser" label, not the old "inviteUser" mislabel', () => {
     render(<UserWindow />);
     expect(lastUserPageProps.newLabel).toBe('newUser');
+  });
+});
+
+// ETP-5351 — a support session cannot create users, resend invitations, promote/demote or
+// change `active`; the name stays editable.
+describe('UserWindow — support session', () => {
+  beforeEach(() => {
+    applySupportSessionFromServer({ clientId: '1', clientName: 'Acme', expiresAt: '2099-01-01T00:00:00Z' }, { storage: localStorage });
+  });
+  afterEach(() => {
+    resetSupportSessionForTests();
+    localStorage.clear();
+  });
+
+  it('hides create, the active toggle and the resend action', () => {
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', active: true, invitationStatus: 'PENDING' }} />);
+    expect(lastUserPageProps.hideCreate).toBe(true);
+    expect(screen.queryByTestId('ActiveStatusToggle__switch')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ResendInvitationButton')).not.toBeInTheDocument();
+    expect(lastUserPageProps.extraActions({ data: { id: 'user-1', invitationStatus: 'PENDING' } })).toEqual([]);
+  });
+
+  it('keeps everything in a normal session', () => {
+    resetSupportSessionForTests();
+    render(<UserWindow recordId="user-1" data={{ id: 'user-1', active: true, invitationStatus: 'PENDING' }} />);
+    expect(lastUserPageProps.hideCreate).toBe(false);
+    expect(screen.getByTestId('ActiveStatusToggle__switch')).toBeInTheDocument();
+    expect(screen.getByTestId('ResendInvitationButton')).toBeInTheDocument();
   });
 });
 

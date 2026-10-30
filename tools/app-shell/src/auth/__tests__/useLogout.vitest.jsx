@@ -19,6 +19,8 @@ import {
   setEnvironmentAccessDecision,
 } from '@/lib/environmentAccessGate.js';
 
+import { SUPPORT_SESSION_STORAGE_KEY } from '@/lib/supportSession.js';
+
 const STORAGE_KEY = 'dashboard_date_range';
 
 describe('useLogout', () => {
@@ -73,6 +75,15 @@ describe('useLogout', () => {
 
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(coreLogout).toHaveBeenCalledTimes(1);
+  });
+
+  // ETP-5351 — a support session's persisted marker must not outlive an explicit logout.
+  it('forgets the support session marker on logout', () => {
+    localStorage.setItem(SUPPORT_SESSION_STORAGE_KEY, '{"clientId":"C1"}');
+    const { result } = renderHook(() => useLogout());
+    act(() => result.current());
+    expect(localStorage.getItem(SUPPORT_SESSION_STORAGE_KEY)).toBeNull();
     expect(coreLogout).toHaveBeenCalledTimes(1);
   });
 

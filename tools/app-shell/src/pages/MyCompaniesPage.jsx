@@ -16,8 +16,7 @@ import {
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { detectBasePath } from '@/lib/neoBaseUrl.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { createPortalSession, getSubscription } from '@/lib/upgrade/api.js';
-import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
+import { UPGRADE_ERROR_CODES, createPortalSession } from '@/lib/upgrade/api.js';
 import {
   environmentCommercialLabel,
   environmentPlanLabelKey,
@@ -49,28 +48,25 @@ function roleLabel(env, ui) {
 }
 
 /**
- * The renewal cell of an owned company: the live renewal date of the subscription for the
- * productive environment it pays for, the trial countdown for a demo, plus the commercial warning
- * (payment grace, suspended) when the backend reports one. No amount: there is one subscription
- * per account and it is not per company.
+ * The renewal cell of an owned company: the renewal date of the productive environment's OWN
+ * subscription, the trial countdown for a demo, plus the commercial warning (payment grace,
+ * suspended) when the backend reports one. No amount.
  *
- * Never the environment's `renewalDueAt`: that is the payment-grace anchor, empty while the
- * subscription is current and the end of the last paid period once it is past due. And only for a
- * subscription that is actually renewing, the rule of the Subscription page: a past-due
- * `renewalAt` is a retry date and a scheduled cancellation does not renew.
+ * ETP-5051 O-1b — per row, whatever environment the session is in: the date is the row's
+ * `renewalAt` from `GET /sws/go/environments`, which the backend sets only while that
+ * environment's subscription is actually renewing (active or trialing, not past due, not
+ * scheduled to cancel) and sends as null otherwise; the null check stays as a guard for an older
+ * backend with no key. Never the environment's `renewalDueAt`: that is the payment-grace anchor,
+ * empty while the subscription is current and the end of the last paid period once it is past due.
  */
-function renewalLabel(env, subscription, ui, locale) {
+function renewalLabel(env, ui, locale) {
   if (!isProductiveEnvironment(env)) return environmentTrialLabel(env, ui) || '—';
-  const renews = subscription?.clientId === env.clientId
-    && subscription.renewalAt
-    && subscription.cancelAtPeriodEnd !== true
-    && RENEWING_STATUSES.has(subscription.status);
-  return renews ? formatCalendarDate(subscription.renewalAt, locale, SHORT_DATE) : '—';
+  return env.renewalAt ? formatCalendarDate(env.renewalAt, locale, SHORT_DATE) : '—';
 }
 
-function RenewalCell({ env, subscription, ui, locale }) {
+function RenewalCell({ env, ui, locale }) {
   const commercial = environmentCommercialLabel(env, ui);
-  const primary = renewalLabel(env, subscription, ui, locale);
+  const primary = renewalLabel(env, ui, locale);
   return (
     <div className="flex flex-col">
       <span>{primary}</span>
@@ -115,7 +111,7 @@ function CompanyName({ env, isCurrent, ui }) {
 }
 
 function OwnedCompaniesTable({
-  companies, subscription, currentClientId, switching, onEnter, onManage, managing, ui, locale,
+  companies, currentClientId, switching, onEnter, onManage, managing, ui, locale,
 }) {
   return (
     <Table data-testid="my-companies-owned-table">
@@ -132,13 +128,14 @@ function OwnedCompaniesTable({
       <TableBody data-testid="TableBody__44c7f5">
         {companies.map((env) => {
           const isCurrent = env.clientId === currentClientId;
-          // The billing portal is account-level and only meaningful for the paid environment.
+          // ETP-5051 O-1b — the portal opened from a row is that row's environment's own (the
+          // client id travels with the request), so it is offered only where something was paid.
           const canManage = isProductiveEnvironment(env);
           return (
             <TableRow key={env.clientId} data-testid={`my-companies-owned-${env.clientId}`}>
               <TableCell data-testid="TableCell__44c7f5"><CompanyName env={env} isCurrent={isCurrent} ui={ui} data-testid="CompanyName__44c7f5" /></TableCell>
               <TableCell data-testid="TableCell__44c7f5">{ui(environmentPlanLabelKey(env))}</TableCell>
-              <TableCell data-testid="TableCell__44c7f5"><RenewalCell env={env} subscription={subscription} ui={ui} locale={locale} data-testid="RenewalCell__44c7f5" /></TableCell>
+              <TableCell data-testid="TableCell__44c7f5"><RenewalCell env={env} ui={ui} locale={locale} data-testid="RenewalCell__44c7f5" /></TableCell>
               <TableCell data-testid="TableCell__44c7f5">{Number.isInteger(env.userCount) ? env.userCount : '—'}</TableCell>
               <TableCell className="text-right" data-testid="TableCell__44c7f5">
                 <EnterButton
@@ -166,7 +163,7 @@ function OwnedCompaniesTable({
                     <DropdownMenuContent align="end" data-testid="DropdownMenuContent__44c7f5">
                       <DropdownMenuItem
                         disabled={managing}
-                        onSelect={onManage}
+                        onSelect={() => onManage(env)}
                         data-testid={`my-companies-manage-${env.clientId}`}
                       >
                         {ui('myCompaniesManageSubscription')}
@@ -274,7 +271,6 @@ export default function MyCompaniesPage() {
   // 'loading' | 'loaded' | 'error'
   const [status, setStatus] = useState('loading');
   const [groups, setGroups] = useState({ owned: [], invited: [], pendingInvitations: [] });
-  const [subscription, setSubscription] = useState(null);
   const [managing, setManaging] = useState(false);
   // One view per visit: a retry after a load error must not count the visit twice.
   const viewTracked = useRef(false);
@@ -283,16 +279,13 @@ export default function MyCompaniesPage() {
     const { apiBase } = detectBasePath();
     setStatus('loading');
     try {
-      const [environments, invitations, liveSubscription] = await Promise.all([
+      const [environments, invitations] = await Promise.all([
         fetchCompanyEnvironments(apiBase),
-        // Invitations and the renewal date are secondary: failing to read them must not hide
-        // the companies.
+        // Invitations are secondary: failing to read them must not hide the companies.
         fetchMyInvitations(apiBase).catch(() => []),
-        getSubscription(apiBase).catch(() => null),
       ]);
       const grouped = groupCompanies(environments, invitations);
       setGroups(grouped);
-      setSubscription(liveSubscription?.hasSubscription ? liveSubscription : null);
       setStatus('loaded');
       if (!viewTracked.current) {
         viewTracked.current = true;
@@ -315,14 +308,17 @@ export default function MyCompaniesPage() {
     }
   }, [switchTo, ui]);
 
-  const handleManage = useCallback(async () => {
+  const handleManage = useCallback(async (env) => {
     setManaging(true);
     try {
-      const session = await createPortalSession(detectBasePath().apiBase);
+      const session = await createPortalSession(detectBasePath().apiBase, env.clientId);
       if (!session?.url) throw new Error('Portal session carried no url');
       window.location.assign(session.url);
-    } catch {
-      toast.error(ui('subscriptionManageError'));
+    } catch (err) {
+      // A row with no subscription of its own is not a transient failure: no "please try again".
+      toast.error(ui(err?.code === UPGRADE_ERROR_CODES.portalNoSubscription
+        ? UPGRADE_ERROR_CODES.portalNoSubscription
+        : 'subscriptionManageError'));
     } finally {
       setManaging(false);
     }
@@ -385,7 +381,6 @@ export default function MyCompaniesPage() {
                 <CardContent className="p-0" data-testid="CardContent__44c7f5">
                   <OwnedCompaniesTable
                     companies={owned}
-                    subscription={subscription}
                     currentClientId={currentClientId}
                     switching={switching}
                     onEnter={handleEnter}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, quotaRefusalFields, translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { PeriodRecoveryLink } from './PeriodRecoveryLink.jsx';
@@ -91,11 +91,17 @@ async function runConfirm({ apiFetch, actionBase, skipDocumentAction, invoiceReq
  * `translateBackendError` resolve a core document-action failure whose text embeds AD line
  * numbers and so can never be matched as a literal. An older backend simply sends no keys and the
  * Error is exactly what it used to be.
+ *
+ * ETP-5051 — a plan-quota refusal (403 QUOTA_EXCEEDED / 500 QUOTA_CHECK_FAILED) carries its text
+ * in `error.message`, which this never read: the user saw "Error (403)". Its `quota` /
+ * `quotaCheckFailed` now ride on the Error, so the translator renders the quota sentence (and
+ * announces the refusal to the quota banner). Any other error is built exactly as before.
  */
 function buildBackendError(body, status) {
   const err = new Error(body?.response?.message || body?.message || `Error (${status})`);
   err.status = status;
   err.messageKeys = extractBackendMessageKeys(body);
+  Object.assign(err, quotaRefusalFields(body));
   return err;
 }
 
@@ -203,7 +209,9 @@ export default function ConfirmInOutModal({
       });
       onConfirmed({ invoice });
     } catch (err) {
-      setError(translateBackendError(err.message, ui, { messageKeys: err.messageKeys }));
+      setError(translateBackendError(err.message, ui, {
+        messageKeys: err.messageKeys, quota: err.quota, quotaCheckFailed: err.quotaCheckFailed,
+      }));
       setErrorRecovery(periodNotAvailableToastOptions(err.messageKeys, ui, { date: periodDate }));
       setLoading(false);
     }

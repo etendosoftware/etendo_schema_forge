@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
-import { useUI } from '@/i18n';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { useEffect, useMemo, useState } from 'react';
+import { useUI, useLabel } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { DataTable } from '@/components/contract-ui';
 
-export default function AccountingPanel({ parentId, apiBaseUrl }) {
+export default function AccountingPanel({ parentId, apiBaseUrl, onCount }) {
   const ui = useUI();
+  const t = useLabel();
   const apiFetch = useApiFetch(apiBaseUrl);
   // Three distinct states, not just null vs array: `undefined` = loading (initial/in-flight),
   // `null` = a request failed (network error or non-2xx response), an array = loaded rows
@@ -23,36 +27,65 @@ export default function AccountingPanel({ parentId, apiBaseUrl }) {
       .catch(() => setRows(null));
   }, [parentId, apiFetch]);
 
-  if (rows === undefined) {
-    return <div data-testid="accounting-panel-loading" className="p-4 text-sm text-muted-foreground">{ui('loading')}</div>;
-  }
+  // Tab count, like every other secondary tab (see PeriodsExpandablePanel for the deps).
+  useEffect(() => {
+    if (Array.isArray(rows)) onCount?.(rows.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows?.length]);
+
+  // `amount` cells format through the canonical currency utilities, with the accounting
+  // schema's currency the backend sends as `currency$_identifier` (ETP-5592).
+  const columns = useMemo(() => [
+    {
+      key: 'account',
+      label: ui('account'),
+      type: 'string',
+      sortable: false,
+      render: (row) => (
+        <span data-testid={`accounting-account-${row.id}`}>
+          {row.accountName ? `${row.account} - ${row.accountName}` : row.account}
+        </span>
+      ),
+    },
+    { key: 'debit', label: ui('debit'), type: 'amount', sortable: false },
+    { key: 'credit', label: ui('credit'), type: 'amount', sortable: false },
+    { key: 'description', label: ui('description'), type: 'string', sortable: false },
+  ], [ui]);
+
+  // Use the backing NEO entity, independently of the surrounding route or parent record.
+  const { gridView } = useFlaggedGridView({
+    spec: 'end-year-close',
+    entity: 'accounting',
+    columns,
+    data: rows ?? [],
+    apiBaseUrl,
+  });
+
   if (rows === null) {
     return <div data-testid="accounting-panel-error" className="p-4 text-sm text-destructive">{ui('accountingLoadError')}</div>;
   }
-  if (rows.length === 0) {
-    return <div data-testid="accounting-panel-empty" className="p-4 text-sm text-muted-foreground">{ui('accountingNoEntries')}</div>;
-  }
 
   return (
-    <table data-testid="accounting-panel-table" className="w-full text-sm">
-      <thead>
-        <tr>
-          <th className="text-left p-2">{ui('account')}</th>
-          <th className="text-right p-2">{ui('debit')}</th>
-          <th className="text-right p-2">{ui('credit')}</th>
-          <th className="text-left p-2">{ui('description')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id} data-testid={`accounting-row-${row.id}`}>
-            <td className="p-2" data-testid={`accounting-account-${row.id}`}>{row.account}</td>
-            <td className="p-2 text-right">{row.debit}</td>
-            <td className="p-2 text-right">{row.credit}</td>
-            <td className="p-2">{row.description}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div data-testid={rows === undefined ? 'accounting-panel-loading' : 'accounting-panel-table'}>
+      {gridView.enabled && <GridViewControls
+        gridView={gridView}
+        gridColumns={columns}
+        ui={ui}
+        t={t}
+        data-testid="GridViewControls__d73b6d" />}
+      <DataTable
+        gridView={gridView}
+        columns={columns}
+        data={rows ?? []}
+        loading={rows === undefined}
+        selectable={false}
+        showFooterTotals={false}
+        emptyState={{
+          title: ui('accountingNoEntries'),
+          description: ui('accountingEmptyDescription'),
+          testId: 'accounting-panel-empty',
+        }}
+        data-testid="accounting-table" />
+    </div>
   );
 }

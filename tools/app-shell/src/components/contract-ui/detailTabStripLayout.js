@@ -41,16 +41,18 @@ export const MIN_VISIBLE_TABS = 2;
 /**
  * How many tabs (<= max) fit in `available` px, "More" trigger included whenever any tab is
  * hidden. Exact: it lays out each candidate count with resolveTabStripLayout, so the width of
- * a promoted slot tab is the one summed. Falls back to `max` while geometry is unknown
+ * a promoted slot tab is the one summed. Falls back to `fallback` (default `max`) while geometry is unknown
  * (zero width, no layout engine, widths not measured yet) and never goes below
  * MIN_VISIBLE_TABS — below that the strip clips rather than overlapping its neighbours.
  *
  * @param {object} p
  * @param {number[]} p.widths - measured width of every tab, in original order
  * @param {number} p.moreWidth - measured width of the "More" trigger
+ * @param {number} [p.max] - ceiling of the count (the strip passes tabs.length: no fixed cap)
+ * @param {number} [p.fallback] - count returned while geometry is unknown
  */
-export function computeFittingTabCount({ widths, moreWidth, available, tabs, activeKey, max = MAX_VISIBLE_TABS }) {
-  if (!Number.isFinite(available) || available <= 0 || widths.length !== tabs.length || widths.every((w) => !w)) return max;
+export function computeFittingTabCount({ widths, moreWidth, available, tabs, activeKey, max = MAX_VISIBLE_TABS, fallback = max }) {
+  if (!Number.isFinite(available) || available <= 0 || widths.length !== tabs.length || widths.every((w) => !w)) return fallback;
   const floor = Math.min(MIN_VISIBLE_TABS, max);
   for (let n = max; n > floor; n -= 1) {
     const { visible, hidden } = resolveTabStripLayout(tabs, activeKey, n);

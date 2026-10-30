@@ -56,6 +56,16 @@ describe('isStaleRecordResponse', () => {
     expect(await isStaleRecordResponse(res)).toBe(true);
   });
 
+  it('is true for the nested thrown shape error.code = "stale_record" (ETP-5782)', async () => {
+    const res = jsonResponse({ error: { code: 'stale_record', status: 409, message: 'changed' } });
+    expect(await isStaleRecordResponse(res)).toBe(true);
+  });
+
+  it('is false for a nested 409 of another class', async () => {
+    const res = jsonResponse({ error: { code: 'duplicate_key', status: 409, message: 'exists' } });
+    expect(await isStaleRecordResponse(res)).toBe(false);
+  });
+
   it('is false for a different error discriminator on the same 409 status', async () => {
     const res = jsonResponse({ status: 409, error: 'conflict', message: 'Duplicate record' });
     expect(await isStaleRecordResponse(res)).toBe(false);

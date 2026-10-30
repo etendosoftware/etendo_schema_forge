@@ -122,8 +122,9 @@ async function reachPaymentStep(page) {
   await page.getByTestId('upgrade-plan-select').click();
   await page.getByTestId('upgrade-addons-continue').click();
   await expect(page.getByTestId('upgrade-checkout')).toBeVisible();
-  // The single catalog plan is auto-selected; the submit is enabled from here on.
-  await expect(page.getByTestId('upgrade-plan-single')).toBeVisible();
+  // The single catalog plan is auto-selected on the Plan step and summarized here; the submit is
+  // enabled from here on.
+  await expect(page.getByTestId('upgrade-plan-summary')).toBeVisible();
   await page.getByTestId('upgrade-tenant-name-input').fill('Acme Productive');
 }
 

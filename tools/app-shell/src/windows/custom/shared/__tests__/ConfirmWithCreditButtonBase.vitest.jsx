@@ -7,8 +7,12 @@
 // (jsdom render + @testing-library/react against the real component tree).
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
+// Keys echo back, except the plan-quota sentence (ETP-5051): an echoed key reads as "not
+// translated", so the translator would fall back and the quota path could not be observed.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params = {}) => (key === 'backendError.quotaExceeded'
+    ? `Límite del plan alcanzado: ${params.resource}`
+    : key),
 }));
 
 const mockNavigate = vi.fn();
@@ -33,11 +37,12 @@ vi.mock('@/components/contract-ui/ConfirmInOutModal', () => ({
   // invoiceAction/defaultCreateInvoice are exposed as data-attributes (ETP-4848)
   // so tests can assert what ConfirmWithCreditButtonBase computed and passed down,
   // without needing to render the real modal's internals.
-  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice }) => (
+  default: ({ onConfirmed, onClose, invoiceAction, defaultCreateInvoice, title }) => (
     <div
       data-testid="confirm-inout-modal"
       data-invoice-action={invoiceAction ?? ''}
       data-default-create-invoice={String(defaultCreateInvoice)}
+      data-title={title ?? ''}
     >
       <button data-testid="confirm-inout-confirm-with-id" onClick={() => onConfirmed({ invoice: { id: 'INV-1', documentNo: 'FC-001', amount: 100, documentStatus: 'CO' } })} />
       <button data-testid="confirm-inout-confirm-no-id" onClick={() => onConfirmed({ invoice: {} })} />
@@ -67,8 +72,8 @@ vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
 // flight, and stays mounted until it resolves — mirroring the real
 // CreateInvoiceConfirmModal's own loading contract.
 vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
-  default: ({ onConfirm, onClose, loading }) => (
-    <div data-testid="create-invoice-confirm-modal">
+  default: ({ onConfirm, onClose, loading, title }) => (
+    <div data-testid="create-invoice-confirm-modal" data-title={title ?? ''}>
       <button data-testid="create-invoice-confirm" onClick={onConfirm} disabled={loading}>
         {loading ? 'soProcessing' : 'soCreateDocsBtn'}
       </button>
@@ -127,6 +132,22 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
     const btn = screen.getByTestId('action-create-return-invoice');
     expect(btn).toHaveTextContent('Crear Factura Rectificativa');
     expect(btn).not.toHaveTextContent('createReturnInvoice');
+  });
+
+  it('renders the document icon (svg) before the label, like "Crear Factura"', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+        postConfirmButtonLabel="Crear Factura Rectificativa"
+      />
+    );
+    const btn = screen.getByTestId('action-create-return-invoice');
+    const svg = btn.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(btn.firstElementChild).toBe(svg);
+    expect(svg).toHaveClass('w-5', 'h-5');
+    expect(btn.textContent).toBe('Crear Factura Rectificativa');
   });
 
   it('does not render the post-confirm button at all when status is CO but hasReturnInvoice is true', () => {
@@ -320,6 +341,48 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('action-create-return-invoice'));
     expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+  });
+
+  // ETP-5688 — the CO popup's title is its own prop; `cardTitle` / `confirmModalTitle` belong to
+  // the DR confirm-time modal and must not leak into it (nor the other way round).
+  it('hands createInvoiceModalTitle to the CO CreateInvoiceConfirmModal as its title', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+        createInvoiceModalTitle="Generate rectificative invoice"
+        cardTitle="Card title (DR only)"
+        confirmModalTitle="Confirm modal title (DR only)"
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toHaveAttribute('data-title', 'Generate rectificative invoice');
+  });
+
+  it('passes no title to the CO modal without createInvoiceModalTitle (it keeps its own default), ignoring cardTitle', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+        cardTitle="Card title (DR only)"
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toHaveAttribute('data-title', '');
+  });
+
+  it('leaves the DR ConfirmInOutModal title on confirmModalTitle, unaffected by createInvoiceModalTitle', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+        confirmModalTitle="Confirm modal title (DR only)"
+        createInvoiceModalTitle="Generate rectificative invoice"
+      />
+    );
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toHaveAttribute('data-title', 'Confirm modal title (DR only)');
+    expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
   });
 
   it('closes ConfirmInOutModal without producing a result when its onClose fires', async () => {
@@ -542,6 +605,40 @@ describe('ConfirmWithCreditButtonBase — CreateInvoiceConfirmModal stays open d
     expect(screen.getByTestId('create-invoice-confirm')).not.toBeDisabled();
     expect(toast.error).toHaveBeenCalledWith('Network error');
     expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+  });
+
+  // ETP-5051 — creating the rectificative invoice can be refused by the plan quota (403
+  // QUOTA_EXCEEDED). The toast reads as the translated quota sentence, not "Error (403)"; any other
+  // refusal reads exactly as before.
+  async function refuseWith(status, body) {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, status, json: () => Promise.resolve(body) }));
+    openCoModal();
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+  }
+
+  it('on a 403 QUOTA_EXCEEDED: toasts the translated quota sentence, and shows no result modal', async () => {
+    toast.error.mockClear();
+    await refuseWith(403, {
+      error: {
+        code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Sales invoices (100/100)',
+        quota: { resourceKey: 'CREDIT_RETURN_INVOICES', resourceName: 'Sales invoices', includedQty: 100, consumed: 100, verdict: 'DENY' },
+      },
+    });
+    expect(toast.error).toHaveBeenCalledWith('Límite del plan alcanzado: Sales invoices');
+    expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+  });
+
+  it('on any other refusal: toasts the backend message, or "Error (<status>)", exactly as before', async () => {
+    toast.error.mockClear();
+    await refuseWith(409, { response: { status: -1, message: 'Business partner on hold' } });
+    expect(toast.error).toHaveBeenCalledWith('Business partner on hold');
+  });
+
+  it('on a refusal with no message: toasts "Error (<status>)"', async () => {
+    toast.error.mockClear();
+    await refuseWith(403, { error: { status: 403 } });
+    expect(toast.error).toHaveBeenCalledWith('Error (403)');
   });
 
   it('rapid double-click on the confirm button while a request is in flight results in exactly one POST call', async () => {

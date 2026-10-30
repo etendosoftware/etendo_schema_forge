@@ -69,7 +69,8 @@ PUSH_REFS=""
 # ----------------------------------------------------------------------------
 # Hooks-Verified: every commit being pushed must carry a valid trailer, proving
 # the pre-commit hooks were installed and ran for that exact tree.
-# Set HOOKS_VERIFY_SKIP=1 to bypass (e.g. when pushing imported/legacy history).
+# HOOKS_VERIFY_SKIP=1 exists only for maintenance pushes of imported history;
+# CI's verify check applies regardless.
 # ----------------------------------------------------------------------------
 if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
   . "$SCRIPT_DIR/lib/hooks-proof.sh"
@@ -102,8 +103,9 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
       printf '     %s  %s\n' "$(git rev-parse --short "$sha")" "$(git log -1 --format=%s "$sha")"
     done
     echo ""
-    echo "   This means the git hooks were not active when those commits were made"
-    echo "   (or the content changed afterwards)."
+    echo "   They were made without the git hooks, or changed after them (an amend with"
+    echo "   --no-verify, a rebase that resolved a conflict). CI's verify check refuses"
+    echo "   them too."
     # Resolve the exact base so the fix can be copy-pasted instead of derived by
     # hand — reading it off the list above is the step people get wrong.
     REBASE_BASE="$(hooks_rebase_base $UNVERIFIED || true)"
@@ -120,7 +122,6 @@ if [ "$HOOKS_VERIFY_SKIP" != "1" ]; then
       echo "   (<base> = the parent of the oldest commit listed above; it could not be"
       echo "    resolved automatically here.)"
     fi
-    echo "   Bypass (discouraged): HOOKS_VERIFY_SKIP=1 git push"
     exit 1
   fi
   echo "✔ Hooks-Verified trailer present on all pushed commits."
@@ -161,7 +162,7 @@ LAST_FAILED_FILE="$REPO_DIR/tmp/pre-push/last-failed-step"
 # Fail fast: Check for uncommitted or untracked changes
 if [ -n "$(git status --porcelain)" ]; then
   echo "❌ ERROR: You have uncommitted or untracked changes in your working tree."
-  echo "   Please commit or stash them before pushing, or use 'git push --no-verify' to bypass."
+  echo "   Commit or stash them before pushing: the checks below must see what you push."
   echo "   Uncommitted files:"
   git status --porcelain
   exit 1
@@ -517,7 +518,6 @@ check_go_module_push_sync() {
   echo "   would disagree."
   echo "👉 Push com.etendoerp.go first, then re-run this push:"
   echo "     git -C etendo_core/modules/com.etendoerp.go push origin $expected_branch"
-  echo "   or bypass with 'git push --no-verify'."
   echo "========================================================================="
   record_failure "com.etendoerp.go not fully pushed (blocks step 4 comparison)"
   STEP_OK=0
@@ -538,7 +538,7 @@ check_go_module_push_sync() {
 # so a mocked failure never prevents integration from also running and being
 # reported — same "collect everything, don't stop at the first problem"
 # contract as the rest of this hook.
-# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS. WIP bypass: git push --no-verify.
+# Overridable: E2E_PASSWORD, E2E_BACKEND_URL, E2E_WORKERS.
 # backend_url defaults to the LOCAL environment's own configured context (read from
 # ../config/Openbravo.properties' context.url) rather than a hardcoded /etendo — different
 # developer machines legitimately deploy under different context names (e.g. /etendogoclean).
@@ -774,6 +774,17 @@ fi
 # caused entirely by a stale core-package pin that only `npm ci` — not a
 # stale local install — would have caught).
 run_step_0() {
+  # Second trigger, independent of the diff: the lockfile can be unchanged vs the
+  # target while the INSTALLED tree is older than it (e.g. develop merged in, its
+  # lockfile bumped a core package, node_modules never reinstalled -> E2E build
+  # and vitest fail on stale packages). Pure JSON compare, fast when in sync.
+  local stale_reason=""
+  if [ "$RUN_S0" != "1" ] && stale_reason="$(node "$REPO_DIR/scripts/check-node-modules-fresh.js" "$REPO_DIR")"; then
+    stale_reason=""
+  elif [ "$RUN_S0" != "1" ]; then
+    echo "==> node_modules is stale vs package-lock.json (${stale_reason:-unknown}) -> running npm ci"
+    RUN_S0=1
+  fi
   if [ "$RUN_S0" != "1" ]; then
     echo "==> [0/5] Syncing npm dependencies (npm ci)... SKIPPED ⏭️  (lockfile unchanged)"
     record_summary_row "Syncing npm dependencies with package-lock.json (npm ci)" "-" "SKIPPED" ""
@@ -782,6 +793,8 @@ run_step_0() {
   # npm ci is a pure function of the lockfile and the node major it installs for.
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" package.json package-lock.json)"
+  # A stale install must reinstall even if this lockfile already passed once.
+  [ -n "$stale_reason" ] && key=""
   run_step "0" "Syncing npm dependencies with package-lock.json (npm ci)" "$REPO_DIR" "tmp/pre-push/npm-ci.log" "npm ci || npm install" "$key"
 }
 
@@ -796,6 +809,47 @@ run_step_1() {
   local key
   key="$(step_cache_compute "node-${NODE_MAJOR}" tools/app-shell/src scripts/check-add-data-testid.sh)"
   run_step "1" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid" "$key"
+}
+
+# Test hygiene (reuse-first protocol, docs/testing/test-reuse-policy.md): the same
+# scripts/check-test-hygiene.js the PR's `test-hygiene (reuse-first protocol)` job runs, over
+# the same change set (BASE_REF...HEAD). It takes well under a second and only looks at the
+# changed test files itself, so it is not relevance-gated and never cached. The mode comes from
+# TEST_HYGIENE_MODE in .github/workflows/ratchet-guards.yml, so the hook and CI share ONE switch:
+# `annotate` prints the findings and never blocks; `block` blocks the push exactly when CI would.
+run_test_hygiene() {
+  local name="Running test-hygiene check (reuse-first protocol)"
+  if [ -z "$BASE_REF" ]; then
+    echo "==> $name... SKIPPED ⚠️  (no target branch to diff against)"
+    record_summary_row "$name" "-" "SKIPPED" ""
+    return 0
+  fi
+  local mode out findings status=0 start=$SECONDS duration
+  mode="$(sed -n -E 's/^[[:space:]]*TEST_HYGIENE_MODE:[[:space:]]*([a-z]+).*/\1/p' \
+    "$REPO_DIR/.github/workflows/ratchet-guards.yml" 2>/dev/null | head -n 1)"
+  [ -n "$mode" ] || mode=annotate
+  out="$(cd "$REPO_DIR" && node scripts/check-test-hygiene.js --base "$BASE_REF" --head HEAD --mode "$mode" 2>&1)" || status=$?
+  duration=$(( SECONDS - start ))
+  findings="$(printf '%s\n' "$out" | grep -cE '^::(warning|error)' || true)"
+  if [ "$status" -ne 0 ]; then
+    echo "==> $name... FAILED ❌ (${duration}s, mode: $mode)"
+  elif [ "$findings" -gt 0 ]; then
+    echo "==> $name... ${findings} WARNING(S) ⚠️  (${duration}s, mode: $mode — not blocking)"
+  else
+    echo "==> $name... SUCCESS ✅ (${duration}s)"
+  fi
+  # GitHub annotation lines (`::warning file=F,line=N,title=T::msg`) shown as `F:N [T] msg`.
+  if [ "$findings" -gt 0 ] || [ "$status" -ne 0 ]; then
+    printf '%s\n' "$out" \
+      | sed -E 's/^::(warning|error) file=([^,]*),line=([0-9]+),title=([^:]*)::/   \2:\3 [\4] /; s/^::(warning|error) title=([^:]*)::/   [\2] /'
+  fi
+  if [ "$status" -ne 0 ]; then
+    record_failure "$name"
+    record_summary_row "$name" "$duration" "FAILED" "${findings} finding(s)"
+  else
+    record_summary_row "$name" "$duration" "OK" "${findings} warning(s), mode: ${mode}"
+  fi
+  return 0
 }
 
 # Domain boundary check disabled: repos are now split at the repo level
@@ -911,7 +965,6 @@ process.stdout.write(r.windows.filter(w=>{\
     echo "👉 Either regenerate + commit (make regen ONLY=<window>), or the pinned"
     echo "   core package (@etendosoftware/schema-forge-cli) is missing/behind a"
     echo "   generator feature the committed artifacts already rely on."
-    echo "   Bypass with 'git push --no-verify'."
     echo "========================================================================="
     mkdir -p "$(dirname "$LAST_FAILED_FILE")"
     echo "3" > "$LAST_FAILED_FILE"
@@ -985,6 +1038,7 @@ if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ]; then
 else
   run_step_0
   run_step_1
+  run_test_hygiene
   run_step_2
   run_step_3
   run_step_4
@@ -1037,7 +1091,7 @@ if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
   done
   echo ""
   echo "   Fix everything listed, then re-push (each is re-checked together —"
-  echo "   no need to push once per problem). Bypass with 'git push --no-verify'."
+  echo "   no need to push once per problem)."
   echo "=========================================="
   exit 1
 fi

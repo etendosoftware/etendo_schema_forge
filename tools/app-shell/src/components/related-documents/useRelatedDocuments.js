@@ -11,8 +11,9 @@ function chipTypeOf(source, doc) {
 
 /**
  * Flattens per-source results into `{ type, doc }` items, in source order, dropping
- * repeated documents (same chip type + id) that two sources may both return — e.g. a
- * rectified invoice that is also a manually linked origin invoice.
+ * repeated documents (same chip type + id) that two sources may both return. The FIRST
+ * source to return a document wins, so a source that returns full records should come
+ * before one that returns bare {id, documentNo} entries.
  *
  * @param {Array<[source, doc[]]>} results
  * @returns {Array<{ type: string, doc: object }>}

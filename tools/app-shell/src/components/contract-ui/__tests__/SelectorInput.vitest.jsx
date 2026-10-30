@@ -1,16 +1,20 @@
+// @covers tools/app-shell/src/components/contract-ui/SelectorInput.jsx
 /**
  * Render tests for SelectorInput — the Radix Select wrapper for FK fields.
  * Covers: initial render, placeholder, compact mode, value display, required field.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
-  buildUrlWithParams: (url) => url,
+  buildUrlWithParams: (url, params) => {
+    const qs = new URLSearchParams(params).toString();
+    return qs ? `${url}?${qs}` : url;
+  },
 }));
 
 vi.mock('@/lib/selectorCatalog.js', () => ({
@@ -253,5 +257,54 @@ describe('SelectorInput', () => {
     } finally {
       globalThis.window = realWindow;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5903 — Radix positions the list on the committed item only when it is loaded. While the
+// dropdown is open, a committed value that is not on the loaded pages is fetched page by page
+// (up to 6 pages = 300 rows). The mocked SelectContent is always mounted, i.e. "open".
+// ---------------------------------------------------------------------------
+describe('SelectorInput — loading the page that holds the committed value (ETP-5903)', () => {
+  function routedFetch(totalRows) {
+    return vi.fn((url) => {
+      const offset = Number(new URL(String(url), 'http://test').searchParams.get('offset') || 0);
+      const count = Math.max(0, Math.min(50, totalRows - offset));
+      const items = Array.from({ length: count }, (_, i) => ({ id: String(offset + i), label: `Item-${offset + i}` }));
+      return Promise.resolve({ ok: true, json: async () => ({ items }) });
+    });
+  }
+  const offsets = () => globalThis.fetch.mock.calls
+    .map(([url]) => Number(new URL(String(url), 'http://test').searchParams.get('offset')));
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('loads pages until the committed value is among the options, and stops there', async () => {
+    globalThis.fetch = routedFetch(150);
+    renderSelector({ selectorUrl: '/api/selectors/bp', value: '120', displayValue: 'Item-120' });
+
+    await waitFor(() => expect(offsets()).toEqual([0, 50, 100]));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(offsets()).toEqual([0, 50, 100]);
+  });
+
+  it('stops at the page cap when the value is further away', async () => {
+    globalThis.fetch = routedFetch(1000);
+    renderSelector({ selectorUrl: '/api/selectors/bp', value: '900', displayValue: 'Item-900' });
+
+    await waitFor(() => expect(offsets()).toEqual([0, 50, 100, 150, 200, 250]));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(offsets()).toHaveLength(6);
+  });
+
+  it('loads only the first page when there is no committed value', async () => {
+    globalThis.fetch = routedFetch(1000);
+    renderSelector({ selectorUrl: '/api/selectors/bp', value: '' });
+
+    await waitFor(() => expect(offsets()).toEqual([0]));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(offsets()).toEqual([0]);
   });
 });

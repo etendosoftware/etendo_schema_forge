@@ -206,14 +206,71 @@ async function runProductSimSearch({ token, lines }) {
 }
 
 /**
- * Decide what to do with the simSearch result of one line description.
- *  - exactly one candidate whose name equals the description (trim + case-insensitive)
- *    → `{ id }`: safe to auto-assign;
- *  - otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
- *    best one: the user must confirm it in the popup, it is never assigned silently
- *    (a partial name such as "Mantenimiento Web" vs "Servicio de desarrollo y mantenimiento
- *    web" is a different product);
- *  - no candidates → `{}`.
+ * Normalizer for the EXACT-name step of the product classification (ETP-5654, CP-7): NFC, trim
+ * (ECMAScript WhiteSpace + LineTerminator, NBSP included), lowercase, then diacritics stripped
+ * (NFD + removal of combining marks), so "Arnés" equals "Arnes" exactly like "60M" equals "60m". The
+ * n-tilde is deliberately kept distinct ("año" is not "ano": different words, and a silent wrong
+ * product is worse than a suggestion), so it is protected with a placeholder while the marks are
+ * stripped. The fold also applies to an identical candidate: if the catalog holds both "Arnés X"
+ * and "Arnes X", the description "Arnés X" has two normalized-exact matches and goes to the user
+ * as a suggestion (candidates[0], which may not be the identical one); the safe direction by
+ * design. Mirrors OcrProductMatch.normalizeProductName in com.etendoerp.go; keep both identical:
+ * `trim()` already is the ECMAScript whitespace set, which the Java twin spells out because
+ * String.trim() (<= U+0020) and strip() (keeps NBSP) do not match it.
+ * Not used for vendor matching (`normalizeName`). Exported for testing.
+ */
+export function normalizeProductName(value) {
+  if (value == null) return '';
+  return String(value)
+    .normalize('NFC')
+    .trim()
+    .toLowerCase()
+    .replaceAll('ñ', '\u0001')
+    .normalize('NFD')
+    .replaceAll(/\p{M}/gu, '')
+    .replaceAll('\u0001', 'ñ');
+}
+
+/** Minimum similarity (0-100, inclusive) at which a catalog product is taken automatically. */
+export const PRODUCT_AUTO_MATCH_MIN_SIMILARITY = 90;
+
+// Defensive parse: simSearch hands the percentage over as a string (trailing '%' stripped), and
+// anything missing or non-numeric ('', undefined, '96.7%') must never count as a match.
+function parseSimilarity(candidate) {
+  const raw = candidate?.similarityPercent;
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return NaN;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : NaN;
+}
+
+// The candidate to take by similarity, or null when it is not safe: the highest valid similarity
+// must reach the threshold and be held by exactly ONE candidate (strict equality on the parsed
+// numbers). A tie at the top is ambiguous, so the user decides; a tie lower down does not matter.
+function pickBySimilarity(candidates) {
+  const scored = candidates
+    .map((c) => ({ c, sim: parseSimilarity(c) }))
+    .filter((x) => !Number.isNaN(x.sim));
+  if (scored.length === 0) return null;
+  const top = Math.max(...scored.map((x) => x.sim));
+  if (top < PRODUCT_AUTO_MATCH_MIN_SIMILARITY) return null;
+  const holders = scored.filter((x) => x.sim === top);
+  return holders.length === 1 ? holders[0].c : null;
+}
+
+/**
+ * Decide what to do with the simSearch result of one line description, in this order:
+ *  1. exactly one candidate whose name equals the description (trim, case- and accent-
+ *     insensitive via `normalizeProductName`; ñ stays distinct) → `{ id }`; two or more exact
+ *     names (also "Arnés X" + "Arnes X" for "Arnés X") are ambiguous → suggestion;
+ *  2. the HIGHEST valid similarityPercent, when it is >= PRODUCT_AUTO_MATCH_MIN_SIMILARITY
+ *     (90, inclusive) and held by exactly one candidate → `{ id }` (ETP-5654), even if a
+ *     runner-up is also >= 90. A tie at the top (two or more with the same value) is ambiguous
+ *     → suggestion (the first candidate); a tie lower down does not block. A missing or
+ *     non-numeric similarity never qualifies;
+ *  3. otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
+ *     first one: the user must confirm it in the popup (a partial name such as "Mantenimiento
+ *     Web" vs "Servicio de desarrollo y mantenimiento web" is a different product);
+ *  4. no candidates → `{}`.
  * Exported for testing.
  */
 export function classifyProductMatch(description, match) {
@@ -221,9 +278,13 @@ export function classifyProductMatch(description, match) {
     ? match.candidates
     : [match]).filter((c) => c?.id);
   if (candidates.length === 0) return {};
-  const wanted = normalizeName(description);
-  const exact = wanted ? candidates.filter((c) => normalizeName(c.name) === wanted) : [];
+  const wanted = normalizeProductName(description);
+  const exact = wanted ? candidates.filter((c) => normalizeProductName(c.name) === wanted) : [];
   if (exact.length === 1) return { id: exact[0].id };
+  if (exact.length === 0) {
+    const bySimilarity = pickBySimilarity(candidates);
+    if (bySimilarity) return { id: bySimilarity.id };
+  }
   const best = candidates[0];
   return { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
 }

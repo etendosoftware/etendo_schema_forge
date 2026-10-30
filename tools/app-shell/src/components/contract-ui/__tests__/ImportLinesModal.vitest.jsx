@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
@@ -517,6 +518,48 @@ describe('ImportLinesModal', () => {
   // ETP-5178 — quantity input: free typing, validate on blur only. Covers the
   // shared classifyQtyDraft() decision (tooHigh vs. plain invalid) end-to-end
   // through the visible DOM value and the toast message, not just the helper.
+  // ETP-5051 — a caller-provided batch submit (the return flows' submitReturnImportBatch) hands back
+  // the refusal `body`. A plan-quota refusal reads as the translated quota sentence, before the
+  // handler's own `error` and before the generic message; every other refusal reads as before.
+  describe('a refused batch submit (submitImport)', () => {
+    const QUOTA_BODY = {
+      error: {
+        code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Returns (5/5)',
+        quota: { resourceKey: 'IMPORT_LINES_RETURNS', resourceName: 'Returns', includedQty: 5, consumed: 5, verdict: 'DENY' },
+      },
+    };
+
+    async function submitWith(result) {
+      const submitImport = vi.fn().mockResolvedValue(result);
+      const onSuccess = vi.fn();
+      renderModal({ linesEndpoint: undefined, submitImport, onSuccess, autoSelectOnExpand: true, eagerLoadLines: false });
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument(), { timeout: 10000 });
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+      fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+      await waitFor(() => expect(submitImport).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+      return { onSuccess };
+    }
+
+    it('shows the quota sentence, not the handler error or the generic message', async () => {
+      const { onSuccess } = await submitWith({ ok: false, body: QUOTA_BODY, error: 'handler error' });
+      expect(toast.error.mock.calls[0][0]).toMatch(/^backendError\.quotaExceeded:/);
+      expect(toast.error.mock.calls[0][0]).toContain('"resource":"Returns"');
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('keeps the handler error for any other refusal body', async () => {
+      await submitWith({ ok: false, body: { error: { message: 'Quantity exceeds stock', status: 409 } }, error: 'handler error' });
+      expect(toast.error).toHaveBeenCalledWith('handler error');
+    });
+
+    it('keeps the generic message when there is neither a quota body nor a handler error', async () => {
+      await submitWith({ ok: false });
+      expect(toast.error).toHaveBeenCalledWith('failedToImportLines');
+    });
+  });
+
   describe('quantity draft input — free typing, validated on blur (ETP-5178)', () => {
     const QTY_LINE = { id: 'line-1', _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 50 };
 
@@ -994,7 +1037,7 @@ describe('ImportLinesModal', () => {
       expect(call.importedDocIds instanceof Set).toBe(true);
       expect(call.importedDocIds.has('doc-1')).toBe(true);
       expect(call.invoiceId).toBe('inv-1');
-      expect(toast.success).toHaveBeenCalledWith('importSuccess');
+      expect(toast.success).toHaveBeenCalledWith('importSuccess:{"count":1}');
       expect(toast.warning).not.toHaveBeenCalled();
     });
 
@@ -1005,7 +1048,7 @@ describe('ImportLinesModal', () => {
       fireEvent.click(screen.getByText(/importSelected/).closest('button'));
 
       await waitFor(() => expect(props.onSuccess).toHaveBeenCalled());
-      expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('1 error'));
+      expect(toast.warning).toHaveBeenCalledWith('importedLinesWithErrors:{"count":0,"errors":1}');
       expect(toast.success).not.toHaveBeenCalled();
     });
 

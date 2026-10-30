@@ -60,10 +60,10 @@ export default function WarehouseProductsTab({ parentId, token, apiBaseUrl, onCo
             <td className="py-3 pr-4 text-muted-foreground">{p.uom || '—'}</td>
             <td className="py-3 pr-4 text-right tabular-nums text-[hsl(var(--foreground))]">{fmtQty(p.qty)}</td>
             <td className="py-3 pr-4 text-right tabular-nums text-[hsl(var(--foreground))]">
-              {p.cost ? formatCurrency(currencyCode, p.cost) : '—'}
+              {p.cost == null ? '—' : formatCurrency(currencyCode, p.cost)}
             </td>
             <td className="py-3 text-right tabular-nums text-[hsl(var(--foreground))]">
-              {p.valuation ? formatCurrency(currencyCode, p.valuation) : '—'}
+              {p.valuation == null ? '—' : formatCurrency(currencyCode, p.valuation)}
             </td>
           </tr>
         ))}

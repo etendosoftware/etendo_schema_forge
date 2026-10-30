@@ -5,8 +5,10 @@ import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useFeatureFlag, CONTACT_CATEGORY_TYPE } from '@/lib/flags';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { PAYMENT_TERM_CREATE_FIELD_PROPS } from '@/lib/inlineCreateVariants.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const PRE_SAVE_BILLING_PREF_FIELDS = [
@@ -134,6 +136,7 @@ async function createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRe
 
 export default function BillingPreferencesForm(props) {
   const ui = useUI();
+  const categoryTypeEnabled = useFeatureFlag(CONTACT_CATEGORY_TYPE);
   const { invalidateBusinessPartner, invalidateFinanceKpis } = useContactsCacheInvalidation();
   const { data, api, token, onChange, apiBaseUrl } = props;
   const bpId = data?.id;
@@ -309,7 +312,15 @@ export default function BillingPreferencesForm(props) {
       inputMode: 'dependent',
       dependsOn: { field: 'paymentMethod', filterKey: 'Fin_Paymentmethod_ID' },
     },
-    { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    // ETP-5826: "+ Crear condición de pago" — same create props as the document windows' field.
+    {
+      key: 'paymentTerms',
+      column: 'C_PaymentTerm_ID',
+      type: 'selector',
+      section: 'principal',
+      inputMode: 'selector',
+      ...PAYMENT_TERM_CREATE_FIELD_PROPS,
+    },
   ];
 
   const vendorBillingFields = [
@@ -324,7 +335,14 @@ export default function BillingPreferencesForm(props) {
       inputMode: 'dependent',
       dependsOn: { field: 'pOPaymentMethod', filterKey: 'PO_Paymentmethod_ID' },
     },
-    { key: 'pOPaymentTerms', column: 'PO_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    {
+      key: 'pOPaymentTerms',
+      column: 'PO_PaymentTerm_ID',
+      type: 'selector',
+      section: 'principal',
+      inputMode: 'selector',
+      ...PAYMENT_TERM_CREATE_FIELD_PROPS,
+    },
   ];
 
   return (
@@ -379,8 +397,11 @@ export default function BillingPreferencesForm(props) {
 
           {/* ── Proveedor ─────────────────────────────────────────────────── */}
           <div className="bg-[hsl(var(--muted))] rounded-lg p-3 flex flex-col gap-3">
+            {/* ETP-5791: "Proveedor/Acreedor" — a creditor is a vendor-type contact too. Own key:
+                the generic `vendor` label is used elsewhere and must stay "Proveedor".
+                Toggle point of the `contact-category-type` flag: OFF keeps "Proveedor". */}
             <SquareCheckbox
-              label={ui('vendor')}
+              label={ui(categoryTypeEnabled ? 'contactVendorCreditor' : 'vendor')}
               checked={!!data?.vendor}
               onChange={(val) => onChange?.('vendor', val)}
               disabled={readOnly}

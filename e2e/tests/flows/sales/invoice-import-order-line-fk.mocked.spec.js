@@ -1,40 +1,33 @@
+// @covers artifacts/sales-invoice/custom/ImportFromOrderModal.jsx
+// @covers artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
 /**
- * Invoice import — the order-line FK must travel as `salesOrderLine` (ETP-5381, mocked).
+ * Invoice import — the order-line FK must reach the server (ETP-5381, mocked).
  *
  * The bug
  * -------
  * The sales-invoice import modals posted the invoice-line → order-line FK under the key
- * `cOrderlineId`, which exists in NO NEO spec. The spec's `java_qualifier` for
- * `C_INVOICELINE.C_OrderLine_ID` is `salesOrderLine`, and `NeoFieldFilter.filterRecord`
- * drops any body key absent from the spec **silently** — HTTP 200, line created, FK NULL.
- * Nothing in the UI, the response or the logs surfaced the loss.
+ * `cOrderlineId`, which exists in NO NEO spec. `NeoFieldFilter.filterRecord` drops any body
+ * key absent from the spec **silently** — HTTP 200, line created, FK NULL. With
+ * `C_OrderLine_ID` NULL, `C_INVOICE_POST` never wrote `M_MATCHSO` nor `QtyInvoiced`, so the
+ * order stayed invoiceable forever (double invoicing).
  *
- * Why it mattered: with `C_OrderLine_ID` NULL, `C_INVOICE_POST` never reached its MatchSO
- * block (no `M_MATCHSO` row — the Classic "Matched Sales Orders" window stayed empty for
- * GO-made invoices) and never ran `UPDATE C_ORDERLINE SET QtyInvoiced`, so the order stayed
- * invoiceable forever. That is the double-invoicing hole ETP-5381 targets.
+ * The write path differs per window, so each one declares how it imports (`importVia`):
+ *   - sales-invoice (`ImportFromOrderModal`) — since ETP-6002 the modal sends ONE request,
+ *     `POST /sales-invoice/header/{id}/action/importOrderLines`, with
+ *     `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`.
+ *     The FK travels as `sourceLineId` and the server builds the line; pending quantities are
+ *     read through `.../action/availableOrderLines`, never computed in the browser.
+ *   - purchase-invoice (`ImportFromPurchaseOrderModal`) — still one `POST /purchase-invoice/lines`
+ *     per line, carrying the FK as `salesOrderLine` (the spec's java_qualifier).
  *
- * What this spec locks — for the write path AND the read path:
- *   1. WRITE — the intercepted `POST /sws/neo/{spec}/lines` body carries `salesOrderLine`
- *      with the originating order-line id, and carries no `cOrderlineId` key at all.
- *   2. READ  — the modal's duplicate detection reads the FK back off existing invoice lines
- *      under `salesOrderLine`, so an order line already invoiced is greyed out and cannot
- *      be re-selected.
- *   3. READ (negative) — an existing invoice line carrying only the dead `cOrderlineId` key
- *      is NOT picked up by that detection. This is the assertion that actually fails if
- *      someone re-introduces the old key on either side: a test that only checked (2) would
- *      stay green against a codebase that read both keys.
- *
- * Both import-from-order windows are covered: sales-invoice (`ImportFromOrderModal`, the side
- * that was broken) and purchase-invoice (`ImportFromPurchaseOrderModal`, the side that was
- * always correct — guarded here so it cannot silently regress INTO the broken shape).
- *
- * Scope note: the import-from-shipment and import-from-source-invoice paths reuse the
- * scaffolding that already exists in `sales-invoice-import-no-reload.mocked.spec.js` and
- * assert the same two properties there, rather than re-mocking the callout cascade here.
+ * What this spec locks, per window:
+ *   1. The FK of the selected order line reaches the server under the key that window's
+ *      contract reads, and the dead `cOrderlineId` key is sent nowhere.
+ *   2. sales-invoice only: no per-line `POST /lines` is sent, and the quantity sent is the
+ *      server's `pendingQuantity` (2), not ordered − invoiced computed locally (3).
  *
  * Routing notes
  * -------------
@@ -83,6 +76,7 @@ const WINDOWS = [
     // ui('importFromSalesOrder') — "Add from order" / "Añadir desde pedido"
     importButton: /Add from order|Añadir desde pedido/i,
     documentType: { transactionDocument: 'doctype-ar-001', 'transactionDocument$_identifier': 'AR Invoice' },
+    importVia: 'action',
   },
   {
     label: 'purchase-invoice ← purchase-order',
@@ -91,6 +85,7 @@ const WINDOWS = [
     // ui('importFromPurchaseOrder') — "Import from PO" / "Importar desde pedido"
     importButton: /Import from PO|Importar desde pedido/i,
     documentType: { transactionDocument: 'doctype-ap-001', 'transactionDocument$_identifier': 'AP Invoice' },
+    importVia: 'linePost',
   },
 ];
 
@@ -165,7 +160,21 @@ function buildFixtures({ invoiceSpec, orderSpec, documentType }) {
         tax: 'tax-1',
       },
     ],
+    // What `.../action/availableOrderLines` answers (sales-invoice only). Line 2 has
+    // pendingQuantity 2 while ordered − invoiced is 3: the posted quantity tells which one the
+    // modal used. The purchase modal never calls this endpoint and keeps ordered − invoiced.
+    pendingByLine: [
+      { id: orderLine1Id, pendingQuantity: 4 },
+      { id: orderLine2Id, pendingQuantity: 2 },
+    ],
   };
+}
+
+// Classifies `.../header/{id}/action/{name}` and returns `name`, or null for anything else.
+function headerActionName(url, id) {
+  const { pathname } = new URL(url);
+  const m = pathname.match(/\/header\/([^/]+)\/action\/([^/]+)$/);
+  return m && m[1] === id ? m[2] : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,11 +186,13 @@ function buildFixtures({ invoiceSpec, orderSpec, documentType }) {
  * @param {Array}  opts.existingInvoiceLines invoice lines the modal's fetchDocuments sees
  *                                           (`_endRow=200`); the detail view always gets an
  *                                           empty list so the empty state renders.
- * @param {object} opts.state                mutable capture bag — `state.postBodies`.
+ * @param {object} opts.state                mutable capture bag — `state.postBodies` (plain
+ *                                           `POST /lines`) and `state.actionCalls`
+ *                                           (`{ name, body }` per `/header/{id}/action/*`).
  */
 async function installMocks(page, cfg, { existingInvoiceLines = [], state }) {
   const { invoiceSpec, orderSpec } = cfg;
-  const { invoiceId, orderId, invoiceHeader, order, orderLines } = cfg.fixtures;
+  const { invoiceId, orderId, invoiceHeader, order, orderLines, pendingByLine } = cfg.fixtures;
 
   // Invoice header — detail GET, plus the PATCH handleImportOrderClick fires before opening
   // the modal (onSave). The PATCH must echo the full header: answering it from the /sws/**
@@ -209,6 +220,29 @@ async function installMocks(page, cfg, { existingInvoiceLines = [], state }) {
   };
   await page.route(`**/sws/neo/${invoiceSpec}/header/**`, invoiceHeaderHandler);
   await page.route(`**/sws/neo/${invoiceSpec}/header**`, invoiceHeaderHandler);
+
+  // Header actions — the sales-invoice import reads pending quantities and imports through
+  // `/header/{id}/action/*` (two segments deep, so only the `header/**` pattern reaches it).
+  // Registered after the header handler, so it is tried first; anything that is not one of
+  // the two import actions falls back to it and then to the catch-all.
+  const invoiceActionHandler = async (route) => {
+    const req = route.request();
+    const name = headerActionName(req.url(), invoiceId);
+    if (req.method() !== 'POST' || !['availableOrderLines', 'importOrderLines'].includes(name)) {
+      return route.fallback();
+    }
+    const body = req.postData() ? JSON.parse(req.postData()) : {};
+    state.actionCalls.push({ name, body });
+    const data = name === 'availableOrderLines'
+      ? (body.orderId === orderId ? pendingByLine : [])
+      : { importedCount: body.orders?.flatMap(o => o.lines || []).length ?? 0 };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data } }),
+    });
+  };
+  await page.route(`**/sws/neo/${invoiceSpec}/header/**`, invoiceActionHandler);
 
   // Invoice lines — POST capture, the modal's own-lines lookup (_endRow=200, feeds duplicate
   // detection) and the detail view's own fetch (empty, so the import buttons render).
@@ -297,11 +331,11 @@ function modalCheckboxes(page) {
 
 for (const win of WINDOWS) {
   const cfg = { ...win, fixtures: buildFixtures(win) };
-  const { invoiceId, orderLine1Id, orderLine2Id } = cfg.fixtures;
+  const { invoiceId, orderId, orderLine2Id } = cfg.fixtures;
 
   test.describe(`Import from order — order-line FK (${cfg.label})`, () => {
-    test('the POSTed invoice line carries salesOrderLine, and no cOrderlineId key at all', async ({ page }) => {
-      const state = { postBodies: [] };
+    test(`the selected order line's FK reaches the server (${cfg.importVia}), and no cOrderlineId key at all`, async ({ page }) => {
+      const state = { postBodies: [], actionCalls: [] };
 
       await login(page);
       await installMocks(page, cfg, { state });
@@ -321,14 +355,33 @@ for (const win of WINDOWS) {
       await expect(importBtn).toBeEnabled({ timeout: 5_000 });
       await importBtn.click();
 
-      await expect.poll(() => state.postBodies.length, { timeout: 10_000 }).toBe(1);
+      if (cfg.importVia === 'action') {
+        const imports = () => state.actionCalls.filter((c) => c.name === 'importOrderLines');
+        await expect.poll(() => imports().length, { timeout: 10_000 }).toBe(1);
 
-      const posted = state.postBodies[0];
-      // The FK the backend actually persists (spec java_qualifier for C_OrderLine_ID).
-      expect(posted.salesOrderLine).toBe(orderLine2Id);
-      // The dead key must not be present at all — NeoFieldFilter would drop it silently,
-      // so sending it "just in case" is indistinguishable from not sending the FK.
-      expect(Object.hasOwn(posted, 'cOrderlineId')).toBe(false);
+        // Pending quantities came from the server, for the expanded order.
+        expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
+          .toContainEqual({ orderId });
+
+        // ONE request: the order, its selected line by FK, the server's pending quantity (2,
+        // not ordered − invoiced = 3), and no global discount to carry (the order has none).
+        expect(imports()[0].body).toEqual({
+          orders: [{ orderId, lines: [{ sourceLineId: orderLine2Id, quantity: 2 }] }],
+          carryGlobalDiscount: false,
+        });
+        // The server builds the line: nothing is POSTed per line any more.
+        expect(state.postBodies).toEqual([]);
+        expect(JSON.stringify(state.actionCalls)).not.toContain('cOrderlineId');
+      } else {
+        await expect.poll(() => state.postBodies.length, { timeout: 10_000 }).toBe(1);
+
+        const posted = state.postBodies[0];
+        // The FK the backend actually persists (spec java_qualifier for C_OrderLine_ID).
+        expect(posted.salesOrderLine).toBe(orderLine2Id);
+        // The dead key must not be present at all — NeoFieldFilter would drop it silently,
+        // so sending it "just in case" is indistinguishable from not sending the FK.
+        expect(Object.hasOwn(posted, 'cOrderlineId')).toBe(false);
+      }
     });
   });
 }

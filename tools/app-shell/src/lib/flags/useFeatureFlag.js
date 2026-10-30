@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { OpenFeature, ProviderEvents } from '@openfeature/web-sdk';
 import { defaultForFlag } from './flag-keys.js';
 
@@ -77,6 +77,54 @@ const readNumber = (client, key, fallback) => client.getNumberValue(key, fallbac
  */
 export function useFeatureFlag(key, defaultValue) {
   return useFlagValue(key, defaultValue ?? defaultForFlag(key), readBoolean);
+}
+
+const KEY_SEPARATOR = '|';
+
+/** `'1'`/`'0'` per key of a signature, so the snapshot is a string compared by value. */
+const readBooleanBits = (client, signature) => (signature
+  ? signature.split(KEY_SEPARATOR).map(key => (client.getBooleanValue(key, defaultForFlag(key) === true) ? '1' : '0')).join('')
+  : '');
+
+/**
+ * Reads SEVERAL boolean flags whose keys are only known at runtime (e.g. declared in a window's
+ * contract), as `{ [key]: boolean }`. Same contract as `useFeatureFlag` — synchronous, declared
+ * defaults until the control plane answers, re-read on every resolution event — but one hook call
+ * for any number of keys, so the hook count stays stable when the key list changes.
+ *
+ * @param {string[]} keys flag keys; duplicates and empty values are ignored
+ * @returns {Record<string, boolean>}
+ */
+export function useFeatureFlags(keys) {
+  const signature = [...new Set((keys ?? []).filter(Boolean))].sort().join(KEY_SEPARATOR);
+  const fallback = signature
+    ? signature.split(KEY_SEPARATOR).map(key => (defaultForFlag(key) === true ? '1' : '0')).join('')
+    : '';
+  const bits = useFlagValue(signature, fallback, readBooleanBits);
+  return useMemo(
+    () => (signature
+      ? Object.fromEntries(signature.split(KEY_SEPARATOR).map((key, i) => [key, bits[i] === '1']))
+      : {}),
+    [signature, bits]
+  );
+}
+
+/**
+ * Non-React read of a boolean flag, for code that runs outside a component (an import
+ * descriptor, a row builder). Answers the declared default when no provider is installed or the
+ * client throws. It does not subscribe: call it at the moment the value is needed, never cache it
+ * at module load.
+ *
+ * @param {string} key Flag key from `flag-keys.js`
+ * @param {boolean} [defaultValue] Overrides the default declared for the key
+ */
+export function readFeatureFlag(key, defaultValue) {
+  const fallback = defaultValue ?? defaultForFlag(key);
+  try {
+    return OpenFeature.getClient().getBooleanValue(key, fallback);
+  } catch {
+    return fallback;
+  }
 }
 
 /**

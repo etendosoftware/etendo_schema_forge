@@ -1,6 +1,5 @@
 import { useUI, useLocale } from '@/i18n';
-import { AccountSelect } from '@/components/contract-ui';
-import SectionShell from './SectionShell.jsx';
+import { AccountSelect, SectionShell } from '@/components/contract-ui';
 import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS, resolveFieldLabel } from './mockCatalogs.js';
 
 /**

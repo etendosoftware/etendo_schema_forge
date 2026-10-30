@@ -7,7 +7,7 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +48,7 @@ function snapshot() {
   return Object.fromEntries(ALL_FILES.map((rel) => [rel, read(rel)]));
 }
 
-function runHook(hook, { spaPort, tomcat = '0', envFile } = {}) {
+function runHook(hook, { spaPort, tomcat = '0', envFile, worktree } = {}) {
   const state = join(env, 'build', 'local-env');
   if (envFile !== undefined) writeFileSync(join(state, 'env'), envFile);
   const vars = {
@@ -61,6 +61,7 @@ function runHook(hook, { spaPort, tomcat = '0', envFile } = {}) {
     LOCALENV_URL: 'http://localhost:8199/etendo',
     LOCALENV_TOMCAT: tomcat,
   };
+  if (worktree !== undefined) vars.LOCALENV_WORKTREE = worktree;
   if (spaPort !== undefined) {
     vars.SPA_PORT = String(spaPort);
     vars.BFF_PORT = '3499';
@@ -242,5 +243,48 @@ describe('etendo-go plugin: MCP / OAuth public URL alignment on worktree-create'
       assert.equal(read(rel), plainProps(`http\\://localhost\\:${reserved}/mcp`, `http\\://localhost\\:${reserved}`), rel);
     }
     assert.match(out.stdout, new RegExp(`^>> Pointed etgo\\.mcp\\.public\\.url / etgo\\.oauth2\\.public\\.url at :${reserved} in `, 'm'));
+  });
+});
+
+describe('etendo-go plugin: app-shell .env.local ETENDO_URL', () => {
+  const ENV_LOCAL = 'schema_forge/tools/app-shell/.env.local';
+  const copied = (url) => `VITE_ETENDO_URL=/etendo\nETENDO_URL=${url}\nVITE_MIXPANEL_API_HOST=https://api-eu.mixpanel.com\n`;
+
+  it('points a worktree copy at its own Tomcat on worktree-create', () => {
+    write(ENV_LOCAL, copied('http://localhost:8080/etendogoclean'));
+
+    const out = runHook('worktree-create', { envFile: '', worktree: 'w1' });
+
+    assert.equal(read(ENV_LOCAL), copied('http://localhost:8199/etendo'));
+    assert.match(out.stdout, /^>> Pointed ETENDO_URL of .*\.env\.local at http:\/\/localhost:8199\/etendo$/m);
+  });
+
+  it('aligns it on up for an environment created before, and only once', () => {
+    write(ENV_LOCAL, copied('http://127.0.0.1:8080/etendo'));
+
+    const first = runHook('up', { spaPort: 3105, worktree: 'w1' });
+    const second = runHook('up', { spaPort: 3105, worktree: 'w1' });
+
+    assert.equal(read(ENV_LOCAL), copied('http://localhost:8199/etendo'));
+    assert.match(first.stdout, /Pointed ETENDO_URL/);
+    assert.doesNotMatch(second.all, /ETENDO_URL/);
+  });
+
+  it('leaves a main checkout, a remote URL and an adopted schema_forge alone', () => {
+    write(ENV_LOCAL, copied('http://localhost:8080/etendo'));
+    runHook('up', { spaPort: 3105 });
+    assert.equal(read(ENV_LOCAL), copied('http://localhost:8080/etendo'), 'main checkout');
+
+    write(ENV_LOCAL, copied('https://go.experimental.etendo.cloud/etendo'));
+    runHook('up', { spaPort: 3105, worktree: 'w1' });
+    assert.equal(read(ENV_LOCAL), copied('https://go.experimental.etendo.cloud/etendo'), 'remote URL');
+
+    const adopted = join(root, 'adopted-schema_forge');
+    mkdirSync(join(adopted, 'tools', 'app-shell'), { recursive: true });
+    writeFileSync(join(adopted, 'tools', 'app-shell', '.env.local'), copied('http://localhost:8080/etendo'));
+    rmSync(join(env, 'schema_forge'), { recursive: true });
+    symlinkSync(adopted, join(env, 'schema_forge'));
+    runHook('up', { spaPort: 3105, worktree: 'w1' });
+    assert.equal(readFileSync(join(adopted, 'tools', 'app-shell', '.env.local'), 'utf8'), copied('http://localhost:8080/etendo'), 'adopted');
   });
 });
