@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/pages/AccountSettingsPage.jsx
+
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -80,6 +82,24 @@ vi.mock('@/components/account/SubscriptionSection.jsx', () => ({
       </div>
     );
   },
+}));
+
+const trackMovedClicked = vi.fn();
+vi.mock('@/lib/myCompanies/telemetry.js', () => ({
+  trackAccountSubscriptionMovedClicked: (...a) => trackMovedClicked(...a),
+}));
+
+const navigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigate,
+}));
+
+// ETP-6060 — the `my-companies-page` flag moves the subscription to "Mis empresas". Off by default
+// in this suite, so every older case keeps hosting the section here.
+let myCompaniesFlag = false;
+vi.mock('@/lib/flags', () => ({
+  MY_COMPANIES_PAGE: 'my-companies-page',
+  useFeatureFlag: () => myCompaniesFlag,
 }));
 
 function httpError(status) {
@@ -713,6 +733,33 @@ describe('AccountSettingsPage', () => {
       expect(logout).toHaveBeenCalledTimes(1);
       expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
       expect(localStorage.getItem('sf_onboarding_notice')).toBe('password-changed');
+    });
+  });
+
+  // ETP-6060 — with "Mis empresas" on, the subscription of each owned company lives there.
+  describe('subscription and the my-companies-page flag', () => {
+    afterEach(() => { myCompaniesFlag = false; });
+
+    it('hosts the subscription section while the flag is off', async () => {
+      render(<AccountSettingsPage />);
+
+      expect(await screen.findByTestId('SubscriptionSection__account')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-settings-subscription-moved')).not.toBeInTheDocument();
+    });
+
+    it('points at My companies instead of the section while the flag is on', async () => {
+      myCompaniesFlag = true;
+      const user = userEvent.setup();
+
+      render(<AccountSettingsPage />);
+
+      expect(await screen.findByTestId('account-settings-subscription-moved'))
+        .toHaveTextContent('accountSubscriptionMoved');
+      expect(screen.queryByTestId('SubscriptionSection__account')).not.toBeInTheDocument();
+      expect(subscriptionSectionRender).not.toHaveBeenCalled();
+      await user.click(screen.getByTestId('account-settings-go-to-companies'));
+      expect(navigate).toHaveBeenCalledWith('/companies');
+      expect(trackMovedClicked).toHaveBeenCalledTimes(1);
     });
   });
 });

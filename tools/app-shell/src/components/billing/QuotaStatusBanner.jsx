@@ -6,20 +6,25 @@ import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { Button } from '@/components/ui/button';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { ownsEnvironmentSubscription } from '@/lib/environmentPresentation.js';
+import { useSubscriptionPagePath, useSubscriptionPath } from '@/lib/myCompanies/subscriptionPath.js';
+import { MY_COMPANIES_SOURCES } from '@/lib/myCompanies/telemetry.js';
 import {
+  QUOTA_ALERT_PINNED,
   QUOTA_VERDICT_DENY,
   isQuotaOverLimit,
+  quotaAlertBehavior,
   quotaAlertItems,
   quotaBannerDismissKey,
   quotaResourceLabel,
   quotaUsageWithPeriod,
 } from '@/lib/planQuotas.js';
 
-// Same exclusions as the payment banner: `/account` already lists every quota with its state, and
-// `/upgrade` is a full-screen overlay the banner would sit invisibly under.
-const HIDDEN_ON_PATHS = ['/account', '/upgrade'];
-function isHiddenOnPath(pathname) {
-  return HIDDEN_ON_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+// Same exclusions as the payment banner: the subscription page the CTA leads to (`/account`, or
+// "Mis empresas" with the `my-companies-page` flag on — ETP-6060) already lists every quota with its
+// state, and `/upgrade` is a full-screen overlay the banner would sit invisibly under.
+function isHiddenOnPath(pathname, subscriptionPage) {
+  return [subscriptionPage, '/upgrade']
+    .some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 // sessionStorage can be missing or throw; a dismissal is a convenience.
@@ -54,11 +59,14 @@ function alertMessageKey(item) {
  * whose Subscription section lists every quota); anyone else is told to contact their
  * administrator, the same split as `BillingStatusBanner`.
  *
- * Dismissal: a banner with only WARN items is dismissible for the browser session, keyed on the
- * reported verdicts, so a new verdict (another resource, or a WARN turning into a DENY) shows it
- * again. A banner with any DENY item has no close button and ignores a stored dismissal: a DENY
- * refuses every new record of that kind, so it stays on screen until the quota is no longer
- * reached (Martin, ETP-5051 manual testing). The list behind it is kept fresh by
+ * Dismissal: each plan quota says how its alert is shown (`warningAlert` before the limit,
+ * `limitAlert` at it: pinned, dismissible or hidden — ETP-6060, `quotaAlertBehavior`). A hidden
+ * item is not listed; a banner with any pinned item has no close button and ignores a stored
+ * dismissal; otherwise it is dismissible for the browser session, keyed on the reported verdicts,
+ * so a new verdict (another resource, or a WARN turning into a DENY) shows it again. Left empty,
+ * a DENY is pinned and a WARN dismissible: a DENY refuses every new record of that kind, so by
+ * default it stays on screen until the quota is no longer reached (Martin, ETP-5051 manual
+ * testing). The list behind it is kept fresh by
  * `useEnvironmentListFreshness` (focus, a 5-minute interval, and a QUOTA_EXCEEDED refusal).
  */
 export function QuotaStatusBanner() {
@@ -71,10 +79,13 @@ export function QuotaStatusBanner() {
   const items = useMemo(() => quotaAlertItems(quotas), [quotas]);
   const dismissKey = quotaBannerDismissKey(currentClientId, items);
   const [dismissedKey, setDismissedKey] = useState(null);
+  const subscriptionPage = useSubscriptionPagePath();
+  const ctaPath = useSubscriptionPath(currentClientId, MY_COMPANIES_SOURCES.QUOTA_BANNER);
 
-  if (items.length === 0 || isHiddenOnPath(pathname)) return null;
+  if (items.length === 0 || isHiddenOnPath(pathname, subscriptionPage)) return null;
   const denied = items.some((item) => item.verdict === QUOTA_VERDICT_DENY);
-  if (!denied && (dismissedKey === dismissKey || readDismissed(dismissKey))) return null;
+  const pinned = items.some((item) => quotaAlertBehavior(item) === QUOTA_ALERT_PINNED);
+  if (!pinned && (dismissedKey === dismissKey || readDismissed(dismissKey))) return null;
 
   const canManage = ownsEnvironmentSubscription(environment);
   const dismiss = () => {
@@ -86,7 +97,7 @@ export function QuotaStatusBanner() {
     <InfoBanner
       tone={denied ? 'danger' : 'warning'}
       icon={Gauge}
-      dismissible={!denied}
+      dismissible={!pinned}
       onDismiss={dismiss}
       dismissTestId="quota-status-banner-dismiss"
       role={denied ? 'alert' : 'status'}
@@ -97,7 +108,7 @@ export function QuotaStatusBanner() {
         <Button
           type="button"
           size="sm"
-          onClick={() => navigate('/account')}
+          onClick={() => navigate(ctaPath)}
           data-testid="quota-status-banner-cta"
         >
           {ui('quotaBannerCta')}
@@ -112,7 +123,7 @@ export function QuotaStatusBanner() {
             data-verdict={item.verdict}
           >
             {ui(alertMessageKey(item), {
-              resource: quotaResourceLabel(item),
+              resource: quotaResourceLabel(item, ui),
               usage: quotaUsageWithPeriod(item, ui),
             })}
           </li>

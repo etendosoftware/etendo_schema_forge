@@ -11,6 +11,10 @@ import { getSubscription, createPortalSession } from '@/lib/upgrade/api.js';
 import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
 import {
+  SUBSCRIPTION_MANAGE_SOURCES,
+  trackSubscriptionManageClicked,
+} from '@/lib/myCompanies/telemetry.js';
+import {
   QUOTA_VERDICT_DENY,
   quotaResourceLabel,
   quotaStateKey,
@@ -74,7 +78,7 @@ function PlanQuotas({ planName, quotas, ui, locale }) {
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium" data-testid="SubscriptionSection__quotaName">
-                  {quotaResourceLabel(item)}
+                  {quotaResourceLabel(item, ui)}
                 </p>
                 <p className="text-xs text-muted-foreground" data-testid="SubscriptionSection__quotaUsage">
                   {quotaUsageWithPeriod(item, ui)}
@@ -106,16 +110,19 @@ function PlanQuotas({ planName, quotas, ui, locale }) {
  * Maps Stripe's live subscription `status` (lowercase, provider-defined — see
  * `StripeCustomerPortalService.SubscriptionDetail.fromProviderJson`, which reads it verbatim
  * from `subscription.status` in the provider's API response) to a translated label key.
- * `active` and `past_due` intentionally reuse the existing `subscriptionCurrent` /
- * `subscriptionPastDue` keys (already shipped for the stored `EnvironmentAccessPolicy`
- * projection) because the words apply just as well to the live provider value. There is no
+ * `past_due` intentionally reuses the existing `subscriptionPastDue` key (already shipped for the
+ * stored `EnvironmentAccessPolicy` projection) because the word applies just as well to the live
+ * provider value. `active` has its own `subscriptionActive` (ETP-6060): the stored projection's
+ * `subscriptionCurrent` reads "Actual" in Spanish, which says nothing about the subscription. A
+ * cancellation scheduled for the period end keeps `active` until it happens; the "cancels on"
+ * line below says so. There is no
  * mapping to `subscriptionExpired` here: that key names the STORED policy state reached only
  * after the grace period elapses, which is a different signal than any single live Stripe
  * status (see the `graceEndsAt` note below) and reusing it here would say something the
  * provider isn't saying.
  */
 const STRIPE_STATUS_LABEL_KEYS = {
-  active: 'subscriptionCurrent',
+  active: 'subscriptionActive',
   trialing: 'subscriptionTrialing',
   past_due: 'subscriptionPastDue',
   canceled: 'subscriptionCanceled',
@@ -151,8 +158,15 @@ const STRIPE_STATUS_LABEL_KEYS = {
  * `SubscriptionSection__account` on the whole composed section) — the outer id names the
  * section for a caller composing several of these; the inner one is this component's own,
  * caller-independent hook for its tests.
+ *
+ * ETP-6060 — with a `clientId` the section shows and manages THAT company's own subscription
+ * ("Mis empresas" renders one per owned company), whatever environment the session is in.
+ * `manageSource` names the host in `subscription_manage_clicked`.
  */
-export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid': dataTestId }) {
+export function SubscriptionSection({
+  apiBaseUrl, clientId = null, onSessionExpired,
+  manageSource = SUBSCRIPTION_MANAGE_SOURCES.ACCOUNT, 'data-testid': dataTestId,
+}) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   // 'loading' | 'loaded' | 'unavailable' | 'sessionExpired'
@@ -165,13 +179,15 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
   // environment the user was invited into), even when the account pays for another one. Only an
   // account-level session (no environment entered: `clientId` null) reads the account-wide line.
   // `useAuthOptional`: the section must still render without an AuthProvider above it.
-  const insideEnvironment = Boolean(useAuthOptional()?.clientId);
+  // A named company is answered the same way: "none" means that company has no subscription.
+  const sessionClientId = useAuthOptional()?.clientId;
+  const insideEnvironment = Boolean(clientId || sessionClientId);
 
   const load = useCallback(async () => {
     setStatus('loading');
     setManageError(false);
     try {
-      const result = await getSubscription(apiBaseUrl);
+      const result = await getSubscription(apiBaseUrl, clientId);
       setSubscription(result || null);
       setStatus('loaded');
     } catch (err) {
@@ -183,15 +199,16 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
       }
       setStatus('unavailable');
     }
-  }, [apiBaseUrl, onSessionExpired]);
+  }, [apiBaseUrl, clientId, onSessionExpired]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleManage = useCallback(async () => {
+    trackSubscriptionManageClicked(manageSource);
     setManageError(false);
     setManaging(true);
     try {
-      const session = await createPortalSession(apiBaseUrl);
+      const session = await createPortalSession(apiBaseUrl, clientId);
       if (!session?.url) throw new Error('Portal session carried no url');
       window.location.assign(session.url);
     } catch (err) {
@@ -204,7 +221,7 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
     } finally {
       setManaging(false);
     }
-  }, [apiBaseUrl, onSessionExpired]);
+  }, [apiBaseUrl, clientId, manageSource, onSessionExpired]);
 
   const hasSubscription = subscription?.hasSubscription === true;
   const normalizedAmount = subscription

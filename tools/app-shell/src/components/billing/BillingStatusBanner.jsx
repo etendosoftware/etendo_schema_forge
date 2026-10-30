@@ -10,16 +10,19 @@ import {
   paymentGraceWarning,
   paymentGraceWarningDismissKey,
 } from '@/lib/environmentPresentation.js';
+import { useSubscriptionPagePath, useSubscriptionPath } from '@/lib/myCompanies/subscriptionPath.js';
+import { MY_COMPANIES_SOURCES } from '@/lib/myCompanies/telemetry.js';
 
 const BANNER_DATE = { day: 'numeric', month: 'long', year: 'numeric' };
 
-// `/account` is where "Update payment" leads: its Subscription section already shows the grace
+// The subscription page is where "Update payment" leads (`/account`, or "Mis empresas" with the
+// `my-companies-page` flag on — ETP-6060): its Subscription section already shows the grace
 // countdown next to the portal button, so the banner would only repeat it and link to itself.
 // `/upgrade` is a full-screen overlay (`fixed inset-0 z-50`) drawn over the layout: the banner
 // would be invisible under it yet still in the accessibility tree, an unseen `role="alert"`.
-const HIDDEN_ON_PATHS = ['/account', '/upgrade'];
-function isHiddenOnPath(pathname) {
-  return HIDDEN_ON_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+function isHiddenOnPath(pathname, subscriptionPage) {
+  return [subscriptionPage, '/upgrade']
+    .some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 // sessionStorage can be missing or throw (private window, blocked site data). A dismissal is a
@@ -64,8 +67,10 @@ export function BillingStatusBanner() {
   const warning = paymentGraceWarning(environment);
   const dismissKey = paymentGraceWarningDismissKey(currentClientId, environment?.graceEndsAt);
   const [dismissedKey, setDismissedKey] = useState(null);
+  const subscriptionPage = useSubscriptionPagePath();
+  const ctaPath = useSubscriptionPath(currentClientId, MY_COMPANIES_SOURCES.BILLING_BANNER);
 
-  if (!warning || isHiddenOnPath(pathname)) return null;
+  if (!warning || isHiddenOnPath(pathname, subscriptionPage)) return null;
   const dismissible = !warning.escalated;
   if (dismissible && (dismissedKey === dismissKey || readDismissed(dismissKey))) return null;
 
@@ -96,7 +101,7 @@ export function BillingStatusBanner() {
         <Button
           type="button"
           size="sm"
-          onClick={() => navigate('/account')}
+          onClick={() => navigate(ctaPath)}
           data-testid="billing-status-banner-cta"
         >
           {ui('billingUpdatePaymentCta')}

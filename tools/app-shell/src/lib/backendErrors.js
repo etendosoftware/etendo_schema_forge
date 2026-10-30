@@ -884,8 +884,8 @@ function translateQuotaExceeded(quota, t) {
   // Every classified QUOTA_EXCEEDED passes here, so this is where the quota banner hears about it
   // (one shared re-read of the environment list; deduplicated, see `announceQuotaRefusal`).
   announceQuotaRefusal(quota);
-  // Same label as the quota banner and the /account row: the catalog name, else the key.
-  const resource = quotaResourceLabel(quota);
+  // Same label as the quota banner and the /account row: translated, else the catalog name.
+  const resource = quotaResourceLabel(quota, t);
   if (!resource) return resolveLocaleKey(t, 'backendError.quotaExceededGeneric');
   const usage = quotaUsageText(quota, t);
   return usage

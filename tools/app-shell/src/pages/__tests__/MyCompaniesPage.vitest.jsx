@@ -21,8 +21,10 @@ const trackEnterClickedMock = vi.fn();
 const trackEnterFailedMock = vi.fn();
 let environmentSwitch = {};
 
+let searchParams = new URLSearchParams();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
+  useSearchParams: () => [searchParams],
 }));
 
 // Interpolating identity translator: a raw key shows up as itself, so an assertion on a key proves
@@ -49,10 +51,16 @@ vi.mock('@/lib/myCompanies/api.js', () => ({
   fetchMyInvitations: (...args) => fetchMyInvitationsMock(...args),
 }));
 
-vi.mock('@/lib/myCompanies/telemetry.js', () => ({
+const trackSubscriptionOpenedMock = vi.fn();
+const trackManageClickedMock = vi.fn();
+// The source vocabulary and its parser stay real; only the emitters are spied on.
+vi.mock('@/lib/myCompanies/telemetry.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   trackMyCompaniesViewed: (...args) => trackViewedMock(...args),
   trackMyCompaniesEnterClicked: (...args) => trackEnterClickedMock(...args),
   trackMyCompaniesEnterFailed: (...args) => trackEnterFailedMock(...args),
+  trackMyCompaniesSubscriptionOpened: (...args) => trackSubscriptionOpenedMock(...args),
+  trackSubscriptionManageClicked: (...args) => trackManageClickedMock(...args),
 }));
 
 // The real module's error table is kept: the page recognizes the portal's NO_SUBSCRIPTION refusal by
@@ -117,6 +125,7 @@ const INVITED = {
 beforeEach(() => {
   vi.clearAllMocks();
   environmentSwitch = {};
+  searchParams = new URLSearchParams();
   fetchCompanyEnvironmentsMock.mockResolvedValue([OWNED_PRODUCTIVE, OWNED_DEMO, INVITED]);
   fetchMyInvitationsMock.mockResolvedValue([]);
 });
@@ -175,7 +184,7 @@ describe('MyCompaniesPage', () => {
     expect(await screen.findByTestId('my-companies-owned-own-1')).toHaveTextContent('—');
   });
 
-  it('does not read the account subscription: every row carries its own renewal date', async () => {
+  it('reads no subscription on load: every row carries its own renewal date', async () => {
     render(<MyCompaniesPage />);
     await screen.findByTestId('my-companies-owned-own-1');
 
@@ -210,6 +219,7 @@ describe('MyCompaniesPage', () => {
 
       await userEvent.click(screen.getByTestId('my-companies-manage-own-3'));
 
+      expect(trackManageClickedMock).toHaveBeenCalledWith('my_companies_menu');
       expect(createPortalSessionMock).toHaveBeenCalledTimes(1);
       expect(createPortalSessionMock).toHaveBeenCalledWith(expect.anything(), 'own-3');
       await waitFor(() => expect(assignMock).toHaveBeenCalledWith('https://billing.example/session-own-3'));
@@ -256,7 +266,20 @@ describe('MyCompaniesPage', () => {
     await screen.findByTestId('my-companies-owned');
 
     expect(trackViewedMock).toHaveBeenCalledTimes(1);
-    expect(trackViewedMock).toHaveBeenCalledWith(3);
+    expect(trackViewedMock).toHaveBeenCalledWith(3, 'direct');
+  });
+
+  // ETP-6060 — a billing CTA names itself in `from`; anything unknown is a direct visit.
+  it.each([
+    ['from=quota_banner', 'quota_banner'],
+    ['from=blocked_screen', 'blocked_screen'],
+    ['from=somewhere-else', 'direct'],
+  ])('attributes the visit for %s', async (query, source) => {
+    searchParams = new URLSearchParams(query);
+    render(<MyCompaniesPage />);
+    await screen.findByTestId('my-companies-owned');
+
+    expect(trackViewedMock).toHaveBeenCalledWith(3, source);
   });
 
   it('lists invited companies with the translated role and the owner', async () => {
@@ -282,6 +305,70 @@ describe('MyCompaniesPage', () => {
 
     expect(screen.getByTestId('my-companies-manage-own-1')).toBeInTheDocument();
     expect(screen.queryByTestId('my-companies-manage-own-2')).not.toBeInTheDocument();
+  });
+
+  // ETP-6060 — the subscription moved here from "Cuenta": each productive owned row unfolds into
+  // that company's own subscription. Invited companies and demos never offer it.
+  it('offers the subscription only on the productive owned company', async () => {
+    render(<MyCompaniesPage />);
+    await screen.findByTestId('my-companies-owned');
+
+    expect(screen.getByTestId('my-companies-subscription-toggle-own-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('my-companies-subscription-toggle-own-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('my-companies-subscription-toggle-inv-1')).not.toBeInTheDocument();
+  });
+
+  it("unfolds a row into that company's own subscription and folds it back", async () => {
+    const otherProductive = { ...OWNED_PRODUCTIVE, clientId: 'own-3', clientName: 'GOClient Export' };
+    fetchCompanyEnvironmentsMock.mockResolvedValue([OWNED_PRODUCTIVE, otherProductive]);
+    getSubscriptionMock.mockResolvedValue({
+      hasSubscription: true, plan: 'Pro', planName: 'Pro', status: 'active', planQuotas: [],
+    });
+    render(<MyCompaniesPage />);
+
+    const toggle = await screen.findByTestId('my-companies-subscription-toggle-own-3');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveTextContent('myCompaniesHideSubscription');
+    const panel = screen.getByTestId('my-companies-subscription-own-3');
+    expect(await screen.findByTestId('SubscriptionSection__plan')).toHaveTextContent('Pro');
+    expect(panel).toContainElement(screen.getByTestId('SubscriptionSection__plan'));
+    // Not the session's company (own-1): the row names its own.
+    expect(getSubscriptionMock).toHaveBeenCalledTimes(1);
+    expect(getSubscriptionMock).toHaveBeenCalledWith(expect.anything(), 'own-3');
+    expect(screen.queryByTestId('my-companies-subscription-own-1')).not.toBeInTheDocument();
+
+    await userEvent.click(toggle);
+    expect(screen.queryByTestId('my-companies-subscription-own-3')).not.toBeInTheDocument();
+    // Only the opening is counted, not the folding.
+    expect(trackSubscriptionOpenedMock).toHaveBeenCalledTimes(1);
+    expect(trackSubscriptionOpenedMock).toHaveBeenCalledWith('toggle');
+  });
+
+  // ETP-6060 — a billing banner's CTA lands here with the session's company named.
+  it('unfolds the company named by the subscription query parameter', async () => {
+    searchParams = new URLSearchParams('subscription=own-1');
+    getSubscriptionMock.mockResolvedValue({ hasSubscription: false });
+    render(<MyCompaniesPage />);
+
+    expect(await screen.findByTestId('my-companies-subscription-own-1')).toBeInTheDocument();
+    expect(screen.getByTestId('my-companies-subscription-toggle-own-1'))
+      .toHaveAttribute('aria-expanded', 'true');
+    expect(getSubscriptionMock).toHaveBeenCalledWith(expect.anything(), 'own-1');
+    expect(trackSubscriptionOpenedMock).toHaveBeenCalledTimes(1);
+    expect(trackSubscriptionOpenedMock).toHaveBeenCalledWith('link');
+  });
+
+  it('ignores a subscription query parameter naming a demo row', async () => {
+    searchParams = new URLSearchParams('subscription=own-2');
+    render(<MyCompaniesPage />);
+    await screen.findByTestId('my-companies-owned');
+
+    expect(screen.queryByTestId('my-companies-subscription-own-2')).not.toBeInTheDocument();
+    expect(getSubscriptionMock).not.toHaveBeenCalled();
+    expect(trackSubscriptionOpenedMock).not.toHaveBeenCalled();
   });
 
   it('opens the billing portal from the subscription action', async () => {
@@ -393,6 +480,15 @@ describe('MyCompaniesPage', () => {
       const value = dict.genericLabels?.[UPGRADE_ERROR_CODES.portalNoSubscription];
       expect(typeof value).toBe('string');
       expect(value.trim()).not.toBe('');
+    });
+
+    it.each([
+      ['en_US', enUS],
+      ['es_ES', esES],
+    ])('%s defines the subscription toggle copy', (_name, dict) => {
+      for (const key of ['myCompaniesShowSubscription', 'myCompaniesHideSubscription']) {
+        expect(dict.genericLabels?.[key]?.trim()).toBeTruthy();
+      }
     });
 
     // Not a transient failure, so it must not read as the retry message it replaced.
