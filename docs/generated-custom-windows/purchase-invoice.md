@@ -1420,11 +1420,35 @@ rectificative type and the legacy `APC` credit memo.
       `docs/request-policy.md`); any other unexpected failure keeps `rectSaveError`. The 349
       base amounts and the original invoice amount are formatted with the canonical
       `formatCurrency('EUR', …)`.
+    - **Earlier correctives count only once posted.** The base an earlier 349 corrective
+      consumes is subtracted only after that corrective is posted, matching the 349 report,
+      which reads posted invoices only. To keep the base from being allocated twice, the module
+      (function `AEAT349_CINVREV_BASE`) raises `@EM_AEAT349_CORR_NOT_POSTED@` — "Existe una
+      correctiva del 349 del mismo operador, año y período pendiente de contabilizar.
+      Contabilícela antes de continuar. Factura: <nº documento>" — when another 349 corrective
+      of the same operator, year and period (exact period text) dated in the same month or
+      earlier is completed (`CO`/`CL`) but not posted. Posting states `D` (document disabled)
+      and `T` (table disabled) never post, so they do not block; every other non-posted state
+      does, posting errors included. The toast names the blocking invoice; the user resolves
+      it by posting that corrective (**Contabilizar**) and retrying. In GO, completing does not
+      post: the background accounting process posts about every 5 minutes, and the manual
+      Contabilizar / Descontabilizar actions exist, so this state is reachable in GO.
+    - **Re-checked at completion.** The base checks (pending-posting block,
+      `@EM_AEAT349_ZERO_BASE_RECT@`, negative base `@EM_AEAT349_NEGATIVE_RECT_E@`/`_S@`) run
+      when the reversed-invoice row is saved AND again when the rectificative is completed
+      (`AEAT349_REVINVOICES_CHECK` on the `C_Invoice_Post` extension point, `DocAction = CO`),
+      because earlier correctives may have been completed or posted in between. A refusal at
+      completion surfaces as the completion error. It only validates: the stored "Base 349"
+      shown on the row is not recalculated at completion.
     - **Accepted limitations.** One year/period per rectificative row; a multi-selection draft
       that picks the quarter sends it to every created row, so originals from different
       quarters need separate saves. Month and quarter correctives consume the declared base by
       exact period text, so a month corrective and a quarter corrective of the same period do
-      not see each other's consumption.
+      not see each other's consumption. When two draft rectificatives share an original, the
+      "Base 349" stored on the second row can be stale (it was computed when the row was saved
+      and is not refreshed at completion); the completion re-check still blocks an over-allocation.
+      A corrective whose posting failed (posting error state) blocks every later corrective of
+      the same operator, year and period until it is posted.
 
 ### List subset filters: "Todos" / "Facturas" / "Facturas rectificativas"
 
