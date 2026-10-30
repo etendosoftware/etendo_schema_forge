@@ -112,7 +112,7 @@ version (§ schema_forge_core versions).
 | `feature → develop` | Clerk or the author | Team reviewers | **Human** |
 | `main → develop` | **`back-merge-main.yml`**, when main moves | None; in com.etendoerp.go `github-actions[bot]` approves it anyway | **Auto-merge** once green; its **assignee** when it conflicts |
 | `mergeblock → main` (the cut) | **Clerk** (on request) | Team reviewers | **Human only** |
-| `mergeblock/auto-* → main` (the automatic cut) | **The merge block job**, as etendobot | None | **The job**, once every PR is green; its **owner** after the deadline |
+| `mergeblock/auto-* → main` (the automatic cut) | **The merge block job**, as etendobot | None | **The job**, once every PR is green; it closes them at the deadline |
 
 The cut and `main → develop` are the **only** PRs an agent may open towards `main` or out of it.
 
@@ -186,28 +186,31 @@ does two things:
    - A red PR is mailed once and labelled `auto-cut-failed`. The cut's owner walks the failure ladder
      (§ When the cut's pipeline fails) on its branch, and the job merges it as soon as it is green
      again.
-   - From `AUTO_CUT_DEADLINE` (20:00) it no longer merges: the PRs get `auto-cut-expired`, and the
-     owner merges them by hand or closes them.
+   - At `AUTO_CUT_DEADLINE` (20:00) it stops merging: a cut not merged by then gets
+     `auto-cut-expired`, a comment saying why, and its PRs are closed. What it carried is still in
+     develop and goes in the next cut.
 2. **Cuts,** from `AUTO_CUT_TIMES` (16:00): `mergeblock/auto-YYYYMMDD-HHMM` from develop in every repo
    where develop carries something main lacks, with `origin/main` merged in, and one PR per repo to
    `main`. The PRs are titled `Mergeblock DD/MM HH:MM (auto)`, labelled `auto-cut` and assigned to the
    day's owner; their body names the owner and carries the task table the team posts in the chat.
    The automatic cut has no Jira task: its branch is named by date and time.
 
-**What holds the cut.** It is not cut while:
+**What holds the cut.** When develop carries tasks to cut, it is not cut while:
 
-- a merge block PR into `main` is open (the morning one, or an earlier automatic one) and develop
-  carries tasks that no open merge block has. When the open one already has every task, there is
-  nothing to cut;
+- a merge into `main` is in progress: a `mergeblock/*` PR (the morning cut, or an earlier automatic
+  one) or a `hotfix/*` PR into `main` that is open and not a draft. Main is about to move, and a cut
+  made now would be born behind it. When an open merge block already has every task develop
+  carries, there is nothing to cut;
 - develop lacks main's commits, because the `main → develop` PR (§ Back to develop) has not merged
-  yet: the cut would be born behind main;
+  yet: the same reason, after the merge into main;
 - develop's head has failing checks.
 
 The run in the first 15 minutes after the cut time tries the cut. While something holds it, every next
-run tries again, for `AUTO_CUT_WAIT` minutes after the cut time (120 by default), cut short by the next
-cut time and the deadline. The first try mails what holds it, the last one mails that the cut was
-skipped, and the runs between stay quiet. A cut made near the end of that window may not get through
-the full pipeline, about two hours, by the deadline.
+run tries again, until the next cut time or the deadline, also when the merge in progress ends with
+red checks. The first try mails what holds it (each merge in progress with whether its checks are
+green, running or red), the last one mails that the cut was skipped, and the runs between stay quiet.
+A cut made late in that window may not get through the full pipeline, about two hours, by the
+deadline, and is then closed.
 
 **The day's owner.** Every cut of a day goes to the owner of that day's first cut: the morning cut's
 author, who is the person on the schedule. A day without a cut yet goes to the person after the
@@ -221,7 +224,6 @@ passes the job's parameters to the script; one left out of the job takes its def
 | `AUTO_CUT_OWNERS` | Multi-line String | The merge block owners in schedule order, one `Name, GitHub login, email` per line |
 | `AUTO_CUT_TIMES` | String | `HH:MM` of each cut, comma-separated (default `16:00`) |
 | `AUTO_CUT_DEADLINE` | String | `HH:MM` from which it no longer merges (default `20:00`) |
-| `AUTO_CUT_WAIT` | String | Minutes after a cut time during which a held cut is tried again (default `120`) |
 | `DRY_RUN` | Boolean | Anything but `false` reads and mails, but writes nothing to GitHub |
 | `AUTO_CUT_MAIL_TO` | String | Recipients instead of the team and the owner, for trying the job out |
 

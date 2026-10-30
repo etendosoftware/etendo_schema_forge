@@ -47,7 +47,7 @@ feature/ETP-C ─PR─▶ ┘             each author resolves their own conflic
   what stays out (job C).
 - **A second cut, automatic, in the afternoon.** A Jenkins job (`com.etendoerp.jenkins.pipelines`,
   `etendo-go/mergeblock/`) cuts `mergeblock/auto-YYYYMMDD-HHMM` from develop from 16:00, opens its
-  PRs to main and merges them itself once every one is green, until 20:00. I never cut it, but I read
+  PRs to main and merges them itself once every one is green; at 20:00 it closes them. I never cut it, but I read
   it (`<automatic_cut>`): a red one goes through job C like any cut, and one still open holds the next
   cut (job B step 3).
 
@@ -127,9 +127,9 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
    open is red or conflicting: name it, its failing checks or conflicts, and its assignee. If none is
    open, the human runs that workflow by hand (Actions → *Back-merge main into develop*).
 3. **No merge block may still be open.** `gh pr list --repo <slug> --base main --state open --json number,headRefName,labels,assignees,url`:
-   any `mergeblock/*` head → 🔴: name it, its owner (the assignee) and its labels, and stop. An
-   automatic cut left open past its deadline carries `auto-cut-expired`: its owner merges it by hand
-   or closes it.
+   any `mergeblock/*` head → 🔴: name it, its owner (the assignee) and its labels, and stop. A
+   `hotfix/*` PR into main still open → 🟡: main is about to move, so the cut waits for it and its
+   `main → develop` PR (step 2).
 4. **Inventory what the cut carries,** per repo, oldest first:
    ```bash
    git -C <repo> log --first-parent --merges --reverse --format='%h %s' origin/main..origin/develop
@@ -195,7 +195,7 @@ one rung, say why, and act only on the human's explicit OK.
 
 On an automatic cut the same rungs apply, on `mergeblock/auto-YYYYMMDD-HHMM`; its owner is the PRs'
 assignee. Once every PR of it is green again the job merges them by itself, until the deadline, so
-after a fix or a revert nobody merges by hand.
+after a fix or a revert nobody merges by hand. At the deadline the job closes what is still open.
 </job_c_failure_ladder>
 
 <automatic_cut>
@@ -209,11 +209,11 @@ Aires time. Full rules: `docs/branch-workflow.md` § The automatic afternoon cut
   label `auto-cut`, opened by etendobot and assigned to the day's owner (the morning cut's author).
   It has no Jira task.
 - **Its labels:** `auto-cut-failed` once a red PR was mailed to the owner; `auto-cut-expired` when it was
-  not green by the deadline (20:00) and the job stopped merging it.
-- **What holds it, before it is cut:** an open merge block while develop carries tasks that no open
-  merge block has; develop lacking main's commits (the `main → develop` PR not merged yet); failing
-  checks on develop's head. Later runs try again, up to `AUTO_CUT_WAIT` minutes (120 by default) after
-  the cut time.
+  not merged by the deadline (20:00), when the job also comments why and closes it.
+- **What holds it, before it is cut:** a merge into main in progress (an open, non-draft `mergeblock/*`
+  or `hotfix/*` PR into main) while develop carries tasks that no open merge block has; develop lacking
+  main's commits (the `main → develop` PR not merged yet); failing checks on develop's head. Later runs
+  try again until the next cut time or the deadline.
 - **Its owner list and times** are parameters of the Jenkins job, not files in a repo. If asked about
   them, I point there; I never guess the day's owner from an example.
 </automatic_cut>
