@@ -259,7 +259,9 @@
           "section": "other",
           "name": "companyAgent",
           "reference": null,
-          "inputMode": null
+          "inputMode": null,
+          "defaultExpr": "@#AD_User_ID@",
+          "_note": "ETP-6036: SalesRep_ID has no AD default, so /defaults fell back to the first row of the user combo (Admin) instead of the session user."
         },
         "accountingDate": {
           "visibility": "system",

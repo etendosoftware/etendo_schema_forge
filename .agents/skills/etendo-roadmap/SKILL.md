@@ -67,10 +67,56 @@ curl -s -u "$AUTH" "$API?fields=description" | jq -j '.fields.description // ""'
 head -c "$(wc -c < "$D/old")" "$D/after" 2>/dev/null | cmp -s - "$D/old" && grep -qF "$ISSUE_URL" "$D/after" && echo LINK-OK
 ```
 
-Done when the comment exists and the read-back prints `LINK-OK`: the old description is an exact
+Then add a Jira **remote link** to the issue as well, so it shows under the task's links and not only
+in its text. Check first, so a re-run does not duplicate it:
+
+```bash
+curl -s -u "$AUTH" "$API/remotelink" | jq -e --arg u "$ISSUE_URL" 'any(.[]; .object.url == $u)' >/dev/null \
+  || jq -n --arg u "$ISSUE_URL" --arg t "GitHub ${ISSUE_URL#https://github.com/}" \
+       '{object:{url:$u,title:$t}}' \
+     | curl -s -u "$AUTH" -X POST -H 'Content-Type: application/json' --data @- "$API/remotelink"
+```
+
+Done when the comment exists, the remote link is listed and the read-back prints `LINK-OK`: the old description is an exact
 prefix of the new one, so the append replaced nothing. A missing `LINK-OK` means "inspect the
 description by hand", not "the append failed": Jira may normalize CRLF or trailing whitespace on
 save. Never re-append blindly, since that duplicates the line.
+
+### Pre-tickets from the ticket router bot
+
+The **ticket router bot** turns an agent's `etendo_feedback` report (an `ETGO_MCP_USAGE` row) into a
+GitHub issue in `etendo-ai` of type `Pre-ticket`, plus a Jira task of type `Tarea`, and assigns a
+cell. Recognize the issue by the line `MCP usage: <row id>`. Its body is obfuscated: every value the
+agent wrote reads `[omitido: contenía datos]`. Diagnosing it is `mcp-ticket-resolver`'s job (and the
+`mcp-audit` skill's); this section covers what happens to the two tickets afterwards, once the user
+has seen the diagnosis.
+
+- **The Jira task already exists.** Its key is in the row's `triage_task` column. Never create a
+  second one.
+- **At least one finding is a real bug** →
+  - GitHub issue type `Pre-ticket` → `Bug 🐛`, through GraphQL (`gh issue edit` cannot set it):
+    ```bash
+    gh api graphql -f query='mutation($i:ID!,$t:ID!){updateIssueIssueType(input:{issueId:$i,issueTypeId:$t}){issue{issueType{name}}}}' \
+      -f i="$(gh issue view <issue-url> --json id -q .id)" -f t=IT_kwDOBlBfO84BBJNZ
+    ```
+    (`etendo-ai` issue types on 2026-10-30: `Bug 🐛` `IT_kwDOBlBfO84BBJNZ`, `Feature 🔌`
+    `IT_kwDOBlBfO84BBJNb`, `Idea 💡` `IT_kwDOBlBfO84B3plA`, `Pre-ticket` `IT_kwDOBlBfO842374s`;
+    re-read with `gh api graphql -f query='{repository(owner:"etendosoftware",name:"etendo-ai"){issueTypes(first:20){nodes{id name}}}}'`.)
+  - Add the `bug` label (§2).
+  - Jira type `Tarea` → `Error` (Bug), through REST v2: the edit screen does not offer `Error`, the
+    REST update is accepted. `jq -n '{fields:{issuetype:{name:"Error"}}}' | curl -s -u "$AUTH" -X PUT -H 'Content-Type: application/json' --data @- "$API"`, then read `fields.issuetype.name` back.
+  - Add the issue to the Roadmap with Product, Team and Status (§4); Team follows the `Celula*`
+    label the bot set.
+- **Only improvements** → issue type `Feature 🔌` and label `Mejora`; Jira type `Historia`. Not Bug.
+- **Nothing real** (every finding ruled out or already fixed) → close the issue with a comment that
+  says why, and only with the user's authorization.
+- **Two versions of the same diagnosis.** The Jira comment is private and complete: client name,
+  session keys, row ids, document numbers. The GitHub comment is public: none of those, nor user ids.
+  Both carry the same table, one row per finding: finding | status | action, where status is one of
+  confirmed, reproduced, already fixed in develop, improvement, ruled out.
+- **Cross-link both ways** with the recipe above; the GitHub comment ends with `Jira: <browse URL>`.
+- **Leave the bot's choices alone:** assignee, `Celula*` label, the `triage_*` columns of the row
+  and its reviewed flag.
 
 ## 2. Route it to a repo
 
