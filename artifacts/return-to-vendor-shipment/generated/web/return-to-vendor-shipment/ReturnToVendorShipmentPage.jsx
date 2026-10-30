@@ -152,6 +152,14 @@ export const api = {
       "reference": "UOM",
       "inputMode": "search",
       "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/selectors/uOM"
+    },
+    {
+      "entity": "returnToVendorShipmentLine",
+      "field": "canceledInoutLine",
+      "column": "Canceled_Inoutline_ID",
+      "reference": "InOutLine",
+      "inputMode": "selector",
+      "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/selectors/canceledInoutLine"
     }
   ],
   "actions": [
