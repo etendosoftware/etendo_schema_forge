@@ -716,10 +716,22 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 return's description). **Omit `lines` to return everything still returnable**; with `lines`, exactly those (a line
 listed twice counts both; a `lineId` that is not on the receipt is a 422 `returnLineNotInDocument`). The receipt must
 be completed (422 `sourceNotCompleted`). The return is **always left in draft**; the 201 answers `{id, documentNo,
-documentStatus, lines:[{id, product, productName, returnedQuantity, originalQuantity, sourceLineId}]}` so the linkage
-can be reported. More than is returnable is a 422 `returnQuantityExceedsAvailable` and nothing is created; nothing
+documentStatus, lines:[{id, product, productName, returnedQuantity, originalQuantity, sourceLineId,
+alreadyReturnedQuantity, returns:[{id, documentNo, documentStatus}]}]}` so the linkage can be reported
+(ETP-6054: `alreadyReturnedQuantity` is what OTHER returns, drafts included and voided excluded, already hold of that
+source line; `returns` lists them; the sales `createReturn` shares the builder and gains the same keys). More than is returnable is a 422 `returnQuantityExceedsAvailable` and nothing is created; nothing
 left at all is 422 `nothingLeftToReturn`. The SPA wizard sends explicit lines and is unchanged; a second partial return
 now works. Cap rule and error shape: `return-to-vendor-shipment.md` and neo-headless.md §4.12.32.
+
+## `returnStatus`: what the percentage means (ETP-6054)
+
+`returnStatus` on a single-record read of a receipt is the units returned (completed returns and drafts, never voided
+ones) over the units received, summed across every line, so it mixes the units of different products (100 beers and 60
+waters returned in full read 100 percent of 160 units). It is a whole number, capped at 100. A draft return already
+counts, exactly as the wizard "Crear Devolucion desde Albaran" counts it in "Disponible para devolver". Example (receipt
+10000000, 272 units, two returns of 20 on the same line, one completed and one draft): 40 of 272 = 15, with the draft and
+after completing it. Before the fix the join repeated the received quantity once per return and the same data read 7.
+**Nothing changes on screen:** the SPA never reads `returnStatus`. Agent prompt updated (`agent-prompts/goods-receipt/spec.md`).
 
 ## Period not open (ETP-5577)
 

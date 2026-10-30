@@ -187,7 +187,9 @@ Nobody opens that PR by hand. `.github/workflows/back-merge-main.yml`, in both r
 - The body lists main's own commits (hotfixes, fixes made on the cut), or says it only carries merge
   commits, and lists the conflicting files when there are any.
 - It assigns the PR to the GitHub user of main's last commit: after a cut or a hotfix, its merge
-  commit, so whoever merged it (falling back to `merged_by` of that commit's PR). Never etendobot.
+  commit, so whoever merged it (falling back to `merged_by` of that commit's PR). When etendobot
+  merged it, as the merge block job does with an automatic cut, it takes that PR's assignee, the
+  cut's owner. Never etendobot.
 - Without conflicts it turns on auto-merge (merge commit), so GitHub merges it once the required
   checks pass: that code was already reviewed and passed the full pipeline on its way into `main`.
   com.etendoerp.go requires one approval on develop and GitHub never lets the PR's author approve

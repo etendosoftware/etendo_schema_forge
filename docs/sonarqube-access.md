@@ -76,3 +76,11 @@ from Sonar, and the push is blocked when `current < base`.
 
 If the base branch has no coverage on Sonar yet, the check skips without blocking (matching CI,
 which treats a missing baseline as 0%).
+
+**The base branch Sonar compares against.** In PR mode Sonar gets the base as a bare name
+(`main`, not `origin/main`), and the scanner reads the local branch of that name before
+`origin/main`. A stale local `main` would count code already in main as new and fail the gate
+(ETP-6067), so `run-sonar.sh` first runs `scripts/sonar-base-branch.sh`: it fast-forwards a local
+branch that is only behind `origin/<name>`, and stops the run, with the command that fixes it, when
+that branch is checked out or has commits of its own. The log shows the base it used as
+`==> Sonar base: main @ <sha> (<date>)`.

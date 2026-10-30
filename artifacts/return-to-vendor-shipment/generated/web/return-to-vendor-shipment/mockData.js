@@ -192,6 +192,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Standard order for Q1 delivery",
     "orderQuantity": 402,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-001"
   },
   {
@@ -202,6 +203,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Rush order - priority shipping required",
     "orderQuantity": 54,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-002"
   },
   {
@@ -212,6 +214,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Bulk purchase for warehouse restocking",
     "orderQuantity": 150,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-003"
   },
   {
@@ -222,6 +225,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Sample order for client evaluation",
     "orderQuantity": 97,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-004"
   },
   {
@@ -232,6 +236,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Recurring monthly supply order",
     "orderQuantity": 311,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-005"
   },
   {
@@ -242,6 +247,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Special pricing agreement applies",
     "orderQuantity": 451,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-006"
   },
   {
@@ -252,6 +258,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Consolidated order from multiple requests",
     "orderQuantity": 496,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-007"
   },
   {
@@ -262,6 +269,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Trial order for new product line",
     "orderQuantity": 284,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-008"
   },
   {
@@ -272,6 +280,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Replacement for damaged goods",
     "orderQuantity": 225,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-009"
   },
   {
@@ -282,6 +291,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Pre-season inventory build-up",
     "orderQuantity": 479,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-010"
   },
   {
@@ -292,6 +302,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Customer-specific configuration",
     "orderQuantity": 123,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-011"
   },
   {
@@ -302,6 +313,7 @@ export const returnToVendorShipmentLine = [
     "uOM": "Sample uOM",
     "description": "Government contract fulfillment",
     "orderQuantity": 337,
+    "canceledInoutLine": "Sample canceledInoutLine",
     "returnToVendorShipmentId": "mock-returnToVendorShipment-012"
   }
 ];
