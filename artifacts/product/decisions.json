@@ -26,7 +26,8 @@
     "attachments": true,
     "detailEntity": null,
     "customPanelTabs": [
-      { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar", "tabOrder": 100 }
+      { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar", "tabOrder": 100 },
+      { "key": "movements", "labelKey": "productMovements", "component": "ProductMovementsTab", "tabOrder": 800 }
     ],
     "labelOverrides": {
       "en_US": {
@@ -667,6 +668,7 @@
     },
     "transactions": {
       "readOnly": true,
+      "javaQualifier": "productTransactionsHandler",
       "fields": {
         "movementDate": {
           "visibility": "readOnly",
@@ -700,6 +702,18 @@
           "visibility": "readOnly",
           "grid": true
         },
+        "etgoWarehouse": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "reference": "Warehouse",
+          "inputMode": "selector"
+        },
+        "etgoDocKind": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false
+        },
         "attributeSetValue": {
           "visibility": "discarded"
         },
@@ -731,7 +745,9 @@
           "visibility": "discarded"
         },
         "transactionCost": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false
         },
         "unitCost": {
           "visibility": "discarded"

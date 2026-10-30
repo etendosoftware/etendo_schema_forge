@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-16T15:28:49.201Z",
-  "contractChecksum": "b12c789a68dc35bb",
+  "updatedAt": "2026-10-29T17:30:54.688Z",
+  "contractChecksum": "f3841b9b4bb0e041",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -314,6 +314,14 @@
         "reference": "UOM",
         "inputMode": "selector",
         "url": "/sws/neo/product/transactions/selectors/uOM"
+      },
+      {
+        "entity": "transactions",
+        "field": "etgoWarehouse",
+        "column": "EM_Etgo_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/transactions/selectors/etgoWarehouse"
       },
       {
         "entity": "productCharacteristic",
@@ -805,12 +813,21 @@
             "readOnly": true,
             "required": true
           },
+          "transactionCost": {
+            "readOnly": true
+          },
           "totalCost": {
             "readOnly": true
           },
           "uOM": {
             "readOnly": true,
             "required": true
+          },
+          "etgoDocKind": {
+            "readOnly": true
+          },
+          "etgoWarehouse": {
+            "readOnly": true
           }
         }
       },
@@ -1071,5 +1088,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "a3da0c448e014a23"
+  "checksum": "8c61953176884fc1"
 }

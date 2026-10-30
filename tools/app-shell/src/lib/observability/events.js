@@ -267,6 +267,19 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
     ],
   }),
+  // ETP-5889 — one event per activation of the product Movements tab. `source` says how the user
+  // got there ('tab' | 'side_panel_link'). The tenant only (`account_id`): no user, role, product
+  // or record identifier, which the payload policy does not allow.
+  PRODUCT_MOVEMENTS_TAB_OPENED: defineEvent('product_movements_tab_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+    ],
+  }),
   TIME_TO_CREATE: defineEvent('time_to_create', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [

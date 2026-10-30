@@ -1537,6 +1537,115 @@
           ]
         }
       ]
+    },
+    {
+      "id": "product-movements-tab",
+      "description": "Read-only Movements tab of the Product window (ETP-5889): stock movements of a product with date, type, warehouse, signed quantity, resulting stock and cost, filtered and sorted in the backend. Switched on per account so it can roll out to chosen accounts first.",
+      "owner": "jortolano",
+      "jira": "ETP-5889",
+      "created": "2026-10-29",
+      "flag": {
+        "key": "product-movements-tab",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "PLACEHOLDER, not agreed with product: roughly one quarter after the first account gets the tab. Replace with the real date once the rollout plan exists.",
+        "symbols": [
+          "product-movements-tab",
+          "FLAG_PRODUCT_MOVEMENTS_TAB",
+          "ETGO_FLAG_PRODUCT_MOVEMENTS_TAB",
+          "etendo.go.flags.product-movements-tab",
+          "productMovements",
+          "PRODUCT_MOVEMENTS_CAPABILITY",
+          "ProductMovementsPolicy",
+          "product_movements_tab_opened"
+        ],
+        "$symbolsComment": "Backend-only flag (positive polarity): no key in flag-keys.js. The frontend trail is the capability name, because the browser only reads capabilities.productMovements off SFWindowAccessMap.",
+        "capability": {
+          "field": "productMovements",
+          "sources": [
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.productMovements) -- evaluated per account (ETGO_ACCOUNT email as targeting key, tenant as clientId attribute)"
+          ]
+        }
+      },
+      "$gatingComment": "ONE evaluator, the backend. ProductMovementsPolicy evaluates the flag per account; SFWindowAccessMap publishes the answer as capabilities.productMovements and the tab reads it with useCapabilitiesSafe(). ProductTransactionsHandler consults the same policy before adding etgoStockAfter and etgoTotalRows, so the tab and its data cannot disagree. Only behaviour is gated: the stored computed columns of M_Transaction (EM_Etgo_Warehouse_ID, EM_Etgo_Doc_Kind), their triggers and the ETGO_SF_* configuration ship unconditionally. The flag is NOT access control: with it off the /transactions rows and the new etgoWarehouse, etgoDocKind and etgoDocHeaderId fields stay readable under the role's own entity and organization access; only etgoStockAfter and etgoTotalRows are withheld.",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/product/ProductMovementsTab.jsx",
+          "tools/app-shell/src/windows/custom/product/productMovements.js",
+          "tools/app-shell/src/windows/custom/product/useProductMovementsTabTracking.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/ProductMovementsPolicy.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. ProductTransactionsHandler, SFWindowAccessMap, GoFeatureFlags, capabilityVisibility.js, tabIcons.js and the locale files are shared files the flag merely touches, so they are not listed. The product decisions.json/contract entries ship unconditionally.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ProductMovementsPolicyTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ProductTransactionsHandlerTest.java",
+            "note": "Shared spec: flag-off and Warehouse-never-consults-flag cases."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/SFWindowAccessMapTest.java",
+            "note": "Shared spec: productMovements capability cases."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/product/__tests__/ProductMovementsTab.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/product/__tests__/productMovements.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/product/__tests__/useProductMovementsTabTracking.vitest.jsx"
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "schema-must-be-deployed-before-targeting",
+          "kind": "precondition",
+          "note": "Turning the flag on for an account without update.database, ad_scd_check = 0 and the ETGO_SF_* configuration exported would show a tab whose Warehouse and Type columns cannot be sorted or filtered, so check all three before targeting any account.",
+          "refs": [
+            "docs/generated-custom-windows/product.md -- ETP-5889",
+            "com.etendoerp.go docs/STORED-COMPUTED-COLUMNS.md"
+          ]
+        },
+        {
+          "id": "hosted-flag-setting-missing",
+          "kind": "precondition",
+          "note": "The hosted control plane (Datadog Feature Flags, ConfigCat as the fallback) has no boolean setting product-movements-tab yet, so the flag stays off for every account until the platform team creates it and writes the targeting rule.",
+          "refs": [
+            "ProductMovementsPolicy -- isEnabledFor"
+          ]
+        },
+        {
+          "id": "kpi-denominator-under-gradual-rollout",
+          "kind": "open",
+          "note": "The adoption KPI counts every active warehouse device; with the tab on for a few accounts the denominator includes devices that cannot open it, so the figure is diluted until the rollout is complete or the KPI is restricted to flagged accounts.",
+          "refs": [
+            "etendo-kpis PR #15 -- eng_movements_tab_adoption"
+          ]
+        },
+        {
+          "id": "warehouse-filter-fed-by-stock",
+          "kind": "open",
+          "note": "The warehouse selector of the Movements tab lists the warehouses found in the product's stock rows (/stock, up to 100 rows), while the filter acts on its movements, so the two sources are not guaranteed to match. With today's data they do (95 product-warehouse pairs with movements, none without a stock row; at most 22 stock rows per product), but a warehouse would vanish from the selector if zero-quantity stock rows were ever deleted or a product had more than 100 stock rows, and its movements could then not be filtered. Accepted for now; the fix is to take the warehouses from the movements (a distinct list returned with etgoTotalRows) and is not scheduled.",
+          "refs": [
+            "tools/app-shell/src/windows/custom/product/ProductMovementsTab.jsx -- warehouses effect",
+            "ProductStockWarehouseHandler -- rows per storage bin",
+            "ETP-5889 CP-08 -- warehouse filter"
+          ]
+        }
+      ]
     }
   ]
 }
