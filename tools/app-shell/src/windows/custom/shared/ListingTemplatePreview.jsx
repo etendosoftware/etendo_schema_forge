@@ -50,7 +50,7 @@ export default function ListingTemplatePreview({ settings }) {
     const wantsLogo = settings?.showLogo === 'on';
     (wantsLogo ? Promise.resolve(settings.logo || loadCompanyLogo(NEO_BASE)) : Promise.resolve(null))
       .then((logo) => renderViaJsreport('html', ui('documentTemplatesSampleListTitle'), columns, SAMPLE_ROWS, [], labels,
-        settings, logo))
+        { config: settings, logo }))
       .then((res) => res.text())
       .then((markup) => { if (!cancelled) setHtml(markup); })
       .catch((e) => { if (!cancelled) { setHtml(''); setError(e.message); } });

@@ -176,10 +176,18 @@ function resolveRows(rawRows, columns) {
   });
 }
 
+/** One console line naming the list-print design in use, so "the style is not applied" is diagnosable. */
+function describeListingDesign(config) {
+  if (!config) return 'no saved design (nothing saved or not readable): the current print';
+  const color = config.color ? ` ${config.color}` : '';
+  return `saved design: ${config.variant}${color}`;
+}
+
 // ---------------------------------------------------------------------------
 // jsreport rendering
 // ---------------------------------------------------------------------------
-export async function renderViaJsreport(recipe, title, columns, rows, filters, labels, templateConfig = null, logo = null) {
+export async function renderViaJsreport(recipe, title, columns, rows, filters, labels, design = null) {
+  const { config: templateConfig = null, logo = null } = design || {};
   const isCSV = recipe === 'text';
   const payload = {
     template: {
@@ -292,7 +300,7 @@ export default function ReportDrawer({
       const logo = config?.showLogo === 'on' ? (config.logo || (await loadCompanyLogo(neoBase, token))) : null;
       if (cancelled) return;
       // Names what the list print will use, so "the style is not applied" is diagnosable from the console.
-      console.info(`[list-print] ${config ? `saved design: ${config.variant}${config.color ? ` ${config.color}` : ''}` : 'no saved design (flag off, nothing saved or not readable): the current print'}`);
+      console.info(`[list-print] ${describeListingDesign(config)}`);
       setListingLogo(logo);
       setListingConfig(config);
     });
@@ -410,7 +418,7 @@ export default function ReportDrawer({
       setLoading(true);
       try {
         if (jsreportAvailable) {
-          const res = await renderViaJsreport('html', title || ui('report'), columns || [], reportRows, activeFilters, reportLabels, listingConfig, listingLogo);
+          const res = await renderViaJsreport('html', title || ui('report'), columns || [], reportRows, activeFilters, reportLabels, { config: listingConfig, logo: listingLogo });
           writeToIframe(await res.text());
         } else {
           const now = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -466,7 +474,7 @@ export default function ReportDrawer({
     setLoading(true);
     setError(null);
     try {
-      const res = await renderViaJsreport(fmt.recipe, title || ui('report'), columns || [], reportRows, activeFilters, reportLabels, listingConfig, listingLogo);
+      const res = await renderViaJsreport(fmt.recipe, title || ui('report'), columns || [], reportRows, activeFilters, reportLabels, { config: listingConfig, logo: listingLogo });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
 

@@ -24,7 +24,7 @@ describe('ListingTemplatePreview', () => {
     jsreport.impl = async () => ({ text: async () => '<p>list</p>' });
     render(<ListingTemplatePreview settings={{ variant: 'classic', color: null, font: null, fontSize: null, rowStripes: null }} />);
     await waitFor(() => expect(screen.getByTestId('ListingTemplatePreview__frame').getAttribute('srcdoc')).toBe('<p>list</p>'));
-    const [recipe, , columns, rows, filters, , config] = jsreport.calls[0];
+    const [recipe, , columns, rows, filters, , { config }] = jsreport.calls[0];
     expect(recipe).toBe('html');
     expect(config).toEqual({ variant: 'classic', color: null, font: null, fontSize: null, rowStripes: null });
     expect(columns.map((c) => c.key)).toEqual(['documentNo', 'date', 'partner', 'status', 'amount']);
@@ -37,21 +37,21 @@ describe('ListingTemplatePreview', () => {
     const settings = { variant: 'modern', color: '#0F766E', font: 'serif', fontSize: 'large', rowStripes: 'off' };
     render(<ListingTemplatePreview settings={settings} />);
     await waitFor(() => expect(jsreport.calls.length).toBeGreaterThan(0));
-    expect(jsreport.calls[0][6]).toEqual(settings);
+    expect(jsreport.calls[0][6].config).toEqual(settings);
   });
 
   it('carries the company logo only when the design shows it', async () => {
     jsreport.impl = async () => ({ text: async () => '<p>x</p>' });
     const { unmount } = render(<ListingTemplatePreview settings={{ variant: 'classic', showLogo: 'on' }} />);
     await waitFor(() => expect(jsreport.calls.length).toBeGreaterThan(0));
-    expect(jsreport.calls[0][7]).toBe('data:image/png;base64,AAA=');
+    expect(jsreport.calls[0][6].logo).toBe('data:image/png;base64,AAA=');
     unmount();
 
     jsreport.calls = [];
     logoLoader.calls = 0;
     render(<ListingTemplatePreview settings={{ variant: 'classic', showLogo: null }} />);
     await waitFor(() => expect(jsreport.calls.length).toBeGreaterThan(0));
-    expect(jsreport.calls[0][7]).toBeNull();
+    expect(jsreport.calls[0][6].logo).toBeNull();
     expect(logoLoader.calls).toBe(0);
   });
 
@@ -60,7 +60,7 @@ describe('ListingTemplatePreview', () => {
     jsreport.impl = async () => ({ text: async () => '<p>x</p>' });
     render(<ListingTemplatePreview settings={{ variant: 'classic', showLogo: 'on' }} />);
     await waitFor(() => expect(jsreport.calls.length).toBeGreaterThan(0));
-    expect(jsreport.calls[0][7]).toBeNull();
+    expect(jsreport.calls[0][6].logo).toBeNull();
   });
 
   it('shows the failure instead of an empty frame', async () => {

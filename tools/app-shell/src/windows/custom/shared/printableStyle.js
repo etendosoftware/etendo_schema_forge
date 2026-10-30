@@ -114,6 +114,12 @@ function listingAccentCss(accent) {
 `;
 }
 
+/** The accent of a list print: the chosen color, else the modern variant's own, else none. */
+function listingAccent(config) {
+  if (isHexColor(config.color)) return config.color.toUpperCase();
+  return config.variant === 'modern' ? LISTING_MODERN_ACCENT : null;
+}
+
 /**
  * The list print's CSS: the one it was given, itself, when there is no configuration (so the
  * current print is the current print by construction); otherwise a copy with the variant and the
@@ -123,8 +129,7 @@ function listingAccentCss(accent) {
 export function resolveListingCss(config, baseCss) {
   if (!config) return baseCss;
   const css = [baseCss, LISTING_VARIANT_CSS[config.variant] ?? ''];
-  const accent = isHexColor(config.color) ? config.color.toUpperCase()
-    : (config.variant === 'modern' ? LISTING_MODERN_ACCENT : null);
+  const accent = listingAccent(config);
   if (accent) css.push(listingAccentCss(accent));
   const stack = fontStack(config.font);
   if (stack) css.push(`\n/* style: font */\nbody { font-family: ${stack}; }\n`);
