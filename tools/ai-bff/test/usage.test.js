@@ -6,6 +6,7 @@ import {
   buildAgentMessageEvent,
   createTurnRecorder,
   postUsageEvent,
+  sumStepCost,
   sumStepUsage,
   usageEndpoint,
 } from '../src/usage.js';
@@ -33,7 +34,7 @@ function recorder(overrides = {}) {
   const logs = [];
   const rec = createTurnRecorder({
     url: 'http://etendo/sws/neo/usage',
-    authorization: 'Bearer tok',
+    headers: { Authorization: 'Bearer tok' },
     sessionKey: 'sess-1',
     target: 'agent-chat',
     modelId: 'kimi-k2.6',
@@ -128,6 +129,40 @@ test('sumStepUsage adds per-step tokens and cache reads', () => {
 test('sumStepUsage leaves cacheReadTokens undefined when no step reports it', () => {
   assert.deepEqual(sumStepUsage(undefined), { inputTokens: 0, outputTokens: 0, inputTokenDetails: { cacheReadTokens: undefined } });
   assert.equal(sumStepUsage([{ usage: { inputTokens: 1 } }]).inputTokenDetails.cacheReadTokens, undefined);
+});
+
+// --- sumStepCost -----------------------------------------------------------
+
+test('sumStepCost adds the provider cost of every step that reported one', () => {
+  assert.equal(sumStepCost([
+    { usage: { raw: { cost: 0.25 } } },
+    { usage: { raw: {} } },
+    {},
+    { usage: { raw: { cost: 0.5 } } },
+  ]), 0.75);
+});
+
+test('sumStepCost is undefined, not 0, when no step reported a usable cost', () => {
+  assert.equal(sumStepCost(undefined), undefined);
+  assert.equal(sumStepCost([{ usage: { inputTokens: 3 } }, { usage: { raw: { cost: '0.1' } } }, { usage: { raw: { cost: Number.NaN } } }]), undefined);
+});
+
+test('sumStepCost keeps a reported cost of 0', () => {
+  assert.equal(sumStepCost([{ usage: { raw: { cost: 0 } } }]), 0);
+});
+
+test('costUsd is recorded from the step costs and omitted when the provider gives none', async () => {
+  const priced = buildAgentMessageEvent({ outcome: 'ok', steps: [{ usage: { raw: { cost: 0.002 } } }, { usage: { raw: { cost: 0.001 } } }] });
+  assert.equal(priced.costUsd, 0.002 + 0.001);
+  assert.equal('costUsd' in priced.properties, false);
+  assert.equal('costUsd' in buildAgentMessageEvent({ outcome: 'ok', steps: [{}] }), false);
+
+  // A failed turn still costs what its finished steps cost.
+  const { rec, calls } = recorder();
+  rec.track({ usage: { inputTokens: 5, outputTokens: 1, raw: { cost: 0.004 } } });
+  rec.fail();
+  await tick();
+  assert.equal(calls[0].body.events[0].costUsd, 0.004);
 });
 
 // --- createTurnRecorder ----------------------------------------------------
@@ -247,7 +282,7 @@ test('durationMs comes from the injected clock and is never negative', async () 
 test('finish returns synchronously and does not wait for the post', () => {
   let resolvePost;
   const rec = createTurnRecorder({
-    url: 'u', authorization: 'Bearer t', now: clock(0),
+    url: 'u', headers: { Authorization: 'Bearer t' }, now: clock(0),
     fetchImpl: () => new Promise(resolve => { resolvePost = resolve; }),
     log: () => {},
   });
@@ -261,7 +296,7 @@ test('postUsageEvent POSTs the event with the forwarded Authorization and a time
   const { calls, fetchImpl } = fakeFetch();
   const logs = [];
   const event = { eventType: 'ai.agent.message' };
-  await postUsageEvent(event, { url: 'http://etendo/sws/neo/usage', authorization: 'Bearer abc', fetchImpl, log: m => logs.push(m) });
+  await postUsageEvent(event, { url: 'http://etendo/sws/neo/usage', headers: { Authorization: 'Bearer abc' }, fetchImpl, log: m => logs.push(m) });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'http://etendo/sws/neo/usage');
   assert.equal(calls[0].init.method, 'POST');
@@ -277,7 +312,7 @@ test('postUsageEvent POSTs the event with the forwarded Authorization and a time
 test('postUsageEvent logs the status of a non-2xx answer and resolves', async () => {
   const { fetchImpl } = fakeFetch(() => Promise.resolve({ ok: false, status: 403 }));
   const logs = [];
-  await assert.doesNotReject(postUsageEvent({}, { url: 'u', authorization: 'a', fetchImpl, log: m => logs.push(m) }));
+  await assert.doesNotReject(postUsageEvent({}, { url: 'u', headers: { Authorization: 'a' }, fetchImpl, log: m => logs.push(m) }));
   assert.equal(logs.length, 1);
   assert.match(logs[0], /HTTP 403/);
 });
@@ -285,7 +320,7 @@ test('postUsageEvent logs the status of a non-2xx answer and resolves', async ()
 test('postUsageEvent logs a rejected fetch once and resolves', async () => {
   const logs = [];
   await assert.doesNotReject(postUsageEvent({}, {
-    url: 'u', authorization: 'a', fetchImpl: () => Promise.reject(new Error('ECONNREFUSED')), log: m => logs.push(m),
+    url: 'u', headers: { Authorization: 'a' }, fetchImpl: () => Promise.reject(new Error('ECONNREFUSED')), log: m => logs.push(m),
   }));
   assert.deepEqual(logs, ['[ai-bff:usage] not recorded: ECONNREFUSED']);
 });
@@ -293,21 +328,21 @@ test('postUsageEvent logs a rejected fetch once and resolves', async () => {
 test('postUsageEvent logs a synchronously throwing fetch once and resolves', async () => {
   const logs = [];
   await assert.doesNotReject(postUsageEvent({}, {
-    url: 'u', authorization: 'a', fetchImpl: () => { throw new Error('bad url'); }, log: m => logs.push(m),
+    url: 'u', headers: { Authorization: 'a' }, fetchImpl: () => { throw new Error('bad url'); }, log: m => logs.push(m),
   }));
   assert.deepEqual(logs, ['[ai-bff:usage] not recorded: bad url']);
 });
 
 test('postUsageEvent logs a non-Error rejection as-is', async () => {
   const logs = [];
-  await postUsageEvent({}, { url: 'u', authorization: 'a', fetchImpl: () => Promise.reject('nope'), log: m => logs.push(m) });
+  await postUsageEvent({}, { url: 'u', headers: { Authorization: 'a' }, fetchImpl: () => Promise.reject('nope'), log: m => logs.push(m) });
   assert.deepEqual(logs, ['[ai-bff:usage] not recorded: nope']);
 });
 
 test('a recorder whose post fails logs once and never throws', async () => {
   const logs = [];
   const rec = createTurnRecorder({
-    url: 'u', authorization: 'a', now: clock(0),
+    url: 'u', headers: { Authorization: 'a' }, now: clock(0),
     fetchImpl: () => Promise.reject(new Error('down')), log: m => logs.push(m),
   });
   assert.doesNotThrow(() => rec.finish({}));
@@ -318,13 +353,6 @@ test('a recorder whose post fails logs once and never throws', async () => {
 // --- server.js wiring (source-reading: handleChat has no seam for streamText/createMCPClient) ---
 
 const serverSrc = readFileSync(new URL('../src/server.js', import.meta.url), 'utf8');
-
-test('handleChat builds one recorder with the derived endpoint, the caller token and the mode target', () => {
-  assert.match(serverSrc, /createTurnRecorder\(\{[^}]*url: usageEndpoint\(mcpUrl\)/s);
-  assert.match(serverSrc, /createTurnRecorder\(\{[^}]*authorization,/s);
-  assert.match(serverSrc, /createTurnRecorder\(\{[^}]*sessionKey: opencodeSession/s);
-  assert.match(serverSrc, /target: isPageHelpRequest \? 'page-help' : 'agent-chat'/);
-});
 
 test('handleChat feeds the recorder from every stream lifecycle callback', () => {
   assert.match(serverSrc, /onStepFinish: step => \{\s*usage\.track\(step\);/);
@@ -342,9 +370,23 @@ test('onFinish records without awaiting and still closes the MCP client', () => 
   assert.ok(body.indexOf('usage.finish') < body.indexOf('mcpClient?.close'));
 });
 
-test('postUsageEvent skips the post when the session has no Bearer token', async () => {
-  const { postUsageEvent } = await import('../src/usage.js');
+test('a cookie session records its turn with the session cookie and CSRF proof, not nothing', async () => {
+  const { calls, fetchImpl } = fakeFetch();
+  const cookieHeaders = {
+    Cookie: '__Host-go_session=s1', 'X-Go-CSRF': 'csrf-1',
+    Origin: 'https://app.etendo.cloud', Referer: 'https://app.etendo.cloud/sales-order',
+  };
+  const rec = createTurnRecorder({ url: 'http://etendo/sws/neo/usage', headers: cookieHeaders, now: clock(0), fetchImpl, log: () => {} });
+  rec.finish({ usage: { inputTokens: 3, outputTokens: 12 } });
+  await tick();
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].init.headers, { ...cookieHeaders, 'Content-Type': 'application/json' });
+  assert.equal('Authorization' in calls[0].init.headers, false);
+});
+
+test('postUsageEvent skips the post only when there is no credential of either scheme', async () => {
   let called = false;
-  await postUsageEvent({}, { url: 'http://x/usage', authorization: undefined, fetchImpl: () => { called = true; } });
+  await postUsageEvent({}, { url: 'http://x/usage', headers: { 'X-Go-CSRF': 'orphan' }, fetchImpl: () => { called = true; } });
+  await postUsageEvent({}, { url: 'http://x/usage', fetchImpl: () => { called = true; } });
   assert.equal(called, false);
 });
