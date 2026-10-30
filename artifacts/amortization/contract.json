@@ -1,8 +1,8 @@
 {
   "version": "0.43.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-10-13T15:55:28.700Z",
-  "checksum": "d4abf8df13aa1e75",
+  "updatedAt": "2026-10-29T13:31:31.089Z",
+  "checksum": "bfb4955165555e8d",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -23,7 +23,6 @@
           "label": "Reactivate",
           "labelKey": "reactivate",
           "visibleWhenFieldTrue": "processed",
-          "preUnpost": true,
           "columnName": "Processed"
         },
         {
@@ -603,7 +602,6 @@
           "label": "Reactivate",
           "labelKey": "reactivate",
           "visibleWhenFieldTrue": "processed",
-          "preUnpost": true,
           "columnName": "Processed"
         },
         {

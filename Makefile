@@ -668,11 +668,12 @@ HOST ?=
 MCP_TARGET = $(or $(PROFILE),$(HOST))
 
 .PHONY: mcp-usage
-mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
+mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1 REVIEWER=<name>] [INCLUDE_REVIEWED=1] [ARGS='...'])
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s mcp-usage-help; exit 0; fi; \
 	if [ -z "$(MCP_TARGET)" ]; then echo "PROFILE (or HOST) is required, e.g. make mcp-usage PROFILE=production"; exit 1; fi; \
 	scripts/mcp-usage-dump.sh $(MCP_TARGET) \
 		$(if $(filter 1,$(MARK_REVIEWED)),--mark-reviewed) \
+		$(if $(REVIEWER),--reviewer '$(REVIEWER)') \
 		$(if $(filter 1,$(INCLUDE_REVIEWED)),--include-reviewed) \
 		$(if $(filter 1,$(COUNT)),--count) \
 		$(if $(SINCE),--since $(SINCE)) \

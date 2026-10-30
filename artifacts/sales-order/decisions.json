@@ -139,7 +139,8 @@
           "displayLogic": null,
           "section": "principal",
           "seq": 1,
-          "selectorFilter": "isCustomer=Y"
+          "selectorFilter": "isCustomer=Y",
+          "agentPrompt": "The customer, as its id plus the name in businessPartner$_identifier. Names can repeat: to tell two apart, read their searchKey and taxID with one etendo_list on contacts/businessPartner filtered by id: {in: [ids]}."
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -206,7 +207,8 @@
           "gridOrder": 1,
           "searchable": true,
           "section": "principal",
-          "seq": 3
+          "seq": 3,
+          "agentPrompt": "The order date. If omitted the server proposes today, as the form does; send the date the user gives when it is another one. It is also the order's accounting date: accountingDate always takes the same day (the app has one date), so changing orderDate moves accountingDate too and the answer shows both."
         },
         "scheduledDeliveryDate": {
           "displayLogic": null,
@@ -318,7 +320,8 @@
         },
         "etgoTotalDiscount": {
           "visibility": "editable",
-          "form": false
+          "form": false,
+          "agentPrompt": "Whole-document discount, in percent. It applies to the grand total with tax: grandTotalAmount = line totals with tax x (1 - etgoTotalDiscount / 100). While the document is a draft the discount shows only on grandTotalAmount (also in the etendo_update answer); summedLineAmount and the lines do not change. On Complete it becomes one negative discount line per tax group, proportional to that group's net amount."
         },
         "eTGOCurrencyRate": {
           "visibility": "editable",
@@ -329,6 +332,7 @@
     },
     "lines": {
       "javaQualifier": "orderLineHandler",
+      "agentPrompt": "A single line of a booked order cannot be cancelled, as in the app. While the order has no shipment or invoice: reactivate it (documentAction RE), delete or change the line, and book it again (CO). Once it has linked documents: close the order (documentAction CL), which closes what is still pending on every line, not on one.",
       "fields": {
         "priceStd": {
           "name": "baseNetUnitPrice",
@@ -411,7 +415,8 @@
             "lineGrossAmount",
             "grossUnitPrice",
             "lineNetAmount"
-          ]
+          ],
+          "agentPrompt": "Normally omit it: the server picks the tax from the product's tax category and the customer's tax category (a customer under 'Recargo de Equivalencia' gets the tax with the surcharge), as the form does. To see or change the options for this line, call etendo_selectors for 'tax' with recordContext {product, businessPartner, orderDate} — not the tax/tax catalogue."
         },
         "listPrice": {
           "grid": true,
@@ -481,7 +486,8 @@
           "form": true,
           "section": "principal",
           "order": 7,
-          "gridOrder": 8
+          "gridOrder": 8,
+          "agentPrompt": "Line total with tax. On a voided order (header documentStatus VO) it keeps the original amount while orderedQuantity and lineNetAmount drop to 0: the line no longer counts, so read the header's documentStatus before adding lines up."
         },
         "grossListPrice": {
           "visibility": "system"

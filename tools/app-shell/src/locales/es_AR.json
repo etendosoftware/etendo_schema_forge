@@ -3196,6 +3196,10 @@
       "label": "Contabilizado",
       "description": "Estado contable en el que figura si una transacción específica fue anotada en el Libro Mayor."
     },
+    "EM_Etblkp_Accountingstatus": {
+      "label": "Estado contable",
+      "description": "Estado contable del registro: si fue anotado en el Libro Mayor."
+    },
     "M_ProductionPlan_ID": {
       "label": "Plan de producción",
       "description": "Propuesta de cómo llevar a cabo la producción."
@@ -16926,6 +16930,7 @@
     "difference": "Diferencia",
     "journalUnbalancedSaveBlocked": "El debe y el haber deben ser iguales antes de guardar",
     "saveMissingRequired": "Completa primero los campos obligatorios: {fields}",
+    "saveCalculating": "Calculando…",
     "journalUnbalancedCompleteBlocked": "El debe y el haber deben ser iguales y distintos de cero antes de completar",
     "totalCredit": "Total haber",
     "totalDebit": "Total debe",
@@ -20103,6 +20108,7 @@
     "backendError.ibanRequired": "Para generar la Cuenta Mostrada con IBAN es necesario introducir el IBAN",
     "backendError.genericAccountRequired": "Para generar la Cuenta Mostrada con Número de Cuenta Genérica es necesario introducir un Número de Cuenta Genérica",
     "backendError.countryIban": "Se necesita el País para una cuenta IBAN.",
+    "backendError.accountingAccessDenied": "Tu rol no puede ver ni modificar la contabilidad. Pedile a un administrador que active Mostrar campos contables.",
     "backendError.countryRequired": "El país es obligatorio",
     "backendError.ibanInvalid": "El código IBAN introducido no es correcto. Por favor revise el código IBAN y el país definido para el banco",
     "backendError.swiftRequired": "Para generar la Cuenta Mostrada con Código SWIFT es necesario introducir un Código SWIFT y el Número de Cuenta Genérica",
@@ -21443,6 +21449,7 @@
     "fm.catalog.title": "Catálogo de modelos",
     "fm.catalog.sub": "Activa o desactiva los modelos fiscales que necesitas presentar.",
     "fm.catalog.active_count": "modelos activos",
+    "fm.catalog.save_unavailable": "No se pudo cargar el catálogo de modelos, así que los cambios no se guardaron. Recargá la página e intentá de nuevo.",
     "fm.catalog.activate": "Activar",
     "fm.catalog.deactivate": "Desactivar",
     "fm.catalog.cat.iva": "IVA",
@@ -21901,7 +21908,7 @@
     "currencyRateSelectPlaceholder": "Seleccionar {label}...",
     "currencyRateEdit": "Editar tipo de cambio",
     "currencyRateNotAvailable": "No hay tipo de cambio para esta fecha. Podés indicarlo manualmente.",
-    "currencyRatesAtDate": "Tipos al {date}",
+    "currencyRatesAtDate": "Conversiones al {date}",
     "stepperDecrease": "Disminuir",
     "stepperIncrease": "Aumentar",
     "rectifySelectedCount": "{count} seleccionadas",

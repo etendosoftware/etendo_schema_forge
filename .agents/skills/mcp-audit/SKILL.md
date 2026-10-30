@@ -61,7 +61,7 @@ Exported columns (from `scripts/mcp-usage-dump.sh`):
 |--------|---------|
 | `etgo_mcp_usage_id` (`id`) | Row id |
 | `created` | Timestamp of the call (DB server time) |
-| `isactive` (`reviewed`) | **Repurposed as a review flag**: `'Y'` = not reviewed, `'N'` = reviewed. Default exports only `'Y'` |
+| `reviewed`, `reviewed_by` | Review state: `Status = 'R'` = reviewed (`NULL` = pending), `Reviewed_By` = reviewer name. Default exports only pending rows. `isactive` is not the review marker any more |
 | `ad_client_id`, `client` | Tenant id and name |
 | `session_key` | MCP session; groups the calls of one agent conversation. Use it to replay a whole flow in order |
 | `row_type` | `tool_call` or `feedback` |
@@ -80,9 +80,10 @@ Exported columns (from `scripts/mcp-usage-dump.sh`):
 | `triage_task` | Feedback only: key of the private Jira task the bot opened (`ETP-...`) |
 | `triaged` | Feedback only: when the bot processed the row; null = not triaged yet |
 
-**Feedback arrives triaged.** An external bot (`etendo-bots`, `bin/bug-triage`) polls the
-`McpFeedbackPending` webhook every 15 minutes, classifies each new feedback row into a cell, assigns
-it when it is sure, opens a GitHub pre-ticket and a Jira task, and writes the result back with the
+**Feedback arrives triaged.** An external bot, the bug router (`etendo-bots`, `bin/bug-router`),
+polls the `McpFeedbackPending` webhook every 15 minutes, classifies each new feedback row into a
+cell, assigns it when it is sure, opens a GitHub pre-ticket (and, optionally, a Jira task), and
+writes the result back with the
 `McpFeedbackTriage` webhook (the `triage_*` columns and `triaged`). The triage is the bot's job, not
 this audit's: read those columns, never write them. They are independent of the review flag
 (`isactive`): a triaged row is still unreviewed until someone reviews it.

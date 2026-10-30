@@ -1,8 +1,8 @@
 {
   "version": "0.31.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-10-22T18:20:38.653Z",
-  "checksum": "24812b657b337e57",
+  "updatedAt": "2026-10-28T17:26:17.716Z",
+  "checksum": "92348c7b02c3e2b1",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -702,7 +702,6 @@
             }
           }
         ],
-        "javaQualifier": "salesQuotationHeaderHandler",
         "draftMode": {
           "enabled": true,
           "processField": "documentAction",
@@ -2000,8 +1999,7 @@
             "visibility": "system",
             "required": false
           }
-        ],
-        "javaQualifier": "salesQuotationHeaderHandler"
+        ]
       },
       "quotationLine": {
         "tableName": "C_OrderLine",

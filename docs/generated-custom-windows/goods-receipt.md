@@ -492,7 +492,7 @@ for "fully invoiced" — and, on the bulk path below, rather than silently degra
 into "no cap at all" (which would re-invoice the full quantity instead of failing).
 
 **To modify a generated invoice**, the user reactivates it: `purchase-invoice`
-exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+exposes a `reactivate` menu action (`documentAction: 'RE'`,
 visible at `DocStatus='CO'`), now the only route back to `DR`.
 
 ### Manual verification
@@ -793,3 +793,14 @@ is (`availableNow` says so for a given record). A `post` right after completing 
 `unpost` of a receipt that is not posted is refused with **422** (`ETGO_GoodsUnpostNotPosted`) instead of a silent "0 entries removed".
 With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing is left to invoice or only a draft invoice covers the rest (the reason says which).
 
+## Agent prompts on lines — ETP-5852
+
+`entities.lines.agentPrompt` says lots, serial numbers and expiry dates are not handled in Etendo GO (the line's `attributeSetValue` is discarded in the UI too), so agents tell the user instead of looking for a field (M-23). `salesOrderLine.agentPrompt` says the receipt line has no price of its own and points to the purchase order line (M-33).
+
+## Agent prompt on the movement date — ETP-5852
+
+`movementDate.agentPrompt`: a completed receipt keeps its date, as in the app; it is corrected with `createPurchaseReturn` and a new receipt. Feedback M-163.
+
+## Alternative units hidden from agents — ETP-5852
+
+`lines.operativeUOM` and `lines.operativeQuantity` carry a field-level `MCP_CONFIG` (`fields.visibility:"discarded"`, `included:false`): agents do not see them in `etendo_schema`, cannot send them, and `etendo_defaults` no longer offers them. Exposed, it suggested an unrelated operative unit (Centímetro for a beer). The app and REST are unchanged; the form already hid them. Feedback M-119.
