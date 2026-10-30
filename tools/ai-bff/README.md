@@ -84,10 +84,14 @@ BFF generates a fallback session ID for older clients that omit the header.
 
 Every model turn — agent chat and page help — is recorded as one
 `ai.agent.message` event in `ETGO_USAGE_EVENT` (`src/usage.js`). The BFF posts it
-to `POST /sws/neo/usage` with the **caller's own Bearer token**, the same one it
-forwards to the MCP endpoint, so the row lands under the right user, role and
-tenant; the body cannot name them. The URL is derived from `ETENDO_MCP_URL`
-(`…/sws/mcp` → `…/sws/neo/usage`); set `ETENDO_USAGE_URL` to override it.
+to `POST /sws/neo/usage` with the **caller's own credential**, exactly the headers
+it forwards to the MCP endpoint (`credentialHeaders`): the Bearer token, or under
+the cookie scheme the session cookie, `X-Go-CSRF`, `Origin` and `Referer`. The row
+therefore lands under the right user, role and tenant whichever scheme the SPA
+uses; the body cannot name them. Until this was shared, a cookie session (the
+SPA's default since ETP-4576) recorded nothing at all. The URL is derived from
+`ETENDO_MCP_URL` (`…/sws/mcp` → `…/sws/neo/usage`); set `ETENDO_USAGE_URL` to
+override it.
 
 | Field | Value |
 |---|---|
@@ -96,10 +100,21 @@ tenant; the body cannot name them. The URL is derived from `ETENDO_MCP_URL`
 | `outcome` | `ok` from `onFinish`; `error` from `onError` or `onAbort` (timeout), with the usage summed over the steps that did finish |
 | `sessionKey` | the `x-opencode-session` value (or the BFF fallback ID) |
 | `durationMs` | from the moment the BFF read the request |
+| `costUsd` | what the provider charged for the turn, in USD; only when the provider reports a cost. Stored in its own column `COST_USD`, not in `properties` |
 | `properties` | `model`, `inputTokens`, `outputTokens`, `cachedInputTokens` (only when the provider reports cache reads), `steps`, `toolCalls`, `finishReason` |
 
 The token keys are shared with the support chat's `ai.support.message`, so both
 aggregate with the same `(properties::jsonb ->> 'inputTokens')::numeric`.
+
+`costUsd` is what the provider charged for the turn, in USD, summed over its steps.
+LiteLLM (`llm.etendo.software`) returns it as `usage.cost` in the last chunk of
+each streamed response; the SDK keeps it per step in `step.usage.raw`, never in
+the aggregated total. A streamed response only carries usage when the request
+asks for it, so `opencodeProviderOptions` sets `includeUsage: true`
+(`stream_options.include_usage`) — without it every turn recorded 0 tokens.
+A provider that reports no cost leaves `costUsd` out rather than recording a
+free turn. NEO keeps it in `ETGO_USAGE_EVENT.COST_USD` (a column, so billing
+can sum it: the `aiSpend` billing resource); a negative value is dropped there.
 
 Recording never touches the chat: the POST is fire-and-forget (never awaited
 before the stream ends), bounded by a 3 s timeout, counted at most once per
