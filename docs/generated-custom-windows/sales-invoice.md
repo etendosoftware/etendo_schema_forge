@@ -2332,7 +2332,9 @@ ticked, the AEAT349 trigger accepts only the original invoice's fiscal year and 
 draft leaves year and period empty unless the user changes the period, so each created row takes its
 own original's year and month. If the user picks the quarter, it is sent to every row, so originals
 from different quarters (or years) need separate rectificatives; an unposted original stops the
-fan-out at that row with the translated toast. Picker, defaults, error handling and accepted
+fan-out at that row with the translated toast. A row (or the completion of the rectificative) is
+also refused with `EM_AEAT349_CORR_NOT_POSTED` while an earlier 349 corrective of the same operator,
+year and period is completed but not posted; posting that invoice clears it. Picker, defaults, error handling and accepted
 limitations are described once for both windows in `purchase-invoice.md`, section
 "Factura Rectificativa — ETP-4737" (the ETP-5059 bullet).
 
