@@ -737,3 +737,7 @@ With a `read-only` tier, `PeriodsExpandablePanel` (reached through `SecondaryPan
 ## Agent prompt on fiscal-calendar/year — ETP-5852
 
 `fiscal-calendar` `entities.year.agentPrompt` sends an agent that wants to know whether a date is in an open period to `open-close-period-control/periodControl` filtered by `startingDate`/`endingDate`, instead of walking calendar → year → period. Feedback M-43.
+
+## Fiscal years across calendars for agents — ETP-6036
+
+`fiscal-calendar/year` is a child of `calendar`, and `calendar` is excluded from the spec, so an agent had no parent id to pass and `etendo_list` on `year` always answered `parent_required` (pre-ticket etendo-ai#50). The `year` entity now carries `MCP_CONFIG.parent.allParents` (com.etendoerp.go `ETGO_SF_ENTITY`, MCP only; the UI is unchanged): `etendo_list(spec:"fiscal-calendar", entity:"year", allParents:true)` lists the years of every calendar of the client, each row naming its `calendar`. Without `allParents` the call still answers `parent_required`, now with a hint that names `allParents`.
