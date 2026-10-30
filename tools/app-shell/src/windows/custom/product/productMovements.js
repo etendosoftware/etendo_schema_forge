@@ -59,12 +59,34 @@ export function buildMovementsCriteria({ direction = 'all', dateRange = null, wa
   return criteria;
 }
 
+// Several movements of a product share a movement date (it carries no time), so the date alone leaves their
+// order to the database. The stock after each movement is summed by (movement date, processing time, id);
+// ordering by the same keys keeps the list reading in the order the stock was computed, and keeps the
+// pages stable. Another column leaves its ties to the most recent movement first.
+function tieBreakers(sortKey, direction) {
+  const dir = sortKey === 'date' && direction === 'asc' ? '' : '-';
+  const keys = ['transactionProcessDate', 'id'].map((key) => `${dir}${key}`);
+  return sortKey === 'date' ? keys : ['-movementDate', ...keys];
+}
+
+// A list of sort criteria is read with one convention: a `-` prefix for descending, none for ascending.
+// `resolveBackendSort` answers `<column> <direction>` for a plain column, so it is put in that convention
+// before the tie-breakers are appended; the two forms are not mixed in one `_sortBy`.
+function prefixed(sortBy) {
+  const [, column, direction] = /^(\S+) (asc|desc)$/.exec(sortBy) ?? [];
+  if (!column) return sortBy;
+  return direction === 'desc' ? `-${column}` : column;
+}
+
 /** Path + query string of one page of the product's transactions (`start` is the first row, 0-based). */
 export function buildMovementsQuery({ productId, filters = {}, sort = MOVEMENTS_DEFAULT_SORT, start = 0, pageSize = MOVEMENTS_PAGE_SIZE }) {
-  const column = SORT_COLUMNS[sort?.key] ?? SORT_COLUMNS[MOVEMENTS_DEFAULT_SORT.key];
+  // An unknown column falls back to the default sort, tie-breakers included.
+  const sortKey = isMovementsSortKey(sort?.key) ? sort.key : MOVEMENTS_DEFAULT_SORT.key;
+  const column = SORT_COLUMNS[sortKey];
   const params = new URLSearchParams();
   params.append('parentId', productId);
-  params.append('_sortBy', resolveBackendSort(column, sort?.direction ?? MOVEMENTS_DEFAULT_SORT.direction));
+  const direction = sort?.direction ?? MOVEMENTS_DEFAULT_SORT.direction;
+  params.append('_sortBy', [prefixed(resolveBackendSort(column, direction)), ...tieBreakers(sortKey, direction)].join(','));
   params.append('_startRow', String(start));
   params.append('_endRow', String(start + pageSize - 1));
   const criteria = buildMovementsCriteria(filters);

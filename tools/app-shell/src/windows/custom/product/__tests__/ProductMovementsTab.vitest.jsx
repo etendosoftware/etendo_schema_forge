@@ -217,7 +217,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     await waitFor(() => expect(pageRequests()).toHaveLength(1));
     const params = query(pageRequests()[0]);
     expect(params.get('parentId')).toBe('p1');
-    expect(params.get('_sortBy')).toBe('movementDate desc');
+    expect(params.get('_sortBy')).toBe('-movementDate,-transactionProcessDate,-id');
     expect(params.get('_startRow')).toBe('0');
     expect(params.get('_endRow')).toBe('49');
     const criteria = JSON.parse(params.get('criteria'));
@@ -317,7 +317,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
 
     await waitFor(() => expect(pageRequests()).toHaveLength(2));
     const params = query(pageRequests()[1]);
-    expect(params.get('_sortBy')).toBe('etgoWarehouse$_identifier');
+    expect(params.get('_sortBy')).toBe('etgoWarehouse$_identifier,-movementDate,-transactionProcessDate,-id');
     expect(params.get('_startRow')).toBe('0');
   });
 
@@ -328,7 +328,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     await userEvent.click(screen.getByText('date'));
 
     await waitFor(() => expect(pageRequests()).toHaveLength(2));
-    expect(query(pageRequests()[1]).get('_sortBy')).toBe('movementDate asc');
+    expect(query(pageRequests()[1]).get('_sortBy')).toBe('movementDate,transactionProcessDate,id');
   });
 
   it('does not let the resulting stock be sorted', async () => {

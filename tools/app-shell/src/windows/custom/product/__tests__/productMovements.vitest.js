@@ -19,6 +19,8 @@ const parse = (path) => {
   return { route, params, criteria: params.has('criteria') ? JSON.parse(params.get('criteria')) : [] };
 };
 
+const TIE_DESC = '-movementDate,-transactionProcessDate,-id';
+
 describe('productMovements (ETP-5889)', () => {
   describe('isStorableProduct', () => {
     it('shows the tab for a stocked item', () => {
@@ -100,7 +102,7 @@ describe('productMovements (ETP-5889)', () => {
       const { route, params, criteria } = parse(buildMovementsQuery({ productId: 'p1' }));
       expect(route).toBe('/transactions');
       expect(params.get('parentId')).toBe('p1');
-      expect(params.get('_sortBy')).toBe('movementDate desc');
+      expect(params.get('_sortBy')).toBe(`-movementDate,-transactionProcessDate,-id`);
       expect(params.get('_startRow')).toBe('0');
       expect(params.get('_endRow')).toBe('49');
       expect(criteria).toEqual([]);
@@ -114,21 +116,36 @@ describe('productMovements (ETP-5889)', () => {
 
     it('sorts the warehouse by its name, not by its id', () => {
       expect(parse(buildMovementsQuery({ productId: 'p1', sort: { key: 'warehouse', direction: 'asc' } })).params.get('_sortBy'))
-        .toBe('etgoWarehouse$_identifier');
+        .toBe(`etgoWarehouse$_identifier,${TIE_DESC}`);
       expect(parse(buildMovementsQuery({ productId: 'p1', sort: { key: 'warehouse', direction: 'desc' } })).params.get('_sortBy'))
-        .toBe('-etgoWarehouse$_identifier');
+        .toBe(`-etgoWarehouse$_identifier,${TIE_DESC}`);
     });
 
     it('sorts every other column by its physical backend column', () => {
       const sortBy = (key, direction) => parse(buildMovementsQuery({ productId: 'p1', sort: { key, direction } })).params.get('_sortBy');
-      expect(sortBy('type', 'asc')).toBe('etgoDocKind asc');
-      expect(sortBy('quantity', 'desc')).toBe('movementQuantity desc');
-      expect(sortBy('cost', 'asc')).toBe('transactionCost asc');
+      expect(sortBy('type', 'asc')).toBe(`etgoDocKind,${TIE_DESC}`);
+      expect(sortBy('quantity', 'desc')).toBe(`-movementQuantity,${TIE_DESC}`);
+      expect(sortBy('cost', 'asc')).toBe(`transactionCost,${TIE_DESC}`);
     });
 
     it('falls back to the default sort for an unknown column', () => {
       expect(parse(buildMovementsQuery({ productId: 'p1', sort: { key: 'stockAfter', direction: 'asc' } })).params.get('_sortBy'))
-        .toBe('movementDate asc');
+        .toBe('movementDate,transactionProcessDate,id');
+    });
+
+    it('breaks the ties of the date sort by processing time and id, in the direction of the sort', () => {
+      const sortBy = (direction) => parse(buildMovementsQuery({ productId: 'p1', sort: { key: 'date', direction } })).params.get('_sortBy');
+      expect(sortBy('desc')).toBe('-movementDate,-transactionProcessDate,-id');
+      expect(sortBy('asc')).toBe('movementDate,transactionProcessDate,id');
+    });
+
+    it('breaks the ties of any other column with the most recent movement first, whatever the direction', () => {
+      for (const key of ['type', 'warehouse', 'quantity', 'cost']) {
+        for (const direction of ['asc', 'desc']) {
+          const sortBy = parse(buildMovementsQuery({ productId: 'p1', sort: { key, direction } })).params.get('_sortBy');
+          expect(sortBy.endsWith(`,${TIE_DESC}`)).toBe(true);
+        }
+      }
     });
 
     it('does not offer to sort the resulting stock', () => {
