@@ -356,7 +356,12 @@ describe('FmModel349Page — totals card', () => {
   it('renders total rows for each KEY_ID (E, S, A, I)', () => {
     const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     const rows = container.querySelectorAll('.fm-349-total-row');
-    expect(rows.length).toBe(4); // E, S, A, I
+    // ETP-5725 real-world follow-up — RectificativeSubtotalCard now always renders alongside
+    // TotalsCard (it used to hide itself without a rectificativeSummary, which `makeDecl()`'s
+    // default fixture never supplies): TotalsCard's own 4 (E,S,A,I) + RectificativeSubtotalCard's
+    // 4 per-key rows (no grand-total row — Ruben's final call keeps that total in the list only)
+    // = 8. Both cards share the `.fm-349-total-row` class.
+    expect(rows.length).toBe(8);
   });
 });
 

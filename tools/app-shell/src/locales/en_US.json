@@ -22855,7 +22855,7 @@
     "fm.m349.totals.title": "Totals by key",
     "fm.m349.rectificative": "Corrective",
     "fm.m349.rectificative_period": "Corrective {period}",
-    "fm.m349.rectif_subtotal.title": "Corrective subtotal",
+    "fm.m349.rectif_subtotal.title": "Rectified bases by key",
     "fm.m349.totals.info": "Calculated from operators. Not editable. Modify operators to adjust totals.",
     "fm.m349.totals.readonly": "read only",
     "fm.m349.totals.sub": "Calculated from operators. Not editable — modify operators to adjust totals.",

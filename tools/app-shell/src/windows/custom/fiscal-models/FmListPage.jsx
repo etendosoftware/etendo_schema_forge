@@ -276,7 +276,14 @@ function InfoResult({ result, t }) {
 // panel's pre-existing z-index bug (see FmInfoTooltip's own comment for the root cause).
 function RectificationsCell({ result, t }) {
   const amount = result?.rectifications ?? 0;
-  if (amount <= 0) return null;
+  // ETP-5725 — a no-rectifications row reads a muted "—", never a fully blank cell, the exact
+  // same visual treatment `InfoResult` already uses for its own zero-amount case (above) —
+  // reused verbatim rather than inventing a second one. Deliberately gated on `hasRectifications`
+  // (whether any rectificative operator row exists), NOT on `amount <= 0` — a declaration can in
+  // principle have real corrective rows whose `correctedBase` values sum to exactly 0,00 (an edge
+  // case, but a real one), and that must still show "0,00 €", not collapse to "—" as if there
+  // were no rectifications at all.
+  if (!result?.hasRectifications) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   // Pre-formatted by `deriveListResult349` (the ONLY place that reads the 349-specific
   // (year, period) row shape) — this generic, cross-model page renders a plain string, the
   // same contract `labelKey` already uses for the 390's model-specific badge text above.

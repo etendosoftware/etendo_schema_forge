@@ -40,8 +40,8 @@ export function isRectificativeOp(op) {
  * operator rows, and nothing else. Shared verbatim by the detail page's "Total operaciones"
  * KPI (`FmModel349Page.jsx`) and the list's "Resultado" column (`listBehavior349.js`).
  *
- * Corrective rows carry SIGNED deltas and are excluded here; their own subtotal is
- * `sumAbsRectificativeTotals` below, which is reported separately and never added in.
+ * Corrective rows carry SIGNED deltas and are excluded here; their own total is
+ * `sumRestatedRectifications` below, which is reported separately and never added in.
  */
 export function sum349OperationsBase(operators) {
   return (operators ?? [])
@@ -50,18 +50,71 @@ export function sum349OperationsBase(operators) {
 }
 
 /**
- * The declaration's RECTIFICATIONS amount, from the payload's `rectificativeSummary`
- * (`{ totalE, totalS, totalA, totalI }`).
+ * ETP-5725 real-world follow-up (QA CP-19) — superseded `sumAbsRectificativeTotals` below
+ * (removed, see git history): that function summed `Math.abs` of the backend's per-key SIGNED
+ * DELTAS (`rectificativeSummary`), which is a wrong BASE QUANTITY, not an aggregation-strategy
+ * bug. Verified against a real, multi-record declaration (ETP-5725): the AEAT's own "Resumen de
+ * la declaración" screen reported "Importe de las rectificaciones: 2.152,00", matching EXACTLY
+ * the sum of the three records' RESTATED ("Base imponible rectificada") bases — 1.608,00 +
+ * 176,00 + 368,00 — never a delta, never an abs-per-key sum, never a signed net; none of those
+ * combinations can reproduce 2.152,00 from the numbers available. The abs-delta sum for that
+ * same declaration read 452,00 (and a signed net would have read -352,00) — neither close.
  *
- * Summed via `Math.abs` per key, which is the same anti-netting rule
- * `RectificativeSubtotalCard` (`FmModel349Page.jsx`) already documents for rendering this very
- * object: E/S are entregas and A/I adquisiciones, and the AEAT never nets one against the
- * other — without the `abs` a -30 sales correction offset by a +30 purchase one would
- * collapse to 0 and the row would read as having no rectifications at all.
+ * `correctedBase` (backend, `Fiscal349BoxesHandler#appendOperators`) is the per-row fix: the
+ * restated total itself, `former + delta`, exposed alongside (never replacing) the existing
+ * signed-delta `base` — the Operadores tab's per-row "Base imponible" display for a corrective
+ * row still needs that delta ("what this one record changed") and is untouched by any of this.
+ *
+ * This is now THE single reduction for "the declaration's real rectifications amount" — Σ
+ * `correctedBase` across every corrective row, no grouping, no sign games. Used by the list's
+ * "Rectificaciones" column (`listBehavior349.js`) AND the detail page's "Subtotal
+ * rectificativas" card's own grand total (`FmModel349Page.jsx`, `RectificativeSubtotalCard`) —
+ * list and detail now compute the identical number from the identical payload, by construction,
+ * the same discipline `sum349OperationsBase` already established for the operations total.
  */
-export function sumAbsRectificativeTotals(rectificativeSummary) {
-  return ['totalE', 'totalS', 'totalA', 'totalI']
-    .reduce((sum, k) => sum + Math.abs(parseFloat(rectificativeSummary?.[k]) || 0), 0);
+export function sumRestatedRectifications(operators) {
+  return (operators ?? [])
+    .filter(isRectificativeOp)
+    .reduce((sum, op) => sum + (parseFloat(op?.correctedBase) || 0), 0);
+}
+
+/** The four AEAT349 tributary keys, in the order `RectificativeSubtotalCard` renders them —
+ * mirrors `Fiscal349BoxesHandler`'s `SUMMARY_KEYS` / `FmModel349Page.jsx`'s local `KEY_IDS`. */
+const RECTIF_KEY_IDS = ['E', 'S', 'A', 'I'];
+
+/**
+ * `sumRestatedRectifications`'s per-key breakdown — the restated ("corrected") base, grouped by
+ * AEAT349 key, over every corrective row. Partitioning the same `correctedBase` values by key
+ * and summing within each is mathematically identical to summing them all directly, so
+ * `Object.values(rectifiedBaseByKey(operators)).reduce((s, v) => s + v, 0)` ALWAYS equals
+ * `sumRestatedRectifications(operators)` — no separate reconciliation between the card and the
+ * list is possible, by construction, not by convention.
+ *
+ * This is what `RectificativeSubtotalCard` (`FmModel349Page.jsx`) now reads INSTEAD of the
+ * backend's `rectificativeSummary` (the delta-based per-key map) for its own per-key rows.
+ * `rectificativeSummary` is left completely alone on the backend — nothing else there reads it
+ * today, but it is still the correct, documented shape of a stable API field, and removing it
+ * is not this change's business.
+ *
+ * Computed client-side from `operators[]`, the same way `sum349OperationsBase` and
+ * `sumRestatedRectifications` already are, rather than as a new backend aggregate: one fewer
+ * payload field, and it can never drift from the row-level `correctedBase` it is built from.
+ *
+ * Unlike `rectificativeSummary`'s deltas (legitimately negative), a restated base is a real
+ * AEAT amount and the AEAT's own convention is explicit — "Todos los importes serán
+ * positivos" — so these are rendered as plain amounts with NO sign-based color (see
+ * `RectificativeSubtotalCard`'s own comment for why the old red-for-negative styling is gone).
+ */
+export function rectifiedBaseByKey(operators) {
+  const totals = {};
+  RECTIF_KEY_IDS.forEach(k => { totals[k] = 0; });
+  for (const op of operators ?? []) {
+    if (!isRectificativeOp(op)) continue;
+    const key = op?.key;
+    if (key == null || !(key in totals)) continue;
+    totals[key] += parseFloat(op?.correctedBase) || 0;
+  }
+  return totals;
 }
 
 // ── List "Rectificaciones" column (ETP-5725, QA CP-19 follow-up) ───────────
@@ -83,7 +136,7 @@ function monthlyOrQuarterlySortValue(period) {
 /**
  * The distinct `(declaredYear, declaredPeriod)` pairs of this declaration's corrective rows,
  * sorted ascending (year first, then period/quarter within it) — the origins contributing to
- * `sumAbsRectificativeTotals`.
+ * `sumRestatedRectifications`.
  *
  * A corrective row's `Year`/`Period` identify the period it corrects, grouped by the DAO on
  * `(BPId, TaxKey, Year, Period)` — a declaration CAN carry rectifications of more than one

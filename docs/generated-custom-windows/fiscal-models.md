@@ -1215,6 +1215,118 @@ need a three-step chain — is the rectified invoice from an earlier period, doe
 submitted declaration, and did that invoice actually enter it — with real performance implications;
 it needs its own investigation.
 
+**ETP-5725 real-world follow-up — the "Rectificaciones" amount itself was ALSO wrong, a second,
+independent bug behind the same figure.** After CP-19 shipped, Ruben generated a real `.349` file
+and validated it against the actual AEAT Sede portal (preproducción). A declaration with 3
+rectification records read "Importe de las rectificaciones: 2.152,00" on the AEAT's own "Resumen
+de la declaración" screen; Etendo's list read **452,00 €** for the same declaration.
+
+The root cause is a wrong BASE QUANTITY, not an aggregation-strategy bug. The AEAT's record of
+design sums the RAW "Base imponible rectificada" value per record — the restated NEW total base,
+always positive — never a delta, an abs-per-key sum, or a signed net; none of those three
+combinations can ever reproduce the real figure from the numbers the backend was exposing.
+`toSignedDeltaRows`/`appendOperators` only ever forwarded the SIGNED DELTA (`corrected − former`,
+negated) on each corrective row — never the raw `corrected` (restated) amount nor the `former`
+(previously declared) one — so the frontend structurally could not reconstruct the AEAT figure
+from what it was given, no matter how it combined it. This is why the generated `.349` FILE was
+always correct (the classic `AEAT3492010Report` Java report reads `BPFormerAmount` directly from
+the DB, independent of the NEO JSON) while the SPA never could be.
+
+**Verified relationship**, confirmed against `AEAT3492010Report#generateLine2_Corrections`
+bytecode (`corrected = former.subtract(unsignedMagnitude)`, written to file positions 153-165,
+with `former` at 166-178) and against `toSignedDeltaRows`' own javadoc
+(`corrected − former == −unsignedMagnitude`, i.e. `delta = −unsignedMagnitude`): since `base` in
+the JSON is already that negated delta, **`corrected = former + base`**. Verified against Ruben's
+real 3-record declaration to the cent: former 2.010,00 + delta −402,00 = corrected 1.608,00 (key
+S); 264,00 + −88,00 = 176,00 (key E, period 09); 230,00 + 138,00 = 368,00 (key E, period 08) —
+summing to the AEAT's own 2.152,00, where the old abs-delta sum read 452,00 and a signed net would
+have read −352,00 — neither remotely close, because neither is the right quantity.
+
+**The fix.** `AEAT3492010ReportDao.getCorrectiveTaxBaseAmountPerBusinessPartner` already attaches
+`BPFormerAmount` to every corrective row (`buildCorrectiveBpAmountList`) — it was simply never
+forwarded into the JSON. `Fiscal349BoxesHandler#appendOperators` now writes a new `correctedBase`
+field onto every corrective row — `former.add(delta)` — additive only: `base` (the signed delta)
+is untouched, still read by the Operadores tab's per-row "Base imponible" display (`-402,00` is
+still exactly what that ONE record changed, a legitimately different view from the restated
+total). The computation was extracted into its own `putCorrectedBaseIfRectificative` helper to
+keep `appendOperators` under the SonarQube cognitive-complexity threshold (java:S3776) — two
+early-exit guards there instead of two more levels of nesting in the per-row loop.
+
+Frontend: `operations349.js` gained `sumRestatedRectifications(operators)` — Σ `correctedBase`
+across every corrective row, no grouping, no sign games — which **replaces**
+`sumAbsRectificativeTotals(rectificativeSummary)` (removed) as the single reduction feeding the
+list's "Rectificaciones" column. A companion `rectifiedBaseByKey(operators)` groups the same
+`correctedBase` values by AEAT349 key.
+
+**"Subtotal rectificativas" was renamed and changed its own meaning, not just its data source.**
+Ruben's reasoning repeats the CP-19 lesson: if the list shows 2.152,00 € but the detail page's
+own card doesn't even sum to that figure (E: 50,00 + S: −402,00 = −352,00, the OLD per-key delta
+card's total, against a real 2.152,00), that is the same list-vs-detail disagreement CP-19 already
+fixed once, now on a different figure. `RectificativeSubtotalCard` (`FmModel349Page.jsx`) now
+reads `rectifiedBaseByKey` instead of the backend's `rectificativeSummary` (delta-based per-key
+map, left completely alone on the backend — nothing else reads it today, but removing a
+documented, stable API field is not this change's business). Partitioning the same per-row
+`correctedBase` values by key and summing within each is mathematically identical to summing them
+all directly (Ruben's real numbers: E 368,00 + 176,00 = 544,00; S 1.608,00; A 0,00; I 0,00; sum
+2.152,00). Title renamed from "Subtotal rectificativas" (ambiguous once the card stopped showing
+deltas — could read as "how much changed") to **"Bases rectificadas por clave"**, same i18n key
+(`fm.m349.rectif_subtotal.title`), new value only.
+
+**A grand-total row went in, then came back out, in the same change.** A first cut drew the
+E/S/A/I sum as its own row at the bottom of this card (reusing the dormant
+`fm-349-total-row--grand` CSS style). Ruben's FINAL call: that total lives ONLY in the list's
+"Rectificaciones" column (the "vista general"), never duplicated inside this per-key card — the
+row and its `fm.m349.rectif_subtotal.total` i18n key are both gone. The card is exactly 4 rows
+(E/S/A/I), now showing restated bases instead of deltas.
+
+Sign/color changed too: a restated base is never negative by AEAT convention ("Todos los importes
+serán positivos"), unlike the old delta (where `-30,00` for a correction removing 3 units of a 10
+EUR product was the expected, valid, red-tinted case) — the red-for-negative styling
+(`fm-349-total-row__amount--negative`) is gone from this card; a genuinely zero key uses the same
+muted `--zero` treatment `TotalsCard` already applies to a zero operations key. The card's own
+`!operators` hide-guard was also removed — `operators` falls back to `MOCK_OPERATORS` at the call
+site and is therefore never nullish by render time, so that guard (mirroring the old `!summary`
+one) was already dead in production; the card now always renders, matching `TotalsCard`'s own
+unconditional style, with all-zero rows when a declaration has no corrective operators at all.
+
+**The Operadores tab's per-row "Base imponible" ALSO switched to the restated base — a reversal
+of this change's own earlier instruction.** The first round of this fix deliberately kept that
+cell on the signed delta ("what this one record changed", a legitimately different view). Ruben's
+final call overturns that: the per-row cell, the per-key card and the list total must all agree
+on the same quantity everywhere in the UI, with no screen showing a different number than
+another. The cell now reads `isRectificativeOp(op) ? (op.correctedBase ?? op.base) : op.base` —
+falling back to the delta only if a legacy/stale payload lacks `correctedBase`, so the cell is
+never blank — and the `fm-349-amount--negative` red styling is gone from it for the same
+"always positive" reason the per-key card dropped it.
+
+**Unchanged, explicitly:** `toSignedDeltaRows` and the `base` (delta) field it still produces on
+every corrective row (needed as the Operadores cell's fallback, and because this is additive, not
+a removal); the backend's `rectificativeSummary` field itself (still computed and emitted, just
+no longer read by the frontend); the `.349` file generator (never touched by any of this — it
+never had the bug); and `em_aeat349_iscorrective` (unchanged, see above).
+
+**Verified against the real, running instance on Ruben's actual 2026/10 declaration (3
+rectification records, the same case used throughout this writeup):**
+- List "Rectificaciones" column: **2.152,00 €** — exact match to the AEAT Sede's own "Importe de
+  las rectificaciones".
+- "Bases rectificadas por clave": E (Entregas) 544,00 € / S (Servicios prestados) 1.608,00 € /
+  A (Adquisiciones) 0,00 € / I (Servicios recibidos) 0,00 € — no grand-total row, summing to
+  2.152,00 € by hand, matching the list.
+- Operadores tab: the 3 rectificative rows read 1.608,00 / 176,00 / 368,00 (the restated bases),
+  no red/negative styling.
+
+One false alarm along the way, worth recording so it isn't rediscovered: after the first
+build+restart cycle, every figure briefly read exactly 0,00/empty (a uniform-zero pattern,
+diagnostic of `correctedBase` being absent rather than miscomputed —
+`rectifiedBaseByKey`/`sumRestatedRectifications` fall back to 0 via `parseFloat(...) || 0` when
+the field is missing). A key-name mismatch was investigated and ruled out (the real, now-cloned
+`AEAT3492010ReportDao.java` source and its deployed `.class` both carry the literal
+`BPFormerAmount`, matching `Fiscal349BoxesHandler`'s `BP_FORMER_AMOUNT` exactly; the deployed
+`Fiscal349BoxesHandler.class` already contained `putCorrectedBaseIfRectificative`/`correctedBase`
+too). The actual cause was an earlier incomplete rebuild/classloader-caching artifact, not a
+logic bug — a full `compile.complete`/`smartbuild` + Tomcat restart resolved it, and the figures
+above are from that clean rebuild.
+
 **QA CP-20 — the confirmation popup must close on BOTH outcomes.** The toast above was shown
 *underneath a still-open modal*: `handleConfirmReactivate` cleared `reactivateTarget` only inside
 its `result.ok` branch, so every rejected reactivation (the common

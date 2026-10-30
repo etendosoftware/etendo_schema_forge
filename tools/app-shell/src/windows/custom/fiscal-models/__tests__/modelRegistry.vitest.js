@@ -206,15 +206,21 @@ describe('modelRegistry — bindings', () => {
       summary: { result: 500 }, boxes: { 27: 500 }, sources: [{ id: 'i1' }],
     });
     expect(res303.amount).toBe(500);
+    // ETP-5725 real-world follow-up — `rectifications` now sums `correctedBase` (the restated
+    // AEAT total) across corrective rows, not the backend's signed-delta `rectificativeSummary`
+    // (still present on the payload for the Operadores tab's per-row display, just unread here).
     const res349 = getListBehavior('349').deriveListResult(decl, {
       operators: [
         { key: 'E', base: '10', rectificative: false },
         { key: 'S', base: '5', rectificative: false },
-        { key: 'A', base: '-2.5', rectificative: true },
+        { key: 'A', base: '-2.5', correctedBase: '2.5', rectificative: true },
       ],
       summary: { totalE: '10', totalS: '5' }, rectificativeSummary: { totalA: -2.5 },
     });
-    expect(res349).toEqual({ kind: 'info', amount: 15, rectifications: 2.5, rectificationOriginsLabel: '' });
+    expect(res349).toEqual({
+      kind: 'info', amount: 15, rectifications: 2.5, rectificationOriginsLabel: '',
+      hasRectifications: true,
+    });
   });
 
   // ETP-5716 — 390: the annual result ([86], or [94] in territory mode), informative: only its sign

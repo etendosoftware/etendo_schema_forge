@@ -248,9 +248,13 @@ const REGULAR_OP = {
   bpId: 'bp-1', nif: 'IT12345678901', name: 'Bramini Vino S.r.l.',
   key: 'E', base: '1000.00', vies: 'valid', rectificative: false,
 };
+// ETP-5725 real-world follow-up — `correctedBase` ("Base imponible rectificada") is additive
+// to `base` (the signed delta, still read by the Operadores tab's per-row display and by the
+// badge/filter/search tests below), never a replacement. Simulates a former base of 1000,00
+// corrected down by the -30,00 delta to a restated 970,00.
 const CORRECTIVE_OP = {
   bpId: 'bp-1', nif: 'IT12345678901', name: 'Bramini Vino S.r.l.',
-  key: 'E', base: '-30.00', vies: 'valid', rectificative: true,
+  key: 'E', base: '-30.00', correctedBase: '970.00', vies: 'valid', rectificative: true,
 };
 // ETP-5027 (QA F1): no `total` key — E/S are sales and A/I are purchases, so the
 // backend deliberately emits no grand total for either subtotal object.
@@ -263,10 +267,10 @@ const RECTIF_SUMMARY = {
 // (BPId, TaxKey, Year, Period), so this is what one declaration correcting a
 // partner's 2025/T1 and 2025/T2 sales of goods actually returns.
 const CORRECTIVE_OP_T1 = {
-  ...CORRECTIVE_OP, base: '-30.00', declaredYear: '2025', declaredPeriod: '1T',
+  ...CORRECTIVE_OP, base: '-30.00', correctedBase: '970.00', declaredYear: '2025', declaredPeriod: '1T',
 };
 const CORRECTIVE_OP_T2 = {
-  ...CORRECTIVE_OP, base: '-50.00', declaredYear: '2025', declaredPeriod: '2T',
+  ...CORRECTIVE_OP, base: '-50.00', correctedBase: '950.00', declaredYear: '2025', declaredPeriod: '2T',
 };
 
 const totalOpsKpiValue = () =>
@@ -295,7 +299,12 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     expect(rows[1].className).not.toContain('fm-349-row--rectificative');
   });
 
-  it('renders the negative delta as-is, never absolute', () => {
+  // ETP-5725 real-world follow-up — REVERSES the original ETP-5027 intent this test name
+  // still describes. Ruben's final call: the Operadores row shows the RESTATED base
+  // (`correctedBase`), not the signed delta, so this cell, the per-key card and the list's
+  // total all agree on the same quantity. No more red/negative styling either — a restated
+  // base is never negative by AEAT convention.
+  it('renders the restated base, not the signed delta, with no negative styling', () => {
     render(
       <FmModel349Page
         decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP] } })}
@@ -303,19 +312,19 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
       />
     );
     const rows = document.querySelectorAll('.fm-table tbody tr');
-    expect(rows[1].textContent).toContain('-30');
-    expect(rows[1].querySelector('.fm-349-amount--negative')).not.toBeNull();
+    expect(rows[1].textContent).toContain('970');
+    expect(rows[1].textContent).not.toContain('-30');
+    expect(rows[1].querySelector('.fm-349-amount--negative')).toBeNull();
   });
 
-  it('renders rectificativeSummary as its own subtotal card with the negative per-key delta', () => {
+  // ETP-5725 real-world follow-up — the card now renders the RESTATED base
+  // (`correctedBase`), grouped by key, not the backend's per-key signed delta
+  // (`rectificativeSummary`, no longer read here at all). Verified against Ruben's
+  // own real-world numbers: a positive, non-negative amount, unlike the old delta.
+  it('renders rectifiedBaseByKey as its own subtotal card with the positive restated base', () => {
     render(
       <FmModel349Page
-        decl={makeDecl({
-          _precomputed: {
-            operators: [REGULAR_OP, CORRECTIVE_OP],
-            rectificativeSummary: RECTIF_SUMMARY,
-          },
-        })}
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP] } })}
         {...defaultProps}
       />
     );
@@ -323,33 +332,28 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     const card = screen.getByTestId('card__rectificativeSubtotal');
     expect(card).toBeInTheDocument();
     expect(card.textContent).toContain('fm.m349.rectif_subtotal.title');
-    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('-30');
-    expect(screen.queryByTestId('amount__rectifSubtotal_total')).not.toBeInTheDocument();
+    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('970');
   });
 
-  // ETP-5027 (QA F1) — a "Total rectificativas" row used to sum E+S+A+I, i.e. sales
-  // plus purchases. A -30 sales correction offset by a +30 purchase correction then
-  // rendered "0", hiding two real corrections. The row is gone; both survive per key.
-  it('never sums sales and purchase corrections into a single grand total', () => {
+  // ETP-5027 (QA F1) ORIGINALLY asserted the per-key rows are never collapsed into a
+  // SIGNED-DELTA grand total (a -30 sales correction offset by a +30 purchase one used to
+  // render "0", hiding two real corrections) — still true. ETP-5725's real-world follow-up
+  // changed the underlying quantity (restated base, not delta) but Ruben's FINAL call removed
+  // the grand-total row from this card entirely — that total lives only in the list's
+  // "Rectificaciones" column. So this test now only asserts what the card still does: E and A
+  // stay separate, distinguishable rows.
+  it('keeps sales and purchase corrections as separate rows', () => {
+    const CORRECTIVE_OP_A = { ...CORRECTIVE_OP, key: 'A', correctedBase: '30.00' };
     render(
       <FmModel349Page
-        decl={makeDecl({
-          _precomputed: {
-            operators: [REGULAR_OP, CORRECTIVE_OP],
-            rectificativeSummary: {
-              totalE: '-30.00', totalS: '0.00', totalA: '30.00', totalI: '0.00',
-            },
-          },
-        })}
+        decl={makeDecl({ _precomputed: { operators: [REGULAR_OP, CORRECTIVE_OP, CORRECTIVE_OP_A] } })}
         {...defaultProps}
       />
     );
 
-    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('-30');
+    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('970');
     expect(screen.getByTestId('amount__rectifSubtotal_A').textContent).toBe('30');
-    expect(screen.queryByTestId('amount__rectifSubtotal_total')).not.toBeInTheDocument();
-    expect(screen.getByTestId('card__rectificativeSubtotal').textContent)
-      .not.toContain('rectif_subtotal.total');
+    expect(screen.queryByTestId('amount__rectifSubtotal_grand')).not.toBeInTheDocument();
   });
 
   // A stale/cached payload can still carry the old `total` key. It must be ignored,
@@ -369,14 +373,20 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     expect(screen.queryByTestId('amount__rectifSubtotal_total')).not.toBeInTheDocument();
   });
 
-  it('does not render the subtotal card when there is no rectificativeSummary', () => {
+  // ETP-5725 real-world follow-up — the card no longer hides itself. It used to gate on
+  // `!rectificativeSummary`, which a LIVE compute in fact never leaves null (always a
+  // fully-populated zero-filled object) — so this was already dead in production; the card now
+  // honestly always renders (matching `TotalsCard`'s own unconditional style), with all-zero
+  // rows when the declaration has no corrective operators at all.
+  it('renders the subtotal card with all-zero rows when there are no corrective operators', () => {
     render(
       <FmModel349Page
         decl={makeDecl({ _precomputed: { operators: [REGULAR_OP] } })}
         {...defaultProps}
       />
     );
-    expect(screen.queryByTestId('card__rectificativeSubtotal')).not.toBeInTheDocument();
+    expect(screen.getByTestId('card__rectificativeSubtotal')).toBeInTheDocument();
+    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('0');
   });
 
   it('keeps corrective deltas OUT of the regular totals card and the total-ops KPI', () => {
@@ -443,7 +453,10 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     expect(operatorsKpiValue()).toBe('1');
   });
 
-  it('picks up rectificativeSummary from the compute() response', async () => {
+  // ETP-5725 real-world follow-up — the card now reads `correctedBase` off the live-computed
+  // `operators`, not `rectificativeSummary` (still returned by the compute response, just no
+  // longer consumed by this card).
+  it('picks up correctedBase from the compute() response', async () => {
     compute349Operators.mockResolvedValueOnce({
       operators: [REGULAR_OP, CORRECTIVE_OP],
       rectificativeSummary: RECTIF_SUMMARY,
@@ -453,7 +466,7 @@ describe('FmModel349Page — rectificative operator rows (ETP-5027)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('card__rectificativeSubtotal')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('-30');
+    expect(screen.getByTestId('amount__rectifSubtotal_E').textContent).toBe('970');
   });
 
   it('the existing key filter picks corrective rows up for free', () => {
@@ -511,12 +524,14 @@ describe('FmModel349Page — several corrected periods for one operator (QA F4)'
     Array.from(document.querySelectorAll('.fm-table tbody tr button[role="checkbox"]'));
   const isChecked = (el) => el.getAttribute('aria-checked') === 'true';
 
+  // ETP-5725 real-world follow-up — each row's own amount is now its RESTATED base
+  // (`correctedBase`), not its delta, following the same reversal as the test above.
   it('renders one row per corrected period, each with its own amount', () => {
     renderTwoPeriods();
     const rows = document.querySelectorAll('.fm-table tbody tr');
     expect(rows).toHaveLength(3);
-    expect(rows[1].textContent).toContain('-30');
-    expect(rows[2].textContent).toContain('-50');
+    expect(rows[1].textContent).toContain('970');
+    expect(rows[2].textContent).toContain('950');
   });
 
   // Without this the two rows are visually identical and the user cannot tell which

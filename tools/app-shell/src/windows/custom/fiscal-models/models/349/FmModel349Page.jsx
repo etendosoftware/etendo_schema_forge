@@ -13,7 +13,7 @@ import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData, RECEIPT_ATTACHMENT_CONFIG } from '../../fiscalModelsUtils.js';
-import { isRectificativeOp, sum349OperationsBase } from './operations349.js';
+import { isRectificativeOp, sum349OperationsBase, rectifiedBaseByKey } from './operations349.js';
 import { FORMER_STATEMENT_LENGTH, isValidFormerStatement, sanitizeFormerStatementInput } from '../../formerStatement.js';
 import { invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
@@ -181,7 +181,7 @@ function ViesBadge({ status }) {
   return <span className={`fm-vies fm-vies--${cls}`}>{icon} {t(`fm.m349.vies.${status ?? 'pending'}`)}</span>;
 }
 
-function TotalsCard({ operators, rectifSummary, t }) {
+function TotalsCard({ operators, t }) {
   // Corrective rows carry signed deltas and are summarized separately in
   // RectificativeSubtotalCard — folding them in here would silently net them
   // off against the regular totals, which is exactly what must not happen.
@@ -212,39 +212,61 @@ function TotalsCard({ operators, rectifSummary, t }) {
           </div>
         ))}
       </div>
-      <RectificativeSubtotalCard summary={rectifSummary} t={t} data-testid="RectificativeSubtotalCard__346dd5" />
+      <RectificativeSubtotalCard operators={operators} t={t} data-testid="RectificativeSubtotalCard__346dd5" />
     </div>
   );
 }
 
-// ETP-5027 — `rectificativeSummary` from the operators endpoint, rendered as its
-// own card so corrective deltas stay visually and numerically separate from the
-// regular totals above. Amounts are SIGNED deltas and are usually negative (a
-// rectification removing 3 units of a 10 EUR product reports -30) — they are
-// rendered as-is through the canonical formatter, never Math.abs()'d, because a
-// negative subtotal is the expected, valid case and not an error state.
+// ETP-5725 real-world follow-up (QA CP-19) — this card used to render `rectificativeSummary`
+// (the backend's per-key SIGNED DELTA map) as "Subtotal rectificativas". Ruben validated a real
+// declaration against the actual AEAT Sede portal: the AEAT's own "Resumen de la declaración"
+// reports "Importe de las rectificaciones" as the sum of the RESTATED ("Base imponible
+// rectificada") amounts, never the deltas — and the per-key delta card's own total didn't even
+// sum to that figure (E: 50,00 + S: -402,00 = -352,00, against a real 2.152,00). So the card now
+// reads `rectifiedBaseByKey` — `correctedBase` (ETP-5725, `Fiscal349BoxesHandler#appendOperators`)
+// grouped by key — which is the SAME reduction `sumRestatedRectifications` applies ungrouped for
+// the list's "Rectificaciones" column. Partitioning the same per-row values by key and summing
+// within each is mathematically identical to summing them all directly, so this card's own total
+// (E 544,00 + S 1.608,00 + A 0,00 + I 0,00 = 2.152,00, Ruben's real numbers) ALWAYS equals the
+// list figure — by construction, not by a second reconciliation.
 //
-// Deliberately per-key ONLY, with no "Total rectificativas" row. E/S are entregas
-// (sales) and A/I are adquisiciones (purchases); the AEAT never nets one against
-// the other, so E+S+A+I is not a quantity that means anything. An earlier revision
-// showed that sum and produced figures like "-32,00 + -5,00 = -37,00", and would
-// have rendered "0,00" for a -30 sales correction offset by a +30 purchase
-// correction. `summary` above has always omitted a grand total for the same
-// reason; the backend now emits both subtotals through one shared shape
-// (`buildKeyTotals`), so `summary.total` is never present.
-function RectificativeSubtotalCard({ summary, t }) {
-  if (!summary) return null;
-  const rows = KEY_IDS
-    .map(k => [k, summary[`total${k}`]])
-    .filter(([, v]) => v != null && v !== '');
-  if (rows.length === 0) return null;
+// Renamed from "Subtotal rectificativas" (ambiguous once the card stopped showing deltas — could
+// read as "how much changed") to "Bases rectificadas por clave" — same i18n key
+// (`fm.m349.rectif_subtotal.title`), new value only.
+//
+// UNLIKE the old delta shape (where E+S+A+I was explicitly "not a quantity that means
+// anything" — the AEAT never nets entregas against adquisiciones), a plain Σ of restated bases
+// across keys IS a meaningful number now: it's literally the AEAT's own "Importe de las
+// rectificaciones". A FIRST cut of this card drew that total as a grand-total row at its own
+// bottom. Ruben's final call: that total lives ONLY in the list's "Rectificaciones" column (the
+// "vista general") — not duplicated inside this detail-page card. The grand-total row and its
+// `fm.m349.rectif_subtotal.total` label are gone; this card is back to exactly 4 rows (E/S/A/I),
+// now showing restated bases instead of deltas.
+//
+// Sign/color: a restated base is never negative by AEAT convention ("Todos los importes serán
+// positivos" — the design-of-record PDF, see CP-19's evidence), unlike the old delta (`-30,00`
+// for a correction removing 3 units of a 10 EUR product was the expected, valid, red-tinted
+// case). The red-for-negative styling (`fm-349-total-row__amount--negative`) is gone from this
+// card for exactly that reason; a genuinely zero key still uses the same muted
+// `fm-349-total-row__amount--zero` treatment `TotalsCard` already applies to a zero operations
+// key, for visual consistency between the two per-key cards in this same panel.
+//
+// Still always 4 rows (E, S, A, I), including zero ones — `rectifiedBaseByKey` always returns
+// all four keys (mirrors `emptyKeyTotals()`'s backend convention) — matching `TotalsCard`'s own
+// unconditional style right above it. No "hide the card" gate at all: `operators` falls back to
+// `MOCK_OPERATORS` above and is therefore never nullish by the time this renders, so the OLD
+// `!summary` guard was already effectively dead in production (a live compute's
+// `rectificativeSummary` was never null either) — this just stops pretending the card can
+// disappear.
+function RectificativeSubtotalCard({ operators, t }) {
+  const totals = rectifiedBaseByKey(operators);
   return (
     <div className="fm-349-totals__card fm-349-rectif-totals" data-testid="card__rectificativeSubtotal">
       <div className="fm-349-totals__title">
-        {t('fm.m349.rectif_subtotal.title') ?? 'Subtotal rectificativas'}
+        {t('fm.m349.rectif_subtotal.title') ?? 'Bases rectificadas por clave'}
       </div>
-      {rows.map(([k, v]) => {
-        const num = parseFloat(v) || 0;
+      {KEY_IDS.map(k => {
+        const num = totals[k] ?? 0;
         return (
           <div key={k} className="fm-349-total-row">
             <div className="fm-349-total-row__left">
@@ -252,7 +274,7 @@ function RectificativeSubtotalCard({ summary, t }) {
               <span className="fm-349-total-row__label">{t(`fm.m349.key.${k}`)}</span>
             </div>
             <span
-              className={`fm-349-total-row__amount${num < 0 ? ' fm-349-total-row__amount--negative' : ''}`}
+              className={`fm-349-total-row__amount${num === 0 ? ' fm-349-total-row__amount--zero' : ''}`}
               data-testid={`amount__rectifSubtotal_${k}`}
             >
               {formatAmount(num)}
@@ -874,7 +896,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   const [liveOperators, setLiveOperators] = useState(decl._precomputed?.operators ?? null);
   const [liveInvoices,  setLiveInvoices]  = useState(decl._precomputed?.invoices  ?? null);
   const [liveRectifications, setLiveRectifications] = useState(decl._precomputed?.rectifications ?? null);
-  const [liveRectifSummary, setLiveRectifSummary] = useState(decl._precomputed?.rectificativeSummary ?? null);
   // ETP-5456 — read-only fallback values `Fiscal349BoxesHandler#computeOperators` exposes
   // (`contactFallback`/`phoneFallback`, mirroring exactly what a blank field falls back to at
   // generation time: the logged-in AD_User's name / the org's resolved phone). FileGenModal uses
@@ -932,7 +953,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
     if (decl._precomputed?.operators) setLiveOperators(decl._precomputed.operators);
     if (decl._precomputed?.invoices)  setLiveInvoices(decl._precomputed.invoices);
     if (decl._precomputed?.rectifications) setLiveRectifications(decl._precomputed.rectifications);
-    if (decl._precomputed?.rectificativeSummary) setLiveRectifSummary(decl._precomputed.rectificativeSummary);
     if (decl._precomputed?.contactFallback != null) setLiveContactFallback(decl._precomputed.contactFallback);
     if (decl._precomputed?.phoneFallback   != null) setLivePhoneFallback(decl._precomputed.phoneFallback);
   }, [decl._precomputed]);
@@ -988,7 +1008,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // (QA CP-19): this is now the shared reduction the list's "Resultado" column
   // applies to the very same payload, so the two figures cannot disagree again.
   const totalBase    = sum349OperationsBase(operators);
-  const rectifSummary = liveRectifSummary ?? decl.rectificativeSummary ?? null;
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
   const rectifications = rectificationCountFor(snapshotServed, submittedSnapshot, rectifRows);
 
@@ -1173,7 +1192,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
     if (res?.operators) setLiveOperators(res.operators);
     if (res?.invoices)  setLiveInvoices(res.invoices);
     if (res?.rectifications) setLiveRectifications(res.rectifications);
-    if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
     // ETP-5456 — contactFallback/phoneFallback are new on the compute payload (added alongside
     // this same helper's other fields), folded into this shared setter rather than a second
     // hand-rolled copy at every call site (mount snapshot, cold-cache restore, live recompute).
@@ -1749,7 +1767,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
               <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
                 <TotalsCard
                   operators={operators}
-                  rectifSummary={rectifSummary}
                   t={t}
                   data-testid="TotalsCard__346dd5" />
 
@@ -1810,11 +1827,17 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                                 badgeTestId="KeyBadge__346dd5"
                                 data-testid="KeyCell__346dd5" />
                             </td>
-                            <td
-                              style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                              className={(parseFloat(op.base) || 0) < 0 ? 'fm-349-amount--negative' : undefined}
-                            >
-                              {formatAmount(op.base)}
+                            {/* ETP-5725 real-world follow-up — a rectificative row shows the RESTATED
+                                base (`correctedBase`), not the signed delta (`base`), so this cell,
+                                the per-key card below and the list's "Rectificaciones" total all
+                                agree on the same quantity — Ruben's reasoning: no more "this screen
+                                shows a different number than that screen". Falls back to the delta
+                                only if a legacy/stale payload lacks `correctedBase`, so the cell is
+                                never blank. No red/negative styling here either — a restated base
+                                is never negative by AEAT convention, the same reason
+                                `RectificativeSubtotalCard` dropped it. */}
+                            <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                              {formatAmount(isRectificativeOp(op) ? (op.correctedBase ?? op.base) : op.base)}
                             </td>
                             <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
                             <td>
