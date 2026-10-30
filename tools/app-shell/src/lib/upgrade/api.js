@@ -246,9 +246,18 @@ export async function getBillingOverview(baseUrl) {
   return data || { purchases: [] };
 }
 
-/** Reads the authenticated account-level subscription projection. */
-export async function getSubscription(baseUrl) {
-  const response = await apiFetch('/sws/go/billing/subscription', { baseUrl, on401: 'ignore' });
+/**
+ * Reads the authenticated account-level subscription projection.
+ *
+ * ETP-6060 — with a `clientId` it is that company's own subscription (a "Mis empresas" row),
+ * whatever environment the session is in; the backend answers `hasSubscription: false` for a
+ * company the account did not buy. Without one, the session's environment's, else the newest.
+ */
+export async function getSubscription(baseUrl, clientId = null) {
+  const path = clientId
+    ? `/sws/go/billing/subscription?clientId=${encodeURIComponent(clientId)}`
+    : '/sws/go/billing/subscription';
+  const response = await apiFetch(path, { baseUrl, on401: 'ignore' });
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired

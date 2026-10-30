@@ -5,7 +5,10 @@ import {
   QUOTA_EXCEEDED_CODE,
   QUOTA_REFUSAL_ANNOUNCE_WINDOW_MS,
   QUOTA_REFUSED_EVENT,
+  RECORDS_WRITTEN_EVENT,
   announceQuotaRefusal,
+  announceRecordWrite,
+  quotaAlertBehavior,
   extractQuotaExceeded,
   formatQuotaQuantity,
   isQuotaOverLimit,
@@ -14,6 +17,7 @@ import {
   quotaPeriodKey,
   quotaResourceLabel,
   quotaStateKey,
+  quotaUnitLabel,
   quotaUsageText,
   quotaUsageWithPeriod,
 } from '../planQuotas.js';
@@ -187,6 +191,91 @@ describe('quotaResourceLabel', () => {
   it('is null when there is neither a name nor a key', () => {
     assert.equal(quotaResourceLabel(quota({ resourceName: ' ', resourceKey: '' })), null);
     assert.equal(quotaResourceLabel(null), null);
+  });
+
+  // ETP-6060 — the catalog names are one language only.
+  it('translates the resources the plans ship with when given ui, whatever the catalog name', () => {
+    const invoices = quota({ resourceKey: 'SALES_INVOICES', resourceName: 'Facturas', unitLabel: 'facturas' });
+    const users = quota({ resourceKey: 'USERS', resourceName: 'Usuarios', unitLabel: null });
+    assert.equal(quotaResourceLabel(invoices, ui), 'quotaResourceSalesInvoices');
+    assert.equal(quotaResourceLabel(users, ui), 'quotaResourceUsers');
+    assert.equal(quotaUnitLabel(invoices, ui), 'quotaUnitSalesInvoices');
+    assert.equal(quotaUnitLabel(users, ui), 'quotaUnitUsers');
+  });
+
+  it('keeps the catalog name and unit without ui, and for a resource it has no translation of', () => {
+    const invoices = quota({ resourceKey: 'SALES_INVOICES', resourceName: 'Facturas', unitLabel: 'facturas' });
+    assert.equal(quotaResourceLabel(invoices), 'Facturas');
+    assert.equal(quotaUnitLabel(invoices), 'facturas');
+    assert.equal(quotaResourceLabel(quota(), ui), 'Posted sales invoices');
+    assert.equal(quotaUnitLabel(quota({ unitLabel: '  Inv ' }), ui), 'Inv');
+    assert.equal(quotaUnitLabel(quota({ unitLabel: null }), ui), null);
+  });
+
+  it('puts the translated unit in the usage text', () => {
+    assert.equal(
+      quotaUsageText(quota({ resourceKey: 'SALES_INVOICES', unitLabel: 'facturas', consumed: 2, includedQty: 2 }), ui),
+      'quotaUsage|{"consumed":"2","included":"2","unit":"quotaUnitSalesInvoices"}',
+    );
+  });
+});
+
+// ETP-6060 — the plan quota's alert settings: `warningAlert` before the limit, `limitAlert` at it.
+describe('quotaAlertBehavior', () => {
+  it('keeps the old behaviour when the plan quota sets nothing: DENY pinned, WARN dismissible', () => {
+    assert.equal(quotaAlertBehavior(quota({ verdict: 'DENY', consumed: 100 })), 'pinned');
+    assert.equal(quotaAlertBehavior(quota({ verdict: 'WARN', consumed: 87 })), 'dismissible');
+    assert.equal(quotaAlertBehavior(quota({ verdict: 'WARN', consumed: 120 })), 'dismissible');
+    assert.equal(quotaAlertBehavior(quota({ verdict: 'DENY', limitAlert: 'sticky' })), 'pinned');
+  });
+
+  it('reads the warning alert before the limit and the limit alert at or past it', () => {
+    const both = { warningAlert: 'hidden', limitAlert: 'dismissible' };
+    assert.equal(quotaAlertBehavior(quota({ ...both, verdict: 'WARN', consumed: 87 })), 'hidden');
+    assert.equal(quotaAlertBehavior(quota({ ...both, verdict: 'WARN', consumed: 100 })), 'dismissible');
+    assert.equal(quotaAlertBehavior(quota({ ...both, verdict: 'DENY', consumed: 100 })), 'dismissible');
+    assert.equal(quotaAlertBehavior(quota({ verdict: 'WARN', consumed: 87, warningAlert: 'pinned' })), 'pinned');
+  });
+
+  it('drops hidden items from the banner list', () => {
+    const hidden = quota({ resourceKey: 'A', verdict: 'DENY', consumed: 100, limitAlert: 'hidden' });
+    const shown = quota({ resourceKey: 'B', verdict: 'WARN', consumed: 87 });
+    assert.deepEqual(quotaAlertItems([hidden, shown]), [shown]);
+  });
+});
+
+describe('announceRecordWrite', () => {
+  let heard;
+  const count = () => { heard += 1; };
+
+  beforeEach(() => {
+    heard = 0;
+    const target = new EventTarget();
+    target.addEventListener(RECORDS_WRITTEN_EVENT, count);
+    globalThis.dispatchEvent = target.dispatchEvent.bind(target);
+  });
+
+  afterEach(() => {
+    delete globalThis.dispatchEvent;
+  });
+
+  it('announces a successful NEO create, update, delete or action', () => {
+    announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header', method: 'POST' });
+    announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header/ABC', method: 'put' });
+    announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header/ABC', method: 'DELETE' });
+    announceRecordWrite({ url: '/etendo/sws/neo/batch', method: 'POST' });
+    assert.equal(heard, 4);
+  });
+
+  it('announces no read, no read-only sub-endpoint and nothing outside /sws/neo/', () => {
+    announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header', method: 'GET' });
+    announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header' });
+    announceRecordWrite({ url: '/etendo/sws/neo/sales-invoice/header/ABC/callout', method: 'POST' });
+    announceRecordWrite({ url: '/etendo/sws/neo/contacts/header/ABC/evaluate-display', method: 'POST' });
+    announceRecordWrite({ url: '/etendo/sws/go/session/environment', method: 'POST' });
+    announceRecordWrite({ method: 'POST' });
+    announceRecordWrite();
+    assert.equal(heard, 0);
   });
 });
 

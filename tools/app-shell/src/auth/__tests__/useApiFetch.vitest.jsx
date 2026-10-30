@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/auth/useApiFetch.js
+
 import { renderHook } from '@testing-library/react';
 
 // ETP-5195 — useApiFetch() now forwards `apiSessionScope` from the session (read via the
@@ -127,12 +129,45 @@ describe('useApiFetch — cross-spec cache invalidation after a write (ETP-5525)
     expect(cache.isFresh(PO_KEY), 'a shipment write must not touch purchase-order').toBe(true);
   });
 
-  it('without a DataProvider returns the core request function itself (no wrapper)', () => {
-    const request = vi.fn();
+  it('without a DataProvider forwards the call and returns the response untouched', async () => {
+    const res = { ok: true, status: 200 };
+    const request = vi.fn().mockResolvedValue(res);
     mockCreateApiFetch.mockReturnValue(request);
 
     const { result } = renderHook(() => useApiFetch('/sws/neo/goods-shipment'));
+    const returned = await result.current('/goodsShipment', { method: 'POST' });
 
-    expect(result.current).toBe(request);
+    expect(returned).toBe(res);
+    expect(request).toHaveBeenCalledWith('/goodsShipment', { method: 'POST' });
+  });
+});
+
+// ETP-6060 — a successful NEO write is announced so the plan-quota banner re-reads the environment
+// list (the matching itself is unit-tested in src/lib/__tests__/planQuotas.test.js). Pinned here:
+// the URL announced is base + path, only an `ok` response is announced, with or without a cache.
+describe('useApiFetch — announces a successful write (ETP-6060)', () => {
+  let heard;
+  const count = () => { heard += 1; };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    heard = 0;
+    mockUseAuthOptional.mockReturnValue(null);
+    const { RECORDS_WRITTEN_EVENT } = await import('@/lib/planQuotas.js');
+    window.addEventListener(RECORDS_WRITTEN_EVENT, count);
+    return () => window.removeEventListener(RECORDS_WRITTEN_EVENT, count);
+  });
+
+  it.each([
+    ['an ok POST under /sws/neo/', { method: 'POST' }, true, 1],
+    ['a failed POST', { method: 'POST' }, false, 0],
+    ['an ok GET', {}, true, 0],
+  ])('announces %s accordingly', async (_label, options, ok, expected) => {
+    mockCreateApiFetch.mockReturnValue(vi.fn().mockResolvedValue({ ok, status: ok ? 200 : 500 }));
+
+    const { result } = renderHook(() => useApiFetch('/etendo/sws/neo/sales-invoice'));
+    await result.current('/header/INV-1', options);
+
+    expect(heard).toBe(expected);
   });
 });

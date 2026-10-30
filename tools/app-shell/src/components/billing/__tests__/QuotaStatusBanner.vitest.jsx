@@ -25,6 +25,14 @@ vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: pathRef.current }),
 }));
 
+// ETP-6060 — the my-companies-page flag moves the subscription (the CTA's destination) to
+// "Mis empresas". Off unless a case turns it on.
+const flagRef = vi.hoisted(() => ({ current: false }));
+vi.mock('@/lib/flags', () => ({
+  MY_COMPANIES_PAGE: 'my-companies-page',
+  useFeatureFlag: () => flagRef.current,
+}));
+
 const envRef = vi.hoisted(() => ({ current: [] }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => ({ environments: envRef.current, currentClientId: 'CLIENT-1' }),
@@ -55,7 +63,7 @@ function quota(overrides = {}) {
 
 const WARN_INVOICES = quota();
 const DENY_USERS = quota({
-  resourceKey: 'USERS', resourceName: 'Users', unitLabel: null, includedQty: 5, consumed: 5, verdict: 'DENY',
+  resourceKey: 'MEMBERS', resourceName: 'Users', unitLabel: null, includedQty: 5, consumed: 5, verdict: 'DENY',
 });
 
 function withEnvironment(overrides = {}) {
@@ -74,6 +82,7 @@ const items = () => screen.getAllByTestId('quota-status-banner-item');
 beforeEach(() => {
   navigateMock.mockReset();
   pathRef.current = '/sales-order';
+  flagRef.current = false;
   sessionStorage.clear();
   withEnvironment();
 });
@@ -184,6 +193,15 @@ describe('QuotaStatusBanner — owner and member', () => {
 
     await user.click(cta);
     expect(navigateMock).toHaveBeenCalledWith('/account');
+  });
+
+  it("leads the owner to the company's row on My companies while the flag is on", async () => {
+    flagRef.current = true;
+    const user = userEvent.setup();
+    render(<QuotaStatusBanner />);
+
+    await user.click(screen.getByTestId('quota-status-banner-cta'));
+    expect(navigateMock).toHaveBeenCalledWith('/companies?subscription=CLIENT-1&from=quota_banner');
   });
 
   it.each([
@@ -321,12 +339,82 @@ describe('QuotaStatusBanner — dismissal', () => {
   });
 });
 
+// ETP-6060 — each plan quota says how its alert is shown: `warningAlert` before the limit,
+// `limitAlert` at it (pinned, dismissible or hidden). The colour still follows the verdict.
+describe('QuotaStatusBanner — alert behaviour set on the plan quota', () => {
+  it('pins a WARN whose warning alert is pinned', () => {
+    withEnvironment({ quotas: [quota({ warningAlert: 'pinned' })] });
+    sessionStorage.setItem(quotaBannerDismissKey('CLIENT-1', [quota()]), '1');
+
+    render(<QuotaStatusBanner />);
+
+    expect(banner()).toHaveAttribute('data-variant', 'warning');
+    expect(screen.queryByTestId('quota-status-banner-dismiss')).not.toBeInTheDocument();
+  });
+
+  it('lets a DENY whose limit alert is dismissible be closed, still red', async () => {
+    const user = userEvent.setup();
+    withEnvironment({ quotas: [{ ...DENY_USERS, limitAlert: 'dismissible' }] });
+    render(<QuotaStatusBanner />);
+
+    expect(banner()).toHaveAttribute('data-variant', 'destructive');
+    await user.click(screen.getByTestId('quota-status-banner-dismiss'));
+    expect(queryBanner()).not.toBeInTheDocument();
+  });
+
+  it('does not list an item whose alert is hidden, and shows nothing when it was the only one', () => {
+    withEnvironment({
+      quotas: [{ ...DENY_USERS, limitAlert: 'hidden' }, quota({ warningAlert: 'hidden' })],
+    });
+    render(<QuotaStatusBanner />);
+    expect(queryBanner()).not.toBeInTheDocument();
+  });
+
+  it('keeps the other items when one is hidden; the banner takes their colour', () => {
+    withEnvironment({ quotas: [{ ...DENY_USERS, limitAlert: 'hidden' }, WARN_INVOICES] });
+    render(<QuotaStatusBanner />);
+
+    expect(items()).toHaveLength(1);
+    expect(banner()).toHaveAttribute('data-variant', 'warning');
+    expect(screen.getByTestId('quota-status-banner-dismiss')).toBeInTheDocument();
+  });
+
+  // The limit alert governs a warn-mode quota that ran past its limit, not the warning alert.
+  it('reads a WARN over its limit with the limit alert', () => {
+    withEnvironment({
+      quotas: [quota({ consumed: 120, warningAlert: 'dismissible', limitAlert: 'pinned' })],
+    });
+    render(<QuotaStatusBanner />);
+
+    expect(screen.queryByTestId('quota-status-banner-dismiss')).not.toBeInTheDocument();
+  });
+});
+
 describe('QuotaStatusBanner — routes', () => {
   it.each(['/account', '/account/x', '/upgrade', '/upgrade/x'])('is hidden on %s', (path) => {
     pathRef.current = path;
     withEnvironment({ quotas: [DENY_USERS] });
     render(<QuotaStatusBanner />);
     expect(queryBanner()).not.toBeInTheDocument();
+  });
+
+  it.each(['/companies', '/companies/x', '/upgrade'])(
+    'is hidden on %s while the flag is on',
+    (path) => {
+      flagRef.current = true;
+      pathRef.current = path;
+      withEnvironment({ quotas: [DENY_USERS] });
+      render(<QuotaStatusBanner />);
+      expect(queryBanner()).not.toBeInTheDocument();
+    },
+  );
+
+  it('is shown on /account while the flag is on: the subscription is no longer there', () => {
+    flagRef.current = true;
+    pathRef.current = '/account';
+    withEnvironment({ quotas: [DENY_USERS] });
+    render(<QuotaStatusBanner />);
+    expect(queryBanner()).toBeInTheDocument();
   });
 
   it.each(['/companies', '/accounts', '/'])('is shown on %s', (path) => {

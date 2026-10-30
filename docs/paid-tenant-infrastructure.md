@@ -86,9 +86,16 @@ Two consequences follow, and neither is hypothetical:
    a legitimate upgrade.
 7. **Branch C — the account already owns at least one environment.** The page is a three-step
    checkout — **Plan → Add-ons → Payment**. The **Plan** step shows the plan catalog
-   (`GET /sws/go/plans`, ETP-5046) as one selectable card per plan, each with the catalog's name,
-   description and price, so a plan added to `ETGO_PLAN` appears with no frontend change
-   (ETP-5049). A single plan is preselected; with several, the user picks one, and nothing is
+   (`GET /sws/go/plans`, ETP-5046) as one selectable card per plan, so a plan added to `ETGO_PLAN`
+   appears with no frontend change (ETP-5049). The cards follow the storefront pricing page: a
+   **Monthly / Yearly** toggle (`upgrade-plan-interval`, shown only when the catalog sells both)
+   filters the cards by `billingInterval`; each card shows the catalog name, the price (a yearly
+   plan leads with its monthly equivalent and states the single yearly payment), the
+   `highlight` badge (*Most popular* / *Recommended*), and a feature list built from the plan's
+   `quotas` (an amount per subscription year, or a seat count), `includesApi`, and the two
+   features every plan shares (all functions, MCP). On the yearly view a banner states the months
+   saved, only when every yearly plan saves the same whole number of months against the monthly
+   plan of the same name. A single plan is preselected; with several, the user picks one, and nothing is
    preselected for them. While the catalog loads, fails (with a retry), is empty, or answers
    401, the step says so and offers no way forward — there is no plan key to send; on a 401 it
    offers **Sign in again** (`upgrade-plans-sign-in-again`), which signs out to the login view as
@@ -408,7 +415,7 @@ The paid flow has separate contracts for the commercial purchase and environment
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /sws/go/plans` | Lists the purchasable plans of the plan catalog (`planKey`, `name`, `description`, `displayPrice`, `currency`, `billingInterval`) — never a provider price id. The upgrade page's only quote source (§3.3). |
+| `GET /sws/go/plans` | Lists the purchasable plans of the plan catalog (`planKey`, `name`, `description`, `displayPrice`, `currency`, `billingInterval`, `includesApi`, `highlight`, and `quotas`: one `{resourceKey, resourceName, unitLabel, includedQty, kind}` per active plan quota, `kind` being `seats` or `perYear`) — never a provider price id. The upgrade page's only quote source (§3.3). |
 | `GET /sws/go/billing/offers` | Quotes the plan catalog's default plan: the grandfathered `legacy-productive` plan at the configured legacy price while the legacy price fallback is active, otherwise the cheapest purchasable plan of `GET /sws/go/plans` at its own Stripe Price. Returns that plan's `planKey`, `amountMinor`, `currency`, and recurring `interval` read live from the chargeable price, and no provider price id (removed in ETP-5049). **No frontend caller since ETP-5049** — the upgrade page quotes the plan catalog only. |
 | `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. A company name the account already uses for a productive environment is refused with 409 `CLIENT_NAME_IN_USE` before Stripe is contacted; any other match (another account, the account's demo) is allowed. A name shaped like a provisioning name (`PEND-` + 32 hex) is reserved (400). |
 | `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |

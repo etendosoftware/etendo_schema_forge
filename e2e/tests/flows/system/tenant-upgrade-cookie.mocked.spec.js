@@ -197,12 +197,16 @@ test.describe('Tenant upgrade — choosing among several catalog plans', () => {
 
     const catalog = page.getByTestId('upgrade-plan-catalog');
     await expect(catalog).toBeVisible();
-    await expect(catalog.locator('[data-testid^="upgrade-plan-card-"]')).toHaveCount(CATALOG.length);
-    for (const plan of CATALOG) {
-      const card = page.getByTestId(`upgrade-plan-card-${plan.planKey}`);
-      await expect(card.getByTestId('upgrade-plan-name')).toHaveText(plan.name);
-      await expect(card.getByTestId('upgrade-plan-description')).toHaveText(plan.description);
-      await expect(card).toHaveAttribute('data-selected', 'false');
+    // The Monthly/Yearly toggle shows one billing interval at a time, monthly first.
+    for (const interval of ['month', 'year']) {
+      await page.getByTestId(`upgrade-plan-interval-${interval}`).click();
+      const shown = CATALOG.filter(plan => plan.billingInterval === interval);
+      await expect(catalog.locator('[data-testid^="upgrade-plan-card-"]')).toHaveCount(shown.length);
+      for (const plan of shown) {
+        const card = page.getByTestId(`upgrade-plan-card-${plan.planKey}`);
+        await expect(card.getByTestId('upgrade-plan-name')).toHaveText(plan.name);
+        await expect(card).toHaveAttribute('data-selected', 'false');
+      }
     }
     await expect(page.getByTestId('upgrade-plan-selected-badge')).toHaveCount(0);
 
@@ -210,8 +214,10 @@ test.describe('Tenant upgrade — choosing among several catalog plans', () => {
     await expect(page.getByTestId('upgrade-checkout-summary-plan')).toHaveText(YEARLY_PLAN.name);
     await expect(page.getByTestId('upgrade-checkout-summary-price')).toContainText('490');
 
-    // Back on the Plan step, the chosen card carries the selection.
+    // Back on the Plan step, the toggle opens on the chosen plan's interval and its card carries
+    // the selection.
     await page.getByTestId('upgrade-checkout-step-plan').click();
+    await expect(page.getByTestId('upgrade-plan-interval-year')).toHaveAttribute('aria-checked', 'true');
     const chosen = page.getByTestId(`upgrade-plan-card-${YEARLY_PLAN.planKey}`);
     await expect(chosen).toHaveAttribute('data-selected', 'true');
     await expect(chosen.getByTestId('upgrade-plan-select')).toHaveAttribute('aria-pressed', 'true');
