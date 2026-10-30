@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 // ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash are the Iconic set on
 // the 20x20 frame (core custom-icons), so the band never mixes icon families.
@@ -9,8 +8,6 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
-import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE, ROW_STICKY_ACTIONS } from './rowVisuals.js';
@@ -43,10 +40,6 @@ function isActionVisible(config, fallbackVisibleWhen, row) {
  * `menuActions` entries with a `neoAction` field (ETP-5414) support two optional siblings:
  *   - `neoActionName` — overrides the literal wire action name sent to
  *     `POST {apiBaseUrl}/{entity}/{id}/action/{name}`, defaulting to `neoAction` itself.
- *   - `preUnpost` — when true, reverses the record's accounting first (via the shared
- *     `runPreUnpost`/`unpost` mechanism, same as `BulkDocumentAction.jsx` and
- *     `DetailMoreActionsMenu.jsx`) if the row is currently posted, before running the main
- *     action; a preUnpost failure toasts and aborts before the main action ever fires.
  * `menuActions` itself, and the function form's return value, MUST be synchronous — it is
  * read directly (`typeof menuActions === 'function' ? menuActions({row,...}) : menuActions`)
  * with no `await` anywhere in the render path. An action whose ELIGIBILITY needs an async
@@ -241,12 +234,12 @@ export default function RowQuickActions({
     setInFlight(prev => ({ ...prev, [key]: true }));
     try {
       if (action.documentAction) {
-        // ETP-5745 QA follow-up — an OPTIONAL per-action guard, checked BEFORE preUnpost:
-        // a row whose document action is already known to be refused (e.g. invoice
-        // reactivation blocked by InvoiceReactivationGuard, com.etendoerp.go) must not
-        // run preUnpost either, or this row-hover kebab un-posts the row and THEN fails —
-        // the exact side effect ETP-5745 exists to prevent on the other two surfaces
-        // (detail kebab, bulk bar). Generic here on purpose: this component stays
+        // ETP-5745 QA follow-up — an OPTIONAL per-action guard: a row whose document action
+        // is already known to be refused (e.g. invoice reactivation blocked by
+        // InvoiceReactivationGuard, com.etendoerp.go) is answered here, without a round trip.
+        // Since ETP-5684 the server un-posts inside the reactivation, after that same guard,
+        // so the guard no longer protects the accounting, only the message. The name is
+        // kept for its callers. Generic here on purpose: this component stays
         // domain-agnostic, the actual check is supplied by the window
         // (`buildInvoiceRowQuickActions`'s `reactivateRowFilter`, useInvoiceWindow.js).
         if (typeof action.preUnpostGuard === 'function') {
@@ -256,21 +249,7 @@ export default function RowQuickActions({
             return;
           }
         }
-        // ETP-5378 — same rule the detail kebab applies (DetailMoreActionsMenu's
-        // runDocumentAction): reactivating an already-posted document must reverse its
-        // accounting first, or the backend rejects the bare docAction with "Factura
-        // contabilizada". Shared with the detail kebab and the bulk bar via lib/preUnpost.js
-        // so the three surfaces cannot drift apart again.
-        const pre = await runPreUnpost({
-          recordId: row?.id,
-          record: row,
-          enabled: action.preUnpost,
-          execute: neoAction.execute,
-        });
-        if (!pre.success) {
-          onMenuActionExecuted?.(action, { success: false, message: pre.message });
-          return;
-        }
+        // ETP-5684 — reactivating a posted document un-posts it on the server, inside the RE.
         const result = await docAction.execute(row?.id, action.documentAction);
         onMenuActionExecuted?.(action, result, row);
         return;
@@ -288,25 +267,6 @@ export default function RowQuickActions({
         // have to reinvent it. Every existing caller (none of which set `neoActionName`)
         // is unaffected: `wireActionName === action.neoAction`, unchanged.
         const wireActionName = action.neoActionName ?? action.neoAction;
-        // ETP-5414 — optional pre-step, same mechanism `BulkDocumentAction.jsx` and
-        // `DetailMoreActionsMenu.jsx` already use: reverse the accounting first when
-        // `action.preUnpost` is set AND the row is currently posted (`runPreUnpost`'s own
-        // no-op guard covers every other case — unset flag, or a row that isn't posted —
-        // so this call is safe to make unconditionally whenever a neoAction fires).
-        const pre = await runPreUnpost({
-          recordId: row?.id, record: row, enabled: !!action.preUnpost, execute: neoAction.execute,
-        });
-        if (!pre.success) {
-          // RowQuickActions never toasts for the declarative documentAction/neoAction
-          // paths (see class docblock — "toast/snackbar is the host's responsibility"),
-          // but a preUnpost failure has nowhere else to surface: the main action below
-          // never runs, so there is no `result` for the host's `onMenuActionExecuted` to
-          // report on its own. Toasting here (mirroring `DetailMoreActionsMenu.jsx`'s own
-          // identical preUnpost failure handling) is the one exception to that rule.
-          toast.error(translateBackendError(pre.message, ui, preUnpostErrorIdentity(pre)) || ui('actionFailed'));
-          onMenuActionExecuted?.(action, { success: false, message: pre.message });
-          return;
-        }
         const result = await neoAction.execute(row?.id, wireActionName);
         onMenuActionExecuted?.(action, result, row);
         return;

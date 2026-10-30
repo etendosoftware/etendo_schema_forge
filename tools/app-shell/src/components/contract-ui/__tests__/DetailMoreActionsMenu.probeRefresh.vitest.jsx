@@ -12,7 +12,6 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('./../DetailView.jsx', () => ({ resolveHideMoreMenu: () => false }));
 vi.mock('./../detailViewHelpers.jsx', () => ({ maybeSaveBeforeConfirm: vi.fn() }));
-vi.mock('@/lib/preUnpost.js', () => ({ runPreUnpost: vi.fn(), preUnpostErrorIdentity: vi.fn() }));
 vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
 
 import { DetailMoreActionsMenu } from '../DetailMoreActionsMenu.jsx';

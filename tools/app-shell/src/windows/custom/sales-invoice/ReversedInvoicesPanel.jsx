@@ -735,10 +735,12 @@ export default function ReversedInvoicesPanel({
 
   const gridColumns = useMemo(() => [
     { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', label: ui('rectColOriginalInvoice'), sourceIndex: 1, required: true },
-    { key: 'invoiceDate', label: ui('rectColDate'), sourceIndex: 2 },
-    { key: 'documentNo', label: ui('rectColDocument'), sourceIndex: 3 },
+    // The original invoice's figures, parsed from its _identifier: `reversed*` keys so they are not
+    // mistaken for the rectificativa's own invoiceDate/documentNo/grandTotalAmount fields (F19).
+    { key: 'reversedInvoiceDate', label: ui('rectColDate'), sourceIndex: 2 },
+    { key: 'reversedDocumentNo', label: ui('rectColDocument'), sourceIndex: 3 },
     { key: 'aEAT349IsCorrective', column: 'EM_AEAT349_IsCorrective', label: ui('rectColModel349'), sourceIndex: 4 },
-    { key: 'grandTotalAmount', label: ui('rectColTotal'), sourceIndex: 5 },
+    { key: 'reversedGrandTotalAmount', label: ui('rectColTotal'), sourceIndex: 5 },
   ], [ui]);
   const gridSpec = reversedInvoicesGridSpec(apiBaseUrl);
   const { gridView, gridColumnViews } = useFlaggedGridView({

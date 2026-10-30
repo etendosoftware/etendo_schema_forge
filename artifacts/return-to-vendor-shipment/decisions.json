@@ -489,7 +489,10 @@
           "visibility": "discarded"
         },
         "canceledInoutLine": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "_note": "ETP-6054: API-only. The line of the source receipt this return line returns, readable through MCP etendo_get / etendo_list. grid and form are off, so it is neither a grid column nor a form input on the screen."
         },
         "managePrereservation": {
           "visibility": "discarded"

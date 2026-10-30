@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/incidentSeverity.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js
 // Vitest component tests for FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -59,10 +60,13 @@ vi.mock('../FmCatalogPage.jsx', () => ({
   // FmCatalogPage's own UI. Wrapped in a `.fm-catalog-drawer` div to mirror
   // the real component's self-contained overlay/drawer markup (FmCatalogPage
   // now owns its own wrapper — FmListPage no longer renders one externally).
-  default: ({ onSave }) =>
+  // `data-unavailable-models` exposes what FmListPage hands the drawer (fiscal-model-390 flag).
+  // `catalog-toggle-349` mirrors the real drawer: it saves the catalog it was opened with plus
+  // one toggle, so the PUT body is built from what FmListPage hands the drawer.
+  default: ({ onSave, unavailableModels, activeModels }) =>
     React.createElement(
       'div',
-      { className: 'fm-catalog-drawer' },
+      { className: 'fm-catalog-drawer', 'data-unavailable-models': JSON.stringify(unavailableModels ?? null) },
       React.createElement(
         'button',
         { 'data-testid': 'catalog-save-none', onClick: () => onSave({ '303': false, '349': false }) },
@@ -72,6 +76,14 @@ vi.mock('../FmCatalogPage.jsx', () => ({
         'button',
         { 'data-testid': 'catalog-save-303-only', onClick: () => onSave({ '303': true, '349': false }) },
         'activate-303-only',
+      ),
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'catalog-toggle-349',
+          onClick: () => onSave({ ...activeModels, '349': !activeModels?.['349'] }),
+        },
+        'toggle-349',
       ),
     ),
 }));
@@ -122,6 +134,7 @@ vi.mock('../FmCommon.jsx', () => ({
 }));
 
 import FmListPage from '../FmListPage.jsx';
+import { toast } from 'sonner';
 // ETP-5030 — shared row-shading assertion helper (see @/test/rowShading.js).
 import { classesOf } from '@/test/rowShading.js';
 
@@ -1002,6 +1015,28 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
   });
 
+  // ETP-5716 repro: the PUT replaces the whole catalog, so a drawer opened after a failed GET must
+  // not save (it used to PUT a catalog built from `{}` and switch every model off).
+  it('does not PUT the catalog after a failed GET, and says why', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => {});
+    const calls = [];
+    globalThis.fetch = vi.fn((url, init) => {
+      calls.push({ url: String(url), method: init?.method ?? 'GET' });
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+      }
+      return Promise.reject(new Error(`unmocked fetch: ${url}`));
+    });
+    const { container } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    fireEvent.click(screen.getByTestId('fm-list-catalog-button'));
+    fireEvent.click(screen.getByTestId('catalog-save-none')); // the drawer saves a change
+    expect(calls.filter(c => c.method === 'PUT')).toEqual([]);
+    expect(container.querySelector('.fm-catalog-drawer')).toBeNull();
+    expect(toastError).toHaveBeenCalledWith('fm.catalog.save_unavailable');
+    toastError.mockRestore();
+  });
+
   it('clears the "loading" gate when the catalog GET rejects outright (network error)', async () => {
     globalThis.fetch = vi.fn((url) => {
       if (String(url).includes('fiscal-models-catalog')) {
@@ -1034,25 +1069,16 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
   });
 
-  it('BUG: a non-empty string GET body produces a nonsensical positive active-models count', async () => {
-    // Object.values('abc') → ['a','b','c'] (all truthy) so `activeCount` reports
-    // 3 "active" models even though modelOptions/activeDecls correctly see none
-    // (string indexing by '303'/'349' is `undefined`). Consequences, both visible
-    // in this test: (1) the toolbar shows a misleading "(3)" and the
-    // '+ fm.action.new_declaration' CTA becomes visible, AND (2) because `activeCount`
-    // (not `modelOptions.length`) gates the table-vs-empty-state branch, the UI
-    // skips the intended "no active models, configure from the Catálogo" empty
-    // state and instead falls through to the plain/generic empty table — an
-    // inconsistent, unhelpful state for a case that should read as "nothing
-    // active". See FmListPage.jsx `setActiveModels(data ?? {})` and the
-    // `activeCount === 0 ? ... : filtered.length === 0 ? <EmptyState /> ...` branch.
+  it('shows 0 active models when the GET body is a non-empty string', async () => {
+    // A string body used to leak through as the active-models map (Object.values('abc') gave a
+    // nonsensical "(3)"). The catalog reader now splits every answer through
+    // `splitCatalogAnswer` (catalogAvailability.js, ETP-5716), which treats any non-object body
+    // as "nothing active", so this reads like the array case above.
     globalThis.fetch = mockCatalogFetch('abc');
     const { getByText, container } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
-    expect(getByText(/fm\.catalog\.title.*\(3\)/)).toBeTruthy();
-    expect(getByText('+ fm.action.new_declaration')).toBeTruthy();
-    // Falls through to the generic/plain empty state, NOT the "no active models" one.
-    expect(container.querySelector('.fm-empty-state').textContent).toBe('empty');
+    expect(getByText(/fm\.catalog\.title.*\(0\)/)).toBeTruthy();
+    expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
   });
 });
 
@@ -1381,3 +1407,104 @@ describe('FmListPage — incidents KPI severity variant (ETP-5597)', () => {
   });
 });
 
+// ── Models the backend marks unavailable (backend-only flag `fiscal-model-390`) ──
+// The catalog GET may answer `{ ..., "_unavailable": ["390"] }`: the 390 is then absent from the
+// list's count, the Modelo filter and Nueva declaración, and the drawer is told to hide it.
+
+describe('FmListPage — models marked unavailable by the catalog', () => {
+  const openModelFilter = (container) => {
+    fireEvent.click(container.querySelectorAll('.fm-toolbar__pill')[1]);
+    return Array.from(container.querySelectorAll('[role="option"]')).map(o => o.textContent);
+  };
+  const drawerUnavailable = (container) =>
+    JSON.parse(container.querySelector('.fm-catalog-drawer').getAttribute('data-unavailable-models'));
+
+  it('a 390 marked unavailable is absent from the count, the Modelo filter and Nueva declaración', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '_unavailable': ['390'] });
+    const decls = [
+      makeDecl({ id: '303-a', model: '303' }),
+      makeDecl({ id: '390-a', model: '390', period: '0A' }),
+    ];
+    const { container, getByText } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+
+    const options = openModelFilter(container);
+    expect(options.some(o => o.includes('303'))).toBe(true);
+    expect(options.some(o => o.includes('390'))).toBe(false);
+
+    fireEvent.click(getByText('+ fm.action.new_declaration'));
+    const modal = container.querySelector('[data-testid="new-decl-modal"]');
+    expect(JSON.parse(modal.getAttribute('data-active-models'))).toEqual({ '303': true });
+  });
+
+  it('a 390 sent as active together with the marker still stays hidden', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '390': true, '_unavailable': ['390'] });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    expect(getByText(/fm\.catalog\.title.*\(1\)/)).toBeTruthy();
+    expect(openModelFilter(container).some(o => o.includes('390'))).toBe(false);
+  });
+
+  it('hands the drawer the unavailable models of the answer', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '_unavailable': ['390'] });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    expect(drawerUnavailable(container)).toEqual(['390']);
+  });
+
+  it('a failed catalog GET opens a drawer told to hide the 390 (fail hidden)', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+      }
+      return Promise.reject(new Error(`unmocked fetch: ${url}`));
+    });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    expect(drawerUnavailable(container)).toEqual(['390']);
+  });
+
+  it('with no marker (flag on) the 390 is counted, offered in the Modelo filter and the drawer hides nothing', async () => {
+    globalThis.fetch = mockCatalogFetch({ '303': true, '390': true });
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
+    expect(openModelFilter(container).some(o => o.includes('390'))).toBe(true);
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    expect(drawerUnavailable(container)).toEqual([]);
+  });
+});
+
+describe('FmListPage — catalog save while the 390 is unavailable', () => {
+  const putBodies = () => globalThis.fetch.mock.calls
+    .filter(([url, init]) => String(url).includes('fiscal-models-catalog') && init?.method === 'PUT')
+    .map(([, init]) => JSON.parse(init.body));
+
+  it.each([
+    ['the answer omits the 390', { '303': true, '349': false, '_unavailable': ['390'] }],
+    ['the answer also sends the 390 as active', { '303': true, '349': false, '390': true, '_unavailable': ['390'] }],
+  ])('the PUT body carries neither 390 nor _unavailable when %s', async (_name, answer) => {
+    globalThis.fetch = mockCatalogFetch(answer);
+    const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(getByText(/fm\.catalog\.title/));
+    fireEvent.click(container.querySelector('[data-testid="catalog-toggle-349"]'));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    const [body] = putBodies();
+    expect(body).toEqual({ '303': true, '349': true });
+    expect(body).not.toHaveProperty('390');
+    expect(body).not.toHaveProperty('_unavailable');
+  });
+});

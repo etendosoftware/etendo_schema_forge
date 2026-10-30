@@ -1720,3 +1720,11 @@ main window.
   `DetailView.autoSaveOnBlurRevert.vitest.jsx`, `formPendingWork.vitest.js`,
   `save-calculating-locale-parity.vitest.js` and the mocked Playwright spec
   `product-logistics-nonstockable-types.mocked.spec.js`.
+
+## Agent prompt on duplicate names — ETP-5852
+
+`entities.product.agentPrompt` tells agents a product name is not unique: identify by `searchKey` or id, ask the user when several match, and only suggest (for confirmation) the one in the contact's latest order. Feedback M-6.
+
+## Agent prompts on stock — ETP-5852
+
+`entities.stock.agentPrompt` says lots, serial numbers and expiry dates are not handled in Etendo GO, so a stock row carries none of them. Feedback M-93.

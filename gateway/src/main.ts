@@ -9,6 +9,11 @@ import { buildPerEntityOpenApiPaths } from './openapi/build-per-entity-paths.ts'
 import { registerOpenApiRoutes } from './openapi/register-openapi-routes.ts';
 import { configureJsonApiBodyParser } from './public-api/json-api-http.ts';
 
+// The docs page shares the app's origin, so its renderer is pinned and checked by
+// hash: a new or tampered CDN release cannot run there. Upgrade both together.
+const SCALAR_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.js';
+const SCALAR_SCRIPT_INTEGRITY = 'sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH';
+
 const gettingStartedDescription = `
 ## Getting started
 
@@ -128,7 +133,17 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Etendo Public API')
     .setVersion('v1')
-    .addBearerAuth()
+    // Named 'bearerAuth' because every operation built by buildPerEntityOpenApiPaths
+    // references it; the credential is `<clientId>:<clientSecret>`, not a JWT.
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'clientId:clientSecret',
+        description: 'API key credential: `<clientId>:<clientSecret>`.',
+      },
+      'bearerAuth',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   // The real HTTP routing stays ONE dynamic @Get(':entityName') handler (no
@@ -191,7 +206,7 @@ async function bootstrap() {
     <div class="etendo-notice">This API is in beta. The contract and limits may change while the public API is being validated.</div>
   </div>
   <script id="api-reference" data-url="/api/openapi.json" data-configuration='{"theme":"default","darkMode":false}'></script>
-  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  <script src="${SCALAR_SCRIPT_URL}" integrity="${SCALAR_SCRIPT_INTEGRITY}" crossorigin="anonymous"></script>
 </body></html>`);
   };
   // /api is the public production documentation entrypoint. It intentionally

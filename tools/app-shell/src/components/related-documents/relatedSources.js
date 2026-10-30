@@ -78,6 +78,8 @@ export function invoiceOrdersDepsKey(record) {
  * Definition of a goods movement (goods shipment / goods receipt): its linked orders,
  * invoices and returns, all injected by the backend on the detail GET.
  */
+// `orderType` is a chip type or a (doc) => type function (the sales shipment tells a quotation
+// from an order by `isQuotation`, ETP-6002); the purchase side passes a plain type.
 export function movementDefinition({ spec, entity, orderType, invoiceType, returnType, returnsField }) {
   return {
     spec,

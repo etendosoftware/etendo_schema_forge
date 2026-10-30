@@ -488,6 +488,10 @@
       "label": "Posted",
       "description": "An accounting status button that indicates if the transaction has already been posted to the general ledger or not."
     },
+    "EM_Etblkp_Accountingstatus": {
+      "label": "Accounting Status",
+      "description": "Accounting state of the record: whether it has been posted to the General Ledger."
+    },
     "C_AcctSchema_ID": {
       "label": "General Ledger",
       "description": "The book containing all financial transactions recorded for the legal entity."
@@ -17109,6 +17113,21 @@
     "backendError.recordInUse": "This record cannot be deleted because other records use it.",
     "backendError.invalidValue": "One of the values sent is not valid.",
     "backendError.missingRequiredValue": "A required value is missing.",
+    "backendError.importTargetNotDraft": "Lines can only be imported into a draft document.",
+    "backendError.importSourceNotCompleted": "The source document is not completed.",
+    "backendError.importBusinessPartnerMismatch": "The source document belongs to another business partner.",
+    "backendError.importCurrencyMismatch": "The source document has a different currency.",
+    "backendError.importDirectionMismatch": "The source document is not of the same kind (sales or purchase).",
+    "backendError.importQuantityExceedsPending": "Cannot import {requested} of {product}: only {pending} is still pending on this line (quantities already in draft documents count as taken).",
+    "backendError.importQuantityNothingPendingOnLine": "Cannot import {requested} of {product}: nothing is pending on this line (quantities already in draft documents count as taken).",
+    "backendError.importLineNotInDocument": "One of the selected lines does not belong to the source document.",
+    "backendError.importNothingPending": "There is nothing left to import from this document.",
+    "backendError.importInvalidLine": "One of the selected lines or quantities is not valid.",
+    "backendError.importDocumentNotFound": "The document was not found.",
+    "backendError.importPriceListRequired": "This document has no price list: set one before importing lines.",
+    "backendError.importQuantityNotHonoured": "The lines could not be created with the requested quantities. Nothing was imported.",
+    "backendError.importNoStorageBin": "There is no storage bin to place the imported lines in.",
+    "backendError.importGlobalDiscountConflict": "The global discount of the selected orders cannot be applied to this invoice. Nothing was imported.",
     "backendError.retryableConflict": "The record is being modified by another operation. Try again in a moment.",
     "backendError.serviceUnavailable": "The service is temporarily unavailable. Try again in a moment.",
     "backendError.forbidden": "Your role is not allowed to perform this action.",
@@ -20796,6 +20815,7 @@
     "backendError.ibanRequired": "Using IBAN for generating the Displayed Account requires to introduce the IBAN",
     "backendError.genericAccountRequired": "Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number",
     "backendError.countryIban": "Country needed in an IBAN account.",
+    "backendError.accountingAccessDenied": "Your role cannot see or change accounting. Ask an administrator to enable Show Accounting Fields.",
     "backendError.countryNoIbanConfig": "{country} has no IBAN configuration, so it cannot be used on an account with an IBAN",
     "backendError.ibanPrefixCountryMismatch": "The IBAN starts with '{prefix}' but the selected country is {country} ({iso})",
     "backendError.ibanCountryLengthMismatch": "An IBAN for {country} must have {expected} characters (received {actual})",
@@ -22412,6 +22432,7 @@
     "fm.catalog.title": "Form catalog",
     "fm.catalog.sub": "Enable or disable the tax forms you need to file.",
     "fm.catalog.active_count": "active forms",
+    "fm.catalog.save_unavailable": "The model catalog could not be loaded, so your changes were not saved. Reload the page and try again.",
     "fm.catalog.activate": "Enable",
     "fm.catalog.deactivate": "Disable",
     "fm.catalog.cat.iva": "VAT",
@@ -25955,7 +25976,7 @@
     "currencyRateSelectPlaceholder": "Select {label}...",
     "currencyRateEdit": "Edit exchange rate",
     "currencyRateNotAvailable": "No exchange rate for this date. You can type one.",
-    "currencyRatesAtDate": "Rates as of {date}",
+    "currencyRatesAtDate": "Conversions as of {date}",
     "stepperDecrease": "Decrease",
     "stepperIncrease": "Increase"
   },

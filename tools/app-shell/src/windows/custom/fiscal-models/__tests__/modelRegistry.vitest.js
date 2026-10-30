@@ -307,6 +307,10 @@ const ALLOWLIST = {
   // Developer-only panel behind the debug flag: fixture declarations (`model: '303'`) and badge
   // colours for the mock views it navigates to. Never rendered for users, no model behaviour.
   'FmDebugPanel.jsx': 'debug-mode fixtures',
+  // ETP-5716: the model the backend-only flag hides while the catalog has not answered. No
+  // exported id constant exists to import (the registry spells it inline). Remove this line when
+  // the flag retires, together with the file.
+  'catalogAvailability.js': 'fiscal-model-390 fail-hidden default; flag-owned, retires with the flag',
 };
 
 const MODEL_ID_LITERAL = /(['"`])\d{3}\1/;
