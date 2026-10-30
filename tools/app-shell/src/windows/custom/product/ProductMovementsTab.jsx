@@ -77,7 +77,10 @@ function DocumentLink({ row, label, openInNewTab }) {
       className="group inline-flex items-center gap-1 text-xs font-medium text-[hsl(var(--foreground))]"
     >
       <span className="border-b border-[hsl(var(--text-disabled))] transition-colors group-hover:border-[hsl(var(--foreground))]">{label}</span>
-      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+      <ArrowUpRight
+        className="h-3.5 w-3.5"
+        aria-hidden="true"
+        data-testid="ArrowUpRight__763719" />
       <span className="sr-only">{openInNewTab}</span>
     </button>
   );
@@ -93,8 +96,12 @@ function MovementRow({ row, ui, currency }) {
     <div role="row" className={`${GRID} border-b border-border/50 px-3 py-3 text-sm`} data-testid="product-movements-row">
       <span role="cell" className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>
       <div role="cell" className="flex flex-col items-start gap-1">
-        <Tag variant={TAG_VARIANT[tone]}>{typeLabel}</Tag>
-        {hasDocument ? <DocumentLink row={row} label={row.etgoDocLabel} openInNewTab={ui('openFullReport')} /> : null}
+        <Tag variant={TAG_VARIANT[tone]} data-testid="Tag__763719">{typeLabel}</Tag>
+        {hasDocument ? <DocumentLink
+          row={row}
+          label={row.etgoDocLabel}
+          openInNewTab={ui('openFullReport')}
+          data-testid="DocumentLink__763719" /> : null}
       </div>
       <span role="cell" className="truncate">{row['etgoWarehouse$_identifier'] ?? '—'}</span>
       <span role="cell" className="text-right font-semibold tabular-nums" style={{ color: SIGN_COLOR[quantityTone(row.movementQuantity)] }}>
@@ -261,7 +268,8 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
       activeKey={sort.key}
       direction={sort.direction}
       onSort={key === 'stockAfter' ? undefined : toggleSort}
-      align={align} />
+      align={align}
+      data-testid="SortableHeaderLabel__763719" />
   );
 
   const noMovementsAtAll = total === 0;
@@ -283,14 +291,20 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
             </button>
           ))}
         </div>
-        <DateRangePopover value={dateRange} onChange={setDateRange} />
-        <Select value={warehouseId ?? 'all'} onValueChange={(value) => setWarehouseId(value === 'all' ? null : value)}>
+        <DateRangePopover
+          value={dateRange}
+          onChange={setDateRange}
+          data-testid="DateRangePopover__763719" />
+        <Select
+          value={warehouseId ?? 'all'}
+          onValueChange={(value) => setWarehouseId(value === 'all' ? null : value)}
+          data-testid="Select__763719">
           <SelectTrigger className="w-[200px]" aria-label={ui('productMovementsWarehouse')} data-testid="product-movements-warehouse">
-            <SelectValue />
+            <SelectValue data-testid="SelectValue__763719" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{ui('productMovementsAllWarehouses')}</SelectItem>
-            {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+          <SelectContent data-testid="SelectContent__763719">
+            <SelectItem value="all" data-testid="SelectItem__763719">{ui('productMovementsAllWarehouses')}</SelectItem>
+            {warehouses.map((w) => <SelectItem key={w.id} value={w.id} data-testid="SelectItem__763719">{w.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -320,7 +334,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
 
         {state.loading ? Array.from({ length: SKELETON_ROWS }, (_, i) => (
           <div key={i} aria-hidden="true" className={`${GRID} border-b border-border/50 px-3 py-3`} data-testid="product-movements-skeleton">
-            {Array.from({ length: 6 }, (__, j) => <Skeleton key={j} className="h-4 w-full" />)}
+            {Array.from({ length: 6 }, (__, j) => <Skeleton key={j} className="h-4 w-full" data-testid="Skeleton__763719" />)}
           </div>
         )) : null}
 
@@ -337,7 +351,9 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
         {!state.loading && !state.error && state.rows.length === 0 ? (
           noMovementsAtAll ? (
             <div className="flex flex-col items-center gap-1 p-10 text-center" data-testid="product-movements-empty">
-              <ArrowLeftRight className="mb-2 h-8 w-8 text-muted-foreground" />
+              <ArrowLeftRight
+                className="mb-2 h-8 w-8 text-muted-foreground"
+                data-testid="ArrowLeftRight__763719" />
               <p className="font-semibold">{ui('noStockMovements')}</p>
               <p className="max-w-sm text-sm text-muted-foreground">{ui('productMovementsEmptyText')}</p>
             </div>
@@ -346,10 +362,15 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onCoun
           )
         ) : null}
 
-        {state.rows.map((row) => <MovementRow key={row.id} row={row} ui={ui} currency={currency} />)}
+        {state.rows.map((row) => <MovementRow
+          key={row.id}
+          row={row}
+          ui={ui}
+          currency={currency}
+          data-testid="MovementRow__763719" />)}
 
         {state.loadingMore ? (
-          <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin" /></div>
+          <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__763719" /></div>
         ) : null}
       </div>
     </div>
