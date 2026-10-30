@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-28T16:07:37.572Z",
-  "checksum": "b12c789a68dc35bb",
+  "updatedAt": "2026-10-29T17:11:59.275Z",
+  "checksum": "badacf19b42e07d5",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -347,8 +347,6 @@
             "publicApi": {
               "exposed": true,
               "name": "searchKey",
-              "type": "passthrough",
-              "handlerId": null,
               "required": true
             }
           },
@@ -397,8 +395,6 @@
             "publicApi": {
               "exposed": true,
               "name": "name",
-              "type": "passthrough",
-              "handlerId": null,
               "required": true
             }
           },
@@ -473,9 +469,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "category",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "category"
             }
           },
           {
@@ -565,9 +559,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "description",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "description"
             }
           },
           {
@@ -871,9 +863,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "salePrice",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "salePrice"
             }
           },
           {
@@ -897,9 +887,7 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "stock",
-              "type": "passthrough",
-              "handlerId": null
+              "name": "stock"
             }
           },
           {

@@ -1766,7 +1766,7 @@ rename what it publishes.
 
 ```json
 "searchKey": {
-  "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+  "publicApi": { "exposed": true, "name": "searchKey" }
 }
 ```
 
@@ -1774,13 +1774,11 @@ rename what it publishes.
 |----------|------|---------|
 | `exposed` | boolean | Only the exact value `true` opts the field in. In a curated entity, absent or `false` = not public. |
 | `name` | string | Requested public field name. **Not necessarily the final name**: the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) rewrites it to snake_case (`searchKey` → `search_key`). |
-| `type` | `"passthrough"` \| `"custom"` | Mapping kind. The manifest generator always emits `passthrough`. |
-| `handlerId` | string \| null | Identifier of a custom handler. The manifest generator always writes `null`. |
 
 Mechanics: `resolve-curated.js` copies `publicApi` verbatim and `generate-contract.js` stamps it
 onto the field in `contract.json` (both in `schema_forge_core`). Fields with `visibility`
 `system` or `discarded`, and the fields listed in the manifest's `policy.excludedFields` (tenant,
-portal access, bank account and bulk-posting fields), are skipped by the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) even when `exposed: true`; the allowlist generator (`sf-generate-public-api-schema`) does not apply that filter. Real examples:
+portal access, bank account and bulk-posting fields), are skipped by the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) even when `exposed: true`. Real examples:
 `artifacts/contacts/decisions.json` and `artifacts/product/decisions.json` (6 fields each).
 
 Changing `publicApi` (or a window's form fields) has no effect on the public API until the public

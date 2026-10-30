@@ -143,8 +143,8 @@ const schema: PublicApiSchema = {
       specName: 'product',
       operations: ['GET', 'LIST', 'POST', 'DELETE'],
       fields: {
-        id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
-        name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        id: { publicApi: true, direction: 'out', internalPath: 'id', dataType: { type: 'string' } },
+        name: { publicApi: true, direction: 'inout', internalPath: 'name', dataType: { type: 'string' } },
       },
     },
   },

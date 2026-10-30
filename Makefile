@@ -388,13 +388,7 @@ regen-help: ## Show usage and examples for `make regen`
 #
 # The gateway/ NestJS app serves public-api/base.v1.json, built by
 # `generate-base-public-api-manifest` from artifacts/*/contract.json and the gitignored
-# artifacts/*/schema-raw.json. `regen-public-api` writes a separate allowlist
-# (artifacts/_public-api/allowlist.v1.json) that no runtime component reads.
-# Same LOCAL_CORE dispatcher as `regen` above.
-
-.PHONY: regen-public-api
-regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
-	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
+# artifacts/*/schema-raw.json. It is the only source of the public API schema.
 
 .PHONY: generate-base-public-api-manifest
 generate-base-public-api-manifest: ## Generate public-api/base.v1.json, the manifest the public API gateway serves

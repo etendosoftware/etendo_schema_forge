@@ -114,7 +114,7 @@
           "searchable": true,
           "section": "principal",
           "seq": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "required": true }
+          "publicApi": { "exposed": true, "name": "searchKey", "required": true }
         },
         "name": {
           "grid": true,
@@ -129,14 +129,14 @@
               { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
             ]
           },
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null, "required": true }
+          "publicApi": { "exposed": true, "name": "name", "required": true }
         },
         "description": {
           "type": "textarea",
           "section": "principal",
           "seq": 10,
           "span": 3,
-          "publicApi": { "exposed": true, "name": "description", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "description" }
         },
         "productType": {
           "grid": true,
@@ -159,7 +159,7 @@
           "reference": "ProductCategory",
           "section": "principal",
           "seq": 4,
-          "publicApi": { "exposed": true, "name": "category", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "category" }
         },
         "uOM": {
           "grid": true,
@@ -209,7 +209,7 @@
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "salePrice" },
           "agentPrompt": "The product's sale price: its standard price on the default sales tariff (current version first). Net of tax unless the tariff includes tax. A new product is given a 0 price on the default sales and purchase tariffs (see _skipPricesSeed on etendo_create), so 0 means 'not priced yet'."
         },
         "eTGOPurchasePrice": {
@@ -231,7 +231,7 @@
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "stock" },
           "agentPrompt": "Total quantity on hand of the product, summed over every warehouse and storage bin, in the product's unit of measure. It does not subtract reservations nor open sales orders: product/stock gives it per bin with reservedQty and allocatedQuantity."
         },
         "stocked": {
