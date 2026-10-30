@@ -181,7 +181,15 @@ The essentials, so a dispatch can be checked at a glance:
 - Every such issue lands on Roadmap project #12 with **Product** set; title, labels, Product, Team
   and Status are read back.
 - An accepted issue gets its Jira task(s), cross-linked both ways: key + full Jira URL on the issue,
-  issue URL appended to the Jira description via REST v2 (never `jira issue edit`).
+  issue URL appended to the Jira description via REST v2 (never `jira issue edit`) plus a Jira
+  remote link to the issue.
+- Pre-tickets from the **ticket router bot** (issue type `Pre-ticket`, line `MCP usage: <id>`;
+  skill, "Pre-tickets from the ticket router bot"): the Jira task already exists (key in the row's
+  `triage_task`), never create another. Accepted as a bug → issue type `Bug 🐛` (GraphQL
+  `updateIssueIssueType`), label `bug`, Jira type `Error` (REST v2), Roadmap item with Product, Team
+  and Status. The Jira comment is the private, complete diagnosis; the GitHub comment is the public
+  one, with no client names, session keys, user ids or document numbers. Assignee, `Celula*` label
+  and the row's `triage_*` columns are left as the bot set them.
 - Optional Datadog flow (skill, "From a Datadog finding"), four entry points: Datadog → issue →
   Jira; Jira first (the task exists, create no second one); Datadog → Jira only; from a Datadog
   case. In the last two the user decides whether an issue is published. The coordinator or user

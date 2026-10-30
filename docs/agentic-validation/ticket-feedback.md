@@ -37,6 +37,14 @@
 - Note to bot team: <concrete: "include X next time">
 -->
 
+### 2026-10-30 — ETP-6036 — Pre-ticket etendo-ai#50: inconsistent permissions and metadata across MCP tools
+- Tool/spec: an `etendo_feedback` report (one row) routed by the ticket router bot into a GitHub pre-ticket; findings on `open-close-period-control/periodControl`, `etendo_defaults` on `purchase-order/header`, `fiscal-calendar/year`, `sales-invoice` post/unpost vs `not-posted-documents`, `generate_aging_receivable`.
+- Root-cause category: mixed, per finding — code-bug (`salesRepresentative` default = Admin), upstream-config (`openClose` read as a status; `fiscal-calendar` without `calendar`), product decision (post/unpost without accounting access), already fixed in develop (403 read `validation_error`, ETP-5852), ruled out ("403 mid-session": the 403s belonged to another session opened with another role).
+- Time-to-locate: **slow** — the public issue obfuscated every agent-written value, including the `failures` (spec, entity, error code) and most frictions; they had to be read from the row over VPN. And the report merged observations from five sessions over a week, which looked like one session changing permissions.
+- Missing rubric fields: [#2, #4, #5, #10]
+- Highest-value field that was missing: **#5 auth context** — the agent could not tell which user/role each observation came from (the MCP offers no way to ask), so a role switch between connections read as a permission change mid-session.
+- Note to bot team (ticket router): keep visible in the public issue what carries no client data — the `failures` tool, spec, entity and `error_code`, and the frictions' `what` when it only names specs, fields or codes. And tag each friction with the `session_key` (or date) it was observed in, so a multi-session report can be split without reading the row.
+
 ### 2026-07-23 — ETP-4287 — GET-only entities were not explicitly identified in discovery
 - Tool/spec: `etendo_discover`; entities `bp-stats`, `bp-trend`, and system-data `tax`.
 - Root-cause category: **code-bug** (category 1) — discovery already returned the configured `methods` array, but omitted the established MCP `readOnly` semantic flag.

@@ -46,10 +46,11 @@ A fix without a feedback note is an incomplete ticket. A feedback note without a
 <ingestion_protocol>
 ## How a ticket arrives — and how to normalize it (do this FIRST)
 
-A ticket reaches Tracer in one of two shapes:
+A ticket reaches Tracer in one of three shapes:
 
 1. **Pasted report** — markdown, plain text, an mbox excerpt, or a code/JSON-RPC snippet the user drops in.
 2. **A Jira reference** — an `ETP-XXXX` id (or a Jira URL).
+3. **A pre-ticket** — a GitHub issue in `etendosoftware/etendo-ai` of type `Pre-ticket`, opened by the **ticket router bot** from an agent's `etendo_feedback` report. Recognize it by the line `MCP usage: <row id>` and the bot's signature (`_Triage automático (bin/bug-triage)._`). See "Pre-ticket intake" below; it replaces the normalization steps.
 
 ### Normalization steps
 1. **If a Jira id was given:** fetch the issue (delegate the read to Clerk / `/etendo-workflow-manager` if direct `jira` access is unavailable). Use its description as the ticket body.
@@ -57,6 +58,16 @@ A ticket reaches Tracer in one of two shapes:
    - **Exists** → adopt that task; do not create a duplicate.
    - **Does not exist** → a Jira task MUST be created before any code is touched. Delegate creation to **Clerk** via `/etendo-workflow-manager` (Feature/bug under the active epic). Tracer never runs `jira` or `gh` directly — it always delegates issue/branch/PR ops to Clerk.
 3. **Extract the structured fields** (see the Ticket Quality Rubric below) from whatever was provided. The fields you CANNOT fill from the ticket are exactly your **feedback-note candidates** — note each missing field as you go.
+
+### Pre-ticket intake (shape 3)
+1. **Never create a Jira task.** The ticket router bot already opened one. Its key is in the `triage_task` column of the feedback row (and its issue URL in `triage_issue`); read it from there, never search Jira by symptom.
+2. **Read the report un-obfuscated.** The public issue replaces every agent-written value with `[omitido: contenía datos]`, often including the `failures` and most `frictions`. Export the row (`scripts/mcp-usage-dump.sh --include-reviewed`, production profile; needs the VPN) and read its `payload` — see the `mcp-audit` skill.
+3. **Replay more than the feedback session.** An agent's feedback aggregates what it saw across several connections and days. Replay the feedback's `session_key` AND every session of the same client in the previous 7 days. ETP-6036 (#50): half the frictions came from other days, under another role.
+4. **Split the report into findings** and classify each one on its own: one of the 6 root-cause categories, or one of two extra statuses:
+   - **already fixed in develop** — the fix commit exists; check whether it reached production with `git merge-base --is-ancestor <commit> origin/main`.
+   - **ruled out** — the telemetry contradicts the claim (e.g. a "403 mid-session" whose 403s all belong to another session opened with another role).
+5. **Show the diagnosis to the user before writing to either ticket.** Then delegate the writes to Clerk, following the pre-ticket lifecycle of the `etendo-roadmap` skill (issue type, Jira type, Roadmap, private/public comments, cross-link).
+6. **Leave the ticket router bot's choices alone:** assignee, `Celula*` label, the `triage_*` columns and the reviewed flag (`--mark-reviewed`).
 </ingestion_protocol>
 
 <ticket_quality_rubric>
@@ -134,10 +145,10 @@ See `docs/neo-headless-extensibility.md`.
 <resolution_workflow>
 ## Resolving a ticket end-to-end (MANDATORY order)
 
-1. **Ingest & normalize** (see ingestion protocol). Ensure a Jira task exists (create via Clerk if not).
+1. **Ingest & normalize** (see ingestion protocol). Ensure a Jira task exists (create via Clerk if not; a pre-ticket already has one in `triage_task`).
 2. **Orient** (see checklist). Read the relevant MCP file(s) and the contract/spec involved before writing anything.
 3. **Reproduce** — reconstruct the failing tool call from the ticket. If you cannot reproduce because info is missing, that gap is the FIRST feedback-note line and you may need to ask the user / inspect the live instance.
-4. **Classify the root cause** — one of the 6 categories (see rubric). Only **code-bug** and **upstream-config** are code fixes here; RBAC, missing-module, validator-side, and test-data-gap become feedback + escalation (validator-side has NO product fix at all — it's a defect in the bot).
+4. **Classify the root cause** — one of the 6 categories (see rubric), per finding when the ticket carries several. Only **code-bug** and **upstream-config** are code fixes here; RBAC, missing-module, validator-side, and test-data-gap become feedback + escalation (validator-side has NO product fix at all — it's a defect in the bot). A finding already fixed in develop, or ruled out by the telemetry, gets no fix either: say so in the ticket.
 5. **Branch** — delegate branch creation to **Clerk** (`feature/ETP-XXXX`, shared across both repos per `docs/branch-workflow.md`). Never work on main/epic directly.
 6. **Fix at the right layer** — MCP Java (CDI `NeoHandler` for window-specific; generic service only for truly generic behavior) OR upstream generator/decisions. Follow the generic-service rule.
 7. **Test** — write the failing repro test for the fix yourself, extending the existing test class found with `make find-tests` (JUnit in com.etendoerp.go for MCP). Every other test goes to the repo's tester: `tester-go` (JUnit) or `tester-functional` (Node / Vitest / Playwright in `etendo_schema_forge`).
