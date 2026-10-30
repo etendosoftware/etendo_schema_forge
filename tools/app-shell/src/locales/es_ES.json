@@ -26212,7 +26212,7 @@
     "currencyRateSelectPlaceholder": "Seleccionar {label}...",
     "currencyRateEdit": "Editar tipo de cambio",
     "currencyRateNotAvailable": "No hay tipo de cambio para esta fecha. Puedes indicarlo manualmente.",
-    "currencyRatesAtDate": "Tipos al {date}",
+    "currencyRatesAtDate": "Conversiones al {date}",
     "stepperDecrease": "Disminuir",
     "stepperIncrease": "Aumentar"
   },

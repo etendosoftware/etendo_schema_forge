@@ -3168,8 +3168,9 @@ threads `documentDateField` into the header `<Form>` calls; no generator change 
   open. Listed: the org currency plus every currency with a conversion range to or from it
   on ANY date (client or system, document org or `0`); a currency with no range at all is not
   offered. One whose ranges do not cover the reference date has `rate: null` and shows «—»
-  (tooltip `currencyRateNotAvailable`). The dropdown header shows the date as
-  dd/mm/yyyy (`currencyRatesAtDate`, `formatCalendarDate`).
+  (tooltip `currencyRateNotAvailable`). The dropdown header shows the reference date as
+  «Conversiones al dd/mm/yyyy» / «Conversions as of dd/mm/yyyy» (`currencyRatesAtDate`,
+  `formatCalendarDate`; worded «Conversiones», not «Tipos», since ETP-5840 QA).
 - Selecting a currency ALWAYS stages its rate — `null` when there is no range — so neither the
   previous currency's rate nor a manual rate survives a currency change. There is no
   client-side blocking anymore: the old «Cambio de moneda cancelado» revert
