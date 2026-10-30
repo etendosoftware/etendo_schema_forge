@@ -37,12 +37,16 @@ const readAsDataUrl = (file) => new Promise((resolve, reject) => {
 function ChoiceSelect({ id, value, onChange, options, labelKeys, unsetLabel, disabled, testId }) {
   const ui = useUI();
   return (
-    <Select value={value ?? UNSET} onValueChange={(v) => onChange(v === UNSET ? null : v)} disabled={disabled}>
-      <SelectTrigger id={id} data-testid={testId}><SelectValue /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value={UNSET}>{unsetLabel}</SelectItem>
+    <Select
+      value={value ?? UNSET}
+      onValueChange={(v) => onChange(v === UNSET ? null : v)}
+      disabled={disabled}
+      data-testid="Select__3f9ff6">
+      <SelectTrigger id={id} data-testid={testId}><SelectValue data-testid="SelectValue__3f9ff6" /></SelectTrigger>
+      <SelectContent data-testid="SelectContent__3f9ff6">
+        <SelectItem value={UNSET} data-testid="SelectItem__3f9ff6">{unsetLabel}</SelectItem>
         {options.map((option) => (
-          <SelectItem key={option} value={option}>{ui(labelKeys[option])}</SelectItem>
+          <SelectItem key={option} value={option} data-testid="SelectItem__3f9ff6">{ui(labelKeys[option])}</SelectItem>
         ))}
       </SelectContent>
     </Select>
@@ -133,13 +137,17 @@ export default function PrintableSettingsSection({
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <Card className="self-start">
-          <CardContent className="flex flex-col gap-4 p-6">
+        <Card className="self-start" data-testid="Card__3f9ff6">
+          <CardContent className="flex flex-col gap-4 p-6" data-testid="CardContent__3f9ff6">
             <div className="flex flex-col gap-2">
-              <Label htmlFor={`${id}-variant`}>{ui('documentTemplatesLabel')}</Label>
-              <Select value={draft.variant} onValueChange={set('variant')} disabled={busy}>
-                <SelectTrigger id={`${id}-variant`} data-testid={`${id}__variant`}><SelectValue /></SelectTrigger>
-                <SelectContent>
+              <Label htmlFor={`${id}-variant`} data-testid="Label__3f9ff6">{ui('documentTemplatesLabel')}</Label>
+              <Select
+                value={draft.variant}
+                onValueChange={set('variant')}
+                disabled={busy}
+                data-testid="Select__3f9ff6">
+                <SelectTrigger id={`${id}-variant`} data-testid={`${id}__variant`}><SelectValue data-testid="SelectValue__3f9ff6" /></SelectTrigger>
+                <SelectContent data-testid="SelectContent__3f9ff6">
                   {VARIANTS.map((variant) => (
                     <SelectItem key={variant} value={variant} data-testid={`${id}__variant-${variant}`}>
                       {ui(VARIANT_LABEL_KEYS[variant])}
@@ -150,7 +158,7 @@ export default function PrintableSettingsSection({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label>{ui('documentTemplatesColor')}</Label>
+              <Label data-testid="Label__3f9ff6">{ui('documentTemplatesColor')}</Label>
               <div className="flex flex-wrap items-center gap-2" data-testid={`${id}__colors`}>
                 <button
                   type="button"
@@ -189,24 +197,45 @@ export default function PrintableSettingsSection({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor={`${id}-font`}>{ui('documentTemplatesFont')}</Label>
-              <ChoiceSelect id={`${id}-font`} testId={`${id}__font`} value={draft.font} onChange={set('font')}
-                options={FONTS} labelKeys={FONT_LABEL_KEYS} unsetLabel={ui('documentTemplatesDesignDefault')} disabled={busy} />
+              <Label htmlFor={`${id}-font`} data-testid="Label__3f9ff6">{ui('documentTemplatesFont')}</Label>
+              <ChoiceSelect
+                id={`${id}-font`}
+                testId={`${id}__font`}
+                value={draft.font}
+                onChange={set('font')}
+                options={FONTS}
+                labelKeys={FONT_LABEL_KEYS}
+                unsetLabel={ui('documentTemplatesDesignDefault')}
+                disabled={busy}
+                data-testid="ChoiceSelect__3f9ff6" />
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor={`${id}-size`}>{ui('documentTemplatesFontSize')}</Label>
-              <ChoiceSelect id={`${id}-size`} testId={`${id}__size`} value={draft.fontSize} onChange={set('fontSize')}
-                options={FONT_SIZES} labelKeys={FONT_SIZE_LABEL_KEYS} unsetLabel={ui('documentTemplatesDesignDefault')} disabled={busy} />
+              <Label htmlFor={`${id}-size`} data-testid="Label__3f9ff6">{ui('documentTemplatesFontSize')}</Label>
+              <ChoiceSelect
+                id={`${id}-size`}
+                testId={`${id}__size`}
+                value={draft.fontSize}
+                onChange={set('fontSize')}
+                options={FONT_SIZES}
+                labelKeys={FONT_SIZE_LABEL_KEYS}
+                unsetLabel={ui('documentTemplatesDesignDefault')}
+                disabled={busy}
+                data-testid="ChoiceSelect__3f9ff6" />
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor={`${id}-stripes`}>{ui('documentTemplatesStripes')}</Label>
-              <ChoiceSelect id={`${id}-stripes`} testId={`${id}__stripes`}
+              <Label htmlFor={`${id}-stripes`} data-testid="Label__3f9ff6">{ui('documentTemplatesStripes')}</Label>
+              <ChoiceSelect
+                id={`${id}-stripes`}
+                testId={`${id}__stripes`}
                 value={stripesOptIn && draft.rowStripes !== 'on' ? null : draft.rowStripes}
                 onChange={set('rowStripes')}
-                options={stripesOptIn ? ['on'] : ROW_STRIPES} labelKeys={STRIPES_LABEL_KEYS}
-                unsetLabel={ui(stripesOptIn ? 'documentTemplatesStripesOff' : 'documentTemplatesDesignDefault')} disabled={busy} />
+                options={stripesOptIn ? ['on'] : ROW_STRIPES}
+                labelKeys={STRIPES_LABEL_KEYS}
+                unsetLabel={ui(stripesOptIn ? 'documentTemplatesStripesOff' : 'documentTemplatesDesignDefault')}
+                disabled={busy}
+                data-testid="ChoiceSelect__3f9ff6" />
             </div>
 
             {withShowLogo && (
@@ -229,7 +258,7 @@ export default function PrintableSettingsSection({
 
             {withLogo && (
                 <div className="flex flex-col gap-2">
-                  <Label>{ui('documentTemplatesLogo')}</Label>
+                  <Label data-testid="Label__3f9ff6">{ui('documentTemplatesLogo')}</Label>
                   <div className="flex items-center gap-3">
                     {draft.logo && (
                       <img src={draft.logo} alt="" className="h-10 max-w-[8rem] rounded border object-contain" data-testid={`${id}__logo-image`} />
@@ -250,7 +279,7 @@ export default function PrintableSettingsSection({
 
             {withFooter && (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor={`${id}-footer`}>{ui('documentTemplatesFooter')}</Label>
+                  <Label htmlFor={`${id}-footer`} data-testid="Label__3f9ff6">{ui('documentTemplatesFooter')}</Label>
                   <textarea
                     id={`${id}-footer`}
                     className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -272,7 +301,7 @@ export default function PrintableSettingsSection({
         <div className="space-y-2" data-testid={`${id}__preview`}>
           <p className="text-sm font-medium">{ui('documentTemplatesPreviewTitle')}</p>
           <p className="text-xs text-muted-foreground">{ui('documentTemplatesPreviewHint')}</p>
-          <Preview settings={draft} />
+          <Preview settings={draft} data-testid="Preview__3f9ff6" />
         </div>
       </div>
     </section>

@@ -71,6 +71,6 @@ export default function ListingTemplatePreview({ settings }) {
       pageWidth={1123}
       pageHeight={794}
       testId="ListingTemplatePreview__frame"
-    />
+      data-testid="PrintablePreviewFrame__abd9c6" />
   );
 }

@@ -65,6 +65,6 @@ export default function DocumentTemplatePreview({ settings }) {
       pageWidth={794}
       pageHeight={1123}
       testId="DocumentTemplatePreview__frame"
-    />
+      data-testid="PrintablePreviewFrame__199a01" />
   );
 }

@@ -289,7 +289,7 @@ export default function ReportDrawer({
     const neoBase = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
     loadDocTemplateConfig('listing', neoBase, token).then(async (config) => {
       // The logo is read with the config, so the preview waits for both and renders once.
-      const logo = config?.showLogo === 'on' ? (config.logo || await loadCompanyLogo(neoBase, token)) : null;
+      const logo = config?.showLogo === 'on' ? (config.logo || (await loadCompanyLogo(neoBase, token))) : null;
       if (cancelled) return;
       // Names what the list print will use, so "the style is not applied" is diagnosable from the console.
       console.info(`[list-print] ${config ? `saved design: ${config.variant}${config.color ? ` ${config.color}` : ''}` : 'no saved design (flag off, nothing saved or not readable): the current print'}`);

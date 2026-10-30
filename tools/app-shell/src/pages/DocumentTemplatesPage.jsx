@@ -76,7 +76,7 @@ export default function DocumentTemplatesPage() {
           apiFetch={apiFetch}
           onReload={load}
           loading={loading}
-        />
+          data-testid="PrintableSettingsSection__b63f58" />
       </div>
       <div hidden={tab !== 'listings'}>
         <PrintableSettingsSection
@@ -92,7 +92,7 @@ export default function DocumentTemplatesPage() {
           apiFetch={apiFetch}
           onReload={load}
           loading={loading}
-        />
+          data-testid="PrintableSettingsSection__b63f58" />
       </div>
     </div>
   );
