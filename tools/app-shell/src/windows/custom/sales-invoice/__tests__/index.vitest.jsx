@@ -119,8 +119,8 @@ vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   },
 }));
 
-// ETP-5302 — props are recorded (not just labelKey rendered) so the `preUnpostActions`
-// opt-in can be asserted on the instance that actually carries it.
+// ETP-5302 — props are recorded (not just labelKey rendered) so the wiring can be
+// asserted on the instance that actually carries it.
 let bulkDocumentActionCalls = [];
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
   default: (props) => {
@@ -513,6 +513,16 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       expect(actions.map((a) => a.key)).toEqual(['reactivate', 'unpost']);
     });
 
+    // The server un-posts inside the RE, so the kebab Reactivar sends the RE alone.
+    it('the row-kebab Reactivar is a plain RE with no preUnpost flag', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { documentStatus: 'CO', processed: 'Y', posted: 'Y' } });
+      const reactivate = actions.find((a) => a.key === 'reactivate');
+      expect(reactivate.documentAction).toBe('RE');
+      expect(reactivate.preUnpost).toBeUndefined();
+    });
+
     it('bumps refreshKey when a neoAction menu action (post) completes', () => {
       render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
@@ -556,37 +566,22 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
   });
 
   // ── ETP-5302 — reactivating a POSTED invoice from the bulk bar ──────────────
-  // The bug: bulk RE on a Completada + Contabilizada invoice failed with
-  // "Factura contabilizada" while the form kebab succeeded, because the kebab
-  // chains unpost → RE (`preUnpost: true` in decisions.json) and the bulk bar sent
-  // a bare RE, which C_INVOICE_POST rejects while Posted='Y'.
-  describe('ETP-5302 — preUnpostActions on the bulk process button', () => {
+  // ETP-5684 — the un-post that ETP-5302 chained before RE on the client now runs on the
+  // server, inside the RE (`ReactivationUnpost`), so no bulk instance asks for it.
+  describe('ETP-5302 — bulk process button', () => {
     const callFor = (labelKey) => bulkDocumentActionCalls.find((p) => p.labelKey === labelKey);
 
-    it("passes preUnpostActions={['RE']} to the process (reactivate) bulk instance", () => {
+    it('opts no bulk instance into a client-side un-post', () => {
       render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
-      expect(callFor('process').preUnpostActions).toEqual(['RE']);
-    });
-
-    // Scoped to RE on purpose: a confirm (CO) must never reverse accounting.
-    it('limits the opt-in to RE — no other action triggers the pre-unpost', () => {
-      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
-
-      expect(callFor('process').preUnpostActions).not.toContain('CO');
-      expect(callFor('process').preUnpostActions).toHaveLength(1);
-    });
-
-    it('does NOT opt the Post bulk instance into the pre-unpost chain', () => {
-      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
-
-      expect(callFor('post').preUnpostActions).toBeUndefined();
+      expect(bulkDocumentActionCalls.length).toBeGreaterThan(0);
+      bulkDocumentActionCalls.forEach((p) => expect(p.preUnpostActions).toBeUndefined());
     });
 
     // ETP-5692 — reverses the ETP-5302 product rule: an invoice now mounts a standalone
     // bulk "Descontabilizar" button that removes the accounting and leaves the invoice
     // Completed, wired to the invoice pair (Completed + posted) rather than the albaranes'
-    // posted-only one. Reactivar keeps its own pre-unpost.
+    // posted-only one.
     it('mounts a standalone bulk unpost button wired to the invoice unpost pair', () => {
       render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 

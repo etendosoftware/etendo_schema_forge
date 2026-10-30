@@ -2,7 +2,7 @@
 # mcp-usage-dump.sh
 #
 # Export the MCP usage telemetry table (ETGO_MCP_USAGE) from a deployed Etendo
-# instance, and optionally mark the exported rows as reviewed.
+# instance, and optionally mark the exported rows as reviewed (Status + Reviewed_By).
 #
 # The instance is named by a remote-connection profile
 # (~/.config/schema-forge/remote/<name>.env: SSH_HOST + GRADLE_PROPERTIES, the
@@ -13,20 +13,20 @@
 # scripts/lib/remote-etendo-psql.sh.
 #
 #   scripts/mcp-usage-dump.sh production
-#   scripts/mcp-usage-dump.sh etendo-go-production --mark-reviewed
+#   scripts/mcp-usage-dump.sh etendo-go-production --mark-reviewed --reviewer "Jane Doe"
 #
-# REVIEWED = isactive 'N'
-# ------------------------
-# The table has no review column, so `isactive` is repurposed as one: the writer
-# (McpUsageLogger) always inserts 'Y' and nothing in the module ever reads the
-# column back, so flipping it to 'N' is inert for the runtime. It is a
-# convention, not a constraint — if the table is ever surfaced as an AD window,
-# the standard grid hides 'N' rows and anyone can flip them back.
+# REVIEWED = Status 'R' (ETP-5594)
+# --------------------------------
+# Status NULL means pending, 'R' means reviewed (check ETGO_MCP_USAGE_STATUS_CHK);
+# Reviewed_By is the free-text name of whoever reviewed the row. The writer
+# (McpUsageLogger) never touches either column, so every new row is pending.
+# `isactive` is no longer read or written here — it is left exactly as it is.
+# See modules/com.etendoerp.go/docs/mcp-usage-telemetry.md.
 #
 # --mark-reviewed marks EXACTLY the rows it exported, in the same statement that
 # reads them (UPDATE ... RETURNING), so a row can never be marked without having
 # been written to the output file. If the file write fails, rerun with
-# --include-reviewed to get them back.
+# --include-reviewed to get them back. It requires --reviewer.
 #
 # Output is JSONL — one JSON object per line, ordered by creation time. The
 # `payload` column stays a string (it is JSON only on feedback rows); parse it
@@ -36,8 +36,9 @@
 #     scripts/mcp-usage-dump.sh [options] <profile|ssh-host>
 #
 # Options:
-#     --mark-reviewed       Mark every exported row isactive='N' (writes to the DB)
-#     --include-reviewed    Also export rows already marked reviewed (default: only unreviewed)
+#     --mark-reviewed       Mark every exported row Status='R' (writes to the DB; needs --reviewer)
+#     --reviewer <name>     Reviewed_By value written by --mark-reviewed (max 60 chars)
+#     --include-reviewed    Also export rows already marked reviewed (default: only Status IS NULL)
 #     --since <date>        Only rows created on/after this date (YYYY-MM-DD)
 #     --until <date>        Only rows created BEFORE this date (YYYY-MM-DD)
 #     --row-type <type>     tool_call | feedback
@@ -59,6 +60,7 @@ TARGET=""
 GRADLE_OVERRIDE=""
 OUT=""
 MARK_REVIEWED=0
+REVIEWER=""
 INCLUDE_REVIEWED=0
 COUNT_ONLY=0
 ASSUME_YES=0
@@ -68,7 +70,7 @@ ROW_TYPE=""
 LIMIT=""
 
 die() { printf 'mcp-usage-dump: %s\n' "$1" >&2; exit 1; }
-usage() { sed -n '3,51p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,/^$/{/^$/!p;}' "$0" | sed 's/^# \{0,1\}//'; }
 
 need_value() { [[ -n "${2:-}" ]] || die "$1 needs a value"; }
 
@@ -76,6 +78,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --mark-reviewed)    MARK_REVIEWED=1; shift ;;
     --include-reviewed) INCLUDE_REVIEWED=1; shift ;;
+    --reviewer)         need_value "$1" "${2:-}"; REVIEWER="$2"; shift 2 ;;
     --count)            COUNT_ONLY=1; shift ;;
     --yes|-y)           ASSUME_YES=1; shift ;;
     --since)            need_value "$1" "${2:-}"; SINCE="$2"; shift 2 ;;
@@ -103,6 +106,9 @@ for d in "$SINCE" "$UNTIL"; do
   [[ -z "$d" || "$d" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "dates must be YYYY-MM-DD (got '$d')"
 done
 [[ $MARK_REVIEWED -eq 1 && $COUNT_ONLY -eq 1 ]] && die "--count and --mark-reviewed are mutually exclusive"
+[[ $MARK_REVIEWED -eq 1 && -z "$REVIEWER" ]] && die "--mark-reviewed needs --reviewer <name> (written to Reviewed_By)"
+[[ -z "$REVIEWER" || ${#REVIEWER} -le 60 ]] || die "--reviewer must be at most 60 characters"
+[[ -z "$REVIEWER" || $MARK_REVIEWED -eq 1 ]] || die "--reviewer only makes sense with --mark-reviewed"
 
 # --- SQL ------------------------------------------------------------------
 
@@ -111,7 +117,7 @@ done
 sql_lit() { printf "'%s'" "${1//\'/\'\'}"; }
 
 WHERE="TRUE"
-[[ $INCLUDE_REVIEWED -eq 1 ]] || WHERE="$WHERE AND u.isactive = 'Y'"
+[[ $INCLUDE_REVIEWED -eq 1 ]] || WHERE="$WHERE AND u.status IS NULL"
 [[ -z "$SINCE" ]]    || WHERE="$WHERE AND u.created >= $(sql_lit "$SINCE")::date"
 [[ -z "$UNTIL" ]]    || WHERE="$WHERE AND u.created <  $(sql_lit "$UNTIL")::date"
 [[ -z "$ROW_TYPE" ]] || WHERE="$WHERE AND u.row_type = $(sql_lit "$ROW_TYPE")"
@@ -124,7 +130,8 @@ LIMIT_CLAUSE=""
 ROW_JSON="json_build_object(
     'id', u.etgo_mcp_usage_id,
     'created', to_char(u.created, 'YYYY-MM-DD\"T\"HH24:MI:SS.MS'),
-    'reviewed', (u.isactive = 'N'),
+    'reviewed', (u.status = 'R'),
+    'reviewed_by', u.reviewed_by,
     'ad_client_id', u.ad_client_id,
     'client', c.name,
     'session_key', u.session_key,
@@ -156,7 +163,7 @@ elif [[ $MARK_REVIEWED -eq 1 ]]; then
   SQL="WITH picked AS (
     SELECT u.etgo_mcp_usage_id FROM etgo_mcp_usage u WHERE $WHERE $ORDER $LIMIT_CLAUSE
   ), marked AS (
-    UPDATE etgo_mcp_usage u SET isactive = 'N', updated = now()
+    UPDATE etgo_mcp_usage u SET status = 'R', reviewed_by = $(sql_lit "$REVIEWER"), updated = now()
     FROM picked p WHERE u.etgo_mcp_usage_id = p.etgo_mcp_usage_id
     RETURNING u.*
   )
@@ -200,7 +207,7 @@ if [[ $MARK_REVIEWED -eq 1 && $ASSUME_YES -eq 0 ]]; then
   [[ -n "$LIMIT" && "$PENDING" -gt "$LIMIT" ]] && PENDING="$LIMIT"
   [[ "$PENDING" -eq 0 ]] && { printf 'Nothing to export: 0 %s on %s.\n' "$(scope_note)" "$SSH_HOST"; exit 0; }
   [[ -t 0 ]] || die "--mark-reviewed writes to $SSH_HOST and stdin is not a terminal; pass --yes to proceed"
-  printf 'About to export and MARK AS REVIEWED %s %s on %s.\n' "$PENDING" "$(scope_note)" "$SSH_HOST"
+  printf 'About to export and MARK AS REVIEWED (Status=R, Reviewed_By=%s) %s %s on %s.\n' "$REVIEWER" "$PENDING" "$(scope_note)" "$SSH_HOST"
   read -r -p 'Proceed? [y/N] ' reply
   [[ "$reply" == "y" || "$reply" == "Y" ]] || { printf 'Aborted, nothing written.\n'; exit 1; }
 fi
@@ -216,7 +223,7 @@ printf '%s\n' "$SQL" | run_remote > "$OUT" || die "the remote export failed; not
 
 ROWS="$(wc -l < "$OUT" | tr -d ' ')"
 printf '%s rows → %s\n' "$ROWS" "$OUT" >&2
-[[ $MARK_REVIEWED -eq 1 ]] && printf 'Marked reviewed (isactive=N) on %s: %s rows.\n' "$SSH_HOST" "$ROWS" >&2
+[[ $MARK_REVIEWED -eq 1 ]] && printf 'Marked reviewed (Status=R, Reviewed_By=%s) on %s: %s rows.\n' "$REVIEWER" "$SSH_HOST" "$ROWS" >&2
 
 if [[ "$ROWS" -gt 0 ]]; then
   {

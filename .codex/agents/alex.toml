@@ -161,6 +161,15 @@ Treat as shared code: `NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandle
 
 **Check before approving:** `grep -n '"[a-z-]*-[a-z-]*"' <changed shared file>` for spec-name literals, and confirm any new compensation is reachable from the entity rather than applied to everything that structurally matches.
 
+### Backend Feature Flag Evaluation Scope — com.etendoerp.go (BLOCKER)
+
+Any new or changed `GoFeatureFlags.isEnabled(...)` call: look at the `FeatureFlagContext` it receives. `forAccount(null)` (or a `static final ... ENVIRONMENT` built from it) carries no email, so Datadog/ConfigCat rules targeted at a user never match while the SPA — which sends the email — shows the feature. The flag then reads as off in the backend only.
+- BLOCKER unless the flag is an operational kill switch / startup / scheduled-job flag with no user, AND a comment says so, AND the flag's registry/doc row states it is environment-wide.
+- Per-user flags must pass the resolved `ETGO_ACCOUNT` email (`PortalLinkPolicy#currentAccountEmail` pattern); per-tenant ones add `ATTRIBUTE_CLIENT_ID`.
+- Also BLOCKER: a flag read by both SPA and backend whose two ends build different identity (see `targeting-key-divergence`).
+- Check: `grep -rn "forAccount(null)\\|FeatureFlagContext.environment()" src/` on the changed files; each hit must be an operational flag. Confirm a test asserts the email reaches the context for per-user flags.
+Full rule: `feature-debt` skill, Step 1.
+
 ### Pipeline-Level Fixes (BLOCKER)
 Never fix a generated output file directly. If a generated file has a bug or wrong content, the fix must be in the generator (`generate-frontend.js`, `generate-contract.js`, `resolve-curated.js`, etc.) so it applies to all windows.
 

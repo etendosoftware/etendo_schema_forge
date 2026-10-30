@@ -1397,6 +1397,14 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
       });
     });
   });
+
+  // ETP-5684 — a post/unpost refused for a role without Show Accounting Fields (403).
+  it('ETGO_AccountingAccessDenied: maps the accounting refusal by key', () => {
+    const ui = fakeUiTranslator({ 'backendError.accountingAccessDenied': 'Tu rol no puede ver la contabilidad' });
+    const body = { success: false, message: 'Access denied to accounting for current role',
+      messageKeys: ['ETGO_AccountingAccessDenied'] };
+    assert.equal(translateBackendErrorBody(body, ui, 'fallback'), 'Tu rol no puede ver la contabilidad');
+  });
 });
 
 // ETP-4891 follow-up: PSD2_IBANAutoFillFailed (com.etendoerp.psd2) — that module ships ~108

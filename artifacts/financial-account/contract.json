@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "updatedAt": "2026-10-22T17:16:47.640Z",
-  "checksum": "2253f8ace18dcc99",
+  "updatedAt": "2026-10-29T13:31:32.607Z",
+  "checksum": "844a2794b4c3c099",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1785,6 +1785,7 @@
               }
             ],
             "defaultValue": "N",
+            "visibleWhenCapability": "showAccountingFields",
             "validation": {
               "required": true,
               "maxLength": 60
@@ -2455,6 +2456,7 @@
               }
             ],
             "defaultValue": "N",
+            "visibleWhenCapability": "showAccountingFields",
             "validation": {
               "required": true,
               "maxLength": 60

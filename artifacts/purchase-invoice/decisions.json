@@ -24,8 +24,7 @@
         "labelKey": "reactivate",
         "visibleWhenStatus": "CO",
         "documentAction": "RE",
-        "successKey": "reactivated",
-        "preUnpost": true
+        "successKey": "reactivated"
       },
       {
         "key": "post",
@@ -197,7 +196,8 @@
           "reference": "DocumentType",
           "inputMode": "selector",
           "readOnlyLogicJs": null,
-          "readOnlyLogic": "@Processed@='Y'"
+          "readOnlyLogic": "@Processed@='Y'",
+          "agentPrompt": "The kind of purchase invoice: 'Factura de compra' for an ordinary supplier invoice, 'Factura Rectificativa (compras)' for a supplier credit note (negative amounts). For goods returned to the supplier, do not build the credit note by hand: complete the return-to-vendor shipment and run its createReturnInvoice action, which creates it linked to the return. etendo_selectors lists the types of this tenant."
         },
         "invoiceDate": {
           "grid": true,
@@ -206,7 +206,8 @@
           "section": "principal",
           "readOnlyLogic": null,
           "seq": 30,
-          "businessCritical": true
+          "businessCritical": true,
+          "agentPrompt": "The date printed on the supplier's invoice. If omitted the server proposes today, as the form does — send the supplier document's own date when registering it."
         },
         "businessPartner": {
           "grid": true,
@@ -217,7 +218,8 @@
           "readOnlyLogic": "@Processed@='Y'",
           "displayLogic": null,
           "seq": 10,
-          "businessCritical": true
+          "businessCritical": true,
+          "agentPrompt": "The vendor, as its id plus the name in businessPartner$_identifier. Names can repeat: to tell two apart, read their searchKey and taxID with one etendo_list on contacts/businessPartner filtered by id: {in: [ids]}."
         },
         "partnerAddress": {
           "section": "principal",
@@ -250,7 +252,8 @@
           "grid": false,
           "seq": 35,
           "readOnlyLogic": "@Posted@='Y'",
-          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post."
+          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post.",
+          "agentPrompt": "The date the invoice is posted to the ledger; it must fall in an open period. If omitted it follows the invoice date (today when that was omitted too)."
         },
         "paymentTerms": {
           "section": "principal",
@@ -290,7 +293,8 @@
           "form": true,
           "searchable": true,
           "readOnlyLogic": null,
-          "seq": 20
+          "seq": 20,
+          "agentPrompt": "The supplier's own number for this invoice (the number printed on the supplier's document), not an order number. Put it here when registering a supplier invoice."
         },
         "taxDate": {
           "visibility": "discarded"
@@ -447,7 +451,7 @@
           "visibility": "system",
           "form": false,
           "displayLogic": null,
-          "agentPrompt": "Document workflow action for this purchase invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it computes taxes and totals and creates the payment plan; a draft takes CO only (delete it to discard it). From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. RE is the only action of a completed invoice; correct an issued invoice by reactivating it or with a factura rectificativa made in the app. Only CO and RE are accepted as docAction: any other value is refused with 422 listing the allowed ones. Preconditions for CO: at least one line, a vendor with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger, and posted is not a documentAction value (never send PO here): book a completed, not-posted invoice with etendo_action(action:'post'); remove the accounting entries of a completed AND posted invoice with etendo_action(action:'unpost'). Unposting is NOT reactivation (RE): the invoice stays CO, and only accountingDate, project, costcenter, orderReference, line project/costcenter and the exchange rates become correctable — then post again. Do unpost, fix and post in one go, since a background accounting process may re-post an unposted invoice within ~5 minutes. Read documentStatus and posted with etendo_get before acting."
+          "agentPrompt": "Document workflow action for this purchase invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it computes taxes and totals and creates the payment plan; a draft takes CO only (delete it to discard it). From documentStatus=CO (Completed): RE reactivates it back to DR; on a posted invoice the server removes its accounting entries first (un-post) and the answer lists steps [unpost, reactivate] — if the reactivation is then refused, the un-post stays and the answer says so in partial. RE is the only action of a completed invoice; correct an issued invoice by reactivating it or with a factura rectificativa made in the app. Only CO and RE are accepted as docAction: any other value is refused with 422 listing the allowed ones. Preconditions for CO: at least one line, a vendor with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger, and posted is not a documentAction value (never send PO here): book a completed, not-posted invoice with etendo_action(action:'post'); remove the accounting entries of a completed AND posted invoice with etendo_action(action:'unpost'). post and unpost need the showAccountingFields capability: without it they are refused with 403 and the posted field is not returned. Unposting is NOT reactivation (RE): the invoice stays CO, and only accountingDate, project, costcenter, orderReference, line project/costcenter and the exchange rates become correctable — then post again. Do unpost, fix and post in one go, since a background accounting process may re-post an unposted invoice within ~5 minutes. Read documentStatus and posted with etendo_get before acting."
         },
         "createLinesFromOrder": {
           "visibility": "discarded",
@@ -617,6 +621,9 @@
           "visibility": "readOnly",
           "form": false,
           "grid": false
+        },
+        "etblkpAccountingstatus": {
+          "agentPrompt": "Whether the invoice is posted to the general ledger: Y posted, N not posted yet. Any other value is why posting failed or is pending (p period closed, i invalid account, b not balanced, c no conversion rate, l pending refresh...); options lists them all."
         }
       }
     },
@@ -729,7 +736,8 @@
           "readOnlyLogic": null,
           "forceCalloutFields": [
             "lineNetAmount"
-          ]
+          ],
+          "agentPrompt": "Normally omit it: the server picks the tax from the product's tax category and the supplier's tax category, as the form does. To see or change the options for this line, call etendo_selectors for 'tax' with recordContext {product, businessPartner, invoiceDate} — not the tax/tax catalogue, which lists every rate, including inactive and future ones."
         },
         "taxableAmount": {
           "visibility": "readOnly",

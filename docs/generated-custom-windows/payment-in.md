@@ -439,8 +439,14 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 - The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
 
+- `etblkpAccountingstatus` ("Estado contable") is `form: false` here, but it also carries the gate (QA pass 1): the accounting guard (`tools/app-shell/test/accounting-capability-guard.test.js`) reads every status column of the resolved contract, so a later `form: true` cannot expose it ungated.
+
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
 ## Default date filter: Last 30 days — ETP-5778
 
 The list opens with the date filter on "Últimos 30 días" (`window.listViewOptions.defaultDatePreset: "last30"` in `decisions.json`, applied to `dateFilterKey: paymentDate`). Choosing "Cualquier fecha"/"Todo el tiempo" is honoured and kept while the user stays in the window; a saved session view wins over the default. See `docs/decisions-reference.md` (Default date preset).
+
+## Agent prompts on account and status — ETP-5852
+
+`decisions.json` carries an `agentPrompt` on `account` (the financial account the money is received into), `status` (the collection lifecycle codes, RPAP to RPPC, and that accounting is a separate field) and `etblkpAccountingstatus` (Y posted, N not posted, any other value the reason posting failed). Feedback M-29.

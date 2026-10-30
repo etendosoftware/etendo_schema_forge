@@ -481,7 +481,7 @@ on: `ETGO_CI` is only written once a confirmed invoice exists.
 
 **To modify an auto-generated invoice**, the user reactivates it: both
 `sales-invoice` and `purchase-invoice` expose a `reactivate` menu action
-(`documentAction: 'RE'`, `preUnpost: true`, `visibleWhenStatus: 'CO'` —
+(`documentAction: 'RE'`, `visibleWhenStatus: 'CO'` —
 `artifacts/sales-invoice/contract.json:26-34`), which is now the only route back
 to `DR`. Editing before confirming is no longer an option on this path.
 
