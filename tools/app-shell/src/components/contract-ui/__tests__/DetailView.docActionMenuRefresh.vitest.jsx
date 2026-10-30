@@ -7,7 +7,7 @@
  * the ETP-4563 cache fix also touched: after a successful document action the
  * record must be re-fetched with `{ force: true }` so the read cache is bypassed
  * and the UI reflects the server-side state change. It also drives the
- * `preUnpost` guard (unpost-before-action) and the failure/throw branches, and
+ * posted-record case (no client-side unpost since ETP-5684) and the failure/throw branches, and
  * the `customMenuContent` onRefresh callback.
  *
  * Harness mirrors DetailView.neoActionMenu.vitest.jsx; the only additions are a
@@ -219,11 +219,12 @@ describe('DetailView — documentAction menu branch cache refresh (ETP-4563)', (
     expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it('unposts first, then runs the documentAction and force-refreshes when the record is posted', async () => {
+  // ETP-5684 — the server un-posts a posted record inside the RE; the menu sends the RE alone.
+  it('runs the documentAction on a posted record without unposting it first', async () => {
     const user = userEvent.setup();
     setCurrentRecord('Y');
     renderDetailView({
-      menuActions: [{ key: 'reopen', label: 'Reopen', documentAction: 'RE', preUnpost: true }],
+      menuActions: [{ key: 'reopen', label: 'Reopen', documentAction: 'RE' }],
     });
 
     await user.click(screen.getByTestId('action-more'));
@@ -231,29 +232,8 @@ describe('DetailView — documentAction menu branch cache refresh (ETP-4563)', (
     await user.click(screen.getByTestId('menu-action-reopen'));
 
     await waitFor(() => expect(docExecuteMock).toHaveBeenCalledWith('123', 'RE'));
-    expect(neoExecuteMock).toHaveBeenCalledWith('123', 'unpost');
-    // Unpost must precede the document action.
-    expect(neoExecuteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      docExecuteMock.mock.invocationCallOrder[0],
-    );
+    expect(neoExecuteMock).not.toHaveBeenCalled();
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
-  });
-
-  it('aborts the documentAction (no execute, no refresh) when the pre-unpost step fails', async () => {
-    const user = userEvent.setup();
-    setCurrentRecord('Y');
-    neoExecuteMock.mockResolvedValue({ success: false, message: 'Cannot unpost' });
-    renderDetailView({
-      menuActions: [{ key: 'reopen', label: 'Reopen', documentAction: 'RE', preUnpost: true }],
-    });
-
-    await user.click(screen.getByTestId('action-more'));
-    mockHook.fetchById.mockClear();
-    await user.click(screen.getByTestId('menu-action-reopen'));
-
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cannot unpost'));
-    expect(docExecuteMock).not.toHaveBeenCalled();
-    expect(mockHook.fetchById).not.toHaveBeenCalled();
   });
 
   it('customMenuContent onRefresh force-refreshes the record', async () => {

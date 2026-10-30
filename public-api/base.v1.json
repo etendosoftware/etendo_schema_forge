@@ -1205,7 +1205,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -1335,7 +1335,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -3898,7 +3898,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.93.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -4057,7 +4057,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.93.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -4152,7 +4152,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.93.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },

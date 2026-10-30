@@ -3755,6 +3755,7 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - Movements (`MovementsTable.jsx`): the posting dot under the type and the "Contabilizado" half of the "Tipo & Contabilizado" header are hidden, and the "Ordenar por" popover loses the entry (`buildMovementSortColumns(ui, capabilities)`). The movement kebab (`MovementRowKebab.jsx`) hides Contabilizar / Descontabilizar, and no stray separator is left above Eliminar.
 - Reconciliations: `decisions.json → entities.reconciliations.fields.posted` carries the gate; `getContractGridColumns` forwards it, so `ReconciliationListTable.jsx` drops the column, its cells and its sort entry, and the advanced filter (`buildReconciliationFilterColumns(ui, capabilities)`) drops the field. `entities.transaction.fields.posted` carries it too.
 - The reconciled-transactions modal (`ReconciledTxnsModal.jsx`) hides the posting dot.
+- The bulk-posting module's `etblkpAccountingstatus` ("Estado contable") form field of `transaction` and `importedBankStatements` carries the gate too (QA pass 1, CP-8): the generator writes it on the form line and `EntityForm` hides it at render time.
 - Kept on purpose: the Reactivar / Eliminar confirmation dialogs still say the accounting entry will be removed (a consequence of an action the user may take).
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

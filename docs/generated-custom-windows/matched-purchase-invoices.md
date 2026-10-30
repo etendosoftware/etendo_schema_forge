@@ -240,9 +240,9 @@ button, modal, per-row loop and result toast are the shared
 > invoice/receipt/shipment windows) only ever emits `post`; this local one emits `post`
 > and/or `unpost`, which is why this window needs no separate *Descontabilizar* button.
 > ETP-5302 added a shared `buildUnpostActions`/`unpostRowFilter` pair and a shared
-> `isPosted` in `tools/app-shell/src/lib/preUnpost.js`, both applying the same
+> `isPosted` in `tools/app-shell/src/lib/postedStatus.js` (moved from `preUnpost.js` in ETP-5684), both applying the same
 > `'Y'`-only rule — so the same predicate is now spelled out in three places
-> (`preUnpost.js`, `BulkDocumentAction.jsx`'s `isRowPosted`, and this file). They agree
+> (`postedStatus.js`, `BulkDocumentAction.jsx`'s `isRowPosted`, and this file). They agree
 > today; a change to the AD Posted-status rule must be applied to all three.
 
 **`actionMode: 'neoAction'` — new generic capability on the shared component.**
