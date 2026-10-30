@@ -88,7 +88,7 @@ Estos cambios viven en `epic/ETP-3504` y aún **no están expuestos vía MCP**, 
 | G14 | Audit log de invocaciones MCP | ⚠️ logs estándar | Compliance / debugging difícil | Media |
 | G15 | Rate limiting por sesión MCP | ❌ no hay | Loop agéntico = DB hammered | Media |
 | G16 | Streaming / progreso (reports largos) | ❌ request/response | Timeouts en reportes grandes | Baja |
-| G17 | Context primer (cliente/org/rol activos, fecha) | ⚠️ en OBContext, no se devuelve | Agente no sabe en qué tenant está | **Alta** |
+| G17 | Context primer (cliente/org/rol activos, fecha) | ✅ tool `etendo_whoami` (etendo-ai#53) | — | — |
 | G18 | Webhooks reverse / subscriptions | ❌ solo polling | No se puede notificar al agente | Baja |
 | G19 | Colisiones de tool names en multi-tenant | ⚠️ resuelto en CRUD, no en procesos | Ambigüedad cross-client | Baja |
 | G20 | Doc agent-friendly del catálogo | ⚠️ docs humanos | Falta `neo_help` o `agent-guide.md` | Media |
@@ -116,7 +116,7 @@ Es el mismo origen que G6 generalizado. Sin esto, las descripciones son genéric
 Crítico para confianza. Agente quiere validar antes de commit. **Propuesta:** parámetro opcional `dryRun: true` en `neo_create/update/delete` que ejecute validaciones + callouts pero rollback la transacción.
 
 **G17 — Context primer**
-Sin esto el agente no sabe en qué tenant/rol/fecha está. **Propuesta:** tool `neo_whoami` (cheap, primer call recomendado en system prompt) → `{client, org, role, user, currentDate, currency, language}`. *Update 2026-04-29: ETP-3662 ya entregó `NeoSessionService` en `GET /sws/neo/session` (devuelve `currencyCode`, datos de organización, dirección, logo). Cerrar G17 es solo agregar la entrada al `ToolRegistry` y completar lo que falta del payload (rol, user, fecha, idioma).*
+Sin esto el agente no sabe en qué tenant/rol/fecha está. **Propuesta:** tool `neo_whoami` (cheap, primer call recomendado en system prompt) → `{client, org, role, user, currentDate, currency, language}`. *Update 2026-04-29: ETP-3662 ya entregó `NeoSessionService` en `GET /sws/neo/session` (devuelve `currencyCode`, datos de organización, dirección, logo). Cerrar G17 es solo agregar la entrada al `ToolRegistry` y completar lo que falta del payload (rol, user, fecha, idioma).* *Update 2026-10-30: cerrado por `etendo_whoami` (etendo-ai#53, `McpWhoamiTool` en com.etendoerp.go): user, role (+ `isAdmin`), client, organization, `capabilities` (`showAccountingFields`, scopes), `currentDate` + `timeZone`, currency e idioma, leídos del `OBContext` de la llamada. Ver `neo-headless.md` §4.12.43.*
 
 ---
 
