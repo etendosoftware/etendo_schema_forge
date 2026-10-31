@@ -421,6 +421,51 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   keeps `subscriptionManageError`. `/account` still posts no body and gets the entered
   environment's portal.
 
+#### 3.2a-sexies Changing plan from `/account` (ETP-5053)
+
+- **Where:** `tools/app-shell/src/components/account/SubscriptionSection.jsx` (the **Change plan**
+  action, `SubscriptionSection__changePlan`, and the pending line `SubscriptionSection__pendingChange`)
+  and `tools/app-shell/src/components/account/PlanChangeDialog.jsx` (the dialog).
+- **When the action is offered:** on a renewing subscription (`status` in `RENEWING_STATUSES`) that
+  has a catalog plan (`planName`). A past-due or canceled subscription gets no action: the backend
+  refuses it anyway (`409 SUBSCRIPTION_NOT_CURRENT`).
+- **Data:** `GET /sws/go/billing/subscription/plan-changes` (`lib/upgrade/api.js` →
+  `getPlanChanges`), the active *Allowed plan changes* rows of the current plan: each target with
+  `timing` (`immediate` / `period_end`), `intervalChange`, its catalog price, and `quotas[]` — the
+  tenant's **current** usage measured against the **target** plan's limits (the `QuotaItem` shape of
+  §3.2a-quater). The dialog offers nothing the backend does not list
+  (`PlanChangeDialog__none` when the list is empty).
+- **Before confirming** (`PlanChangeDialog__consequences`), for the chosen target: the timing note
+  (`planChangeImmediateNote` for an upgrade — applies now, the difference invoiced today, the billing
+  date unchanged; `planChangeIntervalNote` for monthly → annual — billing switches to yearly today,
+  charged upfront, the yearly quota restarts today; `planChangePeriodEndNote` with the current
+  period end for a downgrade — nothing changes before then), the quota note (`planChangeQuotaKept`
+  unless the interval changes), and **one line per exceeded quota of the target**
+  (`PlanChangeDialog__quotaExceededItem`, `planChangeQuotaExceeded`: "{resource}: you have used
+  {consumed} of the {included} included in {plan}. New records of this kind will be refused from the
+  effective date until your next anniversary; existing data stays available."), or
+  `planChangeQuotaFine` when nothing is exceeded. The numbers are today's: usage at the period end
+  will be higher, so the copy says "you have used", never a promise about the boundary.
+- **Confirm:** `POST /sws/go/billing/subscription/plan-change` (`requestPlanChange`). The answer is
+  shown in place (`PlanChangeDialog__done`: `planChangeDoneImmediate` with the new plan, or
+  `planChangeDoneScheduled` with the date; `planChangeAlreadyPending` when the same downgrade was
+  already scheduled) and the section reloads (`onChanged` → `load`), so the plan, the quotas and the
+  pending line follow. Refusals keep the dialog open with their own line: `planChangeNotAllowed`
+  (409 `PLAN_CHANGE_NOT_ALLOWED`), `planChangeNotCurrent` (409 `SUBSCRIPTION_NOT_CURRENT`),
+  `planChangeFailed` (anything else); a 401 is handed to the host as everywhere on the page.
+- **Pending downgrade:** while `pendingChange` is set on `GET /billing/subscription`, the section
+  shows `subscriptionPendingChange` ("Your plan changes to {plan} on {date}") persistently; the
+  dialog repeats it (`PlanChangeDialog__pending`). It disappears when the change applies at the
+  period end or an upgrade releases it.
+- **Formatting:** prices through `formatCurrency` with the `upgradePlanPriceMonthly` /
+  `upgradePlanPriceYearly` keys; dates through `formatCalendarDate`. Strings in `en_US.json`,
+  `es_ES.json` and `es_AR.json` (`locales/__tests__/etp5053-plan-change-keys.vitest.js` pins parity).
+- **Test ids:** `PlanChangeDialog__root`, `__loading`, `__unavailable`, `__retry`, `__none`,
+  `__pending`, `__options`, `__option` (with `data-plan-key`, `data-timing`), `__optionName`,
+  `__optionPrice`, `__optionTiming`, `__consequences`, `__timingNote`, `__quotaKept`, `__quotaFine`,
+  `__quotaExceeded`, `__quotaExceededItem`, `__error`, `__done`, `__confirm`, `__close`.
+- **Backend reference:** `com.etendoerp.go/docs/plan-changes.md`.
+
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
 - **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx` (layout) and

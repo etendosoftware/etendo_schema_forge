@@ -16,6 +16,8 @@ import {
   getBillingPurchase,
   getCheckoutStatus,
   getSubscription,
+  getPlanChanges,
+  requestPlanChange,
   createPortalSession,
   createSubscriptionReactivation,
   runPaidOnboarding,
@@ -155,7 +157,9 @@ describe('the module surface', () => {
       'getBillingOverview',
       'getBillingPurchase',
       'getCheckoutStatus',
+      'getPlanChanges',
       'getSubscription',
+      'requestPlanChange',
       'runPaidOnboarding',
     ]);
   });
@@ -867,6 +871,70 @@ describe('the account subscription', () => {
       () => getSubscription(''),
       (error) => error.code === UPGRADE_ERROR_CODES.subscriptionUnavailable && error.status === 503,
     );
+  });
+
+  // ETP-5053 — plan changes.
+  it('reads the offered plan changes, for the shown subscription or a named environment', async () => {
+    declareCookieSession();
+    const offered = { hasSubscription: true, changes: [{ planKey: 'pro', timing: 'immediate' }] };
+    installFetch(jsonResponse(offered));
+
+    const result = await getPlanChanges('https://api.test');
+    assert.deepEqual(result, offered);
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/subscription/plan-changes');
+
+    await getPlanChanges('https://api.test', 'CLIENT-1');
+    assert.equal(calls[1][0],
+      'https://api.test/sws/go/billing/subscription/plan-changes?clientId=CLIENT-1');
+  });
+
+  it('raises a stable error when the offered plan changes cannot be read', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({}, { ok: false, status: 503 }));
+
+    await assert.rejects(
+      () => getPlanChanges(''),
+      (error) => error.code === UPGRADE_ERROR_CODES.planChangesUnavailable && error.status === 503,
+    );
+  });
+
+  it('asks for a plan change with a POST carrying the plan key and the write proof', async () => {
+    declareCookieSession();
+    const answer = { planKey: 'pro', timing: 'immediate', effectiveAt: '2026-11-01T10:00:00Z' };
+    installFetch(jsonResponse(answer));
+
+    const result = await requestPlanChange('https://api.test', 'pro');
+
+    assert.deepEqual(result, answer);
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/subscription/plan-change');
+    assert.equal(calls[0][1].method, 'POST');
+    assert.deepEqual(JSON.parse(calls[0][1].body), { planKey: 'pro' });
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+
+    await requestPlanChange('https://api.test', 'pro', 'CLIENT-1');
+    assert.deepEqual(JSON.parse(calls[1][1].body), { planKey: 'pro', clientId: 'CLIENT-1' });
+  });
+
+  it('tells a refused plan change apart from a failed one by the backend code', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { code: 'PLAN_CHANGE_NOT_ALLOWED' } },
+      { ok: false, status: 409 }));
+    await assert.rejects(() => requestPlanChange('', 'gold'),
+      (error) => error.code === UPGRADE_ERROR_CODES.planChangeNotAllowed);
+
+    installFetch(jsonResponse({ error: { code: 'SUBSCRIPTION_NOT_CURRENT' } },
+      { ok: false, status: 409 }));
+    await assert.rejects(() => requestPlanChange('', 'pro'),
+      (error) => error.code === UPGRADE_ERROR_CODES.planChangeNotCurrent);
+
+    installFetch(jsonResponse({ error: { code: 'BILLING_PROVIDER_ERROR' } },
+      { ok: false, status: 502 }));
+    await assert.rejects(() => requestPlanChange('', 'pro'),
+      (error) => error.code === UPGRADE_ERROR_CODES.planChangeFailed && error.status === 502);
+
+    installFetch(jsonResponse({}, { ok: false, status: 401 }));
+    await assert.rejects(() => requestPlanChange('', 'pro'),
+      (error) => error.code === UPGRADE_ERROR_CODES.sessionExpired);
   });
 
   it('opens a portal session with a POST to the portal endpoint', async () => {

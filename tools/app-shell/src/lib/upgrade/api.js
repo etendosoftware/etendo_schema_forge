@@ -49,6 +49,13 @@ export const UPGRADE_ERROR_CODES = {
   // environment whose subscription was canceled has one to re-subscribe.
   reactivationOwnerRequired: 'blockedAccessSubscriptionCanceledMemberMessage',
   reactivationNotAvailable: 'blockedAccessReactivateFailed',
+  // ETP-5053: plan changes from /account. The offered changes could not be read; the change was
+  // refused because no Allowed plan changes row offers it (409 PLAN_CHANGE_NOT_ALLOWED) or the
+  // subscription is past due or canceled (409 SUBSCRIPTION_NOT_CURRENT); anything else failed.
+  planChangesUnavailable: 'planChangeUnavailable',
+  planChangeNotAllowed: 'planChangeNotAllowed',
+  planChangeNotCurrent: 'planChangeNotCurrent',
+  planChangeFailed: 'planChangeFailed',
   failed: 'upgradeGenericError',
 };
 
@@ -286,6 +293,62 @@ export async function createPortalSession(baseUrl, clientId = null) {
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(portalFailureCode(response, data), data?.error?.message, response.status);
+  }
+  return data;
+}
+
+/** Backend refusal codes of a plan change (PlanChangeRefusedException, ETP-5053). */
+const PLAN_CHANGE_NOT_ALLOWED = 'PLAN_CHANGE_NOT_ALLOWED';
+const SUBSCRIPTION_NOT_CURRENT = 'SUBSCRIPTION_NOT_CURRENT';
+
+function planChangeFailureCode(response, data) {
+  if (response.status === 401) return UPGRADE_ERROR_CODES.sessionExpired;
+  const code = data?.error?.code;
+  if (response.status === 409 && code === PLAN_CHANGE_NOT_ALLOWED) {
+    return UPGRADE_ERROR_CODES.planChangeNotAllowed;
+  }
+  if (response.status === 409 && code === SUBSCRIPTION_NOT_CURRENT) {
+    return UPGRADE_ERROR_CODES.planChangeNotCurrent;
+  }
+  return UPGRADE_ERROR_CODES.planChangeFailed;
+}
+
+/**
+ * ETP-5053 — the plan changes the shown subscription may ask for, each with its timing
+ * (`immediate` / `period_end`), whether it changes the billing interval, and the tenant's current
+ * usage measured against the target plan's quotas. With a `clientId` it is that environment's
+ * subscription (a "Mis empresas" row); without one, the entered environment's, or the account's
+ * newest purchase.
+ */
+export async function getPlanChanges(baseUrl, clientId = null) {
+  const query = clientId ? `?clientId=${encodeURIComponent(clientId)}` : '';
+  const response = await apiFetch(`/sws/go/billing/subscription/plan-changes${query}`, {
+    baseUrl, on401: 'ignore',
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.planChangesUnavailable, data?.error?.message, response.status);
+  }
+  return data || { hasSubscription: false, changes: [] };
+}
+
+/**
+ * ETP-5053 — asks for a plan change. An upgrade applies now (the answer carries
+ * `timing: "immediate"`); a downgrade is scheduled for the end of the current period
+ * (`timing: "period_end"`, `effectiveAt`). Repeating a request is safe: the same downgrade answers
+ * `alreadyPending: true`, and an upgrade is idempotent at the provider.
+ */
+export async function requestPlanChange(baseUrl, planKey, clientId = null) {
+  const response = await apiFetch('/sws/go/billing/subscription/plan-change', {
+    method: 'POST',
+    baseUrl,
+    on401: 'ignore',
+    body: JSON.stringify(clientId ? { planKey, clientId } : { planKey }),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(planChangeFailureCode(response, data), data?.error?.message, response.status);
   }
   return data;
 }

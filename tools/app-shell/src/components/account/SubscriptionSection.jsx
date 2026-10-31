@@ -10,6 +10,7 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { getSubscription, createPortalSession } from '@/lib/upgrade/api.js';
 import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
+import { PlanChangeDialog } from './PlanChangeDialog.jsx';
 import {
   QUOTA_VERDICT_DENY,
   quotaResourceLabel,
@@ -160,6 +161,9 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
   const [subscription, setSubscription] = useState(null);
   const [managing, setManaging] = useState(false);
   const [manageError, setManageError] = useState(false);
+  // ETP-5053 — the change-plan dialog; a change reloads the section so the plan, the quotas and
+  // the pending line reflect it.
+  const [changingPlan, setChangingPlan] = useState(false);
   // ETP-5051 O-1 — inside an environment the subscription endpoint answers THAT environment's own
   // subscription, so `hasSubscription: false` there means the environment has none (a demo, an
   // environment the user was invited into), even when the account pays for another one. Only an
@@ -222,6 +226,15 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
     : null;
   const statusLabelKey = STRIPE_STATUS_LABEL_KEYS[subscription?.status];
   const statusLabel = statusLabelKey ? ui(statusLabelKey) : subscription?.status;
+  // ETP-5053 — a downgrade scheduled at the provider (`pendingChange` of the subscription
+  // payload): shown persistently until it applies or an upgrade releases it. The change action is
+  // offered only on a renewing subscription with a catalog plan: a past-due or canceled one is
+  // refused by the backend anyway (SUBSCRIPTION_NOT_CURRENT), so it is not offered.
+  const pendingChange = subscription?.pendingChange || null;
+  const pendingChangeDate = pendingChange?.effectiveAt
+    ? formatCalendarDate(pendingChange.effectiveAt, locale) : null;
+  const offersPlanChange = Boolean(subscription?.planName)
+    && RENEWING_STATUSES.has(subscription?.status);
 
   // ETP-5443 REVIEW W5: "renews on X" is a promise the subscription will still be charged on
   // that date, which is only true for a status that is actually renewing. Showing it for e.g.
@@ -340,6 +353,15 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
               </p>
             )}
 
+            {pendingChange && (
+              <p className="text-sm font-medium" data-testid="SubscriptionSection__pendingChange">
+                {ui('subscriptionPendingChange', {
+                  plan: pendingChange.planName || pendingChange.planKey,
+                  date: pendingChangeDate || '',
+                })}
+              </p>
+            )}
+
             {showsGraceRemaining && (
               <p
                 className="text-sm text-destructive"
@@ -374,7 +396,17 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
               locale={locale}
               data-testid="PlanQuotas__769a8e" />
 
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
+              {offersPlanChange && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setChangingPlan(true)}
+                  data-testid="SubscriptionSection__changePlan"
+                >
+                  {ui('subscriptionChangePlan')}
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -389,13 +421,26 @@ export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid
               </Button>
               {manageError && (
                 <p
-                  className="mt-2 text-sm text-destructive"
+                  className="mt-2 w-full text-sm text-destructive"
                   data-testid="SubscriptionSection__manageError"
                 >
                   {ui('subscriptionManageError')}
                 </p>
               )}
             </div>
+
+            {offersPlanChange && (
+              <PlanChangeDialog
+                open={changingPlan}
+                onOpenChange={setChangingPlan}
+                apiBaseUrl={apiBaseUrl}
+                clientId={subscription.clientId || null}
+                periodEnd={subscription.renewalAt || null}
+                onChanged={load}
+                onSessionExpired={onSessionExpired}
+                data-testid="PlanChangeDialog__769a8e"
+              />
+            )}
           </div>
         )}
       </CardContent>
