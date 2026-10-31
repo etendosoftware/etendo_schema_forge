@@ -42,6 +42,12 @@ function doneText(done, ui, locale) {
   return ui(key, { plan, date });
 }
 
+/** The quotas of the chosen target the tenant has already exceeded; none without a target. */
+function exceededQuotasOf(selected) {
+  const quotas = Array.isArray(selected?.quotas) ? selected.quotas : [];
+  return quotas.filter(isQuotaOverLimit);
+}
+
 /** The timing note of the chosen target: downgrade at the period end, interval change, upgrade. */
 function timingNote(selected, ui, periodEndDate) {
   if (selected.timing === TIMING_PERIOD_END) {
@@ -144,9 +150,7 @@ export function PlanChangeDialog({
     }
   }, [apiBaseUrl, clientId, selected, onChanged, onSessionExpired, onOpenChange]);
 
-  const exceeded = selected
-    ? (Array.isArray(selected.quotas) ? selected.quotas : []).filter(isQuotaOverLimit)
-    : [];
+  const exceeded = exceededQuotasOf(selected);
 
   return (
     <Dialog
