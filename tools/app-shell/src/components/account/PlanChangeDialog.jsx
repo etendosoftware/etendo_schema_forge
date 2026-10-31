@@ -24,6 +24,31 @@ import {
 const PRICE_LABEL_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
 const TIMING_IMMEDIATE = 'immediate';
 const TIMING_PERIOD_END = 'period_end';
+const REFUSAL_CODES = new Set([
+  UPGRADE_ERROR_CODES.planChangeNotAllowed, UPGRADE_ERROR_CODES.planChangeNotCurrent,
+]);
+
+/** The line a refused or failed change request shows: its own code for a refusal, else generic. */
+function errorKeyOf(err) {
+  return REFUSAL_CODES.has(err?.code) ? err.code : UPGRADE_ERROR_CODES.planChangeFailed;
+}
+
+/** What happened, once the backend answered: applied now, scheduled, or already pending. */
+function doneText(done, ui, locale) {
+  const plan = done.planName || done.planKey;
+  if (done.timing !== TIMING_PERIOD_END) return ui('planChangeDoneImmediate', { plan });
+  const date = done.effectiveAt ? formatCalendarDate(done.effectiveAt, locale) : '';
+  const key = done.alreadyPending ? 'planChangeAlreadyPending' : 'planChangeDoneScheduled';
+  return ui(key, { plan, date });
+}
+
+/** The timing note of the chosen target: downgrade at the period end, interval change, upgrade. */
+function timingNote(selected, ui, periodEndDate) {
+  if (selected.timing === TIMING_PERIOD_END) {
+    return ui('planChangePeriodEndNote', { date: periodEndDate || '' });
+  }
+  return ui(selected.intervalChange ? 'planChangeIntervalNote' : 'planChangeImmediateNote');
+}
 
 /** `{amount} per month` from the catalog's string amount and currency; '' when unpriced. */
 export function planPriceLabel(plan, ui) {
@@ -113,9 +138,7 @@ export function PlanChangeDialog({
         onOpenChange?.(false);
         return;
       }
-      setErrorKey(err?.code === UPGRADE_ERROR_CODES.planChangeNotAllowed
-        || err?.code === UPGRADE_ERROR_CODES.planChangeNotCurrent
-        ? err.code : UPGRADE_ERROR_CODES.planChangeFailed);
+      setErrorKey(errorKeyOf(err));
     } finally {
       setSubmitting(false);
     }
@@ -160,12 +183,7 @@ export function PlanChangeDialog({
 
         {status === 'loaded' && done && (
           <p className="text-sm" data-testid="PlanChangeDialog__done">
-            {done.timing === TIMING_PERIOD_END
-              ? ui(done.alreadyPending ? 'planChangeAlreadyPending' : 'planChangeDoneScheduled', {
-                plan: done.planName || done.planKey,
-                date: done.effectiveAt ? formatCalendarDate(done.effectiveAt, locale) : '',
-              })
-              : ui('planChangeDoneImmediate', { plan: done.planName || done.planKey })}
+            {doneText(done, ui, locale)}
           </p>
         )}
 
@@ -221,9 +239,7 @@ export function PlanChangeDialog({
         {status === 'loaded' && !done && selected && (
           <div className="space-y-2 rounded-md border p-3 text-sm" data-testid="PlanChangeDialog__consequences">
             <p data-testid="PlanChangeDialog__timingNote">
-              {selected.timing === TIMING_PERIOD_END
-                ? ui('planChangePeriodEndNote', { date: periodEndDate || '' })
-                : ui(selected.intervalChange ? 'planChangeIntervalNote' : 'planChangeImmediateNote')}
+              {timingNote(selected, ui, periodEndDate)}
             </p>
             {!selected.intervalChange && (
               <p className="text-muted-foreground" data-testid="PlanChangeDialog__quotaKept">
