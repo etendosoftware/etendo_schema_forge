@@ -35,6 +35,8 @@ const TEMPLATES = {
   quotaIncludedNoUnit: '{included} included',
   quotaUsageInPeriod: '{usage} {period}',
   quotaCurrentPeriod: '{start} – {end}',
+  // ETP-5053 pending downgrade line.
+  subscriptionPendingChange: '{plan}@{date}:subscriptionPendingChange',
 };
 
 vi.mock('@/i18n', () => ({
@@ -63,6 +65,14 @@ vi.mock('@/lib/upgrade/api.js', () => ({
 let mockSession = { clientId: null };
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuthOptional: () => mockSession,
+}));
+
+// ETP-5053 — the change-plan dialog has its own suite; here only its presence and the handoff
+// matter.
+vi.mock('../PlanChangeDialog.jsx', () => ({
+  PlanChangeDialog: ({ open, onChanged }) => (open
+    ? <button type="button" data-testid="PlanChangeDialog__stub" onClick={() => onChanged?.()}>dialog</button>
+    : null),
 }));
 
 import { SubscriptionSection } from '../SubscriptionSection.jsx';
@@ -398,6 +408,54 @@ describe('SubscriptionSection', () => {
   });
 
   // ETP-5051 — `planName` is the catalog plan; `plan` (the provider product name) is the fallback.
+  // ETP-5053 — plan changes from the account page.
+  describe('the plan change', () => {
+    it('shows the pending downgrade with its plan and date', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Pro',
+        pendingChange: { planKey: 'core', planName: 'Core', effectiveAt: '2026-12-01T00:00:00Z',
+          timing: 'period_end' } });
+      renderSection();
+
+      const pending = await screen.findByTestId('SubscriptionSection__pendingChange');
+      expect(pending).toHaveTextContent('Core@');
+      expect(pending).toHaveTextContent('subscriptionPendingChange');
+      expect(pending).not.toHaveTextContent('{date}');
+    });
+
+    it('shows no pending line without a pending change', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Pro', pendingChange: null });
+      renderSection();
+
+      await screen.findByTestId('SubscriptionSection__plan');
+      expect(screen.queryByTestId('SubscriptionSection__pendingChange')).not.toBeInTheDocument();
+    });
+
+    it('offers the change action on a renewing subscription with a catalog plan, and opens the dialog', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Pro' });
+      renderSection();
+
+      await userEvent.click(await screen.findByTestId('SubscriptionSection__changePlan'));
+
+      expect(screen.getByTestId('PlanChangeDialog__stub')).toBeInTheDocument();
+      // A change reloads the section so plan, quotas and the pending line follow it.
+      await userEvent.click(screen.getByTestId('PlanChangeDialog__stub'));
+      await waitFor(() => expect(getSubscription).toHaveBeenCalledTimes(2));
+    });
+
+    it('offers no change action on a past-due or canceled subscription, nor without a catalog plan', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Pro', status: 'past_due' });
+      const { unmount } = renderSection();
+      await screen.findByTestId('SubscriptionSection__plan');
+      expect(screen.queryByTestId('SubscriptionSection__changePlan')).not.toBeInTheDocument();
+      unmount();
+
+      getSubscription.mockResolvedValue({ ...ACTIVE, planName: null });
+      renderSection();
+      await screen.findByTestId('SubscriptionSection__plan');
+      expect(screen.queryByTestId('SubscriptionSection__changePlan')).not.toBeInTheDocument();
+    });
+  });
+
   describe('the plan name', () => {
     it('shows the catalog planName when the subscription has a plan row', async () => {
       getSubscription.mockResolvedValue({ ...ACTIVE, planName: 'Etendo GO Business', planQuotas: [] });
