@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalStatusSummary.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalCatalog.js
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import React from 'react';
 
 // --- Mocks ----------------------------------------------------------------
@@ -260,6 +260,7 @@ import { useFiscalConfig } from '../useFiscalConfig.js';
 import { useFiscalTestMode } from '../useFiscalTestMode.js';
 import { useAuth, useWindowAccess } from '@/auth/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import { hasUnsavedChanges, saveUnsavedChanges } from '@/lib/unsavedChanges.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -714,6 +715,63 @@ describe('FiscalConfigPage — save button', () => {
     await waitFor(() => {
       expect(screen.getByText(/fiscal\.save/)).toBeInTheDocument();
     });
+  });
+});
+
+// ETP-5831 — the page feeds its dirty flag into the shared unsaved-changes registry
+// (useUnsavedChangesGuard), which drives the in-app navigation prompt and `beforeunload`.
+describe('FiscalConfigPage — unsaved-changes guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false, error: null, profile: 'sii',
+      siiRecord: { id: 'sii-1' }, tbaiRecord: null, verifactuRecord: null, refetch: vi.fn(),
+    });
+  });
+
+  it('is inactive while the form is clean and active once a section is edited', () => {
+    renderPage();
+    expect(hasUnsavedChanges()).toBe(false);
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    expect(hasUnsavedChanges()).toBe(true);
+  });
+
+  it('is inactive again after a successful save', async () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    expect(hasUnsavedChanges()).toBe(true);
+    fireEvent.click(screen.getByText(/fiscal\.save/).closest('button'));
+    await waitFor(() => expect(hasUnsavedChanges()).toBe(false));
+  });
+
+  it('offers "save and continue" through the page save', async () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    let saved;
+    await act(async () => { saved = await saveUnsavedChanges(); });
+    expect(saved).toBe(true);
+    await waitFor(() => expect(hasUnsavedChanges()).toBe(false));
+  });
+
+  it('releases the registry entry on unmount', () => {
+    const { unmount } = renderPage();
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    unmount();
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it('is inactive during the onboarding wizard', () => {
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false, error: null, profile: 'unconfigured',
+      siiRecord: null, tbaiRecord: null, verifactuRecord: null, refetch: vi.fn(),
+    });
+    renderPage();
+    expect(hasUnsavedChanges()).toBe(false);
   });
 });
 

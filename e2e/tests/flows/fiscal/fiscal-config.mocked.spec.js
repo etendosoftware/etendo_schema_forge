@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx
 import { test, expect } from '@playwright/test';
 import { login, navigateTo, MOCK_ORG_ID } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';

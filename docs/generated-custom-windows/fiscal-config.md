@@ -303,6 +303,15 @@ not a shared component, so these changes affect no other window.
   bumps `resetKey`, the sections remount with fresh baselines and "Guardar" is disabled again; a
   failed save leaves the sections dirty, so it stays enabled for a retry. The certificate is not
   part of this: it is saved on upload.
+- **Leaving with unsaved changes asks first.** The same dirty flag is fed into the shared
+  `useUnsavedChangesGuard` (`hooks/useUnsavedChangesGuard.js`, ETP-5022/5073), so in-app
+  navigation, the locale switch and F5/tab close show the app's existing unsaved-changes prompt;
+  no new dialog or i18n key. The page passes `handleSave` as the saver, so the prompt offers
+  "Save and continue" (it resolves `false` on a failed save and the prompt stays). The guard is off
+  while a save is in flight (`isDirty && !saving`) and right after a successful save (the sections
+  remount clean). It is also off during the onboarding wizard: no section is mounted in that
+  branch, so the flag is `false`; the wizard's own steps are deliberately not guarded. Covered by
+  `FiscalConfigPage.vitest.jsx` → "unsaved-changes guard".
 
 ## Certificate expiry banner (`CertExpiryBanner`)
 

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 import { useFiscalConfig } from './useFiscalConfig.js';
 import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
@@ -227,12 +228,21 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
       setResetKey(k => k + 1);
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
+      return true;
     } catch (err) {
       if (!err?._sectionHandled) setSaveError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setSaving(false);
     }
   }
+
+  // ETP-5831 — warn before leaving with unsaved changes (in-app navigation, locale switch, F5/tab
+  // close) through the shared registry, offering "Save and continue" via handleSave (resolves
+  // false on failure, so the prompt stays). Off while a save is in flight; after a successful save
+  // the sections remount and report clean. During the onboarding wizard no section is mounted,
+  // so the flag is false and nothing prompts — the wizard is not guarded.
+  useUnsavedChangesGuard(isDirty && !saving, handleSave);
 
   const DebugPanel = debugMode ? (
     <FiscalConfigDebugPanel
