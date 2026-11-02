@@ -21,9 +21,9 @@ const schema: PublicApiSchema = {
       specName: 'contacts',
       operations: ['GET', 'LIST'],
       fields: {
-        name: { publicApi: true, direction: 'out', internalPath: 'name', type: 'passthrough', handlerId: null },
+        name: { publicApi: true, direction: 'out', internalPath: 'name' },
         category: {
-          publicApi: true, direction: 'out', internalPath: 'category', type: 'passthrough', handlerId: null,
+          publicApi: true, direction: 'out', internalPath: 'category',
           relationship: { resource: 'product-category', cardinality: 'one', foreignKey: 'category' },
         } as any,
       },
@@ -93,7 +93,7 @@ test('maps writable public field names to NeoServlet internal paths for create',
   const crudSchema = structuredClone(schema);
   crudSchema.entities.businessPartner.operations = ['GET', 'LIST', 'POST'];
   crudSchema.entities.businessPartner.fields.taxId = {
-    publicApi: true, direction: 'inout', internalPath: 'taxID', type: 'passthrough', handlerId: null,
+    publicApi: true, direction: 'inout', internalPath: 'taxID',
   };
   let captured: RequestInit | undefined;
   const fakeFetch = async (_url: string, init?: RequestInit) => {
@@ -145,7 +145,7 @@ test('creates a child line through the master route and forwards parentId to Neo
     operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
     parent: { resource: 'businessPartner', entityName: 'businessPartner', pathSegment: 'locations', foreignKey: 'businessPartner' },
     fields: {
-      phone: { publicApi: true, direction: 'inout', internalPath: 'phone', type: 'passthrough', handlerId: null },
+      phone: { publicApi: true, direction: 'inout', internalPath: 'phone' },
     },
   };
   let capturedUrl = '';
@@ -171,7 +171,7 @@ test('routes every child CRUD verb through the master path and preserves the par
     operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
     parent: { resource: 'businessPartner', entityName: 'businessPartner', pathSegment: 'locations', foreignKey: 'businessPartner' },
     fields: {
-      phone: { publicApi: true, direction: 'inout', internalPath: 'phone', type: 'passthrough', handlerId: null },
+      phone: { publicApi: true, direction: 'inout', internalPath: 'phone' },
     },
   };
   const calls: Array<{ url: string; method: string; body?: string }> = [];
@@ -212,7 +212,7 @@ function versionedSchema() {
   versioned.entities.businessPartner.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
   versioned.entities.businessPartner.fields.name.direction = 'inout';
   versioned.entities.businessPartner.fields.updated = {
-    publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', handlerId: null,
+    publicApi: true, direction: 'out', internalPath: 'updated',
   };
   versioned.entities['contact-lines'] = {
     publicApi: true,
@@ -222,8 +222,8 @@ function versionedSchema() {
     operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
     parent: { resource: 'businessPartner', entityName: 'businessPartner', pathSegment: 'locations', foreignKey: 'businessPartner' },
     fields: {
-      phone: { publicApi: true, direction: 'inout', internalPath: 'phone', type: 'passthrough', handlerId: null },
-      updated: { publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', handlerId: null },
+      phone: { publicApi: true, direction: 'inout', internalPath: 'phone' },
+      updated: { publicApi: true, direction: 'out', internalPath: 'updated' },
     },
   };
   return versioned;
@@ -480,10 +480,10 @@ const crudSchema: PublicApiSchema = {
       specName: 'product',
       operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
       fields: {
-        name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', handlerId: null },
-        created: { publicApi: true, direction: 'out', internalPath: 'created', type: 'passthrough', handlerId: null },
+        name: { publicApi: true, direction: 'inout', internalPath: 'name' },
+        created: { publicApi: true, direction: 'out', internalPath: 'created' },
         category: {
-          publicApi: true, direction: 'inout', internalPath: 'productCategory', type: 'passthrough', handlerId: null,
+          publicApi: true, direction: 'inout', internalPath: 'productCategory',
           relationship: { resource: 'product-category', cardinality: 'one', foreignKey: 'category' },
         } as any,
       },
@@ -673,8 +673,8 @@ const actionSchema = (): PublicApiSchema => {
   const s = structuredClone(schema) as any;
   s.entities.salesDoc = {
     publicApi: true, specName: 'sales-doc', entityName: 'header', operations: ['GET', 'LIST'],
-    fields: { id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', handlerId: null },
-      documentStatus: { publicApi: true, direction: 'out', internalPath: 'documentStatus', type: 'passthrough', handlerId: null } },
+    fields: { id: { publicApi: true, direction: 'out', internalPath: 'id' },
+      documentStatus: { publicApi: true, direction: 'out', internalPath: 'documentStatus' } },
     processes: [{ action: 'complete', method: 'POST', path: '/header/:id/action/documentAction', body: { docAction: 'CO' } }],
   };
   s.entities.salesDocLine = {
@@ -811,10 +811,10 @@ const listSchema = {
       entityName: 'businessPartner',
       operations: ['GET', 'LIST'],
       fields: {
-        id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
-        name: { publicApi: true, direction: 'inout', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
-        tax_id: { publicApi: true, direction: 'inout', internalPath: 'taxID', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
-        secret: { publicApi: true, direction: 'in', internalPath: 'secretCode', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        id: { publicApi: true, direction: 'out', internalPath: 'id', dataType: { type: 'string' } },
+        name: { publicApi: true, direction: 'inout', internalPath: 'name', dataType: { type: 'string' } },
+        tax_id: { publicApi: true, direction: 'inout', internalPath: 'taxID', dataType: { type: 'string' } },
+        secret: { publicApi: true, direction: 'in', internalPath: 'secretCode', dataType: { type: 'string' } },
       },
     },
     'contacts-contact': {
@@ -825,8 +825,8 @@ const listSchema = {
       operations: ['GET', 'LIST'],
       parent: { resource: 'contacts', entityName: 'businessPartner', pathSegment: 'contacts', foreignKey: 'businessPartner' },
       fields: {
-        id: { publicApi: true, direction: 'out', internalPath: 'id', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
-        phone: { publicApi: true, direction: 'inout', internalPath: 'phone', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        id: { publicApi: true, direction: 'out', internalPath: 'id', dataType: { type: 'string' } },
+        phone: { publicApi: true, direction: 'inout', internalPath: 'phone', dataType: { type: 'string' } },
       },
     },
   },
