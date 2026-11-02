@@ -122,6 +122,19 @@ Tipo de corrección: **D** descripción de tool / instrucciones · **H** mensaje
   hint para que no sea circular.
 - **Dónde:** `McpDocumentPdfTool.java:238` (`missingHint`), `NeoDocumentPdf`.
 - **Re-probar:** `w-send-invoice` (con una verificación que no pase si no se envió: ver §3).
+- **Decisión (2 nov, Valentin):** arreglar los mensajes y dejar el envío sin PDF como límite
+  conocido; el render del lado del servidor queda como tarea aparte. El PDF lo arma el navegador
+  (`documentPdf.js` → jsreport), así que generarlo en el servidor con el mismo diseño pide correr
+  ese módulo fuera del navegador; usar las plantillas `print-*` mandaría al cliente otro diseño
+  (regla "un documento, un diseño" de `docs/document-printables.md`).
+- **Hecho (GO `ea4de6848` + el historial):**
+  - Los mensajes de "sin PDF" y "PDF viejo" de las dos tools dicen que solo la aplicación genera el
+    PDF y que no se reintente; ya no dicen "o envialo por correo", que el agente leía como la otra
+    tool. `w-send-invoice`: 13 → 7 llamadas, 604k → 261k tokens; el agente avisa que no hay PDF.
+  - `etendo_send_document_email` con `preview:true` lista los envíos anteriores del documento
+    (`history`: fecha, estado, destinatarios, asunto; los últimos 10). Sirve al agente para no
+    reenviar y a la prueba para verificar el envío (`expectEffect.rowsAt`), que antes pasaba sin
+    enviar nada. Sin tool nueva.
 
 ### H7. Usuario con permisos: el rol no se asigna por MCP — C o D (decisión de producto)
 

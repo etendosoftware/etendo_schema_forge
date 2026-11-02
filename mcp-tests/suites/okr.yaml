@@ -664,16 +664,21 @@ probes:
                   filters: { businessPartner: "{{steps.bp.data.id}}", documentStatus: CO, grandTotalAmount: -363 } }
       holded: *holded-no-invoice-setup
 
-  # Flow 13. Provisional check (no mailbox in the environment): the answer names the address.
+  # Flow 13. Verified on the document's send history (the preview of the send tool lists it,
+  # ETP-5848): one SENT email to the address. A send the MCP cannot make (the PDF exists only
+  # once the app renders it) fails here, as it should.
   - id: w-send-invoice
     category: write
-    mode: read
+    mode: write
     prompt: "Mandale a Cliente {{marker}} su última factura por mail, a compras@mcpflow.test."
     platforms:
       etendo-go:
         setup: *customer-with-invoice
-        expectAnswer:
-          all: [{ text: "compras@mcpflow.test" }]
+        expectEffect:
+          tool: etendo_send_document_email
+          args: { spec: sales-invoice, id: "{{steps.invoice.data.id}}", preview: true }
+          rowsAt: history
+          where: { status: SENT, to.0: compras@mcpflow.test }
       holded: *holded-no-invoice-setup
 
   # Flow 14. A customer returns one of the three units shipped.

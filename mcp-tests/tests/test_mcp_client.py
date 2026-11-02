@@ -167,6 +167,27 @@ class DescribeServerTest(unittest.TestCase):
         self.assertEqual(out["catalogue"]["toolCount"], 2)
 
 
+class RowsAtTest(unittest.TestCase):
+    """`expectEffect.rowsAt` (ETP-5848): rows under a key the list shapes do not cover."""
+
+    def test_reads_the_rows_under_the_key_and_where_applies_to_them(self):
+        preview = {"preview": True, "history": [
+            {"status": "SENT", "to": ["compras@mcpflow.test"]},
+            {"status": "FAILED", "to": ["compras@mcpflow.test"]},
+        ]}
+        rows = mcp_client.rows_at(preview, "history")
+        self.assertEqual(mcp_client.count_rows(rows), 2)
+        self.assertEqual(mcp_client.count_matching(
+            rows, {"status": "SENT", "to.0": "compras@mcpflow.test"}), 1)
+        self.assertEqual(mcp_client.count_rows(mcp_client.rows_at({"history": []}, "history")), 0)
+
+    def test_a_missing_or_non_list_key_is_not_verifiable(self):
+        # A silent 0 would pass `expect: none` on a check that never ran.
+        for payload in ({"preview": True}, {"history": "none"}, {"status": 409, "error": "no_pdf"}):
+            with self.subTest(payload=payload), self.assertRaises(mcp_client.VerificationError):
+                mcp_client.rows_at(payload, "history")
+
+
 
 class WhereTest(unittest.TestCase):
     """Suite v2 `expectEffect.where`: exact-match filtering by the runner."""

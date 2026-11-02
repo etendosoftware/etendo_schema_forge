@@ -815,6 +815,20 @@ def _path(row: Any, dotted: str) -> Any:
     return value
 
 
+def rows_at(payload: Any, dotted: str) -> list[Any]:
+    """The rows under `dotted` in an answer (`expectEffect.rowsAt`, ETP-5848).
+
+    A key the answer does not have, or one that is not a list, raises — not
+    verifiable — instead of counting 0, the same rule `matching_rows` keeps for a
+    `where` path: with `expect: none` a silent 0 would pass a check that never ran.
+    """
+    value = _path(payload, dotted)
+    if not isinstance(value, list):
+        keys = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+        raise VerificationError(f"`rowsAt` {dotted!r} is not a list in the answer (keys {keys})")
+    return value
+
+
 _MISSING = object()
 
 

@@ -212,6 +212,10 @@ probes:
   returned rows). Holded's list tools may not filter by a free-text field; matching client-side
   keeps the check deterministic without assuming server filters. `count_rows`
   (`mcp_client.py:664-676`) must learn Holded's payload shapes — unknown until probed (§9).
+- `expectEffect` also takes `rowsAt:` (ETP-5848): the key of the answer that holds the rows when a
+  tool does not answer with `data`/`items`/`results`/`records` — `w-send-invoice` reads the send
+  history that `etendo_send_document_email` lists under `history` with `preview:true`. A key the
+  answer lacks, or one that is not a list, is *not verifiable*, never a silent 0.
 - A task that one platform's MCP cannot do at all is declared, not attempted — see §5.10.
 
 ### 5.4 Identical starting data and isolation

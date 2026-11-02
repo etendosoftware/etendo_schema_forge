@@ -60,6 +60,7 @@ from .mcp_client import (
     is_headless,
     mcp_session,
     preflight,
+    rows_at,
 )
 from .steps import StepError, resolve_refs, run_steps
 from .matcher import MATCHER_VERSION, check_answer
@@ -455,6 +456,8 @@ async def _verify_effect(
         # A session of its own, so nothing the agent's session held can reach it.
         async with mcp_session(target) as session:
             payload = await call_tool(session, effect.tool, call_args)
+            if effect.rows_at:
+                payload = rows_at(payload, effect.rows_at)
             where = None
             if effect.where:
                 where = resolve_refs(interpolate_args(

@@ -62,6 +62,10 @@ class ExpectEffect:
     # returned rows (dotted paths allowed). For tools that cannot filter by the
     # field server-side; keeps the check deterministic without assuming filters.
     where: dict[str, Any] | None = None
+    # ETP-5848: the key of the answer that holds the rows, for a tool whose rows are
+    # not under data/items/results/records — the send tool's preview lists past
+    # sends under `history`. Dotted paths allowed.
+    rows_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -189,7 +193,11 @@ def _parse_effect(raw: Any, probe_id: str, *, allow_where: bool) -> ExpectEffect
     where = raw.get("where")
     if where is not None and (not allow_where or not isinstance(where, dict) or not where):
         raise ValueError(f"Probe {probe_id!r}: expectEffect.where is a non-empty mapping (suite v2 only).")
-    return ExpectEffect(tool=raw["tool"], args=raw.get("args", {}), expect=expect, where=where)
+    rows_at = raw.get("rowsAt")
+    if rows_at is not None and (not allow_where or not isinstance(rows_at, str) or not rows_at):
+        raise ValueError(f"Probe {probe_id!r}: expectEffect.rowsAt is a non-empty key (suite v2 only).")
+    return ExpectEffect(tool=raw["tool"], args=raw.get("args", {}), expect=expect, where=where,
+                        rows_at=rows_at)
 
 
 def load_suite(path: str | Path) -> Suite:
