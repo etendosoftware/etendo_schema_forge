@@ -267,6 +267,19 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
     ],
   }),
+  // ETP-5889 — one event per activation of the product Movements tab. `source` says how the user
+  // got there ('tab' | 'side_panel_link'). The tenant only (`account_id`): no user, role, product
+  // or record identifier, which the payload policy does not allow.
+  PRODUCT_MOVEMENTS_TAB_OPENED: defineEvent('product_movements_tab_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+    ],
+  }),
   TIME_TO_CREATE: defineEvent('time_to_create', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
@@ -713,10 +726,13 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   // Rollout funnel: exposed (flag exposure) -> viewed -> entered another company.
   // `count` is the number of companies the account can enter (owned + invited,
   // pending invitations excluded), so the >=2-companies cohort can be isolated.
+  // ETP-6060 — `source` is how the visit started: 'direct' (menu or URL), or the CTA of
+  // 'quota_banner' | 'billing_banner' | 'blocked_screen' (the `from` query parameter).
   MY_COMPANIES_VIEWED: defineEvent('my_companies_viewed', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
       OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
     ],
   }),
   // Emitted BEFORE the switch: a successful switch is a full navigation that
@@ -734,6 +750,29 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
     properties: [
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
     ],
+  }),
+  // --- Subscription per owned company on "Mis empresas" (ETP-6060) ---------
+  // Adoption funnel: my_companies_viewed -> subscription_opened -> manage_clicked.
+  // An owned company's subscription unfolded. `source`: 'toggle' (the user pressed
+  // "Ver suscripción") | 'link' (a billing CTA opened the page with the row unfolded).
+  // No company id: the events carry the tenant like every other one.
+  MY_COMPANIES_SUBSCRIPTION_OPENED: defineEvent('my_companies_subscription_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
+  // "Gestionar suscripción" pressed, before the portal session is requested. `source`:
+  // 'my_companies_menu' (row menu) | 'my_companies_section' (unfolded row) | 'account'.
+  SUBSCRIPTION_MANAGE_CLICKED: defineEvent('subscription_manage_clicked', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
+  // "Ir a Mis empresas" pressed on /account, where the flag replaced the subscription.
+  ACCOUNT_SUBSCRIPTION_MOVED_CLICKED: defineEvent('account_subscription_moved_clicked', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
   }),
 });
 

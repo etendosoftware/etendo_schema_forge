@@ -25350,7 +25350,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "5a5258938d4e355e58fbb75e61086869368dd114825486f9ad17e70485d43caa",
+      "checksum": "2e73e9c8c10b17d069d40556ef27e747e32a077cd001a8fb2034ada94715e22d",
       "params": [
         "140"
       ],
@@ -26896,6 +26896,18 @@
           "ad_table_id": "329",
           "columnname": "IsCostPermanent",
           "position": "34"
+        },
+        {
+          "ad_column_id": "38B28A05149E440ABE1A37DACDD7EC39",
+          "ad_table_id": "329",
+          "columnname": "EM_Etgo_Warehouse_ID",
+          "position": "35"
+        },
+        {
+          "ad_column_id": "393F4245BB9349FEB5C1967C684FC4CC",
+          "ad_table_id": "329",
+          "columnname": "EM_Etgo_Doc_Kind",
+          "position": "36"
         },
         {
           "ad_column_id": "87EA9943323E40E38DBCF9863880E8E1",

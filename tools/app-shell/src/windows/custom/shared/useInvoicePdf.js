@@ -12,6 +12,7 @@ import {
   resolveDocumentCurrencyCode,
   useDocumentPdf,
 } from './documentPdf.js';
+import { INVOICE_PDF_LABEL_KEYS, resolveLabelKeys } from './printableSources.js';
 import { computeDocumentQrDataUrl } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -116,13 +117,9 @@ export async function buildInvoiceData(invoiceId, base, token) {
  * @param {(key: string) => string} ui
  */
 export function buildInvoicePdfLabels(ui) {
-  return buildDocumentPdfLabels(ui, {
-    title:           ui('invoicePdfTitle'),
-    documentNo:      ui('invoicePdfDocumentNo'),
-    documentSection: ui('invoicePdfInvoiceSection'),
-    date:            ui('invoicePdfDate'),
-    colQty:          ui('invoicePdfColQty'),
-  });
+  // Key map in printableSources.js, which the build also publishes for the server-side
+  // render (ETP-6013) — one definition, so the two cannot drift.
+  return buildDocumentPdfLabels(ui, resolveLabelKeys(ui, INVOICE_PDF_LABEL_KEYS));
 }
 
 export function useInvoicePdf(invoiceId, apiBaseUrl, token, cacheConfig = null) {

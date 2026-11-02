@@ -42,7 +42,8 @@ nothing about which of these five a user actually hits.
 | 4 | **Email — grid row** (hover envelope) | each window's `index.jsx` → `useRowEmailModal({ usePdf })`, or `ReturnWindowShell`'s `emailAction.usePdf` | that hook; **without `usePdf` it silently falls back to `useNoPdf`** |
 | 5 | **Print** — detail button and multi-select in the list | `DetailView` → `DocumentPrintDrawer`, `ListView` → `printDocuments()` | `documentPdfRegistry.js` (no hooks; works for N records). List multi-select excludes Draft documents from the batch first — see D12 |
 
-Plus two consumers that are easy to forget:
+Plus a **sixth producer that runs without a browser** — see §"The server-side render" — and two
+consumers that are easy to forget:
 
 - **The emailed attachment.** `SendDocumentModal` → `cacheDocumentPreviewFile()` uploads the shown
   PDF as the record's marked attachment *before sending*. So `pdfBlobUrl` is not a preview detail:
@@ -68,6 +69,59 @@ never WHETHER the Print button is offered.
    `print-*` artifact. It was exactly this in return-material-receipt.
 2. **Rows 1 and 3 can disagree.** The preview reads the cache, the email path does not, so the
    same record can show two different PDFs. See §"The PDF cache".
+
+## The server-side render (ETP-6013)
+
+The backend (com.etendoerp.go) renders the **same** printable (commercial or movement) for a document whose entity
+declares `MCP_CONFIG.pdf.print`, so the MCP can return (`etendo_get_document_pdf`) and email
+(`etendo_send_document_email`) a document nobody opened in the app. **MCP only**: it renders right
+after a Complete made through the MCP (asynchronously, after the commit) and, as a fallback, on an
+MCP request when the stored PDF is missing or stale. **The GO app is unchanged** — a Complete or a
+preview made in the app keeps producing the PDF in the browser exactly as before; such a document
+gets a server PDF only on its first MCP request. The PDF is stored exactly like the send path
+stores it: the record's main attachment, `<spec>-<documentNo>.pdf`, overwritten in place — so the
+preview cache reads it as fresh. It **never replaces a main attachment that is not an
+Etendo-generated PDF** (a name other than `<spec>-<documentNo|id>.pdf` or the preview's `<id>.pdf`):
+that document simply gets no server PDF. This includes an Etendo file named after an **old** document
+number (the number changed after it was stored): it no longer matches, so it is not replaced and the
+MCP answers `no_pdf` — deliberately on the safe side.
+Full mechanism: com.etendoerp.go `docs/neo-headless.md` §4.12.38.1.
+
+**It holds no copy of the template.** The build publishes what the browser sends to jsreport:
+
+```
+printableSources.js  ──(alias-free: loads in plain Node)──►  vite-plugins/printables-publish.js
+  DOCUMENT_TEMPLATE, DOCUMENT_CSS,                              dist/printables/<document>.json
+  COMMON_HANDLEBARS_HELPERS, JSREPORT_CHROME_A4,                 (template, css, helpers with three
+  COMMON_PDF_CSS, MOVEMENT_TEMPLATE_*, *_TEMPLATE_BODY,           placeholders, chrome, labels per locale)
+  RETURN_DOC_HELPERS, label key maps per document
+        │                                                                   │
+        └── documentPdf.js / pdfUtils.js / use*Pdf.js re-export it          └── NeoPrintableTemplates (Java) fetches it
+```
+
+Rules that follow from it:
+
+- **Edit a printable's template, CSS, shared helpers or label keys in `printableSources.js`** — the
+  commercial template, and for the movement documents the shared fragments and each document's
+  `*_TEMPLATE_BODY` (each hook composes `MOVEMENT_TEMPLATE_OPEN + … + body + …` exactly as
+  `movementTemplate()` does for the manifest, and the Vitest proves the two match). The
+  historical names (`DOCUMENT_TEMPLATE` from `documentPdf.js`, `COMMON_HANDLEBARS_HELPERS`,
+  `COMMON_PDF_CSS`, `MOVEMENT_TEMPLATE_*`, `RETURN_DOC_HELPERS` from `pdfUtils.js`,
+  `buildXxxPdfLabels` / `getXxxPdfLabels`) still work — they re-export or resolve from it — so no caller
+  changed. Keep the module alias-free (no `@/`, no React): the build imports it in plain Node.
+- **The data builder is the one part written twice.** `buildInvoiceData`, `buildOrderData`,
+  `buildQuotationData`, `buildShipmentData`, `buildReturnToVendorData` and `buildReceiptData` have Java
+  ports (`SalesInvoicePrintableData`, `OrderPrintableData`, `QuotationPrintableData`, and the three on
+  `MovementPrintableData`). One fixture per builder, input and expected output, lives in both
+  `__tests__/printableSources.vitest.js` and `PrintableDataTest`: change the shape of a
+  builder and the Vitest fails; update the port and its copy of the fixture in the same change.
+- `printableSources.vitest.js` also proves the published manifest equals the browser's real jsreport
+  call (template, CSS, chrome, helpers once the placeholders are filled, labels per locale).
+- A renderer change reaches the server render with the **frontend deploy**; the backend caches each
+  manifest for 1 minute. **Known limit:** within that minute after a deploy a server render may
+  still use the previous manifest, and because its file is written after the new build instant the
+  bundle-identity invalidation (D16/D17) reads it as fresh — the previous design is served until the
+  record or the branding changes again. The short cache keeps that window small; it does not close it.
 
 ## Criteria any change must meet
 
@@ -321,7 +375,7 @@ click Send; it does not fix the remount itself.
 | D15 | The commercial template's tax labels are **generic** ("Impuesto" / "Impuestos" / "Subtotal (sin impuestos)"), not "IVA" | ETP-5125 | The lines-table tax column prints the tax *name* (`tax$_identifier`, e.g. "IVA 21%"), so a `%` header was wrong; and non-IVA taxes exist. The on-screen `DocumentTotalsPanel` already said "Impuesto", so the PDF contradicted the screen |
 | D16 | The cache is invalidated by **bundle identity** too, not only by the record's `updated` | ETP-5125 | A PDF depends on the template/labels/helpers as much as on the data, and changing those moves no timestamp — a cached document served the old design forever. Deliberately over-invalidates (one cold cache per deploy): the same "re-rendering beats serving stale" trade this cache already takes for `updated` |
 | D17 | The invalidation marker is the **build instant**, not a hand-bumped constant nor a stored renderer fingerprint | ETP-5125 | A constant has to be remembered on every future template change (this repo has shipped the same formatting bug 3× for exactly that reason) and leaves a deploy-slip window. A fingerprint is exact but needs a metadata field the upload cannot carry, and the only free-text column that round-trips is user-editable in the Adjuntos tab |
-| D18 | return-material-receipt's preview left panel reverted to the system-generated PDF (`leftPanel` + `PreviewPdfPanel`); the ETP-4408 customer-upload `attachmentConfig` slot is removed outright, not just hidden | ETP-5124 | PM (Valeria, with Emilio Polliotti) confirmed the original requirement was the Etendo-issued PDF, matching every other document window; QA (Isaías) rejected the ETP-4408 behavior. The customer's own return document is attached only via the generic Attachments tab now — it was never meant to *replace* the Etendo document, per the ticket. Deliberately did **not** adopt the `pdfCacheConfig`/`attachmentConfig` caching layer `return-to-vendor-shipment` uses for the same movement template: any record opened under the ETP-4408 code (2026-07-06 onward) may already carry a customer file marked as the main `M_InOut` attachment, and enabling the read-side cache today would serve that stale file back as a "cached PDF" — the same class of bug, through the cache path instead of the panel wiring. Revisit once a data check confirms no such attachments remain |
+| D18 | return-material-receipt's preview left panel reverted to the system-generated PDF (`leftPanel` + `PreviewPdfPanel`); the ETP-4408 customer-upload `attachmentConfig` slot is removed outright, not just hidden | ETP-5124 | PM (Valeria, with Emilio Polliotti) confirmed the original requirement was the Etendo-issued PDF, matching every other document window; QA (Isaías) rejected the ETP-4408 behavior. The customer's own return document is attached only via the generic Attachments tab now — it was never meant to *replace* the Etendo document, per the ticket. Deliberately did **not** adopt the `pdfCacheConfig`/`attachmentConfig` caching layer `return-to-vendor-shipment` uses for the same movement template: any record opened under the ETP-4408 code (2026-07-06 onward) may already carry a customer file marked as the main `M_InOut` attachment, and enabling the read-side cache today would serve that stale file back as a "cached PDF" — the same class of bug, through the cache path instead of the panel wiring. Revisit once a data check confirms no such attachments remain. The server-side render (D26) does not need that check: it never replaces a main attachment that is not an Etendo-generated PDF, so a receipt still carrying the customer's file as main gets no server PDF; the preview panel itself still renders fresh and reads no cache, unchanged |
 | D19 | rows 3 and 4 of the checklist above went **live** for return-material-receipt: a `return-material-receipt-send` backend contract was built (mirroring `goods-shipment-send`) and the frontend's `onEmail`/`ReceiptSendModal` wiring, which existed since ETP-4912 but pointed at a contract that didn't exist, now works. `EmailsCard` (ETP-5069) was also added to this window's preview, matching Invoice/Order/Quotation/Goods Shipment | ETP-5124 | PM (Valeria) confirmed Send is in scope, and that the backend gap (both sales and purchase return windows) is real engineering work, not a config flag. The summary-block resolver shows one row — `document.detail.movementDate` (reused, no new catalog key) — deliberately not a `sourceShipment` reference: that value is an `afterHandle()` GET-time enrichment (`ReturnShipmentUtils.fetchSourceDocuments`, package-private in a different package), not a real Hibernate property the resolver could read server-side without widening that utility's visibility. `return-to-vendor-shipment` (the purchase-side sibling) is unchanged and still has no working send contract — see its own updated comments in `index.jsx`/`ReturnToVendorShipmentPreview.jsx` |
 | D20 | The detail-view **Send button** moved to `topbarSecondary` (left of Save), but its `SendDocumentModal` did **not** move out of the window's `topbarRight` component; the two are bridged by a `window` `CustomEvent` (`'<window>:open-send-modal'`) | ETP-5260 | The button is a plain visibility/order concern (DF wants it left of Save), but the modal needs client-rendered PDF/`documentType` context (`pdfBlobUrl`, status-derived copy) that the generic, window-agnostic `DocumentSecondaryActions` does not carry and should not be taught per-window. Two windows (`purchase-order`, `goods-shipment`) already used the identical event-bridge pattern for their Confirm/action modals, so this reuses an established shape rather than inventing a second one. Affects `purchase-order`, `sales-order`, `sales-quotation`, `goods-shipment`, `sales-invoice` (5 of the 9 ETP-5260 windows — `purchase-invoice`/`goods-receipt` have no Send button, and the two return windows have neither Clone nor Send in `topbarSecondary`) |
 | D21 | `sales-order`, `purchase-order`, `sales-quotation`, `goods-shipment` gate their `use*Pdf` id on `showSend`, mirroring `sales-invoice`'s ETP-4912 fix; `SendDocumentModal`'s own fallback-build effect now also guards on `pdfBlobLoading` (with `pdfError` excluded, so a hook error still falls through to it); each of the five callers passes `hookLoading \|\| (showSend && !pdfUrl && !pdfError)` instead of the raw hook `loading` | ETP-5308 | Fixed the "0 → 2 `/jsreport/api/report` POSTs on opening a Draft edit form" bug (root cause: eager unconditional PDF build on mount). Gating alone traded that bug for a **new** race — `pdfBlobLoading` itself lags one render behind the state change that starts the fetch, so `SendDocumentModal`'s own fallback build fired a second, redundant render on the very first Send click. Caught live via chrome-devtools network inspection, not by the unit/vitest suite (none of it exercises real render timing) |
@@ -329,6 +383,7 @@ click Send; it does not fix the remount itself.
 | D23 | Under the runtime Solo-Lectura tier every preview keeps **reading** the marked attachment (cached PDF / supplier document, Download) but never **writes** it: `attachmentConfig.readOnly` blocks the auto-store, the stale-cache overwrite, the drop zone and delete. Send (both email paths) is hidden; Print and Download stay | ETP-5205 | Print/Download only expose data the role can read (decision D1 of the ticket); Send mails the customer and uploads the PDF, and the auto-store is a write. `storeCondition: false` was rejected as the switch because it also disables the READ side (`useMainAttachment` becomes a no-op), which would drop the cached-PDF view and the Download gate. The backend refuses the same writes independently (`NeoAttachmentAuthorizer`, email-contract `authorize()`), so a Solo-Lectura cache is simply never refreshed until a full-access user opens the document |
 | D24 | The printable logo comes from `AD_OrgInfo` (the GO Organization screen), with the client's first org logo and then `AD_ClientInfo` as fallbacks, resolved once in `CompanyLogoResolver` for both the session and the portal; a branding change (`session.brandingUpdated`) invalidates cached PDFs | ETP-5541 | The Organization screen saves to `AD_OrgInfo` but the session and portal read `AD_ClientInfo`, so uploaded logos never printed. `AD_ClientInfo` kept as last resort for tenants that never uploaded an org logo (user decision). Branding lives outside the record, so without the third staleness reason a completed document's cached PDF would keep the old logo forever |
 | D25 | `SendDocumentModal` follows the Figma "Enviar" pop-up (SaaS-Etendo-2025, node 5832-58481): 1020px modal, a 496px gray preview pane where a PDF blob is shown by the shared `PdfViewer` (react-pdf) fitted to the pane **width** (24px top / 28px sides, cut by the bottom edge and scrolled) with the zoom bar top right and a `Maximize` fit icon; Download PDF is a pill in the footer left of Send (next to Close when email is off). The native `<iframe>` stays only for the HTML render of the `print-*` artifact when no blob exists | ETP-5598 | Chrome's built-in viewer drew dark side bands and scrolled horizontally. The ticket text asked for a centred bar and fit-to-page; the Figma design overrides it. The viewer only *displays* `effectivePdfUrl` — the same URL is still what Download saves and what `cacheDocumentPreviewFile` attaches, so the shown, downloaded and emailed PDF remain one file (ETP-4912). Colours are the exact Figma values, declared once as `--sf-*` tokens (light + dark) in `tools/app-shell/src/index.css`; global tokens are untouched. `PdfViewer` gains three opt-in props (`contentPadding`, `fitIcon`, `controlColors`) and is lazy-loaded so pdfjs is not pulled in by every `ListView` import; without those props it renders exactly as before for `InvoicePreview`/`GenericPreviewModal` |
+| D26 | The server renders a document's printable itself (sixth producer), eagerly after an MCP Complete and on MCP request when the stored PDF is missing or stale; it fetches the template, helpers and labels the frontend build publishes (`printables/<document>.json`) and ports only the data builder | ETP-6013 | Reverses ETP-5715's "the MCP never renders": documents completed by an agent had no PDF until a person opened them. Publishing the browser's exact payload keeps **one** design (criterion 1) — no hand-copied template — and a fixture shared by a Vitest and a JUnit test guards the ported data. Jasper is ruled out (ETP-4255) and the Node report server only accepts the SPA cookie. Declarative per entity (`MCP_CONFIG.pdf.print`); the read-only tier never stores (D23); supplier-source windows never render. MCP only: the GO app's completions and previews keep rendering in the browser, unchanged. The server never replaces a main attachment that is not an Etendo-generated PDF, which is what makes it safe for return material receipt without D18's data check. Language: the same rule as the MCP email — Spanish (`es_ES`) by default, the email's own language when `etendo_send_document_email` renders it, so an email and its PDF match; a current stored PDF is served whatever its language. Today: the commercial family (sales invoice, sales and purchase order, quotation — orders and quotation on the print path, no exchange-rate row) and the movement family (goods shipment, return to vendor, return material receipt) |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).
