@@ -147,6 +147,7 @@ absent) through `publicFieldName()`:
 - Two fields resolving to the same public name make the generator throw (`Public field name collision`).
 - `direction` is `inout` only when the entity has at least one `POST`, `PUT` or `PATCH` endpoint in `backendContract.endpoints` and the field's visibility is `editable`; otherwise `out`. The rule is the same for curated and derived fields, so a `readOnly` form field is always `out`. It is computed from those endpoints, independently of the fiscal-monitor override that fixes a resource's operations to `GET`, `LIST`.
 - `id` is always present and its internal path is always `id` (the NEO response key). When `id` is not curated it is added as a read-only (`out`) field; when it is curated, its curated direction is kept and only the internal path is forced to `id`.
+- `dataType` comes from the contract field `type`: `amount`, `decimal`, `price`, `quantity` and `number` give `{ "type": "number", "format": "double" }`; `integer` gives `{ "type": "integer", "format": "int32" }`; `boolean` gives `{ "type": "boolean" }`; `date` gives `{ "type": "string", "format": "date" }`; `dateTime` (and the older spelling `datetime`) gives `{ "type": "string", "format": "date-time" }`. Every other type (`string`, `text`, `textarea`, `enum`, `list`, `button`, `foreignKey`, `productAttribute`, `image`) gives `{ "type": "string" }`. The `dataType` is what the OpenAPI document declares for the field and decides which filter operators it accepts ([4.10](#410-list-queries-pagination-sorting-and-filtering)).
 - `updated` is added as a read-only (`out`) field only when the entity's raw schema (`schema-raw.json`) has a field named `updated`. A resource whose entity has none carries no `updated` field. A resource that publishes `updated` is a versioned resource: its updates use [optimistic concurrency](#45-optimistic-concurrency-etag-and-if-match).
 
 ---
@@ -381,6 +382,23 @@ Every failure is an error document, built from Etendo's answer when Etendo refus
 ### 4.9 Automated compliance checks
 
 `gateway/test/json-api-compliance.test.ts` reads the real manifest and the generated OpenAPI and fails when: a relationship is duplicated inside `attributes`; a relationship lacks `type` + `id` linkage or points to an unknown resource; a child's master foreign key is an attribute; `id` is an attribute; a single-record response documents `data` as an array; an operation lacks its error responses; DELETE documents anything but `204`; a runtime document carries a top-level member other than `data`, `errors`, `meta`, `links`, `jsonapi`, `included`; or a relationship is writable as an attribute. `gateway/test/json-api-http.test.ts` exercises media-type negotiation, the error document, the `Content-Type`, the list query parameters through the real query parser, and the per-key rate limit (headers, 429, isolation between keys) over real HTTP; `gateway/test/json-api-query.test.ts` covers every operator, type validation and pagination links. Run with `cd gateway && npm test`.
+
+#### Running the end-to-end suite
+
+`gateway/e2e/` holds an end-to-end suite that drives a **running** gateway over HTTP (`node:test` plus global `fetch`). It is not part of `npm test` and not part of the deploy gate. One file per flow: `contacts` (with its location address), `product`, `sales-order` and `purchase-order` (header plus lines), and `errors` (the JSON:API error contract). Each flow creates a record, reads it, lists it, `PATCH`es it with the `If-Match` of the read, checks `412` for a stale ETag and `428` for a missing one, deletes it and checks `404` afterwards. Every successful response body is also validated with Ajv against the schema of its operation in the gateway's own `/api/openapi.json`, so a drift between the document and the real answers fails the run with the path and the schema error.
+
+```bash
+export PUBLIC_API_BASE_URL=http://localhost:4399
+export PUBLIC_API_KEY='<clientId>:<clientSecret>'      # sent as Authorization: Bearer <value>
+export PUBLIC_API_KEY_READONLY='<clientId>:<secret>'   # optional: enables the 403 test
+make public-api-e2e                                    # or: cd gateway && npm run test:e2e
+```
+
+- The key needs `public-api:read` and `public-api:write` (deletes included) over the published windows. The test tenant needs at least one warehouse (the orders use it).
+- **Localhost guard.** The suite writes and deletes records, so it refuses to start (every file fails with a clear message) when the host of `PUBLIC_API_BASE_URL` is not `localhost` or `127.0.0.1`. `PUBLIC_API_E2E_ALLOW_REMOTE=1` lifts the guard; use it only against a disposable environment, never production.
+- **Data hygiene.** Every record carries a per-run prefix `e2e-<timestamp>-<random>` in its name or search key. An `after` hook deletes whatever the run created, newest first, even when a test failed; a record it could not delete is printed to stderr.
+- **Rate limit.** The gateway allows 100 requests per key per 60 s by default ([4.11](#411-rate-limiting)); the client waits for `Retry-After` and retries on `429`, so a full run takes a little longer than its request count suggests. Raise `PUBLIC_API_RATE_LIMIT` on the local gateway to run faster.
+- Locally, creating a contact can answer `502` when the tenant lacks the `EM_Etgo_Identifier` sequence; the failure message says so.
 
 ### 4.10 List queries: pagination, sorting and filtering
 
@@ -649,6 +667,19 @@ also declares:
 - a required `If-Match` header parameter and the responses `412` and `428` on item `PUT` and `PATCH`;
 - a `meta.etag` property in the resource schema.
 
+The gateway document is OpenAPI 3.0, so it marks values that can be null with `nullable: true`
+(`gateway/src/openapi/build-per-entity-paths.ts`):
+
+- every attribute of a **response** resource is nullable, because Etendo answers an empty value as
+  `null` (a product just created has `"sale_price": null`, `"stock": null`); an attribute with an
+  `enum` also lists `null` in it;
+- the `data` of every to-one relationship is nullable on responses (`{ "data": null }` for an empty
+  link) and on requests (`{ "data": null }` clears the link);
+- **request** attributes keep their plain type: sending `null` to clear an attribute is not part of
+  the contract;
+- the resource `id` is never nullable;
+- the pagination links `prev` and `next` of a list are nullable.
+
 ---
 
 ## 8. Authentication and token flow
@@ -701,6 +732,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Fields with `visibility` `system` or `discarded` are excluded even when exposed ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] A public name collision makes the generator throw ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] Every manifest resource has an `id` field with internal path `id`; `updated` (read-only) is present only when the entity's raw schema has an `updated` field ([2](#field-rules-applied-by-the-manifest-generator))
+- [ ] `amount`, `decimal`, `price`, `quantity` and `number` fields are declared `number`/`double`; `dateTime` and `datetime` are `string`/`date-time`; ids, codes and text are `string` ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] A curated `id` keeps its curated direction and gets internal path `id` ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] Field `direction` is `inout` only for editable fields of an entity with a write endpoint, including for fiscal-monitor windows whose operations are `GET`, `LIST` ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] The public name derivation matches the table, including the override table, the `pO` to `purchase` rule and the generic snake_case rule ([2](#name-derivation))
@@ -793,3 +825,4 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `/api`, `/docs`, `/healthz` and the two OpenAPI routes need no key ([7](#7-openapi-sources-and-endpoint-matrix))
 - [ ] Every manifest resource and operation appears as a gateway path ([7](#7-openapi-sources-and-endpoint-matrix))
 - [ ] For versioned resources the gateway document declares the `ETag` response header, the required `If-Match` parameter with `412` and `428` on `PUT` and `PATCH`, and `meta.etag` ([7](#7-openapi-sources-and-endpoint-matrix))
+- [ ] Response attributes and relationship `data` (responses and requests) are `nullable: true`; request attributes and the resource `id` are not; an enum attribute lists `null` on responses ([7](#7-openapi-sources-and-endpoint-matrix))

@@ -438,6 +438,10 @@ gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and 
 gateway-dev-local-core: ## Start the gateway dev server against the linked local api-gateway-core (LOCAL_CORE dev only)
 	cd gateway && NODE_OPTIONS=--preserve-symlinks npm run start:dev
 
+.PHONY: public-api-e2e
+public-api-e2e: ## Run the public API end-to-end suite against a RUNNING gateway (PUBLIC_API_BASE_URL, PUBLIC_API_KEY; localhost only)
+	cd gateway && npm run test:e2e
+
 .PHONY: docs-api-sync
 docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal
 	cd docs-api && npm run sync:openapi

@@ -131,6 +131,29 @@ describe('buildEntity — non-curated entity derives its form and read-only list
     assert.deepEqual(fields.order_date.dataType, { type: 'string', format: 'date' });
   });
 
+  it('declares every numeric and date-time contract type with the JSON type NEO answers', () => {
+    const typed = [
+      ['orderedQuantity', 'quantity'], ['listPrice', 'price'], ['lineNo', 'number'],
+      ['amount', 'amount'], ['rate', 'decimal'], ['seqNo', 'integer'],
+      ['created', 'dateTime'], ['legacyCreated', 'datetime'], ['orderDate', 'date'],
+      ['active', 'boolean'], ['status', 'enum'], ['description', 'text'],
+    ].map(([name, type]) => ({ name, visibility: 'editable', form: true, type }));
+    const { fields } = build('sales-order', typed);
+    const double = { type: 'number', format: 'double' };
+    assert.deepEqual(fields.ordered_quantity.dataType, double);
+    assert.deepEqual(fields.list_price.dataType, double);
+    assert.deepEqual(fields.line_no.dataType, double);
+    assert.deepEqual(fields.amount.dataType, double);
+    assert.deepEqual(fields.rate.dataType, double);
+    assert.deepEqual(fields.seq_no.dataType, { type: 'integer', format: 'int32' });
+    assert.deepEqual(fields.created.dataType, { type: 'string', format: 'date-time' });
+    assert.deepEqual(fields.legacy_created.dataType, { type: 'string', format: 'date-time' });
+    assert.deepEqual(fields.order_date.dataType, { type: 'string', format: 'date' });
+    assert.deepEqual(fields.active.dataType, { type: 'boolean' });
+    assert.deepEqual(fields.status.dataType, { type: 'string' });
+    assert.deepEqual(fields.description.dataType, { type: 'string' });
+  });
+
   it('marks every derived field out when the entity has no write endpoint', () => {
     const { fields } = build('matched-purchase-invoices', formFields, { methods: ['GET'] });
     assert.equal(fields.order_date.direction, 'out');
