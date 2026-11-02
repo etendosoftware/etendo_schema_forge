@@ -1413,12 +1413,15 @@ rectificative type and the legacy `APC` credit memo.
     the checkbox (plus its dependent AEAT year/period/base-amount fields) when the catalog
     confirms Modelo 349 is active. **Fail-closed** in every failure mode — loading, non-200,
     network error, or a malformed/missing-key response all hide the checkbox, never show it
-    by default. The read-only "Modelo 349" grid-column badge (`CorrectivaBadge`) is **not**
-    gated — it always reflects the underlying `aEAT349IsCorrective` value regardless of
-    catalog state; only the interactive checkbox is affected. **Known non-blocking gap:**
-    toggling 349 off does not clear or warn about an already-`true` `aEAT349IsCorrective` on
-    existing lines — the checkbox just becomes invisible while the data (and the grid badge)
-    stay intact.
+    by default. **Since ETP-5831 (CP-14) the whole "Modelo 349" grid column — header and
+    `CorrectivaBadge` cells — follows the same gate** (`catalogLoaded && isModelActive(activeModels,
+    '349')`): it is absent while the catalog loads and whenever 349 is inactive, so it never
+    flashes in. The column is also dropped from the personal-view column list
+    (`gridColumns`), and the full-width rows (loading, expanded form, draft) span 6 cells
+    instead of 7. Until ETP-5831 the badge column was deliberately left ungated. **Known
+    non-blocking gap:** toggling 349 off does not clear or warn about an already-`true`
+    `aEAT349IsCorrective` on existing lines — the checkbox and the column just become
+    invisible while the data stays intact (and reappears when 349 is switched back on).
   - **New (ETP-5059): the 349 year and period are bound to the original invoice.** The
     classic module `org.openbravo.module.aeat349.es` (trigger `AEAT349_CINVREV_TRG0` on
     `C_Invoice_Reverse`) now accepts, for a "Correctiva del 349", only the original invoice's
