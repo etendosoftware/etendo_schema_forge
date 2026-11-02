@@ -110,8 +110,9 @@ version (§ schema_forge_core versions).
 | | Create the PR | Approve | Merge |
 |---|---|---|---|
 | `feature → develop` | Clerk or the author | Team reviewers | **Human** |
-| `main → develop` | **`back-merge-main.yml`**, when main moves | None in schema_forge; `github-actions[bot]` in com.etendoerp.go | **Auto-merge** once green; its **assignee** when it conflicts |
+| `main → develop` | **`back-merge-main.yml`**, when main moves | None; in com.etendoerp.go `github-actions[bot]` approves it anyway | **Auto-merge** once green; its **assignee** when it conflicts |
 | `mergeblock → main` (the cut) | **Clerk** (on request) | Team reviewers | **Human only** |
+| `mergeblock/auto-* → main` (the automatic cut) | **The merge block job**, as etendobot | None | **The job**, once every PR is green; it closes them at the deadline |
 
 The cut and `main → develop` are the **only** PRs an agent may open towards `main` or out of it.
 
@@ -172,6 +173,62 @@ the next one. Walk the rungs in order, cheapest first.
      branches from develop that afternoon would otherwise inherit the broken code and find it in
      their own PR.
 
+### The automatic afternoon cut (ETP-6040)
+
+The cut above is made by hand in the morning, by the day's owner. A second cut a day is automatic: a
+Jenkins job of `com.etendoerp.jenkins.pipelines` (`etendo-go/mergeblock/Jenkinsfile`, which runs
+`etendo-go/utils/auto-cut/auto-cut.mjs`) cuts develop in the afternoon and merges the cut itself once
+it is green. It runs every 15 minutes from 16:00 to 20:59 on weekdays, Buenos Aires time, and each run
+does two things:
+
+1. **Merges the open automatic cut** once every one of its PRs is clean and green:
+   `com.etendoerp.go` first, then `etendo_schema_forge`, never one without the other.
+   - A red PR is mailed once and labelled `auto-cut-failed`. The cut's owner walks the failure ladder
+     (§ When the cut's pipeline fails) on its branch, and the job merges it as soon as it is green
+     again.
+   - At `AUTO_CUT_DEADLINE` (20:00) it stops merging: a cut not merged by then gets
+     `auto-cut-expired`, a comment saying why, and its PRs are closed. What it carried is still in
+     develop and goes in the next cut.
+2. **Cuts,** from `AUTO_CUT_TIMES` (16:00): `mergeblock/auto-YYYYMMDD-HHMM` from develop in every repo
+   where develop carries something main lacks, with `origin/main` merged in, and one PR per repo to
+   `main`. The PRs are titled `Mergeblock DD/MM HH:MM (auto)`, labelled `auto-cut` and assigned to the
+   day's owner; their body names the owner and carries the task table the team posts in the chat.
+   The automatic cut has no Jira task: its branch is named by date and time.
+
+**What holds the cut.** When develop carries tasks to cut, it is not cut while:
+
+- a merge into `main` is in progress: a `mergeblock/*` PR (the morning cut, or an earlier automatic
+  one) or a `hotfix/*` PR into `main` that is open and not a draft. Main is about to move, and a cut
+  made now would be born behind it. When an open merge block already has every task develop
+  carries, there is nothing to cut;
+- develop lacks main's commits, because the `main → develop` PR (§ Back to develop) has not merged
+  yet: the same reason, after the merge into main;
+- develop's head has failing checks.
+
+The run in the first 15 minutes after the cut time tries the cut. While something holds it, every next
+run tries again, until the next cut time or the deadline, also when the merge in progress ends with
+red checks. The first try mails what holds it (each merge in progress with whether its checks are
+green, running or red), the last one mails that the cut was skipped, and the runs between stay quiet.
+A cut made late in that window may not get through the full pipeline, about two hours, by the
+deadline, and is then closed.
+
+**The day's owner.** Every cut of a day goes to the owner of that day's first cut: the morning cut's
+author, who is the person on the schedule. A day without a cut yet goes to the person after the
+previous day's owner in `AUTO_CUT_OWNERS`. Mails go to the team (`email_builds`) and to the owner.
+
+**The configuration lives in the Jenkins job,** not in a repo, so changing it needs no commit. Jenkins
+passes the job's parameters to the script; one left out of the job takes its default.
+
+| Parameter | Type | What |
+|---|---|---|
+| `AUTO_CUT_OWNERS` | Multi-line String | The merge block owners in schedule order, one `Name, GitHub login, email` per line |
+| `AUTO_CUT_TIMES` | String | `HH:MM` of each cut, comma-separated (default `16:00`) |
+| `AUTO_CUT_DEADLINE` | String | `HH:MM` from which it no longer merges (default `20:00`) |
+| `DRY_RUN` | Boolean | Anything but `false` reads and mails, but writes nothing to GitHub |
+| `AUTO_CUT_MAIL_TO` | String | Recipients instead of the team and the owner, for trying the job out |
+
+A run started by hand tries the cut at once, whatever the time.
+
 ### Back to develop
 
 Whatever enters `main` comes back to `develop` at once, through a `main → develop` PR: a hotfix, or a
@@ -192,8 +249,8 @@ Nobody opens that PR by hand. `.github/workflows/back-merge-main.yml`, in both r
   cut's owner. Never etendobot.
 - Without conflicts it turns on auto-merge (merge commit), so GitHub merges it once the required
   checks pass: that code was already reviewed and passed the full pipeline on its way into `main`.
-  com.etendoerp.go requires one approval on develop and GitHub never lets the PR's author approve
-  it, so there the workflow approves it with `GITHUB_TOKEN`, as `github-actions[bot]`.
+  In com.etendoerp.go the workflow also approves it with `GITHUB_TOKEN`, as `github-actions[bot]`,
+  for when develop requires an approval: GitHub never lets the PR's author approve it.
 - With conflicts it does neither: the PR waits for its assignee.
 - An open PR gets whatever of that it lacks on the next run.
 - It uses `ETENDOBOT_TOKEN`: a PR opened with `GITHUB_TOKEN` triggers no workflow, so its required
