@@ -1,11 +1,11 @@
 # Product Movements Tab (ETP-5889) and Stock Side Panel (ETP-5908) — Plan
 
-> **Date:** 2026-10-28
-> **Status:** Draft — part of it is blocked on definitions pending with the analyst (section 5)
+> **Date:** 2026-10-28 · **Updated:** 2026-11-02
+> **Status:** **ETP-5889 is implemented and merged into `develop`** (etendo_schema_forge#2073, com.etendoerp.go#1507 and etendo-kpis#15, #17, #23; etendo-kpis#24 is open). What is left of it is the deployment, QA and the first measurement (section 5). **ETP-5908 (side panel) is not started and is paused** until ETP-5889 is closed.
 > **Branch:** `feature/ETP-5889`. ETP-5908 gets its own branch, `feature/ETP-5908`, and reuses this plan.
 > **Intent:** develop **both** tasks. They are related in Jira (`relates to`), share the epic ETP-3504, the label `CelulaAlmacenes` and the same design file. Neither task is optional or secondary.
 >
-> **Update 2026-11-02:** ETP-5889 was implemented and merged into `develop` (etendo_schema_forge#2073, com.etendoerp.go#1507), so several points that were open on 2026-10-28 are settled: the role now exists as the list property `role_groups` on every event (ETP-6043); the tab is gated by the per-account flag `product-movements-tab`, evaluated only in the backend and published as the capability `productMovements`; and the two KPIs are read by `etendo-kpis` from saved Mixpanel reports (see `docs/ops/mixpanel-kpi-emission-spec.md`). The rest of this document describes the state of 2026-10-28 and is kept as the record of the plan and its decisions, not as the current state. ETP-5908 (the side panel) is paused until ETP-5889 is closed.
+> **How to read this document:** sections 1 to 3 are the analysis of 2026-10-28 (kept as the record of what was found and why); sections 4 to 10 are updated to 2026-11-02 and say what was done, what was decided and what is pending.
 
 ---
 
@@ -29,7 +29,7 @@ The two meet at three points: the **period** (synced between panel and tab), the
 
 ## 3. What exists today (verified in the code)
 
-- `artifacts/product/contract.json` already has a child entity `transactions` on `M_Transaction` (`tabId 289`), and `artifacts/product/generated/web/product/` has `TransactionsTable.jsx` / `TransactionsForm.jsx`. In `artifacts/product/decisions.json` it is `readOnly: true` and its grid fields include `movementDate`, `movementType`, `storageBin`, `movementQuantity`, `organization` and `totalCost`. **It is not shown in the live tab strip** (see below): it feeds the sidebar chart. It is the natural base for ETP-5889 but lacks the source-document link, the warehouse (it has `storageBin`) and the resulting stock.
+- `artifacts/product/contract.json` already has a child entity `transactions` on `M_Transaction` (`tabId 289`), and `artifacts/product/generated/web/product/` has `TransactionsTable.jsx` / `TransactionsForm.jsx`. In `artifacts/product/decisions.json` it is `readOnly: true` and its grid fields include `movementDate`, `movementType`, `storageBin`, `movementQuantity`, `organization` and `totalCost`. **It is not shown in the live tab strip** (see below): it feeds the sidebar chart. It was the natural base for ETP-5889 but lacked the source-document link, the warehouse (it has `storageBin`) and the resulting stock; ETP-5889 added them (backend handler and the custom tab `ProductMovementsTab`, section 10).
 - **The ETP-5908 side panel already exists**: `tools/app-shell/src/windows/custom/product/ProductSidebar.jsx` (tests in `__tests__/ProductSidebar*.vitest.jsx`), documented in `docs/generated-custom-windows/product.md`: Summary / Warehouses tabs, a shared `SidebarPeriodSelector` (3M/6M/12M), a multi-warehouse inline chart, an "Expandir" link and an expand modal with its own period. ETP-5908 is therefore a **modification** of this component, not a new one.
 - **Live check on the local environment (2026-10-28, product Cerveza `SK-002`, 563 units):**
   - Tab strip is `Precio · Costo · Contabilidad · Adjuntos`; there is **no Movements tab**. ETP-5889 places it between Contabilidad and Adjuntos, which fits.
@@ -65,7 +65,7 @@ The skill `stored-computed-column` states it explicitly: a value injected by `Ne
 
 How the existing ones are built (checked): `EM_ETGO_VALUATION` and `EM_ETGO_COST` on `M_STORAGE_DETAIL` (Warehouse window) use the functions `ETGO_STORAGE_DETAIL_VALUATION` / `ETGO_STORAGE_DETAIL_COST`, `Computation_Mode = S`, `Refresh_Mode = S`, a dependency on the table itself (`COALESCE(NEW.id, OLD.id) FROM dual`) and one on `M_Product` that fans out to every row of the product; the window declares it as a plain field and its contract carries `computed: {mode: stored, refresh: synchronous}`, which makes it sortable and filterable like any physical column. 15 columns of this kind exist in `com.etendoerp.go`.
 
-Proposed for `M_TRANSACTION` (not started; backend repo, see section 7):
+Implemented in `M_TRANSACTION` (com.etendoerp.go#1507, section 10):
 - `EM_ETGO_WAREHOUSE_ID` (FK to `M_Warehouse`), function = the warehouse of `m_locator_id`. The app sorts a foreign key by its `$_identifier` (alphabetical), so the name needs no extra dependency. Dependencies: the row itself (watch `m_locator_id`) and `M_Locator` (watch `m_warehouse_id`; supported by the existing index `m_transaction_locator_idx`).
 - `EM_ETGO_DOC_KIND` (varchar) holding the same window key the handler computes (`goods-shipment`, `return-material-receipt`, `goods-receipt`, `return-to-vendor-shipment`, `goods-movements`, `physical-inventory`, `internal-consumption`, or empty), by the `C_DocType.IsReturn` rule. Sorts and filters by that key (groups equal types together, not alphabetical by the translated label).
 - Both functions must be **total** (an exception would roll back the posting of the stock document) and need the five artifacts of the `stored-computed-column` skill.
@@ -89,17 +89,21 @@ Differences with the written tasks:
 
 ## 4. Workstreams
 
-### A. Movements tab (ETP-5889)
-1. Adapt the existing `transactions` tab: columns in the required order (Date · Type · Warehouse · Quantity · Transaction cost · Resulting stock), source document as a link under the type label, colour badges and labels per the type table, return vs normal document resolved by document type + sign.
-2. Visibility only for storable products (Type = Item); position between Accounting and Attachments; tab counter.
-3. Sorting (all columns except Resulting stock), sticky header with own scroll, 50-row pages with infinite scroll.
-4. Filters: All / In / Out, period (quick ranges, single date, custom range), warehouse.
-5. Empty, no-results and loading (skeleton) states.
-6. Read-only everywhere, **including the API** from this tab (CP-11 expects 403 or equivalent).
-7. Queryable from the MCP (scope 12).
-8. Rename the panel link "Expandir" → "Ver movimientos" (scope 13) — coordinated with workstream B.
+### A. Movements tab (ETP-5889) — status 2026-11-02
 
-### B. Side panel (ETP-5908)
+| # | Work | Status |
+|---|---|---|
+| 1 | Columns in the required order (Date · Type · Warehouse · Quantity · Transaction cost · Resulting stock), source document as a link under the type label, badges per the type table, return vs normal by document type (`IsReturn`) | **Done** (custom tab `ProductMovementsTab`, backend `etgoDocKind` / `etgoDocLabel`) |
+| 2 | Visible only for storable products, between Accounting and Attachments, with a counter | **Done** |
+| 3 | Sorting (every column except Resulting stock), sticky header, 50-row pages with infinite scroll | **Done**. Same-day movements are ordered by `movementDate, transactionProcessDate, id`, the order the resulting stock is summed in |
+| 4 | Filters: All / In / Out, period (quick ranges, single date, custom range), warehouse | **Done**. The warehouse list is built from the product's stock rows, so a warehouse with no stock row is not offered (known risk, registered) |
+| 5 | Empty, no-results, loading (skeleton) and error (with retry) states | **Done** |
+| 6 | Read-only everywhere, including the API (CP-11) | **Done**: the `transactions` entity has POST/PUT/PATCH/DELETE disabled; only GET and GET-by-id are open. Writes were not exercised with a valid CSRF token |
+| 7 | Queryable from the MCP (scope 12) | **Not verified** |
+| 8 | Rename the panel link "Expandir" → "Ver movimientos" (scope 13) | **Pending**, belongs to workstream B |
+| 9 | Behind a per-account feature flag | **Done** (added during delivery, section 10) |
+
+### B. Side panel (ETP-5908) — **not started, paused**
 1. Period selector (3/6/12 months, default 12), exact date range under it, modal that inherits the period but keeps independent state.
 2. Per-warehouse series chart; month labels in the system language; X-axis rules; tooltip with sorted rows and a Total row.
 3. Interactive legend (panel and modal behave differently), at least one series always visible.
@@ -107,99 +111,95 @@ Differences with the written tasks:
 5. Collapse to a 48 px strip, state persisted across reloads.
 
 ### C. Telemetry (shared)
-Proposed events, **none implemented**:
 
-| Event | When | Properties (all allowed today) | Needed by |
+| Event | When | Properties | Status |
 |---|---|---|---|
-| `product_movements_tab_opened` | The Movements tab becomes active | `account_id`, `entity`, `specName`, `source` = `tab` or `side_panel_link` | Both KPIs of ETP-5889, whatever final wording they get |
-| Filtering | Direction / period / warehouse changes | Reuse `search_performed` with `source: 'product_movements'` and `type` = `direction`, `period` or `warehouse` | ETP-5889 scope 15 |
-| `product_movements_sorted` | A column header is sorted | `source`, `type` (bounded column list; may need one new allowed key) | ETP-5889 scope 15 |
-| Panel events (period change, expand, collapse, legend, "Ver movimientos" click) | — | — | **Undefined**: ETP-5908 has no KPIs; decide once they exist |
+| `product_movements_tab_opened` | The Movements tab becomes active (never on mount, because `DetailView` mounts every custom tab and only hides the inactive ones) | `account_id`, `category`, `entity`, `specName`, `source` = `tab` or `side_panel_link` | **Implemented and merged.** Sent whatever the role is, and only when the capability is on. Not yet emitted in production (not deployed) |
+| Filtering and sorting of the tab | Direction / period / warehouse / column changes | — | **Not implemented, by decision**: ETP-5889 scope 15 and CP-15 ask for user, role, product and date, which the privacy policy (ETP-4352) does not allow. Only opens are measured, at tenant level |
+| Panel events (period change, expand, collapse, legend, "Ver movimientos" click) | — | — | **Undefined**: ETP-5908 has no KPIs |
 
-Adding a property or an event requires declaring it in `events.js`, allowing it in `payload.js`, and a test modelled on `productUsageTelemetry.vitest.js`.
+The role is not an event property of this event: it travels on every event as the list `role_groups` (ETP-6043) and is only a filter of the KPI reports.
 
-## 5. What can advance now vs. what is pending
+## 5. Status and open decisions (2026-11-02)
 
-### Can advance now (no dependency on the KPI definition)
+### Decisions taken (ETP-5889)
 
-| # | Work | Task |
-|---|---|---|
-| 1 | ~~Check what the `transactions` tab renders today~~ **Done**: not in the live tab strip (section 3) | 5889 |
-| 2 | ~~Confirm whether `M_Transaction` carries resulting stock~~ **Done**: it does not; compute a running sum (section 3) | 5889 |
-| 3 | Tab visibility rule (storable only), position, counter | 5889 |
-| 4 | Types/labels/badges mapping and return detection by document type + sign | 5889 |
-| 5 | Sorting, sticky header, 50-row infinite scroll, states, read-only enforcement | 5889 |
-| 6 | MCP access to the movements | 5889 |
-| 7 | `product_movements_tab_opened` with `source`, its allowlist entry and test | both |
-| 8 | ~~Check whether a stock side panel already exists~~ **Done**: `ProductSidebar.jsx` exists; gaps found live (section 3) | 5908 |
-| 9 | Panel visual requirements that do not depend on the KPIs (RF-01 … RF-16) | 5908 |
+| Question of 2026-10-28 | Decision |
+|---|---|
+| Identity: users, accounts or devices | **Devices** (anonymous per device, ETP-4352). The role is the list `role_groups` that Platform adds to every event (ETP-6043); a tenant admin carries only `["admin"]` |
+| Which KPI wording and which "active user" | Adoption = devices that open the tab / devices with `session_started` that week; frequency = opens / the same devices. Monday–Sunday weeks, production hosts only. Targets unchanged (≥ 50 % at 3 months) and only meaningful while the denominator keeps the role filter |
+| Where the role filter lives | In the two saved Mixpanel reports that `etendo-kpis` reads (`role_groups` contains `warehouse`), so it is changed in Mixpanel with no code. Whether the admin counts as warehouse stays open (analyst) |
+| What to measure | Opens only, at tenant level (CP-15 not implemented, section 4C) |
+| Sign of *Transaction cost* | Shown unsigned, as stored in `M_Transaction.transactioncost` and as in the design |
+| Resulting stock with a warehouse filter | **Follows the filter**: per product and warehouse when a warehouse is selected, per product otherwise. Not computed for the count-only request |
+| Return types | `C_DocType.IsReturn`, resolved by the handler |
+| Sortable Almacén and Tipo | Two stored computed columns on `M_Transaction` (`EM_Etgo_Warehouse_ID`, `EM_Etgo_Doc_Kind`, `S`/`S`) |
+| Who sees the tab | A per-account feature flag, `product-movements-tab` (default off), evaluated only in the backend by `ProductMovementsPolicy` and published as the capability `productMovements`. The flag gates behaviour only: it is **not** access control (with it off the `transactions` rows stay readable under the role's access; only `etgoStockAfter` and `etgoTotalRows` are withheld) |
 
-### Pending definition with the analyst
+### Pending
 
-**Shared (blocks the KPI wording and the final telemetry):**
-- **One KPI set covering both tasks.** Today ETP-5889 has 2 KPIs (weekly adoption ≥ 50 % at 3 months; opens per active user per week) and ETP-5908 has none. Decide whether the panel gets its own KPIs.
-- **Identity.** "% of active users with warehouse/stock role" cannot be computed: there is no role property and no user identity. Options: measure **accounts** (`account_id`), measure **devices**, or agree with privacy how a role could be expressed without identifying people.
-- Definition of **"active user"**, the **denominator** (which population, which roles) and the **release date / cohort** the 3-month target counts from.
-- ETP-5889 scope 15 and CP-15 ask to record **user, role, product, date**. That conflicts with the allowlist and the GDPR remediation (section 3). Reword it before implementation.
+**ETP-5889**
+- **Deployment to production** of etendo_schema_forge#2073 and com.etendoerp.go#1507. Before opening the tab in an environment: `update.database`, and check `ad_scd_check` = 0 (`ad_scd_rebuild` first if the table has more than 100k rows).
+- **QA**: Matías Bernal / Emilio Polliotti.
+- **Datadog**: the flag exists and has a targeting rule by account email in Production (two accounts); it must be widened for the KPIs to measure anything. A real TTL is still to be set (the registry holds a placeholder, 2027-01-31).
+- **First KPI value**: the first measurable week starts on 2026-11-09; until the event has been seen in production the KPIs are N/D, never 0.
+- **Analyst**: does the tenant admin count as a warehouse role; release date and cohort the 3-month target counts from; whether the KPI is restricted to accounts with the flag (with a gradual rollout the denominator includes devices that cannot see the tab).
+- **Default period of the tab**: implemented on the last 7 days, as in the design; ETP-5889 scope 9 says the last 3 months and "3 months" is not one of the design's quick ranges. To confirm.
+- **`W+`/`W-` (Work Order) movements**: not in the type table and not excluded; not decided.
+- **Not verified**: MCP access (scope 12), a product with more than one page of movements, the flag off in a hosted environment, the event reaching Datadog and Mixpanel (nothing is configured locally), and the filter of the lists (`"x" in properties[…]`) in the collector's own segmentation query.
+- Optional hardening: a `RAISE WARNING` in the two PL/pgSQL functions instead of returning null on error (needs `update.database`).
 
-**ETP-5889 only:**
-- Confirm which of "opens, filters, sorts" must be measured, or only opens.
-- Confirm the formula and **sign** of **Transaction cost**: `M_Transaction.transactioncost` is stored positive even for outbound movements, while the task shows a signed amount ("7,20 €").
-- **Resulting stock with a warehouse filter:** a running sum over all warehouses, or per warehouse? The task says it "matches the real balance after each movement" and must not change when re-sorting; with the warehouse filter both readings differ.
-- ~~Return types~~ Resolved by the existing backend handler (`C_DocType.IsReturn`); see section 3.
-- **`W+`/`W-` (Work Order) movements:** not in the type table and not excluded; decide whether they appear and with which label.
-- Whether the panel's period change counts as a "filter" event of the tab.
-
-**ETP-5908 only:**
-- KPIs, if any (e.g. use of the period selector, Expand, "Ver movimientos").
+**ETP-5908 (all pending)**
+- KPIs, if any (use of the period selector, Expand, "Ver movimientos").
 - RF-12 gives the same example for Spanish and English ("23 Oct 2026" twice); confirm the intended format per language.
+- **Between the two tasks**, to settle before the panel work: the default period (panel 12 months vs tab), the period mapping (the tab supports a single date and a custom range, the panel only 3/6/12 months) and the "Expandir" control (ETP-5889 scope 13 renames it "Ver movimientos"; ETP-5908 RF-02/RF-07 keep a button called "Expandir").
+- The panel gaps found on 2026-10-28 (section 3) are still there.
 
-**Between the two tasks (a decision is needed before either is built):**
-- **Default period.** The panel opens at the last 12 months (ETP-5908 RF-01); the tab at the last 3 months (ETP-5889 scope 9). Scope 10 says they are synchronised. Which wins on first open?
-- **Period mapping.** The tab supports a single date and a custom range; the panel only 3/6/12 months. What does the panel show when the tab holds a custom range?
-- **The "Expandir" control.** ETP-5889 scope 13 renames the "Expandir" link to "Ver movimientos" and keeps expand-on-chart-click; ETP-5908 RF-02/RF-07 keep a button called "Expandir" with a `maximize-2` icon. Define whether these are two controls or one.
+## 6. Next steps
 
-## 6. Suggested order
+1. Deploy, run `update.database`, check `ad_scd_check`, and open the tab with an account covered by the Datadog rule.
+2. QA of the tab and of the flag (on and off).
+3. Widen the Datadog rule; confirm in Mixpanel that `product_movements_tab_opened` and `role_groups` arrive and that the reports return values.
+4. Read the first KPI values (week starting 2026-11-09) with the analyst and settle the admin question.
+5. Resume ETP-5908, starting with the three cross-task decisions of section 5.
 
-1. Items 1, 2 and 8 of section 5 (verification, no code) — they size the rest.
-2. Workstream A items 1–6, together with telemetry item 7.
-3. Workstream B once step 1 shows what is missing; the three cross-task decisions of section 5 must be closed before the "period" and "Expandir" work starts.
-4. Remaining telemetry (filter, sort, panel) after the analyst closes the KPI definition.
+## 7. Outside this repository
 
-## 7. Out of scope of this repo
-
-- **etendo-kpis.** Reading the new event into a KPI (collector query in `src/sources/mixpanel.js`, KPI entry in `src/kpis.js`, the `measurement` link in the issue analysis) happens there, after the event is live in production. Until then the KPI shows N/D, not zero.
+- **com.etendoerp.go** (#1507, merged): stored columns, the `ProductTransactionsHandler` additions, the flag policy and the capability.
+- **etendo-kpis** (#15, #17, #23 merged; #24 open): both KPIs, read from two saved Mixpanel Insights reports (`93773825`, `93773827`, dashboard `11625102`, project Etendo Go); the filters of production and of the role live in those reports; documented in `etendo-kpis/docs/mixpanel-saved-reports.md`. The KPI shows N/D, not zero, until the event is live in production.
+- **Datadog**: the flag `product-movements-tab` and its targeting rule.
 - Production movements, export, editing or voiding movements, non-storable products (ETP-5889 out of scope).
 
 ## 8. Risks and discrepancies to keep visible
 
 - GitHub issue #4 is titled "(ETP-5908)" but its content and both KPIs are ETP-5889's. History: the code was added to the title by its author after the rename, with no comment or relationship. The intended task is unconfirmed; ask the issue author.
-- The telemetry requirement and the privacy policy conflict (section 5, shared).
-- ETP-5889 scope 7 states resulting stock is already available in `M_Transaction`: **false** (verified on the local database). It is a running sum computed on read, with a cost on large histories (the local data has ~9,000 rows in total, which says nothing about production volumes).
+- The telemetry requirement (user, role, product) and the privacy policy conflict; resolved by measuring opens only, per device and tenant (section 5). The issue and Jira still say "users".
+- ETP-5889 scope 7 stated that resulting stock is already available in `M_Transaction`: **false** (verified on the local database). It is a running sum computed on read, with a cost on large histories (the local data has ~9,000 rows, which says nothing about production volumes).
+- The flag is not access control (section 5).
 - Both tasks edit the same area of the Product detail view; keep one branch per Jira key (`feature/ETP-5889`, `feature/ETP-5908`) and merge the first before starting conflicting parts of the second.
 
 ## 9. Not verified
 
 - Returns: the local database has one (`return-material-receipt`, movement type `C-`), which confirms the handler's rule; behaviour for vendor returns was not seen.
 - Production-scale behaviour of the running-sum query.
-- Production Mixpanel/Datadog events (only this repo and the local environment were read).
-- Verified on 2026-10-28: no existing event in `events.js` clashes with the proposed names.
+- The deployed behaviour of the whole chain (flag in Datadog → backend capability → tab → event → Mixpanel → KPI), which can only be checked after the deployment.
+- The `M_InOut` dependency of `EM_Etgo_Doc_Kind` (the core refuses to change the document type of a processed document, so it could not be exercised; probably unnecessary), the insert path with a real posted document, and the load on a mass posting.
 
-## 10. Progress (2026-10-28, uncommitted)
+## 10. Delivered (2026-11-02)
 
-**`schema_forge`, branch `feature/ETP-5889`**
-- Event `product_movements_tab_opened` + helper `trackProductMovementsTabOpened`, and the hook `windows/custom/product/useProductMovementsTabTracking.js` that fires it when the tab becomes active (not on mount, because `DetailView` mounts every custom tab and only hides the inactive ones), with tests. Not emitted yet: the tab does not exist.
-- Confirmed in Mixpanel (project Etendo Go, read-only, 2026-10-28): `session_started` and `window_opened` carry `hostname`/`environment`/`app` and mostly `account_id`; neither carries a role; the event does not exist yet; an unknown event returns an empty result (the KPI collector would store 0 without a guard); weeks run Monday to Sunday.
+**com.etendoerp.go #1507** (merged)
+- `ETGO_TRANSACTION_WAREHOUSE` and `ETGO_TRANSACTION_DOC_KIND` (total functions) and the columns `EM_Etgo_Warehouse_ID` (FK to `M_Warehouse`, indexed) and `EM_Etgo_Doc_Kind` (indexed) on `M_Transaction`, with their `AD_COLUMN`, dependency and watched-column records, and the NEO entity/field configuration (`etgoWarehouse`, `etgoDocKind`).
+- `ProductTransactionsHandler`: `etgoDocHeaderId`, `etgoDocWindow`, `etgoDocLabel`, `etgoStockAfter` (running sums per product and per product + warehouse, bounded by the date of the page) and the exact `etgoTotalRows` (NEO's `totalRows` is only a lower bound). The extra work runs only for the Product window and only when the flag is on; a count-only request skips the stock.
+- `ProductMovementsPolicy` (the flag per account, targeted by the account email with the tenant as `clientId`) and the capability `productMovements` in `SFWindowAccessMap`.
+- Tests: `ProductTransactionsHandlerTest` (45), `ProductMovementsPolicyTest` (6), `SFWindowAccessMapTest` (30). CI green.
+- Local verification (2026-10-28, database): both columns populated on all 9,198 rows, equal to the functions, `ad_scd_check` = 0; a committed change of a locator's warehouse updated its transaction and was reverted.
 
-**`com.etendoerp.go`, branch `feature/ETP-5889`** (stored computed columns on `M_TRANSACTION`, for the sortable Almacén and Tipo columns; written, **not deployed**)
-- `model/functions/ETGO_TRANSACTION_WAREHOUSE.xml`, `ETGO_TRANSACTION_DOC_KIND.xml` (total functions).
-- `model/modifiedTables/M_TRANSACTION.xml`: `EM_ETGO_WAREHOUSE_ID` (FK to `M_WAREHOUSE`, set null on delete, indexed), `EM_ETGO_DOC_KIND` (varchar 40, indexed).
-- `sourcedata`: 2 `AD_ELEMENT`, 2 `AD_COLUMN` (S/S), 4 `AD_COLUMN_COMP_DEPENDENCY` (the row itself + `M_Locator` for the warehouse; the row itself + `M_InOut` for the kind), 8 `AD_COMPDEP_WATCHED_COL`. Generated by cloning existing records; record order and XML well-formedness checked the way `xml-order-check.yml` does.
-- Logic checked read-only against the 9,198 local rows: every row resolves a warehouse; kinds add up to 9,198 (5758 `goods-shipment`, 3000 `goods-receipt`, 407 `physical-inventory`, 32 `goods-movements`, 1 `return-material-receipt`).
-- **Deployed and verified on the local database (2026-10-28, after `update.database`, compile and restart):**
-  - Both columns exist (`varchar(32)`, `varchar(40)`), are populated on all 9,198 rows and equal what the functions return (0 mismatches); the 4 `ad_scd_*` triggers exist (insert + update on `M_Transaction`, update on `M_Locator` and `M_InOut`); `ad_scd_check` = 0 for both and the dirty queue is empty.
-  - Reaction to a real committed change, reverted afterwards (final state identical, 0 mismatches): changing a locator's warehouse updated its transaction; changing a transaction's locator updated its warehouse.
-  - **Not verified:** the `M_InOut` dependency (the core refuses to change the document type of a processed document, `@20501@`, so it could not be exercised; it is probably unnecessary); the insert path with a real posted document (only the trigger definition was checked); and the load on a mass posting.
-  - Known limits: a change of `C_DocType.IsReturn` does not fan out to existing transactions; the kind of a goods line whose header has no document type is null, as in the handler.
+**etendo_schema_forge #2073** (merged)
+- `ProductMovementsTab` and its query builder, tracking hook, capability gate (fail closed), labels in es_ES, es_AR and en, regenerated `artifacts/product`, the flag entry in `flags-registry.json`, docs.
+- Tests: the product folder of `app-shell` and the full suite; CI green (15 of 15 checks).
+- Live verification (2026-11-02, local, tenant GOClient, product with 10 movements): rows, stock, warehouse / direction / period filters and the sorts of every column match SQL; same-day movements read in the order the stock was summed.
 
-**Still to do:** declare both fields in the Product `transactions` entity (`decisions.json`) and add the handler fields (resulting stock, document), the frontend tab, i18n, the side-panel changes of ETP-5908, tests and docs.
+**etendo-kpis**
+- Saved reports, collector, analysis `4.json`, the workbench labels and `docs/mixpanel-saved-reports.md` (see section 7).
+
+**Known limits.** The flag entry in `flags-registry.json` registers four as deferred items: the schema must be deployed before any account is targeted; the hosted flag setting (it has since been created in Datadog, so that item is stale and the entry should be updated); with a gradual rollout the KPI denominator is diluted; the warehouse selector is fed by the stock rows. Also known: the flag is not access control (documented in `docs/feature-flags.md`); a change of `C_DocType.IsReturn` does not fan out to existing transactions; the kind of a goods line whose header has no document type is null, as in the handler.
