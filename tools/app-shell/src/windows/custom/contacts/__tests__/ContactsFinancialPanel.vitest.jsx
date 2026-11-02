@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx
 // Credit-limit field behaviour of the contacts financial panel.
 //
 // ETP-5328 — the credit-limit box is `MaskedAmountInput` (the same component `ProductPriceBar`'s

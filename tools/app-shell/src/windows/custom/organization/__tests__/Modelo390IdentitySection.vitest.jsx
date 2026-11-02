@@ -125,7 +125,7 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
     // Labelled by its column header, so the inputs keep an accessible name.
     expect(screen.getByLabelText(/orgRepFirstNameLabel/)).toBe(within(bodyRows[0]).getByTestId('Modelo390IdentitySection__aeat390Firstname'));
     // Same visual shell as the representatives grid, and no way to add a second row.
-    expect(table.closest('[data-testid="RepresentativeTableFrame__root"]')).not.toBeNull();
+    expect(table.closest('[data-testid="RepresentativeTableFrame__person390"]')).not.toBeNull();
     expect(screen.queryByTestId('RepresentantesLegalesSection__addButton')).not.toBeInTheDocument();
     expect(within(person).queryByRole('button')).not.toBeInTheDocument();
   });

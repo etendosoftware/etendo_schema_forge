@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx
 // ETP-5112 regression — the onboarding wizard's SII+TBAI detail step must save the two
 // sections one after the other, never with `Promise.allSettled([...])`.
 //

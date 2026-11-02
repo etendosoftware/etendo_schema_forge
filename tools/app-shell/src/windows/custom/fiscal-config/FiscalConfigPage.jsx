@@ -289,7 +289,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
       <FiscalStatusSummary
         eyebrow={{
           label: ui('fiscal.status.title'),
-          badge: <EnvironmentBadge isProduction={configuredStatus.isProduction} ui={ui} data-testid="EnvironmentBadge__310303" />,
+          badge: <EnvironmentBadge isProduction={configuredStatus.isProduction} ui={ui} data-testid="FiscalStatusSummary__envBadge" />,
         }}
         title={ui('fiscal.status.active', { system: buildSystems(ui)[configuredStatus.system]?.name })}
         body={ui('fiscal.status.body')}

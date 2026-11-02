@@ -7,9 +7,9 @@
  * `head` is the content of the header row (`<th>` cells, see `RepresentativeHeaderCell`);
  * `children` are the body rows.
  */
-export function RepresentativeTableFrame({ head, children }) {
+export function RepresentativeTableFrame({ head, children, 'data-testid': testId = 'RepresentativeTableFrame__root' }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border" data-testid="RepresentativeTableFrame__root">
+    <div className="overflow-x-auto rounded-lg border border-border" data-testid={testId}>
       <table className="w-full table-fixed">
         <thead>
           <tr className="border-b border-border bg-muted/40">{head}</tr>

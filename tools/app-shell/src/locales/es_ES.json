@@ -20836,7 +20836,6 @@
     "orgSectionIae": "Actividades del IAE",
     "orgSectionIaeDesc": "Actividades del Impuesto sobre Actividades Económicas (IAE) declaradas por esta organización. Al menos una debe estar marcada como principal y con un código asignado antes de presentar el último periodo del modelo 303 de la AEAT.",
     "orgIaeEpigraphLabel": "Epígrafe IAE",
-    "orgIaeTypeLabel": "Clave",
     "orgIaeCodeLabel": "Código",
     "orgIaeDefaultLabel": "Principal",
     "orgIaeCodeHint": "Obligatorio en la fila principal antes de presentar el último periodo (4T o diciembre) del modelo 303 de la AEAT.",

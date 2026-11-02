@@ -534,7 +534,8 @@ describe('ActividadesIaeSection personal columns', () => {
     render(<ActividadesIaeSection {...baseProps} />);
     const row = await screen.findByTestId('ActividadesIaeSection__row-row-1');
 
-    expect(screen.queryByText('orgIaeTypeLabel')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).not.toContain('Clave');
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
     expect(within(row).queryByTestId('selector-epiaeType')).not.toBeInTheDocument();
     expect(gridBoundary.last.columns.map(column => column.key)).toEqual(['epgrafeIAE', 'epiaeCode', 'default']);
 

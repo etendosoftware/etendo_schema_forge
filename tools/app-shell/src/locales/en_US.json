@@ -20600,7 +20600,6 @@
     "orgSectionIae": "IAE activities",
     "orgSectionIaeDesc": "Activities under the Spanish Business Activities Tax (IAE, Impuesto sobre Actividades Económicas) reported for this organization. At least one must be marked as default with a code before filing the last period of the AEAT Modelo 303.",
     "orgIaeEpigraphLabel": "IAE heading",
-    "orgIaeTypeLabel": "Key",
     "orgIaeCodeLabel": "Code",
     "orgIaeDefaultLabel": "Default",
     "orgIaeCodeHint": "Required on the default row before filing the last period (4th quarter or December) of the AEAT Modelo 303.",

@@ -48,12 +48,12 @@ function SummaryRow({ k, v, testId }) {
 }
 
 /** The environment badge of the status panel: "Producción" (success) or "Sandbox · pruebas" (warning). */
-export function EnvironmentBadge({ isProduction, ui }) {
+export function EnvironmentBadge({ isProduction, ui, 'data-testid': testId = 'FiscalStatusSummary__envBadge' }) {
   const tone = isProduction
-    ? 'bg-status-success-bg text-status-success-fg border-status-success-border'
-    : 'bg-status-warning-bg text-status-warning-fg border-status-warning-border';
+    ? 'bg-status-success text-status-success-foreground border-status-success-border'
+    : 'bg-status-warning text-status-warning-foreground border-status-warning-border';
   return (
-    <Badge variant="outline" className={`rounded-full ${tone}`} data-testid="FiscalStatusSummary__envBadge">
+    <Badge variant="outline" className={`rounded-full ${tone}`} data-testid={testId}>
       {isProduction ? ui('fiscal.onboarding.applied.env.production') : ui('fiscal.onboarding.applied.env.sandbox')}
     </Badge>
   );
@@ -132,7 +132,7 @@ export function buildConfiguredStatusRows({ status, territories, systems, cert, 
   const bcp = (locale || 'es_ES').replace('_', '-');
   const certValue = cert?.validTo
     ? ui('fiscal.cert.validUntil', { date: formatCalendarDate(cert.validTo, bcp, { day: '2-digit', month: '2-digit', year: 'numeric' }) })
-    : <span className="text-status-warning-fg">{ui('fiscal.onboarding.cert.pending')}</span>;
+    : <span className="text-status-warning-foreground">{ui('fiscal.onboarding.cert.pending')}</span>;
   return [
     terr && { key: 'territory', label: ui('fiscal.onboarding.applied.row.territory'), value: terr.name },
     { key: 'tax', label: ui('fiscal.onboarding.applied.row.tax'), value: terr ? terr.systemLong : sys?.long },
