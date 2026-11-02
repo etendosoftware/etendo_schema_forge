@@ -67,6 +67,80 @@ x-fixtures:
       args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.id}}",
               action: documentAction, parameters: { docAction: CO } }
 
+  # The customer plus TWO completed invoices of 121 € each (242 € outstanding in total).
+  customer-with-two-invoices: &customer-with-two-invoices
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}" } }
+      saveAs: bp
+    - tool: etendo_create
+      args:
+        spec: contacts
+        entity: locationAddress
+        parentId: "{{steps.bp.data.id}}"
+        fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" }
+      saveAs: address
+    - tool: etendo_list
+      args: { spec: product, entity: product, filters: { name: "Agua" }, fields: [id] }
+      saveAs: agua
+    - tool: etendo_create
+      args: { spec: sales-invoice, entity: header,
+              fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                        description: "{{marker}} 1" } }
+      saveAs: invoice1
+    - tool: etendo_create
+      args: { spec: sales-invoice, entity: lines, parentId: "{{steps.invoice1.data.id}}",
+              fields: { product: "{{steps.agua.data.0.id}}", invoicedQuantity: 1, unitPrice: 100 } }
+    - tool: etendo_action
+      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice1.data.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+    - tool: etendo_create
+      args: { spec: sales-invoice, entity: header,
+              fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                        description: "{{marker}} 2" } }
+      saveAs: invoice2
+    - tool: etendo_create
+      args: { spec: sales-invoice, entity: lines, parentId: "{{steps.invoice2.data.id}}",
+              fields: { product: "{{steps.agua.data.0.id}}", invoicedQuantity: 1, unitPrice: 100 } }
+    - tool: etendo_action
+      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice2.data.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+
+  # The customer plus one completed invoice of 36,30 € (30 € + 21 % VAT), smaller than a 50 € payment.
+  customer-with-small-invoice: &customer-with-small-invoice
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}" } }
+      saveAs: bp
+    - tool: etendo_create
+      args:
+        spec: contacts
+        entity: locationAddress
+        parentId: "{{steps.bp.data.id}}"
+        fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" }
+      saveAs: address
+    - tool: etendo_list
+      args: { spec: product, entity: product, filters: { name: "Agua" }, fields: [id] }
+      saveAs: agua
+    - tool: etendo_create
+      args: { spec: sales-invoice, entity: header,
+              fields: { businessPartner: "{{steps.bp.data.id}}", partnerAddress: "{{steps.address.data.id}}",
+                        description: "{{marker}}" } }
+      saveAs: invoice
+    - tool: etendo_create
+      args: { spec: sales-invoice, entity: lines, parentId: "{{steps.invoice.data.id}}",
+              fields: { product: "{{steps.agua.data.0.id}}", invoicedQuantity: 1, unitPrice: 30 } }
+    - tool: etendo_action
+      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+
+  # Two customers whose names both start with "Cliente {{marker}}": the request is ambiguous.
+  two-similar-customers: &two-similar-customers
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}} Norte" } }
+      saveAs: north
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}} Sur" } }
+      saveAs: south
+
   # Holded's MCP cannot create invoices (no `create_invoice`), so neither the goal nor a starting
   # state that is an invoice can be reached there. Checked live at every preflight.
   holded-no-invoice: &holded-no-invoice
@@ -220,3 +294,143 @@ probes:
                   filters: { businessPartner: "{{steps.bp.data.id}}", documentStatus: CO } }
           expect: none
       holded: *holded-no-invoice
+
+  # --- second batch (sweep 2026-11-02): Etendo side first; Holded blocks after its tools/list ---
+
+  # Flow 2 (create part: a final delete leaves nothing to verify).
+  - id: w-customer-crud
+    category: write
+    mode: write
+    prompt: "Agregá a Cliente {{marker}} como cliente, su correo es compras@mcpflow.test."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner, filters: { name: "Cliente {{marker}}", customer: true } }
+
+  # Flow 6 (create + change; the delete is left out for the same reason).
+  - id: w-draft-order-edit-delete
+    category: write
+    mode: write
+    prompt: "Anotá un pedido de 5 Cervezas para Cliente {{marker}}. Mejor que sean 4."
+    platforms:
+      etendo-go:
+        setup: *customer
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-order, entity: lines, allParents: true,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", orderedQuantity: 4 } }
+
+  # Flow 8. One payment for two invoices: none of them stays pending.
+  - id: f-collect-several-invoices
+    category: flow
+    mode: write
+    prompt: "Cliente {{marker}} nos transfirió todo lo que nos debía de sus dos facturas, en un solo pago. Registralo."
+    platforms:
+      etendo-go:
+        setup: *customer-with-two-invoices
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", paymentComplete: false } }
+          expect: none
+      holded: *holded-no-invoice-setup
+
+  # Flow 9. 50 € paid for a 36,30 € invoice: the invoice ends paid; what is done with the 13,70 €
+  # difference is read from the transcript (not yet part of the check).
+  - id: f-overpay-sales-invoice
+    category: flow
+    mode: write
+    prompt: "Cliente {{marker}} nos pagó 50 € en efectivo por su factura. Registralo."
+    platforms:
+      etendo-go:
+        setup: *customer-with-small-invoice
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { id: "{{steps.invoice.data.id}}", paymentComplete: true } }
+      holded: *holded-no-invoice-setup
+
+  # Flow 20 (create part).
+  - id: w-product-crud
+    category: write
+    mode: write
+    prompt: "Agregá un producto nuevo, Producto {{marker}}: lo compramos a 4 € y lo vendemos a 9 €."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: product, entity: product, filters: { name: "Producto {{marker}}" } }
+
+  # Flow 21 (create part).
+  - id: w-product-category-crud
+    category: write
+    mode: write
+    prompt: "Creá la categoría de productos Bebidas {{marker}}."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: product-category, entity: productCategory, filters: { name: "Bebidas {{marker}}" } }
+
+  # Flow 29 (create part).
+  - id: w-subaccount
+    category: write
+    mode: write
+    prompt: "Necesito una cuenta contable para los gastos de publicidad, que se llame Publicidad {{marker}}."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: chart-of-accounts, entity: elementValue, filters: { name: "Publicidad {{marker}}" } }
+
+  # Flow 37 (price list part).
+  - id: w-commercial-setup
+    category: write
+    mode: write
+    prompt: "Creá una tarifa de venta para mayoristas que se llame Mayoristas {{marker}}."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: price-list, entity: priceList,
+                  filters: { name: "Mayoristas {{marker}}", salesPriceList: true } }
+
+  # Flow 38 (user part).
+  - id: w-company-users-numbering
+    category: write
+    mode: write
+    prompt: "Dale acceso al sistema a {{marker}}@x.es con permisos de ventas."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: user, entity: user, filters: { email: "{{marker}}@x.es" } }
+
+  # Flow 41. Two customers match: the agent asks which one, and creates nothing for either.
+  - id: e-ambiguous-customer
+    category: error
+    mode: write
+    prompt: "Hacele un pedido de 2 Aguas a Cliente {{marker}}."
+    platforms:
+      etendo-go:
+        setup: *two-similar-customers
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-order, entity: lines, allParents: true,
+                  filters: { businessPartner: "{{steps.north.data.id}}" } }
+          expect: none
+
+  # Flow 42. A payment term with the same days as an existing one (30) is refused.
+  - id: e-duplicate-payment-term
+    category: error
+    mode: write
+    prompt: "Creá una condición de pago a 30 días que se llame Mensual {{marker}}."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: payment-term, entity: header, filters: { name: "Mensual {{marker}}" } }
+          expect: none
