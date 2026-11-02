@@ -760,7 +760,8 @@
           "internalPath": "movementQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -1090,7 +1091,8 @@
           "internalPath": "movementQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -1112,7 +1114,8 @@
           "internalPath": "orderQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -1379,7 +1382,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -1419,7 +1422,8 @@
           "internalPath": "movementQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -1452,7 +1456,8 @@
           "internalPath": "orderQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -1527,7 +1532,7 @@
       },
       "source": {
         "artifact": "goods-shipment",
-        "contractVersion": "0.5.0",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     },
@@ -1672,7 +1677,8 @@
           "internalPath": "movementQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -1804,7 +1810,8 @@
           "internalPath": "quantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -2130,7 +2137,8 @@
           "internalPath": "quantityOrderBook",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -2141,7 +2149,8 @@
           "internalPath": "quantityCount",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -2163,7 +2172,8 @@
           "internalPath": "bookQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -2186,7 +2196,8 @@
           "internalPath": "etgoQtydiff",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -2374,7 +2385,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.16.0",
+        "contractVersion": "0.17.0",
         "backendEntity": true
       }
     },
@@ -2472,7 +2483,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.16.0",
+        "contractVersion": "0.17.0",
         "backendEntity": true
       }
     },
@@ -2934,7 +2945,8 @@
           "internalPath": "invoicedQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -2945,7 +2957,8 @@
           "internalPath": "listPrice",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -3107,7 +3120,8 @@
           "internalPath": "rate",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -3450,7 +3464,8 @@
           "internalPath": "orderedQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -3461,7 +3476,8 @@
           "internalPath": "listPrice",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -3779,7 +3795,8 @@
           "internalPath": "movementQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -3823,7 +3840,8 @@
           "internalPath": "orderQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -4039,7 +4057,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -4091,7 +4109,8 @@
           "internalPath": "movementQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -4124,7 +4143,8 @@
           "internalPath": "orderQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -4172,7 +4192,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -4474,7 +4494,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.93.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -4525,7 +4545,8 @@
           "internalPath": "invoicedQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -4536,7 +4557,8 @@
           "internalPath": "listPrice",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -4657,7 +4679,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.93.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -4699,7 +4721,8 @@
           "internalPath": "rate",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -4764,7 +4787,7 @@
       },
       "source": {
         "artifact": "sales-invoice",
-        "contractVersion": "0.93.0",
+        "contractVersion": "0.94.0",
         "backendEntity": true
       }
     },
@@ -5031,7 +5054,8 @@
           "internalPath": "orderedQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -5042,7 +5066,8 @@
           "internalPath": "listPrice",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -5401,7 +5426,8 @@
           "internalPath": "orderedQuantity",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
@@ -5412,7 +5438,8 @@
           "internalPath": "listPrice",
           "type": "passthrough",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null,
           "handlerId": null
