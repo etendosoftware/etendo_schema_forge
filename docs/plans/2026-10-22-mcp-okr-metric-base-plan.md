@@ -306,6 +306,8 @@ verificación mide el resultado, no el camino.
    recién creada). Holded no da refresh token: cuando vence, se repite el login. **Pendiente:
    nadie lo hizo todavía.**
 4. `local` necesita el SPA de un entorno levantado (el MCP local pasa por el SPA, no por Tomcat).
+   El ejemplo apunta a `:3100` (checkout principal); para un entorno de local-env, cambiar la `url`
+   al puerto de su SPA (ETP-5848 usó `:3104`; `local-env worktree ls` lo muestra).
 
 **Entorno de Etendo** (skill `local-env`): `local-env worktree ETP-5848 --module
 com.etendoerp.go=feature/ETP-5848 --base=origin/develop` desde `etendo_develop`, después
