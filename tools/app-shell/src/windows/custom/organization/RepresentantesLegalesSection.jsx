@@ -330,13 +330,15 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
       <RepresentativeTableFrame
         head={(
           <>
-            <RepresentativeHeaderCell className="w-20">{ui('orgRepLineLabel')}</RepresentativeHeaderCell>
+            <RepresentativeHeaderCell className="w-20" data-testid="RepresentativeHeaderCell__f6a856">{ui('orgRepLineLabel')}</RepresentativeHeaderCell>
             {columns.map(column => {
               const label = column.label;
               return (
-                <RepresentativeHeaderCell key={column.key}
+                <RepresentativeHeaderCell
+                  key={column.key}
                   style={headerCellStyle(column)}
-                  {...gridHeaderProps(column, gridView)}>
+                  {...gridHeaderProps(column, gridView)}
+                  data-testid="RepresentativeHeaderCell__f6a856">
                   {label}
                   {gridReorderHandle(column, gridView, label, ui)}
                   {gridResizeHandle(column, gridView, label, ui)}

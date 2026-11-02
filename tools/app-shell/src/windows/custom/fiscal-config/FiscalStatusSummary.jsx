@@ -31,7 +31,12 @@ export default function FiscalStatusSummary({ title, body, rows, eyebrow = null,
       </div>
       <div className="divide-y divide-border px-5 py-2">
         {rows.filter(Boolean).map(row => (
-          <SummaryRow key={row.key} k={row.label} v={row.value} testId={`FiscalStatusSummary__row-${row.key}`} />
+          <SummaryRow
+            key={row.key}
+            k={row.label}
+            v={row.value}
+            testId={`FiscalStatusSummary__row-${row.key}`}
+            data-testid="SummaryRow__100d28" />
         ))}
       </div>
     </div>
