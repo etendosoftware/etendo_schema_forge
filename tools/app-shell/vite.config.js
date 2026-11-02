@@ -9,6 +9,7 @@ import mcpRetryProxy from './vite-plugins/mcp-proxy.js';
 import singleCoreInstancePlugin from './vite-plugins/single-core-instance.js';
 import appsSpikePlugin from './vite-plugins/apps-spike.js';
 import sliceLabelsPlugin from './vite-plugins/slice-labels.js';
+import printablesPublishPlugin from './vite-plugins/printables-publish.js';
 
 // Read ETENDO_URL from .env.local for the dev proxy and report API (not exposed to client)
 function readEnvFile() {
@@ -241,6 +242,8 @@ export default defineConfig(({ mode }) => {
     react(),
     singleCoreInstancePlugin(),
     sliceLabelsPlugin(),
+    // ETP-6013 — dist/printables/<document>.json for the server-side document render.
+    printablesPublishPlugin(),
     schemaApiPlugin(),
     reportApiPlugin({ etendoUrl: ETENDO_URL, jsreportUrl: JSREPORT_URL }),
     mcpWellKnownPlugin(),
