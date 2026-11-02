@@ -13,6 +13,9 @@
 # CLOSED: `e-closed-period` depends on it. Products are read by name ("Agua", "Fernet", "Cerveza").
 # GOClient has no service: create once a product "Hora de instalación" (searchKey INSTALACION, type
 # service) with a 50 € price on "Tarifa de venta principal" (`f-order-direct-invoice`).
+# GOClient has no G/L item for transfers between its own accounts: create once, in the chart
+# "Arbol de cuentas GO", the subaccount 55500001 "Traspasos internos" under 5550 (its G/L item comes
+# with it) (`f-bank-account-transfer`).
 #
 # Holded blocks are written from the live tools/list; probes whose Holded side still has to be
 # confirmed against it say so in their comment.
@@ -855,10 +858,11 @@ probes:
           all: [{ number: "{{steps.stock.data.0.quantityOnHand}}" }]
 
   # Flow 28.
+  # Flow 28. Needs the tenant G/L item "55500001-Traspasos internos" (see the header).
   - id: f-bank-account-transfer
     category: flow
     mode: write
-    prompt: "Abrimos una cuenta en el Banco {{marker}}. Cargala y pasale 500 € de la caja."
+    prompt: "Abrimos una cuenta en el Banco {{marker}}. Cargala y pasale 500 € de la caja, es un traspaso interno."
     platforms:
       etendo-go:
         expectEffect:
