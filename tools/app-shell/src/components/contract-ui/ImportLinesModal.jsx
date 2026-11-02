@@ -21,6 +21,11 @@ function classifyQtyDraft(raw, maxQty) {
   return { valid: false, tooHigh: isNumeric && magnitude > maxQty };
 }
 
+// The dialog is anchored at a fixed offset from the top of the viewport, never centred: content
+// that changes height while the user works (a document expanded, a selection panel appearing)
+// then grows or shrinks the dialog downwards only, so the rows above stay under the pointer.
+const DIALOG_TOP_OFFSET = '10vh';
+
 // Shows a caller-provided toast ({ message, variant }) and reports whether it did.
 function showCustomToast(custom) {
   if (!custom?.message) return false;
@@ -65,6 +70,8 @@ export default function ImportLinesModal({
   renderDocAdornment,    // (doc, selection) => node shown in the document row, after the date
   getDocTotal,           // ({ doc, lines, total, sharedContext }) => number shown as the row total
   renderSelectionPanel,  // (selection) => node rendered between the list and the footer
+  selectionPanelMinHeight, // px reserved for that panel even while it renders nothing, so its
+                           // appearance on the first selection does not shrink the list
   getSelectionHint,      // (selection) => string | null overriding the footer "N selected" text
   getSuccessToast,       // ({ count, importedDocIds, afterImportResult, partial, ...selection }) => { message, variant? } | null
                          // `partial` = some line imports failed: the modal shows its own warning and
@@ -309,7 +316,7 @@ export default function ImportLinesModal({
   };
 
   return createPortal(
-    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-start justify-center bg-foreground/30" style={{ paddingTop: DIALOG_TOP_OFFSET }} data-testid="ImportLinesModal__overlay">
       <div onClick={e => e.stopPropagation()} style={{ width: 580, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))' }}>
 
         <div style={{ padding: '14px 16px', borderBottom: '2px solid hsl(var(--border-subtle))' }}>
@@ -518,7 +525,15 @@ export default function ImportLinesModal({
           })()}
         </div>
 
-        {renderSelectionPanel && !loading && !eagerLoadingLines && renderSelectionPanel(selection)}
+        {renderSelectionPanel && (
+          <div
+            data-testid="ImportLinesModal__selectionPanelSlot"
+            // grid: the panel stretches to fill the reserved height instead of leaving a strip
+            style={{ display: 'grid', flexShrink: 0, minHeight: selectionPanelMinHeight || undefined }}
+          >
+            {!loading && !eagerLoadingLines && renderSelectionPanel(selection)}
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))', padding: '10px 16px' }}>
           <span style={{ fontSize: 12, color: selected.size > 0 ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: selected.size > 0 ? 500 : 400 }}>

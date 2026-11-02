@@ -11,13 +11,17 @@ import {
   shouldPatchInvoiceGlobalDiscount,
 } from './orderGlobalDiscountRule.js';
 
+// Height the modal reserves for the toggle / warning panel before anything is selected, so the
+// panel appearing on the first checked line does not shrink the list under the pointer.
+const SELECTION_PANEL_MIN_HEIGHT = 64;
+
 const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedContext?.orderDiscountMap?.[docId]);
 
 /**
- * Global discount carry-over for the invoice "Add from order" popups (ETP-5828), shared by the
+ * Global discount carry-over for the invoice "Import from order" popups (ETP-5828), shared by the
  * sales-invoice and purchase-invoice modals. Returns the generic `ImportLinesModal` extension
  * props (`initialExtraState`, `renderDocAdornment`, `getDocTotal`, `renderSelectionPanel`,
- * `getSelectionHint`, `afterImport`, `getSuccessToast`), so the shared modal stays unaware of
+ * `selectionPanelMinHeight`, `getSelectionHint`, `afterImport`, `getSuccessToast`), so the shared modal stays unaware of
  * discounts.
  *
  * It expects the caller's `fetchDocuments` to put in `sharedContext`:
@@ -239,6 +243,8 @@ export default function useOrderGlobalDiscountImport({ headerEndpoint }) {
       renderDocAdornment,
       getDocTotal,
       renderSelectionPanel,
+      // The toggle (title + one line) fits; the warning grows the slot only when its text wraps.
+      selectionPanelMinHeight: SELECTION_PANEL_MIN_HEIGHT,
       getSelectionHint,
       afterImport,
       getSuccessToast,

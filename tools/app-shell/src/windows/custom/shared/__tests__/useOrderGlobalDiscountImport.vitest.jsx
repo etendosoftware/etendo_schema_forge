@@ -350,6 +350,11 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
     expect(screen.getByTestId('ImportGlobalDiscount__tag')).toHaveTextContent('importGlobalDiscountTag:{"pct":"10"}');
     expect(screen.getByText(formatCurrency(undefined, 90))).toBeInTheDocument();
     expect(screen.getByText('importGlobalDiscountSelectedOne:{"count":1,"pct":"10"}')).toBeInTheDocument();
+    // The toggle sits in the slot the modal reserved before the first selection (ETP-5828 QA):
+    // its appearance must not shrink the list under the pointer.
+    const slot = screen.getByTestId('ImportLinesModal__selectionPanelSlot');
+    expect(slot).toContainElement(screen.getByTestId('ImportGlobalDiscount__toggle'));
+    expect(slot.style.minHeight).toBe('64px');
 
     fireEvent.click(screen.getByText(/importSelected/).closest('button'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());

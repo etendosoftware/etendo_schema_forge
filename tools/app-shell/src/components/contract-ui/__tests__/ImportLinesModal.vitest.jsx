@@ -1246,4 +1246,45 @@ describe('ImportLinesModal', () => {
       expect(screen.getByText('5')).toBeInTheDocument();
     });
   });
+
+  // ETP-5828 QA: checking the first line made the global-discount panel appear above the footer;
+  // the vertically centred dialog moved up and the list shrank, so a quick second click landed on
+  // another row. The dialog is now anchored at the top and the panel's height reserved up front.
+  describe('layout stays put while selecting', () => {
+    const panel = ({ selectedCount }) => (selectedCount > 0
+      ? <div data-testid="test-selection-panel">panel</div>
+      : null);
+
+    it('anchors the dialog at a fixed top offset instead of centring it vertically', () => {
+      renderModal();
+      const overlay = screen.getByTestId('ImportLinesModal__overlay');
+      expect(overlay.className).toContain('items-start');
+      expect(overlay.className).not.toContain('items-center');
+      expect(overlay.style.paddingTop).toBe('10vh');
+    });
+
+    it('reserves the panel slot before anything is selected and keeps it when the panel appears', async () => {
+      renderModal({ renderSelectionPanel: panel, selectionPanelMinHeight: 64 });
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+
+      const slot = screen.getByTestId('ImportLinesModal__selectionPanelSlot');
+      expect(slot.style.minHeight).toBe('64px');
+      expect(slot.style.flexShrink).toBe('0');
+      expect(screen.queryByTestId('test-selection-panel')).toBeNull();
+
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Widget A').closest('div[style]'));
+
+      const panelNode = screen.getByTestId('test-selection-panel');
+      expect(panelNode.parentElement).toBe(slot);
+      expect(screen.getByTestId('ImportLinesModal__selectionPanelSlot').style.minHeight).toBe('64px');
+    });
+
+    it('renders no slot at all for a caller without a selection panel (the other import popups)', async () => {
+      renderModal();
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      expect(screen.queryByTestId('ImportLinesModal__selectionPanelSlot')).toBeNull();
+    });
+  });
 });
