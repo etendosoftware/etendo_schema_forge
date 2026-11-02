@@ -52,6 +52,12 @@ vi.mock('@/i18n', () => ({
 const getSubscription = vi.fn();
 const createPortalSession = vi.fn();
 
+const trackManageClicked = vi.fn();
+vi.mock('@/lib/myCompanies/telemetry.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  trackSubscriptionManageClicked: (...args) => trackManageClicked(...args),
+}));
+
 vi.mock('@/lib/upgrade/api.js', () => ({
   getSubscription: (...args) => getSubscription(...args),
   createPortalSession: (...args) => createPortalSession(...args),
@@ -223,9 +229,8 @@ describe('SubscriptionSection', () => {
       expect(await screen.findByTestId('SubscriptionSection__plan')).toBeInTheDocument();
       expect(screen.getByTestId('SubscriptionSection__root')).toBeInTheDocument();
       // The badge shows a translated label for the live Stripe status, never the raw provider
-      // string — `active` maps onto the same `subscriptionCurrent` key the stored
-      // `EnvironmentAccessPolicy` projection already uses.
-      expect(screen.getByTestId('SubscriptionSection__status')).toHaveTextContent('subscriptionCurrent');
+      // string — `active` reads "Active" (ETP-6060), not the stored projection's "Current".
+      expect(screen.getByTestId('SubscriptionSection__status')).toHaveTextContent('subscriptionActive');
 
       const amount = screen.getByTestId('SubscriptionSection__amount');
       // Stripe sends 2900 EUR minor units. Assert the exact canonical formatter output so
@@ -441,7 +446,7 @@ describe('SubscriptionSection', () => {
     }
 
     it('shows each quota as consumed of included, with unit and period', async () => {
-      withQuotas([QUOTA, { ...QUOTA, resourceKey: 'USERS', resourceName: 'Users', unitLabel: null, includedQty: 5, consumed: 2 }]);
+      withQuotas([QUOTA, { ...QUOTA, resourceKey: 'API_CALLS', resourceName: 'API calls', unitLabel: null, includedQty: 5, consumed: 2 }]);
       renderSection();
 
       const rows = await screen.findAllByTestId('SubscriptionSection__quota');
@@ -459,12 +464,30 @@ describe('SubscriptionSection', () => {
       ['an empty', ''],
       ['a missing', null],
     ])('names a quota with %s resource name by its resource key', async (_label, resourceName) => {
-      withQuotas([{ ...QUOTA, resourceKey: 'USERS', resourceName, unitLabel: null, includedQty: 5, consumed: 2 }]);
+      withQuotas([{ ...QUOTA, resourceKey: 'API_CALLS', resourceName, unitLabel: null, includedQty: 5, consumed: 2 }]);
       renderSection();
 
       const row = await screen.findByTestId('SubscriptionSection__quota');
-      expect(within(row).getByTestId('SubscriptionSection__quotaName')).toHaveTextContent(/^USERS$/);
+      expect(within(row).getByTestId('SubscriptionSection__quotaName')).toHaveTextContent(/^API_CALLS$/);
       expect(within(row).getByTestId('SubscriptionSection__quotaUsage')).toHaveTextContent(/^2 of 5 quotaPeriodMonth$/);
+    });
+
+    // ETP-6060 — the catalog stores the names in one language; the shipped resources are
+    // translated by key, so an English session never reads "Facturas".
+    it('names the resources the plans ship with in the UI language, not the catalog one', async () => {
+      withQuotas([
+        { ...QUOTA, resourceKey: 'SALES_INVOICES', resourceName: 'Facturas', unitLabel: 'facturas' },
+        { ...QUOTA, resourceKey: 'USERS', resourceName: 'Usuarios', unitLabel: 'usuarios', includedQty: 5, consumed: 2 },
+      ]);
+      renderSection();
+
+      const rows = await screen.findAllByTestId('SubscriptionSection__quota');
+      expect(within(rows[0]).getByTestId('SubscriptionSection__quotaName')).toHaveTextContent(/^quotaResourceSalesInvoices$/);
+      expect(within(rows[0]).getByTestId('SubscriptionSection__quotaUsage'))
+        .toHaveTextContent(/^42 of 100 quotaUnitSalesInvoices quotaPeriodMonth$/);
+      expect(within(rows[1]).getByTestId('SubscriptionSection__quotaName')).toHaveTextContent(/^quotaResourceUsers$/);
+      expect(within(rows[1]).getByTestId('SubscriptionSection__quotaUsage'))
+        .toHaveTextContent(/^2 of 5 quotaUnitUsers quotaPeriodMonth$/);
     });
 
     it('reads a quota on a yearly plan as yearly', async () => {
@@ -610,7 +633,7 @@ describe('SubscriptionSection', () => {
       'subscriptionPaymentOverdue', 'subscriptionPlanLimits', 'subscriptionPlanUnlimited',
       'quotaNotMeasured', 'quotaCurrentPeriod', 'quotaStateWarn', 'quotaStateOver', 'quotaStateDeny',
       'quotaUsage', 'quotaUsageNoUnit', 'quotaIncluded', 'quotaIncludedNoUnit', 'quotaUsageInPeriod',
-      'quotaPeriodMonth', 'quotaPeriodYear', 'subscriptionNoneInEnvironment',
+      'quotaPeriodMonth', 'quotaPeriodYear', 'subscriptionNoneInEnvironment', 'subscriptionActive',
     ];
 
     it.each([
@@ -638,8 +661,36 @@ describe('SubscriptionSection', () => {
       await user.click(await screen.findByTestId('SubscriptionSection__manage'));
 
       expect(createPortalSession).toHaveBeenCalledTimes(1);
+      // ETP-6060 — the host defaults to the account page.
+      expect(trackManageClicked).toHaveBeenCalledWith('account');
       await waitFor(() => expect(assignMock)
         .toHaveBeenCalledWith('https://billing.stripe.com/session/abc'));
+    });
+
+    // ETP-6060 — "Mis empresas" renders one section per owned company: both the read and the
+    // portal name that company, whatever environment the session is in.
+    it('reads and manages the named company when given a clientId', async () => {
+      const user = userEvent.setup();
+      getSubscription.mockResolvedValue(ACTIVE);
+      createPortalSession.mockResolvedValue({ url: 'https://billing.stripe.com/session/own-3' });
+      renderSection({ clientId: 'own-3', manageSource: 'my_companies_section' });
+
+      await user.click(await screen.findByTestId('SubscriptionSection__manage'));
+
+      expect(trackManageClicked).toHaveBeenCalledWith('my_companies_section');
+
+      expect(getSubscription).toHaveBeenCalledWith('/api', 'own-3');
+      expect(createPortalSession).toHaveBeenCalledWith('/api', 'own-3');
+      await waitFor(() => expect(assignMock)
+        .toHaveBeenCalledWith('https://billing.stripe.com/session/own-3'));
+    });
+
+    it('says the named company has no subscription, even from an account-level session', async () => {
+      getSubscription.mockResolvedValue({ hasSubscription: false });
+      renderSection({ clientId: 'own-3' });
+
+      expect(await screen.findByTestId('SubscriptionSection__none'))
+        .toHaveTextContent('subscriptionNoneInEnvironment');
     });
 
     it('surfaces an error instead of navigating when the portal session cannot be created', async () => {
