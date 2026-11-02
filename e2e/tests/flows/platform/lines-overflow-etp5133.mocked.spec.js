@@ -249,7 +249,7 @@ const WINDOWS = [
     ],
   },
   {
-    slug: 'simple-g-l-journal',
+    slug: 'manual-journals',
     headerEntity: 'gLJournal',
     lineEntity: 'gLJournalLine',
     headerId: 'mock-glj-001',

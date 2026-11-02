@@ -5,6 +5,7 @@ import { statusLabel } from '@/lib/statusBadge.js';
 import { StatusTag } from '@/components/ui/status-tag';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 // ETP-5073 / DOC-09 + DOC-10: the dirty-state gate reads the SAME registry the beforeunload
 // guard and the locale switcher read. Gating HERE rather than in each window's topbar is what
 // makes one fix cover all of them: every window that offers cloning renders this very component
@@ -89,8 +90,10 @@ function buildCloneTitles(n, ui, created = n) {
 
 // NEO reports a failed action at one of several depths depending on where it was raised
 // (handler, servlet, DAL), so all four shapes are tried before the generic i18n fallback.
-function extractCloneErrorMessage(json, fallback) {
-  return json?.error?.message
+// ETP-5051 — a plan-quota refusal is rendered as the translated quota sentence first.
+function extractCloneErrorMessage(json, fallback, ui) {
+  return translateQuotaRefusalBody(json, ui)
+    || json?.error?.message
     || json?.response?.error?.message
     || json?.response?.message
     || json?.message
@@ -458,7 +461,7 @@ export default function CloneOrderModal({
     try {
       const posted = await postClones(apiFetch, items, headerEntity, cloneActionName);
       if (!posted.ok) {
-        setError(extractCloneErrorMessage(posted.json, ui(errorKey)));
+        setError(extractCloneErrorMessage(posted.json, ui(errorKey), ui));
         setPhase('confirm');
         return;
       }

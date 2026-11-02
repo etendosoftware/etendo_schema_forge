@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/lib/importExportColumns.js
+// @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -194,6 +196,8 @@ const ACCEPTED_BY_TARGET = {
     7: ['No Censado'],
   },
   // ETP-5544 — Cliente / Proveedor (C_BPartner.IsCustomer / IsVendor), both on the same table.
+  // Exported only while `contact-category-type` is OFF (decisions.json `hiddenWhenFlag`), but the
+  // descriptor registers their labels unconditionally, so they must keep re-importing.
   customer: {
     Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
     N: ['No', 'False', '0'],
@@ -202,6 +206,9 @@ const ACCEPTED_BY_TARGET = {
     Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
     N: ['No', 'False', '0'],
   },
+  // ETP-5730 — the Yes/No flags of the product import (coded 'true'/'false').
+  stocked: { true: ['Sí', 'Yes', 'Y', '1', 'Verdadero'], false: ['No', 'N', '0', 'Falso'] },
+  returnable: { true: ['Sí', 'Yes', 'Y', '1', 'Verdadero'], false: ['No', 'N', '0', 'Falso'] },
   productType: {
     I: ['Articulo', 'Item', 'Producto', 'Bien'],
     S: ['Servicio', 'Service'],
@@ -300,6 +307,9 @@ describe('the shipped windows resolve their sources', () => {
       salesPrice: 'eTGOSalePrice',
       purchasePrice: 'eTGOPurchasePrice',
       category: 'productCategory$_identifier',
+      taxCategory: 'taxCategory$_identifier',
+      stocked: 'stocked',
+      returnable: 'returnable',
       // ETP-5350 — cost lives on the `costing` entity, not on the product header row, so the
       // descriptor declares both targets sourceless and the export emits an empty cell.
       cost: '',

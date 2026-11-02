@@ -250,6 +250,15 @@ reuse of existing background infra (vector outbox ETP-5664, onboarding import, b
 importer — not yet checked). Does not reduce per-row cost: Phase B still applies.
 If built, it can later host the SPA import too and make Phase C unnecessary.
 
+**Delivered by ETP-5677** (`com.etendoerp.go` docs `neo-headless.md` §4.3.7): `POST /sws/neo/batch` and
+`etendo_batch` accept `async:true` and answer a `jobId` at once; `GET|DELETE /sws/neo/batch/jobs/{id}` and
+`etendo_job_status` / `etendo_job_cancel` read and cancel it. The job commits **per row** (an operation plus
+what it references), keeps a per-row result in `ETGO_BATCH_JOB` and survives a restart as `INTERRUPTED`
+(heartbeat, not node identity). The SPA import (`useWindowImportDialog.postBatch` → `useBatch.runBatch
+{async:true}`) submits each chunk as a job and polls it; the core import engine settles every import row from
+its own result row, so Retry resends only rows that were not created, and the poll progress feeds the dialog's
+bar. This makes Phase C unnecessary.
+
 ## 4. Open questions
 1. ~~Should Phase A ship alone first?~~ Yes (2026-10-08).
 2. Phase C: go / no-go after measuring B. If go, failure policy: client-side bisection vs.

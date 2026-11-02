@@ -154,7 +154,7 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
       const confirmResponse = page.waitForResponse(
         (r) => r.url().includes('/sws/neo/') &&
           ['POST', 'PUT', 'PATCH'].includes(r.request().method()) &&
-          r.status() < 500,
+          r.status() < 400,
         { timeout: 30_000 },
       );
       await confirmModalBtn.click();
@@ -202,7 +202,7 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
       const orderResponse = page.waitForResponse(
         (r) => r.url().includes('/sws/neo/') &&
           ['POST', 'PUT', 'PATCH'].includes(r.request().method()) &&
-          r.status() < 500,
+          r.status() < 400,
         { timeout: 60_000 },
       );
       await confirmModalBtn2.click();

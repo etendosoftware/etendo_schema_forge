@@ -492,3 +492,32 @@ describe('CreatableSearchSelect — Escape inside a modal (document-level handle
     }
   });
 });
+
+describe('CreatableSearchSelect — ETP-5902 labelPrefix', () => {
+  const baseProps = {
+    value: '',
+    displayValue: '',
+    formData: {},
+    resolvedLabel: 'Tax',
+    selectorUrl: null,
+    selectorContext: {},
+    token: null,
+  };
+  const field = { key: 'tax', required: false };
+  const staticOptions = [
+    { id: 'iva21', name: 'IVA 21%', labelPrefix: '21%' },
+    { id: 'exento', name: 'Exento' },
+  ];
+
+  it('shows "<labelPrefix> - <name>" in the list and commits the plain name', () => {
+    const onChange = vi.fn();
+    render(<CreatableSearchSelect {...baseProps} field={field} staticOptions={staticOptions} onChange={onChange} />);
+
+    fireEvent.focus(screen.getByTestId('field-tax'));
+    expect(screen.getByTestId('option-tax-iva21')).toHaveTextContent('21% - IVA 21%');
+    expect(screen.getByTestId('option-tax-exento')).toHaveTextContent(/^Exento$/);
+
+    fireEvent.mouseDown(screen.getByTestId('option-tax-iva21'));
+    expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21%' }));
+  });
+});

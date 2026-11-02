@@ -27,11 +27,26 @@ vi.mock('@/lib/buildUrlWithParams.js', () => ({
   },
 }));
 
+// ETP-5826 cases send their requests through a mocked `useApiFetch` (docs/request-policy.md).
+// The real hook still runs on every render (hook order unchanged), so the legacy cases above,
+// which stub `global.fetch`, keep going through it whenever no override is set.
+const apiFetchOverride = vi.hoisted(() => ({ fn: null }));
+vi.mock('@/auth/useApiFetch.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    useApiFetch: (...args) => {
+      const real = actual.useApiFetch(...args);
+      return apiFetchOverride.fn ?? real;
+    },
+  };
+});
+
 import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
 import { DataProvider, createQueryCache } from '@etendosoftware/app-shell-core/data';
 import { appFetchCalls } from '@/test/appFetchCalls.js';
 import { SELECTOR_REVALIDATE_AFTER_MS } from '@/lib/selectorRevalidation.js';
 import { CreatableSearchSelect } from '../CreatableSearchSelect.jsx';
+import { comparePaymentTermOptions } from '@/lib/paymentTermDays.js';
 
 function mockFetchOnce(items) {
   return vi.fn().mockResolvedValue({
@@ -380,5 +395,74 @@ describe('CreatableSearchSelect — serverSearch first page and the shared cache
     // Focus does not fire again on an already-focused input — the mousedown must open it.
     fireEvent.mouseDown(input);
     await waitFor(() => expect(screen.getByText('Centro A')).toBeInTheDocument());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5826 — `sortOptions` reorders what the server returned (the server orders selectors
+// alphabetically: "100 Días" before "15 Días"), and the "+ create" action stays pinned as the
+// first row of the panel, above the sorted options.
+// ---------------------------------------------------------------------------
+describe('CreatableSearchSelect — sortOptions in serverSearch mode (ETP-5826)', () => {
+  const field = { key: 'paymentTerms', required: false };
+  const ALPHABETICAL = ['1 Día', '100 Días', '15 Días', '30 Días', '364 Días', '7 Días', 'Inmediato'];
+
+  beforeEach(() => {
+    apiFetchOverride.fn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: ALPHABETICAL.map((label, i) => ({ id: `pt-${i}`, label })) }),
+    });
+  });
+
+  afterEach(() => {
+    apiFetchOverride.fn = null;
+    vi.restoreAllMocks();
+  });
+
+  function renderSelect(props = {}) {
+    render(
+      <CreatableSearchSelect
+        {...baseProps}
+        selectorUrl="/api/contacts/selectors/C_PaymentTerm_ID"
+        field={field}
+        value=""
+        displayValue=""
+        onChange={vi.fn()}
+        {...props}
+      />,
+    );
+    fireEvent.focus(screen.getByTestId('field-paymentTerms'));
+  }
+
+  const shownNames = () => screen.getAllByRole('option').map((o) => o.textContent);
+
+  it('lists the server page in the comparator order, not the server (alphabetical) order', async () => {
+    renderSelect({ sortOptions: comparePaymentTermOptions });
+
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(ALPHABETICAL.length));
+    expect(shownNames()).toEqual(['Inmediato', '1 Día', '7 Días', '15 Días', '30 Días', '100 Días', '364 Días']);
+    expect(apiFetchOverride.fn).toHaveBeenCalled();
+  });
+
+  it('without sortOptions keeps the server order (regression)', async () => {
+    renderSelect();
+
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(ALPHABETICAL.length));
+    expect(shownNames()).toEqual(ALPHABETICAL);
+  });
+
+  it('keeps the create action as the first row of the panel, above the sorted options', async () => {
+    const onCreateRequest = vi.fn();
+    renderSelect({ sortOptions: comparePaymentTermOptions, createLabel: 'paymentTermCreate', onCreateRequest });
+
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(ALPHABETICAL.length));
+    const panel = screen.getByTestId('options-paymentTerms');
+    const create = screen.getByTestId('action-create-paymentTerms');
+    expect(create).toHaveTextContent('paymentTermCreate');
+    expect(panel.querySelector('button')).toBe(create);
+    expect(screen.getAllByRole('option')[0]).toHaveTextContent('Inmediato');
+
+    fireEvent.mouseDown(create);
+    expect(onCreateRequest).toHaveBeenCalledTimes(1);
   });
 });

@@ -6,6 +6,7 @@ import { run as runDoubleSend } from './scenarios/double-send.js';
 import { run as runConcurrentLoad } from './scenarios/concurrent-load.js';
 import { generateReport } from './report.js';
 import { resetEmailSafetyBeforeRun } from './safety-reset.js';
+import { attachmentTableOf } from '../../../tools/app-shell/src/components/contract-ui/attachmentTable.js';
 
 // Setup AsyncLocalStorage to coordinate worker metadata across async calls
 const workerContext = new AsyncLocalStorage();
@@ -71,6 +72,18 @@ if (pdfBlobPath) {
 } else {
   // Fall back to synthetic 1KB blob as per design spec
   pdfBlob = new Blob([new Uint8Array(1024)], { type: 'application/pdf' });
+}
+
+// ETP-5588: the preview is cached on the table of the window's primary entity, read from its
+// generated contract exactly as the SPA does (no Vite here to glob the contracts). A window without
+// a contract has nothing to cache against, so its preview is skipped, as the SPA does.
+const contractPath = new URL(`../../../artifacts/${windowName}/contract.json`, import.meta.url);
+const attachmentTable = fs.existsSync(contractPath)
+  ? attachmentTableOf(JSON.parse(fs.readFileSync(contractPath, 'utf8')))
+  : null;
+if (!attachmentTable) {
+  console.warn(`[stress] No primary-entity table for window "${windowName}": preview caching skipped.`);
+  pdfBlob = undefined;
 }
 
 // Set up FileReader mock for Node.js context (FileReader is used in tools/app-shell/src/.../documentEmailSend.js)
@@ -186,6 +199,7 @@ if (scenario === 'double-send') {
     workers,
     documentId,
     windowName,
+    attachmentTable,
     baseUrl,
     token,
     pdfBlob,
@@ -197,6 +211,7 @@ if (scenario === 'double-send') {
     workers,
     documentIds,
     windowName,
+    attachmentTable,
     baseUrl,
     token,
     pdfBlob,

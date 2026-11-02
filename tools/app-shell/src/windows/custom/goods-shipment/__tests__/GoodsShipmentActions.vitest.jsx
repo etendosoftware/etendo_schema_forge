@@ -11,8 +11,12 @@
 
 const { mockExecute, mockNavigate } = vi.hoisted(() => ({ mockExecute: vi.fn(), mockNavigate: vi.fn() }));
 
+// Keys echo back, except the plan-quota sentence (ETP-5051): an echoed key reads as "not
+// translated", so the translator would fall back and the quota path could not be observed.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params = {}) => (key === 'backendError.quotaExceeded'
+    ? `Límite del plan alcanzado: ${params.resource}`
+    : key),
   useMenuLabel: () => (key) => key,
 }));
 
@@ -296,6 +300,38 @@ describe('GoodsShipmentActions', () => {
       expect(screen.getByTestId('invoice-confirm-confirm')).toHaveTextContent('soCreateDocsBtn');
       expect(screen.getByTestId('invoice-confirm-confirm')).not.toBeDisabled();
       expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+    });
+
+    // ETP-5051 — createDraftInvoice refused by the plan quota (403 QUOTA_EXCEEDED): the toast is the
+    // translated quota sentence, never "Failed (403)" nor the backend's English prose.
+    it('on a 403 QUOTA_EXCEEDED: toasts the translated quota sentence and keeps the modal open', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({
+          error: {
+            code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Sales invoices (100/100)',
+            quota: { resourceKey: 'GS_ACTIONS_INVOICES', resourceName: 'Sales invoices', includedQty: 100, consumed: 100, verdict: 'DENY' },
+          },
+        }),
+      });
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Límite del plan alcanzado: Sales invoices'));
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+    });
+
+    it('on a refusal with no message: toasts "Failed (<status>)" as before', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: { status: 403 } }) });
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed (403)'));
     });
 
     it('rapid double-click on the confirm button while a request is in flight results in exactly one POST call', async () => {

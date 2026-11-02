@@ -1072,7 +1072,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
+          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50, visibleWhen: (record, ctx) => ctx['OrgCurrencyId'] != null && ((record['currency'] != null && record['currency'] !== '') && record['currency'] !== ctx['OrgCurrencyId']) },
         ]}
         hideDeleteWhenComplete
         hidePrintWhen={true}
@@ -1084,7 +1084,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         topbarExtra={PurchaseInvoiceReceiptBadge}
         customMenuContent={SifSendMenuItem}
         menuActions={({ data, status }) => [
-          { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
+          { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', documentAction: 'RE',  },
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: status === 'CO' && (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}

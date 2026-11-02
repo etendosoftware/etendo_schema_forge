@@ -24,7 +24,7 @@ const OPEN_DOCUMENT_SPECS = {
   M: 'goods-movements',
   MI: 'matched-purchase-invoices',
   IC: 'internal-consumption',
-  GLJ: 'simple-g-l-journal',
+  GLJ: 'manual-journals',
   A: 'amortization',
 };
 

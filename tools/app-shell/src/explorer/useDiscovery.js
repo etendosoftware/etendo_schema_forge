@@ -12,11 +12,15 @@ const BASE = detectBase();
 const NEO_BASE = `${BASE}/sws/neo`;
 const WEBHOOK_BASE = `${BASE}/webhooks`;
 
-// ETP-5455: without an explicit admin token the call runs on the current session's own credential
-// (it used to fall back to the dead legacy sf_auth_token read).
-function getAdminToken() {
-  return localStorage.getItem('sf_admin_token') || undefined;
-}
+// ETP-5454: the admin-token read is gone. `sf_admin_token` had no writer since ADR-0001 moved
+// the session to the __Host-go_session cookie, so the read always returned undefined and every
+// call already ran on the current session's own credential — which is what `apiFetch`/`useApiFetch`
+// attach on their own. Passing `token: undefined` was doing nothing but implying a credential the
+// call site never had.
+//
+// `useAdmin` therefore no longer selects a token; it is kept so the `useSpecs({ useAdmin })`
+// signature and its one caller (SpecList.jsx) stay unchanged. The explorer is not routed in the
+// shipped app, so no user-facing flow changes.
 
 // ── Discovery hooks ──
 
@@ -29,7 +33,7 @@ export function useSpecs({ useAdmin = false } = {}) {
   const refresh = useCallback(() => {
     setLoading(true);
     setError(null);
-    neoFetch('/', useAdmin ? { token: getAdminToken() } : {})
+    neoFetch('/')
       .then(r => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         return r.json();
@@ -95,7 +99,6 @@ async function callWebhook(name, params) {
   const res = await apiFetch(`${WEBHOOK_BASE}/${name}`, {
     method: 'POST',
     baseUrl: '',
-    token: getAdminToken(),
     body: JSON.stringify(params),
   });
   const text = await res.text();

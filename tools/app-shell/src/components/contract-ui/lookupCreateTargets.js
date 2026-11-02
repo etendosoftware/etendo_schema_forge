@@ -41,13 +41,19 @@ export const CREATE_PRODUCT_SPECS = new Set([
 /**
  * Seed values for a new Business Partner created from a document's Contacto selector.
  *
- * The customer/vendor flag is not cosmetic and is the reason this seed exists at all: a
- * contact created from a purchase invoice that is not flagged `vendor` never comes back in
- * a purchase selector, so the user creates it, uses it once, and cannot find it again. The
- * hand-rolled modal this replaced carried the same rule as its `documentType` prop.
+ * The name, plus — only when a `documentType` is passed — the customer/vendor flag:
+ * `vendor: true` (purchase) / `customer: true` (sale). A contact created from a purchase invoice
+ * that is not flagged `vendor` never comes back in a purchase selector.
  *
- * Keys are the NEO `businessPartner` field names, verified against the POST payload the old
- * `CreateContactModal.handleSave` built — `name`, `customer`, `vendor`.
+ * With the `contact-category-type` flag ON (ETP-5791) callers pass NO `documentType`: the backend
+ * copies IsCustomer / IsVendor from the category's `etgoIscustomer` / `etgoIsvendor` flags
+ * UNLESS the body carries `customer` / `vendor`, and key presence is what counts as explicit.
+ * A seeded key is marked user-changed by `useEntity.handleNew`, so it would always reach the
+ * POST and silently disable that inheritance. The type then comes from the seeded category
+ * (`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE`), and `useContactTypeRequirement` refuses a category
+ * that does not grant the type the calling document needs. See `useContactCreateTypeGate`.
+ *
+ * Keys are the NEO `businessPartner` field names — `name`, `customer`, `vendor`.
  */
 export function buildContactSeed(query, { documentType } = {}) {
   const name = String(query ?? '').trim();
@@ -62,11 +68,13 @@ export function buildContactSeed(query, { documentType } = {}) {
  * Search key (`C_BP_Group.Value`) of the contact category a contact created from a document
  * of each nature starts in.
  *
- * Onboarding gives EVERY client three groups whose `Value` is `Cliente`, `Proveedor` and
- * `Acreedor`, and flags `Cliente` as the default. That default is what the Contacts form
- * proposes on its own, which is wrong for a contact created from a PURCHASE document: it
- * appeared as "Cliente". The mapping is explicit for both natures rather than relying on the
- * DB default for `sale`. Ids are never hardcoded — they differ per client — so the id is
+ * Every client has the groups whose `Value` is `Cliente`, `Proveedor`, `Acreedor` and
+ * `Cliente/Proveedor` (ETP-5791 added the last one: onboarding ships it for new clients and
+ * data-fix R50 adds it to existing ones). The DB default differs by tenant age: clients
+ * onboarded after ETP-5791 default to `Cliente/Proveedor`, older clients keep `Cliente`.
+ * Relying on that default was already wrong for a contact created from a PURCHASE document
+ * (it appeared as "Cliente"), so the mapping is explicit for both natures rather than
+ * relying on the DB default for `sale`. Ids are never hardcoded — they differ per client — so the id is
  * resolved at open time by `resolveContactCategorySeed`.
  */
 export const CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE = {
@@ -202,6 +210,11 @@ export const LOOKUP_CREATE_TARGETS = {
     loadForm: () => import('@generated/contacts/generated/web/contacts/BusinessPartnerForm.jsx'),
     loadLabels: () => import('@generated/contacts/generated/web/contacts/labels.js'),
     prefill: query => buildContactSeed(query),
+    // ETP-5791: the fallback form POSTs everything `/defaults` returned, which always includes
+    // `customer: 'Y'` — and a present key disables the backend's inheritance of the contact type
+    // from the category. See `buildRecordCreatePayload`. Applies only with the
+    // `contact-category-type` flag ON: `useContactCreateTypeGate` drops it when the flag is OFF.
+    createOmitUntouched: ['customer', 'vendor'],
   },
   product: {
     key: 'product',

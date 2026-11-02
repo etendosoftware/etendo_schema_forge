@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
+import { useFlagGatedImportConfig } from '@/lib/importFlagGates.js';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
@@ -21,11 +21,13 @@ import { ListFilterBar } from './ListFilterBar.jsx';
 import { buildDatePresetFilter } from './datePresetFilter.js';
 import { ListSortPopover } from './ListSortPopover.jsx';
 import { ListProgressBar } from './ListProgressBar.jsx';
+import { GridViewControls } from './GridViewControls.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
 import { useListToolbarTabsFit } from './useListToolbarTabsFit.js';
+import SegmentedTabs from './SegmentedTabs.jsx';
 import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
@@ -37,7 +39,11 @@ import {
   sanitizeFilterIndices,
 } from '@/lib/listViewSession.js';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
+import { useGridView } from '@/hooks/useGridView.js';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
+import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
+import { columnMinWidthPx, listHeaderFont, listHeaderMinWidthPx } from '@/lib/linesColumnWidth.js';
+import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -156,6 +162,7 @@ function ListFilterBarSection(props) {
           onDeletePreset={props.windowName ? props.deletePreset : null}
           labelOverrides={props.labelOverrides}
           hideStatusFilter={props.hideStatusFilter}
+          buildDistinctQuery={props.hook.buildDistinctQuery}
           flowInParent
           data-testid="ListFilterBar__620cbc" />
       )}
@@ -297,24 +304,19 @@ export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, vie
  * `ViewToggle` is NOT part of it: it keeps its pre-ETP-5509 place after "Filtros".
  */
 function ListToolbarTabs({ subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
+  // Keyed by the raw label (not the translated one) so a tab that moves keeps its focus.
+  const items = subsetFilters.map((sf) => ({
+    key: sf.key || sf.label,
+    label: ui(sf.label),
+    testId: `filter-${sf.key || sf.label?.toLowerCase()}`,
+  }));
   return (
-    <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
-      {subsetFilters.map((sf, i) => (
-        <button
-          key={sf.key || sf.label}
-          onClick={() => onSelectSubset(i)}
-          data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
-          className={[
-            'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
-            activeSubsetIndex === i
-              ? 'bg-card shadow-sm'
-              : 'bg-[hsl(var(--muted))] hover:brightness-95',
-          ].join(' ')}
-        >
-          {ui(sf.label)}
-        </button>
-      ))}
-    </div>
+    <SegmentedTabs
+      items={items}
+      active={activeSubsetIndex}
+      onChange={onSelectSubset}
+      ariaLabel={ui('filters')}
+      data-testid="SegmentedTabs__620cbc" />
   );
 }
 
@@ -517,6 +519,7 @@ export function ListView({
   // row-eligibility gate on this button would put a third delete pattern back in the codebase;
   // `ListView.bulkDelete.vitest.jsx` asserts the button is never disabled by row eligibility.
   listViewOptions = {},
+  gridColumnViewsSurface = false,
   baseFilter = null,
   quickFilters = null,
   initialQuickFilterIndex = null,
@@ -563,8 +566,11 @@ export function ListView({
   onExternalPreviewClose = null,
   hiddenColumns = [],
   listSortBy = null,
-  import: importConfig = null,
+  import: rawImportConfig = null,
 }) {
+  // `window.import.fields[].hiddenWhenFlag` — columns a feature flag retires, dropped here once so
+  // the dialog, the template, the export and the empty state all see the same field list.
+  const importConfig = useFlagGatedImportConfig(rawImportConfig);
   // ETP-4994 — the grid state saved the last time this window's list was left, restored on
   // every return path (breadcrumb, Cancel, browser back) because all three remount ListView.
   // Read ONCE per mount: a later read would fight the live state it is meant to seed.
@@ -635,6 +641,12 @@ export function ListView({
   // all read these columns too. Gate them once here so a role without the capability
   // cannot filter, sort or export by a column it cannot see.
   const capabilities = useCapabilitiesSafe();
+  const gridColumnViewsFlag = useFeatureFlag(GRID_COLUMN_VIEWS);
+  const gridViewSurfaceEligible = gridColumnViewsFlag
+    && Boolean(windowName && entity)
+    // Explicit caller opt-in is the invariant: never infer rollout scope from
+    // React function names, which minifiers may rewrite and custom tables may mimic.
+    && gridColumnViewsSurface;
   const tableColumns = useMemo(
     () => reportedColumns.filter(c => isCapabilityVisible(capabilities, c.visibleWhenCapability)),
     [reportedColumns, capabilities],
@@ -656,7 +668,6 @@ export function ListView({
     setShowImportDialog(open);
     if (!open) setImportInitialFile(null);
   }, []);
-  const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
   // `multiField` columns are opaque to the advanced filter: expand each into
@@ -1030,6 +1041,29 @@ export function ListView({
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
+  const gridHeaderFont = listHeaderFont();
+  const gridColumns = useMemo(() => tableColumns.map((column) => {
+    const explicitWidth = Number(column.minWidth);
+    const headerMinWidthPx = listHeaderMinWidthPx(
+      column,
+      resolveColumnLabel(column, locale, t),
+      gridHeaderFont,
+    );
+    return {
+      ...column,
+      gridDefaultWidthPx: Number.isFinite(explicitWidth) && explicitWidth > 0
+        ? explicitWidth
+        : columnMinWidthPx({ ...column, headerMinWidthPx }),
+    };
+  }), [tableColumns, locale, t, gridHeaderFont]);
+  const gridView = useGridView({
+    spec: windowName,
+    entity,
+    columns: gridViewSurfaceEligible ? gridColumns : [],
+    data: hook.items,
+    enabled: gridViewSurfaceEligible && gridColumns.length > 0,
+    apiBaseUrl,
+  });
 
   // ETP-5190 — the ImportDialog wiring (labels, field labels, existing-key lookup, batch
   // poster) moved to `useWindowImportDialog` so the First Steps checklist can drive the very
@@ -1313,6 +1347,21 @@ export function ListView({
     deselectTrigger,
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
+    gridView: {
+      active: gridView.active,
+      columns: gridView.columns,
+      availableIds: gridView.availableIds,
+      availableKeys: gridView.availableKeys,
+      columnSizing: gridView.columnSizing,
+      resizeHandler: gridView.resizeHandler,
+      resizeBy: gridView.resizeBy,
+      isResizable: gridView.isResizable,
+      widthBounds: gridView.widthBounds,
+      reorderable: gridView.reorderable,
+      moveColumn: gridView.moveColumn,
+      moveByKeyboard: gridView.moveByKeyboard,
+      labelFor: gridView.labelFor,
+    },
     hiddenColumns,
     emptyListContext,
   };
@@ -1528,6 +1577,14 @@ export function ListView({
                     deletePreset={deletePreset}
                     labelOverrides={labelOverrides}
                     data-testid="ListFilterBarSection__620cbc" />
+                  {gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
+                    <GridViewControls
+                      gridView={gridView}
+                      gridColumns={gridColumns}
+                      ui={ui}
+                      t={t}
+                      data-testid="GridViewControls__620cbc" />
+                  )}
                   <ViewToggle
                     galleryRenderer={galleryRenderer}
                     onSelectList={() => handleViewMode('list')}
@@ -1670,6 +1727,19 @@ export function ListView({
               financial-account detail tabs) can show the same affordance. */}
           {hook.loading && hook.items.length > 0 && (
             <ListProgressBar data-testid="ListProgressBar__620cbc" />
+          )}
+
+          {/* A custom toolbar may hide the native list bar while still forwarding gridView
+              to DataTable. Keep personal-view controls reachable above either scroll host. */}
+          {listBarHidden && gridView.enabled && !(viewMode === 'gallery' && galleryRenderer) && (
+            <div className="flex shrink-0 items-center px-2 py-2" data-testid="grid-view-fallback-controls">
+              <GridViewControls
+                gridView={gridView}
+                gridColumns={gridColumns}
+                ui={ui}
+                t={t}
+                data-testid="GridViewControls__620cbc" />
+            </div>
           )}
 
           {/* Table region (ScrollPane, or a bounded flex box when the table owns its

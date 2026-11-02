@@ -33,6 +33,9 @@ export default function ConfirmWithCreditButtonBase({
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
+  // ETP-5688 — title of the post-confirm (CO) invoice popup; `cardTitle` below belongs to the DR
+  // ConfirmInOutModal and must not be reused for it.
+  createInvoiceModalTitle,
   cardTitle: cardTitleProp,
   cardDesc: cardDescProp,
   extraActions,
@@ -83,6 +86,12 @@ export default function ConfirmWithCreditButtonBase({
         // #121217 fill with white text. Was the `--status-info-fg` badge token (saturated blue).
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
           className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90 transition-colors">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
           {postConfirmButtonLabel ?? ui('createReturnInvoice')}
         </button>
       )}
@@ -126,6 +135,7 @@ export default function ConfirmWithCreditButtonBase({
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
+          title={createInvoiceModalTitle}
           token={token}
           rectifiableInvoicesUrl={rectifiableInvoicesUrl}
           onConfirm={(_priceListId, originInvoices) => handleCreateReturnInvoice(originInvoices)}

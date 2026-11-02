@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/product/ProductStockDefaultsWatcher.jsx
+// @covers tools/app-shell/src/components/contract-ui/saveActions.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -101,5 +103,64 @@ test.describe('Product stock flags — control case, Artículo stays stockable',
   test('keeps the stock flags visible for Artículo', async ({ page }) => {
     await expect(page.getByTestId('field-stocked')).toBeVisible();
     await expect(page.getByTestId('field-returnable')).toBeVisible();
+  });
+});
+
+/**
+ * ETP-5680 follow-up — Save is disabled while the tax-category lookup that follows a type change
+ * is in flight, and the save that follows it carries the Services category.
+ *
+ * The `/defaults?productType=` answer is held back by the test, so the in-flight window is
+ * observable instead of a race: Save (and its spinner) is asserted before the reply is released.
+ */
+test.describe('Product type change — Save waits for the tax category (ETP-5680)', () => {
+  test('Save stays disabled until /defaults?productType=S answers, then saves Servicios', async ({ page }) => {
+    const product = { ...PRODUCTS.I, taxCategory: 'TAX-GOODS', 'taxCategory$_identifier': 'IVA Normal' };
+    let releaseDefaults;
+    const defaultsGate = new Promise((resolve) => { releaseDefaults = resolve; });
+    const patchBodies = [];
+
+    await login(page);
+    await page.route('**/sws/neo/product/product/PROD-ARTICLE-1', async (route) => {
+      const req = route.request();
+      if (req.method() !== 'PATCH' && req.method() !== 'PUT') return route.fallback();
+      const body = JSON.parse(req.postData() || '{}');
+      patchBodies.push(body);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [{ ...product, ...body }] } }),
+      });
+    });
+    await mockProductDetail(page, product);
+    await mockStockAndTransactions(page);
+    // Registered AFTER mockProductDetail on purpose: Playwright matches routes last-registered-first,
+    // and that broader pattern would otherwise answer /defaults with the product list at once.
+    await page.route('**/sws/neo/product/product/defaults**', async (route) => {
+      await defaultsGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ defaults: { typeTaxCategory: 'TAX-SERV', 'typeTaxCategory$_identifier': 'IVA Normal Servicios' } }),
+      });
+    });
+    await page.goto(`/product/${product.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    // The Tipo combo is the button that shows the current type (Artículo) next to its clear action.
+    await page.getByRole('button', { name: /^Artículo/ }).first().click();
+    await page.getByRole('option', { name: 'Servicio' }).click();
+
+    // In flight: nothing may be saved, and the button says it is busy.
+    await expect(page.getByTestId('action-save')).toBeDisabled();
+    await expect(page.getByTestId('action-save').getByTestId('Loader2__fa3275')).toBeVisible();
+    expect(patchBodies).toHaveLength(0);
+
+    releaseDefaults();
+    await expect(page.getByTestId('action-save')).toBeEnabled();
+    await page.getByTestId('action-save').click();
+
+    await expect.poll(() => patchBodies.length).toBeGreaterThan(0);
+    expect(patchBodies[patchBodies.length - 1]).toMatchObject({ productType: 'S', taxCategory: 'TAX-SERV' });
   });
 });

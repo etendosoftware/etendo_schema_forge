@@ -57,7 +57,6 @@ vi.mock('../mockCatalogs.js', () => ({
   ],
 }));
 
-vi.mock('../TabBar.jsx', () => ({ default: () => <div data-testid="tab-bar" /> }));
 vi.mock('../GeneralTab.jsx', () => ({ default: () => <div data-testid="general-tab" /> }));
 vi.mock('../DefaultsTab.jsx', () => ({ default: () => <div data-testid="defaults-tab" /> }));
 vi.mock('../DimensionsTab.jsx', () => ({ default: () => <div data-testid="dimensions-tab" /> }));

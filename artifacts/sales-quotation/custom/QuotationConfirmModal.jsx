@@ -5,6 +5,7 @@ import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal.
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateBackendErrorBody } from '@/lib/backendErrors.js';
 
 const OPTION_ORDER = 'order';
 const OPTION_INVOICE = 'invoice';
@@ -92,8 +93,10 @@ export default function QuotationConfirmModal({
     // path (order or invoice). Both convert the quotation using whatever
     // header state is current, so an unsaved edit would otherwise be
     // silently discarded.
+    let savedRecord = null;
     if (onSave) {
       const saved = await onSave();
+      savedRecord = saved;
       if (!saved?.id) {
         setError(ui('sqSaveBeforeConfirmError'));
         setLoading(false);
@@ -104,26 +107,28 @@ export default function QuotationConfirmModal({
     try {
       const baseNeoUrl = apiBaseUrl.replace(/\/sales-quotation$/, '');
 
-      // Exchange rate check: if currencies differ, verify a rate exists for the document date
+      // Exchange rate check (ETP-5840): a foreign-currency quotation needs its own rate.
+      // The document's eTGOCurrencyRate is the only source of truth — it is either the rate
+      // recalculated from the conversion ranges valid on the quotation date or the one the
+      // user typed — so a missing rate blocks, while a manual rate is never second-guessed
+      // against validate-exchange-rate (which ignored it and blocked documents that had one).
+      // Only an explicitly empty rate blocks: a source that does not carry the field at all
+      // (no saved record, a list row without it) is left to the backend completion check.
       const docCurrency = d['currency$_identifier'];
-      const docDate = d.orderDate;
-      if (docCurrency && docDate) {
+      const rateSource = savedRecord && 'eTGOCurrencyRate' in savedRecord ? savedRecord : d;
+      const rateKnown = 'eTGOCurrencyRate' in rateSource;
+      const docRate = rateSource.eTGOCurrencyRate;
+      const missingDocRate = rateKnown && (docRate == null || docRate === '');
+      if (docCurrency && missingDocRate) {
         try {
           const session = await fetchOptionalJson(`${baseNeoUrl}/session`, token);
           const orgCurrency = session?.organization?.['currency$_identifier'];
-          const orgCurrencyId = session?.organization?.currency;
           if (orgCurrency && docCurrency !== orgCurrency) {
-            const fromCurrency = d.currency || docCurrency;
-            const toCurrency = orgCurrencyId ?? orgCurrency;
-            const rateData = await fetchOptionalJson(
-              `${baseNeoUrl}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrency)}&toCurrency=${encodeURIComponent(toCurrency)}&date=${encodeURIComponent(docDate)}`,
-              token,
-            );
-            if (rateData && !rateData.hasRate) {
-              setError(ui('noExchangeRateAvailable'));
-              setLoading(false);
-              return;
-            }
+            // Same sentence the backend completion check answers with (ETP-5840).
+            setError(ui('backendError.exchangeRateMissingOnComplete',
+              { orgCurrency, documentCurrency: docCurrency }));
+            setLoading(false);
+            return;
           }
         } catch { /* non-fatal — allow confirmation to proceed */ }
       }
@@ -135,9 +140,10 @@ export default function QuotationConfirmModal({
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
+          // ETP-5840 — translated from the refusal's identity (e.g. the missing exchange rate).
           throw new Error(
             ui('sqOrderConfirmedError')
-            + (err?.response?.message || err?.message || `Error (${res.status})`)
+            + translateBackendErrorBody(err, ui, `Error (${res.status})`)
           );
         }
         // ETP-4779 — the sales order now exists; let the "Documentos" section
@@ -187,9 +193,7 @@ export default function QuotationConfirmModal({
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
-          throw new Error(
-            err?.response?.message || err?.message || `Error (${res.status})`
-          );
+          throw new Error(translateBackendErrorBody(err, ui, `Error (${res.status})`));
         }
         // ETP-4779 — see rationale above (order path).
         window.dispatchEvent(new CustomEvent('sales-quotation:document-created'));

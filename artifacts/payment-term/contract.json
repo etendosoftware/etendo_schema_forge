@@ -1,16 +1,25 @@
 {
-  "version": "0.4.0",
+  "version": "0.12.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-07-21T12:35:20.747Z",
-  "checksum": "7747449adb3281d4",
+  "updatedAt": "2026-10-28T17:20:09.310Z",
+  "checksum": "c5128897a4012612",
   "frontendContract": {
     "window": {
       "id": "141",
       "name": "Payment Term",
       "primaryEntity": "header",
       "category": "settings",
-      "hidePrint": true,
-      "hideMoreMenu": true,
+      "templateConfig": {
+        "titleKey": "paymentTermNewTitle",
+        "editTitleKey": "paymentTermEditTitle",
+        "newLabelKey": "paymentTermNew",
+        "modalVariant": "compact",
+        "hideBackButton": true,
+        "hideSearch": true,
+        "newButtonVariant": "primary",
+        "rowClickEdit": true,
+        "listVariant": "compact"
+      },
       "detailEntity": null,
       "labelOverrides": {
         "es_ES": {
@@ -20,10 +29,17 @@
           "FixMonthOffset": "Meses de desplazamiento",
           "NetDays": "Días",
           "IsDefault": "Por defecto",
+          "IsNextBusinessDay": "Siguiente día hábil",
           "IsActive": "Activo"
+        },
+        "en_US": {
+          "Name": "Name",
+          "NetDays": "Days",
+          "IsDefault": "Default",
+          "IsNextBusinessDay": "Next Business Day"
         }
       },
-      "layoutType": "default"
+      "layoutType": "list-modal"
     },
     "entities": {
       "header": {
@@ -32,25 +48,6 @@
         "tabName": "Header",
         "uiPattern": "STD",
         "fields": [
-          {
-            "name": "searchKey",
-            "apiKey": "searchKey",
-            "column": "Value",
-            "label": "Search Key",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "section": "principal",
-            "seq": 1,
-            "validation": {
-              "required": true,
-              "maxLength": 40
-            }
-          },
           {
             "name": "name",
             "apiKey": "name",
@@ -64,29 +61,14 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 2,
+            "seq": 1,
+            "cellType": "boldText",
+            "gridOrder": 1,
+            "columnWidth": 164,
+            "columnMaxWidth": 240,
             "validation": {
               "required": true,
               "maxLength": 60
-            }
-          },
-          {
-            "name": "offsetMonthDue",
-            "apiKey": "offsetMonthDue",
-            "column": "FixMonthOffset",
-            "label": "Offset Month Due",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "section": "principal",
-            "seq": 4,
-            "validation": {
-              "required": true,
-              "maxLength": 10
             }
           },
           {
@@ -101,11 +83,21 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "stepper": true,
+            "stepperRejectedKey": "paymentTermDaysNotInteger",
             "section": "principal",
-            "seq": 5,
+            "seq": 2,
+            "gridOrder": 2,
+            "columnWidth": 124,
+            "columnMaxWidth": 148,
+            "min": 0,
+            "max": 365,
+            "integer": true,
             "validation": {
               "required": true,
-              "maxLength": 10
+              "maxLength": 10,
+              "minimum": 0,
+              "maximum": 365
             }
           },
           {
@@ -120,7 +112,7 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "seq": 6,
+            "seq": 3,
             "badge": true,
             "badgeLabels": {
               "true": {
@@ -132,17 +124,61 @@
                 "en_US": "No"
               }
             },
+            "badgeVariants": {
+              "true": "green",
+              "false": "neutral"
+            },
             "labels": {
               "es_ES": "Por defecto",
               "en_US": "Default"
             },
+            "gridOrder": 4,
+            "columnWidth": 158,
+            "validation": {
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "nextBusinessDay",
+            "apiKey": "nextBusinessDay",
+            "column": "IsNextBusinessDay",
+            "label": "Next Business Day",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "defaultValue": "Y",
+            "section": "principal",
+            "seq": 4,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "es_ES": "Sí",
+                "en_US": "Yes"
+              },
+              "false": {
+                "es_ES": "No",
+                "en_US": "No"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "neutral"
+            },
+            "labels": {
+              "es_ES": "Siguiente día hábil",
+              "en_US": "Next Business Day"
+            },
+            "gridOrder": 3,
+            "columnWidth": 158,
             "validation": {
               "maxLength": 1
             }
           }
         ],
         "searchableFields": [
-          "searchKey",
           "name"
         ],
         "computedFields": []
@@ -155,8 +191,17 @@
       "name": "Payment Term",
       "primaryEntity": "header",
       "category": "settings",
-      "hidePrint": true,
-      "hideMoreMenu": true,
+      "templateConfig": {
+        "titleKey": "paymentTermNewTitle",
+        "editTitleKey": "paymentTermEditTitle",
+        "newLabelKey": "paymentTermNew",
+        "modalVariant": "compact",
+        "hideBackButton": true,
+        "hideSearch": true,
+        "newButtonVariant": "primary",
+        "rowClickEdit": true,
+        "listVariant": "compact"
+      },
       "detailEntity": null,
       "labelOverrides": {
         "es_ES": {
@@ -166,9 +211,17 @@
           "FixMonthOffset": "Meses de desplazamiento",
           "NetDays": "Días",
           "IsDefault": "Por defecto",
+          "IsNextBusinessDay": "Siguiente día hábil",
           "IsActive": "Activo"
+        },
+        "en_US": {
+          "Name": "Name",
+          "NetDays": "Days",
+          "IsDefault": "Default",
+          "IsNextBusinessDay": "Next Business Day"
         }
-      }
+      },
+      "layoutType": "list-modal"
     },
     "entities": {
       "header": {
@@ -189,7 +242,7 @@
             "apiKey": "searchKey",
             "column": "Value",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -213,7 +266,7 @@
             "apiKey": "offsetMonthDue",
             "column": "FixMonthOffset",
             "type": "integer",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -277,7 +330,7 @@
             "apiKey": "nextBusinessDay",
             "column": "IsNextBusinessDay",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -361,7 +414,6 @@
         "path": "/header",
         "entity": "header",
         "supportedFilters": [
-          "searchKey",
           "name"
         ]
       },
@@ -406,7 +458,6 @@
         "listUrl": "/sws/neo/payment-term/header",
         "detailUrl": "/sws/neo/payment-term/header/{id}",
         "supportedFilters": [
-          "searchKey",
           "name"
         ]
       }
@@ -437,7 +488,14 @@
         "FixMonthOffset": "Meses de desplazamiento",
         "NetDays": "Días",
         "IsDefault": "Por defecto",
+        "IsNextBusinessDay": "Siguiente día hábil",
         "IsActive": "Activo"
+      },
+      "en_US": {
+        "Name": "Name",
+        "NetDays": "Days",
+        "IsDefault": "Default",
+        "IsNextBusinessDay": "Next Business Day"
       }
     }
   },
@@ -449,6 +507,14 @@
         "entity": "header",
         "runner": "node",
         "description": "CRUD flags for 'header' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-header-nextBusinessDay",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Default value for 'nextBusinessDay' in header should be a string"
       },
       {
         "id": "t-field-presence-header-default",
@@ -467,12 +533,12 @@
         "description": "Field 'name' should be present in header"
       },
       {
-        "id": "t-field-presence-header-offsetMonthDue",
+        "id": "t-field-presence-header-nextBusinessDay",
         "category": "field-presence",
         "entity": "header",
-        "field": "offsetMonthDue",
+        "field": "nextBusinessDay",
         "runner": "node",
-        "description": "Field 'offsetMonthDue' should be present in header"
+        "description": "Field 'nextBusinessDay' should be present in header"
       },
       {
         "id": "t-field-presence-header-overduePaymentDaysRule",
@@ -481,14 +547,6 @@
         "field": "overduePaymentDaysRule",
         "runner": "node",
         "description": "Field 'overduePaymentDaysRule' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-searchKey",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "searchKey",
-        "runner": "node",
-        "description": "Field 'searchKey' should be present in header"
       },
       {
         "id": "t-field-type-header-default",
@@ -507,12 +565,12 @@
         "description": "Field 'name' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-offsetMonthDue",
+        "id": "t-field-type-header-nextBusinessDay",
         "category": "field-type",
         "entity": "header",
-        "field": "offsetMonthDue",
+        "field": "nextBusinessDay",
         "runner": "node",
-        "description": "Field 'offsetMonthDue' should have type 'number' in header"
+        "description": "Field 'nextBusinessDay' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-overduePaymentDaysRule",
@@ -521,14 +579,6 @@
         "field": "overduePaymentDaysRule",
         "runner": "node",
         "description": "Field 'overduePaymentDaysRule' should have type 'number' in header"
-      },
-      {
-        "id": "t-field-type-header-searchKey",
-        "category": "field-type",
-        "entity": "header",
-        "field": "searchKey",
-        "runner": "node",
-        "description": "Field 'searchKey' should have type 'string' in header"
       },
       {
         "id": "t-rule-declared-FIN-PaymentMethodsWithAccount",
@@ -600,14 +650,6 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be a supported filter for header"
-      },
-      {
-        "id": "t-searchable-filters-header-searchKey",
-        "category": "searchable-filters",
-        "entity": "header",
-        "field": "searchKey",
-        "runner": "node",
-        "description": "Field 'searchKey' should be a supported filter for header"
       },
       {
         "id": "t-system-field-header-active",
@@ -698,12 +740,12 @@
         "description": "System field 'maturityDate3' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-nextBusinessDay",
+        "id": "t-system-field-header-offsetMonthDue",
         "category": "system-field",
         "entity": "header",
-        "field": "nextBusinessDay",
+        "field": "offsetMonthDue",
         "runner": "node",
-        "description": "System field 'nextBusinessDay' should exist in backend but not frontend for header"
+        "description": "System field 'offsetMonthDue' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-organization",
@@ -720,6 +762,14 @@
         "field": "overduePaymentDayRule",
         "runner": "node",
         "description": "System field 'overduePaymentDayRule' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-searchKey",
+        "category": "system-field",
+        "entity": "header",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "System field 'searchKey' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-updated",
@@ -754,18 +804,19 @@
       }
     ],
     "summary": {
-      "total": 40,
+      "total": 39,
       "byCategory": {
         "crud-flags": 1,
-        "field-presence": 5,
-        "field-type": 5,
+        "default-value-type": 1,
+        "field-presence": 4,
+        "field-type": 4,
         "rule-declared": 9,
-        "searchable-filters": 2,
-        "system-field": 17,
+        "searchable-filters": 1,
+        "system-field": 18,
         "visibility": 1
       },
       "byRunner": {
-        "node": 40,
+        "node": 39,
         "junit": 0
       }
     }

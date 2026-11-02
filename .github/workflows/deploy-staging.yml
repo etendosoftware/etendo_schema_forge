@@ -157,6 +157,9 @@ jobs:
           # Public API documentation endpoint used by the API keys screen. Only
           # production runs the public API gateway, so every target links there.
           VITE_PUBLIC_API_DOCS_URL: ${{ vars.PUBLIC_ORIGIN_PRODUCTION }}/api
+          # Public website the onboarding logo links back to (ETP-5847). One site for every
+          # target; left unset, the logo is not a link.
+          VITE_WEBSITE_URL: ${{ vars.WEBSITE_URL }}
           # Flag control plane (ETP-5751): Datadog Feature Flags, reusing the RUM
           # application ID/client token above and VITE_APP_ENV as the Datadog
           # flag environment. Setting the VITE_FLAGS_PROVIDER Actions variable to

@@ -368,9 +368,18 @@
           "obuiappProcessId": "D6AB95CE52D34E1599590526115E26C6"
         },
         {
+          "name": "manual-journals",
+          "label": "Manual Journals",
+          "favname": "Manual Journals",
+          "windowId": "B917E8A7B0864ACEA9D941E3B7494E53"
+        },
+        {
           "name": "simple-g-l-journal",
           "label": "Manual Journals",
           "favname": "Manual Journals",
+          "hidden": true,
+          "redirect": "/manual-journals",
+          "redirectKeepPath": true,
           "windowId": "B917E8A7B0864ACEA9D941E3B7494E53"
         },
         {

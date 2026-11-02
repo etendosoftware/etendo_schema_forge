@@ -23,9 +23,9 @@ import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // Columns copied verbatim onto the product body. Everything else declared in
-// `window.import.fields` needs interpreting first: `productType` and `uOM` are resolved
-// below, the two price columns become their own operations, and `category` resolves to a
-// productCategory id. taxCategory still resolves server-side through the product handler.
+// `window.import.fields` needs interpreting first: `productType`, `uOM` and `taxCategory` are
+// resolved below, the four Yes/No flags are parsed, the two price columns become their own
+// operations, and `category` resolves to a productCategory id.
 const PRODUCT_TARGETS = ['searchKey', 'name', 'description'];
 
 // AD_Ref_List for M_Product.ProductType, read straight from the instance: I=Item
@@ -41,6 +41,27 @@ const PRODUCT_TYPE_VALUES = {
 };
 
 const DEFAULT_PRODUCT_TYPE = 'I';
+
+// ETP-5730: the Yes/No flags of the product import (IsStocked, Returnable). IsSold/IsPurchased are
+// deliberately NOT importable: the form hides them and always saves them as true (ETP-5696).
+// Coded as 'true'/'false' so the same table drives the review validator, the send path and the
+// export labels (`codeLabels` writes the first synonym, which `resolveCodedValue` reads back). "Sí"
+// and "Si" are one entry because matching is accent-insensitive. This is local to the product
+// import on purpose: the shared `parseBoolean` has other callers and does not know "Sí".
+const YES_NO_VALUES = {
+  true: ['Sí', 'Yes', 'Y', '1', 'Verdadero'],
+  false: ['No', 'N', '0', 'Falso'],
+};
+
+// What an error says the flags accept: a translated "Sí, No" / "Yes, No", not the code list.
+const YES_NO_ACCEPTED = { acceptedKey: 'importAcceptedYesNo', acceptedFallback: 'Yes, No' };
+
+// The flags and the strings naming them in an error. A blank cell sends nothing, so the AD default
+// of the column (both are 'Y') keeps applying, exactly as before this ticket.
+const YES_NO_FIELDS = [
+  { target: 'stocked', fieldLabelKey: 'importFieldStocked', fieldLabelFallback: 'Stocked' },
+  { target: 'returnable', fieldLabelKey: 'importFieldReturnable', fieldLabelFallback: 'Returnable' },
+];
 
 // `price` is NOT a product field — in this system prices live in a separate M_ProductPrice
 // record tied to a priceListVersion. This descriptor mirrors ProductPriceBar.jsx's own
@@ -222,6 +243,26 @@ async function resolveUom(row, config, productDefaults) {
   return result.id;
 }
 
+/**
+ * ETP-5730: resolve the row's Tax Category. A blank cell sends nothing, so the product handler
+ * keeps injecting the tenant's default (`ProductDefaultsHandler.injectIfMissing`). A filled one
+ * must match an existing record by name (see the `product-tax-category` resolver) and fails the row
+ * otherwise — never dropped, never created, never guessed.
+ */
+async function resolveTaxCategory(row, config) {
+  const raw = String(row.taxCategory ?? '').trim();
+  if (!raw) return undefined;
+  const resolveFn = config.resolveTaxCategoryFn || getFkResolver('product-tax-category');
+  const result = await resolveFn(raw, { token: config.token, fkResolutions: config.fkResolutions });
+  if (result?.status !== 'auto-resolved') {
+    const message = typeof config.translate === 'function'
+      ? config.translate('importErrorTaxCategoryUnresolved', { value: raw })
+      : `The tax category "${raw}" does not match any existing tax category.`;
+    throw new Error(message);
+  }
+  return result.id;
+}
+
 async function resolveCategory(row, config) {
   if (!row.category) return null;
   // A read that fails must fail the ROW, with a message that says so. Falling through with an
@@ -385,6 +426,9 @@ registerImportRowValidator('product', (row, { translate } = {}) => [
   codedCellError(row.productType, PRODUCT_TYPE_VALUES, {
     target: 'productType', fieldLabelKey: 'importFieldProductType', fieldLabelFallback: 'Product Type', translate,
   }),
+  ...YES_NO_FIELDS.map(({ target, fieldLabelKey, fieldLabelFallback }) => codedCellError(row[target], YES_NO_VALUES, {
+    target, fieldLabelKey, fieldLabelFallback, translate, ...YES_NO_ACCEPTED,
+  })),
   ...costCellErrors(row, translate),
 ].filter(Boolean));
 
@@ -442,7 +486,12 @@ registerExportHints('product', {
   },
   // A raw 'I'/'S'/'E' is unreadable in a spreadsheet. Inverted from the same synonym table
   // validated above, so every exported word is one this descriptor accepts back.
-  valueLabels: { productType: codeLabels(PRODUCT_TYPE_VALUES) },
+  // ETP-5730: the four flags are exported as Sí/No, and the same table reads them back. The
+  // Tax Category needs no entry: as a `matchEntity` field it exports its `$_identifier` (the name).
+  valueLabels: {
+    productType: codeLabels(PRODUCT_TYPE_VALUES),
+    ...Object.fromEntries(YES_NO_FIELDS.map(({ target }) => [target, codeLabels(YES_NO_VALUES)])),
+  },
 });
 
 registerImportDescriptor('product', async (row, config) => {
@@ -461,6 +510,16 @@ registerImportDescriptor('product', async (row, config) => {
 
   const categoryId = await resolveCategory(row, config);
   if (categoryId) productBody.productCategory = categoryId;
+
+  const taxCategoryId = await resolveTaxCategory(row, config);
+  if (taxCategoryId) productBody.taxCategory = taxCategoryId;
+
+  for (const { target, fieldLabelKey, fieldLabelFallback } of YES_NO_FIELDS) {
+    const code = resolveCodedCellOrThrow(row[target], YES_NO_VALUES, {
+      defaultCode: undefined, fieldLabelKey, fieldLabelFallback, translate: config.translate, ...YES_NO_ACCEPTED,
+    });
+    if (code !== undefined) productBody[target] = code === 'true';
+  }
 
   const ops = [{ id: 'product', spec: config.spec, entity: config.entity, body: productBody }];
 

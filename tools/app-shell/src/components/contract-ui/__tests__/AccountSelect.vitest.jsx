@@ -58,6 +58,14 @@ describe('AccountSelect', () => {
     expect(within(screen.getByTestId('acct-select')).getByText('requiredField')).toBeInTheDocument();
   });
 
+  // ETP-5948 — the committed account is handed to the popup, which marks it on open.
+  it('opens the popup with the selected account marked', async () => {
+    render(<AccountSelect label="Cuenta" options={OPTIONS} value="acc-626" data-testid="acct-select" />);
+    await openSelector('acct-select');
+    expect(await screen.findByTestId('acct-select-popup-option-acc-626')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('acct-select-popup-option-acc-572')).toHaveAttribute('aria-selected', 'false');
+  });
+
   it('opens a popup titled with the field label that lists every option with its FULL name', async () => {
     render(<AccountSelect label="Cuenta" options={OPTIONS} data-testid="acct-select" />);
     await openSelector('acct-select');
@@ -135,6 +143,23 @@ describe('AccountSelect', () => {
     render(<AccountSelect popupTitle="Cuenta de depósito" options={OPTIONS} data-testid="acct-select" />);
     await openSelector('acct-select');
     expect(within(screen.getByTestId('acct-select-popup')).getByText('Cuenta de depósito')).toBeInTheDocument();
+  });
+
+  // ETP-5791 — fed by a server selector (`loadPage`) instead of a static catalog.
+  it('with loadPage, lists the server page instead of options and shows displayValue as the selection', async () => {
+    const loadPage = vi.fn(async () => ({ items: [{ id: 'vc-430', name: '430 - Clientes' }], hasMore: false }));
+    const onChange = vi.fn();
+    render(
+      <AccountSelect value="vc-400" displayValue="400 - Proveedores" options={OPTIONS} loadPage={loadPage}
+        onChange={onChange} data-testid="acct-select" />,
+    );
+    expect(screen.getByTestId('field-acct-select')).toHaveTextContent('400 - Proveedores');
+
+    await openSelector('acct-select');
+    fireEvent.click(await screen.findByTestId('acct-select-popup-option-vc-430'));
+    expect(loadPage).toHaveBeenCalledWith('', 0, expect.any(AbortSignal));
+    expect(screen.queryByText('572 - Bancos c/c')).not.toBeInTheDocument();
+    expect(onChange).toHaveBeenCalledWith('vc-430', '430 - Clientes');
   });
 
   it('readOnly renders a static value with no interactive selector', () => {

@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/calendar/YearTableWithCloseStatus.jsx
+// @covers tools/app-shell/src/windows/custom/calendar/PeriodsExpandablePanel.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -7,7 +8,7 @@ import { login } from '../../helpers/auth.js';
  *
  * Validates ETP-4478's unified Calendar window: the Finance menu shows only
  * "Calendar" (Fiscal Calendar / Periods retired), the Accounting + Periods
- * secondary tabs render on a year detail, Abrir/Cerrar Periodo hits the
+ * secondary tabs render on a year detail, a period's hover "Cerrar" link hits the
  * mocked action endpoint (global to the whole period, not per document type
  * — that per-document-type breakdown was removed in ETP-4948), and Cerrar
  * Año stays disabled until every period is Closed/Permanently Closed.
@@ -114,22 +115,23 @@ test.describe('Calendar — year detail', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('Abrir/Cerrar Periodo hits the mocked openClose endpoint', async ({ page }) => {
+  test('a period row\'s Cerrar link hits the mocked openClose endpoint after confirming', async ({ page }) => {
     await page.getByTestId('tab-periods').click();
     await expect(page.getByTestId('period-name-period-001')).toBeVisible();
 
-    // openClose requires a param (O/C/P), so the button opens ProcessParamDialog first —
-    // it does not fire the request directly.
-    await page.getByTestId('period-openclose-period-001').click();
-    await page.getByTestId('process-param-select-openClose').click();
-    await page.getByTestId('process-param-option-openClose-C').click();
+    // ETP-5592: the actions are hover links in the row's quick-actions cell, and they confirm
+    // first through the same dialog as the bulk bar.
+    await page.getByTestId('row-period-001').hover();
+    await page.getByTestId('period-close-period-001').click();
+    await expect(page.getByTestId('periods-bulk-confirm-names')).toBeVisible();
 
     const requestPromise = page.waitForRequest(
       (r) => r.url().includes('/sws/neo/open-close-period-control/periodControl/period-001/action/openClose')
         && r.method() === 'POST'
     );
-    await page.getByTestId('process-param-confirm').click();
-    await requestPromise;
+    await page.getByTestId('periods-bulk-confirm-ok').click();
+    const request = await requestPromise;
+    expect(request.postDataJSON()).toEqual({ fieldValues: { openClose: 'C' } });
   });
 });
 
@@ -153,7 +155,9 @@ test.describe('Calendar — bulk open periods', () => {
     await expect(page.getByTestId('period-name-period-001')).toBeVisible();
     await expect(page.getByTestId('period-bulk-open')).toHaveCount(0);
 
-    await page.getByTestId('period-select-all').click();
+    // DataTable's header checkbox selects every selectable period. Its input is sr-only (the
+    // visual box sits on top), so the click is dispatched on the input itself.
+    await page.getByTestId('periods-expandable-panel').locator('thead').getByRole('checkbox').dispatchEvent('click');
     await expect(page.getByTestId('period-bulk-open')).toBeVisible();
 
     const posted = [];

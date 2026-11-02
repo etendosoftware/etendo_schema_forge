@@ -5,21 +5,17 @@ export function resolveNeoBaseUrl(apiBaseUrl) {
   return apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '') : '/sws/neo';
 }
 
-// ETP-4315 — physical Attachment table (C_File) per window, mirroring the
-// attachmentConfig.tableName wired on each window's Preview component. Windows
-// not listed here never pass a real pdfBlob/pdfBlobUrl into SendDocumentModal
-// (no caching to do), so cacheDocumentPreviewFile skips them instead of
-// falling back to the retired preview-file cache.
-export const WINDOW_ATTACHMENT_TABLE = {
-  'sales-invoice': 'C_Invoice',
-  'purchase-invoice': 'C_Invoice',
-  'sales-order': 'C_Order',
-  'purchase-order': 'C_Order',
-  'sales-quotation': 'C_Order',
-  'goods-shipment': 'M_InOut',
-  'return-to-vendor-shipment': 'M_InOut',
-  'return-material-receipt': 'M_InOut',
-};
+// ETP-4315 / ETP-5588 — the cached preview is the record's "main" Attachment (C_File), bound to
+// the table of the window's primary entity (see attachmentTable.js), so no window is listed here.
+// Only document windows pass a real pdfBlob/pdfBlobUrl into SendDocumentModal; the rest skip
+// caching instead of falling back to the retired preview-file cache. A caller that already knows
+// the table passes `attachmentTable`; otherwise it is read from the generated contract, through a
+// lazily imported Vite-only module so this file stays importable from plain Node.
+async function resolveTable(specName, attachmentTable) {
+  if (attachmentTable) return attachmentTable;
+  const { resolveAttachmentTable } = await import('./windowAttachmentTable.js');
+  return resolveAttachmentTable(specName);
+}
 
 export function resolveDocumentEmailContract(windowName) {
   return `${windowName}-send`;
@@ -110,11 +106,12 @@ export async function cacheDocumentPreviewFile({
   documentNo,
   pdfBlob,
   pdfBlobUrl,
+  attachmentTable,
 }) {
-  const tableName = WINDOW_ATTACHMENT_TABLE[specName];
-  if (!tableName) return { skipped: true };
   const previewBlob = await resolvePreviewBlob(pdfBlob, pdfBlobUrl);
   if (!previewBlob) return { skipped: true };
+  const tableName = await resolveTable(specName, attachmentTable);
+  if (!tableName) return { skipped: true };
   const created = await uploadAndMarkMainAttachment({
     token,
     tableName,
@@ -149,6 +146,7 @@ export async function sendDocumentEmail({
   documentNo,
   pdfBlob,
   pdfBlobUrl,
+  attachmentTable,
   recipientEdits,
   messageEdits,
   language,
@@ -162,6 +160,7 @@ export async function sendDocumentEmail({
     documentNo,
     pdfBlob,
     pdfBlobUrl,
+    attachmentTable,
   });
   const res = await apiFetch(`${resolveNeoBaseUrl(apiBaseUrl)}/email-contracts/${contractName}/send`, {
     method: 'POST',

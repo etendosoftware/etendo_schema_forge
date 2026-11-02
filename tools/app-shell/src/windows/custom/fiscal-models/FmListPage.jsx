@@ -5,7 +5,7 @@ import {
   LayoutGrid, ArrowUpDown,
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
-import { EmptyState, KpiWidget } from './FmCommon.jsx';
+import { EmptyState, KpiWidget, FmInfoTooltip } from './FmCommon.jsx';
 import { FmStatusChip } from './FmDetailChrome.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -29,9 +29,12 @@ import { getIncidentSeverity, getIncidentIndicator } from './incidentSeverity.js
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 import { listModels, isKnownModel, getModel, getModelOrDefault, modelTitleKey } from './modelRegistry.js';
 import { getListBehavior } from './modelRegistryList.js';
+import { useFiscalModelsCatalog } from './useFiscalModelsCatalog.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { apiFetch } from '@/auth/api.js';
+import { parseBackendError, isDuplicateConflict } from '@/lib/backendErrors.js';
+
+// committed-selection-ok: short, fully rendered lists that already set aria-selected from their value; nothing to page or centre.
 
 // Every registered model, in registry order (ETP-5716). A module-level constant of fixed length:
 // `useDeclarationsAutoCompute` below calls one `useFiscalAutoCompute` per (bucket × model) in a
@@ -194,9 +197,8 @@ function periodLabel(period, t) {
 // ETP-5716 — `POST /declarations` refused because the exercise already has its single ordinary
 // declaration (FiscalDeclCrudHandler#rejectDuplicateOrdinary): `{ error: { code, existingId } }`.
 // Returns the existing declaration's id, or `null` for any other failure.
-async function duplicateOrdinaryId(res) {
-  if (res?.status !== 409) return null;
-  const body = await res.json().catch(() => null);
+function duplicateOrdinaryId(status, body) {
+  if (status !== 409) return null;
   const error = body?.error ?? body?.response?.error ?? body;
   return error?.code === 'DUPLICATE_ORDINARY' ? (error.existingId ?? null) : null;
 }
@@ -241,6 +243,69 @@ const RESULT_BADGE_STYLE = {
   background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
 };
 
+// ETP-5725 (QA CP-19) — the informative ("info") result of a Modelo 349 row is the TOTAL OF
+// OPERATIONS ONLY, identical by construction to the detail page's "Total operaciones" KPI and
+// to the generated .349 file (both now reduce the same `GET /fiscal349/operators` payload
+// through `sum349OperationsBase`). Its prior-period RECTIFICATIONS amount is a DIFFERENT AEAT
+// header field over a disjoint set of records and is rendered by its own "Rectificaciones"
+// column (`RectificationsCell` below) — Ruben's review of the real AEAT Sede UI replaced the
+// first cut's stacked "rect. X" sub-line inside this cell with that separate column. An
+// ordinaria with no new operations but real rectifications therefore reads "—" here (not
+// "Informativa") — the ETP-5432 pt.2 case, protected via the other column instead.
+function InfoResult({ result, t }) {
+  // SonarQube java:S3358 — extracted out of a nested ternary into sequential early returns.
+  // Same three branches, same rendered output, just expressed as statements instead of a
+  // `cond ? a : (cond2 ? b : c)` chain.
+  if (result.amount > 0) {
+    return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>;
+  }
+  if (result.rectifications > 0) {
+    return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
+  }
+  return <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
+}
+
+// ETP-5725 (QA CP-19) — the "Rectificaciones" column: plain text, same typographic weight as
+// the "Resultado" operations amount (`InfoResult` above) — no pill, no colored background. The
+// only visual distinctiveness is a small info icon next to the amount, whose hover tooltip
+// reveals the distinct origin periods ("de 09, 10, 11" —
+// `collectRectificationOrigins`/`formatRectificationOriginsLabel`, operations349.js). Only
+// Modelo 349 rows ever carry `rectifications` (303/390 derive neither), so this renders
+// nothing for every other model and for a 349 row with none — not an empty icon.
+//
+// Two rounds of visual follow-up already behind this shape: a pill-with-clock-icon, then a
+// primary-color pill with a native `title` tooltip (dropped — unreliable hover behavior, and
+// Ruben reconsidered the pill itself). The icon-hover tooltip now reuses `FmInfoTooltip`
+// (FmCommon.jsx) — the SAME show/hide mechanism "Totales por clave" (FmModel349Page.jsx)
+// already used for its own info icon, portaled to `document.body` so it cannot inherit that
+// panel's pre-existing z-index bug (see FmInfoTooltip's own comment for the root cause).
+function RectificationsCell({ result, t }) {
+  const amount = result?.rectifications ?? 0;
+  // ETP-5725 — a no-rectifications row reads a muted "—", never a fully blank cell, the exact
+  // same visual treatment `InfoResult` already uses for its own zero-amount case (above) —
+  // reused verbatim rather than inventing a second one. Deliberately gated on `hasRectifications`
+  // (whether any rectificative operator row exists), NOT on `amount <= 0` — a declaration can in
+  // principle have real corrective rows whose `correctedBase` values sum to exactly 0,00 (an edge
+  // case, but a real one), and that must still show "0,00 €", not collapse to "—" as if there
+  // were no rectifications at all.
+  if (!result?.hasRectifications) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
+  // Pre-formatted by `deriveListResult349` (the ONLY place that reads the 349-specific
+  // (year, period) row shape) — this generic, cross-model page renders a plain string, the
+  // same contract `labelKey` already uses for the 390's model-specific badge text above.
+  const originsLabel = result?.rectificationOriginsLabel ?? '';
+  const tooltipText = originsLabel
+    ? (t('fm.result.rectifications_origins', { periods: originsLabel }) ?? `de ${originsLabel}`)
+    : null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>
+        {formatAmount(amount)}
+      </span>
+      {tooltipText && <FmInfoTooltip text={tooltipText} data-testid="fm-rectifications-info" />}
+    </span>
+  );
+}
+
 // Result as plain text — used in the list table
 function ResultText({ isComputing, error, result, t }) {
   if (isComputing) return <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 13 }}>…</span>;
@@ -248,11 +313,7 @@ function ResultText({ isComputing, error, result, t }) {
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.N') ?? 'Sin resultado'}</span>;
   if (result.kind === 'zero') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.zero') ?? 'Resultado cero'}</span>;
-  if (result.kind === 'info') {
-    return result.amount > 0
-      ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
-      : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
-  }
+  if (result.kind === 'info') return <InfoResult result={result} t={t} data-testid="InfoResult__cb728e" />;
   // A model may name its own badge text (`labelKey`, e.g. the 390's informative "Resultado
   // positivo"); otherwise the shared `fm.result.<kind>` key.
   const label = t(result.labelKey ?? `fm.result.${result.kind}`) ?? result.kind;
@@ -811,18 +872,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [declIdsKey, token, apiBaseUrl]);
 
-  const [activeModels, setActiveModels] = useState({});
-  const [catalogLoaded, setCatalogLoaded] = useState(!apiBaseUrl);
-
-  useEffect(() => {
-    if (!apiBaseUrl) return;
-    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    apiFetch(`${base}/fiscal-models-catalog`, { baseUrl: '' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setActiveModels(data ?? {}))
-      .catch(() => {})
-      .finally(() => setCatalogLoaded(true));
-  }, [token, apiBaseUrl, apiFetch]);
+  // Shared catalog reader (ETP-5831): same endpoint, same `{}` = no model active rule as the
+  // Organization window's fiscal sections. `setActiveModels` stays local for the drawer's save.
+  const {
+    activeModels, setActiveModels, unavailableModels, loaded: catalogLoaded, error: catalogError,
+  } = useFiscalModelsCatalog(apiBaseUrl, token);
 
   // "Resultado" auto-compute, one bucket set per registered model — see
   // `useDeclarationsAutoCompute` above for the draft / other / submitted split.
@@ -883,10 +937,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(async r => {
-          if (r.ok) return r.json();
+                    if (r.ok) return r.json();
           // ETP-5716 — a single-ordinary model (390) refuses a 2nd ordinary of the exercise
           // with 409 DUPLICATE_ORDINARY + the existing declaration's id: say so and offer it.
-          const existingId = await duplicateOrdinaryId(r);
+          // The body is read once and shared: a Response body cannot be consumed twice.
+          const body = r.status === 409 ? await r.json().catch(() => null) : undefined;
+          const existingId = duplicateOrdinaryId(r.status, body);
           if (existingId) {
             const toastId = toast.error(
               <span>
@@ -903,12 +959,22 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             );
             return null;
           }
-          return Promise.reject(r.status);
+          // ETP-5782: carry the backend error code along with the status.
+          const e = await parseBackendError(body === undefined ? r : {
+            json: async () => {
+              if (body === null) {
+                throw new Error('empty body');
+              }
+              return body;
+            },
+          });
+          return Promise.reject({ status: r.status, code: e.code });
         })
         .then(created => {
           if (created) setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]);
         })
-        .catch((status) => {
+        // The rejection is an object `{status, code}`, not a bare status number.
+        .catch(({ status, code } = {}) => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a
           // closed modal with no created row and no explanation. Mirrors the exact toast pattern
@@ -923,7 +989,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           // unambiguously identifies "a draft already exists for this period". Every other
           // failure (network error, 500, any other status) keeps the original generic toast.
           // (The ETP-5716 409 DUPLICATE_ORDINARY never reaches here: the first `.then` handles it.)
-          if (status === 409) {
+          // ETP-5782: the hand-written guard answers a code-less 409; a classified 409 (duplicate_key
+          // included) from elsewhere in the chain must not claim "draft exists" unless it is one.
+          if (isDuplicateConflict(status, code)) {
             toast.error(t('fm.list.new_decl_draft_exists')
               ?? 'No se puede crear la declaración. Ya existe una declaración en borrador para el periodo seleccionado.');
             return;
@@ -943,12 +1011,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       .then((result) => {
         if (result.ok) {
           setDecls(ds => ds.filter(d => d.id !== deleteTarget.id));
-          setDeleteTarget(null);
         } else {
           toast.error(t('fm.list.delete_failed') ?? 'No se pudo eliminar la declaración.');
         }
       })
-      .finally(() => setDeletingId(null));
+      // ETP-5725 (QA CP-20) — the confirmation closes on BOTH outcomes, next to the busy
+      // flag it is paired with. Clearing it only inside the `result.ok` branch left the
+      // modal stranded on top of its own error toast, so the user had to dismiss the
+      // dialog by hand to even read the row again. Same shape as handleConfirmReactivate.
+      .finally(() => { setDeletingId(null); setDeleteTarget(null); });
   }, [deleteTarget, token, apiBaseUrl, t]);
 
   // Row hover "reactivate" action (ETP-5338) — reverts a submitted/submitted_ack declaration
@@ -965,7 +1036,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         if (result.ok) {
           // The backend cleared the submission snapshot (ETP-5438): a draft computes live again.
           setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft', submittedSnapshot: null } : d));
-          setReactivateTarget(null);
         } else if (result.reason === 'corrective_sibling_presented') {
           // ETP-5725 (reopened QA fix, UX follow-up) — the precise, commonly-hit case: a
           // rectificativa/sustitutiva sibling is already presented for this period, so
@@ -983,7 +1053,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           toast.error(t('fm.list.reactivate_failed') ?? 'No se pudo reactivar la declaración.');
         }
       })
-      .finally(() => setReactivatingId(null));
+      // ETP-5725 (QA CP-20) — the confirmation closes whether the reactivation succeeded or
+      // was rejected. It used to be cleared only in the `result.ok` branch above, so the
+      // common "ya existe una rectificativa/sustitutiva presentada" rejection showed its
+      // toast WITH the modal still open on top of the list. The busy flag and the dialog
+      // are the same lifecycle, so they are cleared in the same place.
+      .finally(() => { setReactivatingId(null); setReactivateTarget(null); });
   }, [reactivateTarget, token, apiBaseUrl, t]);
 
   const yearOptions = useMemo(
@@ -1084,6 +1159,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <th>{t('fm.col.type')}</th>
             <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
             <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
+            <th style={{ textAlign: 'right' }}>{t('fm.col.rectifications') ?? 'Rectificaciones'}</th>
             <th>{t('fm.col.incidents')}</th>
             <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
             <th style={{ width: 72 }} aria-hidden="true" />
@@ -1176,6 +1252,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     result={displayResult}
                     t={t}
                     data-testid="ResultText__cb728e" />
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <RectificationsCell result={displayResult} t={t} data-testid="RectificationsCell__cb728e" />
                 </td>
                 <td>
                   <IncidentsCell
@@ -1388,10 +1467,17 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       {showCatalog && (
         <FmCatalogPage
           activeModels={activeModels}
+          unavailableModels={unavailableModels}
           onBack={() => setShowCatalog(false)}
           onSave={(newActive) => {
-            setActiveModels(newActive);
             setShowCatalog(false);
+            // The PUT replaces the whole catalog: never send one built without a successful read
+            // (it would switch off every model the drawer could not see).
+            if (!catalogLoaded || catalogError) {
+              toast.error(t('fm.catalog.save_unavailable'));
+              return;
+            }
+            setActiveModels(newActive);
             if (apiBaseUrl) {
               const base = apiBaseUrl.replace(/\/[^/]+$/, '');
               apiFetch(`${base}/fiscal-models-catalog`, {

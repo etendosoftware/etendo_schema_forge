@@ -94,8 +94,8 @@
             {{#unless (eq @root.meta.dimensionField 'category')}}<td>{{lookup this 'category'}}</td>{{/unless}}
             <td>{{lookup this 'uom'}}</td>
             <td class="cell-amount">{{formatCurrency (lookup this 'qtyOnHand')}}</td>
-            <td class="cell-amount">{{formatCurrency (lookup this 'unitCost')}}</td>
-            <td class="cell-amount">{{formatCurrency (lookup this 'totalValuation')}}</td>
+            <td class="cell-amount">{{#if (eq (lookup this 'unitCost') null)}}—{{else}}{{formatCurrency (lookup this 'unitCost')}}{{/if}}</td>
+            <td class="cell-amount">{{#if (eq (lookup this 'totalValuation') null)}}—{{else}}{{formatCurrency (lookup this 'totalValuation')}}{{/if}}</td>
           </tr>
     {{/each}}
         </tbody>
@@ -123,8 +123,8 @@
         <td>{{lookup this 'category'}}</td>
         <td>{{lookup this 'uom'}}</td>
         <td class="cell-amount">{{formatCurrency (lookup this 'qtyOnHand')}}</td>
-        <td class="cell-amount">{{formatCurrency (lookup this 'unitCost')}}</td>
-        <td class="cell-amount">{{formatCurrency (lookup this 'totalValuation')}}</td>
+        <td class="cell-amount">{{#if (eq (lookup this 'unitCost') null)}}—{{else}}{{formatCurrency (lookup this 'unitCost')}}{{/if}}</td>
+        <td class="cell-amount">{{#if (eq (lookup this 'totalValuation') null)}}—{{else}}{{formatCurrency (lookup this 'totalValuation')}}{{/if}}</td>
       </tr>
       {{/each}}
     </tbody>

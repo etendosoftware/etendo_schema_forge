@@ -49,6 +49,15 @@ vi.mock('@/windows/custom/fiscal-config/CertSection.jsx', () => ({
   ),
 }));
 
+// ETP-5831 — the fiscal sections (certificate, IAE, Modelo 390) render only while a fiscal
+// configuration that uses them is active (useFiscalSectionVisibility: fiscal models catalog +
+// SII/TBAI/VERI*FACTU config). This suite exercises the sections themselves, so it pins every
+// one visible; the visibility rule has its own coverage. Mutable so a test can hide a section.
+let fiscalSectionVisibility = { showIae: true, show390: true, showCert: true, loading: false };
+vi.mock('../useFiscalSectionVisibility.js', () => ({
+  useFiscalSectionVisibility: () => fiscalSectionVisibility,
+}));
+
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 vi.mock('sonner', () => ({
@@ -79,6 +88,7 @@ describe('OrganizationPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentWindowAccessTier = 'full';
+    fiscalSectionVisibility = { showIae: true, show390: true, showCert: true, loading: false };
   });
 
   // ETP-5395 Fix 3 — before this fix, a 'none' tier still fired the fetch, got a real
@@ -722,6 +732,164 @@ describe('OrganizationPage', () => {
       expect(await screen.findByTestId('Modelo390IdentitySection__error-aeat390RepNif')).toHaveTextContent(/taxIdInvalid/);
       expect(toastError).toHaveBeenCalled();
       expect(infoPatchBody()).toBeNull();
+    });
+  });
+});
+
+// The fiscal sections (certificate, IAE, Modelo 390) follow useFiscalSectionVisibility.
+describe('OrganizationPage — fiscal section visibility', () => {
+  const ALL_VISIBLE = { showIae: true, show390: true, showCert: true, loading: false };
+  const loadedFetch = (info = {}) => makeFetchMock([
+    [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', socialName: 'Acme SL', etgoBusinessType: 'CO' })],
+    [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B1234567D', locationAddress: 'LOC_1', ...info })],
+  ]);
+  const renderLoaded = async () => {
+    const view = render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+    await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
+    return view;
+  };
+  const hasDivider = (testId) => screen.getByTestId(testId).classList.contains('border-b');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    currentWindowAccessTier = 'full';
+    fiscalSectionVisibility = { ...ALL_VISIBLE };
+  });
+
+  it('renders no fiscal section while every one is hidden, and keeps the always-on ones', async () => {
+    fiscalSectionVisibility = { showIae: false, show390: false, showCert: false, loading: false };
+    globalThis.fetch = loadedFetch();
+    await renderLoaded();
+
+    expect(screen.queryByTestId('OrganizationPage__section-certificate')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('CertSection__stub')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__section-iae')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__section-390')).not.toBeInTheDocument();
+    expect(screen.getByTestId('OrganizationPage__section-identity')).toBeInTheDocument();
+    expect(screen.getByTestId('OrganizationPage__section-fiscal')).toBeInTheDocument();
+    expect(screen.getByTestId('OrganizationPage__section-contact')).toBeInTheDocument();
+  });
+
+  it('hides each fiscal section independently', async () => {
+    fiscalSectionVisibility = { showIae: true, show390: false, showCert: false, loading: false };
+    globalThis.fetch = loadedFetch();
+    await renderLoaded();
+
+    expect(screen.getByTestId('OrganizationPage__section-iae')).toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__section-390')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__section-certificate')).not.toBeInTheDocument();
+  });
+
+  it('draws no divider under Modelo 390 when it is the last section, and one under the others', async () => {
+    globalThis.fetch = loadedFetch();
+    await renderLoaded();
+
+    expect(hasDivider('OrganizationPage__section-390')).toBe(false);
+    expect(hasDivider('OrganizationPage__section-iae')).toBe(true);
+    expect(hasDivider('OrganizationPage__section-contact')).toBe(true);
+    expect(hasDivider('OrganizationPage__section-certificate')).toBe(true);
+  });
+
+  it('moves the missing divider to IAE when the 390 section is hidden', async () => {
+    fiscalSectionVisibility = { ...ALL_VISIBLE, show390: false };
+    globalThis.fetch = loadedFetch();
+    await renderLoaded();
+
+    expect(hasDivider('OrganizationPage__section-iae')).toBe(false);
+    expect(hasDivider('OrganizationPage__section-contact')).toBe(true);
+  });
+
+  it('moves the missing divider to Contacto when no section after it is visible', async () => {
+    fiscalSectionVisibility = { showIae: false, show390: false, showCert: true, loading: false };
+    globalThis.fetch = loadedFetch();
+    await renderLoaded();
+
+    expect(hasDivider('OrganizationPage__section-contact')).toBe(false);
+    expect(hasDivider('OrganizationPage__section-certificate')).toBe(true);
+    expect(hasDivider('OrganizationPage__section-fiscal')).toBe(true);
+  });
+
+  it('does not block Save on incomplete 390 identity data while the 390 section is hidden, and sends the aeat390 fields as loaded', async () => {
+    fiscalSectionVisibility = { ...ALL_VISIBLE, show390: false };
+    // Persona física on with no Primer apellido, and a representative NIF without a name: both
+    // would block Save while the section is shown (see the Modelo 390 identity tests above).
+    globalThis.fetch = loadedFetch({
+      aeat390Isperson: 'Y', aeat390Firstname: 'Ana', aeat390RepNif: '12345678Z',
+    });
+    await renderLoaded();
+
+    fireEvent.change(screen.getByTestId('OrganizationPage__name'), { target: { value: 'Acme Corp' } });
+    fireEvent.click(await screen.findByTestId('OrganizationPage__save'));
+
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully'));
+    expect(toastError).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('Modelo390IdentitySection__error-aeat390Surname1')).not.toBeInTheDocument();
+    const infoPatch = globalThis.fetch.mock.calls.find(([url, opts]) =>
+      opts?.method === 'PATCH' && url.includes(`/organization/information/${ORG_ID}`));
+    expect(infoPatch).toBeTruthy();
+    expect(JSON.parse(infoPatch[1].body)).toMatchObject({
+      aeat390Isperson: true,
+      aeat390Firstname: 'Ana',
+      aeat390Surname1: null,
+      aeat390Surname2: null,
+      aeat390RepNif: '12345678Z',
+      aeat390RepName: null,
+    });
+  });
+
+  it('still blocks Save on the same incomplete 390 identity data while the section is shown', async () => {
+    globalThis.fetch = loadedFetch({ aeat390Isperson: 'Y', aeat390Firstname: 'Ana' });
+    await renderLoaded();
+
+    fireEvent.change(screen.getByTestId('OrganizationPage__name'), { target: { value: 'Acme Corp' } });
+    fireEvent.click(await screen.findByTestId('OrganizationPage__save'));
+
+    expect(await screen.findByTestId('Modelo390IdentitySection__error-aeat390Surname1')).toHaveTextContent('fieldRequired');
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  describe('deep link to a fiscal section', () => {
+    let scrollIntoView;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+
+    beforeEach(() => {
+      scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+    });
+
+    afterEach(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      window.history.replaceState(null, '', window.location.pathname);
+    });
+
+    it('does not throw nor scroll when the deep-linked section is hidden', async () => {
+      window.history.replaceState(null, '', '#org-section-390');
+      fiscalSectionVisibility = { ...ALL_VISIBLE, show390: false };
+      globalThis.fetch = loadedFetch();
+      await renderLoaded();
+
+      expect(screen.queryByTestId('OrganizationPage__section-390')).not.toBeInTheDocument();
+      expect(screen.getByTestId('OrganizationPage__section-contact')).toBeInTheDocument();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    });
+
+    it('waits for the visibility to resolve, then scrolls to the section exactly once', async () => {
+      window.history.replaceState(null, '', '#org-section-390');
+      fiscalSectionVisibility = { showIae: false, show390: false, showCert: false, loading: true };
+      globalThis.fetch = loadedFetch();
+      const { rerender } = await renderLoaded();
+
+      expect(scrollIntoView).not.toHaveBeenCalled();
+
+      fiscalSectionVisibility = { ...ALL_VISIBLE };
+      rerender(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(scrollIntoView.mock.contexts[0]).toBe(screen.getByTestId('OrganizationPage__section-390'));
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
+
+      rerender(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
     });
   });
 });

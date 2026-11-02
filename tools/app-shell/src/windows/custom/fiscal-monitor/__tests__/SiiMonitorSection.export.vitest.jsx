@@ -1,5 +1,7 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx
 // Integration tests for the SiiMonitorSection CSV export button.
 // Uses mockRows={[]} to bypass real API calls and put the component in a stable state.
+import { allIconsAs } from '@/test/lucideIconMock.js';
 
 // Stable function reference — prevents useEffect from re-firing on every render.
 const mockApiFetch = vi.hoisted(() =>
@@ -16,12 +18,7 @@ vi.mock('@/i18n', () => ({
   useLocale: () => ({ genericLabels: {}, statuses: {} }),
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
-vi.mock('lucide-react', () => ({
-  FileUp: () => null,
-  FileDown: () => null,
-  TriangleAlert: () => null,
-  ArrowUpRight: () => null,
-}));
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => mockApiFetch,
 }));

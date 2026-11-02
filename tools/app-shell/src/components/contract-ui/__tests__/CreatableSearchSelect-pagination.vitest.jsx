@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -48,7 +49,7 @@ const field = { key: 'partner', required: false };
 function setScrollGeometry(panel, { scrollHeight, clientHeight, scrollTop }) {
   Object.defineProperty(panel, 'scrollHeight', { value: scrollHeight, configurable: true });
   Object.defineProperty(panel, 'clientHeight', { value: clientHeight, configurable: true });
-  Object.defineProperty(panel, 'scrollTop', { value: scrollTop, configurable: true });
+  Object.defineProperty(panel, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
 }
 
 describe('CreatableSearchSelect — serverSearch pagination (ETP-4975)', () => {
@@ -243,5 +244,116 @@ describe('CreatableSearchSelect — serverSearch pagination (ETP-4975)', () => {
     // single result, and a stale item becomes visible again.
     expect(screen.getAllByRole('option')).toHaveLength(1);
     expect(screen.queryByText('Item-50')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5903 — reopening with a committed value that is not on page 0 walks forward (up to 6 pages
+// = 300 rows) to show it IN PLACE; beyond that it is pinned on top through one label lookup.
+// `routedFetch` answers by URL (`offset`, or `q=` for the lookup), independent of request order.
+// ---------------------------------------------------------------------------
+describe('CreatableSearchSelect — locating the committed value on reopen (ETP-5903)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function routedFetch({ totalRows, lookup = [] }) {
+    return vi.fn((url) => {
+      const params = new URL(String(url), 'http://test').searchParams;
+      if (params.has('q')) return jsonOk(lookup);
+      if (params.has('id')) return jsonOk([]);
+      const offset = Number(params.get('offset') || 0);
+      return jsonOk(makePage(offset, Math.max(0, Math.min(50, totalRows - offset))));
+    });
+  }
+  const listOffsets = () => global.fetch.mock.calls
+    .map(([url]) => new URL(String(url), 'http://test').searchParams)
+    .filter((p) => !p.has('q') && !p.has('id'))
+    .map((p) => Number(p.get('offset')));
+  const lookupCalls = () => global.fetch.mock.calls.filter(([url]) => String(url).includes('q='));
+
+  async function reopen(value, displayValue) {
+    render(<CreatableSearchSelect {...baseProps} field={field} value={value} displayValue={displayValue} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('field-partner-chip'));
+    return screen.findByTestId('field-partner');
+  }
+
+  it('walks to the page that holds the value and shows it in place, with no lookup', async () => {
+    global.fetch = routedFetch({ totalRows: 150 });
+
+    await reopen('120', 'Item-120');
+
+    await waitFor(() => expect(screen.getByTestId('option-partner-120')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 50, 100]);
+    expect(lookupCalls()).toHaveLength(0);
+    expect(screen.getByTestId('option-partner-119')).toBeInTheDocument();
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'option-partner-0');
+  });
+
+  it('stops at the page cap, then pins the value on top through one label lookup', async () => {
+    global.fetch = routedFetch({ totalRows: 1000, lookup: [{ id: 'bp-9', label: 'Zeta' }, { id: 'bp-99', label: 'Zeta 2' }] });
+
+    await reopen('bp-9', 'Zeta');
+
+    await waitFor(() => expect(screen.getByTestId('option-partner-bp-9')).toHaveAttribute('aria-selected', 'true'));
+    expect(listOffsets()).toEqual([0, 50, 100, 150, 200, 250]);
+    expect(lookupCalls()).toHaveLength(1);
+    // Only the id-equal row is pinned, on top of the 300 walked rows.
+    expect(screen.getAllByRole('option')).toHaveLength(301);
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute('data-testid', 'option-partner-bp-9');
+    expect(screen.queryByTestId('option-partner-bp-99')).not.toBeInTheDocument();
+  });
+
+  // ETP-5948 — the backend matches each identifier column on its own, so a "<code> - <name>"
+  // label finds nothing as a whole; the lookup retries with the code segment.
+  it('retries the label lookup with the code when the full "code - name" label finds nothing', async () => {
+    const paged = routedFetch({ totalRows: 1000 });
+    global.fetch = vi.fn((url) => {
+      const q = new URL(String(url), 'http://test').searchParams.get('q');
+      if (q === '57200000') return jsonOk([{ id: 'acc-572', label: '57200000 - Bancos' }]);
+      if (q != null) return jsonOk([]);
+      return paged(url);
+    });
+
+    await reopen('acc-572', '57200000 - Bancos');
+
+    await waitFor(() => expect(screen.getByTestId('option-partner-acc-572')).toHaveAttribute('aria-selected', 'true'));
+    expect(lookupCalls().map(([url]) => new URL(String(url), 'http://test').searchParams.get('q')))
+      .toEqual(['57200000 - Bancos', '57200000']);
+  });
+
+  it('opens from the top without error when the value is nowhere (list ends, lookup finds nothing)', async () => {
+    global.fetch = routedFetch({ totalRows: 30, lookup: [] });
+
+    await reopen('gone', 'Gone partner');
+
+    await waitFor(() => expect(lookupCalls()).toHaveLength(1));
+    expect(listOffsets()).toEqual([0]);
+    expect(screen.getAllByRole('option')).toHaveLength(30);
+    expect(screen.getByTestId('options-partner').querySelector('[aria-selected="true"]')).toBeNull();
+  });
+
+  it('stops walking once the user types', async () => {
+    global.fetch = routedFetch({ totalRows: 1000 });
+
+    const input = await reopen('bp-9', 'Zeta');
+    fireEvent.change(input, { target: { value: 'Item' } });
+    await waitFor(() => expect(lookupCalls().some(([url]) => String(url).includes('q=Item'))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const typed = global.fetch.mock.calls.findIndex(([url]) => String(url).includes('q=Item'));
+    expect(global.fetch.mock.calls.slice(typed + 1)).toHaveLength(0);
+  });
+
+  it('scrolls the panel back to the top when the user types (AC4)', async () => {
+    global.fetch = routedFetch({ totalRows: 5 });
+
+    const input = await reopen('2', 'Item-2');
+    const panel = await screen.findByTestId('options-partner');
+    panel.scrollTop = 120;
+
+    fireEvent.change(input, { target: { value: 'Item' } });
+    expect(panel.scrollTop).toBe(0);
+    await waitFor(() => expect(lookupCalls().some(([url]) => String(url).includes('q=Item'))).toBe(true));
   });
 });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // Importing DetailView.jsx pulls in the whole component tree (router, i18n,
@@ -106,7 +107,7 @@ import {
 // actually runs for combos; applyCalloutComboUpdates unconditionally skips
 // the trigger field before ever reaching it, so the trigger-field staleness
 // path can only be exercised by calling applyOneComboEntry directly.
-import { applyOneComboEntry } from '../detailViewHelpers.jsx';
+import { applyOneComboEntry, isCurrencyRateRecalcTarget } from '../detailViewHelpers.jsx';
 
 describe('normalizePatchFieldValues', () => {
   it('skips keys ending in $_identifier', () => {
@@ -245,7 +246,7 @@ describe('applyCalloutFieldUpdates', () => {
       a,
     );
     expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse', { origin: 'callout' });
   });
 
   it('does not emit key$_identifier when entry has no _identifier and api is empty', () => {
@@ -273,7 +274,7 @@ describe('applyCalloutFieldUpdates', () => {
         { warehouse: { value: 'WH1' } },
         a,
       );
-      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse', { origin: 'callout' });
     });
 
     it('falls back to name, then _identifier, when the option has no label', () => {
@@ -283,7 +284,7 @@ describe('applyCalloutFieldUpdates', () => {
         { warehouse: { value: 'WH1' } },
         a,
       );
-      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse (name)');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse (name)', { origin: 'callout' });
     });
 
     it('does not emit an identifier when no selector matches the field', () => {
@@ -307,6 +308,50 @@ describe('applyCalloutFieldUpdates', () => {
       expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
       expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
     });
+  });
+});
+
+// The exchange rate follows its inputs: a callout fired by the currency, the declared document
+// date or the accounting date recalculates eTGOCurrencyRate and must win over a manual rate,
+// including clearing it when no range covers the new date. Any other trigger keeps the manual rate.
+describe('exchange-rate recalculation on callout', () => {
+  it.each([
+    ['eTGOCurrencyRate', 'currency', 'orderDate', true],
+    ['eTGOCurrencyRate', 'orderDate', 'orderDate', true],
+    ['eTGOCurrencyRate', 'accountingDate', 'invoiceDate', true],
+    ['eTGOCurrencyRate', 'businessPartner', 'orderDate', false],
+    ['eTGOCurrencyRate', 'orderDate', undefined, false],
+    ['eTGOCurrencyRate', undefined, 'orderDate', false],
+    ['warehouse', 'currency', 'orderDate', false],
+  ])('isCurrencyRateRecalcTarget(%s, trigger=%s, documentDateField=%s) is %s', (key, trigger, docDate, expected) => {
+    expect(isCurrencyRateRecalcTarget(key, trigger, docDate)).toBe(expected);
+  });
+
+  it.each([
+    ['currency', 1.1, true],
+    ['orderDate', null, true],
+    ['accountingDate', 0.9, true],
+    ['businessPartner', 1.1, false],
+    ['businessPartner', null, false],
+  ])('a %s-triggered rate of %s over a manual rate is applied: %s', (triggerField, value, applied) => {
+    const hook = { handleChange: vi.fn() };
+    const appliedFields = new Map();
+    applyCalloutFieldUpdates({ eTGOCurrencyRate: { value } }, {
+      data: { eTGOCurrencyRate: 2.5 },
+      triggerField,
+      documentDateField: 'orderDate',
+      userTouchedRef: { current: new Set(['eTGOCurrencyRate']) },
+      appliedFields,
+      hook,
+      api: {},
+      catalogs: {},
+    });
+    expect(appliedFields.has('eTGOCurrencyRate')).toBe(applied);
+    if (applied) {
+      expect(hook.handleChange).toHaveBeenCalledWith('eTGOCurrencyRate', value, { origin: 'callout' });
+    } else {
+      expect(hook.handleChange).not.toHaveBeenCalled();
+    }
   });
 });
 
@@ -427,8 +472,8 @@ describe('applyCalloutComboUpdates', () => {
       a,
     );
     expect(a.appliedFields.get('address')).toBe('A1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Street 1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1', { origin: 'callout' });
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Street 1', { origin: 'callout' });
   });
 
   it('auto-selects the first entry when selected is null', () => {
@@ -443,8 +488,8 @@ describe('applyCalloutComboUpdates', () => {
       a,
     );
     expect(a.appliedFields.get('address')).toBe('A1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'First Addr');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1', { origin: 'callout' });
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'First Addr', { origin: 'callout' });
   });
 
   it('falls back to entry._identifier when auto-selecting without identifier', () => {
@@ -453,7 +498,7 @@ describe('applyCalloutComboUpdates', () => {
       { address: { selected: null, entries: [{ id: 'A1', _identifier: 'Fallback Addr' }] } },
       a,
     );
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Fallback Addr');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Fallback Addr', { origin: 'callout' });
   });
 
   it('does nothing when selected is null and there are no entries', () => {
@@ -473,7 +518,7 @@ describe('applyCalloutComboUpdates', () => {
       a,
     );
     expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1', { origin: 'callout' });
   });
 
   it('skips a user-touched non-trigger combo that already has a value', () => {
@@ -561,8 +606,8 @@ describe('applyOneComboEntry — ETP-4772 stale response guard (combos)', () => 
     );
 
     expect(a.appliedFields.get('warehouse')).toBe('DEFAULT_WH');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Default Warehouse');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH', { origin: 'callout' });
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Default Warehouse', { origin: 'callout' });
     expect(fieldGenerationRef.current.warehouse).toBe(2);
   });
 
@@ -586,8 +631,8 @@ describe('applyOneComboEntry — ETP-4772 stale response guard (combos)', () => 
     );
 
     expect(a.appliedFields.get('address')).toBe('A1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Street 1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address', 'A1', { origin: 'callout' });
+    expect(a.hook.handleChange).toHaveBeenCalledWith('address$_identifier', 'Street 1', { origin: 'callout' });
     expect(fieldGenerationRef.current.address).toBe(2);
   });
 
@@ -601,8 +646,8 @@ describe('applyOneComboEntry — ETP-4772 stale response guard (combos)', () => 
     );
 
     expect(a.appliedFields.get('warehouse')).toBe('WH1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse', { origin: 'callout' });
   });
 });
 
@@ -715,7 +760,7 @@ describe('applyCalloutFieldUpdates / applyOneComboEntry — ETP-5190 empty write
       // forever, leaving Guardar permanently disabled.
       expect(data.warehouse).toBe('WH_REAL');
       expect(a.appliedFields.get('warehouse')).toBe('WH_REAL');
-      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH_REAL');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH_REAL', { origin: 'callout' });
       expect(data['warehouse$_identifier']).toBe('Real Warehouse');
       // The real write is the one that legitimately advances the generation.
       expect(fieldGenerationRef.current.warehouse).toBe(1);

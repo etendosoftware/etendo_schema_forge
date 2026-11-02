@@ -17,7 +17,7 @@ the project skill [`.claude/skills/local-env/SKILL.md`](../.claude/skills/local-
 |---|---|
 | `manifest` | prints `seed GOClient v1`, which becomes part of the DB fingerprint, so a DB with the GO sample client never shares a cached snapshot with one without it |
 | `db-seed` | prints the gradle invocations that load it, one per line: `import.sample.data -Pclient=GOClient`, then `prepareOnboardingSampledata --info`. local-env runs them right after `install`, against its own guarded DB, before the DB is snapshotted; every later DB comes from a snapshot that already carries the seed. A failed seed aborts `local-env up` |
-| `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`, together with `ETGO_ALLOWED_ORIGINS` for that SPA port (see *Allowed origins* below), and points `etgo.mcp.public.url` / `etgo.oauth2.public.url` at that port (see *MCP and OAuth public URLs* below). The main checkout keeps 3100 / 3400 |
+| `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`, together with `ETGO_ALLOWED_ORIGINS` for that SPA port (see *Allowed origins* below), and points `etgo.mcp.public.url` / `etgo.oauth2.public.url` at that port (see *MCP and OAuth public URLs* below), and points `ETENDO_URL` in `tools/app-shell/.env.local` at the environment's Tomcat (see *app-shell .env.local* below). The main checkout keeps 3100 / 3400 |
 | `up` | in the background: `npm install` in this environment's `schema_forge_core` and `make install` in its `schema_forge`, each only when its `node_modules` is missing or its `package-lock.json` is newer than the last install (local-env clones `node_modules` into new worktrees from the source checkout, so they can lag the branch); then, in `schema_forge`, `make dev-local-core ETENDO_URL=<this environment's Tomcat URL> SPA_PORT=… BFF_PORT=… SCHEMA_FORGE_CORE=… ETENDO_MCP_URL=<Tomcat URL>/sws/mcp ETENDO_USAGE_URL=<Tomcat URL>/sws/neo/usage`. The AI BFF reads `ETENDO_MCP_URL`, not `ETENDO_URL`, and would otherwise call the main checkout's :8080. A branch whose Makefile predates `SPA_PORT` runs on :3100/:3400 and frees them first, so in a worktree it is started only while both are free (otherwise a warning, no SPA). Prints the SPA URL; log and pid in `build/local-env/plugins/etendo-go/` |
 | `status` | `SPA  http://localhost:<port> (running\|starting\|stopped)`. `<port>` is the one the SPA really listens on (`lsof` on its process group, vite's listener), so a branch whose Makefile ignores `SPA_PORT` shows its own port, flagged `not the reserved :<SPA_PORT>`; until it listens, the reserved port with `(starting)`. local-env puts the URL into `progress.json` (`urls.SPA`) |
 | `stop`, `off`, `worktree-rm` | stops this environment's SPA + BFF (one process group), nobody else's |
@@ -40,6 +40,13 @@ local-env status                               # ... SPA  http://localhost:3101 
 #   local-env stop && local-env sync && local-env up    (stop also stops its SPA)
 local-env worktree rm ETP-1234                 # stops that SPA too
 ```
+
+For local SPA flags, add one `feature-flag <key>=<boolean|number>` line per override
+to the worktree's `worktree.conf`, for example `feature-flag acct-process-monitor=true`.
+On `local-env up`, the plugin combines these into `VITE_FEATURE_FLAGS` for the SPA
+process only. They do not need a shell `VITE_FEATURE_FLAGS=...` assignment and are
+not written to `build/local-env/env`. The SPA reads them only at startup; restart
+the SPA/environment to apply edits.
 
 **Recommended in Claude Code: the progress mod.** etendo-localenv ships a Claude Code mod
 that shows each environment's `local-env` run (phase, step N of M, gradle task, elapsed,
@@ -131,6 +138,17 @@ environment.
 
 Properties load at context init. A Tomcat started by the same `up` reads the new values;
 one already running does not, and `up` warns to restart it once.
+
+## app-shell .env.local
+
+A worktree's `tools/app-shell/.env.local` is copied from the main checkout, so its
+`ETENDO_URL` names the main checkout's Tomcat. The SPA that `up` starts is not affected (the
+URL on make's command line wins), but a `make dev` run by hand in the environment proxies to
+the main checkout without a word. `worktree-create` and every `up` rewrite that line to the
+environment's URL, with three exceptions where they leave the file alone: a main checkout
+(its value may point anywhere on purpose), a non-localhost value, and a `schema_forge` that
+does not physically live in the environment (an adopted worktree, or the plugin's own
+checkout). A `make dev` already running keeps the old URL until it restarts.
 
 ## Ports outside local-env
 

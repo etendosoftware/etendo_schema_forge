@@ -23,7 +23,8 @@ const CONFLICT = 409;
 const FORBIDDEN = 403;
 
 function refusalKey(error) {
-  if (error?.status === CONFLICT) return 'firstStepsCalendarReviewInUse';
+  // ETP-5782: a classified 409 other than record_in_use (retryable_conflict...) is not "in use".
+  if (error?.status === CONFLICT && (!error.code || error.code === 'record_in_use')) return 'firstStepsCalendarReviewInUse';
   if (error?.status === FORBIDDEN) return 'firstStepsCalendarReviewOwnerOnly';
   return 'genericError';
 }

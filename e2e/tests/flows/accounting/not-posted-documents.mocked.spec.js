@@ -117,7 +117,7 @@ test.describe('Not Posted Documents — rows and toolbar', () => {
   test('rows render on open with translated type and status badge, last 12 months by default', async ({ page }) => {
     const { rowRequests } = await openPage(page);
 
-    await expect(row(page, ROWS[0].documentId)).toContainText('Factura (Cliente)');
+    await expect(row(page, ROWS[0].documentId)).toContainText(t('docTypeSalesInvoice'));
     await expect(row(page, ROWS[0].documentId)).toContainText(ROWS[0].description);
     await expect(page.getByTestId(`npd-status-${ROWS[0].documentId}`)).toHaveText(t('notPostedStatusError'));
     await expect(page.getByTestId(`npd-status-${ROWS[1].documentId}`)).toHaveText(t('postedStatusPeriodClosed'));
@@ -196,7 +196,7 @@ test.describe('Not Posted Documents — filters', () => {
     const before = rowRequests.length;
 
     await page.getByTestId('npd-filter-document-type').click();
-    await page.getByRole('button', { name: 'Factura (Cliente)' }).click();
+    await page.getByRole('button', { name: t('docTypeSalesInvoice') }).click();
 
     await expect(page).toHaveURL(/[?&]document=SI\b/);
     await expect.poll(() => rowRequests.length).toBeGreaterThan(before);

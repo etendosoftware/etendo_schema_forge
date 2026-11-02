@@ -25,8 +25,8 @@ vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
 }));
 
 vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
-  default: ({ onConfirm }) => (
-    <div data-testid="create-invoice-confirm-modal">
+  default: ({ onConfirm, title }) => (
+    <div data-testid="create-invoice-confirm-modal" data-title={title ?? ''}>
       <button type="button" data-testid="create-invoice-confirm" onClick={() => onConfirm()} />
     </div>
   ),
@@ -171,6 +171,13 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     );
     const btn = screen.getByTestId('action-create-return-invoice');
     expect(btn).toHaveTextContent('returnToVendor.createCreditNote');
+  });
+
+  // ETP-5688 — the CO popup says "Generate rectificative invoice", not the generic invoice title.
+  it('passes its own rectificative-invoice title key to the CO create-invoice popup', () => {
+    render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'CO', returnInvoices: [] }} />);
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toHaveAttribute('data-title', 'returnToVendor.createCreditNoteTitle');
   });
 
   it('announces the created invoice as a facturaRectificativaCompra in the result popup', async () => {

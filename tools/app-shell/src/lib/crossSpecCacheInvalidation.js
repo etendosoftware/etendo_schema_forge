@@ -60,12 +60,20 @@ export const WRITE_INVALIDATES_SPECS = Object.freeze({
  * ETP-5681 — the accounting dimensions: deactivating (or renaming) a cost center or a project
  * left the document Cost Center / Project selectors listing it until the cache window ran out.
  * `project` and `service-project` both write `C_Project`.
+ *
+ * ETP-5826 — payment terms can be created from any payment-term selector ("+ Crear condición de
+ * pago", a POST to `payment-term/header`). The selector that created it shows the new term, but the
+ * same column in another form (a contact's Condiciones de pago, then a purchase invoice's) kept its
+ * cached page without it. A selector entry is keyed by the selector URL of the document that shows
+ * it, which names no target table, so the whole `selector` entity is marked stale, like the specs
+ * above.
  */
 export const WRITE_INVALIDATES_ENTITIES = Object.freeze({
   contacts: Object.freeze(['selector']),
   'cost-center': Object.freeze(['selector']),
   project: Object.freeze(['selector']),
   'service-project': Object.freeze(['selector']),
+  'payment-term': Object.freeze(['selector']),
 });
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

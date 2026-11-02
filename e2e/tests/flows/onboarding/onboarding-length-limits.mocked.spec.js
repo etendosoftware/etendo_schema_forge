@@ -32,6 +32,10 @@ const LIMITS = {
   clientNameInput: 60,
   fiscalId: 20,
   address: 60,
+  // ETP-5806 — the free-text address field was replaced by structured Street/Number/Building
+  // Name/City cells; streetName is the closest conceptual replacement for this length-limit
+  // check (`ETGO_CORE` ships maxLength === the AD column limit, same as the old address field).
+  streetName: 70,
 };
 
 // ── Mock installer ───────────────────────────────────────────────────────────
@@ -216,7 +220,39 @@ test.describe('ETP-4665 — Step 2 length limits', () => {
 test.describe('ETP-4665 — Step 3 length limits', () => {
 
   async function reachCompanyStep(page) {
-    await registerAndReachProfile(page, Date.now());
+    // ETP-5806 — CompanyStep's structured Street/Number/Building Name fields render only when
+    // `capabilities.structuredAddressForSepa` is true. OnboardingFlow.jsx reads `capabilities`
+    // exactly once, from the mount-time `GET /sws/go/session` response, and never re-reads it
+    // after registration (`handleRegisterSuccess` only calls `GET /sws/go/me`, which carries no
+    // capabilities) — confirmed by tracing the core package. A fresh register journey (the
+    // declareNoSession 401 `registerAndReachProfile` path) can therefore never see the flag on.
+    // Reaching Company step with it on requires landing through an authenticated session
+    // bootstrap instead, which skips the register/login screens entirely and lands straight on
+    // the Profile step — Profile's own required field (fullName) is filled in manually since
+    // there is no registration call to prefill it from.
+    await page.route('**/sws/go/session', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          csrfToken: 'csrf-test',
+          account: { name: 'QA User', email: 'qa-len@example.com' },
+          capabilities: { structuredAddressForSepa: true },
+        }),
+      });
+    });
+    await page.route('**/sws/go/me', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ name: 'QA User', email: 'qa-len@example.com' }),
+      })
+    );
+
+    await page.goto('/onboarding');
+    await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
+    await page.locator('#fullName').fill('QA User');
     await page.getByRole('button', { name: /continuar|continue/i }).click();
     await expect(page.getByText(/datos para empezar a facturar/i)).toBeVisible({ timeout: 5_000 });
   }
@@ -229,17 +265,24 @@ test.describe('ETP-4665 — Step 3 length limits', () => {
     const start = page.getByRole('button', { name: /empezar|start/i });
 
     await clientName.fill('E'.repeat(100));
-    await page.locator('#address').fill('D'.repeat(200));
+    await page.locator('#streetName').fill('D'.repeat(200));
 
     // Over the AD limit but inside the input cap: kept, flagged inline, and not submittable.
     await expect(clientName).toHaveValue('E'.repeat(LIMITS.clientNameInput));
     await expect(clientName).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByText(new RegExp(`${LIMITS.clientName} (caracteres|characters)`))).toBeVisible();
     await expect(start).toBeDisabled();
-    await expect(page.locator('#address')).toHaveValue('D'.repeat(LIMITS.address));
+    // streetName's maxLength is set to the AD column limit itself (no separate looser input
+    // cap), so the overflow is truncated by the browser's native maxlength enforcement.
+    await expect(page.locator('#streetName')).toHaveValue('D'.repeat(LIMITS.streetName));
 
     await clientName.fill('E'.repeat(LIMITS.clientName));
     await expect(clientName).not.toHaveAttribute('aria-invalid', 'true');
+    // ETP-5806 — filling streetName starts the address block, which makes buildingNumber and
+    // city mandatory together with it (isAddressBlockStarted/isCompanyStepValid); fill them too
+    // so Start enables on the same submittable state the old single-field address test reached.
+    await page.locator('#buildingNumber').fill('123');
+    await page.locator('#city').fill('Buenos Aires');
     await expect(start).toBeEnabled();
 
     const onboardingPromise = page.waitForRequest(
@@ -250,7 +293,7 @@ test.describe('ETP-4665 — Step 3 length limits', () => {
 
     const body = (await onboardingPromise).postDataJSON();
     expect(body.clientName.length).toBeLessThanOrEqual(LIMITS.clientName);
-    expect(body.address.length).toBeLessThanOrEqual(LIMITS.address);
+    expect(body.streetName.length).toBeLessThanOrEqual(LIMITS.streetName);
   });
 });
 

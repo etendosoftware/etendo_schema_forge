@@ -21,7 +21,7 @@ import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmoun
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
-import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
+import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver, isFormCalculating } from './saveActions.jsx';
 import { DetailDeleteButton } from './DetailDeleteButton.jsx';
 import { translateBackendError, translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -44,6 +44,7 @@ import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { useSecondaryTabVisibility, useRevealedTabFetch, useActiveTabResolver, useOthersProbe } from './useSecondaryTabVisibility.js';
 import { resolveStatusPill } from '@/lib/postedStatus.js';
 import { evaluateFieldCondition } from '@/lib/evaluateFieldCondition.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -55,7 +56,6 @@ import DocumentPrintDrawer from './DocumentPrintDrawer.jsx';
 import { toast } from 'sonner';
 import { buildChildRowDeleteFn } from '@/lib/batchDelete.js';
 import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
-import { apiFetch } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard.js';
 // ETP-5073 / DOC-08: switching to another line while one is being edited used to discard the
@@ -69,7 +69,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import { buildLineRowUpdateHandler, resolveCompletedLineFieldGate } from './inlineLineUpdateHandlers.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, gateDetailTab, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveInitialCalloutTriggers, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset, panelEditing, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, gateDetailTab, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveInitialCalloutTriggers, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset, panelEditing, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, withExchangeRateHeaderSync, isSecondaryTabVisible, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
   // ETP-4731 (slice 2 of 3): the secondary-tab helpers and the remaining free module scope moved
   // to detailViewHelpers.jsx; imported here only for the symbols this component body still uses.
   formatAmount, NO_GATE_EXCLUSIONS, detailContentPadding, getTabStripBleedClassName,
@@ -77,7 +77,7 @@ import {
   getAddLineWrapperStyle, buildDeleteRowHandler, getDraftModeCompleted, shouldRenderSaveActionsRow,
   onlySaveButtonForCompletedDoc, getDetailContentContainerClassName, getLinesTabsSectionClassName,
   computeIsDirty, shouldShowLinesEmptyState, DIMENSION_MACRO_KEYS, shouldShowLineActionButtons,
-  canShowAddLineArea, executeDetailProcessImpl,
+  canShowAddLineArea, executeDetailProcessImpl, computeIsDirtyForGuard,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -219,7 +219,8 @@ export function DetailView({
   titleField = 'documentNo',
   // Name of the header field holding this document's primary date (e.g. "orderDate"
   // for orders/quotations, "invoiceDate" for invoices). Used for exchange-rate lookups
-  // and other document-date-dependent logic. Defaults to "orderDate" for backward
+  // (a header DateAcct field wins for the rate — resolveRateDateField) and other
+  // document-date-dependent logic. Defaults to "orderDate" for backward
   // compatibility with windows that don't declare window.documentDateField.
   documentDateField = 'orderDate',
   windowName,
@@ -266,7 +267,7 @@ export function DetailView({
   tabsBarRight = null,
   tabsBarAfter = null,
   hideTopBar = false,
-  CustomLines = null,
+  CustomLines: rawCustomLines = null,
   customLinesLabel = 'Invoices',
   sidePanel = null,
   sidePanelStyle = null,
@@ -371,7 +372,7 @@ export function DetailView({
     [Form, gateExclusions]
   );
   const capabilities = useCapabilitiesSafe(); // ETP-4520/5648 — capability-gated pills, tabs and detail
-  const [detailEntity, DetailTable] = gateDetailTab(rawDetailEntity, rawDetailTable, detailVisibleWhenCapability, capabilities);
+  const [detailEntity, DetailTable, CustomLines] = gateDetailTab(rawDetailEntity, rawDetailTable, detailVisibleWhenCapability, capabilities, rawCustomLines);
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields, initialData });
   const apiFetch = useApiFetch(apiBaseUrl);
   // Session-level currency fallback. NEO Headless doesn't return
@@ -381,6 +382,7 @@ export function DetailView({
   // preserves any existing value). Removes the need for per-window
   // `*LinesTable` wrappers that were doing the same thing manually.
   const sessionCurrencyCode = useCurrency();
+  const vis = useSecondaryTabVisibility({ hook, orgCurrencyCode: sessionCurrencyCode });
   const enrichedChildren = useMemo(() => {
     if (!Array.isArray(hook.children)) return hook.children;
     if (!sessionCurrencyCode) return hook.children;
@@ -406,11 +408,11 @@ export function DetailView({
   // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
   // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
   // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
-  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4, capabilities), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4, capabilities, vis), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHooks = withExchangeRateHeaderSync(withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook), secondaryTabs, hook);
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
@@ -444,7 +446,7 @@ export function DetailView({
   // even when called from a setTimeout scheduled before the React re-render committed.
   const handleFieldBlurRef = useRef(null);
   handleFieldBlurRef.current = async () => {
-    if (!hasUnsavedEdits(hook.editing, hook.selected)) return;
+    if (isFormCalculating(hook) || !hasUnsavedEdits(hook.editing, hook.selected)) return;
     // handleSave() resolves to the saved record on success, or null on any
     // failure (validation block, non-2xx PATCH, network error) — see
     // useEntity.js. A checkbox/toggle field autosaves immediately (ETP-4670:
@@ -553,7 +555,7 @@ export function DetailView({
   // INSTANCE itself declared it via `dimensionsPanelFieldKeys` (the lines entity's
   // decisions.json `dimensionsPanel: true` fields, forwarded by generate-frontend.js —
   // see the prop comment on `dimensionsPanelFieldKeys` above). This is what lets
-  // simple-g-l-journal trust 'product' as a dimension macro without reintroducing the
+  // manual-journals trust 'product' as a dimension macro without reintroducing the
   // ETP-4530 regression for sales-invoice/purchase-invoice, whose generated pages never
   // pass 'product' in this prop. Stringified for the memo dep since `dimensionsPanelFieldKeys`
   // defaults to a fresh `[]` reference on every render when the caller omits it.
@@ -927,13 +929,13 @@ export function DetailView({
   // additionalDirtyState lets custom windows inject extra dirty sources via prop.
   const isDirty =
     computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
-  // ETP-5022: publish to the global registry so a language change (which reloads the page)
-  // and F5 / tab close both warn before discarding these edits.
+  // ETP-5022: publish to the global registry so a language change (which reloads the page) and F5 / tab close warn.
   // ETP-5073 / DOC-08 adds the saver, so the in-app navigation prompt can offer "Save and leave"
   // rather than only "Discard". `silent: true` suppresses the per-save toast: the user is leaving,
   // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
   // is what stops the navigation. ETP-5199: buildUnsavedChangesSaver also runs onAfterExistingSave/onAfterCreate.
-  useUnsavedChangesGuard(isDirty, buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
+  // ETP-5888: publishes only USER edits — an untouched new record (defaults + opening callouts) must not prompt.
+  useUnsavedChangesGuard(computeIsDirtyForGuard(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState), buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -1239,7 +1241,7 @@ export function DetailView({
   // Resolve $_identifier for default FK values.
   // NOTE: Mandatory defaults are now handled by the backend (NeoDefaultsService).
   // The frontend only ensures that if a value exists (from a default or callout),
-  // we resolve its $_identifier from the catalogs so it displays correctly.
+  // we resolve its $_identifier from the catalogs so it displays correctly. ETP-5888: not a user edit, hence the origin.
   useEffect(() => {
     if (!isNew || !hook.editing || !catalogsLoaded || !api?.selectors) return;
     for (const sel of api.selectors) {
@@ -1251,7 +1253,7 @@ export function DetailView({
       if (!Array.isArray(options) || options.length === 0) continue;
       const match = options.find(o => o.id === val);
       if (match) {
-        hook.handleChange(sel.field + '$_identifier', match.label || match.name || match._identifier);
+        hook.handleChange(sel.field + '$_identifier', match.label || match.name || match._identifier, { origin: 'callout' });
       }
     }
   }, [isNew, hook.editing, catalogsLoaded, catalogs, api]);
@@ -1371,6 +1373,8 @@ export function DetailView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
 
+  useRevealedTabFetch({ secondaryTabs, secondaryHooks, capabilities, vis, selectedId: hook.selected?.id });
+
   // Apply callout results to the form when they arrive
   useEffect(() => {
     if (!calloutResult) return;
@@ -1392,18 +1396,15 @@ export function DetailView({
     // Mark these fields so the next onChange doesn't re-trigger callout
     calloutAppliedRef.current = appliedFields;
 
-    // Currency change validation is handled inside handleChangeWithCallout (synchronous
-    // dropdown-change path). The callout response handler intentionally no longer applies
-    // any conversion to pending lines — under the simplified ETP-4027 model, conversion
-    // only applies to lines added AFTER the saved currency change.
+    // The callout response handler intentionally applies no conversion to pending lines —
+    // under the ETP-4027 model, conversion only applies to lines added AFTER the saved
+    // currency change. The recalculated eTGOCurrencyRate (ETP-5840) is a plain field update.
   }, [calloutResult]);
 
   // Fire the callout (and related validation) for a user-initiated field change.
   // Extracted from handleChangeWithCallout so the same logic can be triggered either
   // synchronously on change (default) or deferred to blur (opt-in: field.calloutOn === 'blur').
-  // `previousCurrency` is the currency value captured BEFORE hook.handleChange ran, used
-  // only by the currency rate-validation path; pass null when not a currency change.
-  const fireCallout = useCallback((field, value, previousCurrency = null) => {
+  const fireCallout = useCallback((field, value) => {
     // Skip companion/auxiliary fields — they don't have callouts
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
@@ -1426,43 +1427,10 @@ export function DetailView({
     if (!value || value === '') return;
     if (!/^[0-9A-Fa-f]{32}$/.test(value) && !/^-?\d+(\.\d+)?$/.test(value) && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
 
-    // Currency change validation (ETP-4027 simplified model): if no conversion rate
-    // exists between the org base currency and the newly selected currency for the
-    // order date, revert the dropdown to the previous value and surface an error.
-    // Skipped when the new currency equals the org currency (no rate needed) and when
-    // there is no previous currency yet (initial set, e.g. defaults).
-    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
-      const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
-      if (orderDate) {
-        const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-        (async () => {
-          const revert = () => {
-            toast.error(ui('noConversionRateError', { date: orderDate }));
-            hook.handleChange('currency', previousCurrency);
-          };
-          try {
-            const sessionRes = await apiFetch(`${neoBase}/session`, { token, baseUrl: '' });
-            if (!sessionRes.ok) { revert(); return; }
-            const session = await sessionRes.json();
-            const orgCurrencyId = session?.currencyId;
-            // No rate needed when changing TO the org currency — that's just removing
-            // the conversion. Allow without validation.
-            if (!orgCurrencyId || orgCurrencyId === value) return;
-            const rateRes = await apiFetch(
-              `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
-              { token, baseUrl: '' },
-            );
-            if (!rateRes.ok) { revert(); return; }
-            const rateData = await rateRes.json();
-            if (!rateData?.hasRate || !rateData.rate) { revert(); return; }
-            // Rate exists — change stays. The sync effect on hook.selected.currency
-            // will pick it up after the user saves the header.
-          } catch {
-            revert();
-          }
-        })();
-      }
-    }
+    // ETP-5840: no client-side currency-change validation. A currency without a conversion
+    // range on the rate reference date is a legal choice (empty rate the user can type); the
+    // header callout recalculates eTGOCurrencyRate and the backend rejects saving a foreign
+    // currency with an empty rate.
 
     // ETP-4772: bump this field's generation right before dispatching — this is
     // a genuine new value for it. The snapshot taken now travels with the
@@ -1477,23 +1445,13 @@ export function DetailView({
     // latter is a stale closure captured before this render's hook.handleChange commits,
     // so it always lags one change behind for the field that just triggered the callout.
     executeCallout(field, value, pendingEditingRef.current, dispatchSnapshot);
-  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField, apiFetch]);
+  }, [executeCallout]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
   // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
   // EntityForm's DeferredInput, which calls this same onChange once on blur — so the
   // deferral lives entirely in the input component and this handler stays uniform.
   const handleChangeWithCallout = useCallback((field, value) => {
-    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
-    // revert the dropdown if the rate check fails. The closure preserves the old
-    // hook.editing reference, but capturing explicitly keeps intent clear.
-    //
-    // This one deliberately reads hook.editing, NOT pendingEditingRef: here we WANT the
-    // last-committed value (the currency to revert TO if the rate lookup fails). Switching
-    // it to the fresh ref would capture the value the user just picked, making the revert a
-    // no-op. Do not "fix" this for consistency with the ref used below.
-    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
-
     hook.handleChange(field, value);
     // Keep the synchronous snapshot current immediately — hook.handleChange's setEditing
     // is async/batched, so without this, a same-tick chain of onChange calls (e.g. a
@@ -1502,8 +1460,8 @@ export function DetailView({
     // right below, and by any sibling onChange in the same batch) sees the fresh value.
     pendingEditingRef.current = { ...pendingEditingRef.current, [field]: value };
 
-    fireCallout(field, value, previousCurrency);
-  }, [hook.handleChange, hook.editing, fireCallout]);
+    fireCallout(field, value);
+  }, [hook.handleChange, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
@@ -1804,11 +1762,9 @@ export function DetailView({
   const tabs = buildInitialTabs({
     secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
     hook, detailTabIndex, detailTabOrder, CustomLines, customLinesLabel, customLinesCount,
-    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities, isNew,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities, isNew, tabRecord: vis.record, tabCtx: vis.ctx,
   });
 
-  // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
-  const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
   const [activePrimaryTab, setActivePrimaryTab] = useState(primaryTabs?.[0]?.key ?? 'general');
   const [notesFocused, setNotesFocused] = useState(false);
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
@@ -1820,14 +1776,7 @@ export function DetailView({
   // answered 403, which is what stopped every document confirm.
   const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess, apiFetch };
 
-  const othersRef = useRef(null);
-
-  useEffect(() => {
-    if (showOthers === null && othersRef.current) {
-      // Check if the hidden probe rendered any DOM content
-      setShowOthers(othersRef.current.childElementCount > 0);
-    }
-  });
+  const { showOthers, othersRef } = useOthersProbe(primaryTabs, capabilities);
 
   pushOthers(showOthers, tabs, othersLabel, ui);
 
@@ -1838,17 +1787,7 @@ export function DetailView({
   // different tab, leaving the tab strip with no active tab and no panel shown. Track the
   // active tab by its stable `key` (not the index, which shifts when entries are removed)
   // and redirect to the first tab whenever the previously active key is no longer present.
-  const activeTabKeyRef = useRef(null);
-  useEffect(() => {
-    const prevKey = activeTabKeyRef.current;
-    const prevKeyStillExists = prevKey == null || tabs.some(t => t.key === prevKey);
-    if (!prevKeyStillExists) {
-      setActiveTab(0);
-      activeTabKeyRef.current = tabs[0]?.key ?? null;
-    } else {
-      activeTabKeyRef.current = tabs[activeTab]?.key ?? prevKey;
-    }
-  }, [tabs, activeTab]);
+  useActiveTabResolver(tabs, activeTab, setActiveTab);
 
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
 
@@ -2438,6 +2377,7 @@ export function DetailView({
                               labelOverrides={labelOverrides}
                               registerFields={hook.registerFields}
                               fieldErrors={hook.fieldErrors}
+                              documentDateField={documentDateField}
                               onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
                               trailing={inlineTrailing}
                               data-testid="Form__fa3275" />
@@ -2466,6 +2406,7 @@ export function DetailView({
                                   labelOverrides={labelOverrides}
                                   registerFields={hook.registerFields}
                                   fieldErrors={hook.fieldErrors}
+                                  documentDateField={documentDateField}
                                   onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}
                                   data-testid="Form__fa3275" />
                               </div>
@@ -2571,6 +2512,7 @@ export function DetailView({
                                   ref={inlineLinesRef}
                                   data={enrichedChildren}
                                   entity={detailEntity}
+                                  specName={windowName}
                                   token={token}
                                   apiBaseUrl={apiBaseUrl}
                                   linesLayout={linesLayout}
@@ -2957,7 +2899,7 @@ export function DetailView({
                           const isActiveTab = tabs[activeTab]?.key === st.key;
                           // Panel tabs are always mounted so their onCount fires eagerly (counts appear without clicking).
                           // Non-Panel tabs stay lazy to avoid unnecessary fetches; a capability-hidden tab (ETP-5116, mirrors ETP-4520) never renders at all, Panel or not — defense-in-depth alongside buildInitialTabs already excluding it from `tabs`/the nav strip and the openSecondaryTab deep-link.
-                          if (!isCapabilityVisible(capabilities, st.visibleWhenCapability) || (!isActiveTab && !st.Panel)) return false;
+                          if (!isSecondaryTabVisible(st, capabilities, vis.record, vis.ctx) || (!isActiveTab && !st.Panel)) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
                             st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
                             extractErrorMessage, requestBatchDelete: requestLineBatchDelete, secondaryInlineLinesRefs,
@@ -3076,6 +3018,7 @@ export function DetailView({
                               selectorContext={selectorContextByEntity[entity]}
                               labelOverrides={labelOverrides}
                               fieldErrors={hook.fieldErrors}
+                              documentDateField={documentDateField}
                               data-testid="Form__fa3275" />
                           </div>
                         )}

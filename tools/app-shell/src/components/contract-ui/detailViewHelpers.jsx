@@ -19,6 +19,7 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { evalTabVisible } from './evalTabVisible.js';
 import { NUMERIC_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import {apiFetch} from '@/auth/api.js';
@@ -29,6 +30,8 @@ import {evalTabReadOnly} from './evalTabReadOnly.js';
 // like DataTable.jsx's inline-toggle error handling — that only need this one
 // pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
 export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
+// ETP-5736 — leaf module so custom windows can share the record-toolbar classes.
+export {getLinesToolbarClassName, getSaveBtnCls} from './toolbarClasses.js';
 
 /**
  * Header fields that are COMPUTED BY THE BACKEND FROM CHILD ROWS, and that therefore go stale the
@@ -494,6 +497,29 @@ export function isDocumentDateCascadeTarget(key, triggerField, documentDateField
   return key === 'accountingDate' && !!documentDateField && triggerField === documentDateField;
 }
 
+/**
+ * True when `key` is the document's exchange rate (`eTGOCurrencyRate`, AD column
+ * `EM_ETGO_Currency_Rate`) and the callout that returned it was triggered by a change of
+ * the rate's inputs: the currency, the window's declared document date, or the accounting
+ * date (`DateAcct`, the rate reference date of documents that carry one).
+ *
+ * ETP-5840. The backend recalculates the rate from the conversion ranges valid on the
+ * reference date every time one of those inputs changes, and that recalculation must win
+ * over a manual rate (a manual rate is only kept until the date or the currency changes)
+ * and must also be able to CLEAR the rate when no range covers the new date. Without this
+ * exemption the user-touched guard keeps a manual rate forever and the empty-value guard
+ * keeps a stale rate whenever the new date has no range.
+ *
+ * Driven by field names that are the same in every document window (no spec identity), so
+ * it covers quotations, orders and invoices alike.
+ */
+export function isCurrencyRateRecalcTarget(key, triggerField, documentDateField) {
+  if (key !== 'eTGOCurrencyRate' || !triggerField) return false;
+  return triggerField === 'currency'
+    || triggerField === 'accountingDate'
+    || (!!documentDateField && triggerField === documentDateField);
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
   const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
@@ -508,7 +534,8 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
     const userHasValue = currentVal !== '' && currentVal != null;
-    if ((entry.value === '' || entry.value == null) && userHasValue) {
+    const isRateRecalc = isCurrencyRateRecalcTarget(key, triggerField, documentDateField);
+    if ((entry.value === '' || entry.value == null) && userHasValue && !isRateRecalc) {
       continue;
     }
     // Protect user-touched fields from being overwritten by collateral updates
@@ -521,7 +548,8 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // field's callout, it is the whole purpose of the document date's own callout,
     // and classic re-applies it on every change.
     if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue
-        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)) {
+        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)
+        && !isRateRecalc) {
       continue;
     }
     appliedFields.set(key, entry.value);
@@ -571,9 +599,11 @@ export function applyOneComboEntry(key, combo, ctx) {
   const userHasValue = currentVal !== '' && currentVal != null;
   if (userTouchedRef.current.has(key) && userHasValue) return;
   appliedFields.set(key, selectedVal);
-  hook.handleChange(key, selectedVal);
+  // ETP-5888: a combo is a callout response like any other field — same `origin` as
+  // applyCalloutFieldUpdates, so neither the value nor its label reads as a user edit.
+  hook.handleChange(key, selectedVal, { origin: 'callout' });
   if (selectedLabel) {
-    hook.handleChange(key + '$_identifier', selectedLabel);
+    hook.handleChange(key + '$_identifier', selectedLabel, { origin: 'callout' });
   }
   bumpFieldGeneration(key, fieldGenerationRef);
 }
@@ -919,14 +949,6 @@ export function getSidebarSlideClassName(isClosingLine) {
   return isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in';
 }
 
-// ETP-5601 — the record (form view) toolbar follows Figma on every window: 8px padding on all
-// sides around 40px controls (56px), with a 1px #E8EAEF bottom rule. The rule is an inset shadow,
-// not a border, so it is painted inside those 56px instead of adding a 57th pixel. It used to
-// vary per window (`toolbarPaddingX`, `toolbarBorderBottom`, `linesLayout`); it no longer does.
-export function getLinesToolbarClassName() {
-  return 'flex items-center justify-between p-2 shadow-[inset_0_-1px_0_var(--status-neutral-border)]';
-}
-
 export function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
   return getLineMenuActions ? extraActionsRef : undefined;
 }
@@ -1081,12 +1103,6 @@ export function getSqBtnSize() {
   return 'h-10 w-10';
 }
 
-// Save, process and extra-action buttons: 40px, Figma's text-sm/leading-6 line, 20px icons
-// (`[&_svg]:size-5` beats the core Button's `[&_svg]:size-4`).
-export function getSaveBtnCls() {
-  return 'h-10 gap-2 leading-6 [&_svg]:size-5';
-}
-
 export function getDocumentReadOnly(lockWhenProcessed, _headerData) {
   return lockWhenProcessed && (_headerData?.processed === true || _headerData?.processed === 'Y');
 }
@@ -1172,7 +1188,7 @@ export function buildInitialTabs(p) {
       // in DetailView keep working. A filtered-out tab never appears in the nav
       // strip and the deep-link handler's `tabs.findIndex(...)` naturally no-ops
       // for it (see the `openSecondaryTab` effect in DetailView.jsx).
-      if (!isCapabilityVisible(p.capabilities, st.visibleWhenCapability)) return null;
+      if (!isSecondaryTabVisible(st, p.capabilities, p.tabRecord, p.tabCtx)) return null;
       const secondaryChildCount = !st.isFormTab ? (p.secondaryHooks[i]?.children?.length ?? null) : null;
       const childCount = st.Panel ? (p.panelCounts[st.key] ?? null) : secondaryChildCount;
       const label = (st.labelKey && p.ui(st.labelKey)) || st.label;
@@ -1296,17 +1312,33 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   ));
 }
 
-// ETP-5648: a capability-hidden tab gets no entity key, so its hook never fetches it.
-export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities) {
+/**
+ * A secondary tab shows only when its capability gate AND its record gate agree. The record gate
+ * (`visibleWhen(record, ctx)`, decisions.json `visibleWhenLogic`) reads the live header record,
+ * so it never depends on the record being saved.
+ */
+export function isSecondaryTabVisible(st, capabilities, record, ctx) {
+  return isCapabilityVisible(capabilities, st?.visibleWhenCapability) && evalTabVisible(st, record, ctx);
+}
+
+/** Session-level facts the generated `visibleWhen` predicates read as `ctx[...]`. */
+export function buildTabVisibilityContext({ orgCurrencyId, orgCurrencyCode }) {
+  return { OrgCurrencyId: orgCurrencyId ?? null, OrgCurrencyCode: orgCurrencyCode ?? null };
+}
+
+// ETP-5648: a hidden (capability- or record-gated) tab gets no entity key, so its hook never fetches it.
+export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities, vis) {
   const tab = secondaryTabs[index];
-  if (tab?.isFormTab || tab?.Panel || !isCapabilityVisible(capabilities, tab?.visibleWhenCapability)) return null;
+  if (tab?.isFormTab || tab?.Panel || !isSecondaryTabVisible(tab, capabilities, vis?.record, vis?.ctx)) return null;
   return tab?.key ?? null;
 }
 
 // ETP-5648: `window.detailVisibleWhenCapability` drops the detail (lines) tab entirely for a
 // role without the capability: no tab, no children fetch, no evaluate-display, no callouts.
-export function gateDetailTab(detailEntity, DetailTable, capabilityKey, capabilities) {
-  return isCapabilityVisible(capabilities, capabilityKey) ? [detailEntity, DetailTable] : [null, null];
+// ETP-5791: a `CustomLines` component (window.customLinesComponent) REPLACES that same detail tab,
+// so it is gated by the same capability — otherwise a role without it would still see the tab.
+export function gateDetailTab(detailEntity, DetailTable, capabilityKey, capabilities, CustomLines = null) {
+  return isCapabilityVisible(capabilities, capabilityKey) ? [detailEntity, DetailTable, CustomLines] : [null, null, null];
 }
 
 // ETP-5205: `readOnly` here is DetailView's `windowReadOnly` (static decisions.json
@@ -1604,7 +1636,7 @@ export function buildBalanceFooterGridTotals(balanceFooter, balanceState, curren
 export function renderTotalsBlock({ balanceFooter, linesLayout, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
   if (balanceFooter) {
     // ETP-5210 — for the inlineEditable lines grid (the only current
-    // balanceFooter consumer, e.g. simple-g-l-journal), the debit/credit
+    // balanceFooter consumer, e.g. manual-journals), the debit/credit
     // totals are rendered as a column-aligned row INSIDE InlineLinesPanel
     // itself (see `balanceFooter` threaded into <DetailTable> in
     // DetailView.jsx via `buildBalanceFooterGridTotals`) — no separate block
@@ -1748,9 +1780,13 @@ export function resolveStatusPrefix(key, translate) {
   return key ? translate(key) : undefined;
 }
 
+// ETP-5888: the label rides the same callout response as its value, so it carries the same
+// `origin: 'callout'`. Without it the label alone read as a user edit, and an untouched new
+// record whose opening callout returned an FK (purchase invoice: transactionDocument) counted
+// as having unsaved changes.
 export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
   if (entry._identifier) {
-    hook.handleChange(key + '$_identifier', entry._identifier);
+    hook.handleChange(key + '$_identifier', entry._identifier, { origin: 'callout' });
   } else if (entry.value && api?.selectors) {
     // Callout returned an ID without _identifier — resolve from loaded catalogs
     const sel = api.selectors.find(s => s.field === key);
@@ -1758,7 +1794,7 @@ export function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
       const options = getCatalogOptions(catalogs, sel.entity, sel);
       const match = Array.isArray(options) && options.find(o => o.id === entry.value);
       if (match) {
-        hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
+        hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier, { origin: 'callout' });
       }
     }
   }
@@ -2704,6 +2740,17 @@ export function computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits,
       || (additionalDirtyState === true);
 }
 
+/**
+ * ETP-5888: the dirtiness the unsaved-changes guard publishes — {@link computeIsDirty} with the
+ * header part reduced to what the user edited (`hook.hasUserHeaderEdits`), so an untouched new
+ * record no longer prompts on every way out. Falls back to `isDirtyHeader` for a hook that does
+ * not expose the user-edit signal (a custom window passing its own).
+ */
+export function computeIsDirtyForGuard(hook, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState) {
+  const isDirtyHeader = hook.hasUserHeaderEdits ?? hook.isDirtyHeader;
+  return computeIsDirty({ isDirtyHeader }, addingLine, addingSecondaryLine, lineEdits, additionalDirtyState);
+}
+
 export function resolveHideMoreMenu(hideMoreMenu, data) {
   return typeof hideMoreMenu === 'function' ? hideMoreMenu({ data }) : hideMoreMenu;
 }
@@ -2723,13 +2770,13 @@ export function shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isD
 // casings are included so the macro is recognized (cacheable, filterable) regardless of
 // which one a given generated entity actually uses.
 //
-// 'product' is deliberately NOT included here, despite simple-g-l-journal's dimensionsPanel
+// 'product' is deliberately NOT included here, despite manual-journals's dimensionsPanel
 // listing it alongside project/costCenter/businessPartner as an @ACCT_DIMENSION_DISPLAY@
 // candidate there: in sales-invoice/purchase-invoice, `product` is a real per-line field
 // with its OWN record-dependent raw AD displayLogic (`@Financial_Invoice_Line@='N'`, see
 // the ETP-4530 regression note below on `lineHiddenColumns`) — the exact "false noise"
 // this allowlist exists to filter out. Trusting 'product' unconditionally here would fix
-// the gap for simple-g-l-journal but silently reintroduce that already-fixed regression
+// the gap for manual-journals but silently reintroduce that already-fixed regression
 // for every OTHER window that shares this component and has a real, per-record 'product'
 // field. This constant stays GLOBAL and unconditional on purpose.
 //
@@ -2741,10 +2788,10 @@ export function shouldShowLinesEmptyState(hook, addingLine, LinesEmptyState, isD
 // `dimensionsPanelFieldKeys` prop + `trustedDimensionKeys` memo below). `lineHiddenColumns`
 // and the expanded-row DetailForm's `displayLogic` both trust `DIMENSION_MACRO_KEYS UNION
 // dimensionsPanelFieldKeys`, scoped to the current DetailView instance — so
-// simple-g-l-journal can trust 'product' as a dimension macro without this global constant
+// manual-journals can trust 'product' as a dimension macro without this global constant
 // ever needing to include it, and sales-invoice/purchase-invoice (which never pass
 // 'product' in that prop) are unaffected. See DetailView.lineHiddenColumns.vitest.jsx for
-// both the fix proof (simple-g-l-journal) and the non-regression proof (sales-invoice-shaped
+// both the fix proof (manual-journals) and the non-regression proof (sales-invoice-shaped
 // instances).
 const DIMENSION_MACRO_KEYS = new Set(['project', 'costcenter', 'costCenter', 'businessPartner']);
 

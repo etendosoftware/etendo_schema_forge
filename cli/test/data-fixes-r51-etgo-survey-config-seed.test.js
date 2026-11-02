@@ -1,4 +1,4 @@
-// @covers cli/src/data-fixes/sql/20261021T120000Z__R51-etgo-survey-config-seed.sql
+// @covers cli/src/data-fixes/sql/20261028T120000Z__R51-etgo-survey-config-seed.sql
 // @covers cli/src/data-fixes/run.js
 // @covers cli/src/data-fixes/parse-fix.js
 import { describe, it } from 'node:test';
@@ -11,7 +11,7 @@ import { loadCatalogWithRetirement, cmdTargetedFix, applyChain } from '../src/da
 
 /**
  * Static + runner-level validation for the R51 corrective data-fix
- * (20261021T120000Z__R51-etgo-survey-config-seed.sql, ETP-5870, gap Q1).
+ * (20261028T120000Z__R51-etgo-survey-config-seed.sql, ETP-5870, gap Q1).
  *
  * Seeds the three tables backing the "Survey Configuration" window
  * (ETGO_Survey_Config, ETGO_Survey_Type, ETGO_Survey_Canned_Resp) once, as
@@ -63,7 +63,7 @@ import { loadCatalogWithRetirement, cmdTargetedFix, applyChain } from '../src/da
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIX_FILE = '20261021T120000Z__R51-etgo-survey-config-seed.sql';
+const FIX_FILE = '20261028T120000Z__R51-etgo-survey-config-seed.sql';
 const FIX_PATH = join(__dirname, '..', 'src', 'data-fixes', 'sql', FIX_FILE);
 const FIX_ID = basename(FIX_FILE, '.sql');
 const FIX_ARG = 'R51-etgo-survey-config-seed';
@@ -107,9 +107,13 @@ describe('R51 etgo-survey-config-seed data-fix — header metadata', () => {
     assert.ok(fix.apply.length > 0);
   });
 
-  it('sorts after every existing fix, including the latest R50 pair', () => {
+  it('sorts after every existing fix, including the latest R50/R53 fixes', () => {
     const ts = parseFixTimestamp(FIX_ID);
-    assert.equal(ts.toISOString(), '2026-10-21T12:00:00.000Z');
+    // Re-dated 2026-11-02 (was 2026-10-21T12:00:00.000Z) — develop merged
+    // R50-inout-foreign-return-doctype.sql on that exact stamp while this fix sat unmerged;
+    // sql/README.md rule 3 permits renaming an unapplied fix, so R51 moved past every fix the
+    // catalog carried at merge time instead.
+    assert.equal(ts.toISOString(), '2026-10-28T12:00:00.000Z');
     assert.ok(
       ts.getTime() > parseFixTimestamp('20261019T120000Z__R50-tax-category-old-iva-normal-deactivate').getTime(),
       'must sort after R50-tax-category-old-iva-normal-deactivate',
@@ -117,6 +121,14 @@ describe('R51 etgo-survey-config-seed data-fix — header metadata', () => {
     assert.ok(
       ts.getTime() > parseFixTimestamp('20261019T141632Z__R50-gl-journal-foreign-doctype').getTime(),
       'must sort after the latest pre-existing fix in the catalog',
+    );
+    assert.ok(
+      ts.getTime() > parseFixTimestamp('20261021T120000Z__R50-inout-foreign-return-doctype').getTime(),
+      'must sort after the fix it collided with on develop',
+    );
+    assert.ok(
+      ts.getTime() > parseFixTimestamp('20261027T120100Z__R53-tax-intracom-2pct-rate').getTime(),
+      'must sort after the newest fix develop carried at merge time',
     );
   });
 

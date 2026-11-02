@@ -269,7 +269,9 @@ describe('useOrderWindow', () => {
     });
   });
 
-  it('blocks confirmation when exchange rate is missing, then opens confirmation and result portals', async () => {
+  // ETP-5840 — Confirm no longer pre-checks validate-exchange-rate: the document's own
+  // eTGOCurrencyRate is authoritative and the backend completion check rejects an empty one.
+  it('opens confirmation without an exchange-rate pre-check, then the result portal', async () => {
     const { result } = renderOrderHook();
     const row = {
       id: 'so-10',
@@ -279,10 +281,6 @@ describe('useOrderWindow', () => {
       orderDate: '2026-07-01',
     };
 
-    fetchOptionalJson
-      .mockResolvedValueOnce({ organization: { currency: 'USD-ID', currency$_identifier: 'USD' } })
-      .mockResolvedValueOnce({ hasRate: false });
-
     const [confirmAction, manageAction] = result.current.rowQuickActions.menuActions({ row, status: 'DR' });
     expect(confirmAction).toMatchObject({ key: 'confirm', label: 'confirmOrder', visible: true });
     expect(manageAction.visible).toBe(false);
@@ -290,17 +288,8 @@ describe('useOrderWindow', () => {
     await act(async () => {
       await confirmAction.onClick({ row });
     });
-    expect(toast.error).toHaveBeenCalledWith('noExchangeRateAvailable');
-    expect(result.current.confirmPortal).toBeNull();
-
-    fetchOptionalJson
-      .mockResolvedValueOnce({ organization: { currency: 'USD-ID', currency$_identifier: 'USD' } })
-      .mockResolvedValueOnce({ hasRate: true });
-
-    const freshConfirm = result.current.rowQuickActions.menuActions({ row, status: 'DR' })[0];
-    await act(async () => {
-      await freshConfirm.onClick({ row });
-    });
+    expect(fetchOptionalJson.mock.calls.some(([url]) => String(url).includes('validate-exchange-rate'))).toBe(false);
+    expect(toast.error).not.toHaveBeenCalled();
 
     const { unmount } = render(result.current.confirmPortal);
     expect(screen.getByTestId('confirm-modal')).toHaveTextContent('so-10');

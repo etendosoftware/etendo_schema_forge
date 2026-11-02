@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 // ETP-5295 — the REAL reader, not a stub: the computation blocks extracted below now call
 // `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
 import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
+import { translateBackendErrorBody } from '../../../../tools/app-shell/src/lib/backendErrors.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'PurchaseOrderActions.jsx'), 'utf8');
@@ -391,6 +392,38 @@ describe('PurchaseOrderActions', () => {
       it('does not fall back to the generic "Error (400)" suffix', () => {
         assert.doesNotMatch(resolveMessage(flatErrBody(), { status: 400 }), /Error \(400\)$/);
       });
+    });
+
+    // Step 1 (documentAction CO): the real rawMsg line and throw expression run with the real
+    // translateBackendErrorBody, so the refusal is rendered from its identity while the legacy
+    // @OrderWithoutLines@ token and unkeyed prose keep their old outcome.
+    describe('ConfirmModal.handleConfirm — Step 1 (documentAction/confirm)', () => {
+      const es = JSON.parse(readFileSync(join(__dirname, '../../../../tools/app-shell/src/locales/es_ES.json'), 'utf8')).genericLabels;
+      const esUi = (key, params = {}) => Object.entries(params)
+        .reduce((text, [p, v]) => text.replace(`{${p}}`, v), es[key] ?? key);
+
+      function resolveMessage(e, processRes) {
+        const from = src.indexOf('action/documentAction');
+        const rawMsgLine = src.slice(from).match(/const rawMsg = [^;]+;/)[0];
+        const expr = extractCallExprAfter(src, 'action/documentAction', 'throw new Error(');
+        return new Function('e', 'processRes', 'ui', 'translateBackendErrorBody',
+          `${rawMsgLine}\nreturn ${expr};`)(e, processRes, esUi, translateBackendErrorBody);
+      }
+
+      const cases = [
+        ['translates the missing-exchange-rate refusal from its identity',
+          { error: { message: 'prose', messageKeys: ['ETGO_ExchangeRateMissingOnComplete'],
+            messageParams: { orgCurrency: 'EUR', documentCurrency: 'USD' } } },
+          'No se puede confirmar el documento: falta la Tasa de cambio de EUR a USD.'],
+        ['still maps the legacy @OrderWithoutLines@ token', { message: '@OrderWithoutLines@' }, es.soNoLinesError],
+        ['keeps unkeyed backend prose', flatErrBody(), REAL_MESSAGE],
+        ['falls back to Error (status) for an empty body', null, 'Error (500)'],
+      ];
+      for (const [label, body, expected] of cases) {
+        it(label, () => {
+          assert.equal(resolveMessage(body, { status: 500 }), expected);
+        });
+      }
     });
 
     describe('CreateDocsModal.handleCreate — receipt step (sibling to ConfirmModal, ETP-5276)', () => {

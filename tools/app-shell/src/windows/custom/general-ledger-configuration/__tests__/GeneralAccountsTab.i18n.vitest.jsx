@@ -204,11 +204,43 @@ describe('GeneralAccountsTab — account selectors follow their toggles (ETP-568
   });
 });
 
+describe('GeneralAccountsTab — balancing account required while its switch is on (ETP-5724)', () => {
+  const REQUIRED_TEXT = esES.genericLabels['glc.validation.required'];
+
+  it.each(['glc-acct-suspenseBalancing', 'glc-acct-currencyBalancingAcct'])(
+    '%s shows the required marker and the error it is given',
+    (accountId) => {
+      const errors = {
+        suspenseBalancing: REQUIRED_TEXT,
+        currencyBalancingAcct: REQUIRED_TEXT,
+      };
+      renderWithLocale('es_ES', (
+        <GeneralAccountsTab
+          generalAccounts={ALL_TOGGLES_ON}
+          accountOptions={ACCOUNT_OPTIONS}
+          setGeneralAccountsField={vi.fn()}
+          errors={errors}
+        />
+      ));
+      const select = screen.getByTestId(accountId);
+      expect(select).toHaveTextContent('*');
+      expect(select).toHaveTextContent(REQUIRED_TEXT);
+    },
+  );
+});
+
 describe('GeneralLedgerConfigPage — tab label resolution (ETP-4452 follow-up)', () => {
   it('renders the "General accounts" tab label translated, not as glc.tab.generalAccounts', () => {
     renderWithLocale('es_ES', <GeneralLedgerConfigPage apiBaseUrl="/mock" />);
 
     expect(screen.queryByText('glc.tab.generalAccounts')).toBeNull();
     expect(screen.getByText(esES.genericLabels['glc.tab.generalAccounts'])).toBeInTheDocument();
+  });
+
+  // ETP-5736 — the shared segmented control takes a translated group label (the window title).
+  it('names the tab group with the translated window title', () => {
+    renderWithLocale('es_ES', <GeneralLedgerConfigPage apiBaseUrl="/mock" />);
+
+    expect(screen.getByRole('group', { name: esES.genericLabels['glc.title'] })).toBeInTheDocument();
   });
 });

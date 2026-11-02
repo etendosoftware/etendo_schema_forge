@@ -18,6 +18,7 @@ import {
   toInstantMs,
 } from '@/lib/attachmentFreshness.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { resolveAttachmentMime } from './attachmentFileTypes';
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
  * and write the same real `Attachment` row, marked via `EM_ETGO_ISPREVIEWMAIN`
@@ -140,11 +141,13 @@ export function useMainAttachment({
       // auto-store gate and onFileChange need. Skip the blob GET entirely; fetchBlobUrl()
       // below fetches it lazily, on demand, if/when a caller actually needs the bytes.
       if (skipBlobFetch) {
-        applyAttachment(main.id, main.name, main.dataType, null);
+        applyAttachment(main.id, main.name, resolveAttachmentMime(main.dataType, main.name), null);
         return;
       }
       objectUrl = await fetchAttachmentBlobUrl({ token, attachmentId: main.id, apiBaseUrl });
-      if (objectUrl) applyAttachment(main.id, main.name, main.dataType, objectUrl);
+      if (objectUrl) {
+        applyAttachment(main.id, main.name, resolveAttachmentMime(main.dataType, main.name), objectUrl);
+      }
     } catch {
       // keep whatever was already shown; a transient refresh failure isn't fatal
     } finally {

@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
+import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
+import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
+import { Fragment, useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -72,6 +75,17 @@ const SUBTAB_SII_DATA_ENTITIES = {
   receivedPrevious: 'receivedInvoices(previousPeriod)SiiData',
 };
 
+const GRID_COLUMNS = [
+  { key: 'invoiceDate', label: 'fiscalMonitor.col.date' },
+  { key: 'documentNo', label: 'fiscalMonitor.col.invoiceNumber' },
+  { key: 'businessPartner', label: 'fiscalMonitor.col.party' },
+  { key: 'aeatsiiClaveTipo', label: 'fiscalMonitor.col.type' },
+  { key: 'grandTotalAmount', label: 'fiscalMonitor.col.total' },
+  { key: 'aeatsiiEstado', label: 'fiscalMonitor.col.status' },
+  { key: 'aeatsiiErrorMsg', label: 'fiscalMonitor.col.errorReason' },
+  { key: 'cdigoCSV', label: 'fiscalMonitor.col.csv' },
+];
+
 const INVOICE_FK_FIELD = 'aeatsiiInvoice';
 
 function resolveTabState(initialTab) {
@@ -130,10 +144,16 @@ async function fetchSubtab(apiFetch, entityKey, parentId, orgId, page, earliestC
   return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0, csvMap, motivoMap };
 }
 
+function headerClassName(columnKey) {
+  if (columnKey === 'grandTotalAmount') return 'num relative';
+  if (columnKey === 'invoiceDate') return 'sortable sorted relative';
+  return 'relative';
+}
+
 function SiiTableContent({
   ui, tab, period, rows, loading, error, totalRows, page, onLoadMore,
   onInvoiceOpen, onBpClick, csvMap = {}, motivoMap = {},
-  selectedIds, onToggleAll, onToggleRow,
+  selectedIds, onToggleAll, onToggleRow, gridView, columns,
 }) {
   const allSelected  = rows.length > 0 && rows.every(r => selectedIds.has(r.id));
   const someSelected = rows.some(r => selectedIds.has(r.id)) && !allSelected;
@@ -154,7 +174,7 @@ function SiiTableContent({
   }
   return (
     <>
-      <table className="fm-table" data-testid="fm-data-table">
+      <table className="fm-table" data-testid="fm-data-table" style={gridView.active && Object.keys(gridView.columnSizing).length > 0 ? { tableLayout: 'fixed' } : undefined}>
         <thead>
           <tr>
             <th><Checkbox
@@ -162,20 +182,24 @@ function SiiTableContent({
               indeterminate={someSelected}
               onChange={onToggleAll}
               data-testid="Checkbox__be1aa5" /></th>
-            <th className="sortable sorted">{ui('fiscalMonitor.col.date')}</th>
-            <th>{ui('fiscalMonitor.col.invoiceNumber')}</th>
-            <th>{partyHeader}</th>
-            <th>{ui('fiscalMonitor.col.type')}</th>
-            <th className="num">{ui('fiscalMonitor.col.total')}</th>
-            <th>{ui('fiscalMonitor.col.status')}</th>
-            <th>{ui('fiscalMonitor.col.errorReason')}</th>
-            <th>{ui('fiscalMonitor.col.csv')}</th>
-          </tr>
+            {columns.map((column) => {
+                  const label = column.key === 'businessPartner' ? partyHeader : ui(column.label);
+                  return (
+                    <th key={column.key} className={headerClassName(column.key)}
+                      style={column.gridUserWidthPx != null ? { width: column.gridUserWidthPx, whiteSpace: 'normal', overflowWrap: 'anywhere' } : undefined}
+                      {...gridHeaderProps(column, gridView)}>
+                      {label}
+                      {gridReorderHandle(column, gridView, label, ui)}
+                      {gridResizeHandle(column, gridView, label, ui)}
+                    </th>
+                  );
+                })}
+              </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={9} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}> {/* 9 cols: checkbox + 8 data */}
+              <td colSpan={columns.length + 1} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}>
                 {ui('fiscalMonitor.empty')}
               </td>
             </tr>
@@ -201,36 +225,39 @@ function SiiTableContent({
             const errorMsg = isErrorStatus(row.aeatsiiEstado)
               ? (row.aeatsiiErrorMsg || motivoMap[row.id] || null)
               : null;
-            return (
-              <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
-                <td><Checkbox
-                  checked={selectedIds.has(row.id)}
-                  onChange={() => onToggleRow(row.id)}
-                  data-testid="Checkbox__be1aa5" /></td>
-                <td>{fmtDate(row.invoiceDate)}</td>
-                <td className="num-factura">
+            const cells = {
+                  invoiceDate: (<td>{fmtDate(row.invoiceDate)}</td>),
+                  documentNo: (<td className="num-factura">
                   <NumFactura
                     n={row.documentNo ?? row[INVOICE_FK_FIELD] ?? '—'}
                     onOpen={() => onInvoiceOpen?.(invoiceId, specHint)}
                     data-testid="NumFactura__be1aa5" />
-                </td>
-                <td>
+                </td>),
+                  businessPartner: (<td>
                   {row['businessPartner$_identifier'] ?? row.businessPartnerIdentifier ?? row.businessPartner ?? '—'}
-                </td>
-                <td>{siiTipoLabel(row.aeatsiiClaveTipo ?? row.aeatsiiClaveTipoFc)}</td>
-                <td className="num">{formatAmount(row.grandTotalAmount, row['currency$_identifier'])}</td>
-                <td>
+                </td>),
+                  aeatsiiClaveTipo: (<td>{siiTipoLabel(row.aeatsiiClaveTipo ?? row.aeatsiiClaveTipoFc)}</td>),
+                  grandTotalAmount: (<td className="num">{formatAmount(row.grandTotalAmount, row['currency$_identifier'])}</td>),
+                  aeatsiiEstado: (<td>
                   <StatusPill
                     estado={row.aeatsiiEstado}
                     onClick={pillClick}
                     title={isPendingStatus(row.aeatsiiEstado) ? ui('fiscalMonitor.openInvoice') : undefined}
                     data-testid="StatusPill__be1aa5" />
-                </td>
-                <td style={{ color: errorMsg ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
+                </td>),
+                  aeatsiiErrorMsg: (<td style={{ color: errorMsg ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
                   {row.aeatsiiErrorCode ? `[${row.aeatsiiErrorCode}] ` : ''}{errorMsg ?? '—'}
-                </td>
-                <td className="mono">{row.cdigoCSV ?? csvMap[row.id] ?? '—'}</td>
-              </tr>
+                </td>),
+                  cdigoCSV: (<td className="mono">{row.cdigoCSV ?? csvMap[row.id] ?? '—'}</td>),
+                };
+                return (
+              <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
+                <td><Checkbox
+                  checked={selectedIds.has(row.id)}
+                  onChange={() => onToggleRow(row.id)}
+                  data-testid="Checkbox__be1aa5" /></td>
+                    {columns.map((column) => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
+                  </tr>
             );
           })}
         </tbody>
@@ -286,6 +313,11 @@ export default function SiiMonitorSection({
   }, [initialTab]);
 
   const entityKey = resolveEntityKey(tab, period);
+  const partyLabelKey = tab === 'issued' ? 'fiscalMonitor.sii.party.cliente' : 'fiscalMonitor.sii.party.proveedor';
+  const translateGridLabel = (key) => ui(key === 'fiscalMonitor.col.party' ? partyLabelKey : key);
+  const { gridView, gridColumnViews } = useFlaggedGridView({ spec: SII_SPEC, entity: SUBTAB_ENTITIES[entityKey], columns: GRID_COLUMNS, data: rows, apiBaseUrl });
+  const columns = gridView.active ? gridView.columns : GRID_COLUMNS;
+
 
   useEffect(() => {
     if (mockRows) {
@@ -417,12 +449,20 @@ export default function SiiMonitorSection({
         {/* Standard (non-compact) mode: no period toggle rendered — see the
             compact-mode comment above for why (ETP-5432). Only the export
             button remains in the filter bar. */}
+        {gridColumnViews && <GridViewControls
+          gridView={gridView}
+          gridColumns={GRID_COLUMNS}
+          ui={ui}
+          t={translateGridLabel}
+          data-testid="GridViewControls__be1aa5" />}
         <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
           <ExportIcon data-testid="ExportIcon__be1aa5" /> {ui('fiscalMonitor.export')}
         </button>
       </div>
 
       <SiiTableContent
+        gridView={gridView}
+        columns={columns}
         ui={ui}
         tab={tab}
         period={period}

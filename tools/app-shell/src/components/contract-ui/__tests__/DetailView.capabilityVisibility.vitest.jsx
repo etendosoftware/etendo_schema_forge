@@ -11,6 +11,8 @@
  * is mocked to control the capability map directly, while the real
  * `isCapabilityVisible` (`@/lib/capabilityVisibility.js`) is used so the
  * actual gating logic runs.
+ *
+ * ETP-5684 — the "Others" tab is probed again when the capability map changes.
  */
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -118,8 +120,8 @@ vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
 const MockForm = ({ data }) => <div data-testid="mock-form">{data?.documentNo}</div>;
 const MockDetailTable = () => <div data-testid="mock-detail-table" />;
 
-function renderView(props = {}) {
-  return render(
+function view(props = {}) {
+  return (
     <MemoryRouter>
       <DetailView
         entity="header"
@@ -141,8 +143,12 @@ function renderView(props = {}) {
         apiBaseUrl="/api/sales-invoice"
         {...props}
       />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderView(props = {}) {
+  return render(view(props));
 }
 
 const GATED_PILL = {
@@ -181,5 +187,25 @@ describe('extraBadges statusPill — visibleWhenCapability gating', () => {
       extraBadges: [{ key: 'posted', type: 'statusPill', trueKey: 'postedYes', falseKey: 'postedNo' }],
     });
     expect(screen.getByTestId(PILL_TESTID)).toBeInTheDocument();
+  });
+});
+
+// ETP-5684 — the "Others" form of goods-shipment holds only the gated accounting status, so
+// whether the tab exists depends on capabilities that may load after the first probe.
+describe('Others tab — re-probed when capabilities change', () => {
+  const OthersForm = ({ section }) => {
+    const caps = mockUseCapabilitiesSafe();
+    if (section !== 'other' || caps.showAccountingFields !== true) return null;
+    return <div data-testid="others-content">status</div>;
+  };
+
+  it('adds the Others tab once the capability arrives after the first probe', () => {
+    mockUseCapabilitiesSafe.mockReturnValue({});
+    const { rerender } = renderView({ Form: OthersForm });
+    expect(screen.queryByText('others')).not.toBeInTheDocument();
+
+    mockUseCapabilitiesSafe.mockReturnValue({ showAccountingFields: true });
+    rerender(view({ Form: OthersForm }));
+    expect(screen.getByText('others')).toBeInTheDocument();
   });
 });

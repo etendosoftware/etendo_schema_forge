@@ -15,7 +15,7 @@ const groups = {
   Sales: 'sales-quotation sales-order goods-shipment sales-invoice return-material-receipt',
   Purchases: 'purchase-order goods-receipt purchase-invoice return-to-vendor-shipment matched-purchase-invoices',
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
-  Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents simple-g-l-journal fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
+  Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents manual-journals fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
   Settings: 'organization document-sequence price-list payment-term business-partner-category user roles api-keys acct-process-monitor fiscal-config',
 };
@@ -91,7 +91,7 @@ export const optionalNavigation = [
 // "Configuración > Roles" and "Roles del usuario" matrices can resolve a category/label
 // override for them (same convention as match-rule/fiscal-calendar above, no live
 // sidebar link either).
-export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan tax-report aging-receivable aging-payable inventory-stock-report balance-sheet profit-loss report-general-ledger report-journal-entries report-trial-balance'.split(' ');
+export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control simple-g-l-journal recurring-invoice oauth2-clients smart-scan tax-report aging-receivable aging-payable inventory-stock-report balance-sheet profit-loss report-general-ledger report-journal-entries report-trial-balance'.split(' ');
 
 export const navigationProfiles = [
   { label: 'default', apps: [], marketplace: false, proof: false },

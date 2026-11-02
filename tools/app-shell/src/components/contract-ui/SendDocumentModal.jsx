@@ -498,7 +498,7 @@ function SendModalFooter({ allowEmail, onClose, sendFeedback, downloading, onDow
  * - pdfBlob: pre-rendered PDF blob to cache before sending.
  * - pdfBlobLoading: disables send while a cacheable preview is still loading.
  * - cachePreviewBeforeSend: uploads pdfBlob/pdfBlobUrl as the record's marked
- *   "main" attachment (see documentEmailSend.js's WINDOW_ATTACHMENT_TABLE) before sending.
+ *   "main" attachment (see documentEmailSend.js's resolveAttachmentTable) before sending.
  * When pdfBlobUrl is provided, preview and download use it directly and bypass
  * the /api/reports render endpoint.
  *

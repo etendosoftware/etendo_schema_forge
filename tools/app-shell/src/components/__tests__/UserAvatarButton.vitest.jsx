@@ -106,6 +106,7 @@ vi.mock('@/lib/flags', async (importOriginal) => ({
 }));
 
 import { UserAvatarButton } from '../UserAvatarButton.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
 describe('UserAvatarButton', () => {
   beforeEach(() => {
@@ -113,6 +114,7 @@ describe('UserAvatarButton', () => {
     localStorage.clear();
     authOverrides = {};
     localeOverrides = {};
+    resetSupportSessionForTests();
     uiTranslations = ROLE_NAME_TRANSLATIONS;
     flagValues = {};
   });
@@ -455,5 +457,28 @@ describe('UserAvatarButton', () => {
     render(<UserAvatarButton />);
 
     expect(screen.queryByText('language')).not.toBeInTheDocument();
+  });
+  // ETP-5351 — the plan and the account settings belong to the customer, not to an operator in a
+  // support session; both entries go, while logout (the way out) stays.
+  it('hides the upgrade and account entries in a support session and keeps logout', () => {
+    applySupportSessionFromServer(
+      { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+      { storage: localStorage },
+    );
+
+    render(<UserAvatarButton />);
+
+    expect(screen.queryByTestId('menu-account')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('menu-tenant-upgrade')).not.toBeInTheDocument();
+    expect(screen.getByTestId('user-menu-logout')).toBeInTheDocument();
+  });
+
+  it('offers both entries again once /me confirms there is no support session', () => {
+    applySupportSessionFromServer(null, { storage: localStorage });
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByTestId('menu-account')).toBeInTheDocument();
+    expect(screen.getByTestId('menu-tenant-upgrade')).toBeInTheDocument();
   });
 });

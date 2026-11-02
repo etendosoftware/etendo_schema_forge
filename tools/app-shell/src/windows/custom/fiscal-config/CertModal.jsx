@@ -5,6 +5,7 @@ import { FileText, Upload, Eye, EyeOff, Lock, TriangleAlert, Check, Info } from 
 import FiscalStepItem from './FiscalStepItem.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { extractBackendErrorCode } from '@/lib/backendErrors.js';
 
 function AlertBox({ type, title, body, onDismiss }) {
   if (type === 'error') {
@@ -177,7 +178,9 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
 
       if (!res.ok) {
         const raw = data?.error?.message ?? data?.message;
-        const errText = res.status === 422
+        // ETP-5782: the NIF-mismatch refusal is hand-written and carries no code; a classified 422
+        // (business_rule, invalid_value) shows its own server message instead.
+        const errText = res.status === 422 && !extractBackendErrorCode(data)
           ? ui('fiscal.cert.err.nifMismatch')
           : (typeof raw === 'string' ? raw : raw?.text) ?? ui('fiscal.cert.err.default');
         setErrMsg(errText);

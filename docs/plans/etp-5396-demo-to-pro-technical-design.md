@@ -133,6 +133,8 @@ Keep existing tables, rows, request IDs, Stripe fields, event constraints and te
 
 Add only lifecycle/work metadata required for this feature, preferably as a small new record linked to the existing checkout request. This record owns input snapshots, target reservation, leases and recovery checkpoints; the old checkout record remains payment evidence. Reuse a suitable ETP-5048 work record if one exists rather than creating another queue.
 
+> **Boundary with ETP-5048 (agreed 2026-10-18).** ETP-5048 does **not** add a work record. It ships the reconciler (a background process plus its Classic menu entry), Stripe list pagination, both reconciliation directions, abandoned-checkout cleanup (`EXPIRED`), the sweep of stuck `RECEIVED` events, `[BILLING-RECONCILE]` alerting and Classic visibility of every repair as an `ETGO_BILLING_EVENT` row (`PROVIDER='reconciler'`). Server-side provisioning goes through an extracted `PaidProvisioningService`, fenced by the existing `claimForProvisioning` lease on the checkout row, and the onboarding inputs it needs (`LANGUAGE`, `CURRENCY`, `COUNTRY`) are now stored on `ETGO_CHECKOUT_REQUEST`. **This task (ETP-5396) adds later** its own work record, target-tenant reservation, checkpoints and retry budget/backoff, and can move ETP-5048's orchestration behind it without changing how drift is detected or audited. Design of record: `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md` §3.
+
 Known deferred debt: `ETGO_BILLING_EVENT` deduplicates by external `EVENT_ID` alone, and checkout-session uniqueness uses a Stripe field. Do not generalize these constraints now. A future multi-provider integration must address those legacy limits before routing other providers through these stores.
 
 Also deferred: existing Stripe transport timeout/idempotency cleanup and moving old consumers behind ports. None is a prerequisite for isolating the new code. Surface their limitations through explicit uncertain/reconciliation outcomes rather than promising behavior the legacy integration cannot supply.
@@ -373,7 +375,7 @@ Manual/sandbox evidence must cover PRD AC-01 through AC-12, including purchase b
 
 This change is limited to the PRD, this design and `docs/index.md`, on `feature/ETP-5396`. Validate links, requirement/acceptance coverage, consistent defaults/boundaries, and `git diff --check`. Runtime tests and TestSprite are not required for these documentation-only edits. No runtime pass, provider sandbox result, deployment or Jira completion is claimed.
 
-Implementation is complete only after corresponding runtime tests, QA evidence and updated live functional guides are delivered. The new requirements must supersede conflicting ETP-5047 login-only enforcement and ETP-5048 recovery assumptions in implementation planning.
+Implementation is complete only after corresponding runtime tests, QA evidence and updated live functional guides are delivered. The new requirements must supersede conflicting ETP-5047 login-only enforcement and ETP-5048 recovery assumptions in implementation planning. The ETP-5048 side of that is settled by the boundary recorded in §3.3.
 
 ## 12. Why this balances effort and correctness
 

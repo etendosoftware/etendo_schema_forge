@@ -69,7 +69,7 @@
     },
     {
       "id": "open-close-period",
-      "target": "[data-testid^=\"period-openclose-\"]",
+      "target": "[data-testid^=\"period-status-\"]",
       "titleKey": "walkthroughCalendarStepOpenCloseTitle",
       "bodyKey": "walkthroughCalendarStepOpenCloseBody",
       "placement": "left",

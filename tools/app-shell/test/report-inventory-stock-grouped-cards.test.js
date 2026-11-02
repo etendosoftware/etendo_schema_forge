@@ -1,6 +1,7 @@
 // @covers artifacts/inventory-stock-report/helpers.js
 // @covers artifacts/inventory-stock-report/template-csv.hbs
 // @covers artifacts/inventory-stock-report/template-excel.hbs
+// @covers artifacts/inventory-stock-report/template.hbs
 /**
  * ETP-5013 follow-up — the grouped ("Agrupar por") layout used to show a
  * plain group-break row (a single <td> with the group's name) inside ONE
@@ -45,6 +46,9 @@ function row(overrides) {
 function render(meta, rows) {
   const hb = Handlebars.create();
   const helpersCode = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
+  // The browser preview registers ONLY the canonical helper set (helpers.js is read
+  // for number-format options, never executed), so template.hbs must render with
+  // nothing else. Registering a per-report helper here would mask a "Missing helper".
   registerReportHelpers(hb, helpersCode);
   const templateSrc = readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8');
   const template = hb.compile(expandBrandingPartial(templateSrc));
@@ -127,20 +131,22 @@ describe('inventory-stock-report — flat (ungrouped) layout is untouched (ETP-5
 
 // ---------------------------------------------------------------------------
 // A product with no cost reaches the report as unitCost/totalValuation = null.
-// It must render as a genuinely blank cell (never 0, never the literal NaN
-// html-to-xlsx writes for a data-cell-type="number" cell holding no number).
+// It must render the "\u2014" placeholder (same as Warehouse > Products) in every
+// output — never 0, never an empty cell, never the literal NaN html-to-xlsx writes
+// for a data-cell-type="number" cell holding no number.
 // ---------------------------------------------------------------------------
 function loadHelperFns() {
   const code = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
-  return new Function(`${code}; return { round2, numCellType };`)();
+  return new Function(`${code}; return { round2, numCellType, dashIfBlank };`)();
 }
 
 function renderTemplate(file, rows) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8'));
   // Report-specific helpers (loaded by jsreport from helpers.js) registered explicitly.
-  const { round2, numCellType } = loadHelperFns();
+  const { round2, numCellType, dashIfBlank } = loadHelperFns();
   hb.registerHelper('round2', round2);
+  hb.registerHelper('dashIfBlank', dashIfBlank);
   hb.registerHelper('numCellType', numCellType);
   const tpl = hb.compile(readFileSync(resolve(ARTIFACT_DIR, file), 'utf8'));
   return tpl({ meta: { labels: LABELS }, rows });
@@ -185,6 +191,57 @@ describe('inventory-stock-report helpers — round2 / numCellType with missing c
   });
 });
 
+describe('inventory-stock-report helpers — dashIfBlank', () => {
+  const { dashIfBlank } = loadHelperFns();
+
+  it('returns the em dash for null, undefined and empty string', () => {
+    assert.equal(dashIfBlank(null, ''), '\u2014');
+    assert.equal(dashIfBlank(undefined, ''), '\u2014');
+    assert.equal(dashIfBlank('', ''), '\u2014');
+  });
+
+  it('returns the shown value unchanged for a real value and for a real zero', () => {
+    assert.equal(dashIfBlank(9.56, '9,56 EUR'), '9,56 EUR');
+    assert.equal(dashIfBlank(0, '0,00 EUR'), '0,00 EUR');
+    assert.equal(dashIfBlank(0, 0), 0);
+  });
+});
+
+describe('inventory-stock-report — template.hbs (HTML/PDF) with a product that has no cost', () => {
+  for (const [label, meta] of [['grouped cards', { dimensionField: 'product' }], ['ungrouped table', { dimensionField: '' }]]) {
+    describe(label, () => {
+      const html = render(meta, COST_ROWS);
+      // Rows are located by search key: the product column is hidden when grouped by product.
+      const amountCells = (key) => {
+        const tr = html.split('<tr').find((r) => r.includes(`>${key}<`));
+        return [...tr.matchAll(/<td class="cell-amount">([^<]*)<\/td>/g)].map((m) => m[1].trim()).slice(-2);
+      };
+
+      it('null cost and valuation render the em dash, not an empty cell', () => {
+        assert.deepEqual(amountCells('P2'), ['\u2014', '\u2014']);
+      });
+
+      it('a real cost renders the formatCurrency output (no dash)', () => {
+        const cells = amountCells('P1');
+        for (const c of cells) {
+          assert.notEqual(c, '');
+          assert.notEqual(c, '\u2014');
+        }
+        assert.match(cells[0], /9[.,]56/);
+        assert.match(cells[1], /95[.,]6/);
+      });
+
+      it('a zero cost renders the formatted zero, not the dash', () => {
+        const cells = amountCells('P3');
+        for (const c of cells) {
+          assert.notEqual(c, '\u2014');
+          assert.match(c, /0/);
+        }
+      });
+    });
+  }
+});
+
 describe('inventory-stock-report — template-csv.hbs with a product that has no cost', () => {
   const lines = renderTemplate('template-csv.hbs', COST_ROWS).split('\n');
 
@@ -192,9 +249,14 @@ describe('inventory-stock-report — template-csv.hbs with a product that has no
     assert.ok(lines.find((l) => l.includes('With cost')).endsWith(',10,9.56,95.6'));
   });
 
-  it('a null-cost row ends with empty cost and valuation cells', () => {
+  it('a null-cost row ends with an em dash in both amount columns (no empty trailing fields)', () => {
     const l = lines.find((x) => x.includes('No cost'));
-    assert.ok(l.endsWith(',5,,'), l);
+    assert.ok(l.endsWith(',5,\u2014,\u2014'), l);
+    assert.equal(l.split(',').length, 8);
+  });
+
+  it('stays one line per row (header + 3 rows)', () => {
+    assert.equal(lines.filter((x) => x.trim() !== '').length, 4);
   });
 
   it('a real zero cost renders 0, not blank', () => {
@@ -211,11 +273,11 @@ describe('inventory-stock-report — template-excel.hbs with a product that has 
     assert.doesNotMatch(html, /NaN/);
   });
 
-  it('null-cost cells are empty string-typed cells', () => {
+  it('null-cost cells are string-typed cells holding the em dash', () => {
     const cells = [...rowHtml('No cost').matchAll(/<td data-cell-type="(\w+)">([^<]*)<\/td>/g)];
     const [unit, total] = cells.slice(-2);
-    assert.deepEqual([unit[1], unit[2]], ['string', '']);
-    assert.deepEqual([total[1], total[2]], ['string', '']);
+    assert.deepEqual([unit[1], unit[2]], ['string', '\u2014']);
+    assert.deepEqual([total[1], total[2]], ['string', '\u2014']);
   });
 
   it('zero-cost cells are number-typed with 0', () => {
@@ -230,5 +292,28 @@ describe('inventory-stock-report — template-excel.hbs with a product that has 
     const [unit, total] = cells.slice(-2);
     assert.deepEqual([unit[1], unit[2]], ['number', '9.56']);
     assert.deepEqual([total[1], total[2]], ['number', '95.6']);
+  });
+});
+
+describe('inventory-stock-report — template.hbs uses only canonical helpers (browser preview)', () => {
+  const helpersSrc = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
+  const templateSrc = readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8');
+  const reportHelperNames = [...helpersSrc.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
+
+  it('helpers.js declares the per-report helpers this guard checks', () => {
+    for (const n of ['round2', 'numCellType', 'dashIfBlank']) assert.ok(reportHelperNames.includes(n), n);
+  });
+
+  it('template.hbs does not call any helper defined in the report helpers.js', () => {
+    for (const name of reportHelperNames) {
+      const call = new RegExp(`(\\{\\{[#~/^]?\\s*|\\()${name.replace(/\$/g, '\\$')}(?=[\\s})])`);
+      assert.doesNotMatch(
+        templateSrc,
+        call,
+        `template.hbs uses "${name}" from helpers.js, but the browser preview registers only the canonical helpers `
+          + '(registerReportHelpers) and never loads a report\'s helpers.js — jsreport does that only for the Excel/CSV templates. '
+          + 'Use canonical helpers in template.hbs.',
+      );
+    }
   });
 });

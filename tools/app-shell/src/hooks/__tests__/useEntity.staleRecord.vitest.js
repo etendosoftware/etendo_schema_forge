@@ -11,7 +11,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const toast = { error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() };
 vi.mock('sonner', () => ({ toast }));
-vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
+vi.mock('@/lib/backendErrors.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  translateBackendError: (m) => m,
+}));
 
 // The prompt is a dialog now. The real store is imported so these cases exercise the actual
 // hand-off, and a host is subscribed per case to stand in for SaveConflictDialog.
@@ -58,6 +61,16 @@ describe('handleSaveErrorResponse — concurrency conflict (ETP-5073)', () => {
     expect(setSaveError).toHaveBeenCalledWith('saveConflictRecordChanged');
     expect(toast.error).toHaveBeenCalled();
     expect(toast.error.mock.calls[0][0]).toBe('saveConflictRecordChanged');
+  });
+
+  it('treats the nested {error:{code}} shape exactly like the flat one', async () => {
+    const opened = mountHost();
+    await handleSaveErrorResponse(
+      jsonResponse({ error: { message: 'stale', status: 409, code: 'stale_record' } }),
+      ui, vi.fn(), vi.fn(), vi.fn(),
+    );
+    expect(opened).toEqual([true]);
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('raises the dialog rather than a toast when a host is mounted', async () => {

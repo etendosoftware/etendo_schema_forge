@@ -26,7 +26,8 @@
     "attachments": true,
     "detailEntity": null,
     "customPanelTabs": [
-      { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar", "tabOrder": 100 }
+      { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar", "tabOrder": 100 },
+      { "key": "movements", "labelKey": "productMovements", "component": "ProductMovementsTab", "tabOrder": 800 }
     ],
     "labelOverrides": {
       "en_US": {
@@ -91,12 +92,15 @@
         { "target": "name", "aliases": ["nombre"], "label": "Name", "required": true, "example": "Tornillo hexagonal M8", "exampleKey": "importExampleProductName" },
         { "target": "description", "aliases": ["descripcion", "descripción", "description"], "example": "Tornillería inoxidable", "exampleKey": "importExampleProductDescription" },
         { "target": "productType", "aliases": ["tipo", "tipo de producto"], "label": "Product Type", "required": false, "example": "Item", "exampleKey": "importExampleProductType" },
-        { "target": "uOM", "aliases": ["unidad de medida", "unidad", "um", "uom"], "label": "Unit of Measure", "matchEntity": "UOM", "required": false, "example": "Unidad", "exampleKey": "importExampleProductUom" },
+        { "target": "uOM", "aliases": ["unidad de medida", "unidad", "um", "uom"], "label": "Unit of Measure", "matchEntity": "UOM", "matchMode": "strict", "required": false, "example": "Unidad", "exampleKey": "importExampleProductUom" },
         { "target": "salesPrice", "aliases": ["precio de venta", "precio venta", "precio", "pvp"], "label": "Sales Price", "isNumeric": true, "example": "12,50", "exampleKey": "importExampleProductSalesPrice", "labelKey": "importHeaderSalesPrice" },
         { "target": "purchasePrice", "aliases": ["precio de compra", "precio compra"], "label": "Purchase Price", "isNumeric": true, "example": "8,20", "exampleKey": "importExampleProductPurchasePrice", "labelKey": "importHeaderPurchasePrice" },
         { "target": "cost", "aliases": ["costo", "coste", "coste estandar", "coste estándar", "costo estandar", "costo estándar", "standard cost"], "label": "Cost", "required": false, "isNumeric": true, "example": "7,40", "exampleKey": "importExampleProductCost", "labelKey": "importHeaderCost" },
         { "target": "costStartingDate", "aliases": ["fecha de inicio", "fecha inicio", "vigente desde", "fecha de inicio del coste", "starting date"], "label": "Cost Starting Date", "example": "01/01/2026", "exampleKey": "importExampleProductCostStartingDate", "labelKey": "importHeaderCostStartingDate" },
-        { "target": "category", "aliases": ["categoria", "categoría", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Category", "example": "Herramientas", "exampleKey": "importExampleProductCategory", "column": "M_Product_Category_ID" }
+        { "target": "category", "aliases": ["categoria", "categoría", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Category", "example": "Herramientas", "exampleKey": "importExampleProductCategory", "column": "M_Product_Category_ID" },
+        { "target": "taxCategory", "aliases": ["grupo de impuesto", "grupo de impuestos", "categoria de impuesto", "categoría de impuesto", "impuesto", "tax category"], "label": "Tax Category", "matchEntity": "FinancialMgmtTaxCategory", "matchMode": "strict", "required": false, "example": "IVA Normal", "exampleKey": "importExampleProductTaxCategory", "labelKey": "importHeaderTaxCategory" },
+        { "target": "stocked", "aliases": ["almacenable", "stocked", "is stocked"], "label": "Stocked", "required": false, "example": "Sí", "exampleKey": "importExampleYes", "labelKey": "importHeaderStocked" },
+        { "target": "returnable", "aliases": ["retornable", "returnable"], "label": "Returnable", "required": false, "example": "Sí", "exampleKey": "importExampleYes", "labelKey": "importHeaderReturnable" }
       ]
     }
   },
@@ -111,7 +115,7 @@
           "searchable": true,
           "section": "principal",
           "seq": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "required": true }
         },
         "name": {
           "grid": true,
@@ -126,7 +130,7 @@
               { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
             ]
           },
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null, "required": true }
         },
         "description": {
           "type": "textarea",
@@ -206,26 +210,30 @@
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null },
+          "agentPrompt": "The product's sale price: its standard price on the default sales tariff (current version first). Net of tax unless the tariff includes tax. A new product is given a 0 price on the default sales and purchase tariffs (see _skipPricesSeed on etendo_create), so 0 means 'not priced yet'."
         },
         "eTGOPurchasePrice": {
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "agentPrompt": "The product's purchase price: its standard price on the default purchase tariff (current version first). A new product is given a 0 price on the default sales and purchase tariffs (see _skipPricesSeed on etendo_create), so 0 means 'not priced yet'."
         },
         "eTGOCost": {
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "agentPrompt": "The product's current unit cost as the costing engine records it (the standard or average cost in force today, from product/costing), in that cost's own currency, for the whole company (not per warehouse). Empty (null) means no cost has been recorded yet; it is not a cost of 0."
         },
         "eTGOStock": {
           "visibility": "readOnly",
           "grid": true,
           "form": false,
           "section": "other",
-          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null },
+          "agentPrompt": "Total quantity on hand of the product, summed over every warehouse and storage bin, in the product's unit of measure. It does not subtract reservations nor open sales orders: product/stock gives it per bin with reservedQty and allocatedQuantity."
         },
         "stocked": {
           "section": "principal",
@@ -367,7 +375,8 @@
         "copyservicemodifytaxconfig": {
           "visibility": "discarded"
         }
-      }
+      },
+      "agentPrompt": "A product's name is not unique: two products can share it. Identify one by its searchKey (code) or id. When several match what the user said, do not pick one: show them (name, searchKey, prices) and ask. If the user cannot tell, suggest — for them to confirm — the one used in that contact's most recent order or invoice (etendo_list on sales-order/header filtered by businessPartner, newest first, then its lines)."
     },
     "price": {
       "javaQualifier": "productPriceHandler",
@@ -375,7 +384,8 @@
         "cost": {
           "visibility": "editable",
           "form": false,
-          "grid": false
+          "grid": false,
+          "agentPrompt": "Informational cost noted on this tariff row; not the product's cost for valuation, which is eTGOCost (product/costing)."
         },
         "priceListVersion": {
           "visibility": "editable",
@@ -383,10 +393,15 @@
           "reference": "PriceListVersion"
         },
         "standardPrice": {
-          "grid": true
+          "grid": true,
+          "agentPrompt": "The price this tariff version applies: the unit price a new order or invoice line takes for the product (net of tax unless the tariff includes tax). The figure to use as 'the price'."
         },
         "listPrice": {
-          "grid": true
+          "grid": true,
+          "agentPrompt": "The catalog (list) price, shown as the line's list price; a line priced below it shows the difference as a discount. Usually equal to standardPrice."
+        },
+        "priceLimit": {
+          "agentPrompt": "The lowest price allowed for the product on this tariff when price limits are enforced. Maintained by the server."
         }
       }
     },
@@ -444,6 +459,7 @@
     "stock": {
       "readOnly": true,
       "javaQualifier": "productStockWarehouseHandler",
+      "agentPrompt": "Stock per product, warehouse and storage bin. Lots, serial numbers and expiry dates are not handled in Etendo GO, so a row says nothing about them and no product is lot-tracked here.",
       "fields": {
         "storageBin": {
           "visibility": "readOnly",
@@ -456,15 +472,18 @@
         },
         "quantityOnHand": {
           "visibility": "readOnly",
-          "grid": true
+          "grid": true,
+          "agentPrompt": "Physical quantity in this storage bin now. Not the quantity free to sell: it does not subtract reservedQty nor open sales orders. Quantity committed to orders = sales-order/lines with allParents:true and a product filter, orderedQuantity - deliveredQuantity of completed orders."
         },
         "reservedQty": {
           "visibility": "readOnly",
-          "grid": true
+          "grid": true,
+          "agentPrompt": "Quantity of this bin held by explicit stock reservations. Open sales orders do NOT reserve stock by themselves, so it is usually 0 even with orders pending delivery."
         },
         "allocatedQuantity": {
           "visibility": "readOnly",
-          "grid": true
+          "grid": true,
+          "agentPrompt": "The part of reservedQty already allocated to this exact bin (reserved and tied to this stock), so it is never more than reservedQty."
         },
         "attributeSetValue": {
           "visibility": "readOnly",
@@ -571,6 +590,7 @@
       "exclude": true
     },
     "costing": {
+      "publicApi": { "readOnly": true },
       "javaQualifier": "productCostingHandler",
       "fields": {
         "costType": {
@@ -648,6 +668,7 @@
     },
     "transactions": {
       "readOnly": true,
+      "javaQualifier": "productTransactionsHandler",
       "fields": {
         "movementDate": {
           "visibility": "readOnly",
@@ -681,6 +702,18 @@
           "visibility": "readOnly",
           "grid": true
         },
+        "etgoWarehouse": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "reference": "Warehouse",
+          "inputMode": "selector"
+        },
+        "etgoDocKind": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false
+        },
         "attributeSetValue": {
           "visibility": "discarded"
         },
@@ -712,7 +745,9 @@
           "visibility": "discarded"
         },
         "transactionCost": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false
         },
         "unitCost": {
           "visibility": "discarded"

@@ -404,6 +404,11 @@ onboarding checklist 100% complete AND not yet shown (see [Survey Types](#survey
 disabling pattern; it is kept here only as the reference case for how a not-ready survey is staged
 before activation.
 
+**Support sessions (ETP-5351).** No survey is shown, selected, loaded or marked as seen while an
+Etendo operator is inside a tenant as "Soporte Etendo": `useSurveyEngine` treats a support session
+like no session at all (`useSupportSession().isSupportMode`). The operator is not the customer, and
+an answer — or even a `survey_shown` — would be attributed to the tenant.
+
 ---
 
 ## Mixpanel Events

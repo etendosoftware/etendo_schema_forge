@@ -21,8 +21,10 @@
 >   NEO, MCP, the `JwtAuthUtils` servlets and `GET /sws/go/login` — through `EnvironmentAccessGuard`,
 >   with a structured 402 body and a backend-only kill switch (`environment-access-enforcement-off`).
 >
-> Current reference: `com.etendoerp.go` `docs/open-and-notable-topics.md` §3.7–§3.11, and
-> [`../stripe-local-testing.md`](../stripe-local-testing.md) §1.
+> Current reference: `com.etendoerp.go` `docs/open-and-notable-topics.md` §3.7, §3.10 and §3.11
+> (the subscription row lifecycle and its known edges), `com.etendoerp.go`
+> `docs/feature-flags-and-tenant-upgrade.md` §1 (the environment-access check, its 402 and kill
+> switch), and [`../stripe-local-testing.md`](../stripe-local-testing.md) §1.
 
 ---
 

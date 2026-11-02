@@ -120,6 +120,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   const vfInvTypeDefaultedRef = useRef(null);
   const vfReverseTypeRef = useRef(null);
   const siiRectifTypeRef = useRef(null);
+  const siiTipoRectifDefaultedRef = useRef(null);
 
   function getVal(key) {
     return data?.[key] ?? '';
@@ -152,7 +153,16 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   // auto-set the SII "Tipo de Factura" field (aeatsiiClaveTipo) to 'R' (Factura
   // rectificativa). Keyed on recordId+isRectificative so a document-type change
   // mid-session re-fires. Never clobbers a value that is already 'R'.
+  //
+  // ETP-5745 CP-10: sales-only. This effect used to also force `aeatsiiClaveTipoFc` to
+  // 'R' on purchase invoices, even though `PURCHASE_CLAVE_TIPO_FC_OPTIONS` never offers
+  // 'R' as a choice — the UI silently set a value the user never picked and the dropdown
+  // doesn't even show, and it then failed the (correct) reference-list validation on save
+  // (MCP's direct-DAL write skips both this effect and that validation, so it never saw
+  // the failure). Purchase-side corrective-invoice support (rectification-reason handling,
+  // AEAT XML payload) isn't implemented yet, so purchase invoices stay at 'F1' for now.
   useEffect(() => {
+    if (isPurchaseInvoice) return;
     if (!showSii || !isDraft || !recordId) return;
     if (!data?.isRectificative) return;
     const currentVal = data?.[siiTypeField];
@@ -162,7 +172,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     siiRectifTypeRef.current = key;
     onChange?.(siiTypeField, 'R');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
+  }, [isPurchaseInvoice, showSii, isDraft, recordId, data?.isRectificative, siiTypeField, onChange]);
 
   // ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) is hidden from
   // the UI. When the Verifactu invoice type is rectificative (R1–R5) the field must
@@ -179,6 +189,28 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     onChange?.('etvfacReverseinvtype', 'I');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showVerifactu, isDraft, recordId, data?.etvfacInvType, onChange]);
+
+  // ETP-5745 CP-11: "Tipo de factura rectificativa" (aeatsiiTipoRectif) is hidden from the SII
+  // panel — the UI only ever lets the user pick "Motivo de rectificación" (aeatsiiMotivoRectif),
+  // via the Select in SifTab.jsx. But `EM_AEATSII_C_INV_RECT_CHK` (the DB check constraint,
+  // shared by sales AND purchase: see its `ISSOTRX` branches) requires BOTH columns non-null
+  // once the SII type is 'R' — setting only the motivo left `aeatsiiTipoRectif` NULL on any
+  // invoice that never had it populated (e.g. one created via "Import from source invoice"),
+  // and Confirm failed with a raw, untranslated DB constraint violation instead of a validation
+  // message. Mirrors the etvfacReverseinvtype pattern above: always 'I' (Por diferencias) — the
+  // same default decisions.json already declares for this field (dead there: the field is
+  // form:false, so the generator-declared defaultValue is never applied to any form). Never
+  // clobbers a value the user (or Classic) already set.
+  useEffect(() => {
+    if (!showSii || !isDraft || !recordId) return;
+    if (data?.[siiTypeField] !== 'R') return;
+    if (data?.aeatsiiTipoRectif) return; // already has a value — never clobber
+    const key = `${recordId}:${data?.[siiTypeField]}`;
+    if (siiTipoRectifDefaultedRef.current === key) return;
+    siiTipoRectifDefaultedRef.current = key;
+    onChange?.('aeatsiiTipoRectif', 'I');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSii, isDraft, recordId, siiTypeField, data?.[siiTypeField], data?.aeatsiiTipoRectif, onChange]);
 
   return {
     ui,

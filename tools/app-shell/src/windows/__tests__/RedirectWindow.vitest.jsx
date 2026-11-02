@@ -27,6 +27,43 @@ describe('makeRedirectWindow', () => {
     expect(router.state.location.pathname).toBe(to);
   });
 
+  describe('keepPath (ETP-5720)', () => {
+    function renderKeepPath(initialPath, keepPath) {
+      const Redirect = makeRedirectWindow('/manual-journals', keepPath);
+      const target = <div data-testid="target" />;
+      const router = createMemoryRouter(
+        [
+          { path: '/simple-g-l-journal', element: <Redirect /> },
+          { path: '/simple-g-l-journal/:recordId', element: <Redirect /> },
+          { path: '/manual-journals', element: target },
+          { path: '/manual-journals/:recordId', element: target },
+        ],
+        { initialEntries: [initialPath] },
+      );
+      render(<RouterProvider router={router} />);
+      return router;
+    }
+
+    it('keeps the record ID, query string and hash', async () => {
+      const router = renderKeepPath('/simple-g-l-journal/ABC123?x=1#y', true);
+      await screen.findByTestId('target');
+      const { pathname, search, hash } = router.state.location;
+      expect(`${pathname}${search}${hash}`).toBe('/manual-journals/ABC123?x=1#y');
+    });
+
+    it('lands on the list when there is no record ID', async () => {
+      const router = renderKeepPath('/simple-g-l-journal', true);
+      await screen.findByTestId('target');
+      expect(router.state.location.pathname).toBe('/manual-journals');
+    });
+
+    it('drops the record ID without the flag', async () => {
+      const router = renderKeepPath('/simple-g-l-journal/ABC123?x=1', false);
+      await screen.findByTestId('target');
+      expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manual-journals');
+    });
+  });
+
   it('replaces the history entry instead of pushing a new one', async () => {
     const router = renderAt('/old-window', '/contacts');
     await screen.findByTestId('target');

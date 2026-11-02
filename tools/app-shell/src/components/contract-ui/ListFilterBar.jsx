@@ -4,11 +4,19 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ChevronDown, CalendarDays, Filter, Loader2 } from 'lucide-react';
 import { useLocale, useUI } from '@etendosoftware/app-shell-core';
 import { useDistinctValues } from '@/hooks/useDistinctValues.js';
-import { compareStatusCodes, statusLabel } from '@/lib/statusBadge.js';
+import { compareStatusCodes, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
+import { StatusTag } from '@/components/ui/status-tag';
 import { AdvancedFilterBuilder } from './AdvancedFilterBuilder.jsx';
 import { DistinctValuesList } from './DistinctValuesList.jsx';
 import { DateRangePopoverContent } from '@/components/ui/date-range-popover.jsx';
 import { computePresetRange, toIsoDate } from './datePresetFilter.js';
+
+// Case- and accent-insensitive form of a string for client-side option search
+// ("borr" / "Borr" / "bórr" all match "Borrador"): NFD, strip combining marks, lowercase.
+const normalizeSearchText = (s) => String(s ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase();
 
 // ETP-5601 — Figma's toolbar type: text-sm/leading-6/font-medium in #121217 for every text
 // control, idle or active. An active filter is told apart by its border alone. `text-[#121217]`
@@ -16,7 +24,7 @@ import { computePresetRange, toIsoDate } from './datePresetFilter.js';
 // #828FA3; `[&_svg]:` is needed because the core Button forces `[&_svg]:size-4` on its children.
 // The chevron is the exception: `!size-4` (16px box, ~8px glyph as in Figma) must beat the
 // parent `[&_svg]:size-5` selector, which outranks a plain class on the icon itself.
-const TOOLBAR_SELECT_CLASS = 'gap-1.5 text-sm leading-6 font-medium text-[#121217] h-10 px-3 rounded-lg bg-card [&_svg]:size-5 [&_svg]:text-[#828FA3]';
+const TOOLBAR_SELECT_CLASS = 'gap-1.5 text-sm leading-6 font-medium text-[#121217] h-10 px-3 rounded-lg bg-card data-[state=open]:border-[hsl(var(--foreground))] [&_svg]:size-5 [&_svg]:text-[#828FA3]';
 
 /**
  * Quick-filter toolbar rendered above the list table.
@@ -51,6 +59,9 @@ export function ListFilterBar({
   // instead of a nowrap row of their own, so a wrapping parent (the list toolbar's filters
   // cluster) can move them onto a new line one by one when space runs out.
   flowInParent = false,
+  // (excludeKeys) => URL-params string of the list's current filters minus those column
+  // filters (ETP-5561). Absent -> the status options are not narrowed (previous behaviour).
+  buildDistinctQuery = null,
 }) {
   const ui = useUI();
   const dictionary = useLocale();
@@ -101,14 +112,34 @@ export function ListFilterBar({
   }, [rows, statusCol]);
 
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  // The status search is client-side only: the backend matches the stored CODE, not the
+  // translated label, so the typed text is never sent as `_distinctSearch`. The status
+  // value set is small and is fetched whole once per menu open / extraParams change.
+  const [statusSearch, setStatusSearch] = useState('');
 
-  // Backend distinct fetch: paginated, server-side search, ignores active
-  // columnFilters (so the dropdown shows all values available for the
-  // unfiltered dataset).
+  // Backend distinct fetch: paginated, server-side search. Options follow the current view
+  // (subset tab, date range, advanced filter, other column filters) but exclude the status
+  // filter itself, so picking one status keeps the others listed.
+  const statusExtraParams = useMemo(
+    () => (statusCol && buildDistinctQuery ? buildDistinctQuery([statusCol.key]) : ''),
+    [statusCol, buildDistinctQuery],
+  );
   const statusDistinct = useDistinctValues(entity, statusCol?.key, {
     enabled: !!(statusCol && entity && apiBaseUrl && statusMenuOpen),
     apiBaseUrl,
+    extraParams: statusExtraParams,
   });
+  // What DistinctValuesList receives: the hook's state, but with the search box bound to the
+  // LOCAL state. Its unmount cleanup (`setSearch('')`) therefore resets the local text, and
+  // the hook's own search stays '' so typing never refetches.
+  const { values: statusValues, loading: statusLoading, hasMore: statusHasMore,
+    loadMore: statusLoadMore, loadingMore: statusLoadingMore } = statusDistinct;
+  const statusDistinctView = useMemo(() => ({
+    ...statusDistinct,
+    search: statusSearch,
+    setSearch: setStatusSearch,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [statusValues, statusLoading, statusHasMore, statusLoadMore, statusLoadingMore, statusSearch]);
 
   const activeType = columnFilters?.[typeCol?.key]?.value;
   const activeTypeCode = Array.isArray(activeType) ? activeType[0] : null;
@@ -176,12 +207,18 @@ export function ListFilterBar({
   // rows first or reorders once the (uncached) backend distinct-values fetch
   // resolves. Without this, the two sources arrive in different orders and
   // the user sees the options visibly reshuffle on every open.
-  // Local search also filters client-side so in-memory-only codes are hidden
-  // when they don't match what the user typed.
   const normalizeCode = (c) => {
     if (c === true) return 'true';
     if (c === false) return 'false';
     return c;
+  };
+  // ETP-5561 — a code is listed only if it produces a visible label. Whitespace-only
+  // codes (or codes whose label resolves to blank) would otherwise render as empty rows
+  // in the menu, e.g. a window with no records for its status column.
+  const isListableStatusCode = (c) => {
+    if (c == null || String(c).trim() === '') return false;
+    const label = labelForStatus(c);
+    return label != null && String(label).trim() !== '';
   };
   const mergedStatusCodes = useMemo(() => {
     if (!statusCol) return [];
@@ -189,27 +226,47 @@ export function ListFilterBar({
     const out = [];
     for (const entry of statusDistinct.values) {
       const c = normalizeCode(entry?.id);
-      if (c == null || c === '') continue;
+      if (!isListableStatusCode(c)) continue;
       if (!seen.has(c)) { seen.add(c); out.push(c); }
     }
-    const q = statusDistinct.search.trim().toLowerCase();
     for (const c of inMemoryStatusCodes) {
-      if (seen.has(c)) continue;
-      if (q && !labelForStatus(c).toLowerCase().includes(q) && !String(c).toLowerCase().includes(q)) continue;
+      if (seen.has(c) || !isListableStatusCode(c)) continue;
       seen.add(c);
       out.push(c);
     }
-    if (activeStatusCode && !seen.has(activeStatusCode)) {
+    if (activeStatusCode && !seen.has(activeStatusCode) && isListableStatusCode(activeStatusCode)) {
       seen.add(activeStatusCode);
       out.push(activeStatusCode);
     }
-    return out.slice().sort(compareStatusCodes);
-  }, [statusCol, statusDistinct.values, statusDistinct.search, inMemoryStatusCodes, activeStatusCode, dictionary]);
+    // Search applies to every merged source (including the active code: when it does not
+    // match the query it is filtered out like any other option). Matches the displayed
+    // label only: raw codes are never shown to the user, so matching them would list
+    // options for reasons the user cannot see.
+    const q = normalizeSearchText(statusSearch.trim());
+    const matched = q
+      ? out.filter((c) => normalizeSearchText(labelForStatus(c)).includes(q))
+      : out;
+    return matched.slice().sort(compareStatusCodes);
+  }, [statusCol, statusValues, statusSearch, inMemoryStatusCodes, activeStatusCode, dictionary]);
 
   const activeStatusLabel = useMemo(() => {
     if (!activeStatusCode) return ui('allStatuses');
     return labelForStatus(activeStatusCode);
   }, [activeStatusCode, dictionary, ui]);
+
+  // Same tag (StatusTag + getStatusTone) the grid's status column renders. The wrapper reserves
+  // the right gutter for the selected-row check on every row (no shift) and lets a long label
+  // truncate with an ellipsis instead of overflowing the menu.
+  const renderStatusOption = (code, label) => (
+    <span className="flex min-w-0 max-w-full pr-4" title={label} data-testid="StatusTag__filter-option">
+      <StatusTag
+        status={code}
+        label={label}
+        tone={getStatusTone(code)}
+        className="!inline-block min-w-0 max-w-full truncate tracking-[-0.005em]"
+        data-testid="StatusTag__6d5e90" />
+    </span>
+  );
 
   const handleStatusSelect = (code) => {
     if (!statusCol) return;
@@ -316,6 +373,7 @@ export function ListFilterBar({
           <PopoverTrigger asChild data-testid="PopoverTrigger__6d5e90">
             <Button
               data-testid="filter-status"
+              aria-haspopup="listbox"
               variant="outline"
               size="sm"
               className={[
@@ -324,7 +382,7 @@ export function ListFilterBar({
               ].join(' ')}
             >
               {activeStatusLabel}
-              {statusDistinct.loading && (
+              {statusLoading && (
                 <Loader2
                   className="h-3.5 w-3.5 animate-spin text-muted-foreground"
                   data-testid="Loader2__6d5e90" />
@@ -332,13 +390,14 @@ export function ListFilterBar({
               <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__6d5e90">
+          <PopoverContent align="start" className="w-60 p-0" data-testid="PopoverContent__6d5e90">
             <DistinctValuesList
               activeCode={activeStatusCode}
               allLabel={ui('allStatuses')}
               codes={mergedStatusCodes}
               labelFor={labelForStatus}
-              distinct={statusDistinct}
+              renderOption={renderStatusOption}
+              distinct={statusDistinctView}
               onSelect={(code) => {
                 handleStatusSelect(code);
                 setStatusMenuOpen(false);
@@ -356,6 +415,7 @@ export function ListFilterBar({
           <PopoverTrigger asChild data-testid="PopoverTrigger__6d5e90">
             <Button
               data-testid="filter-type"
+              aria-haspopup="listbox"
               variant="outline"
               size="sm"
               className={[
@@ -372,7 +432,7 @@ export function ListFilterBar({
               <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__6d5e90">
+          <PopoverContent align="start" className="w-60 p-0" data-testid="PopoverContent__6d5e90">
             <DistinctValuesList
               activeCode={activeTypeCode}
               allLabel={ui('allTypes')}

@@ -1,24 +1,30 @@
 // @covers tools/app-shell/src/pages/UpgradePage.jsx
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const navigateMock = vi.fn();
 const assignMock = vi.fn();
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
-vi.mock('@/i18n', () => ({
-  // Keys pass through untranslated. The two catalog price keys append their interpolated values,
-  // so a test can still assert on a formatted amount (`formatCurrency`'s output) without depending
-  // on the English copy around it; the billing-offer price renders as "amount / interval".
+vi.mock('@/i18n', () => {
+  // Keys pass through untranslated. The plan keys that carry an amount append their interpolated
+  // values, so a test can still assert on a formatted amount (`formatCurrency`'s output) without
+  // depending on the copy around it.
+  const interpolated = new Set([
+    'upgradePlanPriceMonthly', 'upgradePlanPriceYearly', 'upgradePlanYearlyNote',
+    'upgradePlanFeaturePerYear', 'upgradePlanFeatureSeats', 'upgradePlanFeatureSeatsOne',
+    'upgradePlanYearlyBadge', 'upgradePlanYearlyBanner',
+  ]);
+  return {
   useUI: () => (key, options) => {
-    if (key === 'upgradePlanProductivePrice' && options) return `${options.amount} / ${options.interval}`;
-    if (options && (key === 'upgradePlanPriceMonthly' || key === 'upgradePlanPriceYearly')) {
+    if (options && interpolated.has(key)) {
       return `${key} ${Object.values(options).join(' ')}`;
     }
     return key;
   },
   getStoredLocale: () => 'es_ES',
-}));
+  };
+});
 // ETP-4576 — UpgradePage reaches useEnvironmentSwitch, which now proves the account with
 // `isAuthenticated` off the auth context rather than a token it can read. Nothing here renders
 // an AuthProvider, so the context is mocked instead of wrapping every case.
@@ -43,6 +49,10 @@ vi.mock('@/lib/observability.js', () => ({
   track: vi.fn(),
 }));
 
+// ETP-5049 — the expired-session state signs the user out to the login view, like AccountSettings.
+const logoutMock = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/useLogout.js', () => ({ useLogout: () => logoutMock }));
+
 import {
   TEST_BEARER_TOKEN,
   TEST_CSRF_TOKEN,
@@ -51,11 +61,12 @@ import {
   expectNoAuthorizationHeader,
 } from '@/test/sessionContract.js';
 import UpgradePage from '../UpgradePage.jsx';
+import { UPGRADE_ERROR_CODES } from '@/lib/upgrade/api.js';
 import { ENVIRONMENT_LIST_REFRESH_EVENT } from '../../hooks/useEnvironmentSwitch.js';
 import enUs from '@/locales/en_US.json';
 import esEs from '@/locales/es_ES.json';
 import esAr from '@/locales/es_AR.json';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
 // `track` is imported (not just `vi.mock`ed above) so `trackedEvents` below can
 // read `.mock.calls` off the same singleton — see OnboardingPage.vitest.jsx /
 // health-events.vitest.js for the identical pattern elsewhere in this repo.
@@ -160,7 +171,6 @@ function successStream({ success = true, clientName = 'Acme Productive', clientI
  */
 function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
   purchaseDataTransferEnabled, purchaseProjection, checkoutError, checkout = {}, statuses = ['paid'], onboarding,
-  offer = { code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' },
   sessionEnvironment, plans = [PRODUCTIVE_PLAN] } = {}) {
   const requests = [];
   let statusCallIndex = 0;
@@ -189,9 +199,6 @@ function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
     }
     if (target.includes('/sws/go/billing/overview')) {
       return jsonResponse({ canManageBilling: true, purchases });
-    }
-    if (target.includes('/sws/go/billing/offers')) {
-      return jsonResponse(offer);
     }
     if (target.includes('/sws/go/billing/purchases')) {
       if (!init.method) {
@@ -376,101 +383,6 @@ afterEach(() => {
 });
 
 describe('UpgradePage — hosted checkout', () => {
-  it('displays the amount, currency, and interval returned by the billing offer', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1000, currency: 'USD', interval: 'year' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    const expectedAmount = formatCurrency('USD', 10);
-    const planCard = screen.getByTestId('upgrade-plan-productive');
-    expect(planCard).toHaveTextContent(displayed(`${expectedAmount} / upgradeBillingIntervalYear`));
-    expect(planCard).not.toHaveTextContent('upgradeCheckoutMonth');
-    expect(planCard).not.toHaveTextContent('49');
-  });
-
-  it('uses Stripe whole-unit amounts for zero-decimal currencies and ISK compatibility amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'JPY', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('JPY', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-  });
-
-  it('displays Stripe ISK compatibility amounts in whole units', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'ISK', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('ISK', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-    expect(screen.getByTestId('upgrade-plan-productive')).not.toHaveTextContent('12,34');
-  });
-
-  it('displays Stripe UGX compatibility amounts in whole units', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'UGX', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('UGX', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
-  });
-
-  it('preserves two-decimal HUF charge amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'HUF', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('HUF', 12.34)} / upgradeBillingIntervalMonth`));
-  });
-
-  it('preserves two-decimal TWD charge amounts', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'TWD', interval: 'month' },
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    expect(screen.getByTestId('upgrade-plan-productive'))
-      .toHaveTextContent(displayed(`${formatCurrency('TWD', 12.34)} / upgradeBillingIntervalMonth`));
-  });
-
-  it('does not show a numeric fallback when the billing offer is unavailable', async () => {
-    installFetch({
-      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
-      // No catalog plan to quote, so the card falls back to the server-owned billing offer.
-      plans: [],
-      offer: null,
-    });
-    await renderUpgradePage({ advanceCheckout: false });
-
-    const planCard = screen.getByTestId('upgrade-plan-productive');
-    expect(planCard).toHaveTextContent('upgradePlanProductivePriceUnavailable');
-    expect(planCard).not.toHaveTextContent('49');
-  });
-
   it('uses customer-facing retry and payment copy in every supported locale', () => {
     const locales = [enUs, esEs, esAr];
     for (const locale of locales) {
@@ -486,6 +398,22 @@ describe('UpgradePage — hosted checkout', () => {
       expect(customerMessages[2]).toMatch(/charged again|sin volver a pagar|no se te volverá a cobrar|cobrar de nuevo|cobrar otra vez/i);
       expect(customerMessages[3]).toMatch(/company selector|selector de empresa/i);
     }
+  });
+
+  // The page shows `ui(error.code)` for every known code, and `useUI()` echoes the raw key when the
+  // active dictionary lacks it. There is no locale-to-locale fallback: `LocaleProvider` hands
+  // `useUI` only `dictionaries[locale]`, and `core.es_AR.json` is es_AR.json alone, so es_AR is
+  // checked like the other two. A code added without its copy fails here instead of reaching a user.
+  it.each([
+    ['en_US', enUs],
+    ['es_ES', esEs],
+    ['es_AR', esAr],
+  ])('%s translates every UPGRADE_ERROR_CODES value', (_name, locale) => {
+    const untranslated = Object.values(UPGRADE_ERROR_CODES).filter((key) => {
+      const value = locale.genericLabels?.[key];
+      return typeof value !== 'string' || value.trim() === '' || value === key;
+    });
+    expect(untranslated).toEqual([]);
   });
 
   it('renders no raw card fields', async () => {
@@ -584,9 +512,10 @@ describe('UpgradePage — hosted checkout', () => {
 });
 
 /**
- * The plan catalog (ETP-5046). The checkout endpoint REQUIRES a plan key and has no default, so
- * the page cannot complete a purchase without asking the server what is for sale. These specs pin
- * the three catalog shapes and, above all, that the page never invents a key.
+ * The plan catalog (ETP-5046), chosen on the Plan step since ETP-5049. The checkout endpoint
+ * REQUIRES a plan key and has no default, so the page cannot complete a purchase without asking
+ * the server what is for sale. These specs pin the three catalog shapes and, above all, that the
+ * page never invents a key.
  */
 describe('UpgradePage — plan catalog', () => {
   const SECOND_PLAN = {
@@ -599,13 +528,28 @@ describe('UpgradePage — plan catalog', () => {
   };
 
   it('selects the only purchasable plan and shows what is being bought', async () => {
+    const user = userEvent.setup();
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
-    await renderUpgradePage();
+    await renderUpgradePage({ advanceCheckout: false });
 
-    expect(screen.getByTestId('upgrade-plan-single')).toHaveTextContent('Productive');
-    // Formatted through the canonical formatCurrency (es-ES separators, EUR symbol on the
-    // right), never a hand-rolled toFixed/Intl call.
-    expect(screen.getByTestId('upgrade-plan-single-price')).toHaveTextContent('49,00');
+    // Step 1 shows the catalog plan itself — its name and its price, never a static card.
+    const card = screen.getByTestId('upgrade-plan-card-productive-monthly');
+    expect(card).toHaveAttribute('data-selected', 'true');
+    expect(within(card).getByTestId('upgrade-plan-name')).toHaveTextContent('Productive');
+    // Formatted through the canonical formatCurrency, never a hand-rolled toFixed/Intl call; a
+    // whole amount without decimals, as the storefront writes it.
+    expect(within(card).getByTestId('upgrade-plan-price'))
+      .toHaveTextContent(displayed(formatCurrency('EUR', '49.00', { minimumFractionDigits: 0, maximumFractionDigits: 0 })));
+    expect(within(card).getByTestId('upgrade-plan-price-note')).toHaveTextContent('upgradePlanMonthlyNote');
+    expect(screen.queryByTestId('upgrade-plan-productive')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-coming-soon-1')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-plan-continue'));
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+
+    // Step 3 summarizes the choice read-only: no second chooser.
+    expect(screen.getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive');
+    expect(screen.getByTestId('upgrade-plan-summary-price')).toHaveTextContent('49,00');
     expect(screen.queryByTestId('upgrade-plan-choice')).not.toBeInTheDocument();
   });
 
@@ -629,19 +573,21 @@ describe('UpgradePage — plan catalog', () => {
       environments: [{ clientName: EXISTING_TENANT }],
       plans: [PRODUCTIVE_PLAN, SECOND_PLAN],
     });
-    await renderUpgradePage();
-
-    expect(screen.getByTestId('upgrade-plan-choice')).toBeInTheDocument();
-    // ETP-5396 made the tenant name read-only on this step: it is taken from the demo
-    // environment rather than typed, so the fixture above supplies it.
-    await user.click(screen.getByTestId('upgrade-submit'));
+    await renderUpgradePage({ advanceCheckout: false });
 
     // No default is picked for the user: the server has none either, and choosing on their
     // behalf would charge them for something they did not select.
-    expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradePlanRequired');
-    expect(requests).toHaveLength(0);
+    expect(screen.getByTestId('upgrade-plan-card-productive-monthly')).toHaveAttribute('data-selected', 'false');
+    await user.click(screen.getByTestId('upgrade-plan-interval-year'));
+    expect(screen.getByTestId('upgrade-plan-card-productive-yearly')).toHaveAttribute('data-selected', 'false');
+    expect(screen.getByTestId('upgrade-plan-continue')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
 
-    await user.click(screen.getByTestId('upgrade-plan-option-productive-yearly'));
+    await user.click(within(screen.getByTestId('upgrade-plan-card-productive-yearly'))
+      .getByTestId('upgrade-plan-select'));
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+
+    expect(screen.getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     await waitFor(() => expect(requests).toHaveLength(1));
@@ -652,8 +598,10 @@ describe('UpgradePage — plan catalog', () => {
     installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [] });
     await renderUpgradePage();
 
+    // The Plan step says so and offers no way forward: there is no plan key to send.
     expect(screen.getByTestId('upgrade-plans-unavailable')).toHaveTextContent('upgradePlansEmpty');
-    expect(screen.getByTestId('upgrade-submit')).toBeDisabled();
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
   });
 
   it('blocks checkout and offers a retry when the catalog cannot be read', async () => {
@@ -667,7 +615,7 @@ describe('UpgradePage — plan catalog', () => {
     // is exactly what a guess here would reintroduce.
     expect(screen.getByTestId('upgrade-plans-unavailable'))
       .toHaveTextContent('upgradePlansUnavailable');
-    expect(screen.getByTestId('upgrade-submit')).toBeDisabled();
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
     expect(screen.getByTestId('upgrade-plans-retry')).toBeInTheDocument();
   });
 
@@ -687,8 +635,407 @@ describe('UpgradePage — plan catalog', () => {
 
     await user.click(screen.getByTestId('upgrade-plans-retry'));
 
-    expect(await screen.findByTestId('upgrade-plan-single')).toBeInTheDocument();
-    expect(screen.getByTestId('upgrade-submit')).toBeEnabled();
+    expect(await screen.findByTestId('upgrade-plan-card-productive-monthly')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-plan-continue')).toBeEnabled();
+  });
+
+  // --- The Plan step as a chooser (ETP-5049) -------------------------------------------------
+
+  const THIRD_PLAN = {
+    planKey: 'productive-plus',
+    name: 'Productive Plus',
+    description: 'More users and storage',
+    displayPrice: '1234.50',
+    currency: 'EUR',
+    billingInterval: 'month',
+  };
+  const PRICE_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
+  /** What a summary says for a plan's price under this file's i18n mock: key + formatted amount. */
+  const priceText = plan => displayed(`${PRICE_KEYS[plan.billingInterval]} ${formatCurrency(plan.currency, plan.displayPrice)}`);
+  /** The headline of a monthly card: the amount alone, without decimals when it is whole. */
+  const cardPriceText = plan => displayed(Number.isInteger(Number(plan.displayPrice))
+    ? formatCurrency(plan.currency, plan.displayPrice, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    : formatCurrency(plan.currency, plan.displayPrice));
+  const card = plan => screen.getByTestId(`upgrade-plan-card-${plan.planKey}`);
+  /** The Monthly/Yearly toggle shows one interval at a time: switch to the plan's, when offered. */
+  async function showInterval(plan) {
+    const option = screen.queryByTestId(`upgrade-plan-interval-${plan.billingInterval}`);
+    if (option && option.getAttribute('aria-checked') !== 'true') await userEvent.setup().click(option);
+  }
+  async function selectPlan(plan) {
+    await showInterval(plan);
+    await userEvent.setup().click(within(card(plan)).getByTestId('upgrade-plan-select'));
+  }
+  /** Back to step 1 through the stepper, which is enabled for any step already reached. */
+  async function backToPlanStep(user) {
+    await user.click(screen.getByTestId('upgrade-checkout-step-plan'));
+    await waitFor(() => expect(screen.getByTestId('upgrade-plan-catalog')).toBeInTheDocument());
+  }
+  async function expectSelected(plan, selected) {
+    await showInterval(plan);
+    expect(card(plan)).toHaveAttribute('data-selected', String(selected));
+    expect(within(card(plan)).getByTestId('upgrade-plan-select')).toHaveAttribute('aria-pressed', String(selected));
+    const badge = within(card(plan)).queryByTestId('upgrade-plan-selected-badge');
+    if (selected) expect(badge).toHaveTextContent('upgradePlanSelectedBadge');
+    else expect(badge).not.toBeInTheDocument();
+  }
+
+  /** The ids of the cards on screen, in order. */
+  const shownCards = () => within(screen.getByTestId('upgrade-plan-catalog'))
+    .getAllByTestId(/^upgrade-plan-card-/).map(element => element.dataset.testid);
+
+  it.each([
+    ['two', [PRODUCTIVE_PLAN, THIRD_PLAN]],
+    ['three', [PRODUCTIVE_PLAN, { ...THIRD_PLAN, planKey: 'productive-max', name: 'Max' }, THIRD_PLAN]],
+  ])('shows one card per catalog plan, from the catalog, none preselected (%s plans)', async (_count, catalog) => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: catalog });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(shownCards()).toEqual(catalog.map(plan => `upgrade-plan-card-${plan.planKey}`));
+    // A single billing interval needs no Monthly/Yearly toggle.
+    expect(screen.queryByTestId('upgrade-plan-interval')).not.toBeInTheDocument();
+    for (const plan of catalog) {
+      expect(within(card(plan)).getByTestId('upgrade-plan-name')).toHaveTextContent(plan.name);
+      expect(within(card(plan)).getByTestId('upgrade-plan-price')).toHaveTextContent(cardPriceText(plan));
+      await expectSelected(plan, false);
+    }
+    expect(screen.queryAllByTestId('upgrade-plan-selected-badge')).toHaveLength(0);
+  });
+
+  it('shows the plans of one billing interval at a time, monthly first', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [SECOND_PLAN, PRODUCTIVE_PLAN, THIRD_PLAN],
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(screen.getByTestId('upgrade-plan-interval-month')).toHaveAttribute('aria-checked', 'true');
+    expect(shownCards()).toEqual(['upgrade-plan-card-productive-monthly', 'upgrade-plan-card-productive-plus']);
+
+    await user.click(screen.getByTestId('upgrade-plan-interval-year'));
+    expect(screen.getByTestId('upgrade-plan-interval-year')).toHaveAttribute('aria-checked', 'true');
+    expect(shownCards()).toEqual(['upgrade-plan-card-productive-yearly']);
+  });
+
+  // --- The storefront card: quotas, API, highlight, yearly price -----------------------------
+
+  const QUOTAS = [
+    { resourceKey: 'SALES_INVOICES', resourceName: 'Facturas', unitLabel: 'facturas', includedQty: 3000, kind: 'perYear' },
+    { resourceKey: 'USERS', resourceName: 'Usuarios', unitLabel: 'usuarios', includedQty: 4, kind: 'seats' },
+  ];
+  const PRO_MONTHLY = {
+    planKey: 'pro', name: 'Pro', displayPrice: '45.0000', currency: 'EUR', billingInterval: 'month',
+    includesApi: true, highlight: 'popular', quotas: QUOTAS,
+  };
+  const PRO_YEARLY = { ...PRO_MONTHLY, planKey: 'pro-annual', displayPrice: '450.0000', billingInterval: 'year' };
+  const features = plan => within(within(card(plan)).getByTestId('upgrade-plan-features'))
+    .getAllByRole('listitem').map(item => displayed(item.textContent));
+
+  it('lists the plan quotas, API access and the shared features, in storefront order', async () => {
+    const start = { ...PRO_MONTHLY, planKey: 'start', name: 'Start', includesApi: false, highlight: null,
+      quotas: [{ ...QUOTAS[0], includedQty: 250 }, { ...QUOTAS[1], includedQty: 1 }] };
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [start, PRO_MONTHLY] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(features(PRO_MONTHLY)).toEqual([
+      displayed(`upgradePlanFeaturePerYear ${formatGroupedNumber(3000)} quotaUnitSalesInvoices`),
+      'upgradePlanFeatureAllFeatures',
+      'upgradePlanFeatureApi',
+      'upgradePlanFeatureMcp',
+      'upgradePlanFeatureSeats 4',
+    ]);
+    // No API line without the flag, and the singular for a single seat.
+    expect(features(start)).toEqual([
+      'upgradePlanFeaturePerYear 250 quotaUnitSalesInvoices',
+      'upgradePlanFeatureAllFeatures',
+      'upgradePlanFeatureMcp',
+      'upgradePlanFeatureSeatsOne 1',
+    ]);
+  });
+
+  it('badges a highlighted plan, and only that one', async () => {
+    const recommended = { ...PRO_MONTHLY, planKey: 'scale', name: 'Scale', highlight: 'recommended' };
+    const plain = { ...PRO_MONTHLY, planKey: 'core', name: 'Core', highlight: null };
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [plain, PRO_MONTHLY, recommended] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(within(card(PRO_MONTHLY)).getByTestId('upgrade-plan-highlight')).toHaveTextContent('upgradePlanHighlightPopular');
+    expect(within(card(recommended)).getByTestId('upgrade-plan-highlight')).toHaveTextContent('upgradePlanHighlightRecommended');
+    expect(card(recommended)).toHaveAttribute('data-highlight', 'recommended');
+    expect(within(card(plain)).queryByTestId('upgrade-plan-highlight')).not.toBeInTheDocument();
+  });
+
+  it('leads a yearly card with its monthly equivalent and states the single yearly payment', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [PRO_MONTHLY, PRO_YEARLY] });
+    await renderUpgradePage({ advanceCheckout: false });
+    await user.click(screen.getByTestId('upgrade-plan-interval-year'));
+
+    const price = within(card(PRO_YEARLY)).getByTestId('upgrade-plan-price');
+    expect(price).toHaveTextContent(displayed(formatCurrency('EUR', 37.5)));
+    expect(price).toHaveTextContent('upgradePlanPerMonthSuffix');
+    expect(within(card(PRO_YEARLY)).getByTestId('upgrade-plan-price-note')).toHaveTextContent(
+      displayed(`upgradePlanYearlyNote ${formatCurrency('EUR', 450, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`),
+    );
+  });
+
+  it('announces the months a yearly plan saves only when the catalog backs the figure', async () => {
+    const user = userEvent.setup();
+    const coreMonthly = { ...PRO_MONTHLY, planKey: 'core', name: 'Core', displayPrice: '25.0000' };
+    const coreYearly = { ...coreMonthly, planKey: 'core-annual', displayPrice: '250.0000', billingInterval: 'year' };
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [coreMonthly, PRO_MONTHLY, coreYearly, PRO_YEARLY],
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    // Not on the monthly view.
+    expect(screen.queryByTestId('upgrade-plan-yearly-banner')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('upgrade-plan-interval-year'));
+    const banner = screen.getByTestId('upgrade-plan-yearly-banner');
+    expect(banner).toHaveTextContent('upgradePlanYearlyBadge 2');
+    expect(banner).toHaveTextContent('upgradePlanYearlyBanner 10');
+  });
+
+  it.each([
+    ['the yearly plans save different amounts', [{ planKey: 'pro-annual', displayPrice: '400.0000' }]],
+    ['a yearly plan has no monthly counterpart', [{ planKey: 'pro-annual', name: 'Pro yearly only' }]],
+    ['a yearly plan saves nothing', [{ planKey: 'pro-annual', displayPrice: '540.0000' }]],
+  ])('shows no savings banner when %s', async (_case, [override]) => {
+    const user = userEvent.setup();
+    const coreMonthly = { ...PRO_MONTHLY, planKey: 'core', name: 'Core', displayPrice: '25.0000' };
+    const coreYearly = { ...coreMonthly, planKey: 'core-annual', displayPrice: '250.0000', billingInterval: 'year' };
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [coreMonthly, PRO_MONTHLY, coreYearly, { ...PRO_YEARLY, ...override }],
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+    await user.click(screen.getByTestId('upgrade-plan-interval-year'));
+
+    expect(screen.queryByTestId('upgrade-plan-yearly-banner')).not.toBeInTheDocument();
+  });
+
+  it('moves the selected badge, aria-pressed and data-selected with the click', async () => {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [PRODUCTIVE_PLAN, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(SECOND_PLAN);
+    // Choosing a card moves on to the add-ons.
+    await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
+    await backToPlanStep(user);
+    // Back on the Plan step, the toggle opens on the interval of the plan already chosen.
+    expect(screen.getByTestId('upgrade-plan-interval-year')).toHaveAttribute('aria-checked', 'true');
+    await expectSelected(SECOND_PLAN, true);
+    await expectSelected(PRODUCTIVE_PLAN, false);
+
+    await selectPlan(PRODUCTIVE_PLAN);
+    await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
+    await backToPlanStep(user);
+    await expectSelected(PRODUCTIVE_PLAN, true);
+    await expectSelected(SECOND_PLAN, false);
+    expect(screen.queryAllByTestId('upgrade-plan-selected-badge')).toHaveLength(0);
+  });
+
+  it('summarizes the chosen plan name and price on the Add-ons step', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [PRODUCTIVE_PLAN, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(SECOND_PLAN);
+
+    expect(await screen.findByTestId('upgrade-checkout-summary-plan')).toHaveTextContent('Productive annual');
+    expect(screen.getByTestId('upgrade-checkout-summary-price')).toHaveTextContent(priceText(SECOND_PLAN));
+  });
+
+  it('shows a read-only summary on the Payment step, with no chooser, and sends only the chosen key', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [PRODUCTIVE_PLAN, SECOND_PLAN, THIRD_PLAN],
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    await selectPlan(THIRD_PLAN);
+    await user.click(await screen.findByTestId('upgrade-addons-continue'));
+
+    const summary = await screen.findByTestId('upgrade-plan-summary');
+    expect(within(summary).getByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive Plus');
+    expect(within(summary).getByTestId('upgrade-plan-summary-price')).toHaveTextContent(priceText(THIRD_PLAN));
+    expect(screen.queryByTestId('upgrade-plan-catalog')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-select')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^upgrade-plan-card-/)).toHaveLength(0);
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-plus');
+    expect(requests[0].body).not.toHaveProperty('priceId');
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/price|amount|1234/i);
+  });
+
+  it('shows the bare amount for a billing interval it does not know', async () => {
+    const weekly = { ...PRODUCTIVE_PLAN, planKey: 'productive-weekly', billingInterval: 'week' };
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [weekly] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const price = within(card(weekly)).getByTestId('upgrade-plan-price');
+    // Never asserted as "per month": no price key and no monthly note, only the formatted amount.
+    expect(displayed(price.textContent).trim()).toBe(cardPriceText(weekly));
+    expect(price).not.toHaveTextContent(/upgradePlanPrice|upgradePlanPerMonthSuffix/);
+    expect(within(card(weekly)).queryByTestId('upgrade-plan-price-note')).not.toBeInTheDocument();
+  });
+
+  it('renders a plan that has no description', async () => {
+    const user = userEvent.setup();
+    const bare = { planKey: 'productive-bare', name: 'Bare', displayPrice: '10.00', currency: 'EUR', billingInterval: 'month' };
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [bare, SECOND_PLAN] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(within(card(bare)).getByTestId('upgrade-plan-name')).toHaveTextContent('Bare');
+    expect(within(card(bare)).getByTestId('upgrade-plan-price')).toHaveTextContent(cardPriceText(bare));
+
+    await selectPlan(bare);
+    await user.click(await screen.findByTestId('upgrade-addons-continue'));
+    expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Bare');
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-bare');
+  });
+
+  it('says the session expired, and blocks going forward, when the catalog answers 401', async () => {
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ error: { message: 'Invalid or expired token' } }, { ok: false, status: 401 }),
+    });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-plans-session-expired')).toHaveTextContent('upgradeSessionExpired');
+    // Not an unreadable catalog: retrying the same request cannot help.
+    expect(screen.queryByTestId('upgrade-plans-unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plans-retry')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-continue')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-plan-catalog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-checkout-step-addons')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-checkout-step-payment')).toBeDisabled();
+    expect(screen.queryByTestId('upgrade-submit')).not.toBeInTheDocument();
+  });
+
+  it('offers to sign in again when the catalog answers 401, landing on the login view', async () => {
+    const user = userEvent.setup();
+    logoutMock.mockClear();
+    localStorage.removeItem('sf_onboarding_initial_view');
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ error: { message: 'Invalid or expired token' } }, { ok: false, status: 401 }),
+    });
+    await renderUpgradePage();
+
+    const signIn = screen.getByTestId('upgrade-plans-sign-in-again');
+    expect(signIn).toHaveTextContent('accountSignInAgain');
+    await user.click(signIn);
+    expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a catalog re-read on the Payment step', () => {
+    /** Environments fail once, so the Payment step offers a retry that re-reads both lookups. */
+    function environmentsFailingOnce() {
+      let attempt = 0;
+      return () => {
+        attempt += 1;
+        return attempt === 1
+          ? jsonResponse({ error: { message: 'boom' } }, { ok: false, status: 503 })
+          : jsonResponse({ environments: [{ clientName: EXISTING_TENANT, clientId: 'CLIENT-1' }] });
+      };
+    }
+    /** Answers the catalog lookups in order, repeating the last answer. */
+    function plansInSequence(...answers) {
+      let attempt = 0;
+      return () => {
+        const answer = answers[Math.min(attempt, answers.length - 1)];
+        attempt += 1;
+        return answer === 'fail'
+          ? jsonResponse({ message: 'boom' }, { ok: false, status: 503 })
+          : jsonResponse({ plans: answer });
+      };
+    }
+    const plansReads = () => globalThis.fetch.mock.calls
+      .filter(([url]) => String(url).includes('/sws/go/plans')).length;
+    /** The retry re-read both lookups and both have settled. */
+    async function settledAfterReread(expectedReads) {
+      await waitFor(() => expect(plansReads()).toBe(expectedReads));
+      await waitFor(() => expect(screen.queryByTestId('upgrade-environments-unavailable')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByTestId('upgrade-plans-loading')).not.toBeInTheDocument());
+    }
+    async function choosePlanAndReachPayment(user, plan) {
+      await renderUpgradePage({ advanceCheckout: false });
+      await selectPlan(plan);
+      await user.click(await screen.findByTestId('upgrade-addons-continue'));
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent(plan.name);
+    }
+
+    it('keeps the chosen plan when the re-read succeeds', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
+      await user.click(screen.getByTestId('upgrade-submit'));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].body.planKey).toBe('productive-yearly');
+    });
+
+    it('restores the chosen plan when a failed re-read is retried', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN], 'fail', [PRODUCTIVE_PLAN, SECOND_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+      // The re-read failed: the summary gives way to the retry, and nothing can be bought.
+      expect(await screen.findByTestId('upgrade-plans-retry')).toBeInTheDocument();
+      expect(screen.queryByTestId('upgrade-plan-summary')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('upgrade-plans-retry'));
+      expect(await screen.findByTestId('upgrade-plan-summary-name')).toHaveTextContent('Productive annual');
+      await user.click(screen.getByTestId('upgrade-submit'));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].body.planKey).toBe('productive-yearly');
+    });
+
+    it('drops the choice, and asks for one, when the catalog no longer offers it', async () => {
+      const user = userEvent.setup();
+      const requests = installFetch({
+        environments: environmentsFailingOnce(),
+        plans: plansInSequence([PRODUCTIVE_PLAN, SECOND_PLAN], [PRODUCTIVE_PLAN, THIRD_PLAN]),
+      });
+      await choosePlanAndReachPayment(user, SECOND_PLAN);
+
+      await user.click(screen.getByTestId('upgrade-environments-retry'));
+      await settledAfterReread(2);
+      expect(screen.queryByTestId('upgrade-plan-summary')).not.toBeInTheDocument();
+
+      await user.click(screen.getByTestId('upgrade-submit'));
+      expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradePlanRequired');
+      expect(requests).toHaveLength(0);
+
+      // A way back to the chooser, rather than a dead end with no plan to pick.
+      const choose = screen.getByTestId('upgrade-plan-summary-choose');
+      expect(choose).toHaveTextContent('upgradePlanChoiceLabel');
+      await user.click(choose);
+      expect(await screen.findByTestId('upgrade-plan-catalog')).toBeInTheDocument();
+      expect(screen.queryByTestId('upgrade-submit')).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -1401,6 +1748,16 @@ describe('UpgradePage — current-environment prefill and taken-name guard (ETP-
 });
 
 describe('UpgradePage — provisioning environment synchronization (ETP-5443)', () => {
+  it('reads the trial pill in the singular with one day left (ETP-5049)', async () => {
+    UPGRADE_SESSION.clientId = 'CURRENT-DEMO';
+    installFetch({ environments: [
+      { clientName: 'Current Demo', clientId: 'CURRENT-DEMO', plan: 'demo', trialDaysRemaining: 1 },
+    ] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(await screen.findByTestId('upgrade-trial-pill')).toHaveTextContent('environmentTrialDaysRemainingOne');
+  });
+
   it('requires the user to choose a demo source when starting from a demo with multiple demos', async () => {
     const user = userEvent.setup();
     UPGRADE_SESSION.clientId = 'CURRENT-DEMO';

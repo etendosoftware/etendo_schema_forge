@@ -1,9 +1,10 @@
 import { useCallback } from 'react';
 // ETP-5209 follow-up — relative imports, not the `@/` alias: this module is loaded
 // directly by plain `node --test` via useInvoiceWindow.test.js's real `import`
-// (Vite's alias resolution is unavailable there), and preUnpost.js is a
+// (Vite's alias resolution is unavailable there), and postedStatus.js is a
 // dependency-free leaf module, so the relative path costs nothing.
-import { isPosted as isRowPosted } from '../../../lib/preUnpost.js';
+import { isPosted as isRowPosted } from '../../../lib/postedStatus.js';
+import { joinWithConjunction } from '../../../lib/backendErrors.js';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 import { buildMenuActionExecutedHandler } from './buildDocumentRowQuickActions.js';
 // Plain (hook-free) module, never the `@/auth/api.js` barrel — see
@@ -60,8 +61,8 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
   // the document actions (the fiscal "send to SII/TBAI" entry). It may return one
   // descriptor, an array of them, or nothing.
   const { showEmail = true, onRefresh, ui, extraMenuActions = null, apiBaseUrl, token } = options;
-  // ETP-5745 QA follow-up — the row-hover kebab is a THIRD surface running the same
-  // preUnpost-then-reactivate sequence as the detail kebab and the bulk bar, and list rows
+  // ETP-5745 QA follow-up — the row-hover kebab is a THIRD surface offering the same
+  // reactivation as the detail kebab and the bulk bar, and list rows
   // are never GET-enriched with `reactivationBlocked` (only the detail GET is), so it needs
   // the exact same per-row check `makeInvoiceReactivateRowFilter` already does for the bulk
   // bar. Reused as-is rather than re-implemented, wired through the generic
@@ -95,7 +96,7 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     // form-view kebab the same decisions.json array already describes:
     //   completed + not posted  → Reactivate AND Post
     //   completed + posted      → Reactivate AND Unpost (ETP-5692; the
-    //                             reactivation still unposts first via preUnpost)
+    //                             reactivation un-posts on the server, ETP-5684)
     //   draft                   → Confirm only (ETP-5378, see the note inside)
     // Order matches decisions.json → window.menuActions (reactivate, post, unpost).
     //
@@ -103,7 +104,7 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     // it removes the accounting and leaves the invoice Completed, so accounting-only data
     // (exchange rates, header dimensions) can be corrected and re-posted without
     // reactivating. Offered only on a Completed AND posted invoice (`isPosted` from
-    // preUnpost.js: only 'Y'/true count) — the same gate as the form-view kebab
+    // postedStatus.js: only 'Y'/true count) — the same gate as the form-view kebab
     // (`visibleWhenStatus: "CO"` + `visibleWhenFieldTrue: "posted"`) and the bulk button's
     // invoiceUnpostRowFilter.
     menuActions: ({ row }) => {
@@ -131,10 +132,8 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
             labelKey: 'reactivate',
             documentAction: 'RE',
             successKey: 'reactivated',
-            // Reactivating a posted invoice must reverse its accounting first, or the
-            // backend rejects the bare docAction — same flag the form-view kebab uses.
-            preUnpost: true,
-            // ETP-5745 QA follow-up — checked BEFORE preUnpost; see reactivateRowFilter above.
+            // ETP-5745 QA follow-up — see reactivateRowFilter above. The server un-posts a
+            // posted invoice inside the RE (ETP-5684).
             preUnpostGuard: (currentRow, currentAction, uiFn) =>
               reactivateRowFilter(currentRow, currentAction, uiFn),
           }]
@@ -189,8 +188,9 @@ export const invoiceUnpostRowFilter = (row, action, ui) => {
 /**
  * ETP-5745 follow-up — bulk-bar equivalent of the detail kebab's `reactivationBlocked` check
  * (`DetailMoreActionsMenu.jsx`): a row whose reactivation is already known to be refused (fiscally
- * accepted + a completed rectificativa) must never reach `runPreUnpost`, or the bulk run un-posts
- * it and THEN fails to reactivate it — the exact side effect ETP-5745 exists to prevent.
+ * accepted + a completed rectificativa) is answered here, without a round trip. (It used to also keep
+ * the client-side un-post from running before a refused RE; since ETP-5684 the server un-posts
+ * inside the RE, after its own guard.)
  *
  * Unlike `invoiceUnpostRowFilter`, this CANNOT be answered from the list row alone — "has a
  * completed rectificativa" is not a grid column, it is the same `C_Invoice_Reverse` join the
@@ -219,8 +219,13 @@ export const makeInvoiceReactivateRowFilter = ({ apiBaseUrl, token }) => async (
     const json = await res.json().catch(() => null);
     const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? null;
     if (!record?.reactivationBlocked) return true;
+    // ETP-5745: reactivationBlockedFiscalSystem is a real array (like the live 422's own
+    // messageParams.fiscalSystem) — joined with the same locale-aware conjunction so this
+    // preview reads identically to the action's own refusal ("SII y TicketBAI", not a comma).
     return ui('backendError.invoiceReactivateFiscalRectified', {
-      fiscalSystem: record.reactivationBlockedFiscalSystem,
+      fiscalSystem: Array.isArray(record.reactivationBlockedFiscalSystem)
+        ? joinWithConjunction(record.reactivationBlockedFiscalSystem, ui)
+        : record.reactivationBlockedFiscalSystem,
       rectificativas: Array.isArray(record.reactivationBlockedRectificativas)
         ? record.reactivationBlockedRectificativas.join(', ')
         : record.reactivationBlockedRectificativas,

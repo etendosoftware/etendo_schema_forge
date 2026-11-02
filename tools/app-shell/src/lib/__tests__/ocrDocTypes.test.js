@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/copilot/ocr/ocrDocTypes.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -15,9 +16,18 @@ describe('ocrDocTypes registry', () => {
     for (const entry of OCR_DOC_TYPES) {
       assert.ok(entry.id, 'id missing');
       assert.ok(entry.routePrefix?.startsWith('/'), 'routePrefix must be absolute');
-      assert.ok(entry.toolName, 'toolName missing');
       assert.ok(entry.eventName, 'eventName missing');
-      assert.ok(entry.question, 'question missing');
+      assert.ok(entry.tableName, 'tableName missing');
+      assert.ok(entry.headerFields?.length > 0, 'headerFields missing');
+    }
+  });
+
+  it('keeps no copy of what the extraction asks the model (ETP-5715: the server serves it)', () => {
+    for (const entry of OCR_DOC_TYPES) {
+      assert.equal(entry.toolName, undefined, 'the tool comes from /sws/neo/ocrconfig');
+      assert.equal(entry.question, undefined, 'the question comes from /sws/neo/ocrconfig');
+      assert.equal(entry.extraHeaderFields, undefined, 'the schema comes from /sws/neo/ocrconfig');
+      assert.equal(entry.extraLineFields, undefined, 'the schema comes from /sws/neo/ocrconfig');
     }
   });
 

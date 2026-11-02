@@ -386,16 +386,18 @@ regen-help: ## Show usage and examples for `make regen`
 
 # --- Public API Gateway (ETP-5345) ---
 #
-# Resolves artifacts/*/contract.json's field-level `publicApi` curation into one flat
-# allowlist artifact per API version (artifacts/_public-api/allowlist.<version>.json),
-# consumed by the gateway/ NestJS app. Same LOCAL_CORE dispatcher as `regen` above.
+# The gateway/ NestJS app serves public-api/base.v1.json, built by
+# `generate-base-public-api-manifest` from artifacts/*/contract.json and the gitignored
+# artifacts/*/schema-raw.json. `regen-public-api` writes a separate allowlist
+# (artifacts/_public-api/allowlist.v1.json) that no runtime component reads.
+# Same LOCAL_CORE dispatcher as `regen` above.
 
 .PHONY: regen-public-api
 regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
 	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
 
 .PHONY: generate-base-public-api-manifest
-generate-base-public-api-manifest: ## Generate the editable primary-entity Base-window public API manifest
+generate-base-public-api-manifest: ## Generate public-api/base.v1.json, the manifest the public API gateway serves
 	node scripts/generate-base-public-api-manifest.mjs artifacts public-api/base.v1.json
 	node scripts/validate-base-public-api-manifest.mjs public-api/base.v1.json
 
@@ -666,11 +668,12 @@ HOST ?=
 MCP_TARGET = $(or $(PROFILE),$(HOST))
 
 .PHONY: mcp-usage
-mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
+mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1 REVIEWER=<name>] [INCLUDE_REVIEWED=1] [ARGS='...'])
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s mcp-usage-help; exit 0; fi; \
 	if [ -z "$(MCP_TARGET)" ]; then echo "PROFILE (or HOST) is required, e.g. make mcp-usage PROFILE=production"; exit 1; fi; \
 	scripts/mcp-usage-dump.sh $(MCP_TARGET) \
 		$(if $(filter 1,$(MARK_REVIEWED)),--mark-reviewed) \
+		$(if $(REVIEWER),--reviewer '$(REVIEWER)') \
 		$(if $(filter 1,$(INCLUDE_REVIEWED)),--include-reviewed) \
 		$(if $(filter 1,$(COUNT)),--count) \
 		$(if $(SINCE),--since $(SINCE)) \

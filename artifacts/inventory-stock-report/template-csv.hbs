@@ -13,5 +13,5 @@
       triple-stashed ({{{ }}}), never {{ }}: Handlebars HTML-escapes double-stash
       output by default, which turns csvField's own escaped `""` into
       `&quot;&quot;`, corrupting the CSV. --}}{{#with meta}}{{{csvField labels.productSearchKey}}},{{{csvField labels.product}}},{{{csvField labels.warehouse}}},{{{csvField labels.category}}},{{{csvField labels.uom}}},{{{csvField labels.qtyOnHand}}},{{{csvField labels.unitCost}}},{{{csvField labels.totalValuation}}}
-{{/with}}{{#each rows}}{{{csvField (lookup this 'productSearchKey')}}},{{{csvField (lookup this 'product')}}},{{{csvField (lookup this 'warehouse')}}},{{{csvField (lookup this 'category')}}},{{{csvField (lookup this 'uom')}}},{{round2 (lookup this 'qtyOnHand')}},{{round2 (lookup this 'unitCost')}},{{round2 (lookup this 'totalValuation')}}
+{{/with}}{{#each rows}}{{{csvField (lookup this 'productSearchKey')}}},{{{csvField (lookup this 'product')}}},{{{csvField (lookup this 'warehouse')}}},{{{csvField (lookup this 'category')}}},{{{csvField (lookup this 'uom')}}},{{round2 (lookup this 'qtyOnHand')}},{{dashIfBlank (lookup this 'unitCost') (round2 (lookup this 'unitCost'))}},{{dashIfBlank (lookup this 'totalValuation') (round2 (lookup this 'totalValuation'))}}
 {{/each}}

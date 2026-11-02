@@ -30,7 +30,6 @@ import {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCRIPT = join(REPO_ROOT, 'scripts', 'compare-sonar-coverage.js');
-const BYPASS = "   Bypass with 'git push --no-verify' (WIP only).";
 
 const measures = (value) => ({ component: { measures: [{ metric: 'coverage', value }] } });
 const jsonResp = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
@@ -145,14 +144,13 @@ describe('formatResult — push context (parity with the legacy run-sonar.sh tex
     assert.deepEqual(r.lines, ["    SKIPPED ⚠️  Could not read this branch's coverage from Sonar — not blocking."]);
   });
 
-  it('below-minimum prints the legacy lines and the bypass hint', () => {
+  it('below-minimum prints the legacy lines without a bypass hint', () => {
     const r = formatResult({ verdict: 'below-minimum' }, { ...ctx, current: 65.5, base: null });
     assert.equal(r.exitCode, 1);
     assert.deepEqual(r.lines, [
       '    feature/X coverage: 65.50%',
       '\n❌ COVERAGE BELOW MINIMUM — 65.50% < 70.00% required.',
       '   Add tests until overall coverage reaches the minimum, then re-push.',
-      BYPASS,
     ]);
   });
 
@@ -163,7 +161,7 @@ describe('formatResult — push context (parity with the legacy run-sonar.sh tex
       + '(matches CI, which treats a missing baseline as 0%).']);
   });
 
-  it('decreased prints the legacy lines and the bypass hint', () => {
+  it('decreased prints the legacy lines without a bypass hint', () => {
     const r = formatResult({ verdict: 'decreased', minRequired: 79, short: 0.5 },
       { ...ctx, current: 78.5, base: 80 });
     assert.equal(r.exitCode, 1);
@@ -173,7 +171,6 @@ describe('formatResult — push context (parity with the legacy run-sonar.sh tex
       "\n❌ COVERAGE DECREASED — this push would fail Jenkins' 'Compare Coverage Results'.",
       "   78.50% < 79.00% (base 80.00% − 1.00pp) on 'develop' (short 0.50pp).",
       '   Add tests until overall coverage is >= the base (minus tolerance), then re-push.',
-      BYPASS,
     ]);
   });
 
@@ -556,7 +553,7 @@ describe('main', () => {
     const r = await run(['--base-branch', 'develop', '--project-key', 'p', '--label', 'feature/X'], { fetchImpl });
     assert.equal(r.code, 1);
     assert.match(r.text, /COVERAGE DECREASED — this push would fail/);
-    assert.ok(r.out.includes(BYPASS));
+    assert.doesNotMatch(r.text, /--no-verify/);
     assert.doesNotMatch(r.text, /::error/);
   });
 
@@ -815,5 +812,17 @@ describe('wiring guardrails', () => {
 
   it('gives each push sha its own concurrency group', () => {
     assert.match(workflow, /group: tests-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
+  });
+});
+
+describe('run-sonar.sh scanner locale', () => {
+  const runSonar = readFileSync(join(REPO_ROOT, 'run-sonar.sh'), 'utf8');
+
+  it('launches sonar-scanner under a forced UTF-8 locale (LC_ALL=C aborts on non-ASCII paths)', () => {
+    assert.match(runSonar, /LANG="\$SCANNER_LOCALE" LC_ALL="\$SCANNER_LOCALE" sonar-scanner /);
+  });
+
+  it('falls back to en_US.UTF-8, the locale macOS has', () => {
+    assert.match(runSonar, /SCANNER_LOCALE="en_US\.UTF-8"/);
   });
 });

@@ -16,6 +16,9 @@ import { CfgField, INPUT_ST } from './FmConfigFields.jsx';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+
+// committed-selection-ok: short, fully rendered lists that already set aria-selected from their value; nothing to page or centre.
+
 function parseCityLine(cityLine) {
   if (!cityLine) return { postal: '', city: '', province: '' };
   // Format: "28001 - Madrid (Madrid)" — postal optional, region in parens optional

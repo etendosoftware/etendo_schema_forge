@@ -246,12 +246,13 @@ export function computeTriggerLabel(value, placeholder, ui, bcpLocale) {
       // stale label, the ETP-4956 failure mode.
       allTime: ui('dateRangeAllTime'),
     };
-    return labels[value.presetId] ?? placeholder ?? ui('dateRangeAnyTime');
+    return labels[value.presetId] ?? placeholder ?? ui('dateRangeAllTime');
   }
   if (value && 'from' in value && 'to' in value) {
     return `${fmtDay(value.from)} – ${fmtDay(value.to)}`;
   }
-  return placeholder ?? ui('dateRangeAnyTime');
+  // ETP-5591: no range is what the "All time" preset picks, so it reads the same name.
+  return placeholder ?? ui('dateRangeAllTime');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

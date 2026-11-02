@@ -172,6 +172,8 @@ an app session; data operations under `/api/v1/*` still require an API key.
 | CloudFront distribution | `EGLVB9A5GHHEQ` (`app.etendo.ai`) |
 | ALB routes | `/api`, `/api/openapi.json`, `/api/v1/*` → public API target group |
 
+Build and deploy of this service is manual: see [public-api-gateway-deploy.md](public-api-gateway-deploy.md).
+
 The existing `/api/reports` and `/api/report-selectors` rules retain priority
 over the general `/api/*` behavior and continue routing to report-server.
 

@@ -96,7 +96,7 @@ function expectSaveResponse(page) {
     (resp) =>
       resp.url().includes('/sws/neo/') &&
       ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) &&
-      resp.status() < 500,
+      resp.status() < 400,
     { timeout: 20_000 },
   ).catch(() => {});
 }
@@ -107,7 +107,7 @@ function expectSaveResponse(page) {
  */
 async function waitForConfirmResponse(page) {
   await page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'POST' && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'POST' && resp.status() < 400,
     { timeout: 30_000 },
   ).catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
@@ -260,7 +260,7 @@ async function addLine(page, { productName, productIndex = 0, quantity } = {}) {
 
   // Wait for the callout to fill price/tax before touching quantity.
   await page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/'), // callout/defaults probe: any answer (even 4xx) unblocks the wait
     { timeout: 10_000 },
   ).catch(() => {});
   await slow(page);
@@ -464,7 +464,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await slow(page);
 
     await page.waitForResponse(
-      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 500,
+      (resp) => resp.url().includes('/sws/neo/'), // probe: any answer unblocks the wait
       { timeout: 10_000 },
     ).catch(() => {});
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

@@ -19,5 +19,7 @@ export { CompactHeader } from './CompactHeader';
 export { default as DocumentStatusPill } from './DocumentStatusPill';
 export { ConfirmResultModal } from './ConfirmResultModal';
 export { AccountSelect, accountOptionLabel } from './AccountSelect';
+export { useAccountSelectorPages, selectorItemLabel } from './useAccountSelectorPages';
 export { ToggleRow } from './ToggleRow';
+export { default as SectionShell } from './SectionShell';
 export { default as RecordUnavailable } from './RecordUnavailable';

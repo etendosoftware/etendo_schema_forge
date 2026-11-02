@@ -13,6 +13,9 @@
   The "Documentos" tab shows a count badge **"8"**.
 - **Right side of the tab row**: an overflow (⋮) button and a primary button **"✓ Guardar cambios"**.
   The Guardar button is **disabled/greyed when the form is not dirty**, enabled on change.
+- *Extended by ETP-5736:* the tab row now follows the record-toolbar standard (56px bar, 40px
+  segmented group of 32px tabs, 40px Save, semantic colour tokens). The "Documentos" tab was removed
+  in ETP-4452; see `docs/generated-custom-windows/general-ledger-configuration.md`.
 - **Card surface**: white rounded container on a light-grey page; generous padding.
 - Section pattern: a **left column** with the section **title** (bold) + a small grey **subtitle/description**,
   and a **right area** with the fields laid out in a responsive grid (up to 4 columns on wide screens).

@@ -10,7 +10,7 @@ const columns = [
 
 // @sf-generated-start fields:transactionType
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'general' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'general', maxLength: 60 },
   { key: 'active', column: 'Isactive', type: 'checkbox', label: 'Active', required: true, section: 'general', defaultValue: 'Y' },
 ];
 

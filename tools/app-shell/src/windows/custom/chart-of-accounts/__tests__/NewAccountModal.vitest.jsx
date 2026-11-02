@@ -239,11 +239,37 @@ describe('NewAccountModal', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 
+  // The field's blur check and the modal's save check both report an incomplete code;
+  // they must share one message slot instead of stacking two copies.
+  it('shows the incomplete-code error once when the code is blurred and then saved', () => {
+    globalThis.fetch = vi.fn();
+    render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
+    const suffix = screen.getByTestId('account-code-suffix-input');
+    fireEvent.change(suffix, { target: { value: '12' } });
+    fireEvent.blur(suffix); // jsdom's fireEvent.click on save does not blur the input
+    fireEvent.click(screen.getByTestId('new-account-modal-save'));
+
+    expect(screen.getAllByText('codeExact8Digits')).toHaveLength(1);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('shows the incomplete-code error once when saving without ever focusing the code', () => {
+    render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
+    fireEvent.click(screen.getByTestId('new-account-modal-save'));
+
+    expect(screen.getAllByText('codeExact8Digits')).toHaveLength(1);
+    expect(screen.getByTestId('account-code-error')).toHaveTextContent('codeExact8Digits');
+  });
+
   it('switching the parent selector updates the code prefix and clears its error', async () => {
     const user = userEvent.setup();
     render(<NewAccountModal {...baseProps({ currentRecord: null })} />);
+    const suffix = screen.getByTestId('account-code-suffix-input');
+    fireEvent.change(suffix, { target: { value: '12' } });
+    fireEvent.blur(suffix);
     fireEvent.click(screen.getByTestId('new-account-modal-save'));
     expect(within(screen.getByTestId('new-account-modal-parent')).getByText('required')).toBeInTheDocument();
+    expect(screen.getByText('codeExact8Digits')).toBeInTheDocument();
 
     await openParent(user);
     await pickParent(user, '5000 - Purchases');
@@ -251,6 +277,8 @@ describe('NewAccountModal', () => {
     expect(within(parentRoot()).getByText('5000 - Purchases')).toBeInTheDocument();
     expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('5000');
     expect(within(screen.getByTestId('new-account-modal-parent')).queryByText('required')).not.toBeInTheDocument();
+    // The new parent resets the code to its prefix, so the old code error no longer applies.
+    expect(screen.queryByText('codeExact8Digits')).not.toBeInTheDocument();
   });
 
   it('submits the correct POST body and calls onSaved on success', async () => {

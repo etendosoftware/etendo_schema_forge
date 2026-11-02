@@ -84,6 +84,29 @@ describe('useMainAttachment', () => {
       });
     });
 
+    it('resolves a generic octet-stream data type from the file extension (blob mode)', async () => {
+      fetchMainAttachment.mockResolvedValue({ id: 'att-9', name: 'x.webp', dataType: 'application/octet-stream' });
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:webp-url');
+
+      const { result } = renderHook(() => useMainAttachment(BASE_PARAMS));
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFile.mimeType).toBe('image/webp');
+      expect(result.current.storedFile.objectUrl).toBe('blob:webp-url');
+    });
+
+    it('passes a correct stored data type through unchanged (blob mode)', async () => {
+      fetchMainAttachment.mockResolvedValue({ id: 'att-9', name: 'x.webp', dataType: 'image/png' });
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:png-url');
+
+      const { result } = renderHook(() => useMainAttachment(BASE_PARAMS));
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFile.mimeType).toBe('image/png');
+    });
+
     it('leaves storedFile null when no attachment is marked', async () => {
       fetchMainAttachment.mockResolvedValue(null);
 
@@ -523,6 +546,20 @@ describe('useMainAttachment', () => {
       expect(result.current.storedFile).toEqual({
         attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: null,
       });
+    });
+
+    it('resolves a generic octet-stream data type from the file extension without fetching the blob', async () => {
+      fetchMainAttachment.mockResolvedValue({ id: 'att-9', name: 'x.webp', dataType: 'application/octet-stream' });
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+      );
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(fetchAttachmentBlobUrl).not.toHaveBeenCalled();
+      expect(result.current.storedFile.mimeType).toBe('image/webp');
+      expect(result.current.storedFile.objectUrl).toBeNull();
     });
 
     it('still computes storedFileIsStale in metadata-only mode (staleness never needed the blob)', async () => {

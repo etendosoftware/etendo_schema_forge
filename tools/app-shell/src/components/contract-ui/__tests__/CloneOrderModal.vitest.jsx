@@ -1,6 +1,14 @@
+// @covers tools/app-shell/src/components/contract-ui/CloneOrderModal.jsx
 // Real Vitest import test for CloneOrderModal — covers actual component code paths
+// Keys echo back, except the two plan-quota sentences (ETP-5051), which must be observably
+// translated: an echoed key reads as "not translated" and the translator would fall back.
+const QUOTA_LABELS = {
+  'backendError.quotaExceeded': 'Límite del plan alcanzado: {resource} ({usage}).',
+  'backendError.quotaCheckFailed': 'No se pudo comprobar la cuota del plan.',
+};
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params = {}) => Object.entries(params)
+    .reduce((text, [k, v]) => text.replace(`{${k}}`, String(v)), QUOTA_LABELS[key] ?? key),
   useLocale: () => ({ genericLabels: {}, statuses: {} }),
 }));
 
@@ -181,6 +189,46 @@ describe('CloneOrderModal', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Flat backend error')).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5051 — a clone that would create documents past the plan quota is refused with 403
+  // QUOTA_EXCEEDED. It reads as the translated quota sentence, before the backend prose.
+  it('shows the translated quota sentence for a 403 QUOTA_EXCEEDED, not the backend prose', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: {
+          code: 'QUOTA_EXCEEDED', status: 403, message: 'Quota exceeded: Sales orders (20/20)',
+          quota: { resourceKey: 'CLONE_ORDERS', resourceName: 'Sales orders', includedQty: 20, consumed: 20, verdict: 'DENY' },
+        },
+      }),
+    });
+
+    render(<CloneOrderModal {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('action-clone-record'));
+
+    await waitFor(() => {
+      // The usage part is itself a key (`quotaUsageNoUnit`) this mock echoes; the resource is what matters.
+      expect(screen.getByText(/^Límite del plan alcanzado: Sales orders \(/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Quota exceeded: Sales orders (20/20)')).not.toBeInTheDocument();
+    expect(screen.queryByText('cloneOrderError')).not.toBeInTheDocument();
+  });
+
+  it('shows the check-failed sentence for a 500 QUOTA_CHECK_FAILED', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: { code: 'QUOTA_CHECK_FAILED', status: 500, message: 'The quota check failed; nothing was saved. Try again.' } }),
+    });
+
+    render(<CloneOrderModal {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('action-clone-record'));
+
+    await waitFor(() => {
+      expect(screen.getByText('No se pudo comprobar la cuota del plan.')).toBeInTheDocument();
     });
   });
 
