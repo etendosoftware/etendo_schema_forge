@@ -220,7 +220,7 @@
           "searchable": true,
           "section": "principal",
           "order": 2,
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null, "required": true }
+          "publicApi": { "exposed": true, "name": "name", "required": true }
         },
         "etgoFirstname": {
           "visibility": "editable",
@@ -262,7 +262,7 @@
           "grid": false,
           "section": "principal",
           "order": 1,
-          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null, "readOnly": true },
+          "publicApi": { "exposed": true, "name": "searchKey", "readOnly": true },
           "agentPrompt": "The contact's number, assigned automatically on create as in the app (the same value as etgoIdentifier). Do not send it when creating a contact: a value you send is replaced by the number and the answer says so in searchKeyNote. To find a contact, filter by name or taxID."
         },
         "businessPartnerCategory": {
@@ -286,7 +286,7 @@
           "visibility": "editable",
           "section": "principal",
           "order": 7,
-          "publicApi": { "exposed": true, "name": "taxId", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "taxId" }
         },
         "oBTIKVIESStatus": {
           "visibility": "readOnly",
@@ -359,7 +359,7 @@
           "section": "principal",
           "order": 9,
           "inputPrefix": "https://",
-          "publicApi": { "exposed": true, "name": "web", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "web" }
         },
         "etgoEmail": {
           "visibility": "editable",
@@ -368,7 +368,7 @@
           "label": "Email",
           "section": "principal",
           "order": 10,
-          "publicApi": { "exposed": true, "name": "email", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "email" }
         },
         "etgoPhone": {
           "visibility": "editable",
@@ -377,7 +377,7 @@
           "label": "Phone",
           "section": "principal",
           "order": 11,
-          "publicApi": { "exposed": true, "name": "phone", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "phone" }
         },
         "creditLimit": {
           "visibility": "editable",
@@ -538,7 +538,7 @@
       },
       "fields": {
         "name": {
-          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "name" },
           "visibility": "editable",
           "grid": true,
           "searchable": true,
@@ -549,7 +549,7 @@
           "section": "principal"
         },
         "shipToAddress": {
-          "publicApi": { "exposed": true, "name": "shipToAddress", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "shipToAddress" },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -559,7 +559,7 @@
           }
         },
         "invoiceToAddress": {
-          "publicApi": { "exposed": true, "name": "invoiceToAddress", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "invoiceToAddress" },
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -569,28 +569,28 @@
           }
         },
         "phone": {
-          "publicApi": { "exposed": true, "name": "phone", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "phone" },
           "visibility": "editable",
           "grid": false,
           "section": "other"
         },
         "active": {
-          "publicApi": { "exposed": true, "name": "active", "type": "passthrough", "handlerId": null },
+          "publicApi": { "exposed": true, "name": "active" },
           "visibility": "readOnly",
           "grid": false,
           "section": "other"
         },
         "locationAddress": {
-          "publicApi": { "exposed": true, "name": "locationAddress", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "locationAddress" }
         },
         "alternativePhone": {
-          "publicApi": { "exposed": true, "name": "alternativePhone", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "alternativePhone" }
         },
         "fax": {
-          "publicApi": { "exposed": true, "name": "fax", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "fax" }
         },
         "taxLocation": {
-          "publicApi": { "exposed": true, "name": "taxLocation", "type": "passthrough", "handlerId": null }
+          "publicApi": { "exposed": true, "name": "taxLocation" }
         }
       },
       "javaQualifier": "contactsLocationAddressHandler"

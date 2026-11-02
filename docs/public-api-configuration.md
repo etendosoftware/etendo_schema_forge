@@ -15,7 +15,7 @@ Per field, `entities.<entity>.fields.<field>.publicApi`:
 ```json
 "searchKey": {
   "visibility": "editable",
-  "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
+  "publicApi": { "exposed": true, "name": "searchKey" }
 }
 ```
 
