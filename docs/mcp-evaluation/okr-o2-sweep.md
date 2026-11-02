@@ -42,6 +42,34 @@ JWT de `sws/login`), modelo `gemini/gemini-3.8-flash`. Holded: pendiente del log
 | 38 | `w-company-users-numbering` | ❌ 25 llamadas (tope) | — | 🐞 | 1.º intento: correo de 63 caracteres > tope 60 (🔧, dominio acortado a `@x.es`). 2.º: nunca intentó crear el usuario; gastó los 25 pasos buscando cómo dar "permisos de ventas" (roles, docs, selectores) |
 | 41 | `e-ambiguous-customer` | ✅ 8 llamadas | — | ✅ | Detectó los dos clientes y no creó nada |
 | 42 | `e-duplicate-payment-term` | ✅ 8 llamadas | — | ✅ | No la creó: ya existe una de 30 días |
+| 5 | `f-order-direct-invoice` | ✅ 20 llamadas | ⛔ | ⛔ | 1.º intento 🔧: el servicio no existía y el agente se rindió (correcto). Ahora el servicio "Hora de instalación" es un dato fijo de la empresa |
+| 10 | `f-undo-collection` | ✅ 8 llamadas | ⛔ | ⛔ | 1.º intento 🔧: al dato inicial (cobro) le faltaba la fecha |
+| 11 | `f-credit-note` | ✅ 21 llamadas | ⛔ | ⛔ | Rectificativa FVR por 1 unidad (-121 €) |
+| 12 | `f-void-invoice` | ❌ 15 llamadas | ⛔ | 🐞 | Reactivó la factura a borrador en vez de hacer la rectificativa (camino decidido como incorrecto el 23 oct) y lo dio por anulado |
+| 13 | `w-send-invoice` | ❌ 13 llamadas | — | 🐞 ❓ | **No se puede enviar una factura creada por MCP:** sin PDF ("open the preview in the application") y el MCP no lo genera; los dos mensajes de error se remiten uno al otro. La verificación provisional (la respuesta nombra el correo) pasó igual: hay que cambiarla |
+| 14 | `f-customer-return` | ✅ 14 llamadas | — | ✅ | |
+| 15 | `q-dashboard-indicators` | ✅ 5 llamadas | — | ✅ | Cifras leídas por los datos iniciales justo antes (prueba exclusiva) |
+| 16 | `q-sales-this-month` | ✅ 5 llamadas | — | ✅ | Solo sin IVA |
+| 17 | `q-top-customers` | ✅ 4 llamadas | — | ✅ | |
+| 18 | `f-purchase-receive-invoice` | ❌ 25 llamadas (tope) | — | 🐞 | 1.º intento 🔧 (nombre > 60). 2.º: pedido y recepción en borrador, se quedó sin pasos antes de la factura |
+| 19 | `f-pay-purchase-invoice` | ✅ 13 llamadas | — | ✅ | 🔧 dos veces: la referencia del proveedor tiene tope de 20 (ahora `F-1001`) |
+| 20 | `f-vendor-return` | ✅ 15 llamadas | — | ✅ | |
+| 24 | `f-physical-inventory` | ✅ 22 llamadas | — | ✅ | Stock compartido: prueba exclusiva |
+| 25 | `f-warehouse-transfer` | ✅ 22 llamadas | — | ✅ ❓ | Verificación provisional: no aislada entre intentos |
+| 26 | `f-internal-consumption` | ✅ 23 llamadas | — | ✅ ❓ | Verificación provisional: no aislada entre intentos |
+| 27 | `q-stock-report` | ✅ 7 llamadas | — | ✅ | Solo Agua |
+| 28 | `f-bank-account-transfer` | ❌ 25 llamadas (tope) | — | 🐞 | Creó la cuenta y se quedó sin pasos antes de la transferencia |
+| 31 | `f-open-period` | ✅ 10 llamadas | ⛔ | ⛔ | Con junio 2026 (cierra y reabre la prueba misma) |
+| 32 | `f-asset-amortization` | ❌ 25 llamadas (tope) | ⛔ | 🐞 | 25 pasos de exploración (docs, schema, listas de activos y amortizaciones) sin llegar a crear el activo |
+| 33 | `f-manual-journal-post` | ✅ 17 llamadas | — | ✅ | |
+| 34 | `q-financial-reports` | ✅ 5 llamadas | — | ✅ | Solo lo que nos deben |
+| 36 | `q-fiscal-status` | ✅ 31 llamadas | ⛔ | ✅ ❓ | Verificación provisional (la respuesta contiene "no") |
+
+**Resumen del lado Etendo (43 pruebas):** 36 pasan y 7 fallan por Etendo (🐞): `e-invalid-write`,
+`w-company-users-numbering`, `f-void-invoice`, `w-send-invoice`, `f-purchase-receive-invoice`,
+`f-bank-account-transfer`, `f-asset-amortization`. Cuatro de esas siete terminan en el tope de 25
+pasos. Verificaciones provisionales por reforzar (❓): `w-send-invoice`, `f-warehouse-transfer`,
+`f-internal-consumption`, `q-fiscal-status`.
 
 ## Hallazgos
 
@@ -59,3 +87,11 @@ JWT de `sws/login`), modelo `gemini/gemini-3.8-flash`. Holded: pendiente del log
 - **Usuarios con permisos (🐞):** "dar acceso con permisos de ventas" no lleva al agente a crear el
   usuario y asignarle un rol: el MCP no deja claro cómo se combinan usuario y rol. Candidato a issue
   de descubribilidad.
+- **Tope de pasos y fallas:** 4 de las 7 fallas de Etendo (usuarios, compra completa, transferencia
+  entre cuentas, activo) terminan en los 25 pasos. Es parte de lo que se mide (Etendo necesita más
+  llamadas), pero el tope decide si la prueba es "falla" o "éxito caro". Decisión pendiente: mantener
+  25 o subirlo (vale igual para las dos plataformas).
+- **Datos fijos de la empresa de pruebas:** además de los arreglos del plan §7.5, la suite necesita el
+  servicio "Hora de instalación" (ver la cabecera de `okr.yaml`). Topes de columnas que condicionan
+  los datos iniciales: nombre de contacto 60, código de producto 40, referencia de factura de
+  proveedor 20.
