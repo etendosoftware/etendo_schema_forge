@@ -5,7 +5,7 @@ import {
   LayoutGrid, ArrowUpDown,
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
-import { EmptyState, KpiWidget } from './FmCommon.jsx';
+import { EmptyState, KpiWidget, FmInfoTooltip } from './FmCommon.jsx';
 import { FmStatusChip } from './FmDetailChrome.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -243,6 +243,69 @@ const RESULT_BADGE_STYLE = {
   background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
 };
 
+// ETP-5725 (QA CP-19) — the informative ("info") result of a Modelo 349 row is the TOTAL OF
+// OPERATIONS ONLY, identical by construction to the detail page's "Total operaciones" KPI and
+// to the generated .349 file (both now reduce the same `GET /fiscal349/operators` payload
+// through `sum349OperationsBase`). Its prior-period RECTIFICATIONS amount is a DIFFERENT AEAT
+// header field over a disjoint set of records and is rendered by its own "Rectificaciones"
+// column (`RectificationsCell` below) — Ruben's review of the real AEAT Sede UI replaced the
+// first cut's stacked "rect. X" sub-line inside this cell with that separate column. An
+// ordinaria with no new operations but real rectifications therefore reads "—" here (not
+// "Informativa") — the ETP-5432 pt.2 case, protected via the other column instead.
+function InfoResult({ result, t }) {
+  // SonarQube java:S3358 — extracted out of a nested ternary into sequential early returns.
+  // Same three branches, same rendered output, just expressed as statements instead of a
+  // `cond ? a : (cond2 ? b : c)` chain.
+  if (result.amount > 0) {
+    return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>;
+  }
+  if (result.rectifications > 0) {
+    return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
+  }
+  return <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
+}
+
+// ETP-5725 (QA CP-19) — the "Rectificaciones" column: plain text, same typographic weight as
+// the "Resultado" operations amount (`InfoResult` above) — no pill, no colored background. The
+// only visual distinctiveness is a small info icon next to the amount, whose hover tooltip
+// reveals the distinct origin periods ("de 09, 10, 11" —
+// `collectRectificationOrigins`/`formatRectificationOriginsLabel`, operations349.js). Only
+// Modelo 349 rows ever carry `rectifications` (303/390 derive neither), so this renders
+// nothing for every other model and for a 349 row with none — not an empty icon.
+//
+// Two rounds of visual follow-up already behind this shape: a pill-with-clock-icon, then a
+// primary-color pill with a native `title` tooltip (dropped — unreliable hover behavior, and
+// Ruben reconsidered the pill itself). The icon-hover tooltip now reuses `FmInfoTooltip`
+// (FmCommon.jsx) — the SAME show/hide mechanism "Totales por clave" (FmModel349Page.jsx)
+// already used for its own info icon, portaled to `document.body` so it cannot inherit that
+// panel's pre-existing z-index bug (see FmInfoTooltip's own comment for the root cause).
+function RectificationsCell({ result, t }) {
+  const amount = result?.rectifications ?? 0;
+  // ETP-5725 — a no-rectifications row reads a muted "—", never a fully blank cell, the exact
+  // same visual treatment `InfoResult` already uses for its own zero-amount case (above) —
+  // reused verbatim rather than inventing a second one. Deliberately gated on `hasRectifications`
+  // (whether any rectificative operator row exists), NOT on `amount <= 0` — a declaration can in
+  // principle have real corrective rows whose `correctedBase` values sum to exactly 0,00 (an edge
+  // case, but a real one), and that must still show "0,00 €", not collapse to "—" as if there
+  // were no rectifications at all.
+  if (!result?.hasRectifications) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
+  // Pre-formatted by `deriveListResult349` (the ONLY place that reads the 349-specific
+  // (year, period) row shape) — this generic, cross-model page renders a plain string, the
+  // same contract `labelKey` already uses for the 390's model-specific badge text above.
+  const originsLabel = result?.rectificationOriginsLabel ?? '';
+  const tooltipText = originsLabel
+    ? (t('fm.result.rectifications_origins', { periods: originsLabel }) ?? `de ${originsLabel}`)
+    : null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>
+        {formatAmount(amount)}
+      </span>
+      {tooltipText && <FmInfoTooltip text={tooltipText} data-testid="fm-rectifications-info" />}
+    </span>
+  );
+}
+
 // Result as plain text — used in the list table
 function ResultText({ isComputing, error, result, t }) {
   if (isComputing) return <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 13 }}>…</span>;
@@ -250,11 +313,7 @@ function ResultText({ isComputing, error, result, t }) {
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.N') ?? 'Sin resultado'}</span>;
   if (result.kind === 'zero') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.zero') ?? 'Resultado cero'}</span>;
-  if (result.kind === 'info') {
-    return result.amount > 0
-      ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
-      : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
-  }
+  if (result.kind === 'info') return <InfoResult result={result} t={t} data-testid="InfoResult__cb728e" />;
   // A model may name its own badge text (`labelKey`, e.g. the 390's informative "Resultado
   // positivo"); otherwise the shared `fm.result.<kind>` key.
   const label = t(result.labelKey ?? `fm.result.${result.kind}`) ?? result.kind;
@@ -952,12 +1011,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       .then((result) => {
         if (result.ok) {
           setDecls(ds => ds.filter(d => d.id !== deleteTarget.id));
-          setDeleteTarget(null);
         } else {
           toast.error(t('fm.list.delete_failed') ?? 'No se pudo eliminar la declaración.');
         }
       })
-      .finally(() => setDeletingId(null));
+      // ETP-5725 (QA CP-20) — the confirmation closes on BOTH outcomes, next to the busy
+      // flag it is paired with. Clearing it only inside the `result.ok` branch left the
+      // modal stranded on top of its own error toast, so the user had to dismiss the
+      // dialog by hand to even read the row again. Same shape as handleConfirmReactivate.
+      .finally(() => { setDeletingId(null); setDeleteTarget(null); });
   }, [deleteTarget, token, apiBaseUrl, t]);
 
   // Row hover "reactivate" action (ETP-5338) — reverts a submitted/submitted_ack declaration
@@ -974,7 +1036,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         if (result.ok) {
           // The backend cleared the submission snapshot (ETP-5438): a draft computes live again.
           setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft', submittedSnapshot: null } : d));
-          setReactivateTarget(null);
         } else if (result.reason === 'corrective_sibling_presented') {
           // ETP-5725 (reopened QA fix, UX follow-up) — the precise, commonly-hit case: a
           // rectificativa/sustitutiva sibling is already presented for this period, so
@@ -992,7 +1053,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           toast.error(t('fm.list.reactivate_failed') ?? 'No se pudo reactivar la declaración.');
         }
       })
-      .finally(() => setReactivatingId(null));
+      // ETP-5725 (QA CP-20) — the confirmation closes whether the reactivation succeeded or
+      // was rejected. It used to be cleared only in the `result.ok` branch above, so the
+      // common "ya existe una rectificativa/sustitutiva presentada" rejection showed its
+      // toast WITH the modal still open on top of the list. The busy flag and the dialog
+      // are the same lifecycle, so they are cleared in the same place.
+      .finally(() => { setReactivatingId(null); setReactivateTarget(null); });
   }, [reactivateTarget, token, apiBaseUrl, t]);
 
   const yearOptions = useMemo(
@@ -1093,6 +1159,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <th>{t('fm.col.type')}</th>
             <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
             <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
+            <th style={{ textAlign: 'right' }}>{t('fm.col.rectifications') ?? 'Rectificaciones'}</th>
             <th>{t('fm.col.incidents')}</th>
             <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
             <th style={{ width: 72 }} aria-hidden="true" />
@@ -1185,6 +1252,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     result={displayResult}
                     t={t}
                     data-testid="ResultText__cb728e" />
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <RectificationsCell result={displayResult} t={t} data-testid="RectificationsCell__cb728e" />
                 </td>
                 <td>
                   <IncidentsCell

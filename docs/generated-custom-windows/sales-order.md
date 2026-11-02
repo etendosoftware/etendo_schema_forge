@@ -333,7 +333,9 @@ Booking a draft order over MCP:
 
 Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates **only
 while the order has no linked documents** (same condition as the Reactivate menu action's
-`visibleWhenFieldFalse: hasLinkedDocuments`), `CO -> CL` closes pending quantities.
+`visibleWhenFieldFalse: hasLinkedDocuments`). `CL` (Close) is **not offered**: the window never shows
+it, and since the ETP-5704 QA round the backend refuses it on every sales order (see below), so the
+prompt tells the agent never to send it.
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre-CO total-discount
 line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
@@ -708,12 +710,34 @@ refusal on a stale screen (a shipment created from another tab after the list lo
 used to succeed silently. The `documentAction` agentPrompt's sentence "the process will reject it"
 is now true. Purchase orders are not covered (out of scope).
 
+### Close (`CL`) refused on every sales order — ETP-5704 QA (CP-20)
+
+The Sales Order window never offers Close (its only document menu action is Reactivate, and
+`documentAction` is a `system` field). Over MCP, `CL` on a completed order with a draft shipment
+left the order Closed with its pending quantities at 0 and the shipment dangling. Product decision:
+the backend refuses what the UI does not offer.
+
+- `SalesOrderHeaderHandler.handle()` refuses a POST of the `DocAction` button whose **effective**
+  value is `CL` — always, linked documents or not, in any status. Same resolution, 404 and
+  fail-closed rules as Reactivate: both now go through the shared `DocActionRefusalGuard`
+  (`DocActionRequestSupport.effectiveDocAction`), so `fieldValues.documentAction` vs `docAction`,
+  an empty body running a stored `CL`, and `"cl"` / `" CL"` / garbage are judged as the procedure
+  runs them. REST single, REST batch and MCP all reach this pre-hook.
+- **Refusal**: HTTP 400, `messageKeys: ["ETGO_SalesOrderCloseNotOffered"]`, text in the request
+  language (English / Spanish, `NeoMessageText`). A record or action that cannot be read answers
+  500 `ETGO_DocActionCheckFailed`; an unknown order id 404 `Record not found`.
+- **Advertised**: `etendo_schema(view:"actions", id)` reports `CL` under `unavailableValues` of
+  `documentAction` on every sales order (`SalesOrderHeaderHandler.unavailableActions`), with a
+  reason saying the app does not offer Close.
+- Purchase orders are untouched. No visible change in the UI: it never sends `CL`.
+
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 - `etendo_schema(spec, entity, view:"actions", id:<sales order id>)` says `availableNow` / `unavailableReason` per action for that
-  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes `CL` or `RE`.
+  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes only `RE` (`CL`
+  is not offered and is also reported under `unavailableValues` — see the ETP-5704 QA section above).
   `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
-  behind the UI's `hasLinkedDocuments` flag. Advice only: nothing is blocked by it.
+  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents and CL are also refused by the pre-hook (see the ETP-5704 sections).
 - `createShipment` and `createDraftInvoice` applies to a completed order only.
 - The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
   they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.

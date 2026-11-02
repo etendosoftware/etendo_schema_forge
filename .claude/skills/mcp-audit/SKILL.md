@@ -72,19 +72,25 @@ Exported columns (from `scripts/mcp-usage-dump.sh`):
 | `duration_ms`, `req_bytes`, `resp_bytes` | Timing and sizes |
 | `client_name`, `client_version` | MCP client that made the call |
 | `payload` | JSON only on `feedback` rows; null on tool calls |
-| `triage_cell` | Feedback only: cell label the triage bot classified it into (`CelulaPlataforma`, ...) |
+| `triage_cell` | Feedback only: cell label the ticket router bot classified it into (`CelulaPlataforma`, ...) |
 | `triage_assignee` | Feedback only: GitHub login the bot assigned; null when the bot was not sure |
 | `triage_issue` | Feedback only: URL of the public GitHub pre-ticket the bot opened |
-| `triage_task` | Feedback only: key of the private Jira task the bot opened (`ETP-...`) |
+| `triage_task` | Feedback only: key of the private Jira task the bot opened (`ETP-...`). The way from a feedback row to its tickets: never search Jira by symptom |
 | `triaged` | Feedback only: when the bot processed the row; null = not triaged yet |
 
-**Feedback arrives triaged.** An external bot, the bug router (`etendo-bots`, `bin/bug-router`),
+**Feedback arrives triaged.** An external bot, the ticket router (`etendo-bots`, `bin/bug-router`),
 polls the `McpFeedbackPending` webhook every 15 minutes, classifies each new feedback row into a
 cell, assigns it when it is sure, opens a GitHub pre-ticket (and, optionally, a Jira task), and
 writes the result back with the
-`McpFeedbackTriage` webhook (the `triage_*` columns and `triaged`). The triage is the bot's job, not
-this audit's: read those columns, never write them. They are independent of the review flag
-(`isactive`): a triaged row is still unreviewed until someone reviews it.
+`McpFeedbackTriage` webhook (the `triage_*` columns and `triaged`). The routing is the bot's job, not
+this audit's: read those columns, never write them. They are independent of the review flag: a
+routed row is still unreviewed until someone reviews it.
+
+**A feedback row reports more than its own session.** The agent writes what it saw across several
+connections, days and roles. Replay the feedback's `session_key` AND every session of the same
+client in the previous 7 days before trusting a claim such as "the same session started returning
+403": on ETP-6036 every such 403 belonged to another session, opened with another role from its
+first call.
 
 ### What the telemetry does NOT contain (limits of the audit)
 
@@ -97,6 +103,11 @@ this audit's: read those columns, never write them. They are independent of the 
 - **`outcome = ok` does not mean the business result is right.** A line created without price
   succeeds. Check the data, not only the outcome.
 - No user id column: the user is inferred from `client`, `client_name` and `session_key`.
+- **Which calls have no row.** `McpServlet.recordToolCall` writes one row for every `tools/call` that
+  got past authentication, errors included (a role refusal is `error_code = forbidden`). Only these
+  leave no row: authentication refusals (401), the environment guard (402/503), modern-protocol
+  refusals, and missing-resource / unknown-method answers (not tool calls). A claimed failure with
+  no row is therefore from another day, session or environment, not a logging gap.
 
 ---
 
@@ -145,6 +156,8 @@ jq -r 'select(.row_type=="feedback") | .payload | fromjson' /tmp/prod-mcp.jsonl
 | `validation_error` | Payload rejected (missing/invalid required field). Frequent on `etendo_action` and `etendo_selectors` |
 | `not_found` | Record, entity or tab does not exist (wrong entity name such as `goods-shipment/lines`, or bad id) |
 | `unknown_filter_field` | `etendo_list` filter on a field the entity does not expose |
+| `forbidden` | The role may not do this (spec without window access, process without access). No change to the request fixes it. Before ETP-5852 (`beb9a44d2`) a 403 returned by a handler read `validation_error` |
+| `parent_required` | `etendo_list` on a child entity without `parentId` |
 
 The list can grow; list the live values with
 `jq -r 'select(.outcome=="error")|.error_code' dump.jsonl | sort | uniq -c`.

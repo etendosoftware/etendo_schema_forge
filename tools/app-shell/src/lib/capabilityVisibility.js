@@ -33,6 +33,13 @@ export function isCapabilityVisible(capabilities, key) {
  */
 export const ACCOUNTING_CAPABILITY = 'showAccountingFields';
 
+/**
+ * ETP-5889 — the capability that switches on the Product window's Movements tab. Served by
+ * `SFWindowAccessMap` as `capabilities.productMovements`: the backend evaluates the per-account feature
+ * flag `product-movements-tab` and the browser never does, so both ends always agree. Fails closed.
+ */
+export const PRODUCT_MOVEMENTS_CAPABILITY = 'productMovements';
+
 // The generic posting actions served by `DocumentPostingService` for every
 // postable document. A structural contract, not an entity name.
 const POSTING_ACTIONS = new Set(['post', 'unpost']);

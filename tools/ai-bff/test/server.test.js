@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import http from 'node:http';
 import { browserTools, createServer, handleChat, hasConfiguredSecret, mcpClientOptions, opencodeProviderOptions, opencodeSessionId, sessionCredentials } from '../src/server.js';
 
 function request(headers = {}) {
@@ -95,6 +96,89 @@ test('preserves a valid OpenCode session and creates a fallback when absent', ()
 test('forwards the OpenCode session header to the model provider', () => {
   const options = opencodeProviderOptions('chat-session-1');
   assert.equal(options.headers['x-opencode-session'], 'chat-session-1');
+});
+
+/** A LiteLLM double: like llm.etendo.software, it streams usage (with `cost`) only on request. */
+async function fakeLiteLlm() {
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', chunk => { raw += chunk; });
+    req.on('end', () => {
+      const body = JSON.parse(raw);
+      const chunk = data => `data: ${JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 0, model: body.model, ...data })}\n\n`;
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.write(chunk({ choices: [{ index: 0, delta: { role: 'assistant', content: 'ok' } }] }));
+      res.write(chunk({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }));
+      if (body.stream_options?.include_usage) {
+        res.write(chunk({ choices: [], usage: { prompt_tokens: 3, completion_tokens: 12, total_tokens: 15, cost: 0.00004725 } }));
+      }
+      res.end('data: [DONE]\n\n');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  return { server, baseURL: `http://127.0.0.1:${server.address().port}/v1` };
+}
+
+/** An Etendo `/sws/neo/usage` double that keeps what each POST carried. */
+async function fakeUsageEndpoint() {
+  const posts = [];
+  let delivered;
+  const arrived = new Promise(resolve => { delivered = resolve; });
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', chunk => { raw += chunk; });
+    req.on('end', () => {
+      posts.push({ headers: req.headers, body: JSON.parse(raw) });
+      res.writeHead(202).end();
+      delivered();
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  return { server, posts, arrived, url: `http://127.0.0.1:${server.address().port}/sws/neo/usage` };
+}
+
+test('a cookie-session chat turn against LiteLLM records its tokens and cost under that session', async () => {
+  const model = await fakeLiteLlm();
+  const usage = await fakeUsageEndpoint();
+  const bff = createServer();
+  await new Promise(resolve => bff.listen(0, '127.0.0.1', resolve));
+  const names = ['OPENCODE_API_KEY', 'OPENCODE_BASE_URL', 'ETENDO_USAGE_URL', 'AI_BFF_TRACE'];
+  const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  Object.assign(process.env, {
+    OPENCODE_API_KEY: 'configured-test-value', OPENCODE_BASE_URL: model.baseURL,
+    ETENDO_USAGE_URL: usage.url, AI_BFF_TRACE: 'off',
+  });
+  try {
+    // The cookie scheme: no Authorization at all, only the session cookie and its CSRF proof.
+    const answer = await fetch(`http://127.0.0.1:${bff.address().port}/api/ai/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', Cookie: '__Host-go_session=s1; other=x',
+        'X-Go-CSRF': 'csrf-1', Origin: 'https://app.etendo.cloud', 'x-opencode-session': 'conv-1',
+      },
+      body: JSON.stringify({ mode: 'page-help', messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'hi' }] }] }),
+    });
+    await answer.text();
+    await Promise.race([usage.arrived, new Promise((_, reject) => setTimeout(() => reject(new Error('no usage POST')), 5000))]);
+
+    const [post] = usage.posts;
+    assert.equal(post.headers.cookie, '__Host-go_session=s1');
+    assert.equal(post.headers['x-go-csrf'], 'csrf-1');
+    assert.equal(post.headers.origin, 'https://app.etendo.cloud');
+    assert.equal(post.headers.authorization, undefined);
+    const [event] = post.body.events;
+    assert.equal(event.sessionKey, 'conv-1');
+    assert.equal(event.properties.inputTokens, 3);
+    assert.equal(event.properties.outputTokens, 12);
+    assert.equal(event.costUsd, 0.00004725);
+  } finally {
+    bff.close();
+    model.server.close();
+    usage.server.close();
+    for (const name of names) {
+      if (saved[name] === undefined) delete process.env[name]; else process.env[name] = saved[name];
+    }
+  }
 });
 
 test('creates an HTTP server without opening a listener on import', () => {

@@ -36,6 +36,7 @@ vi.mock('../use349Pdf.js', () => ({
 
 // FmCommon.jsx lives at fiscal-models/ (3 levels up)
 vi.mock('../../../FmCommon.jsx', () => ({
+  FmInfoTooltip: () => null,
   StatusPillMenu: () => null,
   // KpiWidget must render the value prop so count/total KPI tests can read it.
   KpiWidget: ({ value, valueColor }) => (
