@@ -1792,19 +1792,19 @@
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/BankBounceSuggestionsFlagTest.java",
             "expected": true,
-            "note": "Pending: the per-account email reaches the provider context (targeting key and email attributes), end to end through GoFeatureFlags into a capturing provider; a targeted account reads true and a non-targeted one false; no OBContext, no account, a null email or a failed lookup read false; unset, non-boolean and failing provider read false."
+            "note": "Covered (ETP-5581 part 1): the ETGO_ACCOUNT email reaches the provider context through the real GoFeatureFlags into a capturing provider, as targeting key and as Email/email attributes, with the account resolved for real by GoAccountResolver over mocked OBContext/OBDal; a targeted account reads true and a non-targeted one false; no OBContext, no user, no account, a null email, a failed account query or a failure reading the user read false and hand the provider no identity; unset, non-boolean and failing provider read false; the key is bank-bounce-suggestions."
           },
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/BankBounceDetectorTest.java",
             "expected": true,
-            "note": "Pending: an outgoing line and a later line with the same amount and opposite sign form a candidate pair; same sign, different amount, a line already discarded or already reconciled never pairs; each line belongs to at most one pair."
+            "note": "Covered (ETP-5581 part 1): each signal (pis_link on the outflow's last description token, return_text on the bounce line only, counterparty after normalization, blank names never equal) and their priority; the confidence rules (high: same-day wording, PIS link within tolerance, PIS link plus wording; review: later-day wording, PIS link alone weeks later, counterparty alone); the window (0 and 60 days in, 61 out, a bounce before its original out); only opposite sign and the exact amount pair, same sign, different or zero amount never pair, no signal never pairs; each line in at most one pair; same-day roles (wording wins whatever the sign, else the PIS-linked outflow is the original, else the outflow); an ambiguous group is one review pair with no original and its candidates closest first; an original without an ERP payment is preferred and a pair whose only original has one is not proposed; only PSD2 lines outside a match group are candidates (toStatementLine), load reads PSD2 payments, open movements and schedule counts and runs no query without candidates, detectQuietly answers empty on a failed read. Excluding pending/discarded lines is the caller's (loadPendingLines), covered in ReconciliationHandlerTest."
           },
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/ReconciliationHandlerBounceSuggestionsTest.java",
             "expected": true,
-            "note": "Pending: the autoMatch answer carries bounce-pair suggestions with the flag on and none with it off (the rest of the answer unchanged); already-discarded lines are excluded in both flag states."
+            "note": "Covered (ETP-5581 part 1): the bounce plan (only high pairs reserve lines, a review pair only when none of its lines or candidates is taken, high first, flag off is Plan.NONE with no detection); autoMatch with the flag on (high-pair lines never suggested to a transaction, kind:transaction on existing groups, the bouncePair group shape, ambiguous pairs with candidates, groupsFound and telemetry count transaction groups only, kpis.bouncePairs) and off (no detection, no kind, kpis exactly as before, output equal to flag-on-without-pairs minus kind/bouncePairs); panel/modal agreement (same bounce lines and groupKeys, counts, reserved rows unclassified) and the bouncePair annotation for the original, bounce and candidate roles; applySuggestions (bounce groups first in a mixed batch, a line in two groups 409, unknown kind 400, flag off 403 BOUNCE_SUGGESTIONS_OFF per bounce group with nothing written, telemetry without the bounce groups). Discarded lines excluded in both flag states: see ReconciliationHandlerTest."
           },
           {
             "root": "frontend",
@@ -1816,7 +1816,19 @@
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/BankBouncePairDiscardTest.java",
             "expected": true,
-            "note": "Pending: accepting a pair discards BOTH statement lines (EM_PSD2_IS_DISCARDED) and links them as a pair; restoring either line restores both and unlinks them; accepting a pair is refused with the flag off and writes nothing."
+            "note": "Covered (ETP-5581 part 1): discardPair sets EM_PSD2_IS_DISCARDED=Y and the PSD2 button in sync on BOTH lines, links each to the other and stores one discard time, signal and confidence on both (pis_link/high whichever line is named first; no signal -> review; 60 days accepted); every coded refusal in the code's order (LINE_DISCARDED incl. a hook-excluded line, DISCARD_NOT_ALLOWED for reconciled / not PSD2 / PSD2 columns missing, LINE_NOT_PENDING, SIGN_MISMATCH, AMOUNT_MISMATCH, DISCARD_NOT_ALLOWED outside the 60-day window, HAS_PAYMENT) and the request errors, each writing nothing; flag off -> 403 BOUNCE_SUGGESTIONS_OFF reading and writing nothing. restorePair, never reading the flag: restores both lines and clears the four link columns, a lone discarded line restores alone, a plain line is a 200 no-op, a counterpart in another account is left alone, refusals write nothing."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankBounceLineTextTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1), port of the parked ReturnLineTextTest without its learnedForm cases: normalize (accents, umlauts, blank); the bounce vocabulary (every word, the Santander accent, inflected long words, short words only as whole tokens, no match inside another token, an ordinary transfer is not a bounce); lastToken (end-to-end id, trailing punctuation, blank); sameCounterparty (normalized names, empty names never match)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BankBouncePaymentGuardTest.java",
+            "expected": true,
+            "note": "Covered (ETP-5581 part 1): attribution (a payment found through the PIS link even with another amount; a single fitting movement within tolerance; outside tolerance or opposite sign gives none; a payment claimed by another line's PIS link excluded; a contested movement or two fitting movements give CANNOT_ATTRIBUTE); ambiguousPayment (3 attempts / 1 payment / 2 pairs is safe, 2 outflows / 2 payments / 1 bounce is ambiguous and gives HAS_PAYMENT); containedInLargerPayment (a larger multi-invoice movement of the same counterparty, or any when the line names none; not a single-invoice, smaller, opposite-sign, out-of-tolerance, other-counterparty or PIS-claimed one; never a line with its own payment); blocker (null without payments, HAS_PAYMENT on either side, a PIS-linked original blocks)."
           },
           {
             "root": "frontend",
@@ -1826,9 +1838,9 @@
           },
           {
             "root": "backend",
-            "path": "src-test/src/com/etendoerp/go/schemaforge/AutoMatchSupportDiscardedLinesTest.java",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ReconciliationHandlerTest.java",
             "expected": true,
-            "note": "Pending, NOT gated by the flag: an already-discarded statement line (EM_PSD2_IS_DISCARDED) is excluded from the pending lists and from auto-match candidates in BOTH flag states; with no discarded line the results are unchanged. May be folded into the existing AutoMatchSupportTest (reuse-first): if so, replace this path and record the cases here -- the existing file is not listed now because it would score as present before these cases are written."
+            "note": "Folded into the existing ReconciliationHandlerTest (reuse-first; replaces the provisional AutoMatchSupportDiscardedLinesTest.java, never created). NOT gated by the flag, covered (ETP-5581 part 1): pendingLines leaves hook-excluded (discarded) lines out of lines, total and the state counts and reports counts.discarded, with the flag on and off; status=discarded lists only them, state discarded, with bounceLink (counterpart, signal, confidence, discardedAt) or null for a line discarded alone; flag off adds no counts.bounce, bouncePair or kind and runs no detection; loadPendingLines appends the hooks' AUTO_MATCH_CANDIDATES HQL condition and parameters to an OBQuery that keeps the client/org/active filter, and adds none without a hook or an owned account (the two earlier loadPendingLines tests rewritten from OBCriteria to OBQuery). The 409 LINE_DISCARDED before any write is in ReconciliationRefusedWriteTest (reconcileGroup, prepareGroup), ReconciliationDifferenceSupportTest (reconcileDifference) and ReconciliationLineTargetSupportTest (the heal in resolveForMatch)."
           }
         ],
         "e2e": [
