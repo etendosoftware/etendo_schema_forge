@@ -20,44 +20,12 @@ import {
   buildReturnDocCommonFields,
   sortLinesByLineNo,
 } from '../shared/pdfUtils.js';
+import { RETURN_RECEIPT_TEMPLATE_BODY, RETURN_RECEIPT_PDF_LABEL_KEYS, resolveLabelKeys } from '../shared/printableSources.js';
 
 const TEMPLATE = MOVEMENT_TEMPLATE_OPEN
 + MOVEMENT_TEMPLATE_HEADER
 + MOVEMENT_TEMPLATE_PARTIES
-+ `
-  <div class="doc-movement">
-    <div class="doc-movement-cell">
-      <div class="cell-label">{{labels.date}}</div>
-      <div class="cell-value">{{fmtDate movementDate}}</div>
-    </div>
-    <div class="doc-movement-cell">
-      <div class="cell-label">{{labels.sourceShipment}}</div>
-      <div class="cell-value">{{#if sourceShipmentRef}}{{sourceShipmentRef}}{{else}}—{{/if}}</div>
-    </div>
-    <div class="doc-movement-cell">
-      <div class="cell-label">{{labels.warehouse}}</div>
-      <div class="cell-value">{{#if warehouse}}{{warehouse}}{{else}}—{{/if}}</div>
-    </div>
-  </div>
-
-  <table class="doc-table">
-    <thead>
-      <tr>
-        <th style="width:64px">{{labels.colCode}}</th>
-        <th>{{labels.colDescription}}</th>
-        <th class="num" style="width:130px">{{labels.colReturned}}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{#each lines}}
-      <tr>
-        <td class="code">{{this.productCode}}</td>
-        <td class="desc">{{this.productName}}</td>
-        <td class="num">{{fmt this.returnedQty}}</td>
-      </tr>
-      {{/each}}
-    </tbody>
-  </table>`
++ RETURN_RECEIPT_TEMPLATE_BODY
 + MOVEMENT_TEMPLATE_SIGNATURE
 + MOVEMENT_TEMPLATE_NOTES
 + MOVEMENT_TEMPLATE_FOOTER;
@@ -105,22 +73,9 @@ export function useReturnReceiptPdf(receiptId, apiBaseUrl, token) {
 }
 
 export function getReturnReceiptPdfLabels(ui) {
-  return {
-    title:             ui('returnReceiptPdfTitle'),
-    taxId:             ui('invoicePdfTaxId'),
-    page:              ui('invoicePdfPage'),
-    issuerSection:     ui('shipmentPdfIssuerSection'),
-    deliverySection:   ui('shipmentPdfDeliverySection'),
-    sourceShipment:    ui('returnReceiptPdfSourceShipment'),
-    date:              ui('shipmentPdfDate'),
-    warehouse:         ui('shipmentPdfWarehouse'),
-    colCode:           ui('invoicePdfColCode'),
-    colDescription:    ui('invoicePdfColDescription'),
-    colReturned:       ui('returnReceiptPdfColReturned'),
-    notes:             ui('invoicePdfNotes'),
-    signatureReceiver: ui('shipmentPdfSignatureReceiver'),
-    signatureDate:     ui('shipmentPdfSignatureDate'),
-  };
+  // Key map in printableSources.js, which the build also publishes for the server-side
+  // render (ETP-6013) — one definition, so the two cannot drift.
+  return resolveLabelKeys(ui, RETURN_RECEIPT_PDF_LABEL_KEYS);
 }
 
 /**
