@@ -542,6 +542,12 @@ The `organization` spec's 3 `AD_OrgInfo` flags added in the discarded intermedia
 Organization-window information exposed on the backend contract, just no longer consumed
 from Contacts. See `docs/generated-custom-windows/organization.md` for that side.
 
+No `decisions.json` or generator change was needed for this simplification — pure
+custom-component revert. Verified with `npx vitest run src/windows/custom/contacts` (all
+Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
+visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
+to `onChange`).
+
 ## ETP-5831 (CP-20) — SIF-gated blocks
 
 QA (ETP-5831 CP-20) reported the section offering SII and TicketBAI options to tenants where
@@ -569,12 +575,6 @@ The rule is the exported pure `resolveFiscalDefaultsBlocks({ fiscal, isCustomer 
 
 Hidden is not stripped: hiding a block never clears the stored values; they reappear when the SIF
 is activated again.
-
-No `decisions.json` or generator change was needed for this simplification — pure
-custom-component revert. Verified with `npx vitest run src/windows/custom/contacts` (all
-Contacts suites pass; `FiscalDefaultsSection.vitest.jsx` rewritten to cover: SII block
-visible/hidden by `data.customer`, TicketBAI block always visible, and both toggles' wiring
-to `onChange`).
 
 ## ETP-4784 (part 4) — SII fields silently discarded on save (fix)
 

@@ -220,14 +220,15 @@ per organization, not per fiscal system: `etsg_certificate` is keyed by `ad_org_
 `NeoCertificateHelper` replaces every certificate of the org with the new one. SII, TicketBAI and
 VERI\*FACTU therefore read and write the **same** record. Consequences in the `sii+tbai` layout:
 
-- the "Certificado digital" block is shown in **both** the SII and the TicketBAI tab (the TBAI
-  tab used to receive `hideCert`; it no longer does — the prop still exists for other callers);
+- the "Certificado digital" block is shown in **whichever tab is visible**, SII or TicketBAI
+  (the TBAI tab used to receive `hideCert` permanently). Both tabs stay mounted, so `hideCert` now
+  follows the tab switch (`hideCert={activeTab !== n}`): only the visible tab renders the block,
+  which avoids duplicate test ids and a second `/certificate` read (see "Org bar" below);
 - replacing it from either tab updates everything that shows it: `CertSection` reports the upload
   through `onUploaded`, `FiscalConfigPage` bumps a `certVersion` counter and passes it down as
   `certRefreshKey` (→ `CertSection`'s `refreshKey`) to every section and as `refreshKey` to
-  `useCertExpiry`, so the other tab's block, the expiry banner and the status panel's
-  "Certificado" row re-read `GET /certificate`. (Only the active tab is mounted, so the other tab
-  also re-reads on mount; the counter covers the readers that stay mounted.) On mount it calls `GET /sws/neo/certificate` (org inferred from the bearer token) to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
+  `useCertExpiry`, so the block in the other tab (re-rendered when the tab switches), the expiry
+  banner and the status panel's "Certificado" row re-read `GET /certificate`. On mount it calls `GET /sws/neo/certificate` (org inferred from the bearer token) to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
 
 ### Backend endpoints (`NeoCertificateHelper`)
 
