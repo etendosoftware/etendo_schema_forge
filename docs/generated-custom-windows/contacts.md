@@ -423,9 +423,9 @@ pending manual verification (steps below) rather than a follow-up ticket.
 
 | Classic field | Go field (camelCase) | Entity | Where it lives in Go |
 |---|---|---|---|
-| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when `data.customer` is true (see part 3 below) |
+| "Clave por Defecto" | `aeatsiiDefaultsiikey` | `customer` | Toggle in the Financial tab → **Default fiscal values** section, "SII" sub-block, `FiscalDefaultsSection.jsx` — shown only when SII is active for the organization AND `data.customer` is true (ETP-5831, see "SIF-gated blocks" below) |
 | "Clave tipo factura" | `aeatsiiSiikeylist` | `customer` | Enum selector (`R`/`F1`/`F2`/`F4`) in the same "SII" sub-block, visible only when `aeatsiiDefaultsiikey` is checked |
-| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — always shown, unconditional (see part 3 below) |
+| "Factura Simplificada" | `tbaiIssimplifiedinv` | `businessPartner` | Toggle in the "TicketBAI" sub-block, `FiscalDefaultsSection.jsx` — shown only when TicketBAI is active for the organization (ETP-5831, see "SIF-gated blocks" below) |
 
 **SII (`aeatsiiDefaultsiikey` / `aeatsiiSiikeylist`):** both fields were already `editable`
 and already pushed to NEO from earlier work — only the UI wiring was missing. **Correction
@@ -504,6 +504,9 @@ and all Contacts vitest suites (`BillingPreferencesForm.vitest.jsx`,
 
 ## ETP-4784 (part 3) — Simplified back to Classic parity, no "SII/TBAI active" gating
 
+> **Superseded by ETP-5831 (CP-20)** — see "SIF-gated blocks" right after this section. Kept
+> for the history of the decision.
+
 Parts 3 and 4 of this ticket (see git history for the discarded intermediate design)
 explored gating the "SII"/"TicketBAI" blocks on whether the contact's organization actually
 had SII/TicketBAI configured — first by fetching and filtering the `sii-config`/`tbai-config`
@@ -538,6 +541,34 @@ The `organization` spec's 3 `AD_OrgInfo` flags added in the discarded intermedia
 **kept as-is** in `artifacts/organization/decisions.json` — they remain legitimate
 Organization-window information exposed on the backend contract, just no longer consumed
 from Contacts. See `docs/generated-custom-windows/organization.md` for that side.
+
+## ETP-5831 (CP-20) — SIF-gated blocks
+
+QA (ETP-5831 CP-20) reported the section offering SII and TicketBAI options to tenants where
+those SIF are not active. Product decision (this ticket): **each option depends on its own SIF
+being active for the organization**, deliberately departing from Classic's AD DisplayLogic (part
+3 above). `FiscalDefaultsSection.jsx` now reads the organization's active fiscal configuration
+through the existing `useFiscalConfig(orgId, apiBaseUrl)` (`fiscal-config/useFiscalConfig.js` —
+the same reader the invoice windows and the Organization window's fiscal sections use; no new
+reader). `orgId` is the organization selected in the top-nav (`useAuth().selectedOrg`), the same
+source as the invoice lists' SIF columns: a business partner usually lives at org `*`, which never
+carries a SIF config. `ContactsFinancialPanel.jsx` now passes `apiBaseUrl` down.
+
+The rule is the exported pure `resolveFiscalDefaultsBlocks({ fiscal, isCustomer })`:
+
+- **"SII" block** (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) — an active SII config
+  (`siiRecord`) **and** `data.customer` true (the customer gate is unchanged).
+- **"TicketBAI" block** (`tbaiIssimplifiedinv`) — an active TicketBAI config (`tbaiRecord`).
+- **VERI\*FACTU** — the section has no VERI\*FACTU-specific option, so nothing to gate.
+- **Neither block → no section at all**: the component returns `null`, title, description and
+  divider included. The divider (`<hr>`) moved from `ContactsFinancialPanel.jsx` into the
+  section for that reason, so a hidden section leaves no stray rule.
+- **Fail closed, no flash:** until `useFiscalConfig` has settled (a resolved `profile` or an
+  `error` — it starts at `loading: false, profile: null`), and after a failed read, no block is
+  shown. Same "settled" rule as `organization/useFiscalSectionVisibility.js`.
+
+Hidden is not stripped: hiding a block never clears the stored values; they reappear when the SIF
+is activated again.
 
 No `decisions.json` or generator change was needed for this simplification — pure
 custom-component revert. Verified with `npx vitest run src/windows/custom/contacts` (all

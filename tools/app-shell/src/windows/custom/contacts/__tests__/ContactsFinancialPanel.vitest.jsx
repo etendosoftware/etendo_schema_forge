@@ -140,9 +140,11 @@ describe('ContactsFinancialPanel', () => {
     expect(screen.getByTestId('fiscal-defaults-section')).toBeInTheDocument();
   });
 
-  it('separates its three sections with rendered rules', () => {
+  // The fiscal defaults section draws its own divider (it may render nothing at all when no SIF
+  // applies, ETP-5831 CP-20); it is stubbed here, so the panel itself draws one rule.
+  it('separates its own sections with a rendered rule and leaves the fiscal defaults divider to that section', () => {
     const { container } = render(<ContactsFinancialPanel {...defaultProps} />);
-    expect(container.querySelectorAll('hr')).toHaveLength(2);
+    expect(container.querySelectorAll('hr')).toHaveLength(1);
   });
 });
 
