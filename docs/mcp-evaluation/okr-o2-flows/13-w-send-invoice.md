@@ -10,13 +10,10 @@ Listado y convenciones: [`../okr-o2-flows.md`](../okr-o2-flows.md).
   vista previa); el harness lo lee con `expectEffect.rowsAt: history`. Antes la verificación era
   provisional (la respuesta nombraba la dirección) y la prueba pasaba sin que se enviara nada.
 - **Datos previos:** factura completada; cliente con correo (compras@mcpflow.test).
-- **Límite conocido de Etendo:** el PDF de un documento lo arma la aplicación, en el navegador. Un
-  documento creado por MCP no tiene PDF hasta que alguien abre su vista previa en la aplicación,
-  y sin PDF no se puede enviar. Por eso esta prueba **falla en Etendo** hoy: es un límite real
-  frente a Holded, no un fallo de la prueba. Desde ETP-5848 los dos mensajes de "sin PDF" dicen
-  que solo la aplicación lo genera y que no se reintente; antes se remitían uno al otro (13
-  llamadas y 604k tokens; ahora 7 llamadas y 261k). Generar el PDF del lado del servidor, con el
-  mismo diseño, es una tarea aparte (ver H6 en `../okr-o2-sweep-analysis.md`).
+- **PDF (2 nov):** el PDF de un documento lo armaba solo la aplicación, en el navegador, así
+  que un documento creado por MCP no se podía enviar. ETP-6013 (en develop desde el 2 nov) lo
+  genera en el servidor al completar por MCP y al pedirlo si falta o está viejo; con eso la
+  prueba debería poder pasar en Etendo. Hay que re-probarla con un entorno que tenga ETP-6013.
 - **Evidencia UI:** 👁 (23 oct) "Enviar / Descargar" abre "Enviar Factura de Venta #…": vista previa
   del PDF, Para (obligatorio), CC, Asunto (obligatorio, viene prellenado), Mensaje (prellenado),
   "Descargar PDF" y "Enviar". No se envió. El PDF sale titulado "AR Invoice" (en inglés) en una

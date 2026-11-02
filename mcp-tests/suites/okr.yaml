@@ -673,8 +673,8 @@ probes:
       holded: *holded-no-invoice-setup
 
   # Flow 13. Verified on the document's send history (the preview of the send tool lists it,
-  # ETP-5848): one SENT email to the address. A send the MCP cannot make (the PDF exists only
-  # once the app renders it) fails here, as it should.
+  # ETP-5848): one SENT email to the address. Before ETP-6013 the MCP could not make the PDF, so
+  # the send failed; the check fails whenever nothing went out.
   - id: w-send-invoice
     category: write
     mode: write

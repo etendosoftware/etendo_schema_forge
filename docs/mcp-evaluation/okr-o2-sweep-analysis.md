@@ -135,6 +135,11 @@ Tipo de corrección: **D** descripción de tool / instrucciones · **H** mensaje
     (`history`: fecha, estado, destinatarios, asunto; los últimos 10). Sirve al agente para no
     reenviar y a la prueba para verificar el envío (`expectEffect.rowsAt`), que antes pasaba sin
     enviar nada. Sin tool nueva.
+- **Actualización (2 nov, al mergear develop):** ETP-6013 genera el PDF en el servidor (al
+  completar por MCP y al pedirlo si falta o está viejo) y reescribió estos mismos mensajes ("pedilo de
+  nuevo en unos segundos"). El cambio de mensajes de ETP-5848 (`ea4de6848`) se descartó en el merge
+  a favor de ETP-6013; se conservan el historial de envíos y la verificación. `w-send-invoice` hay
+  que re-probarla: ahora debería pasar.
 
 ### H7. Usuario con permisos: el rol no se asigna por MCP — resuelto: acción `assignRoles`
 
