@@ -178,21 +178,26 @@ describe('FmCatalogPage — toggle', () => {
     expect(locked.length).toBe(0);
   });
 
-  it('re-sorts cards so the still-active model renders first after a toggle', () => {
+  // ETP-5831 CP-21 — the order is by model code and never depends on the active state: toggling
+  // a model must not move its card (it used to jump, as the list sorted active models first).
+  const badgeOrder = (container) => Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
+    .map(b => b.textContent);
+
+  it('keeps the cards in model-code order when a model is deactivated', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
-    // Initially 303 and 349 active — id order wins the tie-break (303 before 349); the inactive
-    // 390 (ETP-5716, not in activeModels) sorts after them.
-    let order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
-      .map(b => b.textContent);
-    expect(order).toEqual(['303', '349', '390']);
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
 
-    // Deactivate 303 (first switch) — 349 (still active) should now sort first.
-    const switches = container.querySelectorAll('[role="switch"]');
-    fireEvent.click(switches[0]);
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[0]); // 303 off
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
+  });
 
-    order = Array.from(container.querySelectorAll('.fm-catalog-card__badge'))
-      .map(b => b.textContent);
-    expect(order).toEqual(['349', '303', '390']);
+  it('keeps the cards in model-code order when a model is activated', () => {
+    const { container } = render(<FmCatalogPage {...defaultProps} activeModels={{ '390': true }} />);
+    // Active state at open time does not lead the order either.
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
+
+    fireEvent.click(container.querySelectorAll('[role="switch"]')[1]); // 349 on
+    expect(badgeOrder(container)).toEqual(['303', '349', '390']);
   });
 });
 
