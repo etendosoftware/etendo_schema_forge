@@ -2091,7 +2091,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.17.0",
+        "contractVersion": "0.18.0",
         "backendEntity": true
       }
     },
@@ -2179,7 +2179,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.17.0",
+        "contractVersion": "0.18.0",
         "backendEntity": true
       }
     },
