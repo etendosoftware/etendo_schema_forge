@@ -1102,6 +1102,100 @@ bare status code was ever propagated) via the existing `parseServerMessage` help
 `fm.list.reactivate_failed` when no reason is present (network error, or any future 409 this
 mechanism doesn't tag).
 
+### "Rectificaciones" column (349 list) — current behavior
+
+**Domain fact (verified against the real AEAT Sede portal, preproducción, across several
+multi-record declarations, both sales and purchase corrections):** the Modelo 349's "Importe de
+las rectificaciones" header field sums the RESTATED base per rectification record — the new,
+corrected total base after the correction is applied — never a delta, never an abs-per-key sum of
+the delta, and never a signed net of deltas. This is the one number to keep in mind when touching
+anything in this section: any change that goes back to summing deltas (signed or absolute) will
+reproduce a figure AEAT's own portal does not show.
+
+**List shape.**
+
+- **"Resultado"** (`InfoResult`, `FmListPage.jsx`) shows ONLY the operations total — regular
+  (non-corrective) operator rows, via `sum349OperationsBase(operators)`
+  (`models/349/operations349.js`). This agrees by construction with the detail page's "Total
+  operaciones" KPI and the generated `.349` file, since all three read the same
+  `GET /fiscal349/operators` payload through the same reduction. An ordinaria with zero operations
+  but real rectifications renders `—`, never "Informativa".
+- **"Rectificaciones"** (`RectificationsCell`, `FmListPage.jsx`), a separate column right after
+  "Resultado", shows `sumRestatedRectifications(operators)` — Σ `correctedBase` across every
+  corrective row, no grouping, no sign games. It is gated on `result.hasRectifications` (whether
+  any rectificative operator row exists at all), **not** on `amount > 0` — a real rectification
+  whose restated bases happen to sum to exactly 0,00 must still render "0,00 €", not collapse to
+  the empty `—` state. Rendering is plain text, same typographic weight as "Resultado"
+  (`fontVariantNumeric: tabular-nums`, no pill, no color tint). A small info icon next to the
+  amount, `FmInfoTooltip` (`FmCommon.jsx`), shows the origin periods on hover (e.g. "de 09, 10,
+  11" — `collectRectificationOrigins`/`formatRectificationOriginsLabel`, `operations349.js`,
+  reading the `declaredYear`/`declaredPeriod` each corrective operator row already carries since
+  ETP-5027); a cross-year origin is qualified with its full year (`"<period> <year>"`), matching
+  the detail page's own "Rectificaciones" tab convention. `FmInfoTooltip` renders its box via
+  `createPortal` to `document.body` so it is never clipped by a sticky/scrolling ancestor — the
+  same mechanism backs "Totales por clave"'s own info icon.
+- The 303/390 rows never populate `rectifications`, so their "Rectificaciones" cell is simply
+  empty; the "Rectificaciones" tab, the per-key totals and every `.349` file amount are untouched
+  by any of the above.
+
+**Detail page — "Bases rectificadas por clave" card** (`RectificativeSubtotalCard`,
+`FmModel349Page.jsx`, i18n key `fm.m349.rectif_subtotal.title`) reads `rectifiedBaseByKey(operators)`
+— the same `correctedBase` values, partitioned by AEAT349 key (E/S/A/I). It always renders exactly
+4 rows, including zero ones. Restated bases are never negative by AEAT convention ("Todos los
+importes serán positivos"), so the card has no red/negative styling. **It carries no grand-total
+row** — the only place the overall total is shown is the list's "Rectificaciones" column; summing
+the 4 rows by hand always matches that column's value, since both are reductions over the same
+`correctedBase` values.
+
+**Detail page — Operadores tab, per-row "Base imponible".** A rectificative row's cell reads
+`isRectificativeOp(op) ? (op.correctedBase ?? op.base) : op.base` — the restated base, falling back
+to the old signed delta (`base`) only when `correctedBase` is absent (a legacy/stale payload), so
+the cell is never blank. No red/negative styling here either, for the same "always positive"
+reason.
+
+**Backend field.** `com.etendoerp.go`'s `Fiscal349BoxesHandler#appendOperators` (via the
+`putCorrectedBaseIfRectificative` helper) writes `correctedBase = former.add(delta)` onto every
+corrective operator row, additive alongside the pre-existing signed-delta `base` field — `base` is
+untouched and still backs the Operadores fallback case above. `former` comes from
+`AEAT3492010ReportDao.getCorrectiveTaxBaseAmountPerBusinessPartner`'s `BPFormerAmount`, already
+attached to every corrective row. The `.349` file generator (`AEAT3492010Report`, classic) reads
+`BPFormerAmount` directly from the DB and was never affected by any of this — it was always
+correct.
+
+**Deliberately not changed:** `em_aeat349_iscorrective` (the manual flag deciding whether an
+invoice lands in "Rectificaciones" or "Facturas origen") and the backend's `rectificativeSummary`
+field (still computed and emitted, just no longer read by the frontend — removing a documented,
+stable API field is not this change's business).
+
+#### CP-20 — reactivate/delete confirm dialogs close on both outcomes
+
+`FmListPage.jsx`'s `handleConfirmReactivate` and `handleConfirmDelete` clear their target
+(`reactivateTarget`/`deleteTarget`) in `.finally`, next to the busy flag each shares a lifecycle
+with (`reactivatingId`/`deletingId`) — so the confirmation dialog closes whether the action
+succeeds or is rejected (e.g. the `corrective_sibling_presented` 409). The row itself is left
+untouched on failure, so the action can simply be retried. Guarded by
+`FmListPage.reactivate.vitest.jsx` (all three rejection reasons) and
+`FmListPage.rowActions.vitest.jsx` (delete).
+
+#### Design history / lessons
+
+Earlier iterations are worth knowing about only so they aren't re-tried: the operations total was
+once computed as `sumAbsKeyTotals(summary) + sumAbsKeyTotals(rectificativeSummary)` (CP-19's first
+bug — it mixed the rectifications block into "Resultado"), and once the rectifications amount
+itself was computed as `sumAbsRectificativeTotals(rectificativeSummary)`, a per-key absolute sum of
+SIGNED DELTAS rather than the restated base — both wrong for the same underlying reason (deltas,
+signed or absolute, cannot reconstruct AEAT's restated-base figure). The "Rectificaciones" cell
+itself went through two discarded visual designs before the current plain-text + info-icon shape:
+a colored pill with a clock icon and a permanent sub-line of origin periods (broke row vertical
+alignment), then a pill with the origin periods in the browser's native `title` tooltip (unreliable
+hover behavior). Resist reintroducing any of these to "simplify" the column.
+
+One pointer worth keeping so it isn't re-investigated: during development, the `correctedBase`
+figures briefly read as a uniform 0,00/empty across the board; this looked like a missing-field or
+key-mismatch bug but was confirmed (via bytecode/DB inspection) to be a stale build/classloader
+artifact from an incomplete rebuild, resolved by a full `compile.complete`/`smartbuild` + Tomcat
+restart — not a logic bug.
+
 **4 — Display regression: the Bug 3 fix needed a second layer.** ETP-5725's original Bug 3 fix
 (see "Tipo column derivation" above) only patched `FmListPage.jsx`'s `resolveDeclTypeLabel` — its
 "never-saved" fallback now requires `decl.status === 'draft'` before defaulting to
