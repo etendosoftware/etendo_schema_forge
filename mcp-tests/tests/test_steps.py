@@ -289,10 +289,19 @@ class SuiteV2Test(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent / "suites"
         for path in sorted(root.glob("*.yaml")):
             suite = load_suite(path)
-            self.assertEqual(suite.schema_version, 1, path.name)
+            if suite.schema_version != 1:
+                continue  # okr.yaml is the v2 comparison suite
             for probe in suite.probes:
                 self.assertIsNone(probe.platforms)
                 self.assertIs(probe.for_platform("etendo-go"), probe)
+
+    def test_the_okr_suite_loads_and_every_probe_runs_on_etendo(self):
+        suite = load_suite(Path(__file__).resolve().parent.parent / "suites/okr.yaml")
+        self.assertEqual(suite.schema_version, 2)
+        for probe in suite.probes:
+            block = probe.for_platform("etendo-go")
+            self.assertIsNotNone(block, probe.id)
+            self.assertIsNone(block.not_possible, probe.id)
 
     def _rejects(self, fragment, message):
         with self.assertRaises(ValueError) as ctx:

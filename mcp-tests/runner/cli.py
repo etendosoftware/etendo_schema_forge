@@ -413,6 +413,7 @@ def _run_header(
         "model": provider["model"],
         "temperature": provider["temperature"],
         "promptVersion": PROMPT_VERSION,
+        "feedbackTools": provider.get("feedbackTools", False),
         "maxSteps": max_steps,
         "maxResultChars": max_result_chars,
         # Requested MEASURED attempts per probe (D43). Replacements for
@@ -744,6 +745,7 @@ async def run_attempt(
                 max_steps=ctx.max_steps,
                 max_result_chars=ctx.max_result_chars,
                 on_event=on_event,
+                feedback_tools=ctx.provider.get("feedbackTools", False),
             )
         result.update(outcome)
         # harnessError is a separate axis from outcome (D12). Classification
@@ -1027,6 +1029,9 @@ def _stop_message(provider: dict[str, Any]) -> str:
 async def _run(args: argparse.Namespace) -> int:
     config = cfg.load_config(args.config)
     provider = cfg.provider_settings(config, model=args.model)
+    # Rides on the resolved provider settings, like the model: it shapes what the
+    # agent is told, and every attempt, run.json and compare pin already reads them.
+    provider["feedbackTools"] = cfg.feedback_tools(config, override=args.feedback_tools)
     max_steps = cfg.max_steps(config, override=args.max_steps)
     max_result_chars = cfg.max_result_chars(config)
     comparing = bool(args.targets)
@@ -1176,7 +1181,8 @@ def _open_target_run(
         print(f"  maxSteps    {max_steps}")
         print(f"  repeat      {repeat}")
         print(f"  maxResChars {max_result_chars}")
-        print(f"  promptVer   {PROMPT_VERSION}")
+        print(f"  promptVer   {PROMPT_VERSION}"
+              + (" · feedback tools ON" if provider.get("feedbackTools") else ""))
         print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
     print(f"  concurrency {concurrency}")
     if server and not server["error"]:
@@ -1620,6 +1626,8 @@ def _compare_record(
             "model": provider["model"],
             "temperature": provider["temperature"],
             "promptVersion": PROMPT_VERSION,
+            # A comparison and a feedback battery must never pair as a stability run.
+            "feedbackTools": provider.get("feedbackTools", False),
             "verdictSchemaVersion": VERDICT_SCHEMA_VERSION,
             "runSchemaVersion": RUN_SCHEMA_VERSION,
             "ruleVersion": rule.RULE_VERSION,
@@ -1707,6 +1715,13 @@ def main(argv: list[str] | None = None) -> int:
         "the config file.",
     )
     parser.add_argument("--max-steps", type=int, help="Override the per-probe agent loop cap")
+    parser.add_argument(
+        "--feedback-tools",
+        action="store_true",
+        help="Let the agent send feedback through a platform's own tool (a feedback battery). "
+        "Off by default: comparisons keep the final report as the only report (prompt v5). "
+        "Same as [run] feedback_tools = true.",
+    )
     parser.add_argument(
         "--repeat",
         type=int,

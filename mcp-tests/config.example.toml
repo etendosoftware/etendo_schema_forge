@@ -50,6 +50,12 @@ temperature = 0
 # decide before calls (rule 2).
 max_steps = 50
 
+# Whether the agent may send feedback through a platform's own tool. Off for comparisons: the
+# system prompt makes the agent's final report the only report, so a feedback call does not add a
+# turn to one platform only. Turn it on (or `make mcp-test FEEDBACK=1`) for a battery whose purpose
+# is to collect that product feedback.
+feedback_tools = false
+
 # Per tool call, how much of the RESULT body is stored in the run file. Results
 # are recorded so a failure is diagnosable from runs/ alone; the cap exists
 # because one `etendo_discover` answer is ~79 KB. The true size is always kept as
