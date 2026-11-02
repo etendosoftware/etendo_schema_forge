@@ -85,6 +85,9 @@ function makeSectionMock(label, delayMs) {
         fail: saveOutcome[label] === 'fail' ? new Error(`${label} boom`) : undefined,
       }),
     }));
+    // ETP-5831: the page's Save is enabled only while a section reports unsaved changes; these
+    // doubles report themselves dirty so the serialization tests can press it.
+    React.useEffect(() => { props.onDirtyChange?.(true); }, [props.onDirtyChange]);
     return <div data-testid={`${label}-section`} />;
   });
 }

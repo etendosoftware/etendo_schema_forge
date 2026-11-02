@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertSection from './CertSection.jsx';
+import { useFormDirty } from './useFormDirty.js';
 import SectionSaveButton from './SectionSaveButton.jsx';
 import {
   getFiscalRecordId,
@@ -40,13 +41,15 @@ function SectionRow({ label, children, labelExtra, boldLabel, noBorderTop }) {
   );
 }
 
-const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId, onSave, hideSave, hideCert, locked, certRefreshKey, onCertUploaded }, ref) {
+const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId, onSave, hideSave, hideCert, locked, certRefreshKey, onCertUploaded, onDirtyChange }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState({
     autoSendInvoices:   normalizeEtendoBoolean(record?.autoSendInvoices),
     jasperreportPath:   record?.jasperreportPath  ?? '',
   });
+  // ETP-5831 — tells the page whether this section has unsaved changes (enables its Save).
+  useFormDirty(form, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
 

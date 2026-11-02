@@ -3,17 +3,13 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { isProductionEnvironment, isEtendoTrue } from './fiscalConfig.utils.js';
 
 /**
- * The fiscal configuration status card: a success band ("{system} configured / active") over a
- * list of label/value rows. One component, two placements:
+ * The fiscal configuration status card: a success band ("{system} activo") over a list of
+ * label/value rows — the "Estado" side panel of FiscalConfigPage (ETP-5831), shown whenever the
+ * organization already has a fiscal configuration, with rows derived from the stored records
+ * (`deriveConfiguredStatus`). `eyebrow` adds the "Estado" label and the environment badge.
  *
- * - the wizard's "Configuración aplicada" screen (right after the first save), which passes the
- *   answers the user just gave as rows;
- * - the "Estado" side panel of FiscalConfigPage (ETP-5831), shown whenever the organization
- *   already has a fiscal configuration, with rows derived from the stored records
- *   (`deriveConfiguredStatus`). The panel adds the `eyebrow` header: the "Estado" label and the
- *   environment badge.
- *
- * Colours are the system status tokens (status-success / status-warning), never ad-hoc ones.
+ * It started as the wizard's "Configuración aplicada" card; that screen was removed in ETP-5831
+ * and this panel replaces it. Colours are the system status tokens, never ad-hoc ones.
  */
 export default function FiscalStatusSummary({ title, body, rows, eyebrow = null, className = '', 'data-testid': testId }) {
   return (

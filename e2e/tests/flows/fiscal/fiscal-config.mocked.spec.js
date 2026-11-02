@@ -418,10 +418,14 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
 // verifactuConfig), which the backend no longer returns — recordId was always
 // null and the section's save() threw a "record id not found" error instead of
 // completing. Asserting the PUT request URL contains the record's `id` is the
-// direct regression signal for the bug; reaching the applied screen confirms the
-// save actually completed instead of throwing.
+// direct regression signal for the bug; reaching the configured page (with its "Estado" panel,
+// ETP-5831 — the wizard no longer has an applied screen) confirms the save actually completed
+// instead of throwing.
 
 async function installOnboardingRecordMock(page, { spec, record }) {
+  // Once the record exists (POST), the page's re-read after the wizard (ETP-5831) lists it, so
+  // the page leaves the wizard for the configured view.
+  let created = false;
   await page.route(`**/sws/neo/${spec}/**`, async route => {
     const req = route.request();
     const method = req.method();
@@ -433,9 +437,10 @@ async function installOnboardingRecordMock(page, { spec, record }) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(neoOk(isListLoad ? [] : [record])),
+        body: JSON.stringify(neoOk(isListLoad && !created ? [] : [record])),
       });
     }
+    if (method === 'POST') created = true;
     // POST (create) and PUT (update) both echo back the full record.
     return route.fulfill({
       status: 200,
@@ -554,8 +559,9 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
       ]);
       expect(putReq.url()).toContain(testCase.record.id);
 
-      // Success — reaches the applied screen instead of throwing "record id not found".
-      await expect(page.getByText(t('fiscal.onboarding.applied.title'))).toBeVisible({ timeout: 8_000 });
+      // Success — hands over to the configured page with its "Estado" panel (ETP-5831: no
+      // applied screen) instead of throwing "record id not found".
+      await expect(page.getByTestId('FiscalStatusSummary__panel')).toBeVisible({ timeout: 8_000 });
     });
   }
 });

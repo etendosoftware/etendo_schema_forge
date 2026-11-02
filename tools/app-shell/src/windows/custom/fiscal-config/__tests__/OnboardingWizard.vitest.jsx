@@ -32,8 +32,7 @@ vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (url) => url?.replace(/\/[^/]+$/, '') ?? '',
 }));
 
-// ETP-5027: spread the real module so isProductionEnvironment keeps its real
-// behaviour — the applied-summary environment row is derived from it.
+// Spread the real module so only the helpers below are stubbed.
 vi.mock('../fiscalConfig.utils.js', async (importOriginal) => ({
   ...(await importOriginal()),
   buildOnboardingPayloads: vi.fn(() => ({})),
@@ -365,8 +364,10 @@ describe('OnboardingWizard — createRecords flow', () => {
     });
   });
 
-  it('back button in DetailScreen goes to AppliedScreen (ETP-4783: records already created, cannot go back to wizard)', async () => {
-    renderWizard();
+  // ETP-4783: the records already exist, so "Cancelar" never goes back into the wizard. Since
+  // ETP-5831 (no applied screen) it hands over to the page, which shows the configured view.
+  it('cancel in DetailScreen hands over to the page instead of going back into the wizard', async () => {
+    const { props } = renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
@@ -375,7 +376,7 @@ describe('OnboardingWizard — createRecords flow', () => {
     });
     fireEvent.click(screen.getByText('fiscal.cancel'));
     expect(screen.queryByText('fiscal.onboarding.confirm.title')).not.toBeInTheDocument();
-    expect(screen.getByText('fiscal.onboarding.goHome')).toBeInTheDocument();
+    expect(props.onComplete).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -491,12 +492,15 @@ describe('OnboardingWizard — ManualScreen territory restriction (ETP-5272 poin
   });
 });
 
-describe('OnboardingWizard — AppliedScreen', () => {
+// ETP-5831 — the "Configuración aplicada" screen is gone: once the detail save succeeds the
+// wizard hands over to the page (onComplete), which re-reads the config and shows the configured
+// view with its "Estado" panel. Nothing of the wizard's own summary is rendered.
+describe('OnboardingWizard — after saving the details', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  async function navigateToApplied(overrides = {}) {
+  async function saveDetails(overrides = {}) {
     const result = renderWizard(overrides);
     // Use manual path so manualSystem='SII' bypasses the resolveSystem mock (which returns null)
     fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
@@ -507,60 +511,36 @@ describe('OnboardingWizard — AppliedScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('fiscal.save')).toBeInTheDocument();
     });
-    // handleSaveDetail: system='SII', siiRef.current is null (SiiSection not rendered),
-    // optional-chaining returns undefined, onApplied() fires → step='applied'
-    fireEvent.click(screen.getByText('fiscal.save'));
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
-    });
+    // handleSaveDetail: system='SII', siiRef.current is null (SiiSection mocked), so the save
+    // resolves at once and the wizard hands over.
+    fireEvent.click(screen.getByTestId('OnboardingWizard__detailSaveButton'));
     return result;
   }
 
-  it('shows applied title after saving details', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
+  it('calls onComplete so the page re-reads the stored config', async () => {
+    const { props } = await saveDetails();
+    await waitFor(() => expect(props.onComplete).toHaveBeenCalledTimes(1));
   });
 
-  it('shows applied subtitle', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.subtitle')).toBeInTheDocument();
+  it('never renders an applied / summary screen of its own', async () => {
+    await saveDetails();
+    await waitFor(() => expect(screen.queryByText('fiscal.onboarding.applied.title')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('FiscalStatusSummary__applied')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('FiscalStatusSummary__panel')).not.toBeInTheDocument();
   });
 
-  it('shows goHome button in applied screen', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.goHome')).toBeInTheDocument();
-  });
-
-  it('shows viewConfig button in applied screen', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.viewConfig')).toBeInTheDocument();
-  });
-
-  it('calls onGoHome when goHome button is clicked in applied screen', async () => {
-    const { props } = await navigateToApplied();
-    fireEvent.click(screen.getByText('fiscal.onboarding.goHome'));
-    expect(props.onGoHome).toHaveBeenCalled();
-  });
-
-  it('calls onComplete when viewConfig button is clicked in applied screen', async () => {
-    const { props } = await navigateToApplied();
-    fireEvent.click(screen.getByText('fiscal.onboarding.viewConfig'));
-    expect(props.onComplete).toHaveBeenCalled();
-  });
-
-  it('shows applied territory row', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.row.territory')).toBeInTheDocument();
-  });
-
-  it('shows applied system row', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.applied.row.system')).toBeInTheDocument();
-  });
-
-  it('shows nextsteps title', async () => {
-    await navigateToApplied();
-    expect(screen.getByText('fiscal.onboarding.nextsteps.title')).toBeInTheDocument();
+  it('does not double-submit: a second click while the save is in flight is ignored', async () => {
+    const { props } = renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText('SII'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
+    const save = await screen.findByTestId('OnboardingWizard__detailSaveButton');
+    fireEvent.click(save);
+    fireEvent.click(save);
+    await waitFor(() => expect(props.onComplete).toHaveBeenCalled());
+    expect(props.onComplete).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -733,62 +713,6 @@ describe('OnboardingWizard — renderPageHead helper', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     // SubquestionScreen also calls renderPageHead
     expect(screen.getByText('Test Organization')).toBeInTheDocument();
-  });
-});
-
-describe('OnboardingWizard — AppliedScreen environment row (ETP-5027)', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  // Walks the manual path up to the applied summary for the given system,
-  // with createRecords returning `record` as the created config row.
-  async function navigateToAppliedFor({ systemLabel, payloadKey, record }) {
-    buildOnboardingPayloads.mockReturnValue({ [payloadKey]: {} });
-    useApiFetch.mockReturnValue(vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ response: { data: [record] } }),
-    })));
-    renderWizard();
-    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
-    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
-    fireEvent.click(screen.getByText(systemLabel));
-    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
-    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByText('fiscal.save'));
-    await waitFor(() => {
-      expect(screen.getByText('fiscal.onboarding.applied.title')).toBeInTheDocument();
-    });
-  }
-
-  it('shows the sandbox label when VERI*FACTU runs in the developer environment', async () => {
-    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: { isDevEnv: 'Y' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
-    expect(screen.queryByText('fiscal.onboarding.applied.env.production')).not.toBeInTheDocument();
-  });
-
-  it('shows the production label when VERI*FACTU runs in production', async () => {
-    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: { isDevEnv: 'N' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.production')).toBeInTheDocument();
-    expect(screen.queryByText('fiscal.onboarding.applied.env.sandbox')).not.toBeInTheDocument();
-  });
-
-  it('falls back to the sandbox label when the environment flag is missing', async () => {
-    await navigateToAppliedFor({ systemLabel: 'VERI*FACTU', payloadKey: 'verifactu', record: {} });
-    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
-  });
-
-  it('shows the production label when SII is in the production environment', async () => {
-    await navigateToAppliedFor({ systemLabel: 'SII', payloadKey: 'sii', record: { entornoDeProduccin: 'Y' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.production')).toBeInTheDocument();
-  });
-
-  it('shows the sandbox label when SII is not in the production environment', async () => {
-    await navigateToAppliedFor({ systemLabel: 'SII', payloadKey: 'sii', record: { entornoDeProduccin: 'N' } });
-    expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
   });
 });
 

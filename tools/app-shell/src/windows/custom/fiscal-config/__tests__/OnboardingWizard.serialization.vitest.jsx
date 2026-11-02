@@ -150,12 +150,14 @@ describe('OnboardingWizard — SII+TBAI detail save serialization (ETP-5112)', (
     expect(journal.minOverlapGap()).toBeGreaterThan(0);
   });
 
-  it('reaches the applied screen once both saves succeeded', async () => {
-    await renderAtDetailScreen();
+  // ETP-5831 — no "Configuración aplicada" screen any more: a successful save hands over to the
+  // page (onComplete re-reads the config, which shows the configured page and its status panel).
+  it('hands over to the page once both saves succeeded', async () => {
+    const { props } = await renderAtDetailScreen();
 
     await clickSaveDetail(journalRef.current);
 
-    await waitFor(() => expect(screen.getByText('fiscal.onboarding.goHome')).toBeInTheDocument());
+    await waitFor(() => expect(props.onComplete).toHaveBeenCalledTimes(1));
   });
 
   // Semantics the serialization must preserve: the previous `allSettled` attempted both
@@ -172,13 +174,13 @@ describe('OnboardingWizard — SII+TBAI detail save serialization (ETP-5112)', (
     expect(journal.minOverlapGap()).toBeGreaterThan(0);
   });
 
-  it('does not advance to the applied screen when one save failed', async () => {
+  it('stays on the detail screen when one save failed', async () => {
     saveOutcome.tbai = 'fail';
-    await renderAtDetailScreen();
+    const { props } = await renderAtDetailScreen();
 
     await clickSaveDetail(journalRef.current);
 
-    expect(screen.queryByText('fiscal.onboarding.goHome')).not.toBeInTheDocument();
+    expect(props.onComplete).not.toHaveBeenCalled();
     expect(screen.getByText('fiscal.save')).toBeInTheDocument();
   });
 });

@@ -89,9 +89,13 @@ vi.mock('../ChangeSifDialog.jsx', async () => {
 
 // Section component mocks
 
-vi.mock('../SiiSection.jsx', () => ({
-  default: React.forwardRef((props, ref) => {
+vi.mock('../SiiSection.jsx', async () => {
+  // The real dirty tracking over a one-field form: "edit" makes the section dirty.
+  const { useFormDirty } = await import('../useFormDirty.js');
+  return { default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
+    const [form, setForm] = React.useState({ value: 'stored' });
+    useFormDirty(form, props.onDirtyChange);
     return (
       <div
         data-testid="sii-section"
@@ -99,14 +103,19 @@ vi.mock('../SiiSection.jsx', () => ({
         data-hide-cert={String(!!props.hideCert)}
         data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
         <button type="button" data-testid="sii-section-cert-uploaded" onClick={() => props.onCertUploaded?.()}>uploaded</button>
+        <button type="button" data-testid="sii-section-edit" onClick={() => setForm({ value: 'edited' })}>edit</button>
       </div>
     );
-  }),
-}));
+  }) };
+});
 
-vi.mock('../TbaiSection.jsx', () => ({
-  default: React.forwardRef((props, ref) => {
+vi.mock('../TbaiSection.jsx', async () => {
+  // The real dirty tracking over a one-field form: "edit" makes the section dirty.
+  const { useFormDirty } = await import('../useFormDirty.js');
+  return { default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
+    const [form, setForm] = React.useState({ value: 'stored' });
+    useFormDirty(form, props.onDirtyChange);
     return (
       <div
         data-testid="tbai-section"
@@ -114,14 +123,19 @@ vi.mock('../TbaiSection.jsx', () => ({
         data-hide-cert={String(!!props.hideCert)}
         data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
         <button type="button" data-testid="tbai-section-cert-uploaded" onClick={() => props.onCertUploaded?.()}>uploaded</button>
+        <button type="button" data-testid="tbai-section-edit" onClick={() => setForm({ value: 'edited' })}>edit</button>
       </div>
     );
-  }),
-}));
+  }) };
+});
 
-vi.mock('../VerifactuSection.jsx', () => ({
-  default: React.forwardRef((props, ref) => {
+vi.mock('../VerifactuSection.jsx', async () => {
+  // The real dirty tracking over a one-field form: "edit" makes the section dirty.
+  const { useFormDirty } = await import('../useFormDirty.js');
+  return { default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
+    const [form, setForm] = React.useState({ value: 'stored' });
+    useFormDirty(form, props.onDirtyChange);
     return (
       <div
         data-testid="verifactu-section"
@@ -129,10 +143,11 @@ vi.mock('../VerifactuSection.jsx', () => ({
         data-hide-cert={String(!!props.hideCert)}
         data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
         <button type="button" data-testid="verifactu-section-cert-uploaded" onClick={() => props.onCertUploaded?.()}>uploaded</button>
+        <button type="button" data-testid="verifactu-section-edit" onClick={() => setForm({ value: 'edited' })}>edit</button>
       </div>
     );
-  }),
-}));
+  }) };
+});
 
 vi.mock('../FiscalConfigDebugPanel.jsx', () => ({
   default: () => <div data-testid="debug-panel" />,
@@ -142,7 +157,9 @@ vi.mock('../OnboardingWizard.jsx', () => ({
   default: (props) => (
     <div
       data-testid="onboarding-wizard"
-      data-force-test-mode={String(!!props.forceTestMode)} />
+      data-force-test-mode={String(!!props.forceTestMode)}>
+      <button type="button" data-testid="onboarding-wizard-complete" onClick={() => props.onComplete?.()}>complete</button>
+    </div>
   ),
 }));
 
@@ -447,10 +464,11 @@ describe('FiscalConfigPage — profile: sii', () => {
     expect(screen.queryByTestId('verifactu-section')).not.toBeInTheDocument();
   });
 
-  it('shows the org bar with cancel and save buttons', () => {
+  // ETP-5831 — the org bar has no "Cancelar" any more (it only navigated back).
+  it('shows the org bar with the save button and no cancel button', () => {
     renderPage();
-    expect(screen.getByText('fiscal.cancel')).toBeInTheDocument();
     expect(screen.getByText('fiscal.save')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.cancel')).not.toBeInTheDocument();
   });
 
   it('does not show "Add SII" item in the kebab menu when profile is "sii"', () => {
@@ -650,36 +668,6 @@ describe('FiscalConfigPage — profile: conflict', () => {
   });
 });
 
-describe('FiscalConfigPage — cancel button', () => {
-  let mockNavigate;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockNavigate = vi.fn();
-    vi.mocked(useNavigate).mockReturnValue(mockNavigate);
-    vi.mocked(useAuth).mockReturnValue({
-      selectedOrg: { id: 'org-1', name: 'Test Org' },
-      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
-      selectOrg: vi.fn(),
-    });
-    vi.mocked(useFiscalConfig).mockReturnValue({
-      loading: false,
-      error: null,
-      profile: 'sii',
-      siiRecord: { id: 'sii-1' },
-      tbaiRecord: null,
-      verifactuRecord: null,
-      refetch: vi.fn(),
-    });
-  });
-
-  it('calls navigate(-1) when cancel button is clicked', () => {
-    renderPage();
-    fireEvent.click(screen.getByText('fiscal.cancel'));
-    expect(mockNavigate).toHaveBeenCalledWith(-1);
-  });
-});
-
 describe('FiscalConfigPage — save button', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -699,15 +687,27 @@ describe('FiscalConfigPage — save button', () => {
     });
   });
 
-  it('the Save button is present and enabled when orgId is set', () => {
+  // ETP-5831 — "Guardar" is enabled only while a section has unsaved changes.
+  it('the Save button is disabled while nothing has changed', () => {
     renderPage();
-    // Find the Save button (has the icon + save label)
     const saveBtn = screen.getByText('fiscal.save').closest('button');
-    expect(saveBtn).not.toBeDisabled();
+    expect(saveBtn).toBeDisabled();
+  });
+
+  it('enables Save once a section has unsaved changes, and disables it again after a successful save', async () => {
+    renderPage();
+    const saveBtn = () => screen.getByText(/fiscal\.save/).closest('button');
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    expect(saveBtn()).not.toBeDisabled();
+
+    fireEvent.click(saveBtn());
+    // The sections remount after the save (resetKey) and report themselves clean.
+    await waitFor(() => expect(saveBtn()).toBeDisabled());
   });
 
   it('clicking Save triggers the save flow without throwing', async () => {
     renderPage();
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
     const saveBtn = screen.getByText('fiscal.save').closest('button');
     fireEvent.click(saveBtn);
     // After save, label becomes "✓ fiscal.save" briefly — just verify no crash
@@ -838,6 +838,22 @@ describe('FiscalConfigPage — actions kebab menu', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('FiscalConfigPage__actionsMenu')).not.toBeInTheDocument();
     });
+  });
+
+  // ETP-5831 — adding a complementary SIF must be finishable with "Guardar" even with no field
+  // edited: the save is what closes the "adding" state.
+  it('enables Save while a complementary SIF is being added, even with no field edited', async () => {
+    setupAuth();
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false, error: null, profile: 'tbai',
+      siiRecord: null, tbaiRecord: { id: 'tbai-1' }, verifactuRecord: null,
+      refetch: vi.fn(), createComplementary: vi.fn().mockResolvedValue({ id: 'new-sii-1' }),
+    });
+    renderPage();
+    expect(screen.getByText('fiscal.save').closest('button')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__addComplementary'));
+    await waitFor(() => expect(screen.getByText('fiscal.save').closest('button')).not.toBeDisabled());
   });
 
   it('kebab trigger IS rendered when canChangeSif is true (sii profile)', () => {
@@ -1038,6 +1054,7 @@ describe('FiscalConfigPage — forceTestMode (ETP-5272)', () => {
   it('re-enables the page Save button when forceTestMode is false (no regression)', () => {
     vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: false });
     renderPage();
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
     const saveBtn = screen.getByText('fiscal.save').closest('button');
     expect(saveBtn).not.toBeDisabled();
   });
@@ -1308,5 +1325,43 @@ describe('FiscalConfigPage — "Estado" status panel on load (ETP-5831 B)', () =
     mockConfig(state);
     renderPage();
     expect(screen.queryByTestId('FiscalStatusSummary__panel')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5831 — first-time setup: the wizard owns the screen and the "Estado" panel is absent; the
+// wizard's save hands over to the page (onComplete = refetch), and the panel appears only once the
+// re-read config is a configured one.
+describe('FiscalConfigPage — first-time setup and the status panel (ETP-5831)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    certExpiry.value = { daysLeft: null, validTo: null };
+  });
+
+  it('shows no status panel while the wizard is configuring, and wires the wizard completion to refetch', () => {
+    const refetch = vi.fn();
+    mockConfig({ profile: 'unconfigured', refetch });
+    renderPage();
+    expect(screen.getByTestId('onboarding-wizard')).toBeInTheDocument();
+    expect(screen.queryByTestId('FiscalStatusSummary__panel')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('onboarding-wizard-complete'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the status panel once the re-read config is configured', () => {
+    mockConfig({ profile: 'unconfigured' });
+    const { rerender } = renderPage();
+    expect(screen.queryByTestId('FiscalStatusSummary__panel')).not.toBeInTheDocument();
+
+    mockConfig({ profile: 'sii', siiRecord: SII_REC });
+    rerender(<FiscalConfigPage {...BASE_PROPS} />);
+    expect(screen.queryByTestId('onboarding-wizard')).not.toBeInTheDocument();
+    expect(screen.getByTestId('FiscalStatusSummary__panel')).toBeInTheDocument();
+  });
+
+  it('opens the configured page with Save disabled (nothing unsaved yet)', () => {
+    mockConfig({ profile: 'sii', siiRecord: SII_REC });
+    renderPage();
+    expect(screen.getByText('fiscal.save').closest('button')).toBeDisabled();
   });
 });

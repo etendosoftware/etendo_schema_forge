@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Save, RefreshCw, PlusCircle, MoreVertical, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
@@ -133,6 +133,15 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   // reader (the other tab's CertSection, the expiry banner, the status panel) re-reads it.
   const [certVersion, setCertVersion] = useState(0);
   const handleCertUploaded = () => setCertVersion(v => v + 1);
+  // ETP-5831 — unsaved changes per section (useFormDirty). "Guardar" is enabled only while some
+  // section is dirty (or a complementary SIF is being added); after a successful save the sections
+  // remount (resetKey) and report themselves clean, which disables it again.
+  const [dirtySections, setDirtySections] = useState({});
+  const reportDirty = useMemo(() => {
+    const reporter = (key) => (dirty) => setDirtySections(prev => (prev[key] === dirty ? prev : { ...prev, [key]: dirty }));
+    return { sii: reporter('sii'), tbai: reporter('tbai'), verifactu: reporter('verifactu') };
+  }, []);
+  const isDirty = Object.values(dirtySections).some(Boolean);
 
   // "Add complementary SIF" — null while idle, 'sii' or 'tbai' while adding
   const [addingComplementary, setAddingComplementary] = useState(null);
@@ -225,10 +234,6 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     }
   }
 
-  function handleCancel() {
-    navigate(-1);
-  }
-
   const DebugPanel = debugMode ? (
     <FiscalConfigDebugPanel
       orgId={orgId}
@@ -269,10 +274,11 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const canChangeSif = !mockOverride && orgId && CONFIGURED_PROFILES.includes(effectiveProfile);
 
   // ── Status panel (ETP-5831) ──────────────────────────────────────────────────
-  // The "Estado" card of the wizard's applied screen, shown beside the form whenever the
-  // organization already has a fiscal configuration — on opening the window, after a reload and
-  // on later visits, not only right after the first save. Rows are derived from the stored
-  // records (deriveConfiguredStatus); no link to the submission history.
+  // The "Estado" card, shown beside the form whenever the organization already has a fiscal
+  // configuration — on opening the window, after a reload, on later visits and right after the
+  // wizard's first save (the wizard hands over through `onComplete` = refetch; it has no summary
+  // screen of its own). Never during the wizard: that branch returns before this point. Rows are
+  // derived from the stored records (deriveConfiguredStatus); no link to the submission history.
   const configuredStatus = deriveConfiguredStatus({
     profile: effectiveProfile, siiRecord: effectiveSii, tbaiRecord: effectiveTbai, verifactuRecord: effectiveVerifactu,
   });
@@ -363,15 +369,9 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
             </DropdownMenu>
           )}
           <Button
-            variant="outline"
-            onClick={handleCancel}
-            disabled={saving}
-            data-testid="Button__310303">
-            {ui('fiscal.cancel')}
-          </Button>
-          <Button
             onClick={handleSave}
-            disabled={saving || !orgId || forceTestMode}
+            disabled={saving || !orgId || forceTestMode || !(isDirty || addingComplementary)}
+            data-dirty={String(isDirty)}
             className={resolveSaveClass(savedOk)}
             data-testid="Button__310303">
             <Save size={14} className="mr-1.5" data-testid="Save__310303" />
@@ -477,6 +477,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 hideSave
                 locked={forceTestMode}
                 {...certProps}
+                onDirtyChange={reportDirty.sii}
                 data-testid="SiiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
@@ -513,6 +514,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                     hideSave
                     locked={forceTestMode}
                     {...certProps}
+                    onDirtyChange={reportDirty.sii}
                     data-testid="SiiSection__310303" />
                 )}
                 {activeTab === 1 && (
@@ -526,6 +528,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                     hideSave
                     locked={forceTestMode}
                     {...certProps}
+                    onDirtyChange={reportDirty.tbai}
                     data-testid="TbaiSection__310303" />
                 )}
                 <CertExpiryBanner
@@ -554,6 +557,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 hideSave
                 locked={forceTestMode}
                 {...certProps}
+                onDirtyChange={reportDirty.tbai}
                 data-testid="TbaiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
@@ -580,6 +584,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 hideSave
                 locked={forceTestMode}
                 {...certProps}
+                onDirtyChange={reportDirty.verifactu}
                 data-testid="VerifactuSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
