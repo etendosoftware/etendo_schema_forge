@@ -21950,7 +21950,7 @@
     "org390RepNifLabel": "NIF del representante legal",
     "org390RepNameLabel": "Nombre del representante legal",
     "orgRepLineLabel": "Línea",
-    "orgRepTaxIdLabel": "CIF/NIF",
+    "orgRepTaxIdLabel": "NIF",
     "orgRepFirstNameLabel": "Nombre",
     "orgRepLastname1Label": "Primer apellido",
     "orgRepLastname2Label": "Segundo apellido",
