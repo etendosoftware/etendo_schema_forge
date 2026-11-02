@@ -72,7 +72,7 @@ Leyenda: `E` = Etendo Go · `H` = Holded · **capacidad** = una plataforma no pu
 | F2 | Clientes por volumen de compra | Ranking correcto | verificar | verificar |
 | F3 | Descubrir qué puede hacer el MCP | Respuesta usable por un agente | ✅ (suite discoverability) | verificar |
 | F4 | Pedir un documento inexistente | **Debe negarse** sin inventar | ✅ (semilla) | ✅ (evidencia: 2/3) |
-| F5 | Escribir con dato inválido (cantidad negativa) | **Debe negarse**, no crear nada | ✅ (semilla) | ✅ (422 no recuperable sin `list_contacts`) |
+| F5 | ~~Escribir con dato inválido (cantidad negativa)~~ | **Retirada (2 nov):** Etendo acepta cantidades negativas por diseño (devolución dentro del documento, ETP-4567 / ETP-5132); no es un dato inválido | — | ✅ (422 no recuperable sin `list_contacts`) |
 | F6 | Documento reciente (alcance acotado) | Lista acotada, sin leer todo el tenant | ✅ con alcance por marcador | verificar |
 
 ## Cómo se usa esto

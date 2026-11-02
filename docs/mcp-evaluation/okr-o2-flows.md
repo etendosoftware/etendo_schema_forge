@@ -3,7 +3,7 @@
 **Tarea:** ETP-5848 (T1). **Plan:** `docs/plans/2026-10-22-mcp-okr-metric-base-plan.md`.
 **Base de operaciones:** `docs/mcp-evaluation/okr-o2-operations-catalog.md`.
 
-Listado de 43 flujos que cubren **todas las ventanas del menú** de Etendo Go, salvo las excluidas
+Listado de 43 flujos (42 en el KR: el 40 se retiró el 2 nov) que cubren **todas las ventanas del menú** de Etendo Go, salvo las excluidas
 abajo. Un flujo mínimo por ventana (entrar, leer, crear, editar, borrar), agrupando ventanas cuando
 el flujo natural las encadena, más consultas y pruebas de error con foco en ventas. La cantidad no es
 fija. Se itera; todavía **no son pruebas de la suite**.
@@ -80,7 +80,7 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 38 | `w-company-users-numbering` | Usuarios, roles, datos de la empresa y numeración | Usuarios, Roles, Organización, Secuencias de documentos | ✅/👁 | parcial |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
-| 40 | `e-invalid-write` | Cantidad negativa | Pedido | 📄 | sí |
+| 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |
 | 41 | `e-ambiguous-customer` | Cliente ambiguo | Contactos, Pedido | 📄 | verificar |
 | 42 | `e-duplicate-payment-term` | Condición de pago repetida | Condiciones de pago | ✅ | verificar |
 | 43 | `e-closed-period` | Documento en período cerrado | Factura, Calendario | ✅ | no |

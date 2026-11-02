@@ -29,7 +29,7 @@ JWT de `sws/login`), modelo `gemini/gemini-3.8-flash`. Holded: pendiente del log
 | 30 | `w-cost-center-project` | ✅ 19 llamadas | — | ✅ | Solo el proyecto |
 | 35 | `q-taxes-and-rates` | ✅ 7 llamadas | — | ✅ | Solo IVA |
 | 39 | `e-unknown-document` | ✅ 13 llamadas | — | ✅ | |
-| 40 | `e-invalid-write` | ❌ creó el pedido con -3 | — | 🐞 | Catálogo F5 decía que se negaba |
+| 40 | ~~`e-invalid-write`~~ | ❌ creó el pedido con -3 | — | retirada | **Retirada del KR (2 nov):** Etendo acepta cantidades negativas por diseño (ver la ficha 40) |
 | 43 | `e-closed-period` | ✅ 16 llamadas | ⛔ | ⛔ | No completó la factura y explicó el período cerrado |
 | 2 | `w-customer-crud` | ✅ 25 llamadas (tope) | — | ✅ | Solo alta. Llegó al tope de 25 pasos antes de responder |
 | 5 | `w-draft-order-edit-delete` | ✅ 17 llamadas | — | ✅ | Alta + cambio a 4 (sin el borrado final) |
@@ -69,6 +69,8 @@ JWT de `sws/login`), modelo `gemini/gemini-3.8-flash`. Holded: pendiente del log
 Etendo (🐞): `e-invalid-write`, `w-company-users-numbering` (no asigna el rol), `f-void-invoice`,
 `w-send-invoice`. Verificaciones por reforzar (❓/🔧): `w-company-users-numbering` (rol),
 `w-send-invoice`, `f-warehouse-transfer`, `f-internal-consumption`, `q-fiscal-status`.
+Después del barrido, `e-invalid-write` se retiró del KR (no era un fallo: H8 del análisis), así que
+el KR se mide sobre 42 pruebas.
 
 ## Hallazgos
 

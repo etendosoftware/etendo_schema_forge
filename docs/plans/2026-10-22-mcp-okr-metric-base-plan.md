@@ -340,8 +340,9 @@ where c.ad_reference_id = 'B82E1C56F57749AD97DD9924624F08D3'   -- secuencia tran
 3. **Datos fijos de la empresa** (una vez, por la app o el MCP; los lista la cabecera de
    `mcp-tests/suites/okr.yaml`): el servicio "Hora de instalación" (INSTALACION, 50 € en la tarifa
    de venta principal) y la subcuenta 55500001 "Traspasos internos" bajo 5550, en el árbol
-   "Arbol de cuentas GO" (el otro árbol del tenant, "GOOrg Account Tree", no lo usa ningún esquema:
-   una cuenta creada ahí no genera concepto contable).
+   "Arbol de cuentas GO". Ojo: la siembra de GOClient trae un segundo árbol, "GOOrg Account Tree",
+   que no usa ningún esquema (una cuenta creada ahí no genera concepto contable); un tenant hecho
+   por el alta tiene uno solo.
 
 Los tres tienen que ir a la preparación (fixture) de la suite o arreglarse en la siembra de
 local-env; hoy no están en ningún código.

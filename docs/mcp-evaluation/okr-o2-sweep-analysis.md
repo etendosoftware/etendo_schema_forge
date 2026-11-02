@@ -120,13 +120,16 @@ Tipo de corrección: **D** descripción de tool / instrucciones · **H** mensaje
   conocido.
 - **Re-probar:** `w-company-users-numbering`, con la verificación del rol (§3).
 
-### H8. Pedido con cantidad negativa — C o M
+### H8. Pedido con cantidad negativa — resuelto: prueba retirada del KR
 
 - **Evidencia:** `e-invalid-write`. Crea el pedido PV1000001 con **-3 unidades** y lo da por hecho.
   El catálogo de operaciones (F5) decía que se negaba.
-- **Propuesta:** validar cantidad > 0 en líneas de pedido de venta (las devoluciones tienen su propio
-  documento), o como mínimo un `agentPrompt` en la cantidad.
-- **Re-probar:** `e-invalid-write`.
+- **Análisis (2 nov):** no es un fallo. La UI acepta cantidades negativas a propósito, para la
+  devolución dentro del mismo documento: `"min": false` en la cantidad de pedidos, presupuestos y
+  facturas (ETP-4567), y ETP-5132 arregla los totales de una factura con una línea negativa. El MCP
+  hace lo mismo que la UI.
+- **Decisión (Valentin):** la prueba se retira del KR (quedan 42). Medía una diferencia de diseño con
+  Holded, no la calidad del MCP; el manejo de rechazos ya lo cubren las otras cuatro pruebas `e-*`.
 
 ### H9. Acciones con parámetros mal declarados — M o C (bugs)
 

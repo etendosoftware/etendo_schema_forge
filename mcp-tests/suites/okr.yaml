@@ -371,21 +371,6 @@ probes:
       etendo-go: *vat-check
       holded: *vat-check
 
-  # Flow 40. A negative quantity: refuse (or ask), create nothing.
-  # Holded side pending: it can create sales orders but has no tool to list them (to confirm live).
-  - id: e-invalid-write
-    category: error
-    mode: write
-    prompt: "Cargale a Cliente {{marker}} un pedido de -3 Aguas."
-    platforms:
-      etendo-go:
-        setup: *customer
-        expectOutcome: refused
-        expectEffect:
-          tool: etendo_list
-          args: { spec: sales-order, entity: header, filters: { businessPartner: "{{steps.bp.data.id}}" } }
-          expect: none
-
   # Flow 23 (create part). Holded side pending: warehouses, to confirm live.
   - id: w-warehouse-crud
     category: write
