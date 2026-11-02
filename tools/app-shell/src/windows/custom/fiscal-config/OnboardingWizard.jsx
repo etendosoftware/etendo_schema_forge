@@ -23,35 +23,13 @@ import VerifactuSection from './VerifactuSection.jsx';
 import CertModal from './CertModal.jsx';
 import CertSection from './CertSection.jsx';
 import TabBar from './TabBar.jsx';
+import { TERRITORY_GROUP_META, buildTerritories, buildSystems } from './fiscalCatalog.js';
+import FiscalStatusSummary from './FiscalStatusSummary.jsx';
 
 // Keep in sync with useFiscalConfig.js
 const SII_ENTITY      = 'siiConfiguration';
 const TBAI_ENTITY     = 'header';
 const VERIFACTU_ENTITY = 'cabeceraDeConfiguraciónVerifactu';
-
-// ── Data (IDs and logic flags — display strings resolved via ui() inside component) ───
-
-const TERRITORY_META = {
-  navarra:  { id: 'navarra',  regime: 'sii_foral', askNational: false, askVolume: false, taxtype: 'IVA',  tbaiTerritory: null,       guipuzcoa: null },
-  alava:    { id: 'alava',    regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'ARABA',    guipuzcoa: null },
-  bizkaia:  { id: 'bizkaia',  regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'BIZKAIA',  guipuzcoa: null },
-  gipuzkoa: { id: 'gipuzkoa', regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'GIPUZKOA', guipuzcoa: 'Y'  },
-  baleares: { id: 'baleares', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IVA',  tbaiTerritory: null,       guipuzcoa: null },
-  canarias: { id: 'canarias', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IGIC', tbaiTerritory: null,       guipuzcoa: null },
-  // askVolume: false — unlike baleares/canarias, Ceuta/Melilla's IPSI tax scheme has no
-  // SII billing-volume threshold to ask about: SII cannot represent an IPSI taxpayer at
-  // all (AEATSII_CONFIG.taxtype only defines IVA/IGIC — see getAllowedSystemsForTerritory
-  // in fiscalConfig.utils.js, ETP-5272 point 4), so VERIFACTU is the only applicable
-  // system regardless of volume and the sub-question would be moot.
-  ceuta:    { id: 'ceuta',    regime: 'siiver',     askNational: false, askVolume: false, taxtype: 'IPSI', tbaiTerritory: null,       guipuzcoa: null },
-};
-
-const TERRITORY_GROUP_META = [
-  { regime: 'sii_foral', items: ['navarra'] },
-  { regime: 'tbai',      items: ['alava', 'bizkaia', 'gipuzkoa'] },
-  { regime: 'siiver',    items: ['baleares', 'canarias', 'ceuta'] },
-];
-
 
 // ── Network ───────────────────────────────────────────────────────────────────
 
@@ -346,57 +324,42 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
           {ui('fiscal.onboarding.applied.subtitle', { system: sys?.name })}
         </p>
 
-        <div className="rounded-xl border border-border overflow-hidden">
-          <div className="bg-status-success border-b border-status-success-border px-5 py-4 flex items-center gap-3.5">
-            <span className="w-9 h-9 rounded-full bg-status-success text-status-success-foreground flex items-center justify-center flex-shrink-0 text-xl">✓</span>
-            <div>
-              <div className="font-bold text-status-success-foreground">{ui('fiscal.onboarding.applied.configured', { system: sys?.name })}</div>
-              <div className="text-sm text-status-success-foreground/80 mt-0.5">{ui('fiscal.onboarding.applied.body')}</div>
-            </div>
-          </div>
-          <div className="divide-y divide-border px-5 py-2">
-            {terr && <Row
-              k={ui('fiscal.onboarding.applied.row.territory')}
-              v={terr.name}
-              data-testid="Row__e9ef3f" />}
-            <Row
-              k={ui('fiscal.onboarding.applied.row.system')}
-              v={sys?.name}
-              data-testid="Row__e9ef3f" />
-            <Row
-              k={ui('fiscal.onboarding.applied.row.tax')}
-              v={terr ? terr.systemLong : sys?.long}
-              data-testid="Row__e9ef3f" />
-            {terr?.askNational && (
-              <Row
-                k={ui('fiscal.onboarding.applied.row.national')}
-                v={alsoNational ? ui('fiscal.onboarding.applied.national.active') : ui('fiscal.onboarding.applied.national.na')}
-                data-testid="Row__e9ef3f" />
-            )}
-            {terr?.askVolume && volume && (
-              <Row
-                k={ui('fiscal.onboarding.applied.row.volume')}
-                v={volume === 'high' ? ui('fiscal.onboarding.applied.volume.high') : ui('fiscal.onboarding.applied.volume.low')}
-                data-testid="Row__e9ef3f" />
-            )}
-            {volume === 'low' && lowChoice && (
-              <Row
-                k={ui('fiscal.onboarding.applied.row.chosen')}
-                v={lowChoice === 'sii' ? ui('fiscal.onboarding.applied.chosen.sii') : ui('fiscal.onboarding.applied.chosen.verifactu')}
-                data-testid="Row__e9ef3f" />
-            )}
-            <Row
-              k={ui('fiscal.onboarding.applied.row.env')}
-              v={isProduction
+        <FiscalStatusSummary
+          title={ui('fiscal.onboarding.applied.configured', { system: sys?.name })}
+          body={ui('fiscal.onboarding.applied.body')}
+          rows={[
+            terr && { key: 'territory', label: ui('fiscal.onboarding.applied.row.territory'), value: terr.name },
+            { key: 'system', label: ui('fiscal.onboarding.applied.row.system'), value: sys?.name },
+            { key: 'tax', label: ui('fiscal.onboarding.applied.row.tax'), value: terr ? terr.systemLong : sys?.long },
+            terr?.askNational && {
+              key: 'national',
+              label: ui('fiscal.onboarding.applied.row.national'),
+              value: alsoNational ? ui('fiscal.onboarding.applied.national.active') : ui('fiscal.onboarding.applied.national.na'),
+            },
+            terr?.askVolume && volume && {
+              key: 'volume',
+              label: ui('fiscal.onboarding.applied.row.volume'),
+              value: volume === 'high' ? ui('fiscal.onboarding.applied.volume.high') : ui('fiscal.onboarding.applied.volume.low'),
+            },
+            volume === 'low' && lowChoice && {
+              key: 'chosen',
+              label: ui('fiscal.onboarding.applied.row.chosen'),
+              value: lowChoice === 'sii' ? ui('fiscal.onboarding.applied.chosen.sii') : ui('fiscal.onboarding.applied.chosen.verifactu'),
+            },
+            {
+              key: 'env',
+              label: ui('fiscal.onboarding.applied.row.env'),
+              value: isProduction
                 ? <span className="text-status-success-foreground">{ui('fiscal.onboarding.applied.env.production')}</span>
-                : <span className="text-status-warning-foreground">{ui('fiscal.onboarding.applied.env.sandbox')}</span>}
-              data-testid="Row__e9ef3f" />
-            <Row
-              k={ui('fiscal.onboarding.applied.row.activated')}
-              v={new Date().toLocaleString(locale.replace('_', '-'), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              data-testid="Row__e9ef3f" />
-          </div>
-        </div>
+                : <span className="text-status-warning-foreground">{ui('fiscal.onboarding.applied.env.sandbox')}</span>,
+            },
+            {
+              key: 'activated',
+              label: ui('fiscal.onboarding.applied.row.activated'),
+              value: new Date().toLocaleString(locale.replace('_', '-'), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            },
+          ]}
+          data-testid="FiscalStatusSummary__applied" />
 
         <div className="mt-7">
           <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">{ui('fiscal.onboarding.nextsteps.title')}</h3>
@@ -1181,18 +1144,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
     onComplete();
   }
 
-  const TERRITORIES = {
-    navarra:  { ...TERRITORY_META.navarra,  name: ui('fiscal.territory.navarra'),  system: ui('fiscal.territory.system.sii'),    systemLong: ui('fiscal.territory.navarra.systemLong'),  example: ui('fiscal.territory.navarra.example')  },
-    alava:    { ...TERRITORY_META.alava,    name: ui('fiscal.territory.alava'),    system: ui('fiscal.territory.system.tbai'),   systemLong: ui('fiscal.territory.alava.systemLong'),    example: ui('fiscal.territory.alava.example')    },
-    bizkaia:  { ...TERRITORY_META.bizkaia,  name: ui('fiscal.territory.bizkaia'),  system: ui('fiscal.territory.system.tbai'),   systemLong: ui('fiscal.territory.bizkaia.systemLong'),  example: ui('fiscal.territory.bizkaia.example')  },
-    gipuzkoa: { ...TERRITORY_META.gipuzkoa, name: ui('fiscal.territory.gipuzkoa'), system: ui('fiscal.territory.system.tbai'),   systemLong: ui('fiscal.territory.gipuzkoa.systemLong'), example: ui('fiscal.territory.gipuzkoa.example') },
-    baleares: { ...TERRITORY_META.baleares, name: ui('fiscal.territory.espania'),  system: ui('fiscal.territory.system.siiver'), systemLong: ui('fiscal.territory.baleares.systemLong'), example: ui('fiscal.territory.baleares.example') },
-    canarias: { ...TERRITORY_META.canarias, name: ui('fiscal.territory.canarias'), system: ui('fiscal.territory.system.siiver'), systemLong: ui('fiscal.territory.canarias.systemLong'), example: ui('fiscal.territory.canarias.example') },
-    // ETP-5272 point 4: badge is VERI*FACTU-only (not the shared 'siiver' SII/VERI*FACTU
-    // badge) — SII cannot represent an IPSI (Ceuta/Melilla) taxpayer at all, so it is
-    // never a real option here, unlike baleares/canarias.
-    ceuta:    { ...TERRITORY_META.ceuta,    name: ui('fiscal.territory.ceuta'),    system: ui('fiscal.territory.system.verifactu'), systemLong: ui('fiscal.territory.ceuta.systemLong'),    example: ui('fiscal.territory.ceuta.example')    },
-  };
+  const TERRITORIES = buildTerritories(ui);
 
   const TERRITORY_GROUPS = TERRITORY_GROUP_META.map(g => ({
     ...g,
@@ -1200,12 +1152,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
     desc:  ui(`fiscal.territory.group.${g.regime === 'sii_foral' ? 'sii' : g.regime}.desc`),
   }));
 
-  const SYSTEMS = {
-    SII:       { id: 'SII',       name: 'SII',        long: ui('fiscal.system.sii.long'),      desc: ui('fiscal.system.sii.desc')      },
-    TBAI:      { id: 'TBAI',      name: 'TicketBAI',         long: ui('fiscal.system.tbai.long'),     desc: ui('fiscal.system.tbai.desc')     },
-    'SII+TBAI':{ id: 'SII+TBAI',  name: 'SII + TicketBAI',  long: ui('fiscal.system.siitbai.long'),  desc: ui('fiscal.system.siitbai.desc')  },
-    VERIFACTU: { id: 'VERIFACTU', name: 'VERI*FACTU',  long: ui('fiscal.system.verifactu.long'), desc: ui('fiscal.system.verifactu.desc') },
-  };
+  const SYSTEMS = buildSystems(ui);
 
   const [step, setStep]                   = useState('territory');
   const [selectedTerritory, setSelectedTerritory] = useState(null);
@@ -1405,15 +1352,6 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
 }
 
 // ── Shared layout atoms ───────────────────────────────────────────────────────
-
-function Row({ k, v }) {
-  return (
-    <div className="flex justify-between gap-4 py-2.5 text-sm">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="font-medium text-right">{v}</span>
-    </div>
-  );
-}
 
 function NextItem({ icon, title, desc, badge, done, onClick }) {
   return (

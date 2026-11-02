@@ -40,7 +40,7 @@ function SectionRow({ label, children, labelExtra, boldLabel, noBorderTop }) {
   );
 }
 
-const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId, onSave, hideSave, hideCert, locked }, ref) {
+const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId, onSave, hideSave, hideCert, locked, certRefreshKey, onCertUploaded }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState({
@@ -131,6 +131,8 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
             context="tbai"
             orgId={orgId}
             apiBaseUrl={apiBaseUrl}
+            refreshKey={certRefreshKey}
+            onUploaded={onCertUploaded}
             data-testid="CertSection__f06d4b" />
         </SectionRow>
       )}

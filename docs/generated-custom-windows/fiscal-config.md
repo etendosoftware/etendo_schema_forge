@@ -191,7 +191,22 @@ Records are POST-created during wizard confirmation step and then edited in the 
 
 ## Certificate upload (CertModal + CertSection)
 
-`CertSection.jsx` renders the certificate status widget inside SII, TBAI, and Verifactu section forms. On mount it calls `GET /sws/neo/certificate` (org inferred from the bearer token) to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
+`CertSection.jsx` renders the certificate status widget inside SII, TBAI, and Verifactu section forms.
+
+**One certificate per organization, shown in every tab (ETP-5831).** The certificate is stored
+per organization, not per fiscal system: `etsg_certificate` is keyed by `ad_org_id`, the upload
+(`POST /certificate`, fields `certificate` / `orgId` / `password`) carries no system, and
+`NeoCertificateHelper` replaces every certificate of the org with the new one. SII, TicketBAI and
+VERI\*FACTU therefore read and write the **same** record. Consequences in the `sii+tbai` layout:
+
+- the "Certificado digital" block is shown in **both** the SII and the TicketBAI tab (the TBAI
+  tab used to receive `hideCert`; it no longer does — the prop still exists for other callers);
+- replacing it from either tab updates everything that shows it: `CertSection` reports the upload
+  through `onUploaded`, `FiscalConfigPage` bumps a `certVersion` counter and passes it down as
+  `certRefreshKey` (→ `CertSection`'s `refreshKey`) to every section and as `refreshKey` to
+  `useCertExpiry`, so the other tab's block, the expiry banner and the status panel's
+  "Certificado" row re-read `GET /certificate`. (Only the active tab is mounted, so the other tab
+  also re-reads on mount; the counter covers the readers that stay mounted.) On mount it calls `GET /sws/neo/certificate` (org inferred from the bearer token) to restore the cert status from `etsg_certificate`, so the "loaded" state persists across window refreshes. `CertModal.jsx` is the 3-step upload modal (pick → verify spinner → done/confirmNif).
 
 ### Backend endpoints (`NeoCertificateHelper`)
 
@@ -217,6 +232,38 @@ The extracted NIF is then compared (case-insensitive, hyphen-stripped) against `
 - **Mismatch** — return HTTP 422 with an explanatory error message.
 
 `NeoCertificateHelperTest.java` (17 unit tests) covers `parseNifFromDn` and `normalizeNif` for all supported certificate formats.
+
+## Status panel ("Estado", ETP-5831)
+
+The "Configuración aplicada" card used to be visible only once, on the wizard's applied screen
+right after the first save. It is now also the **"Estado" side panel** of `FiscalConfigPage`,
+rendered to the right of the form whenever the organization **already has** an active fiscal
+configuration: on opening the window, after a reload and on later visits, for every configured
+profile (`sii`, `sii-navarra`, `tbai`, `sii+tbai`, `verifactu`). It is not rendered while loading,
+on a load error, for `unconfigured` (the wizard shows instead) or for `conflict`.
+
+One component, two placements: `FiscalStatusSummary.jsx` was extracted from the wizard's
+`AppliedScreen` (which now renders it with its own rows) and is reused by the page. The territory
+and system catalogue it names things with (`TERRITORY_META`, `buildTerritories(ui)`,
+`buildSystems(ui)`) moved from `OnboardingWizard.jsx` to `fiscalCatalog.js`, shared by both.
+
+What the panel shows — derived from the stored records by `deriveConfiguredStatus` and
+`buildConfiguredStatusRows`, not from wizard answers (which are not stored):
+
+| Part | Source |
+|------|--------|
+| "Estado" + environment badge | `fiscal.status.title`; "Producción" / "Sandbox · pruebas" from `isProductionEnvironment` (same rule as the applied screen: every record of the system must be in production) — status-success / status-warning tokens |
+| "{system} activo" + body | `fiscal.status.active` (system name from `buildSystems`), `fiscal.status.body` |
+| Territorio fiscal | TBAI `etsgSifTerritory` (ARABA/BIZKAIA/GIPUZKOA); else SII `navarra` → Navarra, `guipuzcoa` → Guipúzcoa, `taxtype` IGIC → Canarias, otherwise España / Baleares; VERI\*FACTU `tAXType` 01/03/02 → España / Canarias / Ceuta-Melilla. Row omitted when unknown |
+| Hacienda | the territory's `systemLong`, or the system's `long` text |
+| Operativa nacional (SII) | TicketBAI territories only: "Activa" when an SII record exists, otherwise "No aplica" |
+| Certificado | "Válido hasta dd/mm/aaaa" from `useCertExpiry().validTo` (new return field), or "Pendiente" (warning colour) without a certificate |
+| Activado | earliest creation timestamp of the system's records (`created`, the API key NEO serves the `Created` audit column under); row omitted without one |
+
+The "Ver historial de envíos" link of the design is **deliberately not included**. In the
+`sii+tbai` layout the tab bar stays above the form and the panel sits beside the tab content.
+i18n: `fiscal.status.title|active|body|row.cert` (en_US, es_ES); every other label reuses the
+applied screen's `fiscal.onboarding.applied.*` keys.
 
 ## Certificate expiry banner (`CertExpiryBanner`)
 
@@ -460,7 +507,8 @@ as UTC, which in Spain hid every invoice dated on the adoption day from the fisc
 5. Upload a `.p12` certificate in the CertModal; confirm the stepper advances through pick → verify → done (or through the confirmNif step if the org has no taxid). Close and reopen the window — the "Certificado cargado" state should still show (persisted via GET endpoint).
 5a. In the wizard, upload the certificate during the `detail` step (via `CertSection`), then advance to the `applied` step — confirm the "Upload digital certificate" item shows as completed (not PENDING).
 5b. In the debug panel, enable "45d warn" — confirm the amber expiry banner appears in the page header. Enable "20d crit" — confirm it turns red and the dismiss button disappears.
-6. Open `/fiscal-config` with an org that already has an SII record and confirm the wizard is NOT shown — only SiiSection renders.
+6. Open `/fiscal-config` with an org that already has an SII record and confirm the wizard is NOT shown — only SiiSection renders, with the "Estado" status panel on the right (ETP-5831).
+6a. (ETP-5831) With a `sii+tbai` org, confirm "Certificado digital" appears in both the SII and the TicketBAI tab. Replace the certificate from the TicketBAI tab and confirm the SII tab and the status panel's "Certificado" row show the new expiry date.
 7. Open `/fiscal-config` with an org that has both SII and Verifactu records and confirm the conflict warning renders.
 8. Press "Omitir por ahora" on the territory screen and confirm the skipped screen shows with a "← Volver al asistente" button that returns to territory selection.
 9. Open `/fiscal-config` with an org that has a single active SII (or Verifactu/TBAI) config. Confirm the **"Change SIF"** button appears in the org bar. Press it, confirm the dialog shows the matching permanence notice, press "Deactivate and change", and verify the onboarding wizard reappears (org resolved to `unconfigured`). Query the DB and confirm the old config row still exists with `isactive='N'`.

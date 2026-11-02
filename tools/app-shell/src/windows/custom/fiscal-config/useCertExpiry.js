@@ -5,8 +5,14 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export { daysUntil };
 
-export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null } = {}) {
+/**
+ * The organization's certificate expiry: `daysLeft` (for the expiry banner) and the raw `validTo`
+ * date (for the status panel's "Certificado" row, ETP-5831). `refreshKey` re-reads it — bumped by
+ * FiscalConfigPage whenever the certificate is replaced.
+ */
+export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null, refreshKey = 0 } = {}) {
   const [daysLeft, setDaysLeft] = useState(null);
+  const [validTo, setValidTo] = useState(null);
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
 
   useEffect(() => {
@@ -16,6 +22,7 @@ export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null } 
     }
     if (!apiBaseUrl || !orgId) {
       setDaysLeft(null);
+      setValidTo(null);
       return;
     }
     setDaysLeft(null);
@@ -26,13 +33,15 @@ export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null } 
         if (controller.signal.aborted) return;
         if (data?.exists && data?.validTo) {
           setDaysLeft(daysUntil(data.validTo));
+          setValidTo(data.validTo);
         } else {
           setDaysLeft(null);
+          setValidTo(null);
         }
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [apiFetch, mockDaysLeft, apiBaseUrl, orgId]);
+  }, [apiFetch, mockDaysLeft, apiBaseUrl, orgId, refreshKey]);
 
-  return { daysLeft };
+  return { daysLeft, validTo };
 }

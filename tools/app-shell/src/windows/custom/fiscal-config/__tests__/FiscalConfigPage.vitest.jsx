@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalStatusSummary.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalCatalog.js
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
@@ -5,6 +8,7 @@ import React from 'react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 // ETP-5395 Fix 3: FiscalConfigPage is now gated by useWindowAccess — default to 'full' so
@@ -45,8 +49,11 @@ vi.mock('../../fiscal-monitor/useDebugMode.js', () => ({
   useDebugMode: () => false,
 }));
 
+// `certExpiry.value` lets a test give the page a loaded certificate; `calls` records the
+// refreshKey each render asked for (ETP-5831: a replaced certificate re-reads it).
+const certExpiry = vi.hoisted(() => ({ value: { daysLeft: null, validTo: null }, calls: [] }));
 vi.mock('../useCertExpiry.js', () => ({
-  useCertExpiry: () => ({ daysLeft: null }),
+  useCertExpiry: (apiBaseUrl, opts) => { certExpiry.calls.push(opts); return certExpiry.value; },
 }));
 
 vi.mock('../useFiscalTestMode.js', () => ({
@@ -85,21 +92,45 @@ vi.mock('../ChangeSifDialog.jsx', async () => {
 vi.mock('../SiiSection.jsx', () => ({
   default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
-    return <div data-testid="sii-section" data-locked={String(!!props.locked)} />;
+    return (
+      <div
+        data-testid="sii-section"
+        data-locked={String(!!props.locked)}
+        data-hide-cert={String(!!props.hideCert)}
+        data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
+        <button type="button" data-testid="sii-section-cert-uploaded" onClick={() => props.onCertUploaded?.()}>uploaded</button>
+      </div>
+    );
   }),
 }));
 
 vi.mock('../TbaiSection.jsx', () => ({
   default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
-    return <div data-testid="tbai-section" data-locked={String(!!props.locked)} />;
+    return (
+      <div
+        data-testid="tbai-section"
+        data-locked={String(!!props.locked)}
+        data-hide-cert={String(!!props.hideCert)}
+        data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
+        <button type="button" data-testid="tbai-section-cert-uploaded" onClick={() => props.onCertUploaded?.()}>uploaded</button>
+      </div>
+    );
   }),
 }));
 
 vi.mock('../VerifactuSection.jsx', () => ({
   default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
-    return <div data-testid="verifactu-section" data-locked={String(!!props.locked)} />;
+    return (
+      <div
+        data-testid="verifactu-section"
+        data-locked={String(!!props.locked)}
+        data-hide-cert={String(!!props.hideCert)}
+        data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
+        <button type="button" data-testid="verifactu-section-cert-uploaded" onClick={() => props.onCertUploaded?.()}>uploaded</button>
+      </div>
+    );
   }),
 }));
 
@@ -1122,5 +1153,133 @@ describe('FiscalConfigPage — forceTestMode (ETP-5272)', () => {
     });
     renderPage();
     expect(screen.getByTestId('onboarding-wizard')).toHaveAttribute('data-force-test-mode', 'false');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5831 — shared certificate in the SII and TicketBAI tabs, and the "Estado" panel
+// ---------------------------------------------------------------------------
+
+function mockConfig(overrides) {
+  vi.mocked(useAuth).mockReturnValue({
+    selectedOrg: { id: 'org-1', name: 'Test Org' },
+    selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+    selectOrg: vi.fn(),
+  });
+  vi.mocked(useWindowAccess).mockReturnValue('full');
+  vi.mocked(useFiscalConfig).mockReturnValue({
+    loading: false, error: null, profile: 'unconfigured',
+    siiRecord: null, tbaiRecord: null, verifactuRecord: null,
+    refetch: vi.fn(), createComplementary: vi.fn(),
+    ...overrides,
+  });
+}
+
+const SII_REC = { id: 'sii-1', entornoDeProduccin: 'Y', created: '2026-11-02T11:08:00+01:00', taxtype: 'IVA' };
+const TBAI_REC = { id: 'tbai-1', productionEnv: 'Y', etsgSifTerritory: 'GIPUZKOA', created: '2026-11-02T11:08:00+01:00' };
+
+describe('FiscalConfigPage — certificate in both SII and TicketBAI tabs (ETP-5831 A)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    certExpiry.value = { daysLeft: 200, validTo: '2027-07-01' };
+    certExpiry.calls = [];
+    mockConfig({ profile: 'sii+tbai', siiRecord: SII_REC, tbaiRecord: TBAI_REC });
+  });
+
+  it('shows the certificate block in the TicketBAI tab too (the org has one shared certificate)', () => {
+    renderPage();
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-hide-cert', 'false');
+    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
+    expect(screen.getByTestId('tbai-section')).toHaveAttribute('data-hide-cert', 'false');
+  });
+
+  it('a certificate replaced from one tab refreshes the other tab, the expiry banner and the status panel', () => {
+    renderPage();
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-cert-refresh-key', '0');
+    fireEvent.click(screen.getByTestId('sii-section-cert-uploaded'));
+
+    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
+    expect(screen.getByTestId('tbai-section')).toHaveAttribute('data-cert-refresh-key', '1');
+    expect(certExpiry.calls.at(-1)).toMatchObject({ orgId: 'org-1', refreshKey: 1 });
+
+    fireEvent.click(screen.getByTestId('tbai-section-cert-uploaded'));
+    fireEvent.click(screen.getByText('fiscal.tab.sii'));
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-cert-refresh-key', '2');
+  });
+});
+
+describe('FiscalConfigPage — "Estado" status panel on load (ETP-5831 B)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    certExpiry.value = { daysLeft: 200, validTo: '2027-07-01' };
+    certExpiry.calls = [];
+  });
+
+  it('renders the status panel on opening the window when the org already has SII + TicketBAI', () => {
+    mockConfig({ profile: 'sii+tbai', siiRecord: SII_REC, tbaiRecord: TBAI_REC });
+    renderPage();
+
+    const panel = screen.getByTestId('FiscalStatusSummary__panel');
+    expect(panel).toHaveTextContent('fiscal.status.title');
+    expect(screen.getByTestId('FiscalStatusSummary__envBadge')).toHaveTextContent('fiscal.onboarding.applied.env.production');
+    expect(screen.getByTestId('FiscalStatusSummary__title')).toHaveTextContent('fiscal.status.active');
+    expect(panel).toHaveTextContent('fiscal.status.body');
+    expect(screen.getByTestId('FiscalStatusSummary__row-territory')).toHaveTextContent('fiscal.territory.gipuzkoa');
+    expect(screen.getByTestId('FiscalStatusSummary__row-tax')).toHaveTextContent('fiscal.territory.gipuzkoa.systemLong');
+    expect(screen.getByTestId('FiscalStatusSummary__row-national')).toHaveTextContent('fiscal.onboarding.applied.national.active');
+    expect(screen.getByTestId('FiscalStatusSummary__row-cert')).toHaveTextContent('fiscal.cert.validUntil');
+    expect(screen.getByTestId('FiscalStatusSummary__row-activated')).toBeInTheDocument();
+    // No submission-history link in the panel.
+    expect(panel.querySelector('a')).toBeNull();
+  });
+
+  it('stays visible after switching between the SII and TicketBAI tabs', () => {
+    mockConfig({ profile: 'sii+tbai', siiRecord: SII_REC, tbaiRecord: TBAI_REC });
+    renderPage();
+    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
+    expect(screen.getByTestId('FiscalStatusSummary__panel')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['sii', { siiRecord: SII_REC }, ['territory', 'tax', 'cert', 'activated'], ['national']],
+    ['sii-navarra', { siiRecord: { ...SII_REC, navarra: 'Y' } }, ['territory', 'tax', 'cert'], ['national']],
+    ['tbai', { tbaiRecord: TBAI_REC }, ['territory', 'tax', 'national', 'cert'], []],
+    ['verifactu', { verifactuRecord: { id: 'vf-1', isDevEnv: 'N', tAXType: '03', created: '2026-11-02T11:08:00Z' } }, ['territory', 'tax', 'cert', 'activated'], ['national']],
+  ])('renders the status panel for a %s configuration with the rows that apply', (profile, records, present, absent) => {
+    mockConfig({ profile, ...records });
+    renderPage();
+    expect(screen.getByTestId('FiscalStatusSummary__panel')).toBeInTheDocument();
+    for (const row of present) expect(screen.getByTestId(`FiscalStatusSummary__row-${row}`)).toBeInTheDocument();
+    for (const row of absent) expect(screen.queryByTestId(`FiscalStatusSummary__row-${row}`)).not.toBeInTheDocument();
+  });
+
+  it('marks a TicketBAI-only territory without SII as "No aplica" for the national operation', () => {
+    mockConfig({ profile: 'tbai', tbaiRecord: TBAI_REC });
+    renderPage();
+    expect(screen.getByTestId('FiscalStatusSummary__row-national')).toHaveTextContent('fiscal.onboarding.applied.national.na');
+  });
+
+  it('shows the sandbox badge when a record is not in production', () => {
+    mockConfig({ profile: 'sii', siiRecord: { ...SII_REC, entornoDeProduccin: 'N' } });
+    renderPage();
+    expect(screen.getByTestId('FiscalStatusSummary__envBadge')).toHaveTextContent('fiscal.onboarding.applied.env.sandbox');
+  });
+
+  it('shows the certificate as pending when the org has none', () => {
+    certExpiry.value = { daysLeft: null, validTo: null };
+    mockConfig({ profile: 'sii', siiRecord: SII_REC });
+    renderPage();
+    expect(screen.getByTestId('FiscalStatusSummary__row-cert')).toHaveTextContent('fiscal.onboarding.cert.pending');
+  });
+
+  it.each([
+    ['loading', { loading: true, profile: null }],
+    ['unconfigured (wizard)', { profile: 'unconfigured' }],
+    ['conflict', { profile: 'conflict', siiRecord: SII_REC, verifactuRecord: { id: 'vf' } }],
+    ['load error', { error: 'boom', profile: null }],
+  ])('does not render the status panel while %s', (_label, state) => {
+    mockConfig(state);
+    renderPage();
+    expect(screen.queryByTestId('FiscalStatusSummary__panel')).not.toBeInTheDocument();
   });
 });

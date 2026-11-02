@@ -30,7 +30,7 @@ function SectionRow({ children, leftContent }) {
   );
 }
 
-const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseUrl, orgId, onSave, hideSave, locked }, ref) {
+const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseUrl, orgId, onSave, hideSave, locked, certRefreshKey, onCertUploaded }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   // Locked either because the record itself is "ready" (existing ETP-4785 rule)
@@ -131,6 +131,8 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
           context="verifactu"
           orgId={orgId}
           apiBaseUrl={apiBaseUrl}
+          refreshKey={certRefreshKey}
+          onUploaded={onCertUploaded}
           data-testid="CertSection__e30816" />
       </SectionRow>
       <SectionSaveButton

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx
 // ETP-5112 regression — `FiscalConfigPage.saveTwoRefs` must run its two section saves one
 // after the other, never with `Promise.allSettled([...])`.
 //
@@ -32,7 +33,7 @@ import { createRequestJournal } from '@/test/requestJournal.js';
 const journalRef = { current: null };
 const saveOutcome = { sii: 'ok', tbai: 'ok' };
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 
 // ETP-5395 Fix 3: FiscalConfigPage is now gated by useWindowAccess — default to 'full' so
 // this suite keeps exercising the window as before (mirrors financial-account's own

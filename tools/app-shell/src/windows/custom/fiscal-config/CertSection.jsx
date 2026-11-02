@@ -6,7 +6,13 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertModal from './CertModal.jsx';
 
-export default function CertSection({ context, orgId, apiBaseUrl }) {
+/**
+ * The organization's digital certificate: its state and "Reemplazar", or the upload dropzone.
+ * The org has ONE certificate shared by every fiscal system, so the same block appears in the SII,
+ * TicketBAI and VERI*FACTU sections (ETP-5831). `refreshKey` re-reads it (the page bumps it when the
+ * certificate is replaced from another section); `onUploaded` reports a replacement upwards.
+ */
+export default function CertSection({ context, orgId, apiBaseUrl, refreshKey = 0, onUploaded }) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [cert, setCert]   = useState(null);
@@ -21,7 +27,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
         if (data?.exists) setCert({ name: ui('fiscal.cert.loaded'), validTo: data.validTo ?? '' });
       })
       .catch(() => {});
-  }, [apiFetch, ui, orgId, apiBaseUrl]);
+  }, [apiFetch, ui, orgId, apiBaseUrl, refreshKey]);
 
   if (cert) {
     return (
@@ -53,7 +59,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
             orgId={orgId}
             apiBaseUrl={apiBaseUrl}
             onClose={() => setOpen(false)}
-            onUpload={(c) => { setCert(c); setOpen(false); }}
+            onUpload={(c) => { setCert(c); setOpen(false); onUploaded?.(c); }}
             data-testid="CertModal__e7cbc5" />
         )}
       </>
@@ -88,7 +94,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
           orgId={orgId}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setOpen(false)}
-          onUpload={(c) => { setCert(c); setOpen(false); }}
+          onUpload={(c) => { setCert(c); setOpen(false); onUploaded?.(c); }}
           data-testid="CertModal__e7cbc5" />
       )}
     </>

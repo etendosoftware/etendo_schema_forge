@@ -25,7 +25,7 @@ function SectionRow({ label, children, labelExtra, noBorderTop, boldLabel }) {
   );
 }
 
-const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, onSave, variant, hideSave, hideCert, locked }, ref) {
+const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, onSave, variant, hideSave, hideCert, locked, certRefreshKey, onCertUploaded }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState(mapSiiRecordToForm(record));
@@ -114,6 +114,8 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
             context="sii"
             orgId={orgId}
             apiBaseUrl={apiBaseUrl}
+            refreshKey={certRefreshKey}
+            onUploaded={onCertUploaded}
             data-testid="CertSection__fcb159" />
         </SectionRow>
       )}

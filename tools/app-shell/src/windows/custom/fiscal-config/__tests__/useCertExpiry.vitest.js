@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/useCertExpiry.js
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -132,5 +133,31 @@ describe('useCertExpiry — org change refetch', () => {
     await waitFor(() => expect(apiFetch.mock.calls.length).toBeGreaterThan(callsBefore));
     const lastUrl = apiFetch.mock.calls.at(-1)[0];
     expect(lastUrl).toContain('orgId=org-B');
+  });
+});
+
+// ETP-5831 — the status panel shows the certificate's validTo, and a replaced certificate is
+// re-read through refreshKey.
+describe('useCertExpiry — validTo and refreshKey (ETP-5831)', () => {
+  it('returns the raw validTo of an existing certificate', async () => {
+    vi.mocked(useApiFetch).mockReturnValue(makeApiFetch({ exists: true, validTo: '2030-01-01' }));
+    const { result } = renderHook(() => useCertExpiry(BASE, { orgId: ORG }));
+    await waitFor(() => expect(result.current.validTo).toBe('2030-01-01'));
+  });
+
+  it('returns a null validTo when the org has no certificate', async () => {
+    vi.mocked(useApiFetch).mockReturnValue(makeApiFetch({ exists: false }));
+    const { result } = renderHook(() => useCertExpiry(BASE, { orgId: ORG }));
+    await act(async () => {});
+    expect(result.current.validTo).toBeNull();
+  });
+
+  it('re-reads the certificate when refreshKey changes', async () => {
+    const apiFetch = makeApiFetch({ exists: true, validTo: '2030-01-01' });
+    vi.mocked(useApiFetch).mockReturnValue(apiFetch);
+    const { rerender } = renderHook(({ k }) => useCertExpiry(BASE, { orgId: ORG, refreshKey: k }), { initialProps: { k: 0 } });
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+    rerender({ k: 1 });
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
   });
 });

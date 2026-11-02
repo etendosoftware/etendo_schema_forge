@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { useFiscalConfig } from './useFiscalConfig.js';
@@ -27,6 +27,10 @@ import VerifactuSection from './VerifactuSection.jsx';
 import FiscalConfigDebugPanel from './FiscalConfigDebugPanel.jsx';
 import ChangeSifDialog from './ChangeSifDialog.jsx';
 import TabBar from './TabBar.jsx';
+import FiscalStatusSummary, {
+  EnvironmentBadge, buildConfiguredStatusRows, deriveConfiguredStatus,
+} from './FiscalStatusSummary.jsx';
+import { buildSystems, buildTerritories } from './fiscalCatalog.js';
 
 // Profiles that represent a real, active fiscal config (i.e. "Change SIF" applies).
 const CONFIGURED_PROFILES = ['sii', 'sii-navarra', 'sii+tbai', 'tbai', 'verifactu'];
@@ -108,6 +112,7 @@ export default function FiscalConfigPage(props) {
 
 function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
   const { selectedOrg, selectedRole, selectOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
@@ -123,6 +128,11 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const [savedOk, setSavedOk] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [changeSifOpen, setChangeSifOpen] = useState(false);
+  // ETP-5831 — the organization has ONE certificate (etsg_certificate, keyed by ad_org_id), shared
+  // by SII, TicketBAI and VERI*FACTU. Bumped whenever it is replaced from any section, so every
+  // reader (the other tab's CertSection, the expiry banner, the status panel) re-reads it.
+  const [certVersion, setCertVersion] = useState(0);
+  const handleCertUploaded = () => setCertVersion(v => v + 1);
 
   // "Add complementary SIF" — null while idle, 'sii' or 'tbai' while adding
   const [addingComplementary, setAddingComplementary] = useState(null);
@@ -152,7 +162,8 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     ? [mockOverride.sii, mockOverride.tbai, mockOverride.verifactu]
     : [siiRecord, tbaiRecord, verifactuRecord];
 
-  const { daysLeft: certDaysLeft } = useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId });
+  const { daysLeft: certDaysLeft, validTo: certValidTo } =
+    useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId, refreshKey: certVersion });
 
   // ETP-5272 — AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba":
   // when active, the whole window becomes read-only (no new SIF activation is
@@ -256,6 +267,44 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   // "Change SIF" only applies to a real, active config resolved from the API —
   // not in mock/debug mode (mock records cannot be deactivated on the server).
   const canChangeSif = !mockOverride && orgId && CONFIGURED_PROFILES.includes(effectiveProfile);
+
+  // ── Status panel (ETP-5831) ──────────────────────────────────────────────────
+  // The "Estado" card of the wizard's applied screen, shown beside the form whenever the
+  // organization already has a fiscal configuration — on opening the window, after a reload and
+  // on later visits, not only right after the first save. Rows are derived from the stored
+  // records (deriveConfiguredStatus); no link to the submission history.
+  const configuredStatus = deriveConfiguredStatus({
+    profile: effectiveProfile, siiRecord: effectiveSii, tbaiRecord: effectiveTbai, verifactuRecord: effectiveVerifactu,
+  });
+  const statusPanel = configuredStatus ? (
+    <aside className="w-[340px] flex-shrink-0" aria-label={ui('fiscal.status.title')}>
+      <FiscalStatusSummary
+        eyebrow={{
+          label: ui('fiscal.status.title'),
+          badge: <EnvironmentBadge isProduction={configuredStatus.isProduction} ui={ui} data-testid="EnvironmentBadge__310303" />,
+        }}
+        title={ui('fiscal.status.active', { system: buildSystems(ui)[configuredStatus.system]?.name })}
+        body={ui('fiscal.status.body')}
+        rows={buildConfiguredStatusRows({
+          status: configuredStatus,
+          territories: buildTerritories(ui),
+          systems: buildSystems(ui),
+          cert: certValidTo ? { validTo: certValidTo } : null,
+          locale,
+          ui,
+        })}
+        data-testid="FiscalStatusSummary__panel" />
+    </aside>
+  ) : null;
+
+  // Form column + status panel, side by side.
+  const withStatus = (content) => (
+    <div className="flex items-start gap-6">
+      <div className="flex-1 min-w-0">{content}</div>
+      {statusPanel}
+    </div>
+  );
+  const certProps = { certRefreshKey: certVersion, onCertUploaded: handleCertUploaded };
 
   // ── Org bar ──────────────────────────────────────────────────────────────────
   const saveLabel = resolveSaveLabel(ui, saving, savedOk);
@@ -414,6 +463,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {showContent && ['sii', 'sii-navarra'].includes(renderProfile) && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
+              {withStatus(<>
               <SiiSection
                 key={resetKey}
                 ref={siiRef}
@@ -424,11 +474,13 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 variant={effectiveProfile}
                 hideSave
                 locked={forceTestMode}
+                {...certProps}
                 data-testid="SiiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
                 variant="prominent"
                 data-testid="CertExpiryBanner__310303" />
+              </>)}
             </div>
           </div>
         )}
@@ -443,6 +495,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
               data-testid="TabBar__310303" />
             <div className="flex-1 overflow-y-auto">
               <div className="px-6 py-6">
+                {withStatus(<>
                 {activeTab === 0 && (
                   <SiiSection
                     key={`sii-${resetKey}`}
@@ -454,6 +507,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                     variant="sii"
                     hideSave
                     locked={forceTestMode}
+                    {...certProps}
                     data-testid="SiiSection__310303" />
                 )}
                 {activeTab === 1 && (
@@ -465,8 +519,8 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                     orgId={orgId}
                     onSave={() => {}}
                     hideSave
-                    hideCert
                     locked={forceTestMode}
+                    {...certProps}
                     data-testid="TbaiSection__310303" />
                 )}
                 <CertExpiryBanner
@@ -474,6 +528,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                   variant="prominent"
                   data-testid="CertExpiryBanner__310303" />
                 {/* errors are shown in the org bar */}
+                </>)}
               </div>
             </div>
           </>
@@ -483,6 +538,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {showContent && renderProfile === 'tbai' && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
+              {withStatus(<>
               <TbaiSection
                 key={resetKey}
                 ref={tbaiRef}
@@ -492,12 +548,14 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 onSave={() => {}}
                 hideSave
                 locked={forceTestMode}
+                {...certProps}
                 data-testid="TbaiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
                 variant="prominent"
                 data-testid="CertExpiryBanner__310303" />
               {/* errors are shown in the org bar */}
+              </>)}
             </div>
           </div>
         )}
@@ -506,6 +564,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {showContent && renderProfile === 'verifactu' && (
           <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-6">
+              {withStatus(<>
               <VerifactuSection
                 key={resetKey}
                 ref={verifactuRef}
@@ -515,12 +574,14 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 onSave={() => {}}
                 hideSave
                 locked={forceTestMode}
+                {...certProps}
                 data-testid="VerifactuSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
                 variant="prominent"
                 data-testid="CertExpiryBanner__310303" />
               {/* errors are shown in the org bar */}
+              </>)}
             </div>
           </div>
         )}
