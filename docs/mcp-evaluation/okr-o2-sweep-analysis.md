@@ -169,6 +169,11 @@ Tipo de corrección: **D** descripción de tool / instrucciones · **H** mensaje
 - **Evidencia:** 8 `validation_error` por largo (código de producto y de categoría 40, nombre 60). En
   parte lo provoca el marcador largo de las pruebas.
 - **Propuesta:** exponer el largo máximo en `etendo_schema(view: "create")`.
+- **Hecho (2 nov, GO `b12a99f4b`):** `etendo_schema` publica `maxLength` en los campos de texto
+  (también en `view:"create"`); los demás tipos no lo llevan. Unos 15 bytes por campo de texto. El
+  error de largo ya decía el máximo, así que el agente corregía al primer reintento: el ahorro es
+  ese reintento. Re-prueba, 1 intento: `w-product-crud` 24 → 19 llamadas, 1,26 M → 0,96 M tokens;
+  `w-product-category-crud` 10 → 6 llamadas, 326k → 212k tokens; ninguno chocó con el largo.
 
 ### Entorno (no es del MCP)
 
