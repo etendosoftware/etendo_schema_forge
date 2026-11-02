@@ -1,0 +1,222 @@
+# OKR O2 comparison suite (ETP-5848; plan docs/plans/2026-10-22-mcp-okr-metric-base-plan.md).
+#
+# One probe per approved flow of docs/mcp-evaluation/okr-o2-flows.md (the flow id is the probe id).
+# Prompts are what a person would write: they never say how to do it, never name a tool, and carry
+# no context a user would not give. What a probe needs beforehand is built by its `setup`, through
+# each platform's own MCP. Verification reads the result, not the path.
+#
+# Every attempt gets its own `{{marker}}`, so probes never share records: the customer of a probe is
+# "Cliente {{marker}}", created by its setup.
+#
+# DATA (etendo-go): the GOClient tenant of a local-env environment, with the two data fixes of the
+# plan §7.5 applied and the accounting period of the run's month OPEN. December 2026 must stay
+# CLOSED: `e-closed-period` depends on it. Products are read by name ("Agua", "Fernet").
+#
+# Holded blocks are written from the live tools/list; probes whose Holded side still has to be
+# confirmed against it say so in their comment.
+
+schemaVersion: 2
+window: okr
+decision: { ruleVersion: 2 }
+
+x-fixtures:
+  # A customer named with the marker, with one address (needed by every sales document).
+  customer: &customer
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}" } }
+      saveAs: bp
+    - tool: etendo_create
+      args:
+        spec: contacts
+        entity: locationAddress
+        parentId: "{{steps.bp.data.id}}"
+        fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" }
+      saveAs: address
+
+  # The customer plus one completed invoice: 1 Agua at 100 € + 21 % VAT = 121 € outstanding.
+  customer-with-invoice: &customer-with-invoice
+    - tool: etendo_create
+      args: { spec: contacts, entity: businessPartner, fields: { name: "Cliente {{marker}}" } }
+      saveAs: bp
+    - tool: etendo_create
+      args:
+        spec: contacts
+        entity: locationAddress
+        parentId: "{{steps.bp.data.id}}"
+        fields: { country: "106", addressLine1: "Calle Mayor 1", cityName: "Madrid", postalCode: "28001" }
+      saveAs: address
+    - tool: etendo_list
+      args: { spec: product, entity: product, filters: { name: "Agua" }, fields: [id] }
+      saveAs: agua
+    - tool: etendo_create
+      args:
+        spec: sales-invoice
+        entity: header
+        fields:
+          businessPartner: "{{steps.bp.data.id}}"
+          partnerAddress: "{{steps.address.data.id}}"
+          description: "{{marker}}"
+      saveAs: invoice
+    - tool: etendo_create
+      args:
+        spec: sales-invoice
+        entity: lines
+        parentId: "{{steps.invoice.data.id}}"
+        fields: { product: "{{steps.agua.data.0.id}}", invoicedQuantity: 1, unitPrice: 100 }
+    - tool: etendo_action
+      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+
+  # Holded's MCP cannot create invoices (no `create_invoice`), so neither the goal nor a starting
+  # state that is an invoice can be reached there. Checked live at every preflight.
+  holded-no-invoice: &holded-no-invoice
+    notPossible:
+      kind: goal
+      reason: "Holded's MCP has no tool to create an invoice."
+      missingTools: [create_invoice]
+  holded-no-invoice-setup: &holded-no-invoice-setup
+    notPossible:
+      kind: setup
+      reason: "Holded's MCP has no tool to create an invoice, so the starting state cannot be built."
+      missingTools: [create_invoice]
+
+  # A greeting is answered without tools; any sensible reply passes. Decided on total tokens: the
+  # catalogue each MCP adds to every turn (plan §5, decision 5).
+  hello-check: &hello-check
+    expectAnswer:
+      none: [{ text: "error" }, { text: "no puedo" }]
+
+  unknown-document-check: &unknown-document-check
+    expectOutcome: refused
+    expectAnswer:
+      all: [{ text: "FV9999999" }]
+
+  vat-check: &vat-check
+    expectAnswer:
+      all: [{ number: 21, percent: true }]
+
+probes:
+  # Flow 1. Cost of opening a conversation with only this MCP connected.
+  - id: q-hello
+    category: query
+    mode: read
+    prompt: "Hola"
+    platforms:
+      etendo-go: *hello-check
+      holded: *hello-check
+
+  # Flow 39. A document that exists nowhere: the agent says so and invents nothing.
+  - id: e-unknown-document
+    category: error
+    mode: read
+    prompt: "Mostrame la factura FV9999999."
+    platforms:
+      etendo-go: *unknown-document-check
+      holded: *unknown-document-check
+
+  # Flow 35 (VAT part). Read from the tax configuration.
+  - id: q-taxes-and-rates
+    category: query
+    mode: read
+    prompt: "¿Qué IVA se le aplica a una venta normal en España?"
+    platforms:
+      etendo-go: *vat-check
+      holded: *vat-check
+
+  # Flow 40. A negative quantity: refuse (or ask), create nothing.
+  # Holded side pending: it can create sales orders but has no tool to list them (to confirm live).
+  - id: e-invalid-write
+    category: error
+    mode: write
+    prompt: "Cargale a Cliente {{marker}} un pedido de -3 Aguas."
+    platforms:
+      etendo-go:
+        setup: *customer
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-order, entity: header, filters: { businessPartner: "{{steps.bp.data.id}}" } }
+          expect: none
+
+  # Flow 23 (create part). Holded side pending: warehouses, to confirm live.
+  - id: w-warehouse-crud
+    category: write
+    mode: write
+    prompt: "Abrimos un depósito nuevo, Depósito {{marker}}, en la Calle Mayor 1 de Madrid. Cargalo."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: warehouse, entity: warehouse, filters: { name: "Depósito {{marker}}" } }
+
+  # Flow 30 (project part). Holded side pending: projects, to confirm live.
+  - id: w-cost-center-project
+    category: write
+    mode: write
+    prompt: "Creá el proyecto Reforma {{marker}}."
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: service-project, entity: serviceProject, filters: { name: "Reforma {{marker}}" } }
+
+  # Flow 3. Quotation accepted and invoiced (through an order or directly: both pass).
+  - id: f-quotation-to-invoice
+    category: flow
+    mode: write
+    prompt: "Hacele un presupuesto a Cliente {{marker}} por 2 Fernet. Ya lo aceptó, facturáselo."
+    platforms:
+      etendo-go:
+        setup: *customer
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", documentStatus: CO } }
+      holded: *holded-no-invoice
+
+  # Flow 4. Order shipped and invoiced.
+  - id: f-order-ship-invoice
+    category: flow
+    mode: write
+    prompt: "Cliente {{marker}} nos pidió 3 Aguas. Mandáselas y facturáselas."
+    platforms:
+      etendo-go:
+        setup: *customer
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", documentStatus: CO } }
+      holded: *holded-no-invoice
+
+  # Flow 7. A partial collection and the balance left (121 € - 20 € = 101 €).
+  - id: f-collect-invoice
+    category: flow
+    mode: write
+    prompt: "Cliente {{marker}} nos pagó 20 € en efectivo. ¿Cuánto nos sigue debiendo?"
+    platforms:
+      etendo-go:
+        setup: *customer-with-invoice
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { id: "{{steps.invoice.data.id}}", outstandingAmount: 101 } }
+        expectAnswer:
+          all: [{ number: 101, tolerance: 0.01 }]
+      holded: *holded-no-invoice-setup
+
+  # Flow 43. Invoicing in a closed period: no completed invoice, and the agent says why. Opening the
+  # period on its own, without asking, is a failure too (the invoice would then be completed).
+  - id: e-closed-period
+    category: error
+    mode: write
+    prompt: "Facturale a Cliente {{marker}} 1 Agua con fecha 15 de diciembre."
+    platforms:
+      etendo-go:
+        setup: *customer
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-invoice, entity: header,
+                  filters: { businessPartner: "{{steps.bp.data.id}}", documentStatus: CO } }
+          expect: none
+      holded: *holded-no-invoice
