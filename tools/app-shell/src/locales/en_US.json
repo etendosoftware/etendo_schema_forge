@@ -17470,7 +17470,7 @@
     "notes": "Notes",
     "addLines": "Add Lines",
     "importFromShipment": "Import from Shipment",
-    "importFromSalesOrder": "Add from order",
+    "importFromSalesOrder": "Import from order",
     "importFromSourceInvoice": "Import from source invoice",
     "noLinesYet": "No lines yet",
     "productCostRequired": "Without a defined cost, this product's costs cannot be calculated and its movements cannot be posted. Add a line on the Costing tab.",

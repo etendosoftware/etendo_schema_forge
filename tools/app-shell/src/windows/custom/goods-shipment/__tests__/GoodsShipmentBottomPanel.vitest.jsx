@@ -81,7 +81,7 @@ describe('ShipmentLinesEmptyState (ETP-5066)', () => {
     vi.clearAllMocks();
   });
 
-  it('forwards "order" to onSave when "Añadir desde pedido" (importFromSalesOrder) is clicked', async () => {
+  it('forwards "order" to onSave when "Importar desde pedido" (importFromSalesOrder) is clicked', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(true);
     render(<ShipmentLinesEmptyState {...BASE_PROPS} onSave={onSave} />);

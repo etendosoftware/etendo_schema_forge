@@ -73,8 +73,8 @@ const WINDOWS = [
     label: 'sales-invoice ← sales-order',
     invoiceSpec: 'sales-invoice',
     orderSpec: 'sales-order',
-    // ui('importFromSalesOrder') — "Add from order" / "Añadir desde pedido"
-    importButton: /Add from order|Añadir desde pedido/i,
+    // ui('importFromSalesOrder') — "Import from order" / "Importar desde pedido"
+    importButton: /Import from order|Importar desde pedido/i,
     documentType: { transactionDocument: 'doctype-ar-001', 'transactionDocument$_identifier': 'AR Invoice' },
     importVia: 'action',
   },

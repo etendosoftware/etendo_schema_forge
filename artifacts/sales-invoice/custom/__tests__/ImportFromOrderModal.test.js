@@ -180,7 +180,7 @@ describe('ImportFromOrderModal — fetchDocuments currency filter', () => {
   });
 });
 
-// ETP-6002 — "Añadir desde pedido" is ONE call to the invoice's importOrderLines action, so the
+// ETP-6002 — "Importar desde pedido" is ONE call to the invoice's importOrderLines action, so the
 // window and the MCP share one rule (oldest pending shipment line first, one invoice line per
 // shipment line). Prices, discount, tax, UoM and the order-line link are set server-side.
 describe('ImportFromOrderModal — submitOrderImport (importOrderLines action)', () => {

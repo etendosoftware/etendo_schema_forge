@@ -6,7 +6,7 @@ import { useUI } from '@/i18n';
 import { translateImportRefusal } from '@/lib/backendErrors.js';
 
 /**
- * "Añadir desde pedido" on a sales invoice (ETP-6002). The import is ONE call to the invoice's
+ * "Importar desde pedido" on a sales invoice (ETP-6002). The import is ONE call to the invoice's
  * declared `importOrderLines` action — the same one the MCP uses — instead of one line POST per
  * order line, so the window and the agents share one rule:
  * - each order line's quantity goes first to its completed shipment lines not yet invoiced, oldest
