@@ -242,7 +242,10 @@ como no oficial, con el formato de §3.3.
 - El texto del OKR está en `docs/plans/drafts/2026-10-15-propuesta-okr-o2.md` (borrador sin
   commitear).
 
-### 7.3 Candidatas a prueba (borrador, 31 — recortar a ~30 y aprobar de a una)
+### 7.3 Candidatas a prueba (reemplazadas)
+
+**Reemplazadas el 23 oct** por el listado de 43 flujos de `docs/mcp-evaluation/okr-o2-flows.md` (un
+archivo por flujo en `okr-o2-flows/`). La lista de abajo queda como referencia histórica.
 
 **Base de operaciones:** `docs/mcp-evaluation/okr-o2-operations-catalog.md` (versión base, se itera):
 cada operación con su verificación objetiva y su ruta en Etendo y en Holded. Las pruebas salen de ahí.
@@ -275,3 +278,62 @@ antes de correrla.
 - **Sesgo de selección:** facturación y cobros favorecen a Etendo; contactos/CRM a Holded.
 - **Login de Holded** por OAuth (configurado y verificado el descubrimiento; falta el primer login).
 - **Plazo:** 30 pruebas pilotadas al 1 nov es ajustado; el número del 26 oct sale con lo que haya.
+
+### 7.5 Cómo retomar (estado al 29 oct)
+
+**Dónde está todo:** rama `feature/ETP-5848` de `etendo_schema_forge`.
+
+| Qué | Dónde |
+|---|---|
+| Este plan (§3 métrica, §5 decisiones, §6 qué implementar) | `docs/plans/2026-10-22-mcp-okr-metric-base-plan.md` |
+| Las 43 pruebas, con reglas de redacción y hallazgos | `docs/mcp-evaluation/okr-o2-flows.md` + `okr-o2-flows/NN-<id>.md` |
+| Catálogo de operaciones | `docs/mcp-evaluation/okr-o2-operations-catalog.md` |
+| Harness y su guía | `mcp-tests/`, `mcp-tests/README.md` |
+
+**Próximo paso:** Valentin aprueba las pruebas de a una → se escriben en `mcp-tests/suites/okr.yaml`
+(no existe todavía) → piloto de cada una contra el MCP local y Holded. En paralelo, §6 (no
+necesita Holded: se prueba con `mcp-tests/tests/fixtures/`). Reglas de las pruebas: el pedido es
+lo que escribiría una persona, sin explicar cómo; lo que se prepara va en "Datos previos"; la
+verificación mide el resultado, no el camino.
+
+**Configurar el harness:**
+
+1. `cp mcp-tests/config.example.toml mcp-tests/config.toml` (gitignored). El ejemplo ya trae
+   `local` y `holded` con `platform`, que `make mcp-compare` exige.
+2. Clave del gateway de LLM: la variable que nombra `[provider] api_key_env`.
+3. Holded es `auth = "oauth"`, igual que Etendo: `make mcp-login TARGET=holded` abre el navegador;
+   lo hace una persona, con una **cuenta de Holded descartable** (la medición oficial pide una cuenta
+   recién creada). Holded no da refresh token: cuando vence, se repite el login. **Pendiente:
+   nadie lo hizo todavía.**
+4. `local` necesita el SPA de un entorno levantado (el MCP local pasa por el SPA, no por Tomcat).
+
+**Entorno de Etendo** (skill `local-env`): `local-env worktree ETP-5848 --module
+com.etendoerp.go=feature/ETP-5848 --base=origin/develop` desde `etendo_develop`, después
+`local-env up` dentro del entorno (lo aprueba el usuario). La rama de `com.etendoerp.go` está vacía:
+no hay cambios de GO en esta tarea. Dos arreglos de datos que la siembra de local-env **no** hace y
+que las pruebas necesitan (en la base del entorno, `source <env>/build/local-env/env`, usuario
+`tad`):
+
+```sql
+-- 1. Secuencias de identificador (sin ellas el alta de contactos falla con
+--    "No se pudo encontrar una secuencia: EM_Etgo_Identifier"). Org = la de GOClient (GOOrg).
+insert into ad_sequence (ad_sequence_id, ad_client_id, ad_org_id, isactive, createdby, updatedby,
+  name, prefix, suffix, mask, isautosequence, incrementno, startno, currentnext, currentnextsys,
+  istableid, ad_column_id, ad_table_id)
+select get_uuid(), o.ad_client_id, o.ad_org_id, 'Y', '100', '100',
+  substr(t.name,1,29)||'-'||substr(c.name,1,30), '', '', '#######', 'Y', 1, 1000000, 1000000, 1000000,
+  'N', c.ad_column_id, t.ad_table_id
+from ad_column c join ad_table t using (ad_table_id)
+cross join ad_org o join ad_client cl on cl.ad_client_id = o.ad_client_id
+where c.ad_reference_id = 'B82E1C56F57749AD97DD9924624F08D3'   -- secuencia transaccional
+  and cl.name = 'GOClient' and o.name = 'GOOrg'
+  and not exists (select 1 from ad_sequence s where s.ad_column_id = c.ad_column_id
+                  and s.ad_org_id = o.ad_org_id);
+```
+
+2. **Período contable del mes actual abierto:** el seed abre solo enero–abril 2026 y cualquier
+   documento con fecha de hoy falla con "El período contable … no está abierto". Desde la UI:
+   Finanzas › Calendario › año › Períodos › "Abrir/Cerrar Periodo" → Abierto.
+
+Los dos tienen que ir a la preparación (fixture) de la suite o arreglarse en la siembra de
+local-env; hoy no están en ningún código.
