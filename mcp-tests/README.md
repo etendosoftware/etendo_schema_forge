@@ -167,13 +167,18 @@ otherwise `UNOFFICIAL`, and the figure is still fully reported but is not a KR n
 run whose targets could not check some entities because their MCP does not offer the tool says so:
 `OFFICIAL — 10 entities not verifiable on holded (tools not offered)`. Read it as official, with the
 listed entities taken on trust: their freshness rests on the account having been freshly
-initialized and seeded, not on a read. The KR line
-is *subject wins / evaluated tasks*, always split in two because they say different things about
-the product:
+initialized and seeded, not on a read. The KR line (plan `2026-10-22-mcp-okr-metric-base-plan.md`
+§3.3) is *(Etendo Win + Etendo Only) / evaluated tasks* against an 80 % target, always followed by
+the five results, because they say different things about the product:
 
-- **won by capability** — the other platform declared the task `notPossible` (decision rule step 0);
-- **won by measurement** — both sides ran it and steps 1–4 decided (successes, median calls with a
-  20 % margin, unrecovered errors, median tokens with a 10 % margin).
+- **Etendo Only / Holded Only** — the other platform declared the task `notPossible` (rule step 0);
+- **Etendo Win / Holded Win** — both sides ran it and rule 2 decided: successes, unrecovered errors,
+  median total tokens of the conversation (catalogue included) with a 10 % margin, then median calls
+  with a 20 % margin;
+- **empate** — nothing separated them.
+
+Rule 2 requires real token usage: a task where a side has a success without it is *not evaluable*
+(there is no byte fallback — bytes leave the tool catalogue out).
 
 Ties count in the denominator; not-evaluable and excluded tasks do not. The next line pins the rule
 version, its parameters sha, `REPEAT` and the report version.

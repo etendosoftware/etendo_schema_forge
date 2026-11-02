@@ -194,14 +194,15 @@ versión siguiente, no en la medición en curso.
 
 Objetivo de la tarea: que la primera corrida salga ya con este formato y sea el número base.
 
-1. **Resultado por prueba:** mapear `winner` + `decidedBy` a Etendo Only / Etendo Win /
-   Holded Win / Holded Only / empate (§3.3).
-2. **Titular y secundarios en `summary.md`:** `(Etendo Win + Etendo Only) ÷ evaluadas`, cantidad
-   de pruebas, Only, Win y Holded Only por separado; explicar caídas por pruebas nuevas (§3.2).
-3. **`RULE_VERSION = 2`** en `runner/decide.py`: éxito → errores no recuperados → tokens totales
-   (10 %) → llamadas (20 %) → desempate (§3.4).
+1. ✅ **Resultado por prueba:** `report.task_result` mapea cada tarea decidida a Etendo Only /
+   Etendo Win / Holded Win / Holded Only / empate (§3.3). Hecho el 2026-10-30 (report v6).
+2. ✅ **Titular y secundarios en `summary.md`:** `(Etendo Win + Etendo Only) ÷ evaluadas`, meta
+   80 %, con los cinco resultados al lado. Pendiente: explicar caídas por pruebas nuevas (§3.2).
+3. ✅ **`RULE_VERSION = 2`** en `runner/decide.py`: éxito → errores no recuperados → tokens totales
+   (10 %) → llamadas (20 %) → empate. La regla 1 queda rechazada (§3.4).
 4. **Desempate con API de decisión** en el paso 5; respuesta guardada en el run y no recalculada (§3.5).
-5. **Tokens reales obligatorios** en corridas oficiales; sin fallback a `resultBytes` (§3.4).
+5. ✅ **Tokens reales obligatorios:** sin fallback a `resultBytes`; una tarea sin tokens es no
+   evaluable (§3.4).
 6. **Tiempo** por tarea y de tools separado del modelo, solo informativo (§3.6).
 7. **Origen de cada prueba** (UI de Etendo / MCP de Holded) registrado en la suite (§3.3).
 8. Correr la primera medición y publicar el número base como no oficial.

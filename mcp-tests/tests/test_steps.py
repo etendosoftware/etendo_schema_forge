@@ -85,12 +85,12 @@ class LoaderTest(unittest.TestCase):
                         prompt: hi
                 """))
         suite = load_suite(_suite("""
-            decision: { ruleVersion: 1, callsMargin: 0.3 }
+            decision: { ruleVersion: 2, callsMargin: 0.3 }
             probes:
               - id: p
                 prompt: hi
         """))
-        self.assertEqual(suite.decision, {"ruleVersion": 1, "callsMargin": 0.3})
+        self.assertEqual(suite.decision, {"ruleVersion": 2, "callsMargin": 0.3})
         self.assertIsNone(load_suite(_suite("probes: [{id: p, prompt: hi}]")).decision)
 
     def test_rejects_a_step_without_tool(self):

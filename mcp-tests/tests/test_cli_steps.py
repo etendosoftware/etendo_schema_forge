@@ -67,6 +67,9 @@ OUTCOME = {
     "verdict": {"outcome": "OKAY", "summary": "done"},
     "toolCallCount": 3,
     "toolCalls": [],
+    # Rule 2 decides on real token usage and refuses to compare without it.
+    "usage": {"loop": {"turns": 2, "turnsWithUsage": 2, "inputTokens": 900, "outputTokens": 100,
+                       "totalTokens": 1000, "cachedInputTokens": 0}, "report": None},
 }
 
 
@@ -542,11 +545,11 @@ class CompareTest(unittest.TestCase):
             self.assertEqual(len(h.attempts_of(name)), 2)
 
     def test_compare_json_carries_what_the_report_reads(self):
-        h = CompareHarness(self.tmp, "decision: { ruleVersion: 1, callsMargin: 0.3 }\n" + SUITE)
+        h = CompareHarness(self.tmp, "decision: { ruleVersion: 2, callsMargin: 0.3 }\n" + SUITE)
         compare = h.compare("--repeat", "2", "--seed", "7", "--concurrency", "3", "--subject", "h")
         self.assertEqual(compare["subject"], "h")
         self.assertEqual(compare["repeat"], 2)
-        self.assertEqual(compare["decision"], {"ruleVersion": 1, "callsMargin": 0.3})
+        self.assertEqual(compare["decision"], {"ruleVersion": 2, "callsMargin": 0.3})
         self.assertEqual(compare["probes"], ["p"])
         self.assertIsNotNone(compare["startedAt"])
         self.assertIsNotNone(compare["finishedAt"])
@@ -1308,7 +1311,7 @@ probes:
         summary = json.loads((h.compare_dir / "summary.json").read_text())
         row = summary["tasks"][0]
         self.assertEqual((row["winner"], row["decidedBy"]), ("reference", "0-capability"))
-        self.assertEqual(summary["kr"]["referenceWins"]["byCapability"], 1)
+        self.assertEqual(summary["kr"]["results"]["referenceOnly"], 1)
 
     def test_not_possible_on_both_platforms_is_excluded(self):
         suite = V2_SUITE.split("  - id: w")[0].replace("""        setup: [{ tool: etendo_create, args: { description: "{{marker}}" }, saveAs: inv }]
