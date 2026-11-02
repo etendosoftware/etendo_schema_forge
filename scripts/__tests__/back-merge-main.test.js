@@ -28,7 +28,12 @@ case "$1 $2" in
     echo "${PR_URL}" ;;
   "pr view")
     case "$json" in
-      assignees) printf '%s\\n' "\${GH_STUB_ASSIGNEES:-0}" ;;
+      assignees)
+        if [ -n "\${GH_STUB_MERGED_NUMBER:-}" ] && [ "$3" = "\${GH_STUB_MERGED_NUMBER:-}" ]; then
+          printf '%s\\n' "\${GH_STUB_MERGED_ASSIGNEE:-}"
+        else
+          printf '%s\\n' "\${GH_STUB_ASSIGNEES:-0}"
+        fi ;;
       reviewDecision) printf '%s\\n' "\${GH_STUB_REVIEW:-REVIEW_REQUIRED}" ;;
       autoMergeRequest) printf '%s\\n' "\${GH_STUB_AUTO_MERGE:-false}" ;;
       mergedBy) printf '%s\\n' "\${GH_STUB_MERGED_BY:-}" ;;
@@ -161,6 +166,36 @@ describe('back-merge-main.sh', () => {
     assert.equal(out.status, 0, out.stderr);
     assert.deepEqual(ghCalls('pr view 41'), ['pr view 41 --json mergedBy --jq .mergedBy.login // empty']);
     assert.deepEqual(ghCalls('pr edit'), [`pr edit ${PR_URL} --add-assignee bob`]);
+  });
+
+  it('looks past etendobot as the commit author to whoever merged the PR', () => {
+    hotfix();
+    const out = runScript({ GH_STUB_COMMIT_AUTHOR: 'etendobot', GH_STUB_MERGED_NUMBER: '41', GH_STUB_MERGED_BY: 'bob' });
+    assert.equal(out.status, 0, out.stderr);
+    assert.deepEqual(ghCalls('pr edit'), [`pr edit ${PR_URL} --add-assignee bob`]);
+  });
+
+  it("assigns an automatic cut's owner: etendobot merged it, its PR's assignee owns it", () => {
+    hotfix();
+    const out = runScript({
+      GH_STUB_COMMIT_AUTHOR: 'etendobot', GH_STUB_MERGED_NUMBER: '60', GH_STUB_MERGED_BY: 'etendobot', GH_STUB_MERGED_ASSIGNEE: 'gremiger',
+    });
+    assert.equal(out.status, 0, out.stderr);
+    assert.deepEqual(ghCalls('pr view 60'), [
+      'pr view 60 --json mergedBy --jq .mergedBy.login // empty',
+      'pr view 60 --json assignees --jq .assignees[0].login // empty',
+    ]);
+    assert.deepEqual(ghCalls('pr edit'), [`pr edit ${PR_URL} --add-assignee gremiger`]);
+  });
+
+  it('never assigns the bot, even as the assignee of the merged PR', () => {
+    hotfix();
+    const out = runScript({
+      GH_STUB_COMMIT_AUTHOR: 'etendobot', GH_STUB_MERGED_NUMBER: '60', GH_STUB_MERGED_BY: 'etendobot', GH_STUB_MERGED_ASSIGNEE: 'etendobot',
+    });
+    assert.equal(out.status, 0, out.stderr);
+    assert.deepEqual(ghCalls('pr edit'), []);
+    assert.equal(ghCalls('pr merge').length, 1);
   });
 
   it('never assigns the bot that opens the PR', () => {

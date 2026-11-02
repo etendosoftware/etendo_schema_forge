@@ -239,6 +239,10 @@ describe('FmListPage — row actions Delete', () => {
 
     const { toast } = await import('sonner');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.delete_failed'));
+    // ETP-5725 (QA CP-20, sibling of the Reactivar popup) — the confirmation dialog must
+    // close on BOTH outcomes. It used to be dismissed only inside the `result.ok` branch,
+    // so a rejected delete left the modal open behind its own error toast.
+    await waitFor(() => expect(screen.queryByTestId('batch-delete-confirm')).not.toBeInTheDocument());
   });
 
   it('closing the confirm dialog without confirming never calls deleteDeclaration', async () => {

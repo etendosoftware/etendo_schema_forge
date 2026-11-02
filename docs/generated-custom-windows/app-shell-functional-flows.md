@@ -240,7 +240,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `formatCalendarDate` in the UI locale.
   - Owner (`ownedByAccount: true`, the signal ETP-5742 gates re-subscription on, via
     `ownsEnvironmentSubscription`): **Update payment** → `/account`, where the Subscription section
-    opens the Stripe Customer Portal.
+    opens the Stripe Customer Portal. With the `my-companies-page` flag on (ETP-6060) it leads to
+    `/companies?subscription=<clientId>` instead, which opens "Mis empresas" with that company's
+    subscription unfolded (`useSubscriptionPath`, `lib/myCompanies/subscriptionPath.js`).
   - Anyone else: *"Contact your company's administrator."*, no button.
 - **Escalation:** more than 3 days (`BILLING_WARNING_ESCALATION_DAYS`) before `graceEndsAt` it is
   amber and can be dismissed for the browser session (sessionStorage key
@@ -251,7 +253,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   shows the grace countdown next to the portal button. `/upgrade` is a full-screen overlay
   (`upgrade-page-shell`, `fixed inset-0 z-50`) drawn over the layout, so the banner would be
   invisible there yet still in the accessibility tree — escalated, an unseen `role="alert"`. It
-  stays on `/companies` and on every in-environment page, where nothing else says it.
+  stays on `/companies` and on every in-environment page, where nothing else says it. With the
+  `my-companies-page` flag on, the CTA's destination is `/companies`, so it is hidden there and on
+  `/upgrade`, and shown on `/account`, which no longer carries the subscription.
 - **The kill switch — neutral wording (ETP-5051, `open-and-notable-topics.md` §4.17):** with the
   backend kill switch `environment-access-enforcement-off` on for the tenant, the environment is
   **not** blocked on `graceEndsAt`. `GET /sws/go/environments` now carries `accessEnforced` per
@@ -298,24 +302,36 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   window event `etendo:quota-refused`), called from `translateQuotaExceeded` in
   `lib/backendErrors.js`, which every path that classifies the refusal goes through; the same
   refusal (resource and counts) is announced at most once per 30 s, so re-rendering an error
-  cannot turn into a stream of reads. The core query cache has no refetch-on-focus or interval
+  cannot turn into a stream of reads. **After a successful NEO write (ETP-6060)** — a create, a
+  save, a document action such as completing an invoice — it re-reads once more, 1.5 s after the
+  last write of a burst and at least 5 s after the previous read, so the banner shows the quota a
+  write just reached without a reload. `useApiFetch` announces every `ok` non-read response under
+  `/sws/neo/` (`announceRecordWrite`, window event `etendo:records-written`; `callout` and
+  `evaluate-display` are reads). The core query cache has no refetch-on-focus or interval
   option, hence the single app-level owner.
-- **Copy:** one line per item, DENY first, built from the catalog `resourceName` (its
-  `resourceKey` when the name is blank), `consumed`,
-  `includedQty`, `unitLabel` and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
+- **Copy:** one line per item, DENY first, built from the resource name (`quotaResourceLabel`,
+  see the per-row note in §3.2a-quater), `consumed`,
+  `includedQty`, the unit (`quotaUnitLabel`) and the period word (`quotaBannerDeny` / `quotaBannerOver` for a
   `warn`-mode quota already past its limit / `quotaBannerWarn`). Red with `role="alert"` when any
   item is DENY, amber otherwise.
-- **Dismissal:** a banner with only WARN items is dismissible for the browser session; the
-  dismissal key names the reported verdicts, so a new alert (another resource, or a WARN turning
-  into a DENY) shows again. A banner with any DENY item has **no close button**, and a dismissal
-  stored for the same verdicts does not hide it: it stays until the quota is no longer reached.
-  Martin's decision during ETP-5051 manual testing. The dismissal was not what hid a later DENY
+- **Dismissal (per plan quota since ETP-6060):** each item is shown as its plan quota says —
+  `warningAlert` before the limit, `limitAlert` at it (a DENY, or a `warn` quota past its limit):
+  `pinned`, `dismissible` or `hidden` (`quotaAlertBehavior`, `lib/planQuotas.js`). A `hidden`
+  item is not listed; a banner with any `pinned` item has **no close button** and ignores a stored
+  dismissal; otherwise it is dismissible for the browser session, and the dismissal key names the
+  reported verdicts, so a new alert (another resource, or a WARN turning into a DENY) shows again.
+  The colour still follows the verdict (red with any DENY). Left empty, a DENY is pinned and a
+  WARN dismissible — Martin's decision during ETP-5051 manual testing. Presentation only: a
+  hidden or dismissible DENY still refuses new records. The dismissal was not what hid a later DENY
   there until the next login: the key already named the verdicts, so a WARN turning into a DENY
   would have shown again. The banner still showed the environment list read at page load, which
   nothing re-read while the app stayed open; the **Freshness** triggers above fix that.
 - **CTA:** the owner (`ownsEnvironmentSubscription`) gets **View plan usage** → `/account`; anyone
   else reads *"Contact your company's administrator."*. Hidden on `/account` and `/upgrade`, for the
-  same reasons as the payment banner.
+  same reasons as the payment banner. With the `my-companies-page` flag on (ETP-6060), the CTA goes
+  to `/companies?subscription=<clientId>` and the hidden paths become `/companies` and `/upgrade`,
+  exactly as the payment banner; the blocked-access screen's **Manage subscription** follows the
+  same rule.
 - **Test ids:** `quota-status-banner` (with `data-variant`), `quota-status-banner-items`,
   `quota-status-banner-item` (with `data-verdict`), `quota-status-banner-cta`,
   `quota-status-banner-member-hint`, `quota-status-banner-dismiss` (WARN-only banners).
@@ -381,8 +397,13 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   (`subscriptionNoneInEnvironment`) when the session has an entered environment (auth `clientId`),
   and keeps "You don't have an active subscription." (`subscriptionNoActive`) without one. The
   Manage (portal) button is not shown in either no-subscription state.
-- **Per quota row:** the catalog `resourceName` (its `resourceKey` when the name is blank);
-  "`consumed` of `includedQty` `unitLabel`" followed by the period word. Plan limits count over the
+- **Per quota row:** the resource name and unit in the UI language. The catalog stores
+  `resourceName`/`unitLabel` in one language only, so the resources the plans ship with are
+  translated by `resourceKey` (`SALES_INVOICES`, `USERS` → `quotaResource*` / `quotaUnit*` keys,
+  `quotaResourceLabel` / `quotaUnitLabel` in `lib/planQuotas.js`, ETP-6060); any other resource
+  shows its catalog name (its `resourceKey` when the name is blank). The banner, the 403 sentence
+  and the plan cards of `/upgrade` use the same labels.
+  "`consumed` of `includedQty` unit" followed by the period word. Plan limits count over the
   subscription year whatever the billing interval, so every quota reads "per year", a monthly plan's
   included (the backend sends `period: "year"`; only a subscription without a start date sends the
   billing interval — `open-and-notable-topics.md` §5.5, §5.8); "(not measured yet)" when `consumed` is
@@ -406,8 +427,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Where:** `tools/app-shell/src/pages/MyCompaniesPage.jsx` (`/companies`), the owned-companies
   table.
 - **Rule:** every row describes and manages its OWN environment, whatever environment the session
-  is in. The page does not read `GET /sws/go/billing/subscription`, which answers only the entered
-  environment.
+  is in. On load the page reads no subscription: the row data comes from `GET /sws/go/environments`.
 - **Renewal column:** a productive row shows its own `renewalAt` from `GET /sws/go/environments`
   (`formatCalendarDate`, short date). The backend sends it only while that environment's
   subscription is renewing (active or trialing, not past due, not scheduled to cancel) and `null`
@@ -420,6 +440,35 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   "This company has no subscription to manage." (`upgradePortalNoSubscription`); any other failure
   keeps `subscriptionManageError`. `/account` still posts no body and gets the entered
   environment's portal.
+- **Subscription per owned company (ETP-6060):** a productive owned row has a **Show subscription**
+  toggle (test id `my-companies-subscription-toggle-<clientId>`, `aria-expanded`). Unfolding it
+  adds a row (`my-companies-subscription-<clientId>`) with `SubscriptionSection` for that company
+  (`clientId` prop): plan, amount, status, renewal, grace, limits and their usage, and its own
+  Manage button. The section reads `GET /sws/go/billing/subscription?clientId=<clientId>` and posts
+  the same `clientId` to the portal, so it describes that company even from another environment;
+  a company the account did not buy reads "This environment has no subscription.". Rows start
+  folded, so the page makes no provider call until the user asks. Demo rows and invited companies
+  never offer it.
+- **`/account` and the `my-companies-page` flag (ETP-6060):** with the flag on, `/account` no
+  longer hosts the Subscription section; it shows a notice (`account-settings-subscription-moved`,
+  `accountSubscriptionMoved`) with a **Go to My companies** button
+  (`account-settings-go-to-companies` → `/companies`). With the flag off, `/account` keeps the
+  section exactly as before (the entered environment's subscription, else the newest).
+- **`?subscription=<clientId>` (ETP-6060):** opens the page with that productive owned row already
+  unfolded; the billing banners' and the blocked screen's CTAs send it. A demo or unknown id is
+  ignored.
+- **Status label (ETP-6060):** Stripe's `active` reads **Active** / **Activa**
+  (`subscriptionActive`), no longer the stored projection's "Current" / "Actual". A cancellation
+  scheduled from the portal keeps `active` until it happens; the "Cancels on {date}" line says so.
+- **Telemetry (ETP-6060, Mixpanel, `lib/myCompanies/telemetry.js`):**
+  - `my_companies_viewed` gains `source`: `direct`, or the CTA named by `?from=` (`quota_banner`,
+    `billing_banner`, `blocked_screen`); an unknown value reads `direct`.
+  - `my_companies_subscription_opened` (`source`: `toggle`, or `link` when a CTA opened the page
+    with the row unfolded). Only openings count, not foldings.
+  - `subscription_manage_clicked` (`source`: `my_companies_menu`, `my_companies_section`,
+    `account`), sent before the portal session is requested.
+  - `account_subscription_moved_clicked`, the "Go to My companies" button on `/account`.
+  - No event carries a company id or name.
 
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 

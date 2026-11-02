@@ -1,6 +1,7 @@
 // ETP-5051 — relative imports only: `backendErrors.js` imports this module and is loaded by plain
 // `node --test`, which does not resolve the `@/` alias.
 import { formatGroupedNumber } from './formatCurrency.js';
+import { isReadOnlySubEndpoint, isWriteMethod } from './crossSpecCacheInvalidation.js';
 
 /**
  * ETP-5051 — the plan quota item (`QuotaItem`) the backend sends in three places, and what the SPA
@@ -20,8 +21,10 @@ import { formatGroupedNumber } from './formatCurrency.js';
  * `periodStart` / `periodEnd` (the counted window, date-only `yyyy-MM-dd` strings, shown through
  * `formatCalendarDate`).
  *
- * Every user-visible sentence is a `genericLabels` key interpolated with the catalog name and unit:
- * never a per-resource key, because the resources are catalog rows an operator can add.
+ * Every user-visible sentence is a `genericLabels` key interpolated with the resource name and
+ * unit. The catalog stores them in one language only (`ETGO_BILLING_RESOURCE.NAME`/`UNIT_LABEL`),
+ * so the resources the plans ship with are translated by `resourceKey` ({@link quotaResourceLabel},
+ * {@link quotaUnitLabel}, ETP-6060); a resource an operator adds later shows its catalog name.
  */
 
 export const QUOTA_VERDICT_WARN = 'WARN';
@@ -72,6 +75,28 @@ function refusalSignature(quota) {
 }
 
 /**
+ * ETP-6060 — window event announcing that a NEO write succeeded. A create, or an action such as
+ * completing an invoice, can take a quota to WARN or DENY, so `useEnvironmentListFreshness` answers
+ * it with a debounced re-read of the environment list: the banner shows the new state without a
+ * page reload. Listeners never receive the request.
+ */
+export const RECORDS_WRITTEN_EVENT = 'etendo:records-written';
+
+/**
+ * Announces a successful NEO write ({@link RECORDS_WRITTEN_EVENT}). Called by `useApiFetch` for
+ * every successful response; reads (GET, and the POSTed read-only sub-endpoints such as `callout`)
+ * and requests outside `/sws/neo/` announce nothing. A no-op outside a browser.
+ *
+ * @param {{ url?: string, method?: string }} request the URL (base included) and method
+ */
+export function announceRecordWrite({ url, method } = {}) {
+  if (typeof globalThis.dispatchEvent !== 'function' || typeof Event !== 'function') return;
+  if (!isWriteMethod(method) || typeof url !== 'string' || !url.includes('/sws/neo/')) return;
+  if (isReadOnlySubEndpoint(url)) return;
+  globalThis.dispatchEvent(new Event(RECORDS_WRITTEN_EVENT));
+}
+
+/**
  * Announces a QUOTA_EXCEEDED refusal ({@link QUOTA_REFUSED_EVENT}). Called from the one place
  * every path that classifies the refusal goes through — `translateQuotaExceeded` in
  * `backendErrors.js` (useEntity saves, RecordCreateModal, the OCR batch, and every caller that
@@ -103,11 +128,31 @@ function nonBlank(value) {
 }
 
 /**
- * The name to show for a quota: the catalog `resourceName`, or its `resourceKey` when the name is
- * blank (a catalog row an operator left unnamed). `null` when neither is usable.
+ * ETP-6060 — the locale keys of the resources the plans ship with, by `resourceKey`. The catalog
+ * names are one language only, whatever the UI's.
  */
-export function quotaResourceLabel(item) {
-  return nonBlank(item?.resourceName) ?? nonBlank(item?.resourceKey);
+const RESOURCE_LABEL_KEYS = Object.freeze({
+  SALES_INVOICES: Object.freeze({ name: 'quotaResourceSalesInvoices', unit: 'quotaUnitSalesInvoices' }),
+  USERS: Object.freeze({ name: 'quotaResourceUsers', unit: 'quotaUnitUsers' }),
+});
+
+function translatedLabel(item, ui, slot) {
+  const keys = typeof ui === 'function' ? RESOURCE_LABEL_KEYS[item?.resourceKey] : null;
+  return keys ? nonBlank(ui(keys[slot])) : null;
+}
+
+/**
+ * The name to show for a quota: its translation when `ui` is given and the resource is a known one,
+ * else the catalog `resourceName`, else its `resourceKey` (a catalog row an operator left unnamed).
+ * `null` when none is usable. Without `ui` it is the untranslated identity of the resource.
+ */
+export function quotaResourceLabel(item, ui) {
+  return translatedLabel(item, ui, 'name') ?? nonBlank(item?.resourceName) ?? nonBlank(item?.resourceKey);
+}
+
+/** The unit to show for a quota: translated like {@link quotaResourceLabel}, else the catalog's. */
+export function quotaUnitLabel(item, ui) {
+  return translatedLabel(item, ui, 'unit') ?? nonBlank(item?.unitLabel);
 }
 
 /** The quantity as the UI shows it: grouped with the instance-wide separators. */
@@ -146,7 +191,7 @@ export function quotaPeriodKey(item) {
  */
 export function quotaUsageText(item, ui) {
   if (!item || !hasNumber(item.includedQty)) return '';
-  const unit = nonBlank(item.unitLabel);
+  const unit = quotaUnitLabel(item, ui);
   const included = formatQuotaQuantity(item.includedQty);
   if (!hasNumber(item.consumed)) {
     return unit
@@ -167,11 +212,35 @@ export function quotaUsageWithPeriod(item, ui) {
   return ui('quotaUsageInPeriod', { usage, period: ui(periodKey) });
 }
 
-/** The items the login banner reports: WARN and DENY only, DENY first. */
+/** ETP-6060 — how a quota's alert is shown (`ETGO_PLAN_QUOTA.WARNING_ALERT` / `LIMIT_ALERT`). */
+export const QUOTA_ALERT_PINNED = 'pinned';
+export const QUOTA_ALERT_DISMISSIBLE = 'dismissible';
+export const QUOTA_ALERT_HIDDEN = 'hidden';
+const QUOTA_ALERTS = new Set([QUOTA_ALERT_PINNED, QUOTA_ALERT_DISMISSIBLE, QUOTA_ALERT_HIDDEN]);
+
+/**
+ * How the banner shows one WARN/DENY item. The limit alert (`limitAlert`) applies once the included
+ * quantity is reached — a DENY, or a `warn` quota over its limit — the warning alert
+ * (`warningAlert`) before that. A value the plan quota leaves empty (or one this build does not
+ * know) keeps the behaviour from before ETP-6060: a DENY is pinned, anything else dismissible.
+ * Presentation only: a `block` quota refuses new records whatever this answers.
+ */
+export function quotaAlertBehavior(item) {
+  const atLimit = item?.verdict === QUOTA_VERDICT_DENY || isQuotaOverLimit(item);
+  const configured = atLimit ? item?.limitAlert : item?.warningAlert;
+  if (QUOTA_ALERTS.has(configured)) return configured;
+  return item?.verdict === QUOTA_VERDICT_DENY ? QUOTA_ALERT_PINNED : QUOTA_ALERT_DISMISSIBLE;
+}
+
+/**
+ * The items the login banner reports: WARN and DENY only, DENY first, without the ones whose plan
+ * quota hides their alert (ETP-6060).
+ */
 export function quotaAlertItems(quotas) {
   if (!Array.isArray(quotas)) return [];
   const alerts = quotas.filter((item) => item
     && (item.verdict === QUOTA_VERDICT_WARN || item.verdict === QUOTA_VERDICT_DENY)
+    && quotaAlertBehavior(item) !== QUOTA_ALERT_HIDDEN
     && quotaResourceLabel(item));
   return [
     ...alerts.filter((item) => item.verdict === QUOTA_VERDICT_DENY),

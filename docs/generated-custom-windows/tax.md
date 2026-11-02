@@ -240,3 +240,7 @@ Saving an account field of the Accounting tab (Tax Due / Tax Credit) now refuses
 ## Agent prompt on the catalogue — ETP-5852
 
 `entities.tax.agentPrompt` says this is the full catalogue (inactive, future and category-specific rates included) and that a line's tax is resolved by the server or listed by `etendo_selectors` on the line's `tax`. Feedback M-35.
+
+## ETP-6062 — Header handler bound by `@NeoExtension`
+
+`TaxSifOverrideHandler` (`com.etendoerp.go`, the header handler that lets a tenant save the SIF tax keys on a shared tax) is now bound with `@NeoExtension(spec = "tax", entity = "tax")` instead of the legacy `Java_Qualifier` binding. In this repo, the `javaQualifier: "taxSifOverrideHandler"` key was removed from `artifacts/tax/decisions.json → entities.tax`, so the predicted `ETGO_SF_ENTITY` row matches the GO XML that no longer carries the qualifier (otherwise the GO PR's Offline Regen Check reports `JAVA_QUALIFIER: <none> → "taxSifOverrideHandler"`). The `accounting` entity keeps `javaQualifier: "taxAccountingHandler"` (still legacy). `make regen ONLY=tax FROM_CACHE=1` changed only the two `javaQualifier` lines and the checksum in `contract.json` plus the checksum echo in `contract.mcp.json`; no UI change. `make regen-check ONLY=tax` reports OK (3/3 XML match) and `sf-validate-pipeline --scope=tax` 0 violations.

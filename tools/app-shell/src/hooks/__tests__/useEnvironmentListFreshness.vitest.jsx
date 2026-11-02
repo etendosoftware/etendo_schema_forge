@@ -2,12 +2,14 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ENVIRONMENT_LIST_AFTER_WRITE_DELAY_MS,
+  ENVIRONMENT_LIST_AFTER_WRITE_SPACING_MS,
   ENVIRONMENT_LIST_INTERVAL_MS,
   ENVIRONMENT_LIST_MIN_SPACING_MS,
   useEnvironmentListFreshness,
 } from '../useEnvironmentListFreshness.js';
 import { ENVIRONMENT_LIST_REFRESH_EVENT } from '../useEnvironmentSwitch.js';
-import { QUOTA_REFUSED_EVENT } from '../../lib/planQuotas.js';
+import { QUOTA_REFUSED_EVENT, RECORDS_WRITTEN_EVENT } from '../../lib/planQuotas.js';
 
 /**
  * ETP-5051 — the app-level triggers that keep `GET /sws/go/environments` (and with it the quota
@@ -43,6 +45,10 @@ function becomeHidden() {
 
 function quotaRefused() {
   window.dispatchEvent(new Event(QUOTA_REFUSED_EVENT));
+}
+
+function recordsWritten() {
+  window.dispatchEvent(new Event(RECORDS_WRITTEN_EVENT));
 }
 
 /** A refresh fired by someone else (an upgrade, provisioning): counted apart from the hook's. */
@@ -182,6 +188,38 @@ describe('useEnvironmentListFreshness', () => {
       quotaRefused();
       focus();
       expect(refreshes).toBe(1);
+    });
+  });
+
+  // ETP-6060 — completing the invoice that reaches a quota must show the banner without a reload.
+  describe('a successful write', () => {
+    it('refreshes once, a moment after the last write of a burst', () => {
+      renderHook(() => useEnvironmentListFreshness());
+      vi.advanceTimersByTime(ENVIRONMENT_LIST_AFTER_WRITE_SPACING_MS);
+      recordsWritten();
+      vi.advanceTimersByTime(ENVIRONMENT_LIST_AFTER_WRITE_DELAY_MS - 1);
+      recordsWritten();
+      vi.advanceTimersByTime(ENVIRONMENT_LIST_AFTER_WRITE_DELAY_MS - 1);
+      expect(refreshes).toBe(0);
+      vi.advanceTimersByTime(1);
+      expect(refreshes).toBe(1);
+    });
+
+    it('waits out the spacing since the previous read, without dropping the write', () => {
+      renderHook(() => useEnvironmentListFreshness());
+      recordsWritten();
+      vi.advanceTimersByTime(ENVIRONMENT_LIST_AFTER_WRITE_SPACING_MS - 1);
+      expect(refreshes).toBe(0);
+      vi.advanceTimersByTime(1);
+      expect(refreshes).toBe(1);
+    });
+
+    it('fires nothing after unmount for a write announced before it', () => {
+      const { unmount } = renderHook(() => useEnvironmentListFreshness());
+      recordsWritten();
+      unmount();
+      vi.advanceTimersByTime(ENVIRONMENT_LIST_AFTER_WRITE_SPACING_MS);
+      expect(refreshes).toBe(0);
     });
   });
 
