@@ -44,7 +44,7 @@ import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
-import { useSecondaryTabVisibility, useRevealedTabFetch, useActiveTabResolver } from './useSecondaryTabVisibility.js';
+import { useSecondaryTabVisibility, useRevealedTabFetch, useActiveTabResolver, useOthersProbe } from './useSecondaryTabVisibility.js';
 import { resolveStatusPill } from '@/lib/postedStatus.js';
 import { evaluateFieldCondition } from '@/lib/evaluateFieldCondition.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -1765,8 +1765,6 @@ export function DetailView({
     customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities, isNew, tabRecord: vis.record, tabCtx: vis.ctx,
   });
 
-  // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
-  const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
   const [activePrimaryTab, setActivePrimaryTab] = useState(primaryTabs?.[0]?.key ?? 'general');
   const [notesFocused, setNotesFocused] = useState(false);
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
@@ -1778,14 +1776,7 @@ export function DetailView({
   // answered 403, which is what stopped every document confirm.
   const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess, apiFetch };
 
-  const othersRef = useRef(null);
-
-  useEffect(() => {
-    if (showOthers === null && othersRef.current) {
-      // Check if the hidden probe rendered any DOM content
-      setShowOthers(othersRef.current.childElementCount > 0);
-    }
-  });
+  const { showOthers, othersRef } = useOthersProbe(primaryTabs, capabilities);
 
   pushOthers(showOthers, tabs, othersLabel, ui);
 

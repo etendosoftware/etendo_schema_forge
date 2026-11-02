@@ -522,6 +522,9 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_FinAccCountryRequired: 'backendError.countryRequired',
   ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
   ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
+  // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
+  // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
+  ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -881,8 +884,8 @@ function translateQuotaExceeded(quota, t) {
   // Every classified QUOTA_EXCEEDED passes here, so this is where the quota banner hears about it
   // (one shared re-read of the environment list; deduplicated, see `announceQuotaRefusal`).
   announceQuotaRefusal(quota);
-  // Same label as the quota banner and the /account row: the catalog name, else the key.
-  const resource = quotaResourceLabel(quota);
+  // Same label as the quota banner and the /account row: translated, else the catalog name.
+  const resource = quotaResourceLabel(quota, t);
   if (!resource) return resolveLocaleKey(t, 'backendError.quotaExceededGeneric');
   const usage = quotaUsageText(quota, t);
   return usage

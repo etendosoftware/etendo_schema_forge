@@ -437,8 +437,8 @@ Three matching mechanisms coexist — know all three before adding a new backend
    `DetailView`'s `extractErrorMessage` does; `useEntity`'s `extractErrorMessage` forwards the body's
    identity the same way. `parseBackendErrorMessage(res)` + `translateBackendError(msg, ui)` drops
    the identity, so do not use that pair on a path that can receive a keyed refusal (ETP-5692).
-   A failed `runPreUnpost` carries `messageKeys`/`messageParams` too; pass
-   `preUnpostErrorIdentity(pre)` as the options.
+   A post/unpost refused for a role without *Show Accounting Fields* (ETP-5684) carries
+   `ETGO_AccountingAccessDenied`, mapped to `backendError.accountingAccessDenied`.
 
    **A key need not be an AD_MESSAGE.** Since ETP-5692 the invoice post/unpost refusals of
    `com.etendoerp.go` (`CompletedInvoiceWriteFence`, `InvoicePostingGate`,

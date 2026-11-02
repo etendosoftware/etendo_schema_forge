@@ -82,13 +82,9 @@ function renderAmortizationBulkActions(ctx) {
  *   (`useOrderWindow.jsx:132-160`). `validateConfirmEligibility` is imported straight from
  *   `AmortizationBulkActions.jsx` rather than re-implemented, so the row kebab and the bulk
  *   bar can never silently drift on what "eligible to confirm" means.
- * - `reactivate`: needs no async check (its only precondition is
- *   `Processed='Y' AND Posted<>'Y'`, both already on the row), so it stays fully
- *   declarative: `neoAction: 'Processed'` + `preUnpost: true` — the exact same
- *   unpost-then-reactivate mechanism the bulk bar's `preUnpostActions={['reactivate']}`
- *   already uses, now supported by `RowQuickActions.jsx` itself (see that component's
- *   docblock for the `neoActionName`/`preUnpost` extension this window's reactivate entry
- *   exercises).
+ * - `reactivate`: needs no async check (its only precondition, `Processed='Y'`, is
+ *   already on the row), so it stays fully declarative: `neoAction: 'Processed'`. A posted
+ *   row is un-posted by the server inside the reactivation (ETP-5684).
  *
  * **Toasting**: `RowQuickActions.jsx` deliberately never toasts for the declarative
  * `documentAction`/`neoAction` paths ("toast/snackbar is the host's responsibility" — see
@@ -102,9 +98,7 @@ function renderAmortizationBulkActions(ctx) {
  * **Third entry — `post` ("Contabilizar"), added alongside the bulk bar's own "Contabilizar"
  * button (`AmortizationBulkActions.jsx`).** Fully declarative like `reactivate`, no
  * `onClick`: its only precondition (`processed === 'Y' && !posted`) is already on the row,
- * synchronously, and `post` needs no preUnpost step (unlike `reactivate`, there is nothing
- * to reverse first — posting a not-yet-posted document is the base case, not a toggle back
- * from an already-posted one). `visible` reuses `isRowProcessed`/`isRowPosted` imported from
+ * synchronously. `visible` reuses `isRowProcessed`/`isRowPosted` imported from
  * `BulkDocumentAction.jsx` — the SAME predicates `postRowFilter`/`buildPostActions` use for
  * the bulk button — instead of a third hand-written copy of `row.posted === 'Y' || ...`.
  * `successKey: 'documentPosted'` matches `decisions.json → window.menuActions[1]`'s own
@@ -164,7 +158,6 @@ export default function AmortizationWindow(props) {
         labelKey: 'reactivate',
         visible: isConfirmed(row),
         neoAction: 'Processed',
-        preUnpost: true,
         successKey: 'reactivated',
       },
       {

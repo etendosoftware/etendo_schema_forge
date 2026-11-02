@@ -56,8 +56,7 @@
         "labelKey": "reactivate",
         "visibleWhenStatus": "CO",
         "documentAction": "RE",
-        "successKey": "reactivated",
-        "preUnpost": true
+        "successKey": "reactivated"
       },
       {
         "key": "post",
@@ -193,7 +192,8 @@
           "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
           "seq": 10,
-          "businessCritical": true
+          "businessCritical": true,
+          "agentPrompt": "The customer, as its id plus the name in businessPartner$_identifier. Names can repeat: to tell two apart, read their searchKey and taxID with one etendo_list on contacts/businessPartner filtered by id: {in: [ids]}."
         },
         "invoiceDate": {
           "grid": true,
@@ -201,7 +201,8 @@
           "searchable": true,
           "section": "principal",
           "seq": 30,
-          "businessCritical": true
+          "businessCritical": true,
+          "agentPrompt": "The invoice date. If omitted the server proposes today, as the form does. When the user names a date, or the invoice copies an earlier document, send that date explicitly."
         },
         "accountingDate": {
           "visibility": "editable",
@@ -210,7 +211,8 @@
           "section": "principal",
           "seq": 35,
           "readOnlyLogic": "@Posted@='Y'",
-          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post."
+          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post.",
+          "agentPrompt": "The date the invoice is posted to the ledger; it must fall in an open period. If omitted it follows the invoice date (today when that was omitted too)."
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -271,7 +273,7 @@
         },
         "documentAction": {
           "visibility": "system",
-          "agentPrompt": "Document workflow action for this sales invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it assigns the final document number, computes taxes and totals and creates the payment plan; a draft takes CO only (delete it to discard it). From documentStatus=CO (Completed): RE reactivates it back to DR, and the UI unposts the invoice first when it was already posted — so check the posted field and expect the accounting entries to be removed. RE is the only action of a completed invoice; correct an issued invoice by reactivating it or with a factura rectificativa made in the app. Only CO and RE are accepted as docAction: any other value is refused with 422 listing the allowed ones. Preconditions for CO: at least one line, a customer with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger, and posted is not a documentAction value (never send PO here): book a completed, not-posted invoice with etendo_action(action:'post'); remove the accounting entries of a completed AND posted invoice with etendo_action(action:'unpost'). Unposting is NOT reactivation (RE): the invoice stays CO, and only accountingDate, project, costcenter, line project/costcenter and the exchange rates become correctable — then post again. Do unpost, fix and post in one go, since a background accounting process may re-post an unposted invoice within ~5 minutes. Read documentStatus and posted with etendo_get before acting."
+          "agentPrompt": "Document workflow action for this sales invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). From documentStatus=DR (Draft): CO completes the invoice — it assigns the final document number, computes taxes and totals and creates the payment plan; a draft takes CO only (delete it to discard it). From documentStatus=CO (Completed): RE reactivates it back to DR; on a posted invoice the server removes its accounting entries first (un-post) and the answer lists steps [unpost, reactivate] — if the reactivation is then refused, the un-post stays and the answer says so in partial. RE is the only action of a completed invoice; correct an issued invoice by reactivating it or with a factura rectificativa made in the app. Only CO and RE are accepted as docAction: any other value is refused with 422 listing the allowed ones. Preconditions for CO: at least one line, a customer with payment terms, and an open period for the accounting date. Completing does NOT post to the ledger, and posted is not a documentAction value (never send PO here): book a completed, not-posted invoice with etendo_action(action:'post'); remove the accounting entries of a completed AND posted invoice with etendo_action(action:'unpost'). post and unpost need the showAccountingFields capability: without it they are refused with 403 and the posted field is not returned. Unposting is NOT reactivation (RE): the invoice stays CO, and only accountingDate, project, costcenter, line project/costcenter and the exchange rates become correctable — then post again. Do unpost, fix and post in one go, since a background accounting process may re-post an unposted invoice within ~5 minutes. Read documentStatus and posted with etendo_get before acting."
         },
         "createLinesFromOrder": {
           "visibility": "discarded"
@@ -697,7 +699,8 @@
           "inputMode": "selector",
           "forceCalloutFields": [
             "lineNetAmount"
-          ]
+          ],
+          "agentPrompt": "Normally omit it: the server picks the tax from the product's tax category and the customer's tax category (a customer under 'Recargo de Equivalencia' gets the tax with the surcharge), as the form does. To see or change the options for this line, call etendo_selectors for 'tax' with recordContext {product, businessPartner, invoiceDate} — not the tax/tax catalogue, which lists every rate, including inactive and future ones."
         },
         "lineNetAmount": {
           "visibility": "system",
@@ -953,7 +956,39 @@
       }
     },
     "accounting": {
-      "exclude": true
+      "readOnly": true,
+      "name": "accounting",
+      "renderTab": false,
+      "_note": "ETP-5852 (M-81): read-only journal lines of the invoice for agents, as purchase-invoice/accounting. renderTab:false — the app shows no accounting tab on either invoice window.",
+      "fields": {
+        "account": {
+          "grid": true,
+          "reference": null,
+          "inputMode": null
+        },
+        "accountingDate": {
+          "grid": true
+        },
+        "postingType": {
+          "visibility": "readOnly"
+        },
+        "debit": {
+          "grid": true
+        },
+        "credit": {
+          "grid": true
+        },
+        "description": {
+          "visibility": "readOnly"
+        },
+        "accountingFact": {
+          "name": "factAcct"
+        },
+        "table": {
+          "name": "adTable"
+        }
+      },
+      "javaQualifier": "factAcctHandler"
     },
     "exchangeRates": {
       "publicApi": { "readOnly": true },

@@ -38,6 +38,8 @@ import {
 import { useLogout } from '@/auth/useLogout.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { useEnvironmentAccessGate } from '@/hooks/useEnvironmentAccessGate.js';
+import { ACCOUNT_PATH, useSubscriptionPath } from '@/lib/myCompanies/subscriptionPath.js';
+import { MY_COMPANIES_SOURCES } from '@/lib/myCompanies/telemetry.js';
 import { useAccessLoadError } from '@/hooks/useAccessLoadError.js';
 import { clearAccessLoadError, recordAccessLoadError } from '@/lib/accessLoadError.js';
 import { useUI } from '@/i18n';
@@ -254,7 +256,8 @@ const BLOCKED_ACCESS_CONTENT = {
     titleKey: 'blockedAccessSubscriptionRequiredTitle',
     messageKey: 'blockedAccessSubscriptionRequiredMessage',
     ctaKey: 'blockedAccessManageSubscriptionCta',
-    ctaPath: '/account',
+    // ETP-6060 — resolved by useSubscriptionPath: "Mis empresas" with the my-companies-page flag on.
+    ctaPath: ACCOUNT_PATH,
   },
 };
 
@@ -310,6 +313,7 @@ function BlockedAccessScreen({ decision }) {
   const companyName = companies.find((env) => env.clientId === currentClientId)?.clientName
     || ui('yourCompany');
   const canSwitch = companies.some((env) => env.clientId !== currentClientId);
+  const subscriptionPath = useSubscriptionPath(currentClientId, MY_COMPANIES_SOURCES.BLOCKED_SCREEN);
   // ETP-5742 — a re-subscription paid in this visit (a second click after paying) or the one the
   // provider sent the browser back with: either way the screen waits for it to apply.
   const [searchParams] = useSearchParams();
@@ -373,7 +377,9 @@ function BlockedAccessScreen({ decision }) {
             <Button
               type="button"
               className="mt-4"
-              onClick={() => navigate(content.ctaPath)}
+              onClick={() => navigate(
+                content.ctaPath === ACCOUNT_PATH ? subscriptionPath : content.ctaPath,
+              )}
               data-testid="blocked-access-cta"
             >
               {ui(content.ctaKey)}

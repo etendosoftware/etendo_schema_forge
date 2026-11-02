@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-28T16:07:37.572Z",
-  "checksum": "b12c789a68dc35bb",
+  "updatedAt": "2026-10-29T17:30:54.688Z",
+  "checksum": "f3841b9b4bb0e041",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -84,6 +84,12 @@
           "labelKey": "price",
           "component": "ProductPriceBar",
           "tabOrder": 100
+        },
+        {
+          "key": "movements",
+          "labelKey": "productMovements",
+          "component": "ProductMovementsTab",
+          "tabOrder": 800
         }
       ],
       "layoutType": "gallery",
@@ -1787,6 +1793,25 @@
             }
           },
           {
+            "name": "transactionCost",
+            "apiKey": "transactionCost",
+            "column": "TransactionCost",
+            "label": "Trx Original Cost",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "validation": {
+              "maxLength": 12
+            },
+            "displayLogic": {
+              "raw": "@IsCostCalculated@='Y'",
+              "evaluable": true
+            }
+          },
+          {
             "name": "totalCost",
             "apiKey": "totalCost",
             "column": "TotalCost",
@@ -1823,6 +1848,46 @@
               "required": true,
               "maxLength": 22
             }
+          },
+          {
+            "name": "etgoDocKind",
+            "apiKey": "etgoDocKind",
+            "column": "EM_Etgo_Doc_Kind",
+            "label": "EM_Etgo_Doc_Kind",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "etgoWarehouse",
+            "apiKey": "etgoWarehouse",
+            "column": "EM_Etgo_Warehouse_ID",
+            "label": "EM_Etgo_Warehouse_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "reference": "Warehouse",
+            "inputMode": "selector",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -1834,7 +1899,8 @@
               "source": "context.organization"
             }
           }
-        ]
+        ],
+        "javaQualifier": "productTransactionsHandler"
       },
       "productCharacteristic": {
         "tableName": "M_Product_Ch",
@@ -2641,6 +2707,12 @@
           "labelKey": "price",
           "component": "ProductPriceBar",
           "tabOrder": 100
+        },
+        {
+          "key": "movements",
+          "labelKey": "productMovements",
+          "component": "ProductMovementsTab",
+          "tabOrder": 800
         }
       ],
       "layoutType": "gallery",
@@ -4908,7 +4980,7 @@
             "apiKey": "transactionCost",
             "column": "TransactionCost",
             "type": "amount",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5070,8 +5142,25 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoDocKind",
+            "apiKey": "etgoDocKind",
+            "column": "EM_Etgo_Doc_Kind",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "etgoWarehouse",
+            "apiKey": "etgoWarehouse",
+            "column": "EM_Etgo_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
           }
-        ]
+        ],
+        "javaQualifier": "productTransactionsHandler"
       },
       "productCharacteristic": {
         "tableName": "M_Product_Ch",
@@ -6330,6 +6419,14 @@
         "url": "/sws/neo/product/transactions/selectors/uOM"
       },
       {
+        "entity": "transactions",
+        "field": "etgoWarehouse",
+        "column": "EM_Etgo_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/transactions/selectors/etgoWarehouse"
+      },
+      {
         "entity": "productCharacteristic",
         "field": "characteristic",
         "column": "M_Characteristic_ID",
@@ -6913,6 +7010,14 @@
         "description": "Display logic for 'totalCost' in transactions should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-transactions-transactionCost",
+        "category": "displaylogic-evaluable",
+        "entity": "transactions",
+        "field": "transactionCost",
+        "runner": "node",
+        "description": "Display logic for 'transactionCost' in transactions should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-valid-product-returnable",
         "category": "displaylogic-valid",
         "entity": "product",
@@ -6967,6 +7072,14 @@
         "field": "totalCost",
         "runner": "node",
         "description": "Display logic for 'totalCost' in transactions should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-transactions-transactionCost",
+        "category": "displaylogic-valid",
+        "entity": "transactions",
+        "field": "transactionCost",
+        "runner": "node",
+        "description": "Display logic for 'transactionCost' in transactions should be valid JS"
       },
       {
         "id": "t-field-presence-accounting-fixedAsset",
@@ -7553,6 +7666,22 @@
         "description": "Field 'unitCost' should be present in transactionAdjustments"
       },
       {
+        "id": "t-field-presence-transactions-etgoDocKind",
+        "category": "field-presence",
+        "entity": "transactions",
+        "field": "etgoDocKind",
+        "runner": "node",
+        "description": "Field 'etgoDocKind' should be present in transactions"
+      },
+      {
+        "id": "t-field-presence-transactions-etgoWarehouse",
+        "category": "field-presence",
+        "entity": "transactions",
+        "field": "etgoWarehouse",
+        "runner": "node",
+        "description": "Field 'etgoWarehouse' should be present in transactions"
+      },
+      {
         "id": "t-field-presence-transactions-movementDate",
         "category": "field-presence",
         "entity": "transactions",
@@ -7599,6 +7728,14 @@
         "field": "totalCost",
         "runner": "node",
         "description": "Field 'totalCost' should be present in transactions"
+      },
+      {
+        "id": "t-field-presence-transactions-transactionCost",
+        "category": "field-presence",
+        "entity": "transactions",
+        "field": "transactionCost",
+        "runner": "node",
+        "description": "Field 'transactionCost' should be present in transactions"
       },
       {
         "id": "t-field-presence-transactions-uOM",
@@ -8193,6 +8330,22 @@
         "description": "Field 'unitCost' should have type 'boolean' in transactionAdjustments"
       },
       {
+        "id": "t-field-type-transactions-etgoDocKind",
+        "category": "field-type",
+        "entity": "transactions",
+        "field": "etgoDocKind",
+        "runner": "node",
+        "description": "Field 'etgoDocKind' should have type 'string' in transactions"
+      },
+      {
+        "id": "t-field-type-transactions-etgoWarehouse",
+        "category": "field-type",
+        "entity": "transactions",
+        "field": "etgoWarehouse",
+        "runner": "node",
+        "description": "Field 'etgoWarehouse' should have type 'string' in transactions"
+      },
+      {
         "id": "t-field-type-transactions-movementDate",
         "category": "field-type",
         "entity": "transactions",
@@ -8239,6 +8392,14 @@
         "field": "totalCost",
         "runner": "node",
         "description": "Field 'totalCost' should have type 'number' in transactions"
+      },
+      {
+        "id": "t-field-type-transactions-transactionCost",
+        "category": "field-type",
+        "entity": "transactions",
+        "field": "transactionCost",
+        "runner": "node",
+        "description": "Field 'transactionCost' should have type 'number' in transactions"
       },
       {
         "id": "t-field-type-transactions-uOM",
@@ -9545,6 +9706,14 @@
         "field": "costAdjustmentLine",
         "runner": "node",
         "description": "Selector endpoint for 'costAdjustmentLine' in transactionAdjustments should exist"
+      },
+      {
+        "id": "t-selector-endpoint-transactions-etgoWarehouse",
+        "category": "selector-endpoint",
+        "entity": "transactions",
+        "field": "etgoWarehouse",
+        "runner": "node",
+        "description": "Selector endpoint for 'etgoWarehouse' in transactions should exist"
       },
       {
         "id": "t-selector-endpoint-transactions-organization",
@@ -11571,14 +11740,6 @@
         "description": "System field 'projectIssue' should exist in backend but not frontend for transactions"
       },
       {
-        "id": "t-system-field-transactions-transactionCost",
-        "category": "system-field",
-        "entity": "transactions",
-        "field": "transactionCost",
-        "runner": "node",
-        "description": "System field 'transactionCost' should exist in backend but not frontend for transactions"
-      },
-      {
         "id": "t-system-field-transactions-transactionProcessDate",
         "category": "system-field",
         "entity": "transactions",
@@ -11696,25 +11857,25 @@
       }
     ],
     "summary": {
-      "total": 671,
+      "total": 679,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
         "default-value-type": 26,
-        "displaylogic-evaluable": 7,
-        "displaylogic-valid": 7,
-        "field-presence": 80,
-        "field-type": 80,
+        "displaylogic-evaluable": 8,
+        "displaylogic-valid": 8,
+        "field-presence": 83,
+        "field-type": 83,
         "readonlylogic-evaluable": 5,
         "readonlylogic-valid": 5,
         "rule-declared": 142,
         "searchable-filters": 5,
-        "selector-endpoint": 26,
-        "system-field": 255,
+        "selector-endpoint": 27,
+        "system-field": 254,
         "visibility": 12
       },
       "byRunner": {
-        "node": 671,
+        "node": 679,
         "junit": 0
       }
     }

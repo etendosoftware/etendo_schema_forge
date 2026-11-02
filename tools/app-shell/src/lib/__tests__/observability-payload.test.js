@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/observability/payload.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -160,6 +161,37 @@ describe('observability payload normalization', () => {
       }),
       {}
     );
+  });
+
+  it('keeps role_groups as a list of known values only (ETP-6043)', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({ role_groups: ['sales', 'warehouse'] }),
+      { role_groups: ['sales', 'warehouse'] }
+    );
+    assert.deepEqual(
+      sanitizeEventProperties({ role_groups: ['warehouse', 'Acme SL Admin', 'warehouse', 3] }),
+      { role_groups: ['warehouse'] }
+    );
+  });
+
+  it('drops role_groups when it is not a list or keeps no known value', () => {
+    assert.deepEqual(sanitizeEventProperties({ role_groups: 'warehouse' }), {});
+    assert.deepEqual(sanitizeEventProperties({ role_groups: [] }), {});
+    assert.deepEqual(sanitizeEventProperties({ role_groups: ['Acme SL Admin'] }), {});
+  });
+
+  it('carries role_groups from the common context into every event', () => {
+    const payload = buildEventPayload({
+      context: { app: 'app-shell', role_groups: ['warehouse'] },
+      properties: { action: 'view' },
+      timestamp: '2026-10-29T00:00:00.000Z',
+    });
+
+    assert.deepEqual(payload.role_groups, ['warehouse']);
+  });
+
+  it('still drops a list on any other key', () => {
+    assert.deepEqual(sanitizeEventProperties({ status: ['opened'], tags: ['a'] }), {});
   });
 
   it('gives the denylist priority over the allowlist', () => {

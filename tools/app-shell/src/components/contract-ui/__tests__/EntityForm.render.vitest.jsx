@@ -89,6 +89,11 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 vi.mock('@/lib/selectorCatalog.js', () => ({
   getCatalogOptions: () => [],
 }));
+// ETP-5684 — the capability map a `visibleWhenCapability` field is gated on.
+const capabilityState = vi.hoisted(() => ({ capabilities: {} }));
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
+  useCapabilitiesSafe: () => capabilityState.capabilities,
+}));
 
 import { EntityForm } from '../EntityForm.jsx';
 
@@ -536,6 +541,37 @@ describe('EntityForm — extended render coverage', () => {
     expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.getByText('C')).toBeInTheDocument();
     expect(screen.queryByText('B')).not.toBeInTheDocument();
+  });
+
+  // --- Capability-gated fields (ETP-5684) ---
+
+  const GATED_FIELDS = [
+    { key: 'name', label: 'Name', type: 'text', column: 'Name' },
+    { key: 'acctStatus', label: 'AcctStatus', type: 'text', column: 'EM_Etblkp_Accountingstatus',
+      readOnly: true, visibleWhenCapability: 'showAccountingFields' },
+  ];
+
+  it('hides a capability-gated field without the capability, but keeps it registered', () => {
+    capabilityState.capabilities = {};
+    const registerFields = vi.fn();
+    render(<EntityForm fields={GATED_FIELDS} data={{}} onChange={vi.fn()} registerFields={registerFields} />);
+    expect(screen.getByText('Name')).toBeInTheDocument();
+    expect(screen.queryByText('EM_Etblkp_Accountingstatus')).not.toBeInTheDocument();
+    const registered = registerFields.mock.calls.find(([list]) => list)?.[0] ?? [];
+    expect(registered.map(f => f.key)).toContain('acctStatus');
+  });
+
+  it('shows a capability-gated field when the role holds the capability', () => {
+    capabilityState.capabilities = { showAccountingFields: true };
+    render(<EntityForm fields={GATED_FIELDS} data={{}} onChange={vi.fn()} />);
+    expect(screen.getByText('EM_Etblkp_Accountingstatus')).toBeInTheDocument();
+    capabilityState.capabilities = {};
+  });
+
+  it('renders nothing when the only field is gated away', () => {
+    capabilityState.capabilities = {};
+    const { container } = render(<EntityForm fields={[GATED_FIELDS[1]]} data={{}} onChange={vi.fn()} />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   // --- Image field layout ---

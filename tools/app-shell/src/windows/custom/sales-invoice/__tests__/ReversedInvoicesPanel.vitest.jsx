@@ -1564,16 +1564,16 @@ describe('ReversedInvoicesPanel personal columns', () => {
   it.each(['sales-invoice', 'purchase-invoice'])('preserves expansion and inline group edits after restoring the %s view', async (spec) => {
     gridBoundary.enabled = true;
     gridBoundary.active = true;
-    gridBoundary.keys = ['grandTotalAmount', 'reversedInvoice'];
-    gridBoundary.widths = { grandTotalAmount: 210 };
+    gridBoundary.keys = ['reversedGrandTotalAmount', 'reversedInvoice'];
+    gridBoundary.widths = { reversedGrandTotalAmount: 210 };
     const { container } = renderPanel({ apiBaseUrl: `/sws/neo/${spec}`, lines: [LINE()], years: [{ id: 'y2026', fiscalYear: '2026' }] });
     await screen.findAllByText('10000067');
     const row = container.querySelector('tbody tr');
     expect([...row.querySelectorAll('[data-grid-column]')].map(cell => cell.dataset.gridColumn)).toEqual([
-      'grandTotalAmount', 'reversedInvoice',
+      'reversedGrandTotalAmount', 'reversedInvoice',
     ]);
     expect(row.children).toHaveLength(4);
-    expect(row.querySelector('[data-grid-column="grandTotalAmount"]')).toHaveStyle({ width: '210px' });
+    expect(row.querySelector('[data-grid-column="reversedGrandTotalAmount"]')).toHaveStyle({ width: '210px' });
     expect(screen.getByTestId('btn__deleteLine').closest('td')).toBe(row.lastElementChild);
     await expandFirstRow();
     expect(row.nextElementSibling.querySelector('td')).toHaveAttribute('colspan', '4');

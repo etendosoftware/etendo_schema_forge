@@ -43,7 +43,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
 - **Independent accounting date (ETP-4531)**: scope was explicitly confirmed to keep `accountingDate` fully read-only here — no change made. Verified against live AD metadata: `A_Amortization` has zero `AD_Column.AD_Callout_ID` entries on any column (no callouts wired at all), so no field edit — in Classic or in `com.etendoerp.go`'s callout cascade — can ever write into `accountingDate`. Combined with its `readOnly` visibility, this field is immutable by construction; nothing else in this window can recalculate it.
 - **Line lock**: all line fields carry `readOnlyLogic: @Processed@='Y'` and become read-only once the document is processed.
 - **Confirmar button**: wired via `draftMode.processField: "Processed"`. Only visible while draft; disabled when no lines; opens the confirm modal. The modal fetches the record and line count independently, calculates the total from line amounts (not from the stored header field), shows a warning, and submits `POST /action/Processed`. On success, the detail view refetches the header.
-- **Reactivar menu action**: appears in the three-dot menu only when `processed='Y'`, regardless of the accounting `posted` value. It uses `preUnpost: true`, so posted records first call `/action/unpost` and then `/action/Processed`; unposted records skip the unpost step and only call `/action/Processed`. After success, the page reloads. The independent **Descontabilizar** menu action is intentionally not exposed for amortizations.
+- **Reactivar menu action**: appears in the three-dot menu only when `processed='Y'`, regardless of the accounting `posted` value. It calls `/action/Processed` alone; for a posted record the server un-posts it first, inside the reactivation (`AmortizationHeaderHandler` → `ReactivationUnpost`, ETP-5684). After success, the page reloads. The independent **Descontabilizar** menu action is intentionally not exposed for amortizations.
 - **Status pill**: `statusField: "processed"` in `decisions.json` causes DetailView to render a `DocumentStatusPill` next to the Cancel button. Values: `'Y'` → "✓ Procesado" (green/success), `'N'` → "Borrador" (neutral/grey). Tone mapping lives in `tools/app-shell/src/lib/statusBadge.js` (`getStatusTone`).
 - **Lines total footer**: computed from visible lines (`lines.reduce()`) so it updates immediately on any mutation — no server round-trip needed. `TOTALAMORTIZATION` on the header is kept in sync by `ETGO_A_AMORTLINE_TOTAL_TRG` (AFTER trigger on `A_AMORTIZATIONLINE`) and is the authoritative value shown in the list view column.
 - **New record currency default**: the `currency` field defaults to the org's functional currency via `defaultExpr: "@$C_Currency_ID@"` in decisions.json. Currency is classified `readOnly`, so it is displayed but never editable from this window.
@@ -104,7 +104,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - `statusField: "processed"` — drives the `DocumentStatusPill` in the toolbar (green for 'Y', grey for 'N').
   - `asset.grow: true` and `amortizationPercentage.grow: true` for balanced column distribution.
   - `draftMode: { processField: "Processed", label: "confirm", confirmModal: "AmortizationConfirmModal", disableWhenEmpty: true }`.
-  - `menuActions: [{ key: "reactivate", visibleWhenFieldTrue: "processed", preUnpost: true, columnName: "Processed" }]`; there is no standalone `unpost` action for amortizations.
+  - `menuActions: [{ key: "reactivate", visibleWhenFieldTrue: "processed", columnName: "Processed" }]`; there is no standalone `unpost` action for amortizations.
   - `hideDeleteButton: true`, `hideCreate: true`, `summaryFields: []`, `hidePrint: true`, `hideLink: true`.
   - `currency.defaultExpr: "@$C_Currency_ID@"`; `currency.visibility: "readOnly"`.
   - Header fields `name`, `accountingDate`, `startingDate`, `currency`: `visibility: "readOnly"`. Only `description` stays editable.
@@ -361,7 +361,7 @@ keys through as explicit props).
 ## ETP-4538 — Reactivate replaces Unpost on posted amortizations
 
 - The three-dot menu no longer exposes the independent **Descontabilizar** (`unpost`) action for amortization documents.
-- **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow. **ETP-5302:** that behaviour is unchanged, but it is no longer implemented inline in `DetailMoreActionsMenu.jsx` — the rule now lives in `tools/app-shell/src/lib/preUnpost.js` (`isPosted(row)` + `runPreUnpost({recordId, record, enabled, execute})`), shared with the list's bulk bar. **Update (ETP-5414):** Amortization now DOES mount `preUnpostActions` for its bulk "Reactivar" (`preUnpostActions={['reactivate']}` in `AmortizationBulkActions.jsx`) and its row-kebab "Reactivar" (`preUnpost: true` on the `menuActions` entry in `tools/app-shell/src/windows/custom/amortization/index.jsx`) — see the ETP-5414 section below for the full mechanism, including the residual grid-vs-DB race this introduces.
+- **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records the server un-posts before running the reactivation (ETP-5684); the UI only ever sends `Processed`. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow. **ETP-5302:** that behaviour is unchanged, but it is no longer implemented inline in `DetailMoreActionsMenu.jsx` — the rule now lives in `tools/app-shell/src/lib/preUnpost.js` (`isPosted(row)` + `runPreUnpost({recordId, record, enabled, execute})`), shared with the list's bulk bar. **Update (ETP-5414):** Amortization now DOES mount `preUnpostActions` for its bulk "Reactivar" (`preUnpostActions={['reactivate']}` in `AmortizationBulkActions.jsx`) and its row-kebab "Reactivar" (`preUnpost: true` on the `menuActions` entry in `tools/app-shell/src/windows/custom/amortization/index.jsx`) — see the ETP-5414 section below for the full mechanism, including the residual grid-vs-DB race this introduces. **ETP-5684 removed all of it:** the un-post moved to the server, so the bulk bar and both kebabs send `Processed` alone and a role without *Show Accounting Fields* can reactivate a posted amortization.
 - Role-based access restrictions for **Reactivar** are deferred until the role permissions model exists.
 
 ## ETP-4979 — List column-sort click was dead on the "Fecha contable" (desc-default) column
@@ -547,8 +547,8 @@ Because both intents share one wire action, `BulkDocumentAction.jsx` (the shared
 component) gained an optional `neoActionName` field per offered action, decoupling the
 dropdown/UI identity (`value: 'confirm'` / `value: 'reactivate'`) from the literal URL segment
 both map to (`neoActionName: 'Processed'`). `RowQuickActions.jsx` (the shared per-row kebab
-component) gained the same `neoActionName` field for symmetry, plus an optional `preUnpost` flag
-on a `neoAction`-typed `menuActions` entry (see Reactivar below).
+component) gained the same `neoActionName` field for symmetry (its `preUnpost` flag was removed
+in ETP-5684, see Reactivar below).
 
 **Contabilizar has no such ambiguity** — its wire action (`neoAction: 'post'`) is a real, distinct
 button/process, handled generically by `DocumentPostingService.handleAction` (the same bean
@@ -570,12 +570,11 @@ already proven in production by amortization's own pre-existing detail-kebab **P
   `AmortizationConfirmModal.jsx` (the single-record confirm dialog) already checked client-side —
   see "Known debt" below for why this validation exists ONLY on the client.
 - **Reactivar** — offered only for a row that IS confirmed (`processed === 'Y'`). No lines check.
-  If the row is also `posted === 'Y'`, the UI unposts first (`preUnpostActions={['reactivate']}`
-  on the bulk `<BulkDocumentAction>`, `preUnpost: true` on the row-kebab's `menuActions` entry) via
-  the shared `runPreUnpost`/`unpost` mechanism (`tools/app-shell/src/lib/preUnpost.js`) —
-  `POST /header/{id}/action/unpost`, handled by the same `DocumentPostingService` bean, which
-  deletes the `Fact_Acct` rows and sets `Posted='N'`. Only after that succeeds does the
-  `Processed` call run. **If the unpost genuinely cannot happen (accounting already settled,
+  If the row is also `posted === 'Y'`, the server un-posts it first, inside the reactivation
+  (ETP-5684: `AmortizationHeaderHandler` calls `ReactivationUnpost.unpostFirst` when the
+  `Processed` button hits an already-processed row), through the same `DocumentPostingService`
+  bean, which deletes the `Fact_Acct` rows and sets `Posted='N'`. Only after that succeeds does
+  the reactivation run; the UI sends `Processed` alone. **If the unpost genuinely cannot happen (accounting already settled,
   irreversible), the row fails naturally** — it lands in the bulk toast's "failed" bucket (or a
   row-kebab error toast) with the server's own message; it is never pre-filtered out as
   ineligible. This is a deliberate reversal from an earlier version of this feature, which

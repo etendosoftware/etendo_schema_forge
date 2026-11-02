@@ -857,6 +857,17 @@ describe('the account subscription', () => {
     assert.equal(calls[0][0], 'https://api.test/sws/go/billing/subscription');
   });
 
+  // ETP-6060 — a "Mis empresas" row names its company; the id is encoded into the query.
+  it('reads a named company subscription through the clientId query parameter', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ hasSubscription: false }));
+
+    await getSubscription('https://api.test', 'own 3&x');
+
+    assert.equal(calls[0][0],
+      'https://api.test/sws/go/billing/subscription?clientId=own%203%26x');
+  });
+
   // ETP-5443 REVIEW N3: a failed read of the subscription is its own error code, not the
   // generic checkout-creation one — see the doc comment on UPGRADE_ERROR_CODES.
   it('raises a stable error when the subscription is unavailable', async () => {

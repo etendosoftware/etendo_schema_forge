@@ -157,7 +157,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `artifacts/sales-order/custom/OrderCreateInvoice.jsx` (`ConfirmModal`) tracks `orderConfirmed`, `shipmentResult`, and `invoiceResult` in component state to make `handleConfirm` idempotent across retries. Each step is wrapped in a `!persistedResult` guard so retries never re-trigger a step that already succeeded, and the `onConfirmed` callback uses `currentX ?? persistedX` to ensure the result modal shows every document created during the multi-attempt confirmation, regardless of which attempt produced each one.
 - `artifacts/sales-order/custom/BulkOrderMoreMenu.jsx` proves the kebab-menu bulk creation flow that wraps `createDraftInvoice` / `createShipment` NeoHandlers in a `Promise.allSettled` loop with an aggregated result toast.
 - **ETP-5302 — the kebab's bulk actions no longer reload the page**: `ListView.jsx` now hands `refresh` (a stable in-place refetch) to the `bulkActions` slot context. `BulkOrderMoreMenu` accepts it and ends with `clearSelection()` → `showBulkActionToast(ui, result)` → `refresh()`, so "Crear facturas" / "Crear albaranes" keep the user's scroll position and active filters instead of rebooting the SPA. Its `runBulkOrderAction` helper now **returns** `{ ok, failed }` rather than writing it to `sessionStorage` itself — persisting is the caller's decision and happens only on the legacy fallback path, kept for a host mounted outside `ListView`'s slot. The same treatment was applied to `BulkDocumentAction` (the `Procesar` button beside this kebab) and to `artifacts/purchase-order/custom/BulkPurchaseOrderMoreMenu.jsx`. Note it calls the exported `showBulkActionToast(ui, result)`, not `useBulkActionToast()`: mounting the hook to reach `showResult` also installs its `sessionStorage`-draining effect, which would consume the caller's own persisted result before a fallback reload could hand it to the next mount. Full contract: `docs/ui-customization.md` §9e.
-- **ETP-5302 — orders deliberately do NOT carry `preUnpostActions`**: `BulkDocumentAction` gained a `preUnpostActions` prop so a bulk `RE` can reverse a posted record's accounting first, mirroring the `preUnpost: true` flag the detail kebab honours. `sales-invoice` and `purchase-invoice` mount it as `preUnpostActions={['RE']}`; **this window does not, on purpose**. Core's `C_ORDER_POST1.xml` has no `Posted` guard on its `RE` branch at all, so there is nothing to work around — unposting an order before reactivating it would be a gratuitous accounting reversal for no functional gain. Do not "harmonise" this by copying the invoice wiring onto the order windows.
+- **ETP-5302 — orders deliberately do NOT carry `preUnpostActions`**: `BulkDocumentAction` gained a `preUnpostActions` prop so a bulk `RE` can reverse a posted record's accounting first, mirroring the `preUnpost: true` flag the detail kebab honours. `sales-invoice` and `purchase-invoice` mount it as `preUnpostActions={['RE']}`; **this window does not, on purpose**. Core's `C_ORDER_POST1.xml` has no `Posted` guard on its `RE` branch at all, so there is nothing to work around — unposting an order before reactivating it would be a gratuitous accounting reversal for no functional gain. Do not "harmonise" this by copying the invoice wiring onto the order windows. **ETP-5684:** the prop no longer exists — reactivating a posted invoice or amortization un-posts on the server.
 - `artifacts/sales-order/custom/OrderReactivateBulkAction.jsx` is the thin wrapper that mounts the shared `BulkDocumentAction` with this window's `rowFilter` (`(row) => !row.hasLinkedDocuments`) and `labelKey="process"`.
 - **ETP-5302 — selection-bar button renamed to "Procesar", dropdown option renamed to "Confirmar"**: the floating selection-bar button is now mounted with `labelKey="process"` ("Procesar" / "Process") — the `confirmBulk` key it used before was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. In the same move, `BulkDocumentAction`'s `CO` entry (in both `buildInOutActions` and the default `buildActions`) switched from `labelKey: 'book'` to `labelKey: 'confirm'`, so the dropdown option that completes the document now reads "Confirmar" / "Confirm". The `RE` entry keeps `labelKey: 'reactivate'`. Labels only — the dialog, the per-row `Promise.allSettled` loop, the `documentAction=CO` call and the result toast are untouched. On this window the dropdown normally shows **Reactivar** (`RE`) for the completed rows it targets; the renamed `CO` entry appears only when a draft row is in the selection.
 - `artifacts/sales-order/custom/OrderCreateInvoice.jsx` exports `ManageDocsLauncher`, the sales-order-specific kebab item mounted from the row quick actions: it fetches shipments, invoices, and order lines, derives pending quantity and amount, and reuses `CreateDocsModal` to surface the same create-shipment/create-invoice flow available from the detail topbar. On success it now surfaces the shared `confirmResultPortal` result popup instead of closing silently (ETP-5295, see below).
@@ -333,7 +333,9 @@ Booking a draft order over MCP:
 
 Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates **only
 while the order has no linked documents** (same condition as the Reactivate menu action's
-`visibleWhenFieldFalse: hasLinkedDocuments`), `CO -> CL` closes pending quantities.
+`visibleWhenFieldFalse: hasLinkedDocuments`). `CL` (Close) is **not offered**: the window never shows
+it, and since the ETP-5704 QA round the backend refuses it on every sales order (see below), so the
+prompt tells the agent never to send it.
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre-CO total-discount
 line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
@@ -503,7 +505,7 @@ invoices never moved `qtyinvoiced`. Now that generated invoices are confirmed,
 that 400 is reliable. Do not expect a 409 here.
 
 **To modify a generated invoice**, the user reactivates it. `sales-invoice`
-exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+exposes a `reactivate` menu action (`documentAction: 'RE'`,
 `visibleWhenStatus: 'CO'` — `artifacts/sales-invoice/contract.json:26-34`), which
 is now the only route back to `DR`. The previous "review the draft before
 confirming it" workflow no longer exists on this path.
@@ -708,12 +710,34 @@ refusal on a stale screen (a shipment created from another tab after the list lo
 used to succeed silently. The `documentAction` agentPrompt's sentence "the process will reject it"
 is now true. Purchase orders are not covered (out of scope).
 
+### Close (`CL`) refused on every sales order — ETP-5704 QA (CP-20)
+
+The Sales Order window never offers Close (its only document menu action is Reactivate, and
+`documentAction` is a `system` field). Over MCP, `CL` on a completed order with a draft shipment
+left the order Closed with its pending quantities at 0 and the shipment dangling. Product decision:
+the backend refuses what the UI does not offer.
+
+- `SalesOrderHeaderHandler.handle()` refuses a POST of the `DocAction` button whose **effective**
+  value is `CL` — always, linked documents or not, in any status. Same resolution, 404 and
+  fail-closed rules as Reactivate: both now go through the shared `DocActionRefusalGuard`
+  (`DocActionRequestSupport.effectiveDocAction`), so `fieldValues.documentAction` vs `docAction`,
+  an empty body running a stored `CL`, and `"cl"` / `" CL"` / garbage are judged as the procedure
+  runs them. REST single, REST batch and MCP all reach this pre-hook.
+- **Refusal**: HTTP 400, `messageKeys: ["ETGO_SalesOrderCloseNotOffered"]`, text in the request
+  language (English / Spanish, `NeoMessageText`). A record or action that cannot be read answers
+  500 `ETGO_DocActionCheckFailed`; an unknown order id 404 `Record not found`.
+- **Advertised**: `etendo_schema(view:"actions", id)` reports `CL` under `unavailableValues` of
+  `documentAction` on every sales order (`SalesOrderHeaderHandler.unavailableActions`), with a
+  reason saying the app does not offer Close.
+- Purchase orders are untouched. No visible change in the UI: it never sends `CL`.
+
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 - `etendo_schema(spec, entity, view:"actions", id:<sales order id>)` says `availableNow` / `unavailableReason` per action for that
-  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes `CL` or `RE`.
+  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes only `RE` (`CL`
+  is not offered and is also reported under `unavailableValues` — see the ETP-5704 QA section above).
   `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
-  behind the UI's `hasLinkedDocuments` flag. Advice only: nothing is blocked by it.
+  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents and CL are also refused by the pre-hook (see the ETP-5704 sections).
 - `createShipment` and `createDraftInvoice` applies to a completed order only.
 - The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
   they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
@@ -756,3 +780,23 @@ window does (the exchange rate follows the currency, `1` in the company's own; n
 price the order in it) and the order date is also the accounting date. See `purchase-order.md`
 ("Header validations over MCP `etendo_update`") and
 `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41.
+
+## Agent prompts on order date and line tax — ETP-5852
+
+`orderDate` (server proposes today; send the user's date, M-31) and `lines.tax` (resolved from product and customer tax categories, options through `etendo_selectors`, M-35/M-79).
+
+## Order date and accounting date — ETP-5852
+
+`orderDate.agentPrompt` also says the accounting date always follows the order date (`mirrorAccountingDate`, ETP-4531), so an agent changing it expects both to move. Feedback M-183.
+
+## Voided order lines — ETP-5852
+
+`lines.lineGrossAmount.agentPrompt`: on a voided order the line keeps its gross amount while quantity and net drop to 0 (checked live), so agents read the header status before adding lines up. Feedback M-240.
+
+## Cancelling a line — ETP-5852
+
+`lines.agentPrompt`: a single line of a booked order cannot be cancelled; reactivate and edit while there are no linked documents, otherwise close the order (CL). Feedback M-123.
+
+## Agent prompt on the business partner — ETP-5852
+
+`businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.

@@ -427,3 +427,7 @@ new name findable there, the window declares `window.agentPrompt` → `agent-pro
 (persisted to `ETGO_SF_SPEC.AGENT_PROMPT`), which names the old spec and the create/complete/post flow. It is not
 set as `ETGO_SF_SPEC.DESCRIPTION`: the window push writes `description = null` on every upsert, so a hand-set
 description would not survive `make regen PUSH_TO_NEO=1`.
+
+## Agent prompt on journal lines — ETP-5852
+
+`entities.lines.agentPrompt` tells agents that a journal line has no description (dropped in ETP-5210) and that the note goes in the header `description`. Feedback M-104.
