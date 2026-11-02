@@ -1537,6 +1537,77 @@
           ]
         }
       ]
+    },
+    {
+      "id": "invoice-inbox",
+      "description": "Invoice Inbox (epic ETP-6046): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
+      "owner": "ivanrobledofutit",
+      "jira": "ETP-6047",
+      "created": "2026-11-02",
+      "flag": {
+        "key": "invoice-inbox",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag, delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and (once ETP-6049 adds it) the INVOICE_INBOX key in flag-keys.js with its toggle points; delete the flag object, keep this entry.",
+        "symbols": [
+          "invoice-inbox",
+          "FLAG_INVOICE_INBOX",
+          "InvoiceInboxFlag"
+        ],
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js yet (ETP-6049 adds INVOICE_INBOX when there is UI). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator."
+      },
+      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone.",
+      "paths": {
+        "frontend": [],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxFlag.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. GoFeatureFlags.java is framework. Shared toggle point still to be written (removal cost): the inbox upload endpoint of ETP-6047 in com.etendoerp.go.",
+      "testSpecs": {
+        "$testSpecsComment": "Backend specs are tester-go's. The gate test is written; the upload endpoint toggle point needs its own coverage when it lands. The environment-variable spelling of the local arm cannot be set from the JVM, so only the property is tested.",
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxFlagTest.java",
+            "note": "Covers: isEnabled(email, clientId) publishes the targeting key, Email and lowercase email plus clientId to the provider, end to end through GoFeatureFlags into a capturing provider; a targeted account reads true and a non-targeted one false; blank or null email -> clientId only, no targeting key, default false; isEnabled() passes GoAccountResolver.currentAccountEmail() and the OBContext tenant through; no OBContext or no client -> null client id, no throw; unset, non-boolean and failing provider all read false; local property arm (etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX) true/false."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "web-key-with-ui",
+          "kind": "scope",
+          "note": "No key in tools/app-shell/src/lib/flags/flag-keys.js on purpose. Story ETP-6049 adds INVOICE_INBOX when the inbox has a UI. Web client and backend use different targeting keys, so the Datadog rules must be written on the lowercase `email` attribute only.",
+          "refs": [
+            "ETP-6049"
+          ]
+        },
+        {
+          "id": "upload-endpoint-gate",
+          "kind": "open",
+          "note": "The toggle point is not written yet: the upload endpoint of story ETP-6047 must call InvoiceInboxFlag.isEnabled() at request entry and refuse before enqueuing OCR. The OCR worker must not re-evaluate the flag. Add the endpoint path to paths.backend when it lands.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`invoice-inbox` (ETP-6047)'"
+          ]
+        },
+        {
+          "id": "neo-spec-and-role-access",
+          "kind": "scope",
+          "note": "The NEO spec and the role access matrix of the Invoice Inbox window (see ETP-4878) are not part of this flag change.",
+          "refs": [
+            "ETP-4878"
+          ]
+        },
+        {
+          "id": "ttl-to-confirm",
+          "kind": "precondition",
+          "note": "The TTL 2027-01-31 is provisional and must be confirmed with product before the flag is turned on anywhere shared.",
+          "refs": [
+            "ETP-6046"
+          ]
+        }
+      ]
     }
   ]
 }
