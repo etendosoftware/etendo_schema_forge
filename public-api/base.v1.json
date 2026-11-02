@@ -667,7 +667,8 @@
           "direction": "inout",
           "internalPath": "movementQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -955,7 +956,8 @@
           "direction": "inout",
           "internalPath": "movementQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -973,7 +975,8 @@
           "direction": "out",
           "internalPath": "orderQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1242,7 +1245,8 @@
           "direction": "inout",
           "internalPath": "movementQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1269,7 +1273,8 @@
           "direction": "out",
           "internalPath": "orderQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1465,7 +1470,8 @@
           "direction": "inout",
           "internalPath": "movementQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1581,7 +1587,8 @@
           "direction": "out",
           "internalPath": "quantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1867,7 +1874,8 @@
           "direction": "out",
           "internalPath": "quantityOrderBook",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1876,7 +1884,8 @@
           "direction": "inout",
           "internalPath": "quantityCount",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1894,7 +1903,8 @@
           "direction": "out",
           "internalPath": "bookQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -1913,7 +1923,8 @@
           "direction": "out",
           "internalPath": "etgoQtydiff",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -2565,7 +2576,8 @@
           "direction": "inout",
           "internalPath": "invoicedQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -2574,7 +2586,8 @@
           "direction": "inout",
           "internalPath": "listPrice",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -2714,7 +2727,8 @@
           "direction": "out",
           "internalPath": "rate",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3013,7 +3027,8 @@
           "direction": "inout",
           "internalPath": "orderedQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3022,7 +3037,8 @@
           "direction": "inout",
           "internalPath": "listPrice",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3300,7 +3316,8 @@
           "direction": "inout",
           "internalPath": "movementQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3336,7 +3353,8 @@
           "direction": "out",
           "internalPath": "orderQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3525,7 +3543,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -3572,7 +3590,8 @@
           "direction": "inout",
           "internalPath": "movementQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3599,7 +3618,8 @@
           "direction": "out",
           "internalPath": "orderQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3642,7 +3662,7 @@
       },
       "source": {
         "artifact": "return-to-vendor-shipment",
-        "contractVersion": "0.6.0",
+        "contractVersion": "0.7.0",
         "backendEntity": true
       }
     },
@@ -3944,7 +3964,8 @@
           "direction": "inout",
           "internalPath": "invoicedQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -3953,7 +3974,8 @@
           "direction": "inout",
           "internalPath": "listPrice",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -4094,7 +4116,8 @@
           "direction": "out",
           "internalPath": "rate",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -4384,7 +4407,8 @@
           "direction": "inout",
           "internalPath": "orderedQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -4393,7 +4417,8 @@
           "direction": "inout",
           "internalPath": "listPrice",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -4704,7 +4729,8 @@
           "direction": "inout",
           "internalPath": "orderedQuantity",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },
@@ -4713,7 +4739,8 @@
           "direction": "inout",
           "internalPath": "listPrice",
           "dataType": {
-            "type": "string"
+            "type": "number",
+            "format": "double"
           },
           "reference": null
         },

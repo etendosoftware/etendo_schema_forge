@@ -216,13 +216,21 @@ export function publicFieldName(internalName) {
     .toLowerCase();
 }
 
+// Maps a contract field type to the JSON type NEO answers for it. Every numeric
+// AD reference (amount, price, quantity, generic number) is a JSON number; the
+// contract spells date-time `dateTime` (`datetime` is kept for older contracts).
+// Everything else (ids, list codes, buttons, text) is a string.
 function openApiType(fieldType) {
   switch (fieldType) {
     case 'boolean': return { type: 'boolean' };
     case 'integer': return { type: 'integer', format: 'int32' };
     case 'decimal':
-    case 'amount': return { type: 'number', format: 'double' };
+    case 'amount':
+    case 'price':
+    case 'quantity':
+    case 'number': return { type: 'number', format: 'double' };
     case 'date': return { type: 'string', format: 'date' };
+    case 'dateTime':
     case 'datetime': return { type: 'string', format: 'date-time' };
     default: return { type: 'string' };
   }

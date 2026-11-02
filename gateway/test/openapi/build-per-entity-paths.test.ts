@@ -61,8 +61,8 @@ test('uses declared field data types in response schemas', () => {
   typedSchema.entities.product.fields.active = { publicApi: true, direction: 'out', internalPath: 'active', dataType: { type: 'boolean' } };
   typedSchema.entities.product.fields.weight = { publicApi: true, direction: 'out', internalPath: 'weight', dataType: { type: 'number', format: 'double' } };
   const properties = buildPerEntityOpenApiPaths(typedSchema)['/api/v1/product'].get.responses['200'].content['application/json'].schema.properties.data.items.properties.attributes.properties;
-  assert.deepEqual(properties.active, { type: 'boolean' });
-  assert.deepEqual(properties.weight, { type: 'number', format: 'double' });
+  assert.deepEqual(properties.active, { type: 'boolean', nullable: true });
+  assert.deepEqual(properties.weight, { type: 'number', format: 'double', nullable: true });
 });
 
 test('does not leak internal fields not marked publicApi', () => {
@@ -394,4 +394,42 @@ test('a write body lists only writable fields, marks the declared required ones 
   assert.deepEqual(Object.keys(read.properties.attributes.properties).sort(), ['name', 'sale_price', 'search_key']);
   assert.equal(read.properties.attributes.required, undefined);
   assert.ok(read.properties.relationships.properties.category);
+});
+
+// ---- ETP-6052: an empty value is answered as null --------------------------
+
+test('response attributes and to-one relationships accept null; the resource id and request attributes do not', () => {
+  const nullable = structuredClone(writableSchema) as any;
+  nullable.entities.product.fields.sale_price = { publicApi: true, direction: 'out', internalPath: 'salePrice', type: 'passthrough', dataType: { type: 'number', format: 'double' }, handlerId: null };
+  nullable.entities.product.fields.status = { publicApi: true, direction: 'inout', internalPath: 'status', type: 'passthrough', dataType: { type: 'string', enum: ['DR', 'CO'] }, handlerId: null };
+  nullable.entities.product.fields.category = {
+    publicApi: true, direction: 'inout', internalPath: 'productCategory', type: 'passthrough', handlerId: null,
+    relationship: { resource: 'product-category', cardinality: 'one', foreignKey: 'category' },
+  };
+  const paths = buildPerEntityOpenApiPaths(nullable);
+  const responses = [
+    paths['/api/v1/product'].get.responses['200'].content!['application/json'].schema.properties!.data.items,
+    paths['/api/v1/product/{id}'].get.responses['200'].content!['application/json'].schema.properties!.data,
+    paths['/api/v1/product'].post.responses['201'].content!['application/json'].schema.properties!.data,
+    paths['/api/v1/product/{id}'].patch.responses['200'].content!['application/json'].schema.properties!.data,
+  ] as any[];
+  for (const resource of responses) {
+    const attributes = resource.properties.attributes.properties;
+    assert.deepEqual(attributes.sale_price, { type: 'number', format: 'double', nullable: true });
+    assert.deepEqual(attributes.name, { type: 'string', nullable: true });
+    assert.deepEqual(attributes.status, { type: 'string', enum: ['DR', 'CO', null], nullable: true }, 'OpenAPI 3.0: an enum must list null too');
+    assert.equal(resource.properties.relationships.properties.category.properties.data.nullable, true);
+    assert.equal(resource.properties.id.nullable, undefined, 'a resource id is never null');
+  }
+  const body = paths['/api/v1/product'].post.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.deepEqual(body.properties.attributes.properties.status, { type: 'string', enum: ['DR', 'CO'] }, 'request attributes keep their plain type');
+  assert.equal(body.properties.relationships.properties.category.properties.data.nullable, true, '{ "data": null } clears a relationship on write');
+  assert.deepEqual(nullable.entities.product.fields.status.dataType, { type: 'string', enum: ['DR', 'CO'] }, 'the manifest is not mutated');
+});
+
+test('a list response documents prev and next links as nullable', () => {
+  const links = (buildPerEntityOpenApiPaths(schema)['/api/v1/product'].get.responses['200'].content!['application/json'].schema.properties as any).links.properties;
+  assert.equal(links.prev.nullable, true);
+  assert.equal(links.next.nullable, true);
+  assert.equal(links.self.nullable, undefined);
 });
