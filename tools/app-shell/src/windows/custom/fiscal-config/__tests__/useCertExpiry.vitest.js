@@ -44,11 +44,7 @@ describe('useCertExpiry — mockDaysLeft', () => {
     expect(result.current.validTo).toBeNull();
   });
 
-  // KNOWN BUG (reported to the coordinator, ETP-5831): the mock branch sets daysLeft but never
-  // clears validTo, so a date read before the debug override is switched on stays on the status
-  // panel next to the mocked expiry. Marked `.fails` so the suite flags it the day it is fixed —
-  // then drop `.fails`.
-  it.fails('drops a real validTo already loaded when a mock is switched on', async () => {
+  it('drops a real validTo already loaded when a mock is switched on', async () => {
     vi.mocked(useApiFetch).mockReturnValue(makeApiFetch({ exists: true, validTo: '2030-01-01' }));
     const { result, rerender } = renderHook(
       ({ mock }) => useCertExpiry(BASE, { mockDaysLeft: mock, orgId: ORG }),

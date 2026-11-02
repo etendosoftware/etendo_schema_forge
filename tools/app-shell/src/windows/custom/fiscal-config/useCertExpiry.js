@@ -22,6 +22,7 @@ export function useCertExpiry(apiBaseUrl, { mockDaysLeft = null, orgId = null, r
   useEffect(() => {
     if (mockDaysLeft !== null) {
       setDaysLeft(mockDaysLeft);
+      setValidTo(null);
       return;
     }
     if (!apiBaseUrl || !orgId) {
