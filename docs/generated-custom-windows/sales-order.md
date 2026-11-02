@@ -169,7 +169,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `e2e/tests/flows/attachments.mocked.spec.js` (Suites F–I) provides browser-level E2E coverage for the Attachments tab on Sales Order: tab visibility in the main strip alongside Lines (including the tab-switching preservation test), upload (valid file, badge increment, duplicate replace confirmation), single delete, Delete All, individual file download, and Download All (ZIP). The Attachments tab uses `tableName: "C_Order"` and the `data-testid` selector `tab-custom:attachments`.
 - `tests/test-sales-order-endpoints.sh` provides backend-level evidence for list/detail payloads, required order fields in API responses, and creation of a new sales-order header through the NEO endpoints.
 - `artifacts/sales-order/generated/web/sales-order/LinesTable.jsx` — the `unitPrice` column (`PriceActual`) uses `type: 'amount'` so the net unit price renders as a formatted currency value rather than a raw number.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/SalesOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is the CDI bean registered as `salesOrderHeaderHandler`. Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), which `visibleWhenFieldFalse: 'hasLinkedDocuments'` in `decisions.json` uses to conditionally hide the `Reactivate Order` action on the detail view and the `OrderReactivateBulkAction` uses as a row-level filter on the list. The same post-hook also appends `needsPrimaryDoc` (shipment, for this window) and `needsInvoiceDoc` (ETP-5295), computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/SalesOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is bound to `sales-order/header` by `@NeoExtension(spec = "sales-order", entity = "header")` (ETP-6026; it used to be the `salesOrderHeaderHandler` `Java_Qualifier`, cleared in the same change). Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), which `visibleWhenFieldFalse: 'hasLinkedDocuments'` in `decisions.json` uses to conditionally hide the `Reactivate Order` action on the detail view and the `OrderReactivateBulkAction` uses as a row-level filter on the list. The same post-hook also appends `needsPrimaryDoc` (shipment, for this window) and `needsInvoiceDoc` (ETP-5295), computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AbstractOrderHeaderHandler.java` — shared base class for both order header handlers; contains all `afterHandle()` logic including the batch IN query that avoids N+1 on list responses.
 - `artifacts/sales-order/custom/OrderCreateInvoice.jsx` proves the Send Email modal is wired with `bPartnerId` and `apiBaseUrl` so the recipient email is resolved from the contacts spec at open time and proposed as an editable `To` chip (removable, with additional To/CC recipients supported per ETP-4226 — edits reach the backend only through the allowlisted `recipientEdits` command field), and `documentType` is translated via `useMenuLabel()`. Backend delivery is handled by the `sales-order-send` transactional email contract in `com.etendoerp.go`, using the shared default document-send payload strategy.
 - **ETP-4717 — editable subject/message and status-gated Send:** `tools/app-shell/src/components/contract-ui/__tests__/SendDocumentModal.vitest.jsx` and `documentEmailSend.vitest.js` cover the editable `Asunto`/`Mensaje` fields and the opt-in `messageEdits` command field (present only when the operator actually changes subject or message; omitted — byte-identical legacy payload — otherwise). `e2e/tests/flows/document-send-recipients.mocked.spec.js` adds browser-level coverage that a typed message reaches the backend as `messageEdits.message`. `artifacts/sales-order/custom/__tests__/OrderCreateInvoice.test.js` locks `isCompleted && <SendDocumentButton>` (not `isDraft || isCompleted`) in source. `artifacts/__tests__/etp-4717-send-email-visibility.test.js` asserts `contract.json → frontendContract.window.rowQuickActions.actions.email.visibleWhen === "@DocumentStatus@='CO'"` so the grid row quick-action agrees with the Form-view topbar gate.
@@ -331,11 +331,12 @@ Booking a draft order over MCP:
     etendo_action { spec: "sales-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
-Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates **only
+Flow encoded in the prompt: `DR -> CO` books, `CO -> RE` reactivates **only
 while the order has no linked documents** (same condition as the Reactivate menu action's
 `visibleWhenFieldFalse: hasLinkedDocuments`). `CL` (Close) is **not offered**: the window never shows
 it, and since the ETP-5704 QA round the backend refuses it on every sales order (see below), so the
-prompt tells the agent never to send it.
+prompt tells the agent never to send it. `VO` (Void) is **not offered** either: since ETP-6026 the
+backend refuses it on a draft, in-progress or booked order (see below).
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre-CO total-discount
 line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
@@ -731,13 +732,27 @@ the backend refuses what the UI does not offer.
   reason saying the app does not offer Close.
 - Purchase orders are untouched. No visible change in the UI: it never sends `CL`.
 
+### Void (`VO`) refused on a draft, in-progress or booked sales order — ETP-6026
+
+The window offers Delete and Confirm on a draft and only Reactivate once booked; it never offers
+Void. Over MCP, `VO` on a draft order used to void it with total 0.
+
+- `SalesOrderHeaderHandler.handle()` refuses a POST of the `DocAction` button whose **effective**
+  value is `VO` when the stored `documentStatus` is `DR`, `IP` or `CO` — same `DocActionRefusalGuard`
+  resolution, 404 and fail-closed rules as Close. REST single, REST batch and MCP all reach it.
+- **Refusal**: HTTP 400, `messageKeys: ["ETGO_SalesOrderVoidNotOffered"]` (English / Spanish).
+- **Advertised**: `VO` is reported under `unavailableValues` of `documentAction` on those statuses,
+  and the advisory `MCP_CONFIG.actions.valuesByStatus` no longer lists `VO` (`DR` → CO, PR; `IP` → CO).
+- Purchase orders are untouched. No visible change in the UI: no component sends `VO` (grep of
+  the SPA, the window's custom components and app-shell-core).
+
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 - `etendo_schema(spec, entity, view:"actions", id:<sales order id>)` says `availableNow` / `unavailableReason` per action for that
-  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes only `RE` (`CL`
-  is not offered and is also reported under `unavailableValues` — see the ETP-5704 QA section above).
+  record, and `availableValuesNow` for `documentAction`: a draft takes `CO` or `PR`; a completed order takes only `RE` (`CL`
+  and `VO` are not offered and are also reported under `unavailableValues` — see the ETP-5704 QA section above).
   `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
-  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents and CL are also refused by the pre-hook (see the ETP-5704 sections).
+  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents, CL and VO are also refused by the pre-hook (see the ETP-5704 and ETP-6026 sections).
 - `createShipment` and `createDraftInvoice` applies to a completed order only.
 - The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
   they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
