@@ -161,3 +161,46 @@ describe('useCertExpiry — validTo and refreshKey (ETP-5831)', () => {
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
   });
 });
+
+// ETP-5831 QA F-2 — a stale certificate must never be shown for another organization, nor kept
+// after a failed read.
+describe('useCertExpiry — no stale certificate', () => {
+  function deferred() {
+    let resolve;
+    const promise = new Promise(r => { resolve = r; });
+    return { promise, resolve };
+  }
+
+  it('resets validTo and daysLeft as soon as orgId changes, before the new fetch resolves', async () => {
+    const pending = deferred();
+    const apiFetch = vi.fn()
+      .mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ exists: true, validTo: '2030-01-01' }) }))
+      .mockImplementationOnce(() => pending.promise);
+    vi.mocked(useApiFetch).mockReturnValue(apiFetch);
+
+    const { result, rerender } = renderHook(({ orgId }) => useCertExpiry(BASE, { orgId }), { initialProps: { orgId: ORG } });
+    await waitFor(() => expect(result.current.validTo).toBe('2030-01-01'));
+
+    rerender({ orgId: 'org-other' });
+    expect(result.current.validTo).toBeNull();
+    expect(result.current.daysLeft).toBeNull();
+
+    await act(async () => { pending.resolve({ ok: true, json: () => Promise.resolve({ exists: true, validTo: '2031-06-30' }) }); });
+    await waitFor(() => expect(result.current.validTo).toBe('2031-06-30'));
+  });
+
+  it('clears validTo and daysLeft when a refetch fails', async () => {
+    const apiFetch = vi.fn()
+      .mockImplementationOnce(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ exists: true, validTo: '2030-01-01' }) }))
+      .mockImplementationOnce(() => Promise.reject(new Error('network down')));
+    vi.mocked(useApiFetch).mockReturnValue(apiFetch);
+
+    const { result, rerender } = renderHook(({ refreshKey }) => useCertExpiry(BASE, { orgId: ORG, refreshKey }), { initialProps: { refreshKey: 0 } });
+    await waitFor(() => expect(result.current.validTo).toBe('2030-01-01'));
+
+    rerender({ refreshKey: 1 });
+    await act(async () => {});
+    expect(result.current.validTo).toBeNull();
+    expect(result.current.daysLeft).toBeNull();
+  });
+});

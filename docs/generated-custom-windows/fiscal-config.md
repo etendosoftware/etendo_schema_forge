@@ -279,7 +279,7 @@ What the panel shows — derived from the stored records by `deriveConfiguredSta
 | Territorio fiscal | TBAI `etsgSifTerritory` (ARABA/BIZKAIA/GIPUZKOA); else SII `navarra` → Navarra, `guipuzcoa` → Guipúzcoa, `taxtype` IGIC → Canarias, otherwise España / Baleares; VERI\*FACTU `tAXType` 01/03/02 → España / Canarias / Ceuta-Melilla. Row omitted when unknown |
 | Hacienda | the territory's `systemLong`, or the system's `long` text |
 | Operativa nacional (SII) | TicketBAI territories only: "Activa" when an SII record exists, otherwise "No aplica" |
-| Certificado | "Válido hasta dd/mm/aaaa" from `useCertExpiry().validTo` (new return field), or "Pendiente" (warning colour) without a certificate |
+| Certificado | "Válido hasta dd/mm/aaaa" from `useCertExpiry().validTo` (new return field), or "Pendiente" (warning colour) without a certificate. Never stale: `useCertExpiry` resets `validTo`/`daysLeft` when a read starts (org change or certificate refresh) and clears them when the read fails, so another org's date or an old date never stays on screen |
 | Activado | earliest creation timestamp of the system's records (`created`, the API key NEO serves the `Created` audit column under); row omitted without one |
 
 The "Ver historial de envíos" link of the design is **deliberately not included**.
