@@ -708,6 +708,11 @@ function reversedInvoicesGridSpec(apiBaseUrl) {
   return apiBaseUrl?.match(/\/sws\/neo\/(sales-invoice|purchase-invoice)\/?$/)?.[1] ?? null;
 }
 
+/** Cells per row (expand toggle + data columns + actions); the Modelo 349 column adds one. */
+function reversedInvoicesRowColSpan(model349Active) {
+  return model349Active ? 7 : 6;
+}
+
 // ── ReversedInvoicesPanel ─────────────────────────────────────────────────────
 export default function ReversedInvoicesPanel({
   recordId: recordIdProp,
@@ -742,7 +747,7 @@ export default function ReversedInvoicesPanel({
   const { activeModels, loaded: catalogLoaded } = useFiscalModelsCatalog(apiBaseUrl, token);
   const model349Active = catalogLoaded && isModelActive(activeModels, '349');
   // Cells per row (expand toggle + data columns + actions) — the full-width rows span them all.
-  const rowColSpan = model349Active ? 7 : 6;
+  const rowColSpan = reversedInvoicesRowColSpan(model349Active);
 
   const gridColumns = useMemo(() => [
     { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', label: ui('rectColOriginalInvoice'), sourceIndex: 1, required: true },

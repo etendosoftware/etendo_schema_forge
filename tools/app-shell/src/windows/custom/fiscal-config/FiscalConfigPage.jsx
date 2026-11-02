@@ -91,6 +91,16 @@ async function saveSections(sections) {
   return firstFailure;
 }
 
+/**
+ * The ref and record a tab section of the SII + TicketBAI layout is bound to: the complementary
+ * record while `system` is the one being added, otherwise the section's own stored record.
+ */
+function tabSectionBinding(system, { addingComplementary, complementaryRef, complementaryRecord, ownRef, ownRecord }) {
+  return addingComplementary === system
+    ? { ref: complementaryRef, record: complementaryRecord }
+    : { ref: ownRef, record: ownRecord };
+}
+
 // ── FiscalConfigPage ───────────────────────────────────────────────────────────
 
 const FISCAL_CONFIG_WINDOW_ID = 'C1D3A2A017AC4B82B9FEE6F4D2A0C55A';
@@ -300,6 +310,12 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const configuredStatus = deriveConfiguredStatus({
     profile: effectiveProfile, siiRecord: effectiveSii, tbaiRecord: effectiveTbai, verifactuRecord: effectiveVerifactu,
   });
+  // What each tab of the SII + TicketBAI layout edits: the stored record, or the complementary one
+  // while it is being added.
+  const complementary = { addingComplementary, complementaryRef, complementaryRecord };
+  const siiTab = tabSectionBinding('sii', { ...complementary, ownRef: siiRef, ownRecord: effectiveSii });
+  const tbaiTab = tabSectionBinding('tbai', { ...complementary, ownRef: tbaiRef, ownRecord: effectiveTbai });
+
   // Below `xl` the panel stacks under the form at full width (no horizontal scroll); from `xl` it
   // is a 360px column beside it, its top level with the form's first row (or the tab switch).
   const statusPanel = configuredStatus ? (
@@ -532,8 +548,8 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 <div hidden={activeTab !== 0} data-testid="FiscalConfigPage__siiPane">
                   <SiiSection
                     key={`sii-${resetKey}`}
-                    ref={addingComplementary === 'sii' ? complementaryRef : siiRef}
-                    record={addingComplementary === 'sii' ? complementaryRecord : effectiveSii}
+                    ref={siiTab.ref}
+                    record={siiTab.record}
                     apiBaseUrl={apiBaseUrl}
                     orgId={orgId}
                     onSave={() => {}}
@@ -548,8 +564,8 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                 <div hidden={activeTab !== 1} data-testid="FiscalConfigPage__tbaiPane">
                   <TbaiSection
                     key={`tbai-${resetKey}`}
-                    ref={addingComplementary === 'tbai' ? complementaryRef : tbaiRef}
-                    record={addingComplementary === 'tbai' ? complementaryRecord : effectiveTbai}
+                    ref={tbaiTab.ref}
+                    record={tbaiTab.record}
                     apiBaseUrl={apiBaseUrl}
                     orgId={orgId}
                     onSave={() => {}}
