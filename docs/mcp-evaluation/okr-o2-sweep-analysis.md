@@ -78,6 +78,19 @@ Tipo de corrección: **D** descripción de tool / instrucciones · **H** mensaje
     está configurado (hoy el agente la intenta y pierde la llamada; en producción sí funciona, así
     que en el entorno de pruebas penaliza a Etendo de más).
 - **Re-probar:** `f-credit-note`, `w-customer-crud`, `w-company-users-numbering`, `e-unknown-document`.
+- **Resuelto (2 nov, GO `3204b1a1b`):**
+  - `etendo_vector_search` ya no depende solo de los embeddings: si el proveedor falla o la búsqueda
+    semántica no encuentra nada, busca los mismos targets por texto con `etendo_list` + `contains`
+    sobre las columnas que indexa cada uno (`mode:"lexical"`). Pasa por el router: rol, filtro de la
+    ventana y scopes como en cualquier lectura. La UI no cambia (decisión de Valentin: solo la tool).
+    Ver `docs/vector-search-configuration.md` › *Text fallback in the MCP*.
+  - `contains` sobre un campo relacionado devuelve el paso siguiente concreto:
+    `etendo_selectors(spec, field, query)` y después filtrar por el id.
+  - `allParents`: sin cambios (el mensaje ya dice qué hacer y el agente se corrige solo).
+  - Re-prueba, 1 intento: `e-unknown-document` 13 → 8 llamadas, 532k → 274k tokens (la búsqueda
+    ahora responde por texto en vez de fallar); `f-credit-note` 21 → 18 llamadas, 1,20 M → 0,98 M
+    tokens. `f-void-invoice` 17 → 21 llamadas sin usar la búsqueda: variación del agente (leyó la
+    doc dos veces e intentó contabilizar la factura), a confirmar con 3 repeticiones.
 
 ### H4. Modelo ambiguo: el correo de un cliente — M
 
