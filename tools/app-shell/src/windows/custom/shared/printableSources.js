@@ -597,7 +597,7 @@ export function movementTemplate(body) {
 
 /** The labels of the movement documents (formerly inlined in get*PdfLabels). */
 export const SHIPMENT_PDF_LABEL_KEYS = Object.freeze({
-  title:             'shipmentPdfTitle',
+  title:             i18nKey('shipmentPdfTitle'),
   taxId:             'invoicePdfTaxId',
   page:              'invoicePdfPage',
   issuerSection:     'shipmentPdfIssuerSection',
@@ -615,7 +615,7 @@ export const SHIPMENT_PDF_LABEL_KEYS = Object.freeze({
 });
 
 export const RETURN_TO_VENDOR_PDF_LABEL_KEYS = Object.freeze({
-  title:             'returnToVendorPdfTitle',
+  title:             i18nKey('returnToVendorPdfTitle'),
   taxId:             'invoicePdfTaxId',
   page:              'invoicePdfPage',
   issuerSection:     'shipmentPdfIssuerSection',
@@ -633,7 +633,7 @@ export const RETURN_TO_VENDOR_PDF_LABEL_KEYS = Object.freeze({
 });
 
 export const RETURN_RECEIPT_PDF_LABEL_KEYS = Object.freeze({
-  title:             'returnReceiptPdfTitle',
+  title:             i18nKey('returnReceiptPdfTitle'),
   taxId:             'invoicePdfTaxId',
   page:              'invoicePdfPage',
   issuerSection:     'shipmentPdfIssuerSection',
@@ -729,7 +729,7 @@ export const COMMERCIAL_LABEL_KEYS = Object.freeze({
 
 /** Per-document overrides of the commercial labels (the old `buildXxxPdfLabels` bodies). */
 export const INVOICE_PDF_LABEL_KEYS = Object.freeze({
-  title:           'invoicePdfTitle',
+  title:           i18nKey('invoicePdfTitle'),
   documentNo:      'invoicePdfDocumentNo',
   documentSection: 'invoicePdfInvoiceSection',
   date:            'invoicePdfDate',
@@ -737,7 +737,7 @@ export const INVOICE_PDF_LABEL_KEYS = Object.freeze({
 });
 
 export const SALES_ORDER_PDF_LABEL_KEYS = Object.freeze({
-  title:           'orderPdfTitle',
+  title:           i18nKey('orderPdfTitle'),
   documentNo:      'orderPdfDocumentNo',
   documentSection: 'orderPdfSection',
   date:            'orderPdfDate',
@@ -745,7 +745,7 @@ export const SALES_ORDER_PDF_LABEL_KEYS = Object.freeze({
 });
 
 export const PURCHASE_ORDER_PDF_LABEL_KEYS = Object.freeze({
-  title:           'purchaseOrderPdfTitle',
+  title:           i18nKey('purchaseOrderPdfTitle'),
   documentNo:      'purchaseOrderPdfDocumentNo',
   documentSection: 'purchaseOrderPdfSection',
   date:            'orderPdfDate',
@@ -758,13 +758,27 @@ export const PURCHASE_ORDER_PDF_LABEL_KEYS = Object.freeze({
 });
 
 export const QUOTATION_PDF_LABEL_KEYS = Object.freeze({
-  title:           'quotationPdfTitle',
+  title:           i18nKey('quotationPdfTitle'),
   documentNo:      'quotationPdfDocumentNo',
   documentSection: 'quotationPdfSection',
   date:            'quotationPdfDate',
   validUntil:      'quotationPdfValidUntil',
   colQty:          'quotationPdfColQty',
 });
+
+/**
+ * Marks a value of a label key map as a `genericLabels` KEY, not display text. Identity at runtime.
+ *
+ * The `title` entries need it: the sfqg i18n check reports any `title: '<string literal>'` property
+ * as a hardcoded title, and here that string is the key the title is translated from
+ * (`resolveLabelKeys` turns it into text through `ui()`). Hoisted, so the maps above can use it.
+ *
+ * @param {string} key a `genericLabels` key
+ * @returns {string} the same key
+ */
+function i18nKey(key) {
+  return key;
+}
 
 /**
  * Resolves a `{ label: genericLabelsKey }` map through a translator.
