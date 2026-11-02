@@ -45,7 +45,10 @@ api_key_env = "OPENAI_API_KEY"
 temperature = 0
 
 [run]
-max_steps = 25
+# Tool-loop turns per attempt, the same for every platform. 50 since 2026-11-02 (was 25): at 25 four
+# Etendo probes ended at the cap mid-task; the cost of the extra steps is read from the tokens, which
+# decide before calls (rule 2).
+max_steps = 50
 
 # Per tool call, how much of the RESULT body is stored in the run file. Results
 # are recorded so a failure is diagnosable from runs/ alone; the cap exists
