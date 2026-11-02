@@ -1259,6 +1259,60 @@ probes:
                 self.assertIn("status.cod", attempts[0]["harnessError"]["detail"])
                 self.assertIsNone(attempts[0]["effectVerified"])
 
+    LOOKUP_SUITE = """
+schemaVersion: 2
+probes:
+  - id: w
+    category: write
+    mode: write
+    prompt: "Dale acceso a {{marker}}@x.es"
+    platforms:
+      etendo-go:
+        expectEffect:
+          lookup:
+            - { tool: etendo_list, args: { filters: { email: "{{marker}}@x.es" } }, saveAs: user }
+          tool: etendo_action
+          args: { id: "{{steps.user.data.0.id}}", action: roles }
+          rowsAt: roles
+          where: { name: Sales }
+      holded:
+        notPossible: { kind: goal, reason: "no users" }
+"""
+
+    def _lookup(self, users, roles):
+        h = V2Harness(self.tmp, self.LOOKUP_SUITE)
+
+        async def call_tool(session, name, args):
+            if name in ("etendo_list", "etendo_action"):
+                h.calls.append((name, args))
+                return {"data": list(users)} if name == "etendo_list" else {"roles": list(roles)}
+            return await V2Harness.call_tool(h, session, name, args)
+
+        h.call_tool = call_tool
+        h.compare("--repeat", "1")
+        return h, h.attempts("t", "w")
+
+    def test_lookup_feeds_the_check_with_what_the_agent_created(self):
+        # ETP-5848: the check needs the id of the user the agent created.
+        h, attempts = self._lookup([{"id": "U9"}], [{"id": "S", "name": "Sales"}])
+        self.assertTrue(attempts[0]["effectVerified"])
+        action = [args for name, args in h.calls if name == "etendo_action"]
+        self.assertEqual(action[-1]["id"], "U9")
+        self.assertIn("@x.es", [a for n, a in h.calls if n == "etendo_list"][0]["filters"]["email"])
+
+    def test_a_user_without_the_role_is_an_absent_effect(self):
+        _h, attempts = self._lookup([{"id": "U9"}], [{"id": "F", "name": "Finance"}])
+        self.assertFalse(attempts[0]["effectVerified"])
+
+    def test_a_lookup_that_finds_nothing_is_an_absent_effect_not_a_harness_error(self):
+        # No user created: nothing to check, so the effect did not happen.
+        h, attempts = self._lookup([], [{"id": "S", "name": "Sales"}])
+        self.assertEqual(len(attempts), 1, "not replaced: it is a real failure")
+        self.assertFalse(attempts[0]["effectVerified"])
+        self.assertIsNone(attempts[0].get("harnessError"))
+        self.assertTrue(attempts[0]["effectCheck"]["lookupFoundNothing"])
+        self.assertEqual([n for n, _ in h.calls], ["etendo_list"], "the check itself never ran")
+
     def test_an_unresolvable_answer_ref_is_a_harness_error_and_replaced(self):
         h = V2Harness(self.tmp, V2_SUITE.replace("{{steps.inv.total}}", "{{steps.nope.total}}"))
         h.compare("--repeat", "1")

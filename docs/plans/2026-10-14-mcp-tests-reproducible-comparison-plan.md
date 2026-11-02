@@ -216,6 +216,11 @@ probes:
   tool does not answer with `data`/`items`/`results`/`records` — `w-send-invoice` reads the send
   history that `etendo_send_document_email` lists under `history` with `preview:true`. A key the
   answer lacks, or one that is not a list, is *not verifiable*, never a silent 0.
+- `expectEffect.lookup:` (ETP-5848) runs reads with the setup syntax (`saveAs`) in the check's own
+  session before the check, for a check that needs the id of something the *agent* created —
+  `w-company-users-numbering` finds the user by email, then reads its roles. A lookup that finds
+  nothing leaves the check's reference unresolved, which counts as the effect being absent (0
+  rows); a lookup call that fails is *not verifiable*.
 - A task that one platform's MCP cannot do at all is declared, not attempted — see §5.10.
 
 ### 5.4 Identical starting data and isolation

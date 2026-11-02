@@ -340,6 +340,11 @@ Regenerated as part of ETP-5197 (dead Link toolbar button, additive). `artifacts
 
 Regenerated as part of ETP-5194 (email correction window, contract `0.1.0` → `0.2.0`, additive). `artifacts/user/decisions.json`'s `user` entity `email` field changed `readOnlyLogicJs` from `"!!record.id"` to `"!!record.id && record.emailEditable !== true"`; the rule only reads the `emailEditable` flag `com.etendoerp.go` attaches to every `user` GET row, so the server-side guard and the form cannot drift. `make regen ONLY=user` re-ran (`UserForm.jsx`, `contract.json`, `contract.mcp.json` checksum); `npx sf-validate-pipeline --scope=user` reports 0 violations. No NEO push is needed: `readOnlyLogicJs` is client-only. The error-literal mapping (`backendErrors.js`) and the `backendError.userEmail*` i18n keys are hand-written, not pipeline output.
 
-## Roles for agents — ETP-5852
+## Roles for agents — ETP-5852, ETP-5848
 
-Over NEO/MCP, `user/user` declares the read-only action `roles` (`UserRolesReadAction` in com.etendoerp.go): the applied template roles and whether the user is a client administrator, for administrators only. Assigning roles stays in this window. Feedback M-201.
+Over NEO/MCP, `user/user` declares two actions, for administrators only (com.etendoerp.go):
+
+- `roles` (`UserRolesReadAction`, ETP-5852, feedback M-201): the applied template roles, whether the user is a client administrator, and (ETP-5848) `available`, every template that can be assigned.
+- `assignRoles` (`UserRolesAssignAction`, ETP-5848): sets the user's template roles, as this window's "Roles asignados" control does. `templateRoleIds` is the whole set the user must end with (it replaces; an empty list removes them all). Same service and guards as the window's `assignuserroles` webhook (`UserRoleCompositionService#assignTemplateRoles`): a role that is not a template, the tenant owner and administrators are refused (422), the caller stays inside its own client, and a concurrent write is a 409. It reverses ETP-5852's "assigning stays in this window": an agent asked to give someone sales permissions spent 2.8 M tokens exploring and created the user without them (OKR O2 probe `w-company-users-numbering`). Promoting to administrator and demoting stay in this window.
+
+**Verify:** `etendo_action(spec:"user", id:<a non-admin user>, action:"assignRoles", parameters:{templateRoleIds:[<Sales id from roles.available>]})` answers the Sales role; `roles` lists it; the window's chips show it.

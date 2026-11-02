@@ -555,7 +555,8 @@ probes:
           args: { spec: price-list, entity: priceList,
                   filters: { name: "Mayoristas {{marker}}", salesPriceList: true } }
 
-  # Flow 38 (user part).
+  # Flow 38 (user part). Verified on the user's roles (ETP-5848): the user exists AND holds the
+  # Sales template. The lookup finds the user the agent created; no user means the effect is absent.
   - id: w-company-users-numbering
     category: write
     mode: write
@@ -563,8 +564,15 @@ probes:
     platforms:
       etendo-go:
         expectEffect:
-          tool: etendo_list
-          args: { spec: user, entity: user, filters: { email: "{{marker}}@x.es" } }
+          lookup:
+            - tool: etendo_list
+              args: { spec: user, entity: user, filters: { email: "{{marker}}@x.es" }, fields: [id] }
+              saveAs: user
+          tool: etendo_action
+          args: { spec: user, entity: user, id: "{{steps.user.data.0.id}}", action: roles,
+                  parameters: {} }
+          rowsAt: roles
+          where: { name: Sales }
 
   # Flow 41. Two customers match: the agent asks which one, and creates nothing for either.
   - id: e-ambiguous-customer

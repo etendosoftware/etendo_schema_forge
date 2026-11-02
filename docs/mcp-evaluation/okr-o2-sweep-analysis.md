@@ -136,7 +136,7 @@ Tipo de corrección: **D** descripción de tool / instrucciones · **H** mensaje
     reenviar y a la prueba para verificar el envío (`expectEffect.rowsAt`), que antes pasaba sin
     enviar nada. Sin tool nueva.
 
-### H7. Usuario con permisos: el rol no se asigna por MCP — C o D (decisión de producto)
+### H7. Usuario con permisos: el rol no se asigna por MCP — resuelto: acción `assignRoles`
 
 - **Evidencia:** `w-company-users-numbering`. Con 25 pasos se perdía; con 50 crea el usuario (32
   llamadas, **2,8 millones de tokens**) y dice "*role assignment is read-only via API*". La acción
@@ -145,6 +145,18 @@ Tipo de corrección: **D** descripción de tool / instrucciones · **H** mensaje
   del spec `user` desde el principio (ahorra la exploración) y que la prueba quede como límite
   conocido.
 - **Re-probar:** `w-company-users-numbering`, con la verificación del rol (§3).
+- **Decisión (2 nov, Valentin):** el MCP asigna roles igual que la UI; revierte la decisión de
+  ETP-5852 (M-201) de dejarlo solo en la app.
+- **Hecho (GO `ab8dc2dba`):** acción `assignRoles` en `user/user` (`UserRolesAssignAction`):
+  recibe el conjunto completo de plantillas y llama al mismo `UserRoleCompositionService` que el
+  webhook de la UI, con sus mismos controles (solo plantillas, ni el dueño ni administradores, el
+  propio cliente, candado por usuario → 409). Solo administradores. La acción `roles` ahora lista
+  también `available`. Promover o quitar administrador sigue en la app. Probado en vivo: asigna,
+  relee, rechaza un rol que no es plantilla y al dueño (422), y deja al usuario sin roles.
+- **Verificación de la prueba:** ahora exige el rol Ventas (`expectEffect.lookup` busca el usuario
+  que creó el agente y `roles` lo lee); antes solo miraba que existiera el usuario.
+- **Re-prueba, 1 intento:** ✅ 20 llamadas, 855k tokens, rol Ventas asignado. Antes: ⚠️ 32
+  llamadas, 2,85 M tokens, usuario sin rol.
 
 ### H8. Pedido con cantidad negativa — resuelto: prueba retirada del KR
 
