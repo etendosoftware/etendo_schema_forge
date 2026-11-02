@@ -51,6 +51,8 @@ The guard also changes what "Reactivar" does mechanically when it already knows 
 ## Reactive behavior and dependencies
 
 - Header defaults are visible in the contract for invoice date and accounting date (`@#Date@`), document status (`DR`), currency, and zeroed payable amounts such as total paid and outstanding amount. Currency is editable on the header via the `CurrencyRatePicker` component (see "Currency and exchange rate — ETP-4029" below), not a read-only defaulted value.
+- **Company agent defaults to the session user (ETP-6036):** `salesRepresentative` (`SalesRep_ID`, hidden in the form) declares `"defaultExpr": "@#AD_User_ID@"`. `SalesRep_ID` has no AD default, so `GET /defaults` (and MCP `etendo_defaults`) used to fall back to the first row of the user combo, `Admin`, whoever was logged in.
+- **No contact by default unless it is the vendor's (ETP-6036):** `userContact` (`AD_User_ID`, the vendor's contact, hidden in the form) has no AD default either, and came back as `Admin` the same way. `PurchaseInvoiceHeaderHandler.afterHandle` now removes it from the `/defaults` answer unless it is a contact of the `businessPartner` sent as record context (what the partner callout sets). The shared combo fallback of `NeoDefaultsService` is untouched: other windows depend on it (price lists and payment methods of a new contact, SII keys).
 - **Capability-gated `posted` field/status pill (ETP-4520):** the header `posted` field (rendered as a `Posted`/`Not posted` status pill on the detail header and as a `Posted` boolean badge column in the grid) carries `"visibleWhenCapability": "showAccountingFields"` in `artifacts/purchase-invoice/decisions.json`, mirroring the sales-invoice implementation. This is resolved against `capabilities.showAccountingFields`, fetched once at role-selection via `GET /sws/neo/windowaccessmap` (NEO pseudo-spec bridge) and exposed through `useAuth().capabilities`. The field backs the `AD_Role.EM_ETGO_Show_Acct_Fields` ("Show Accounting Fields") checkbox — Etendo Classic-only for this MVP, no GO-app UI to toggle it — and the server resolves it with an Administrator bypass. A role without the capability never sees the column or the pill at all (the field is omitted, not disabled/hidden): `DataTable.jsx` filters the column out of `visibleColumns` and `DetailView.jsx` returns `null` for the status pill before it renders, both via the shared `isCapabilityVisible()` helper (`tools/app-shell/src/lib/capabilityVisibility.js`) fed by `useCapabilitiesSafe()`. Administrator sessions always see the field regardless of the checkbox.
 - **Independent accounting date (ETP-5273, re-reverts ETP-4531):** `accountingDate` (`DateAcct`) is again an independent, editable header field — `"visibility": "editable"`, `section: "principal"`, `seq: 35`, hidden from the grid (`grid: false`) but present in the form (`form: true`) and in `frontendContract.entities.header.fields`. `readOnlyLogic: "@Posted@='Y'"` — editable while the invoice is Borrador or Confirmado, locked once it is `Posted` (in the GL ledger), and editable again if the entry is reversed/unposted. `@Posted@` is used deliberately instead of this window's dominant `@Processed@='Y'` pattern: `Processed='Y'` alone would also lock the date during a failed posting attempt, where the user still needs to correct it before retrying.
   - **Sync direction is one-way, exactly like Classic:** editing `invoiceDate` cascades into `accountingDate` server-side via the native classic callout `SifInvoiceOperationDateCallout` (registered on `C_Invoice.DateInvoiced`, extending `SE_Invoice_AccountingDate`), executed through `NeoCalloutService` — no Etendo GO-side guard blocks it, because this cascade is the intended behavior. Editing `accountingDate` never touches `invoiceDate` — the callout registered on `DateAcct` is `SE_Invoice_TaxDate`, which writes `Taxdate` only.
@@ -1460,11 +1462,35 @@ rectificative type and the legacy `APC` credit memo.
       `docs/request-policy.md`); any other unexpected failure keeps `rectSaveError`. The 349
       base amounts and the original invoice amount are formatted with the canonical
       `formatCurrency('EUR', …)`.
+    - **Earlier correctives count only once posted.** The base an earlier 349 corrective
+      consumes is subtracted only after that corrective is posted, matching the 349 report,
+      which reads posted invoices only. To keep the base from being allocated twice, the module
+      (function `AEAT349_CINVREV_BASE`) raises `@EM_AEAT349_CORR_NOT_POSTED@` — "Existe una
+      correctiva del 349 del mismo operador, año y período pendiente de contabilizar.
+      Contabilícela antes de continuar. Factura: <nº documento>" — when another 349 corrective
+      of the same operator, year and period (exact period text) dated in the same month or
+      earlier is completed (`CO`/`CL`) but not posted. Posting states `D` (document disabled)
+      and `T` (table disabled) never post, so they do not block; every other non-posted state
+      does, posting errors included. The toast names the blocking invoice; the user resolves
+      it by posting that corrective (**Contabilizar**) and retrying. In GO, completing does not
+      post: the background accounting process posts about every 5 minutes, and the manual
+      Contabilizar / Descontabilizar actions exist, so this state is reachable in GO.
+    - **Re-checked at completion.** The base checks (pending-posting block,
+      `@EM_AEAT349_ZERO_BASE_RECT@`, negative base `@EM_AEAT349_NEGATIVE_RECT_E@`/`_S@`) run
+      when the reversed-invoice row is saved AND again when the rectificative is completed
+      (`AEAT349_REVINVOICES_CHECK` on the `C_Invoice_Post` extension point, `DocAction = CO`),
+      because earlier correctives may have been completed or posted in between. A refusal at
+      completion surfaces as the completion error. It only validates: the stored "Base 349"
+      shown on the row is not recalculated at completion.
     - **Accepted limitations.** One year/period per rectificative row; a multi-selection draft
       that picks the quarter sends it to every created row, so originals from different
       quarters need separate saves. Month and quarter correctives consume the declared base by
       exact period text, so a month corrective and a quarter corrective of the same period do
-      not see each other's consumption.
+      not see each other's consumption. When two draft rectificatives share an original, the
+      "Base 349" stored on the second row can be stale (it was computed when the row was saved
+      and is not refreshed at completion); the completion re-check still blocks an over-allocation.
+      A corrective whose posting failed (posting error state) blocks every later corrective of
+      the same operator, year and period until it is posted.
 
 ### List subset filters: "Todos" / "Facturas" / "Facturas rectificativas"
 
