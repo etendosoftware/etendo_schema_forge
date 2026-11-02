@@ -1773,3 +1773,15 @@ The account fields of `customerAccounting` and `vendorAccounting` tell agents th
 ## Billing preferences of a new contact over MCP — ETP-5852
 
 As in the app, a new contact is saved without billing preferences (`priceList`, `paymentTerms`, `paymentMethod`, `account`, `customerBlocking` and their purchase twins): the form fills them in after the contact exists. Over MCP a value the agent itself sends on create is now kept (it was dropped without a word); the defaults pass still does not fill them. `etendo_schema(view:"create")` no longer marks them `serverDefaulted` and `etendo_defaults` no longer offers them (`BusinessPartnerHandler#createUnsetFields`). The entity `agentPrompt` says so. REST and the app are unchanged. Feedback M-106.
+
+## Where a contact's email goes, for agents — ETP-5848
+
+The OKR O2 sweep (`docs/mcp-evaluation/okr-o2-sweep-analysis.md`, H4) found an agent spending 20 calls of a 25-call "add this customer with their email" deciding between `businessPartner.etgoEmail`, a `contact` row and a user. Three agent-facing texts now settle it, with no change of behavior:
+
+- the spec prompt (`agent-prompts/contacts/spec.md`) says the contact itself is `businessPartner`, with its name, tax ID, email (`etgoEmail`), phone and website, and that `contact` holds the people who work for it;
+- `businessPartner.etgoEmail` (`agent-prompts/contacts/business-partner.etgo-email.md`): the contact's own address, the one documents are sent to;
+- `contact.email` (`agent-prompts/contacts/contact.email.md`): a person's email, not the contact's.
+
+The agentic docs served by the `docs` tool (`etendo-go-docs/agentic/contacts/index.md`) carry the same field map for customers and vendors.
+
+**Verify:** `etendo_schema(spec: "contacts", view: "create")` lists `etgoEmail` with that `agentPrompt`; re-run the okr probe `w-customer-crud` and compare its calls with the sweep (25).
