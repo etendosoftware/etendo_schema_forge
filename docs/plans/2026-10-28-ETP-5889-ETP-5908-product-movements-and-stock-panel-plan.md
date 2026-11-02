@@ -142,7 +142,7 @@ The role is not an event property of this event: it travels on every event as th
 - **Deployment to production** of etendo_schema_forge#2073 and com.etendoerp.go#1507. Before opening the tab in an environment: `update.database`, and check `ad_scd_check` = 0 (`ad_scd_rebuild` first if the table has more than 100k rows).
 - **QA**: Matías Bernal / Emilio Polliotti.
 - **Datadog**: the flag exists and has a targeting rule by account email in Production (two accounts); it must be widened for the KPIs to measure anything. A real TTL is still to be set (the registry holds a placeholder, 2027-01-31).
-- **First KPI value**: the first measurable week starts on 2026-11-09; until the event has been seen in production the KPIs are N/D, never 0.
+- **First KPI value**: the collector reports the last complete Monday–Sunday week, so the first value appears on the Monday after the first complete week in which the tab was deployed and used (for the week of 2 to 8 November, on 2026-11-09). Until the event has been seen in production the KPIs are N/D, never 0.
 - **Analyst**: does the tenant admin count as a warehouse role; release date and cohort the 3-month target counts from; whether the KPI is restricted to accounts with the flag (with a gradual rollout the denominator includes devices that cannot see the tab).
 - **Default period of the tab**: implemented on the last 7 days, as in the design; ETP-5889 scope 9 says the last 3 months and "3 months" is not one of the design's quick ranges. To confirm.
 - **`W+`/`W-` (Work Order) movements**: not in the type table and not excluded; not decided.
@@ -160,7 +160,7 @@ The role is not an event property of this event: it travels on every event as th
 1. Deploy, run `update.database`, check `ad_scd_check`, and open the tab with an account covered by the Datadog rule.
 2. QA of the tab and of the flag (on and off).
 3. Widen the Datadog rule; confirm in Mixpanel that `product_movements_tab_opened` and `role_groups` arrive and that the reports return values.
-4. Read the first KPI values (week starting 2026-11-09) with the analyst and settle the admin question.
+4. Read the first KPI values (the Monday after the first complete week with usage) with the analyst and settle the admin question.
 5. Resume ETP-5908, starting with the three cross-task decisions of section 5.
 
 ## 7. Outside this repository
