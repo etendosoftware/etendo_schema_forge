@@ -25,15 +25,20 @@ import contract from '@generated/contacts/contract.json';
 const formMode = vi.hoisted(() => ({ useRealEntityForm: false }));
 
 // The organization's active fiscal configuration (useFiscalConfig), keyed by the selected org.
-const fiscal = vi.hoisted(() => ({ state: null, calls: [] }));
+// `byOrg` (optional) answers per org id, standing in for the real hook re-reading on an org change.
+const fiscal = vi.hoisted(() => ({ state: null, calls: [], byOrg: null }));
+const auth = vi.hoisted(() => ({ selectedOrg: { id: 'org-1' } }));
 const BOTH_SIF_ACTIVE = Object.freeze({
   loading: false, error: null, profile: 'sii+tbai', siiRecord: { id: 'sii' }, tbaiRecord: { id: 'tbai' }, verifactuRecord: null,
 });
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: (orgId, apiBaseUrl) => { fiscal.calls.push([orgId, apiBaseUrl]); return fiscal.state; },
+  useFiscalConfig: (orgId, apiBaseUrl) => {
+    fiscal.calls.push([orgId, apiBaseUrl]);
+    return fiscal.byOrg ? fiscal.byOrg[String(orgId)] : fiscal.state;
+  },
 }));
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ selectedOrg: { id: 'org-1' } }),
+  useAuth: () => ({ selectedOrg: auth.selectedOrg }),
 }));
 
 vi.mock('@/i18n', () => ({
@@ -86,6 +91,8 @@ describe('FiscalDefaultsSection', () => {
     formMode.useRealEntityForm = false;
     fiscal.state = BOTH_SIF_ACTIVE;
     fiscal.calls = [];
+    fiscal.byOrg = null;
+    auth.selectedOrg = { id: 'org-1' };
   });
 
   // ETP-5831 CP-20 — each option depends on its own SIF being active for the organization.
@@ -145,6 +152,38 @@ describe('FiscalDefaultsSection', () => {
       fiscal.state = sif({ error: 'HTTP 500' });
       const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
       expect(container).toBeEmptyDOMElement();
+    });
+
+    it('hides the section when no organization is selected (useFiscalConfig answers "unconfigured")', () => {
+      auth.selectedOrg = null;
+      // What the real hook returns for a null org id: unconfigured, no records.
+      fiscal.byOrg = { null: { loading: false, error: null, profile: 'unconfigured', siiRecord: null, tbaiRecord: null, verifactuRecord: null } };
+      const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(fiscal.calls.at(-1)[0]).toBeNull();
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('re-reads the fiscal config when the organization changes, and swaps the blocks', () => {
+      fiscal.byOrg = {
+        'org-1': sif({ profile: 'sii', tbaiRecord: null }),
+        'org-2': sif({ profile: 'tbai', siiRecord: null }),
+      };
+      const { rerender } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('FiscalDefaultsSection__sii-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__tbai-block')).not.toBeInTheDocument();
+
+      auth.selectedOrg = { id: 'org-2' };
+      rerender(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(fiscal.calls.at(-1)[0]).toBe('org-2');
+      expect(screen.getByTestId('FiscalDefaultsSection__tbai-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
+    });
+
+    it('shows only the TicketBAI block when SII and TicketBAI are active but the partner is not a customer', () => {
+      render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('FiscalDefaultsSection__tbai-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
+      expect(findFieldsCall('aeatsiiSiikeylist')).toBeUndefined();
     });
 
     it('draws its own divider above the section, so a hidden section leaves no stray rule', () => {

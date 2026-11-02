@@ -850,3 +850,92 @@ test.describe('Fiscal Config — ChangeSifDialog notice per SIF profile', () => 
     });
   }
 });
+
+// ── Save gating, unsaved-changes guard and the "Estado" panel (ETP-5831) ───────
+//
+// A configured TicketBAI org: "Guardar" is enabled only while a section has unsaved changes; an
+// in-app navigation with unsaved changes opens the shared prompt, whose "Save and continue" goes
+// through the page save (PUT) and then navigates; the "Estado" panel is shown beside the form.
+
+async function installTbaiSaveMocks(page) {
+  const puts = [];
+  await page.route('**/sws/neo/tbai-config/**', async route => {
+    const req = route.request();
+    if (req.method() === 'PUT') {
+      const body = JSON.parse(req.postData() || '{}');
+      puts.push({ url: req.url(), body });
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(neoOk([{ ...TBAI_RECORD, ...body }])),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([TBAI_RECORD])) });
+  });
+  for (const other of ['sii-config', 'verifactu-config']) {
+    await page.route(`**/sws/neo/${other}/**`, route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
+    );
+  }
+  await page.route('**/certificate{/**,}**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) }),
+  );
+  return puts;
+}
+
+test.describe('Fiscal Config — Save gating, unsaved-changes guard and status panel (ETP-5831)', () => {
+  // The page Save is the only button carrying `data-dirty`.
+  const pageSave = (page) => page.locator('button[data-dirty]');
+  const autoSendSwitch = (page) => page.getByTestId('Switch__f06d4b');
+
+  test('shows the "Estado" panel for an org that already has a fiscal configuration', async ({ page }) => {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    const panel = page.getByTestId('FiscalStatusSummary__panel');
+    await expect(panel).toBeVisible({ timeout: 8_000 });
+    await expect(panel.getByTestId('FiscalStatusSummary__row-territory')).toContainText(t('fiscal.territory.alava'));
+    await expect(panel.getByTestId('FiscalStatusSummary__envBadge')).toHaveText(t('fiscal.onboarding.applied.env.sandbox'));
+  });
+
+  test('Save is disabled on load and enabled after an edit', async ({ page }) => {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(autoSendSwitch(page)).toBeVisible({ timeout: 8_000 });
+    await expect(pageSave(page)).toBeDisabled();
+    await expect(pageSave(page)).toHaveAttribute('data-dirty', 'false');
+
+    await autoSendSwitch(page).click();
+    await expect(pageSave(page)).toBeEnabled();
+    await expect(pageSave(page)).toHaveAttribute('data-dirty', 'true');
+  });
+
+  test('navigating away while dirty prompts, and "Save and continue" PUTs the change then navigates', async ({ page }) => {
+    await loginWithOrg(page);
+    const puts = await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(autoSendSwitch(page)).toBeVisible({ timeout: 8_000 });
+    await autoSendSwitch(page).click();
+    await expect(pageSave(page)).toBeEnabled();
+
+    await page.getByTestId('menu-item-dashboard').click();
+    const prompt = page.getByTestId('unsaved-navigation-dialog');
+    await expect(prompt).toBeVisible();
+    // The prompt holds the navigation: still on the fiscal configuration.
+    await expect(page).toHaveURL(/\/fiscal-config/);
+
+    const [putReq] = await Promise.all([
+      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes('/tbai-config/')),
+      prompt.getByTestId('unsaved-navigation-save').click(),
+    ]);
+    expect(putReq.url()).toContain(TBAI_RECORD.id);
+    expect(JSON.parse(putReq.postData() || '{}').autoSendInvoices).toBe(true);
+
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(prompt).toHaveCount(0);
+    expect(puts).toHaveLength(1);
+  });
+});

@@ -53,6 +53,8 @@ vi.mock('../../fiscal-monitor/useDebugMode.js', () => ({
 // refreshKey each render asked for (ETP-5831: a replaced certificate re-reads it).
 // Section-double saves in call order (ETP-5831 QA F-1).
 const sectionSaves = vi.hoisted(() => []);
+// Optional per-section save override (e.g. a rejection or a deferred promise); null → resolves.
+const sectionSaveImpl = vi.hoisted(() => ({ sii: null }));
 const certExpiry = vi.hoisted(() => ({ value: { daysLeft: null, validTo: null }, calls: [] }));
 vi.mock('../useCertExpiry.js', () => ({
   useCertExpiry: (apiBaseUrl, opts) => { certExpiry.calls.push(opts); return certExpiry.value; },
@@ -95,7 +97,7 @@ vi.mock('../SiiSection.jsx', async () => {
   // The real dirty tracking over a one-field form: "edit" makes the section dirty.
   const { useFormDirty } = await import('../useFormDirty.js');
   return { default: React.forwardRef((props, ref) => {
-    React.useImperativeHandle(ref, () => ({ save: () => { sectionSaves.push(['sii']); return Promise.resolve(); } }));
+    React.useImperativeHandle(ref, () => ({ save: () => { sectionSaves.push(['sii']); return sectionSaveImpl.sii ? sectionSaveImpl.sii() : Promise.resolve(); } }));
     const [form, setForm] = React.useState({ value: 'stored' });
     useFormDirty(form, props.onDirtyChange);
     return (
@@ -265,6 +267,8 @@ import { useFiscalTestMode } from '../useFiscalTestMode.js';
 import { useAuth, useWindowAccess } from '@/auth/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 import { hasUnsavedChanges, saveUnsavedChanges } from '@/lib/unsavedChanges.js';
+import { deriveConfiguredStatus, buildConfiguredStatusRows } from '../FiscalStatusSummary.jsx';
+import { buildTerritories, buildSystems } from '../fiscalCatalog.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -804,6 +808,51 @@ describe('FiscalConfigPage — unsaved-changes guard', () => {
     await act(async () => { saved = await saveUnsavedChanges(); });
     expect(saved).toBe(true);
     await waitFor(() => expect(hasUnsavedChanges()).toBe(false));
+  });
+
+  // A failed save must keep the guard on — otherwise "Save and continue" would navigate away
+  // and drop the edits the server just refused.
+  describe('when the save fails', () => {
+    afterEach(() => { sectionSaveImpl.sii = null; });
+
+    it('"save and continue" resolves false when the section save rejects, and the registry stays dirty', async () => {
+      sectionSaveImpl.sii = () => Promise.reject(new Error('Backend refused the SII config'));
+      renderPage();
+      fireEvent.click(screen.getByTestId('sii-section-edit'));
+      let saved;
+      await act(async () => { saved = await saveUnsavedChanges(); });
+      expect(saved).toBe(false);
+      expect(hasUnsavedChanges()).toBe(true);
+      expect(screen.getByTestId('sii-section')).toHaveAttribute('data-form', 'edited');
+      expect(screen.getByText('Backend refused the SII config')).toBeInTheDocument();
+    });
+
+    it('a rejection the section already reported (_sectionHandled) shows no page error banner but still resolves false', async () => {
+      sectionSaveImpl.sii = () => Promise.reject(Object.assign(new Error('Shown by the section'), { _sectionHandled: true }));
+      renderPage();
+      fireEvent.click(screen.getByTestId('sii-section-edit'));
+      let saved;
+      await act(async () => { saved = await saveUnsavedChanges(); });
+      expect(saved).toBe(false);
+      expect(screen.queryByText('Shown by the section')).not.toBeInTheDocument();
+      expect(hasUnsavedChanges()).toBe(true);
+    });
+
+    it('is inactive while a save is in flight', async () => {
+      let resolveSave;
+      sectionSaveImpl.sii = () => new Promise((resolve) => { resolveSave = resolve; });
+      renderPage();
+      fireEvent.click(screen.getByTestId('sii-section-edit'));
+      expect(hasUnsavedChanges()).toBe(true);
+      let pending;
+      await act(async () => { pending = saveUnsavedChanges(); });
+      expect(screen.getByText('fiscal.saving')).toBeInTheDocument();
+      expect(hasUnsavedChanges()).toBe(false);
+      let saved;
+      await act(async () => { resolveSave(); saved = await pending; });
+      expect(saved).toBe(true);
+      await waitFor(() => expect(hasUnsavedChanges()).toBe(false));
+    });
   });
 
   it('releases the registry entry on unmount', () => {
@@ -1469,5 +1518,76 @@ describe('FiscalConfigPage — first-time setup and the status panel (ETP-5831)'
     mockConfig({ profile: 'sii', siiRecord: SII_REC });
     renderPage();
     expect(screen.getByText('fiscal.save').closest('button')).toBeDisabled();
+  });
+});
+
+// The status panel's pure derivation: which territory, system and rows a stored configuration
+// maps to. Exercised directly so every territory branch is covered without rendering the page.
+describe('FiscalStatusSummary — deriveConfiguredStatus / buildConfiguredStatusRows', () => {
+  const ui = (key) => key;
+  const territories = buildTerritories(ui);
+  const systems = buildSystems(ui);
+  const rowsFor = (status) => buildConfiguredStatusRows({ status, territories, systems, cert: null, locale: 'es_ES', ui });
+  const rowKeys = (rows) => rows.map(r => r.key);
+  const rowValue = (rows, key) => rows.find(r => r.key === key)?.value;
+
+  it('maps sii-navarra to the Navarra territory with no national-operation row', () => {
+    const status = deriveConfiguredStatus({ profile: 'sii-navarra', siiRecord: { id: 'sii-1', navarra: 'Y' } });
+    expect(status.system).toBe('SII');
+    expect(status.territoryId).toBe('navarra');
+    const rows = rowsFor(status);
+    expect(rowValue(rows, 'territory')).toBe('fiscal.territory.navarra');
+    expect(rowValue(rows, 'tax')).toBe('fiscal.territory.navarra.systemLong');
+    expect(rowKeys(rows)).not.toContain('national');
+  });
+
+  it('maps SII with IGIC to Canarias, and SII with IVA to the common territory', () => {
+    expect(deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'igic' } }).territoryId).toBe('canarias');
+    expect(deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', taxtype: 'IVA' } }).territoryId).toBe('baleares');
+  });
+
+  it.each([
+    ['01', 'baleares'],
+    ['02', 'ceuta'],
+    ['03', 'canarias'],
+  ])('maps VERI*FACTU tax type %s to %s', (tAXType, territoryId) => {
+    const status = deriveConfiguredStatus({ profile: 'verifactu', verifactuRecord: { id: 'ver-1', tAXType } });
+    expect(status.system).toBe('VERIFACTU');
+    expect(status.territoryId).toBe(territoryId);
+    expect(rowValue(rowsFor(status), 'tax')).toBe(`fiscal.territory.${territoryId}.systemLong`);
+  });
+
+  it('leaves the territory null for an unknown VERI*FACTU tax type and falls back to the system long name', () => {
+    const status = deriveConfiguredStatus({ profile: 'verifactu', verifactuRecord: { id: 'ver-1', tAXType: '99' } });
+    expect(status.territoryId).toBeNull();
+    const rows = rowsFor(status);
+    expect(rowKeys(rows)).not.toContain('territory');
+    expect(rowValue(rows, 'tax')).toBe('fiscal.system.verifactu.long');
+  });
+
+  it('has no "activated" row when the records carry no creation date', () => {
+    const status = deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1' } });
+    expect(status.activatedAt).toBeNull();
+    expect(rowKeys(rowsFor(status))).not.toContain('activated');
+  });
+
+  it('has no "activated" row when the creation date is not a valid date', () => {
+    const status = deriveConfiguredStatus({ profile: 'sii', siiRecord: { id: 'sii-1', created: 'not-a-date' } });
+    expect(status.activatedAt).toBeNull();
+    expect(rowKeys(rowsFor(status))).not.toContain('activated');
+  });
+
+  it('takes the earliest of created/creationDate across the records in use', () => {
+    const status = deriveConfiguredStatus({
+      profile: 'sii+tbai',
+      siiRecord: { id: 'sii-1', created: '2026-03-10T10:00:00Z' },
+      tbaiRecord: { id: 'tbai-1', etsgSifTerritory: 'BIZKAIA', creationDate: '2026-02-01T09:00:00Z' },
+    });
+    expect(status.activatedAt.toISOString()).toBe('2026-02-01T09:00:00.000Z');
+    expect(rowKeys(rowsFor(status))).toContain('activated');
+  });
+
+  it.each(['conflict', 'unconfigured', 'something-else', undefined])('returns null for profile %s', (profile) => {
+    expect(deriveConfiguredStatus({ profile, siiRecord: { id: 'sii-1' } })).toBeNull();
   });
 });
