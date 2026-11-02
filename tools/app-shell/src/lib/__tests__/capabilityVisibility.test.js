@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/capabilityVisibility.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -7,6 +8,10 @@ import {
   isCapabilityVisible,
   isPostingAction,
 } from '../capabilityVisibility.js';
+import * as capabilityVisibility from '../capabilityVisibility.js';
+
+// Namespace read: while the constant is not exported yet only its own tests fail, not the whole file.
+const { PRODUCT_MOVEMENTS_CAPABILITY } = capabilityVisibility;
 
 describe('isCapabilityVisible', () => {
   it('returns true when no key is given (opt-in, default visible)', () => {
@@ -88,5 +93,18 @@ describe('filterPostingActions', () => {
   it('passes a non-array through unchanged', () => {
     assert.equal(filterPostingActions(undefined, {}), undefined);
     assert.equal(filterPostingActions(null, {}), null);
+  });
+});
+
+describe('PRODUCT_MOVEMENTS_CAPABILITY', () => {
+  it('is the key the backend publishes in SFWindowAccessMap', () => {
+    assert.equal(PRODUCT_MOVEMENTS_CAPABILITY, 'productMovements');
+  });
+
+  it('fails closed: only an explicit true shows the Movements tab', () => {
+    assert.equal(isCapabilityVisible({ productMovements: true }, PRODUCT_MOVEMENTS_CAPABILITY), true);
+    assert.equal(isCapabilityVisible({ productMovements: false }, PRODUCT_MOVEMENTS_CAPABILITY), false);
+    assert.equal(isCapabilityVisible({}, PRODUCT_MOVEMENTS_CAPABILITY), false);
+    assert.equal(isCapabilityVisible(undefined, PRODUCT_MOVEMENTS_CAPABILITY), false);
   });
 });

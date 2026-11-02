@@ -2,9 +2,9 @@
  * Record the token usage of one agent chat turn in ETGO_USAGE_EVENT.
  *
  * The BFF cannot use the Java recorder, so it posts to NEO's `POST /sws/neo/usage` with the
- * caller's own Bearer token — the same credential it already forwards to the Etendo MCP endpoint.
- * User, role and tenant come from that token on the server; the body cannot name them, and
- * `source: 'ai-bff'` is a label, not a trust boundary.
+ * caller's own credential — the same headers it already forwards to the Etendo MCP endpoint, under
+ * either session scheme (bearer or cookie + CSRF). User, role and tenant come from that session on
+ * the server; the body cannot name them, and `source: 'ai-bff'` is a label, not a trust boundary.
  *
  * Usage never affects the chat: the post is fire-and-forget, bounded by a short timeout, and every
  * failure collapses into one log line.
@@ -20,11 +20,14 @@ export function usageEndpoint(mcpUrl, override = process.env.ETENDO_USAGE_URL) {
 
 /**
  * Build the `ai.agent.message` event. `usage` is the SDK's aggregated LanguageModelUsage;
- * `cachedInputTokens` is emitted only when the provider reported it.
+ * `cachedInputTokens` is emitted only when the provider reported it. `costUsd` (see
+ * {@link sumStepCost}) is a top-level field, not a property: NEO stores it in its own
+ * `COST_USD` column, which the billing engine sums; it is omitted when nothing was priced.
  */
 export function buildAgentMessageEvent({ outcome, durationMs, sessionKey, target, model, usage, steps, finishReason }) {
   const stepList = steps || [];
   const cached = usage?.inputTokenDetails?.cacheReadTokens;
+  const cost = sumStepCost(stepList);
   return {
     eventType: 'ai.agent.message',
     source: 'ai-bff',
@@ -33,6 +36,7 @@ export function buildAgentMessageEvent({ outcome, durationMs, sessionKey, target
     outcome,
     durationMs,
     sessionKey,
+    ...(cost === undefined ? {} : { costUsd: cost }),
     properties: {
       ...(model ? { model } : {}),
       inputTokens: usage?.inputTokens ?? 0,
@@ -58,15 +62,35 @@ export function sumStepUsage(steps) {
   return { ...total, inputTokenDetails: { cacheReadTokens: cached } };
 }
 
-/** Post one event. Returns a promise that never rejects; callers must not await it. */
-export function postUsageEvent(event, { url, authorization, fetchImpl = fetch, log = console.warn } = {}) {
-  // Cookie-only sessions carry no Bearer token, and /sws/neo/usage is recorded with
-  // the caller's Bearer. Skip instead of sending `Authorization: undefined`.
-  if (!authorization) return Promise.resolve();
+/**
+ * Sum the money the provider charged for the steps, in USD. LiteLLM (llm.etendo.software) puts
+ * it in the raw usage of each streamed response as `usage.cost`; the SDK keeps that raw object
+ * per step only (`step.usage.raw`), never in the aggregated total. Undefined when no step
+ * reported a cost, so a provider that does not price requests is not recorded as free.
+ */
+export function sumStepCost(steps) {
+  let total;
+  for (const step of steps || []) {
+    const cost = step?.usage?.raw?.cost;
+    if (typeof cost === 'number' && Number.isFinite(cost)) total = (total || 0) + cost;
+  }
+  return total;
+}
+
+/**
+ * Post one event with the caller's own credential headers (`credentialHeaders` in server.js:
+ * `Authorization` under the bearer scheme; the session `Cookie`, `X-Go-CSRF`, `Origin` and
+ * `Referer` under the cookie scheme). Returns a promise that never rejects; callers must not
+ * await it.
+ */
+export function postUsageEvent(event, { url, headers, fetchImpl = fetch, log = console.warn } = {}) {
+  // No credential of either scheme: nobody to record the event under. handleChat refuses such a
+  // request before a recorder exists, so this only guards direct callers.
+  if (!headers?.Authorization && !headers?.Cookie) return Promise.resolve();
   return Promise.resolve()
     .then(() => fetchImpl(url, {
       method: 'POST',
-      headers: { Authorization: authorization, 'Content-Type': 'application/json' },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ events: [event] }),
       signal: AbortSignal.timeout(USAGE_TIMEOUT_MS),
     }))
@@ -82,7 +106,7 @@ export function postUsageEvent(event, { url, authorization, fetchImpl = fetch, l
  * One recorder per chat request. `track(step)` collects steps as they finish; the first of
  * `finish` / `fail` / `abort` records the turn and the rest are ignored, so a turn is counted once.
  */
-export function createTurnRecorder({ url, authorization, sessionKey, target, modelId, now = Date.now, fetchImpl, log }) {
+export function createTurnRecorder({ url, headers, sessionKey, target, modelId, now = Date.now, fetchImpl, log }) {
   const startedAt = now();
   const trackedSteps = [];
   let recorded = false;
@@ -101,7 +125,7 @@ export function createTurnRecorder({ url, authorization, sessionKey, target, mod
         steps,
         finishReason,
       });
-      postUsageEvent(event, { url, authorization, fetchImpl, log });
+      postUsageEvent(event, { url, headers, fetchImpl, log });
     } catch (error) {
       (log || console.warn)(`[ai-bff:usage] not recorded: ${error instanceof Error ? error.message : error}`);
     }
