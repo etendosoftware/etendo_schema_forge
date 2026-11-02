@@ -941,8 +941,11 @@ export const transactions = [
     "movementQuantity": 402,
     "movementDate": "2026-01-15",
     "movementType": "Sample movementType",
+    "transactionCost": 38907,
     "totalCost": 38907,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "Main Warehouse",
     "productId": "mock-product-001"
   },
   {
@@ -952,8 +955,11 @@ export const transactions = [
     "movementQuantity": 54,
     "movementDate": "2026-01-16",
     "movementType": "Sample movementType",
+    "transactionCost": 9306,
     "totalCost": 9306,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "East Distribution Center",
     "productId": "mock-product-002"
   },
   {
@@ -963,8 +969,11 @@ export const transactions = [
     "movementQuantity": 150,
     "movementDate": "2026-01-17",
     "movementType": "Sample movementType",
+    "transactionCost": 11544,
     "totalCost": 11544,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "West Hub",
     "productId": "mock-product-003"
   },
   {
@@ -974,8 +983,11 @@ export const transactions = [
     "movementQuantity": 97,
     "movementDate": "2026-01-18",
     "movementType": "Sample movementType",
+    "transactionCost": 11872,
     "totalCost": 11872,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "North Storage",
     "productId": "mock-product-004"
   },
   {
@@ -985,8 +997,11 @@ export const transactions = [
     "movementQuantity": 311,
     "movementDate": "2026-01-19",
     "movementType": "Sample movementType",
+    "transactionCost": 48460,
     "totalCost": 48460,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "South Logistics",
     "productId": "mock-product-005"
   },
   {
@@ -996,8 +1011,11 @@ export const transactions = [
     "movementQuantity": 451,
     "movementDate": "2026-01-20",
     "movementType": "Sample movementType",
+    "transactionCost": 45418,
     "totalCost": 45418,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "Central Depot",
     "productId": "mock-product-006"
   },
   {
@@ -1007,8 +1025,11 @@ export const transactions = [
     "movementQuantity": 496,
     "movementDate": "2026-01-21",
     "movementType": "Sample movementType",
+    "transactionCost": 33840,
     "totalCost": 33840,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "Regional Warehouse A",
     "productId": "mock-product-007"
   },
   {
@@ -1018,8 +1039,11 @@ export const transactions = [
     "movementQuantity": 284,
     "movementDate": "2026-01-22",
     "movementType": "Sample movementType",
+    "transactionCost": 25716,
     "totalCost": 25716,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "Regional Warehouse B",
     "productId": "mock-product-008"
   },
   {
@@ -1029,8 +1053,11 @@ export const transactions = [
     "movementQuantity": 225,
     "movementDate": "2026-01-23",
     "movementType": "Sample movementType",
+    "transactionCost": 44780,
     "totalCost": 44780,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "Main Warehouse",
     "productId": "mock-product-009"
   },
   {
@@ -1040,8 +1067,11 @@ export const transactions = [
     "movementQuantity": 479,
     "movementDate": "2026-01-24",
     "movementType": "Sample movementType",
+    "transactionCost": 12483,
     "totalCost": 12483,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "East Distribution Center",
     "productId": "mock-product-010"
   },
   {
@@ -1051,8 +1081,11 @@ export const transactions = [
     "movementQuantity": 123,
     "movementDate": "2026-01-25",
     "movementType": "Sample movementType",
+    "transactionCost": 46022,
     "totalCost": 46022,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "West Hub",
     "productId": "mock-product-011"
   },
   {
@@ -1062,8 +1095,11 @@ export const transactions = [
     "movementQuantity": 337,
     "movementDate": "2026-01-26",
     "movementType": "Sample movementType",
+    "transactionCost": 38634,
     "totalCost": 38634,
     "uOM": "Sample uOM",
+    "etgoDocKind": "Sample etgoDocKind",
+    "etgoWarehouse": "North Storage",
     "productId": "mock-product-012"
   }
 ];

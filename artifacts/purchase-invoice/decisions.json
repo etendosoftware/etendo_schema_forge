@@ -312,7 +312,9 @@
           "section": "other",
           "form": false,
           "reference": "User",
-          "inputMode": "search"
+          "inputMode": "search",
+          "defaultExpr": "@#AD_User_ID@",
+          "_note": "ETP-6036: SalesRep_ID has no AD default, so /defaults fell back to the first row of the user combo (Admin) instead of the session user."
         },
         "charge": {
           "visibility": "editable",

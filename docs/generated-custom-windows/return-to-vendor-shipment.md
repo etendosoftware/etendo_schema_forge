@@ -549,6 +549,14 @@ works; one document may now have several returns (the old 409 "A return already 
   the returned total is read, so two simultaneous creates/imports cannot both pass the cap. A reversed return still
   counts as returned (only a voided one frees the quantity). `reason` over the description length answers 422
   `returnReasonTooLong`. See `neo-headless.md` §4.12.32.
+- **Source line and quantities for MCP (ETP-6054).** `canceledInoutLine` (the goods receipt line a return line returns) was
+  `discarded`; it is now `visibility: "readOnly"`, `grid: false`, `form: false` in `decisions.json` (entity `lines`), so
+  `etendo_get` / `etendo_list` of `returnToVendorShipmentLine` return it while the screen shows no new column, field or input
+  (the generated diff is one `selectors` entry that is only read for a rendered field, plus mock data). `orderQuantity`
+  keeps its name: it is the quantity RECEIVED on the source receipt line, the "Cant. recibida orig." column. `availableReceiptLines`
+  adds `receivedQuantity` next to `movementQuantity` (still returnable). The `createPurchaseReturn` 201 lists per line
+  `alreadyReturnedQuantity` and the `returns` that hold it. To publish the new field to the runtime:
+  `make regen ONLY=return-to-vendor-shipment PUSH_TO_NEO=1` and `./gradlew export.database`.
 - **Published to MCP.** `availableReceipts`, `availableReceiptLines` (`receiptId` + `businessPartner`),
   `importReceiptLines`, `rectifiableInvoices`, `createReturnInvoice` and `documentAction` (CO) are declared by
   `ReturnToVendorShipmentHeaderHandler.actionContracts()`; the spec `agentPrompt`
