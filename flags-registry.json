@@ -1539,6 +1539,107 @@
       ]
     },
     {
+      "id": "invoice-inbox",
+      "description": "Invoice Inbox (epic ETP-6046): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
+      "owner": "ivanrobledofutit",
+      "jira": "ETP-6047",
+      "created": "2026-11-02",
+      "flag": {
+        "key": "invoice-inbox",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag, delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and (once ETP-6049 adds it) the INVOICE_INBOX key in flag-keys.js with its toggle points; delete the flag object, keep this entry.",
+        "symbols": [
+          "invoice-inbox",
+          "FLAG_INVOICE_INBOX",
+          "InvoiceInboxFlag"
+        ],
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js yet (ETP-6049 adds INVOICE_INBOX when there is UI). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator."
+      },
+      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. The toggle point is InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart.",
+      "paths": {
+        "frontend": [],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxFlag.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpoint.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxIntake.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxMessages.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays.",
+      "testSpecs": {
+        "$testSpecsComment": "Backend specs are tester-go's. All are written and pass: the gate, the upload endpoint (toggle point), the intake, the messages, the shared specs and one DB-backed integration test (WeldBaseTest: the attachment manager is resolved through the Weld static bean manager, absent under a plain OBBaseTest). The environment-variable spelling of the local arm cannot be set from the JVM, so only the property is tested.",
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxFlagTest.java",
+            "note": "Covers: isEnabled(email, clientId) publishes the targeting key, Email and lowercase email plus clientId to the provider, end to end through GoFeatureFlags into a capturing provider; a targeted account reads true and a non-targeted one false; blank or null email -> clientId only, no targeting key, default false; isEnabled() passes GoAccountResolver.currentAccountEmail() and the OBContext tenant through; no OBContext or no client -> null client id, no throw; unset, non-boolean and failing provider all read false; local property arm (etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX) true/false."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpointTest.java",
+            "note": "Covers: flag off -> 403 feature_disabled before getParts() is called and before any window/org check; no window write access -> 403 access_denied; not multipart -> 400 not_multipart; star org and org outside getWritableOrganizations -> 403 org_not_allowed; getParts() throwing IllegalStateException -> 413 request_too_large (message carries 10 and 210 MB); getParts() IOException/ServletException -> 400 not_multipart; only parts named `files` with a submitted file name count; 0 files -> 400 no_files; 21 files -> 400 too_many_files with max 20 and count and NOTHING created; exactly 20 accepted; mixed batch answers 200 with accepted/rejected counts and ordered results; ids (client/org/user) captured once; parts' temp files deleted in every path."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxIntakeTest.java",
+            "note": "Covers: extension not in {pdf,jpg,jpeg,png} (webp, exe, none, ..) -> unsupported_type without touching the DAL; size 0 -> empty_file; path-traversal names sanitized; happy path creates the IncomingDocument (source UPLOAD, targetType PURCHASE_INVOICE, status PROCESSING, adjusted/reviewed false, client/org re-read by id), calls NeoAttachmentStore.store with markAsMain true and the table name, then commitAndClose and returns the row id; store 400/422 -> rollbackAndClose + invalid_content passing the store message; store 404/500 or no message -> store_failed; any exception -> rollbackAndClose + store_failed, never thrown; temp file and its directory removed in every path; one file failing does not affect the next."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxMessagesTest.java",
+            "note": "Covers: the AD text is used when present, the English fallback when the row is missing or messageBD returns the key or throws; @name@ placeholders replaced; every key has a default."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoBuiltInEndpointHandlerTest.java",
+            "note": "Shared spec (find with make find-tests): the invoice-inbox/upload POST branch delegates and writes the response; invoice-inbox with another entity or verb does not take the branch."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/roles/TemplateRoleWindowAccessTest.java",
+            "note": "Shared spec, updated: Purchasing 14, Finance 34, total 74, distinct windows 42; Invoice Inbox 81AC659E93504927B459E0CAE80CE923 is FULL for Compras and Financiero and absent for Ventas/Almacén. Parity guardrail: EnsureSystemRoleTemplatesScript's inlined matrix (compiled in memory, read by reflection) equals TemplateRoleWindowAccess for every role, Invoice Inbox included."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoAttachmentPolicyTest.java",
+            "note": "Shared spec: the per-file limit and the 210 MB multipart request limit derive from MAX_SIZE_MB (20 files x 10 MB + 10 MB margin)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxIntakeIntegrationTest.java",
+            "note": "DB-backed (WeldBaseTest, F&B sample data): each accepted file commits a PROCESSING row plus its main C_File attachment; a content mismatch leaves no row and no attachment; a refused file between two good ones does not affect them; nothing is created in C_Invoice."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "web-key-with-ui",
+          "kind": "scope",
+          "note": "No key in tools/app-shell/src/lib/flags/flag-keys.js on purpose. Story ETP-6049 adds INVOICE_INBOX when the inbox has a UI. Web client and backend use different targeting keys, so the Datadog rules must be written on the lowercase `email` attribute only.",
+          "refs": [
+            "ETP-6049"
+          ]
+        },
+        {
+          "id": "neo-spec-and-role-access",
+          "kind": "scope",
+          "note": "The NEO spec and the role access matrix of the Invoice Inbox window (see ETP-4878) are not part of this flag change.",
+          "refs": [
+            "ETP-4878"
+          ]
+        },
+        {
+          "id": "ttl-to-confirm",
+          "kind": "precondition",
+          "note": "The TTL 2027-01-31 is provisional and must be confirmed with product before the flag is turned on anywhere shared.",
+          "refs": [
+            "ETP-6046"
+          ]
+        }
+      ]
+    },
+    {
       "id": "product-movements-tab",
       "description": "Read-only Movements tab of the Product window (ETP-5889): stock movements of a product with date, type, warehouse, signed quantity, resulting stock and cost, filtered and sorted in the backend. Switched on per account so it can roll out to chosen accounts first.",
       "owner": "jortolano",
