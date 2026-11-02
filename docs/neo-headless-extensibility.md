@@ -204,6 +204,7 @@ handler opts in only when it needs to:
 | `actionContracts()` | empty map | which named actions it answers, with their parameters | §2.7.1 |
 | `serverResolvedCreateFields()` | empty set | which mandatory fields the server derives on create | §2.7.2 |
 | `resolveServerCreateFields(ctx)` | no-op | fills create fields **before** the MCP mandatory pre-check | §2.7.3 |
+| `createUnsetFields()` | empty set | which defaulted fields a new record is saved without | §2.7.4 |
 | `protectedCreateCalloutFields(ctx)` | empty set | which caller values the create callout cascade must not overwrite | — |
 
 This is how the structure-vs-identity rule (Golden Rule) is kept: the shared MCP/REST code reads
@@ -609,6 +610,28 @@ Full runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.22 (next 
 `serverResolvedCreateFields`) and *Invoice header defaults for a write that leaves them out
 (ETP-5703)*; the documents that still diverge on `etendo_create` are listed under §4.12.9
 *Still divergent*.
+
+### 2.7.4 `createUnsetFields()`: fields a new record is saved without (ETP-5852)
+
+Some forms prefill a field and then clear it before saving a new record — the contact's billing
+preferences (price list, payment terms and method, financial account, blocking) are filled in
+after the contact exists. `etendo_defaults` still answers a value for them, so without this
+declaration `etendo_schema(view:"create")` marks them `serverDefaulted` while the record is saved
+with them empty.
+
+```java
+@Override
+public Set<String> createUnsetFields() {
+  return PRECREATE_BILLING_FIELDS;   // BusinessPartnerHandler
+}
+```
+
+- **Reader: MCP only** (`McpServerResolvedFields.unsetOnCreate`). The names are never
+  `serverDefaulted` in `view:"create"`, and `etendo_defaults` over MCP drops them (with their
+  `$_identifier`), so an agent is not handed a value to copy.
+- **What happens to a sent value is the customization's call.** `BusinessPartnerHandler` keeps a
+  value the agent itself sent (`NeoContext.ATTR_CLIENT_PROVIDED_FIELDS`, MCP origin) and clears
+  the rest, as the app's form does.
 
 ---
 

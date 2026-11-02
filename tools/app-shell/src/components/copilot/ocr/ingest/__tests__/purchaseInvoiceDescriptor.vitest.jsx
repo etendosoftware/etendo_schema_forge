@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js
 import { BACK } from '../../ocrFlowSignals';
-import { classifyProductMatch, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
+import { classifyProductMatch, normalizeProductName, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
 
 // Mock simSearch to test findBp without network
 vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
@@ -582,6 +582,15 @@ describe('purchaseInvoiceDescriptor', () => {
         expect(result.ops.find(o => o.entity === 'Lines').body.product).toBe('p-mw');
       });
 
+      it('auto-assigns an accent-only difference even at 82.3529% similarity (CP-7, QA literal)', async () => {
+        const name = 'Arnés escalada QA5654D talla M';
+        const { result, askUserForProducts } = await run('Arnes escalada QA5654D talla M', [
+          { id: 'p-arnes', name, similarityPercent: '82.3529', candidates: [{ id: 'p-arnes', name, similarityPercent: '82.3529' }] },
+        ]);
+        expect(askUserForProducts).not.toHaveBeenCalled();
+        expect(result.ops.find(o => o.entity === 'Lines').body.product).toBe('p-arnes');
+      });
+
       it('sends two exact-name candidates to the popup instead of picking one', async () => {
         const cands = [{ id: 'p1', name: 'Widget' }, { id: 'p2', name: 'widget' }];
         const { askUserForProducts } = await run('Widget', [{ ...cands[0], candidates: cands }]);
@@ -681,6 +690,61 @@ describe('purchaseInvoiceDescriptor', () => {
       describe('similarity auto-match (ETP-5654)', () => {
         const cand = (id, name, similarityPercent) => ({ id, name, similarityPercent });
         const classify = (desc, ...cs) => classifyProductMatch(desc, { ...cs[0], candidates: cs });
+
+        describe('accent-insensitive exact name (CP-7)', () => {
+          const c = (id, name, sim) => ({ id, name, similarityPercent: sim });
+          const sugg = (id, name) => ({ suggestion: { id, name } });
+
+          it('normalizes case, accents and spaces but keeps n-tilde', () => {
+            expect(normalizeProductName('  ARNÉS  ')).toBe('arnes');
+            expect(normalizeProductName('Año')).toBe('año');
+            expect(normalizeProductName('An\u0303o')).toBe('año'); // decomposed n + tilde == ñ
+            expect(normalizeProductName(null)).toBe('');
+          });
+
+          it('matches an accent-only difference at 82.3529 (accent in candidate)', () => {
+            expect(classify('Arnes escalada QA5654D talla M', c('p1', 'Arnés escalada QA5654D talla M', '82.3529')))
+              .toEqual({ id: 'p1' });
+          });
+
+          it('matches in the other direction (accent in description)', () => {
+            expect(classify('Arnés talla M', c('p1', 'Arnes talla M', 82))).toEqual({ id: 'p1' });
+          });
+
+          it('matches accent and case combined', () => {
+            expect(classify('ARNES talla M', c('p1', 'Arnés talla M', 80))).toEqual({ id: 'p1' });
+          });
+
+          it('suggests when two candidates are equal after normalization', () => {
+            expect(classify('Arnés X', c('p1', 'Arnés X', 100), c('p2', 'Arnes X', 100))).toEqual(sugg('p1', 'Arnés X'));
+            expect(classify('Arnes X', c('p1', 'Arnés X', 82), c('p2', 'Arnes X', 99))).toEqual(sugg('p1', 'Arnés X'));
+          });
+
+          it('lets the accent-equal candidate beat a higher-similarity non-equal one', () => {
+            expect(classify('Arnes talla M', c('p1', 'Arnes talla M extra', 97), c('p2', 'Arnés talla M', 82)))
+              .toEqual({ id: 'p2' });
+          });
+
+          it('does not match a different word at 82 ("talla N" vs "talla M")', () => {
+            expect(classify('Arnes talla N', c('p1', 'Arnés talla M', 82))).toEqual(sugg('p1', 'Arnés talla M'));
+          });
+
+          it('keeps n-tilde distinct ("ano" is not "año")', () => {
+            expect(classify('ano', c('p1', 'año', 80))).toEqual(sugg('p1', 'año'));
+            expect(classify('AÑO', c('p1', 'año', 80))).toEqual({ id: 'p1' });
+          });
+
+          it('trims Unicode spaces such as a trailing NBSP', () => {
+            expect(normalizeProductName('Arnés\u00A0')).toBe('arnes');
+            expect(normalizeProductName('\uFEFF\u2003Arnés\u3000')).toBe('arnes');
+            expect(classify('Arnés\u00A0', c('p1', 'Arnés', 50))).toEqual({ id: 'p1' });
+          });
+
+          it('keeps empty and null descriptions unchanged', () => {
+            expect(classify('', c('p1', 'Arnés', 80))).toEqual(sugg('p1', 'Arnés'));
+            expect(classifyProductMatch(null, { ...c('p1', 'Arnés', 80) })).toEqual(sugg('p1', 'Arnés'));
+          });
+        });
 
         it('exposes the threshold constant', () => {
           expect(PRODUCT_AUTO_MATCH_MIN_SIMILARITY).toBe(90);

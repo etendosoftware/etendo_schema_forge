@@ -12,7 +12,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  resolvePostedStatus, postedStatusLabel, resolveStatusPill, postedStatusTone, isPostedBooleanValue,
+  resolvePostedStatus, postedStatusLabel, resolveStatusPill, postedStatusTone, isPostedBooleanValue, isPosted,
 } from '../postedStatus.js';
 
 describe('resolvePostedStatus', () => {
@@ -289,5 +289,49 @@ describe('resolveStatusPill', () => {
         hint: undefined,
       });
     });
+  });
+});
+
+// Moved from preUnpost.test.js with `isPosted` (ETP-5684).
+describe('isPosted', () => {
+  it('treats the AD "Y" flag as posted', () => {
+    assert.equal(isPosted({ posted: 'Y' }), true);
+  });
+
+  it('treats a real boolean true as posted (a JSON-typed backend row)', () => {
+    assert.equal(isPosted({ posted: true }), true);
+  });
+
+  it('treats "N" as not posted', () => {
+    assert.equal(isPosted({ posted: 'N' }), false);
+  });
+
+  it('treats a missing posted flag as not posted', () => {
+    assert.equal(isPosted({}), false);
+    assert.equal(isPosted({ posted: undefined }), false);
+  });
+
+  it('treats an absent row as not posted instead of throwing', () => {
+    assert.equal(isPosted(null), false);
+    assert.equal(isPosted(undefined), false);
+  });
+
+  // The AD "Posted status" reference has more members than Y/N — only 'Y' means
+  // "accounting entries exist". Anything else (error, not-from-this-doc, being
+  // posted, inactive period…) must NOT offer an unpost: unposting a document
+  // that was never posted is a no-op at best and an error at worst.
+  for (const value of ['E', 'D', 'p', 'i']) {
+    it(`treats the "${value}" posted status as not posted`, () => {
+      assert.equal(isPosted({ posted: value }), false);
+    });
+  }
+
+  it('treats a lowercase "y" as not posted (the AD value is uppercase)', () => {
+    assert.equal(isPosted({ posted: 'y' }), false);
+  });
+
+  it('treats boolean false and the empty string as not posted', () => {
+    assert.equal(isPosted({ posted: false }), false);
+    assert.equal(isPosted({ posted: '' }), false);
   });
 });

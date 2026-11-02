@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { fetchAccount } from '@etendosoftware/etendo-go-core/onboarding/api';
@@ -12,6 +13,8 @@ import { ChangePasswordDialog } from '@/components/ChangePasswordDialog.jsx';
 import { SecuritySection } from '@/components/account/SecuritySection.jsx';
 import { SubscriptionSection } from '@/components/account/SubscriptionSection.jsx';
 import { useLogout } from '@/auth/useLogout.js';
+import { useFeatureFlag, MY_COMPANIES_PAGE } from '@/lib/flags';
+import { trackAccountSubscriptionMovedClicked } from '@/lib/myCompanies/telemetry.js';
 
 /**
  * Account settings (ETP-5115).
@@ -23,6 +26,11 @@ import { useLogout } from '@/auth/useLogout.js';
 export default function AccountSettingsPage() {
   const ui = useUI();
   const logout = useLogout();
+  const navigate = useNavigate();
+  // ETP-6060 — with "Mis empresas" on, each owned company's subscription lives there (one per
+  // company, whatever environment the session is in); this page only points at it. Off, the
+  // section stays here as before.
+  const subscriptionInMyCompanies = useFeatureFlag(MY_COMPANIES_PAGE);
   const [authMethods, setAuthMethods] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -154,10 +162,30 @@ export default function AccountSettingsPage() {
           ? <p className="text-sm text-muted-foreground">{ui('loading')}</p>
           : securityBody}
 
-        <SubscriptionSection
-          apiBaseUrl={detectBaseUrl()}
-          onSessionExpired={markSessionExpired}
-          data-testid="SubscriptionSection__account" />
+        {subscriptionInMyCompanies ? (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3"
+            data-testid="account-settings-subscription-moved"
+          >
+            <p className="text-sm text-muted-foreground">{ui('accountSubscriptionMoved')}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                trackAccountSubscriptionMovedClicked();
+                navigate('/companies');
+              }}
+              data-testid="account-settings-go-to-companies"
+            >
+              {ui('accountSubscriptionGoToCompanies')}
+            </Button>
+          </div>
+        ) : (
+          <SubscriptionSection
+            apiBaseUrl={detectBaseUrl()}
+            onSessionExpired={markSessionExpired}
+            data-testid="SubscriptionSection__account" />
+        )}
       </div>
 
       <ChangePasswordDialog

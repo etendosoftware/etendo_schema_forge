@@ -227,10 +227,14 @@ export default function ImportLinesModal({
     return lines;
   };
 
-  // Caller-provided batch submit (e.g. the return-flow's single POST action).
+  // Caller-provided batch submit (e.g. the return-flow's single POST action). It also receives
+  // the current `selection` and `extraState`, and may return `afterImportResult`, handed to
+  // `getSuccessToast` as in the per-line path (ETP-6002: the order import's global discount).
   const importViaSubmitHandler = async () => {
     const lines = collectSelectedLines();
-    const result = await submitImport({ lines, base, headers, invoiceId, sharedContext });
+    const result = await submitImport({
+      lines, base, headers, invoiceId, sharedContext, extraState, selection,
+    });
     if (!result?.ok) {
       // ETP-5051 — a handler that hands back the refusal `body` gets a plan-quota refusal shown as
       // the translated quota sentence; anything else keeps its own error or the generic one.
@@ -238,7 +242,9 @@ export default function ImportLinesModal({
       return;
     }
     const count = result.count ?? lines.length;
-    showSuccessToast({ count, importedDocIds: new Set(lines.map(l => l.docId)), afterImportResult: undefined });
+    showSuccessToast({
+      count, importedDocIds: new Set(lines.map(l => l.docId)), afterImportResult: result.afterImportResult,
+    });
     onSuccess();
   };
 

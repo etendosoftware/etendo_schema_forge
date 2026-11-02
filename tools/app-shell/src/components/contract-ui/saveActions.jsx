@@ -18,6 +18,8 @@ import { Check, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 import { showSaveSuccessToast } from '@/hooks/useEntity';
+import { useFormPendingWork } from '@/hooks/useFormPendingWork.js';
+import { isCalculating } from '@/lib/formPendingWork.js';
 
 /**
  * The required-field gate shared by every primary persist button. ETP-4839 layers a
@@ -244,9 +246,9 @@ function GateTooltip({ title, children }) {
  * window except the fully-invoiced goods-shipment / goods-receipt path) resolves on the
  * next microtask, so no other window ever renders different DOM than before.
  */
-function DraftModeConfirmButton({ confirmParams, hook, ui, draftMode, saveBtnCls, saveGate, blockCompleteForBalance }) {
+function DraftModeConfirmButton({ confirmParams, hook, ui, draftMode, saveBtnCls, saveGate, blockCompleteForBalance, calculating = false }) {
   const [customConfirmBusy, setCustomConfirmBusy] = useState(false);
-  const busy = hook.isSaving || customConfirmBusy;
+  const busy = hook.isSaving || customConfirmBusy || calculating;
   return (
     <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || customConfirmBusy || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ ...confirmParams, setCustomConfirmBusy })}>
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
@@ -264,7 +266,7 @@ function renderDraftModeSaveActions({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
   draftMode, blockSaveForBalance, blockCompleteForBalance, setShowProcessingModal, saveGate = {},
-  onlySaveButton = false,
+  onlySaveButton = false, calculating = false,
 }) {
   return (
     <>
@@ -278,7 +280,7 @@ function renderDraftModeSaveActions({
           reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
+        {hook.isSaving || calculating ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button></GateTooltip>
       {/* ETP-4839: `draftMode.keepSaveWhenCompletedFields` keeps Save visible once
@@ -298,6 +300,7 @@ function renderDraftModeSaveActions({
           saveBtnCls={saveBtnCls}
           saveGate={saveGate}
           blockCompleteForBalance={blockCompleteForBalance}
+          calculating={calculating}
           data-testid="DraftModeConfirmButton__22ebc2" />
       )}
     </>
@@ -437,7 +440,7 @@ function renderNewRecordSaveActions({
   hook, flushPendingLines, data, isNew, navigate, windowName,
   ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
   isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance, saveGate = {},
-  hasExternalPrimaryAction = false,
+  hasExternalPrimaryAction = false, calculating = false,
 }) {
   // ETP-4933: on a new record Save is normally THE primary action, so the default
   // (blue) variant is right. Windows that render their own primary action beside it
@@ -459,7 +462,7 @@ function renderNewRecordSaveActions({
           reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
-        {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
+        {hook.isSaving || calculating ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button></GateTooltip>
       {!isProcessed && hook.children.length > 0 && (
@@ -468,7 +471,7 @@ function renderNewRecordSaveActions({
           const saved = await hook.handleSaveAndProcess(draftMode);
           await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
         }}>
-          {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+          {hook.isSaving || calculating ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
           {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
         </Button></GateTooltip>
       )}
@@ -516,9 +519,44 @@ function renderExistingRecordSaveAction({
  * module level so the branch logic does not count toward DetailView's cognitive
  * complexity. All values arrive via the `params` object built in DetailView.
  */
-function renderSaveActions(params) {
+function dispatchSaveActions(params) {
   if (params.draftMode?.enabled) return renderDraftModeSaveActions(params);
   if (params.isNew) return renderNewRecordSaveActions(params);
   return renderExistingRecordSaveAction(params);
+}
+
+/**
+ * ETP-5680 follow-up: `true` while a custom form component of this form instance has work in
+ * flight whose result must land before saving (lib/formPendingWork.js). Plain (non-hook) read for
+ * callers that are not components, e.g. the auto-save-on-blur callback.
+ */
+export function isFormCalculating(hook) {
+  return isCalculating(hook?.handleChange);
+}
+
+/**
+ * The params the save buttons render with while the form is calculating: every persist button is
+ * disabled through the same `saveGate` they already honour (so the draftMode, new-record and
+ * existing-record buttons and the Complete button all follow), the tooltip says why, and the
+ * buttons show their spinner. A gate that already blocks for another reason keeps its own
+ * explanation. Exported for tests.
+ */
+export function withCalculatingGate(params) {
+  const gate = params.saveGate ?? {};
+  return {
+    ...params,
+    calculating: true,
+    saveBusy: true,
+    saveGate: gate.blocked ? gate : { ...gate, blocked: true, title: params.ui('saveCalculating') },
+  };
+}
+
+function PendingAwareSaveActions({ params }) {
+  const calculating = useFormPendingWork(params.hook?.handleChange);
+  return dispatchSaveActions(calculating ? withCalculatingGate(params) : params);
+}
+
+function renderSaveActions(params) {
+  return <PendingAwareSaveActions params={params} data-testid="PendingAwareSaveActions__22ebc2" />;
 }
 export { renderSaveActions };

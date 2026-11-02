@@ -492,7 +492,7 @@ for "fully invoiced" — and, on the bulk path below, rather than silently degra
 into "no cap at all" (which would re-invoice the full quantity instead of failing).
 
 **To modify a generated invoice**, the user reactivates it: `purchase-invoice`
-exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+exposes a `reactivate` menu action (`documentAction: 'RE'`,
 visible at `DocStatus='CO'`), now the only route back to `DR`.
 
 ### Manual verification
@@ -716,10 +716,22 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 return's description). **Omit `lines` to return everything still returnable**; with `lines`, exactly those (a line
 listed twice counts both; a `lineId` that is not on the receipt is a 422 `returnLineNotInDocument`). The receipt must
 be completed (422 `sourceNotCompleted`). The return is **always left in draft**; the 201 answers `{id, documentNo,
-documentStatus, lines:[{id, product, productName, returnedQuantity, originalQuantity, sourceLineId}]}` so the linkage
-can be reported. More than is returnable is a 422 `returnQuantityExceedsAvailable` and nothing is created; nothing
+documentStatus, lines:[{id, product, productName, returnedQuantity, originalQuantity, sourceLineId,
+alreadyReturnedQuantity, returns:[{id, documentNo, documentStatus}]}]}` so the linkage can be reported
+(ETP-6054: `alreadyReturnedQuantity` is what OTHER returns, drafts included and voided excluded, already hold of that
+source line; `returns` lists them; the sales `createReturn` shares the builder and gains the same keys). More than is returnable is a 422 `returnQuantityExceedsAvailable` and nothing is created; nothing
 left at all is 422 `nothingLeftToReturn`. The SPA wizard sends explicit lines and is unchanged; a second partial return
 now works. Cap rule and error shape: `return-to-vendor-shipment.md` and neo-headless.md §4.12.32.
+
+## `returnStatus`: what the percentage means (ETP-6054)
+
+`returnStatus` on a single-record read of a receipt is the units returned (completed returns and drafts, never voided
+ones) over the units received, summed across every line, so it mixes the units of different products (100 beers and 60
+waters returned in full read 100 percent of 160 units). It is a whole number, capped at 100. A draft return already
+counts, exactly as the wizard "Crear Devolucion desde Albaran" counts it in "Disponible para devolver". Example (receipt
+10000000, 272 units, two returns of 20 on the same line, one completed and one draft): 40 of 272 = 15, with the draft and
+after completing it. Before the fix the join repeated the received quantity once per return and the same data read 7.
+**Nothing changes on screen:** the SPA never reads `returnStatus`. Agent prompt updated (`agent-prompts/goods-receipt/spec.md`).
 
 ## Period not open (ETP-5577)
 
@@ -793,3 +805,14 @@ is (`availableNow` says so for a given record). A `post` right after completing 
 `unpost` of a receipt that is not posted is refused with **422** (`ETGO_GoodsUnpostNotPosted`) instead of a silent "0 entries removed".
 With a record id, `createPurchaseInvoice` is `availableNow:false` once nothing is left to invoice or only a draft invoice covers the rest (the reason says which).
 
+## Agent prompts on lines — ETP-5852
+
+`entities.lines.agentPrompt` says lots, serial numbers and expiry dates are not handled in Etendo GO (the line's `attributeSetValue` is discarded in the UI too), so agents tell the user instead of looking for a field (M-23). `salesOrderLine.agentPrompt` says the receipt line has no price of its own and points to the purchase order line (M-33).
+
+## Agent prompt on the movement date — ETP-5852
+
+`movementDate.agentPrompt`: a completed receipt keeps its date, as in the app; it is corrected with `createPurchaseReturn` and a new receipt. Feedback M-163.
+
+## Alternative units hidden from agents — ETP-5852
+
+`lines.operativeUOM` and `lines.operativeQuantity` carry a field-level `MCP_CONFIG` (`fields.visibility:"discarded"`, `included:false`): agents do not see them in `etendo_schema`, cannot send them, and `etendo_defaults` no longer offers them. Exposed, it suggested an unrelated operative unit (Centímetro for a beer). The app and REST are unchanged; the form already hid them. Feedback M-119.

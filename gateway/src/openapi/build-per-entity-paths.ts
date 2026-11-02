@@ -2,6 +2,7 @@ import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import {
   DEFAULT_PAGE_SIZE, MAX_FILTERS, MAX_PAGE_SIZE, MAX_SORT_FIELDS, filterOperatorsFor, isReadable, isSortable, kindOf,
 } from '../public-api/json-api-query.ts';
+import { isWritable } from '../public-api/json-api-request.ts';
 
 type JsonSchema = {
   type: 'array' | 'object' | 'string';
@@ -10,7 +11,7 @@ type JsonSchema = {
   required?: string[];
 };
 
-type FieldSchema = { type: string; format?: string; enum?: string[]; description?: string; properties?: Record<string, FieldSchema>; items?: FieldSchema };
+type FieldSchema = { type: string; format?: string; nullable?: boolean; enum?: Array<string | null>; description?: string; properties?: Record<string, FieldSchema>; items?: FieldSchema; required?: string[] };
 
 export interface OpenApiParameter {
   name: string;
@@ -154,6 +155,12 @@ function withEtagHeader(responses: OpenApiOperation['responses']) {
   return responses;
 }
 
+// The document is OpenAPI 3.0 (@nestjs/swagger), so null is allowed with
+// `nullable: true`; an enum must list null as well or null still fails it.
+function nullable(schema: FieldSchema): FieldSchema {
+  return { ...schema, nullable: true, ...(schema.enum ? { enum: [...schema.enum, null] } : {}) };
+}
+
 function isVersioned(entity: PublicApiEntity): boolean {
   return Boolean(entity.fields.updated);
 }
@@ -168,7 +175,7 @@ const LIST_META_LINKS: Record<string, FieldSchema> = {
   links: {
     type: 'object',
     description: 'Pagination links (self, first, prev, next, last); they keep your other query parameters. prev and next are null when there is no such page.',
-    properties: { self: { type: 'string' }, first: { type: 'string' }, prev: { type: 'string' }, next: { type: 'string' }, last: { type: 'string' } },
+    properties: { self: { type: 'string' }, first: { type: 'string' }, prev: { type: 'string', nullable: true }, next: { type: 'string', nullable: true }, last: { type: 'string' } },
   },
 };
 
@@ -203,23 +210,37 @@ function listQueryParameters(entity: PublicApiEntity): OpenApiParameter[] {
 }
 
 // `meta.etag` is response-only: the version travels in If-Match, never in a body.
+// A request body lists only what the gateway accepts on write (and marks the fields
+// declared `required`); a response lists only what it returns.
+// Etendo answers an empty value as null, so every response attribute is nullable;
+// request attributes keep their plain type (a write that clears a field with null
+// is not part of the contract). A to-one relationship is `{ data: null }` when
+// empty on a response and clears the link on a write, so its `data` is nullable
+// on both. The resource `id` is never null.
 function resourceSchema(
   entityName: string,
   entity: PublicApiEntity,
   properties: Record<string, FieldSchema>,
-  { request = false }: { request?: boolean } = {},
+  { request = false, partial = false }: { request?: boolean; partial?: boolean } = {},
 ): JsonSchema {
   const relationshipProperties: Record<string, FieldSchema> = {};
-  const attributeProperties = { ...properties };
+  const published = request ? isWritable : isReadable;
+  const attributeProperties = Object.fromEntries(
+    Object.entries(properties)
+      .filter(([fieldName]) => published(entity.fields[fieldName] as any))
+      .map(([fieldName, fieldSchema]) => [fieldName, request ? fieldSchema : nullable(fieldSchema)]),
+  );
   for (const [fieldName, field] of Object.entries(entity.fields) as Array<[string, typeof entity.fields[string] & { relationship?: { resource: string; foreignKey?: string } }]>) {
     if (!field.relationship) continue;
     delete attributeProperties[fieldName];
+    if (!published(field as any)) continue;
     relationshipProperties[fieldName] = {
       type: 'object',
       description: `Relationship to ${field.relationship.resource}. Foreign key: ${field.relationship.foreignKey ?? fieldName}.`,
       properties: {
         data: {
           type: 'object',
+          nullable: true,
           properties: {
             type: { type: 'string', enum: [field.relationship.resource], description: `Resource type: ${field.relationship.resource}.` },
             id: { type: 'string' },
@@ -228,14 +249,20 @@ function resourceSchema(
       },
     };
   }
+  // A PATCH sends only what changes, so nothing is required there.
+  const requiredOf = (names: string[]) => request && !partial
+    ? names.filter((fieldName) => (entity.fields[fieldName] as { required?: boolean }).required === true)
+    : [];
+  const requiredAttributes = requiredOf(Object.keys(attributeProperties));
+  const requiredRelationships = requiredOf(Object.keys(relationshipProperties));
   return {
     type: 'object',
     properties: {
       type: { type: 'string', enum: [entityName], description: `Resource type: ${entityName}.` },
       id: { type: 'string' },
-      attributes: { type: 'object', properties: attributeProperties },
+      attributes: { type: 'object', properties: attributeProperties, ...(requiredAttributes.length ? { required: requiredAttributes } : {}) },
       ...(Object.keys(relationshipProperties).length
-        ? { relationships: { type: 'object', properties: relationshipProperties } }
+        ? { relationships: { type: 'object', properties: relationshipProperties, ...(requiredRelationships.length ? { required: requiredRelationships } : {}) } }
         : {}),
       ...(isVersioned(entity) && !request
         ? { meta: { type: 'object', properties: { etag: { type: 'string', description: 'Same value as the ETag header; send it in If-Match to update this record.' } } } }
@@ -307,7 +334,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
         operationId: `${method.toLowerCase()}_${entityName}`, summary: `${method === 'PATCH' ? 'Partially update' : 'Update'} ${title}`,
         tags: [tag], description,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        requestBody: jsonApiRequestBody(resourceSchema(entityName, entity, properties, { request: true })),
+        requestBody: jsonApiRequestBody(resourceSchema(entityName, entity, properties, { request: true, partial: method === 'PATCH' })),
         responses: response(`${title} record updated`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }),
         security: [{ bearerAuth: [] }],
       };

@@ -293,7 +293,8 @@
           "visibility": "discarded"
         },
         "documentAction": {
-          "visibility": "system"
+          "visibility": "system",
+          "agentPrompt": "Document workflow action for this sales quotation. Fire it with etendo_action, sending the chosen value as parameters.docAction. A quotation Under evaluation (documentStatus=UE) is accepted with the Convertquotation action, which creates a draft sales order, or rejected with rejectQuotation (docAction RJ is routed to the same flow and needs its reason); it is never sent back to Draft. RE (Reactivate) is accepted only on a voided quotation (documentStatus=VO), as in the app; in any other status, UE included, it is refused with 400. Read documentStatus with etendo_get before acting."
         },
         "createOrder": {
           "visibility": "system"
@@ -303,15 +304,15 @@
         },
         "etgoTotalDiscount": {
           "visibility": "editable",
-          "form": false
+          "form": false,
+          "agentPrompt": "Whole-document discount, in percent. It applies to the grand total with tax: grandTotalAmount = line totals with tax x (1 - etgoTotalDiscount / 100). While the document is a draft the discount shows only on grandTotalAmount (also in the etendo_update answer); summedLineAmount and the lines do not change. On Complete it becomes one negative discount line per tax group, proportional to that group's net amount."
         },
         "eTGOCurrencyRate": {
           "visibility": "editable",
           "form": false,
           "grid": false
         }
-      },
-      "javaQualifier": "salesQuotationHeaderHandler"
+      }
     },
     "lines": {
       "javaQualifier": "orderLineHandler",

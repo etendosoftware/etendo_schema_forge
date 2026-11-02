@@ -12,8 +12,8 @@ const schema: PublicApiSchema = {
       specName: 'product',
       operations: ['GET', 'LIST'],
       fields: {
-        searchKey: { publicApi: true, direction: 'out', internalPath: 'searchKey', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
-        name: { publicApi: true, direction: 'out', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        searchKey: { publicApi: true, direction: 'out', internalPath: 'searchKey', dataType: { type: 'string' } },
+        name: { publicApi: true, direction: 'out', internalPath: 'name', dataType: { type: 'string' } },
       },
       functional: { functionalName: 'Products', functionalSummary: 'Maintain the product catalog.', functionalCapabilities: ['Create products.', 'Review products.'] },
     },
@@ -22,8 +22,8 @@ const schema: PublicApiSchema = {
       specName: 'contacts',
       operations: ['GET', 'LIST'],
       fields: {
-        name: { publicApi: true, direction: 'out', internalPath: 'name', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
-        tax_id: { publicApi: true, direction: 'out', internalPath: 'taxID', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+        name: { publicApi: true, direction: 'out', internalPath: 'name', dataType: { type: 'string' } },
+        tax_id: { publicApi: true, direction: 'out', internalPath: 'taxID', dataType: { type: 'string' } },
       },
       functional: { functionalName: 'Contacts', functionalSummary: 'Maintain customers and vendors.', functionalCapabilities: ['Create contacts.'] },
     },
@@ -58,11 +58,11 @@ test('uses functional names and descriptions instead of raw entity names', () =>
 
 test('uses declared field data types in response schemas', () => {
   const typedSchema = structuredClone(schema);
-  typedSchema.entities.product.fields.active = { publicApi: true, direction: 'out', internalPath: 'active', type: 'passthrough', dataType: { type: 'boolean' } };
-  typedSchema.entities.product.fields.weight = { publicApi: true, direction: 'out', internalPath: 'weight', type: 'passthrough', dataType: { type: 'number', format: 'double' } };
+  typedSchema.entities.product.fields.active = { publicApi: true, direction: 'out', internalPath: 'active', dataType: { type: 'boolean' } };
+  typedSchema.entities.product.fields.weight = { publicApi: true, direction: 'out', internalPath: 'weight', dataType: { type: 'number', format: 'double' } };
   const properties = buildPerEntityOpenApiPaths(typedSchema)['/api/v1/product'].get.responses['200'].content['application/json'].schema.properties.data.items.properties.attributes.properties;
-  assert.deepEqual(properties.active, { type: 'boolean' });
-  assert.deepEqual(properties.weight, { type: 'number', format: 'double' });
+  assert.deepEqual(properties.active, { type: 'boolean', nullable: true });
+  assert.deepEqual(properties.weight, { type: 'number', format: 'double', nullable: true });
 });
 
 test('does not leak internal fields not marked publicApi', () => {
@@ -84,7 +84,7 @@ test('documents CRUD verbs on the correct collection and item paths', () => {
 test('documents public foreign keys as JSON:API relationships', () => {
   const relationshipSchema = structuredClone(schema);
   relationshipSchema.entities.product.fields.category = {
-    publicApi: true, direction: 'out', internalPath: 'productCategory', type: 'passthrough', handlerId: null,
+    publicApi: true, direction: 'out', internalPath: 'productCategory',
     relationship: { resource: 'product-category', cardinality: 'one', foreignKey: 'category' },
   } as any;
   const responseSchema = buildPerEntityOpenApiPaths(relationshipSchema)['/api/v1/product'].get.responses['200'].content['application/json'].schema;
@@ -106,7 +106,7 @@ test('groups a child resource under its master and documents the parent id', () 
     operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
     parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'product' },
     fields: {
-      quantity: { publicApi: true, direction: 'inout', internalPath: 'quantity', type: 'passthrough', dataType: { type: 'number' }, handlerId: null },
+      quantity: { publicApi: true, direction: 'inout', internalPath: 'quantity', dataType: { type: 'number' } },
     },
     functional: { functionalName: 'Products — Lines' },
   };
@@ -132,7 +132,7 @@ test('documents PATCH for writable child resources in the public contract', () =
     operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
     parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'product' },
     fields: {
-      quantity: { publicApi: true, direction: 'inout', internalPath: 'quantity', type: 'passthrough', dataType: { type: 'number' }, handlerId: null },
+      quantity: { publicApi: true, direction: 'inout', internalPath: 'quantity', dataType: { type: 'number' } },
     },
     functional: { functionalName: 'Products — Lines' },
   };
@@ -144,7 +144,7 @@ function versionedSchema() {
   const versioned = structuredClone(schema) as any;
   versioned.entities.product.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
   versioned.entities.product.fields.updated = {
-    publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', dataType: { type: 'string', format: 'date-time' }, handlerId: null,
+    publicApi: true, direction: 'out', internalPath: 'updated', dataType: { type: 'string', format: 'date-time' },
   };
   versioned.entities.businessPartner.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
   return versioned;
@@ -198,8 +198,8 @@ test('a versioned child documents If-Match on its updates and never on DELETE', 
     operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
     parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'product' },
     fields: {
-      quantity: { publicApi: true, direction: 'inout', internalPath: 'quantity', type: 'passthrough', dataType: { type: 'number' }, handlerId: null },
-      updated: { publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+      quantity: { publicApi: true, direction: 'inout', internalPath: 'quantity', dataType: { type: 'number' } },
+      updated: { publicApi: true, direction: 'out', internalPath: 'updated', dataType: { type: 'string' } },
     },
     functional: { functionalName: 'Products — Lines' },
   };
@@ -302,11 +302,11 @@ test('declares one POST path per top-level action and none for children', () => 
 
 test('a list operation documents page, sort and one filter per readable filterable field', () => {
   const rich = structuredClone(schema) as any;
-  rich.entities.product.fields.active = { publicApi: true, direction: 'inout', internalPath: 'isActive', type: 'passthrough', dataType: { type: 'boolean' } };
-  rich.entities.product.fields.created = { publicApi: true, direction: 'out', internalPath: 'created', type: 'passthrough', dataType: { type: 'string', format: 'date-time' } };
-  rich.entities.product.fields.secret = { publicApi: true, direction: 'in', internalPath: 'secret', type: 'passthrough', dataType: { type: 'string' } };
-  rich.entities.product.fields.rel = { publicApi: true, direction: 'inout', internalPath: 'rel', type: 'passthrough', dataType: { type: 'string' }, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'rel' } };
-  rich.entities.product.fields.blob = { publicApi: true, direction: 'out', internalPath: 'blob', type: 'passthrough', dataType: { type: 'object' } };
+  rich.entities.product.fields.active = { publicApi: true, direction: 'inout', internalPath: 'isActive', dataType: { type: 'boolean' } };
+  rich.entities.product.fields.created = { publicApi: true, direction: 'out', internalPath: 'created', dataType: { type: 'string', format: 'date-time' } };
+  rich.entities.product.fields.secret = { publicApi: true, direction: 'in', internalPath: 'secret', dataType: { type: 'string' } };
+  rich.entities.product.fields.rel = { publicApi: true, direction: 'inout', internalPath: 'rel', dataType: { type: 'string' }, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'rel' } };
+  rich.entities.product.fields.blob = { publicApi: true, direction: 'out', internalPath: 'blob', dataType: { type: 'object' } };
   const parameters = buildPerEntityOpenApiPaths(rich)['/api/v1/product'].get.parameters as any[];
   const byName = Object.fromEntries(parameters.map((parameter) => [parameter.name, parameter]));
   assert.deepEqual(Object.keys(byName), ['page[number]', 'page[size]', 'sort', 'filter[searchKey]', 'filter[name]', 'filter[active]', 'filter[created]', 'filter[rel]']);
@@ -337,7 +337,7 @@ test('a child list keeps its parentId path parameter ahead of the query paramete
   withChild.entities.line = {
     publicApi: true, specName: 'product', operations: ['GET', 'LIST'],
     parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'p' },
-    fields: { qty: { publicApi: true, direction: 'inout', internalPath: 'qty', type: 'passthrough', dataType: { type: 'integer' } } },
+    fields: { qty: { publicApi: true, direction: 'inout', internalPath: 'qty', dataType: { type: 'integer' } } },
   };
   const parameters = buildPerEntityOpenApiPaths(withChild)['/api/v1/product/{parentId}/lines'].get.parameters as any[];
   assert.deepEqual(parameters.map((p) => `${p.in}:${p.name}`), ['path:parentId', 'query:page[number]', 'query:page[size]', 'query:sort', 'query:filter[qty]']);
@@ -356,4 +356,80 @@ test('every operation documents 429 with its rate-limit headers; list operations
     }
   }
   assert.match(paths['/api/v1/product'].get.responses['400'].description, /source\.parameter/);
+});
+
+test('a write body lists only writable fields, marks the declared required ones (not on PATCH), and a response lists only readable fields', () => {
+  const writable: PublicApiSchema = {
+    apiVersion: 'v1',
+    entities: {
+      product: {
+        publicApi: true,
+        specName: 'product',
+        operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH'],
+        fields: {
+          search_key: { publicApi: true, direction: 'inout', required: true, internalPath: 'searchKey', dataType: { type: 'string' } },
+          name: { publicApi: true, direction: 'inout', internalPath: 'name', dataType: { type: 'string' } },
+          sale_price: { publicApi: true, direction: 'out', internalPath: 'salePrice', dataType: { type: 'number' } },
+          secret_input: { publicApi: true, direction: 'in', internalPath: 'secretInput', dataType: { type: 'string' } },
+          category: { publicApi: true, direction: 'out', internalPath: 'productCategory', dataType: { type: 'string' }, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'category' } },
+          brand: { publicApi: true, direction: 'inout', required: true, internalPath: 'brand', dataType: { type: 'string' }, relationship: { resource: 'product', cardinality: 'one', foreignKey: 'brand' } },
+        },
+      },
+    },
+  } as unknown as PublicApiSchema;
+  const paths = buildPerEntityOpenApiPaths(writable);
+  const body = paths['/api/v1/product'].post.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.deepEqual(Object.keys(body.properties.attributes.properties).sort(), ['name', 'search_key', 'secret_input']);
+  assert.deepEqual(body.properties.attributes.required, ['search_key']);
+  assert.deepEqual(Object.keys(body.properties.relationships.properties), ['brand'], 'a read-only relationship is not offered on write');
+  assert.deepEqual(body.properties.relationships.required, ['brand'], 'a required writable relationship is listed on POST');
+  const put = paths['/api/v1/product/{id}'].put.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.deepEqual(put.properties.attributes.required, ['search_key'], 'a full update lists the required fields too');
+  assert.deepEqual(put.properties.relationships.required, ['brand']);
+  const patch = paths['/api/v1/product/{id}'].patch.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.equal(patch.properties.attributes.required, undefined, 'a partial update requires nothing');
+  assert.equal(patch.properties.relationships.required, undefined);
+
+  const read = paths['/api/v1/product/{id}'].get.responses['200'].content!['application/json'].schema.properties!.data as any;
+  assert.deepEqual(Object.keys(read.properties.attributes.properties).sort(), ['name', 'sale_price', 'search_key']);
+  assert.equal(read.properties.attributes.required, undefined);
+  assert.ok(read.properties.relationships.properties.category);
+});
+
+// ---- ETP-6052: an empty value is answered as null --------------------------
+
+test('response attributes and to-one relationships accept null; the resource id and request attributes do not', () => {
+  const nullable = structuredClone(writableSchema) as any;
+  nullable.entities.product.fields.sale_price = { publicApi: true, direction: 'out', internalPath: 'salePrice', type: 'passthrough', dataType: { type: 'number', format: 'double' }, handlerId: null };
+  nullable.entities.product.fields.status = { publicApi: true, direction: 'inout', internalPath: 'status', type: 'passthrough', dataType: { type: 'string', enum: ['DR', 'CO'] }, handlerId: null };
+  nullable.entities.product.fields.category = {
+    publicApi: true, direction: 'inout', internalPath: 'productCategory', type: 'passthrough', handlerId: null,
+    relationship: { resource: 'product-category', cardinality: 'one', foreignKey: 'category' },
+  };
+  const paths = buildPerEntityOpenApiPaths(nullable);
+  const responses = [
+    paths['/api/v1/product'].get.responses['200'].content!['application/json'].schema.properties!.data.items,
+    paths['/api/v1/product/{id}'].get.responses['200'].content!['application/json'].schema.properties!.data,
+    paths['/api/v1/product'].post.responses['201'].content!['application/json'].schema.properties!.data,
+    paths['/api/v1/product/{id}'].patch.responses['200'].content!['application/json'].schema.properties!.data,
+  ] as any[];
+  for (const resource of responses) {
+    const attributes = resource.properties.attributes.properties;
+    assert.deepEqual(attributes.sale_price, { type: 'number', format: 'double', nullable: true });
+    assert.deepEqual(attributes.name, { type: 'string', nullable: true });
+    assert.deepEqual(attributes.status, { type: 'string', enum: ['DR', 'CO', null], nullable: true }, 'OpenAPI 3.0: an enum must list null too');
+    assert.equal(resource.properties.relationships.properties.category.properties.data.nullable, true);
+    assert.equal(resource.properties.id.nullable, undefined, 'a resource id is never null');
+  }
+  const body = paths['/api/v1/product'].post.requestBody!.content['application/json'].schema.properties!.data as any;
+  assert.deepEqual(body.properties.attributes.properties.status, { type: 'string', enum: ['DR', 'CO'] }, 'request attributes keep their plain type');
+  assert.equal(body.properties.relationships.properties.category.properties.data.nullable, true, '{ "data": null } clears a relationship on write');
+  assert.deepEqual(nullable.entities.product.fields.status.dataType, { type: 'string', enum: ['DR', 'CO'] }, 'the manifest is not mutated');
+});
+
+test('a list response documents prev and next links as nullable', () => {
+  const links = (buildPerEntityOpenApiPaths(schema)['/api/v1/product'].get.responses['200'].content!['application/json'].schema.properties as any).links.properties;
+  assert.equal(links.prev.nullable, true);
+  assert.equal(links.next.nullable, true);
+  assert.equal(links.self.nullable, undefined);
 });

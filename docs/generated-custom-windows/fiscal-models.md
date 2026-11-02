@@ -1102,6 +1102,100 @@ bare status code was ever propagated) via the existing `parseServerMessage` help
 `fm.list.reactivate_failed` when no reason is present (network error, or any future 409 this
 mechanism doesn't tag).
 
+### "Rectificaciones" column (349 list) — current behavior
+
+**Domain fact (verified against the real AEAT Sede portal, preproducción, across several
+multi-record declarations, both sales and purchase corrections):** the Modelo 349's "Importe de
+las rectificaciones" header field sums the RESTATED base per rectification record — the new,
+corrected total base after the correction is applied — never a delta, never an abs-per-key sum of
+the delta, and never a signed net of deltas. This is the one number to keep in mind when touching
+anything in this section: any change that goes back to summing deltas (signed or absolute) will
+reproduce a figure AEAT's own portal does not show.
+
+**List shape.**
+
+- **"Resultado"** (`InfoResult`, `FmListPage.jsx`) shows ONLY the operations total — regular
+  (non-corrective) operator rows, via `sum349OperationsBase(operators)`
+  (`models/349/operations349.js`). This agrees by construction with the detail page's "Total
+  operaciones" KPI and the generated `.349` file, since all three read the same
+  `GET /fiscal349/operators` payload through the same reduction. An ordinaria with zero operations
+  but real rectifications renders `—`, never "Informativa".
+- **"Rectificaciones"** (`RectificationsCell`, `FmListPage.jsx`), a separate column right after
+  "Resultado", shows `sumRestatedRectifications(operators)` — Σ `correctedBase` across every
+  corrective row, no grouping, no sign games. It is gated on `result.hasRectifications` (whether
+  any rectificative operator row exists at all), **not** on `amount > 0` — a real rectification
+  whose restated bases happen to sum to exactly 0,00 must still render "0,00 €", not collapse to
+  the empty `—` state. Rendering is plain text, same typographic weight as "Resultado"
+  (`fontVariantNumeric: tabular-nums`, no pill, no color tint). A small info icon next to the
+  amount, `FmInfoTooltip` (`FmCommon.jsx`), shows the origin periods on hover (e.g. "de 09, 10,
+  11" — `collectRectificationOrigins`/`formatRectificationOriginsLabel`, `operations349.js`,
+  reading the `declaredYear`/`declaredPeriod` each corrective operator row already carries since
+  ETP-5027); a cross-year origin is qualified with its full year (`"<period> <year>"`), matching
+  the detail page's own "Rectificaciones" tab convention. `FmInfoTooltip` renders its box via
+  `createPortal` to `document.body` so it is never clipped by a sticky/scrolling ancestor — the
+  same mechanism backs "Totales por clave"'s own info icon.
+- The 303/390 rows never populate `rectifications`, so their "Rectificaciones" cell is simply
+  empty; the "Rectificaciones" tab, the per-key totals and every `.349` file amount are untouched
+  by any of the above.
+
+**Detail page — "Bases rectificadas por clave" card** (`RectificativeSubtotalCard`,
+`FmModel349Page.jsx`, i18n key `fm.m349.rectif_subtotal.title`) reads `rectifiedBaseByKey(operators)`
+— the same `correctedBase` values, partitioned by AEAT349 key (E/S/A/I). It always renders exactly
+4 rows, including zero ones. Restated bases are never negative by AEAT convention ("Todos los
+importes serán positivos"), so the card has no red/negative styling. **It carries no grand-total
+row** — the only place the overall total is shown is the list's "Rectificaciones" column; summing
+the 4 rows by hand always matches that column's value, since both are reductions over the same
+`correctedBase` values.
+
+**Detail page — Operadores tab, per-row "Base imponible".** A rectificative row's cell reads
+`isRectificativeOp(op) ? (op.correctedBase ?? op.base) : op.base` — the restated base, falling back
+to the old signed delta (`base`) only when `correctedBase` is absent (a legacy/stale payload), so
+the cell is never blank. No red/negative styling here either, for the same "always positive"
+reason.
+
+**Backend field.** `com.etendoerp.go`'s `Fiscal349BoxesHandler#appendOperators` (via the
+`putCorrectedBaseIfRectificative` helper) writes `correctedBase = former.add(delta)` onto every
+corrective operator row, additive alongside the pre-existing signed-delta `base` field — `base` is
+untouched and still backs the Operadores fallback case above. `former` comes from
+`AEAT3492010ReportDao.getCorrectiveTaxBaseAmountPerBusinessPartner`'s `BPFormerAmount`, already
+attached to every corrective row. The `.349` file generator (`AEAT3492010Report`, classic) reads
+`BPFormerAmount` directly from the DB and was never affected by any of this — it was always
+correct.
+
+**Deliberately not changed:** `em_aeat349_iscorrective` (the manual flag deciding whether an
+invoice lands in "Rectificaciones" or "Facturas origen") and the backend's `rectificativeSummary`
+field (still computed and emitted, just no longer read by the frontend — removing a documented,
+stable API field is not this change's business).
+
+#### CP-20 — reactivate/delete confirm dialogs close on both outcomes
+
+`FmListPage.jsx`'s `handleConfirmReactivate` and `handleConfirmDelete` clear their target
+(`reactivateTarget`/`deleteTarget`) in `.finally`, next to the busy flag each shares a lifecycle
+with (`reactivatingId`/`deletingId`) — so the confirmation dialog closes whether the action
+succeeds or is rejected (e.g. the `corrective_sibling_presented` 409). The row itself is left
+untouched on failure, so the action can simply be retried. Guarded by
+`FmListPage.reactivate.vitest.jsx` (all three rejection reasons) and
+`FmListPage.rowActions.vitest.jsx` (delete).
+
+#### Design history / lessons
+
+Earlier iterations are worth knowing about only so they aren't re-tried: the operations total was
+once computed as `sumAbsKeyTotals(summary) + sumAbsKeyTotals(rectificativeSummary)` (CP-19's first
+bug — it mixed the rectifications block into "Resultado"), and once the rectifications amount
+itself was computed as `sumAbsRectificativeTotals(rectificativeSummary)`, a per-key absolute sum of
+SIGNED DELTAS rather than the restated base — both wrong for the same underlying reason (deltas,
+signed or absolute, cannot reconstruct AEAT's restated-base figure). The "Rectificaciones" cell
+itself went through two discarded visual designs before the current plain-text + info-icon shape:
+a colored pill with a clock icon and a permanent sub-line of origin periods (broke row vertical
+alignment), then a pill with the origin periods in the browser's native `title` tooltip (unreliable
+hover behavior). Resist reintroducing any of these to "simplify" the column.
+
+One pointer worth keeping so it isn't re-investigated: during development, the `correctedBase`
+figures briefly read as a uniform 0,00/empty across the board; this looked like a missing-field or
+key-mismatch bug but was confirmed (via bytecode/DB inspection) to be a stale build/classloader
+artifact from an incomplete rebuild, resolved by a full `compile.complete`/`smartbuild` + Tomcat
+restart — not a logic bug.
+
 **4 — Display regression: the Bug 3 fix needed a second layer.** ETP-5725's original Bug 3 fix
 (see "Tipo column derivation" above) only patched `FmListPage.jsx`'s `resolveDeclTypeLabel` — its
 "never-saved" fallback now requires `decl.status === 'draft'` before defaulting to
@@ -3819,6 +3913,7 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
 | Surface | 390 behaviour | Driven by |
 |---|---|---|
 | Catalog | Card "390" with the single chip "Anual"; SII warning on activation (see "Model catalog") | `periodicities: ['annual']`, `siiWarningOnActivate` |
+| Every surface | Hidden while the backend-only flag `fiscal-model-390` is off for the current user (the default; targeted per account email and per tenant): the catalog answer drops 390 and marks it `_unavailable` (see "Model catalog › Modelo 390 behind the backend-only flag") | `FiscalModel390Flag` (backend), `catalogAvailability.js` |
 | Nueva declaración | Subtitle "Elige el modelo y el ejercicio que quieres declarar." (`fm.new_decl.subtitle_annual`; the others keep the "período" one). Year only (no Frecuencia / Período), the Año field full width (`.fm-newdecl-row--single`): under Año a grey "Anual" pill + "El Modelo 390 no tiene frecuencia ni periodo: se declara el ejercicio completo." (`fm.new_decl.annual_hint`); footer "Se creará como Modelo 390 · Anual <año>" (`fm.new_decl.preview_annual`); period sent is `'0A'` | `isAnnualOnlyModel` (`fiscalPeriods.js`) |
 | Nueva declaración | An ordinary 390 of the selected year already in the list → inline notice "Ya existe el Modelo 390 de <año>" + **Abrir declaración** (`onOpenExisting`) and "Crear declaración" disabled. A substitute (`type: 'com'`) does not block | `singleOrdinaryPerYear` |
 | Nueva declaración | Amber, non-blocking notice with a `TriangleAlert`: bold "Faltan Modelos 303 de <año> (T4)." (`fm.m390.new_decl.missing_303_lead`, the hook's `key`) + "El 390 se calculará igualmente, pero el resultado podría no cuadrar." (`…_body`, the hook's optional `bodyKey`) when 303s of the year are not in the list. The duplicate-ordinary notice has the same icon with its sentence in bold. Quarterly filer by default (T1-T4); once the year has a monthly 303, every month 01-12 is expected; any status counts | `newDeclWarning` → `newDeclWarning390.js` |
@@ -4721,6 +4816,59 @@ The catalog drawer lists the tax forms the tenant can enable/disable — no lock
 | `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
 | `390` | Modelo 390 - Resumen anual de IVA | Anual | Declaración resumen anual de las autoliquidaciones de IVA del ejercicio (ETP-5716) |
 
+### Modelo 390 behind the backend-only flag `fiscal-model-390` (ETP-5716)
+
+The whole Modelo 390 is hidden until the backend-only flag `fiscal-model-390` is on for the current
+user (default **off**; TTL 2027-01-01; registry entry `fiscal-model-390` in `flags-registry.json`).
+The flag is evaluated only in `com.etendoerp.go` (`FiscalModel390Flag`, called by
+`NeoFiscalModelsCatalogService`) and is **targeted per user and per tenant**: the evaluation carries
+the logged-in user's account email and the tenant's `clientId`, so one user can see the 390 while
+another user of the same tenant does not (a hosted rule on the lowercase `email` attribute), or a
+whole tenant can be opened (a rule on `clientId`). The catalog is shared by the tenant, but its
+answer is per request. The SPA has no key for it in `flag-keys.js` and only reacts to the catalog
+answer:
+
+- **Catalog answer, flag off:** `GET <neo>/fiscal-models-catalog` drops the `390` key and adds
+  `"_unavailable": ["390"]`, e.g. `{"303": true, "_unavailable": ["390"]}` (and
+  `{"_unavailable": ["390"]}` for a never-saved catalog). Flag on, the answer is exactly the stored
+  catalog, with no marker.
+- **The SPA:** `useFiscalModelsCatalog` splits the marker off (`splitCatalogAnswer`,
+  `catalogAvailability.js`), so `activeModels` never contains it and exposes `unavailableModels`.
+  Because `390` is never active, the declarations list, the "Modelo" filter and "Nueva declaración"
+  hide it, so the 390 detail page cannot be reached (it has no URL of its own). The catalog drawer
+  drops unavailable models from its cards and from its count (`filterAvailableModels`). The
+  Organization window's "Representante legal / Modelo 390" section hides for the same reason (see
+  the organization guide, "Fiscal section visibility").
+- **Catalog save, flag off:** `PUT` ignores any `390` value the client sends and keeps the stored one,
+  and never persists `_unavailable`. A tenant that had 390 active before the flag was turned off
+  gets it back when it is turned on again.
+- **Catalog save, flag on:** only an explicit `390` value changes it; a body without the key keeps
+  the stored value (absent is not `false`). So a page loaded while the flag was off, saved after the
+  flag was turned on at runtime, does not erase the tenant's 390.
+- **Catalog save, stored catalog unreadable (both flag states):** the backend refuses the save with
+  HTTP 500 and writes nothing, rather than merging the body over `{}`. The SPA does not surface that
+  500 yet (the `PUT` is fire-and-forget, see "Persistence" below; open item
+  `refused-save-silent-in-spa` in the registry entry).
+- **When the drawer saves** is not flag behaviour: it applies to every model. See "Persistence" ›
+  "On save" below.
+- **Not gated:** the `/fiscal390/*` endpoints, the 390 declarations CRUD and the
+  `organization/representanteLegal` entity answer whatever the flag says, also through the MCP
+  generic tools (`etendo_list`/`etendo_get`/`etendo_update`, …). The flag is a visual gate, not
+  authorization; those endpoints stay protected by the role's window access. Existing 390
+  declarations are never touched.
+- **Failure — always hidden:** any failure of the flag provider resolves to off. In the SPA, while
+  the catalog has not answered (first read in flight) and after a failed read, `unavailableModels`
+  is `unavailableWithoutAnswer()` (`catalogAvailability.js`, the only frontend place that names 390),
+  so the drawer does not offer the 390 card, and no model is active. Any successful answer replaces
+  that default.
+
+Turning it on locally: `etendo.go.flags.fiscal-model-390=true` in `Openbravo.properties` (or the JVM
+property, or the environment variable `ETGO_FLAG_FISCAL_MODEL_390=true`), then restart Tomcat. This
+only works with no Datadog/ConfigCat arm selected; on a shared environment the `fiscal-model-390`
+boolean setting must first be created in that dashboard, or the flag stays `false`. Full reference
+(targeting rules, rollout, retirement): `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`,
+"`fiscal-model-390`".
+
 ### SII warning when activating the 390 (ETP-5716)
 
 Entities in the SII are not obliged to file the Modelo 390. Turning ON a model whose registry entry
@@ -4772,7 +4920,7 @@ taller than its sibling.
 `activeModels` is not purely in-memory state anymore — it round-trips through NEO Headless and survives reloads:
 
 - **On mount**, when `apiBaseUrl` is present, `FmListPage` reads `GET {base}/fiscal-models-catalog` through the shared `useFiscalModelsCatalog(apiBaseUrl, token)` hook (ETP-5831, see "Shared catalog reader" below; the request goes through `useApiFetch`, which adds the session headers, and `token` only acts as a refresh key) and seeds `activeModels` from the JSON response (`{"303": true, "349": false}`-shaped). A tenant with nothing saved yet gets back `{}` from the backend — i.e. **no model is active by default**; there is no hardcoded "both models active" starting point. When `apiBaseUrl` is absent (e.g. tests, storybook-like contexts), the fetch is skipped entirely and `activeModels` simply stays at its initial value, `{}`.
-- **On save**, `FmCatalogPage`'s `onSave` callback updates `FmListPage`'s `activeModels` state immediately through the hook's `setActiveModels` (so the UI reflects the change without waiting on the network) and closes the drawer, then — only when `apiBaseUrl` is present — fire-and-forgets a `PUT {base}/fiscal-models-catalog` with the new map as the JSON body. A failed `PUT` is silently swallowed (`.catch(() => {})`), the same convention `FavoritesContext.jsx`'s `syncToServer` uses — the UI does not roll back or surface an error; the next successful `GET` (e.g. after a reload) is the source of truth.
+- **On save** (every model; ETP-5716). Closing the drawer calls `onSave` **only when the selection really changed**: `catalogSelectionChanged(initialActive, active)` (exported from `FmCatalogPage.jsx`) compares the two maps as booleans, so a missing key equals `false` and toggling a model on and back off is no change. Opening and closing the drawer never rewrites the catalog. `FmListPage`'s `onSave` then closes the drawer and, **if the catalog read has not finished or failed** (`!catalogLoaded || catalogError`), discards the change and shows the error toast `fm.catalog.save_unavailable` ("No se pudo cargar el catálogo de modelos, así que los cambios no se han guardado. Recarga la página e inténtalo de nuevo."). The reason: the `PUT` replaces the whole catalog, and a drawer built without a successful read would switch off every model it could not see. Otherwise it updates `activeModels` immediately through the hook's `setActiveModels` (so the UI reflects the change without waiting on the network) and, only when `apiBaseUrl` is present, fire-and-forgets a `PUT {base}/fiscal-models-catalog` with the new map as the JSON body. A failed `PUT` is silently swallowed (`.catch(() => {})`), the same convention `FavoritesContext.jsx`'s `syncToServer` uses — the UI does not roll back or surface an error; the next successful `GET` (e.g. after a reload) is the source of truth. That includes the backend's **500** when it refuses a save because the stored catalog cannot be read (see "Modelo 390 behind the backend-only flag"): the page shows the change as saved although nothing was written — open item `refused-save-silent-in-spa` in the `fiscal-model-390` registry entry.
 - **`catalogLoaded`** (the hook's `loaded`) gates rendering while the initial `GET` is in flight. It starts `true` only when `apiBaseUrl` is missing; otherwise it starts `false` and flips to `true` in the `GET`'s `.finally()`, regardless of whether the request succeeded or failed. While `catalogLoaded` is `false`: the table region shows a "Cargando…" `EmptyState` instead of either the real table or the "no active models" empty state, and the "+ Nueva declaración" toolbar button does not render at all — its guard is `catalogLoaded && activeCount > 0`, not just `activeCount > 0` (see "No active models" below). This avoids flashing an incorrect CTA/empty-state before the real catalog value is known.
 - **Scope: per-Client, not per-org or per-user.** The backend service (`NeoFiscalModelsCatalogService`, `com.etendoerp.go`) stores the map in `AD_PREFERENCE` under key `ETGO_FiscalModelsCatalog`, scoped only to `OBContext.getOBContext().getCurrentClient()` — organization, user and role are all passed as `null` to `Preferences`. Every user of the same client, in any organization, with any role, reads and writes the same catalog state.
 
@@ -4888,8 +5036,9 @@ Practical effect: deactivating a model in the catalog immediately hides all of i
 ### Shared catalog reader (ETP-5831)
 
 `FmListPage` reads the catalog through `useFiscalModelsCatalog(apiBaseUrl, token)`
-(`fiscal-models/useFiscalModelsCatalog.js`) — `{ activeModels, setActiveModels, loaded, error }`,
-same request as before (`GET <neo base>/fiscal-models-catalog`). The Organization window's fiscal
+(`fiscal-models/useFiscalModelsCatalog.js`) — `{ activeModels, setActiveModels, unavailableModels,
+loaded, error }` (`unavailableModels` since ETP-5716: the answer's `_unavailable` marker split off by
+`splitCatalogAnswer`, see "Modelo 390 behind the backend-only flag"), same request as before (`GET <neo base>/fiscal-models-catalog`). The Organization window's fiscal
 section visibility uses the same hook (see `organization.md`, "Fiscal section visibility"), and so
 does `ReversedInvoicesPanel.jsx`'s "Correctiva del 349" gate (below). One rule for every reader: a
 never-saved catalog (`{}`) or a failed read means **no model active**; `defaultActive` is not
@@ -5037,7 +5186,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
 | `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
 | `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client), via `useFiscalModelsCatalog`; also consumed cross-spec, through the same hook, by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above — and by the Organization window to show its fiscal sections (ETP-5831, `organization.md`) |
-| `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client) |
+| `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client); sent only on a real change and only after a successful catalog read (ETP-5716, see "Persistence") |
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
 | `GET` | `/fiscal303/modified?year=&period=&since=` | `checkModified303` |
 | `GET` | `/fiscal303/generate?year=&period=&tipo=` | `generate303File` |

@@ -1270,16 +1270,16 @@
           "EM_OBSEPA_BldgNb",
           "EM_OBSEPA_BldgNm"
         ],
-        "$symbolsComment": "Backend-only flag (positive polarity, both ends evaluate the SIGNAL not the flag -- see $gatingComment): no key in flag-keys.js and no frontend evaluator of the flag itself. The frontend grep trail is the capability field name, not a flag key, because the only thing the frontend ever reads is capabilities.structuredAddressForSepa off SFWindowAccessMap (role-scoped pages) and the onboarding session-bootstrap response GET /sws/go/session (pre-tenant pages, where SFWindowAccessMap has no role to resolve against). The 3 AD column DB names are included because they are the structural keys several call sites branch on by name (AddressVirtualSelectorPolicy.STRUCTURED_ADDRESS_COLUMNS, McpSchemaFieldBuilder.STRUCTURED_ADDRESS_COLUMNS) and the 3 published field names are the ones every handler and the frontend agree on in JSON.",
+        "$symbolsComment": "Backend-only flag (positive polarity, both ends evaluate the SIGNAL not the flag -- see $gatingComment): no key in flag-keys.js and no frontend evaluator of the flag itself. The frontend grep trail is the capability field name, not a flag key, because the only thing the frontend ever reads is capabilities.structuredAddressForSepa off SFWindowAccessMap (role-scoped pages) and the onboarding session-bootstrap response GET /sws/go/session (pre-tenant pages, where SFWindowAccessMap has no role to resolve against). The 3 AD column DB names are included because they are the structural keys several call sites branch on by name (AddressVirtualSelectorPolicy.STRUCTURED_ADDRESS_COLUMNS, McpSchemaFieldBuilder.STRUCTURED_ADDRESS_COLUMNS) and the 3 published field names are the ones every handler and the frontend agree on in JSON. GoAccountResolver.currentAccountEmail is DELIBERATELY NOT listed, and must not be re-added: it is shared platform code that survives this flag's retirement, and since ETP-5952 merged it is used by FLAG_BP_PORTAL_LINK (PortalLinkPolicy) and FLAG_CONTACT_CATEGORY_TYPE (ContactTypeRules) too, so listing it charges those features' toggle points to this one. It was ETP-5806-exclusive while it was named resolveCurrentAccountEmail; consolidating onto develop's shared helper during the develop merge is what made it non-discriminating. Nothing is lost by its absence: StructuredAddressComposer.isEnabled above finds all 8 gating call sites, and FLAG_STRUCTURED_ADDRESS_FOR_SEPA finds SFWindowAccessMap's own evaluation.",
         "capability": {
           "field": "structuredAddressForSepa",
           "sources": [
-            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.structuredAddressForSepa) -- role-scoped pages, environment-level value (same for every role/branch)",
-            "com.etendoerp.go EtendoGoJwtServlet GET /sws/go/session response (capabilities.structuredAddressForSepa) -- the onboarding bootstrap, used before any tenant/role exists"
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.structuredAddressForSepa) -- role-scoped pages, per-account targeting key (the requesting user's ETGO_ACCOUNT email via GoAccountResolver.currentAccountEmail()), same value in every role/branch since it does not itself vary by role. Since the follow-up this signal and the backend's own validate/persist/expose gating resolve for the SAME account, so they can no longer disagree",
+            "com.etendoerp.go EtendoGoJwtServlet GET /sws/go/session response (capabilities.structuredAddressForSepa) -- the onboarding bootstrap, used before any tenant/role exists; per-account targeting key is the just-resolved session account's own email"
           ]
         }
       },
-      "$gatingComment": "ONE evaluator, the backend; the frontend reads its ANSWER (capabilities.structuredAddressForSepa), never the flag -- deliberately against the usual ETP-4966 'one flag, one evaluator, read the flag itself' pattern, because this flag must also hide DATA (3 columns), not just a UI entry point, and the backend's answer is therefore the single source of truth for both the UI decision and the wire contract. Environment-level boolean for now (no per-account targeting), matching the TTL being a hard global deadline rather than a staged rollout -- revisit if that changes before 2026-11-15. Must be created as a boolean setting in the ConfigCat dashboard before it can be toggled in any environment with an SDK key configured; until then every such environment resolves it to the code default (false) regardless of local properties. Local dev (no SDK key) uses etendo.go.flags.structured-address-for-sepa / ETGO_FLAG_STRUCTURED_ADDRESS_FOR_SEPA, which needs a Tomcat restart to pick up a change. Write-path contract when OFF: a write that still carries the 3 fields (e.g. a stale cached frontend bundle, or a stale MCP client schema) is IGNORED, never rejected -- see ContactsLocationAddressHandler/WarehouseLocationHandler/BpLocationHandler, which read/validate/persist the 3 fields only when the flag is on and otherwise treat them as though absent from the body.",
+      "$gatingComment": "ONE evaluator, the backend; the frontend reads its ANSWER (capabilities.structuredAddressForSepa), never the flag -- deliberately against the usual ETP-4966 'one flag, one evaluator, read the flag itself' pattern, because this flag must also hide DATA (3 columns), not just a UI entry point, and the backend's answer is therefore the single source of truth for both the UI decision and the wire contract. PER-ACCOUNT AT EVERY CALL SITE since the ETP-5806 staged-rollout follow-up: each one passes FeatureFlagContext.forAccount(<real ETGO_ACCOUNT email>) instead of null, mirroring bp-portal-link's pattern, so a Datadog targeting rule ('email is one of [...]') can stage the rollout -- localization team first, then the rest of Etendo, then everyone -- instead of flipping it for every tenant at once. With no targeting rule configured it still resolves the plain per-environment boolean default, so the TTL remains a hard global deadline regardless of staging. The email reaches each call site in one of two ways, and the split is deliberate: (a) AUTHENTICATED REQUEST -- GoAccountResolver.currentAccountEmail() at the call site: SFWindowAccessMap (capability), ContactsLocationAddressHandler/WarehouseLocationHandler/BpLocationHandler (NEO read/write gating, resolved once per request at the handler entry point and threaded through its own helpers), AddressVirtualSelectorPolicy/McpSchemaFieldBuilder (MCP schema gating, both request-scoped so there is no cross-account leak). (b) ONBOARDING -- the account is already in hand and provisioning runs under an admin execution context with no caller identity left to recover, so it is passed explicitly: EtendoGoJwtServlet#buildSessionCapabilities and the two validateStructuredAddress* checks take it as a parameter, and it rides OrgInfoInput down to OnboardingOrgInfoService#createLocation, which PERSISTS the fields. StructuredAddressComposer.isEnabled(String accountEmail) is the single shared evaluator and has NO account-less overload, by design -- that is what closed the earlier gap, where a targeted account saw the 3 fields in the UI (per-account capability) while the backend validated/accepted/persisted them per the global default (account-less gating) and silently dropped them under the ignore-don't-reject contract below. ORDERING TRAP when adding a call site: resolve the account email BEFORE any no-arg OBContext.setAdminMode(), which substitutes the admin identity when no context exists. Must be created as a boolean setting in the ConfigCat dashboard before it can be toggled in any environment with an SDK key configured; until then every such environment resolves it to the code default (false) regardless of local properties. Local dev (no SDK key) uses etendo.go.flags.structured-address-for-sepa / ETGO_FLAG_STRUCTURED_ADDRESS_FOR_SEPA, which needs a Tomcat restart to pick up a change. Write-path contract when OFF: a write that still carries the 3 fields (e.g. a stale cached frontend bundle, or a stale MCP client schema) is IGNORED, never rejected -- see ContactsLocationAddressHandler/WarehouseLocationHandler/BpLocationHandler, which read/validate/persist the 3 fields only when the flag is on and otherwise treat them as though absent from the body.",
       "paths": {
         "frontend": [
           "tools/app-shell/src/windows/custom/shared/LocationEditorModal.jsx"
@@ -1311,9 +1311,116 @@
           { "root": "backend", "path": "src-test/src/com/etendoerp/go/mcp/McpSchemaFieldBuilderTest.java" },
           { "root": "backend", "path": "src-test/src/com/etendoerp/go/schemaforge/selector/policy/AddressVirtualSelectorPolicyTest.java" },
           { "root": "backend", "path": "src-test/src/com/etendoerp/go/onboarding/OnboardingOrgInfoServiceTest.java", "note": "Covers the structured-address branch of ensureOrgInfoLocation/createLocation added for this flag (flag on/off, legacy-address fallback)." },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/common/GoAccountResolverTest.java" },
+          { "root": "backend", "path": "src-test/src/com/etendoerp/go/mcp/McpHookExecutorTest.java", "note": "testRunReadHookInvokesAfterHandleOnAnAnnotationOnlyHandler/testRunReadHookWithNoResolvedHandlerKeepsTheOriginalBody cover the runReadHook dispatch-resolution regression fix." },
           { "root": "frontend", "path": "tools/app-shell/src/windows/custom/shared/__tests__/LocationEditorModal.vitest.jsx", "note": "Extended with a 'structured-address-for-sepa flag OFF' describe block (legacy address lines, legacy save-gating, save payload) plus a flag-ON default via the useAuth() mock for every pre-existing case." }
         ]
       }
+    },
+    {
+      "id": "fiscal-model-390",
+      "description": "Modelo 390 (annual VAT summary) in Etendo GO, merged to develop by ETP-5716 and put behind a backend-only flag before release. Off hides the whole 390: the Fiscal Models catalog drawer toggle, the declarations list and 'Nueva declaración', the 390 detail page (reachable only from the list) and the Organization window's 'Representante legal / Modelo 390' section (identity fields + legal representatives grid). The backend (com.etendoerp.go) is the only evaluator: the fiscal models catalog answer drops 390 and lists it under `_unavailable`, a catalog save cannot switch it on, and the SPA reacts to that answer.",
+      "owner": "AyelenGarcia01",
+      "jira": "ETP-5716",
+      "created": "2026-10-29",
+      "flag": {
+        "key": "fiscal-model-390",
+        "defaultValue": false,
+        "ttl": "2027-01-01",
+        "ttlNote": "Set by the user for ETP-5716: by 2027-01-01 the 390 is released to every tenant and the flag retires on the ship branch (unwrap the two toggle points in NeoFiscalModelsCatalogService and the two in useFiscalModelsCatalog.js/FmCatalogPage.jsx, delete FiscalModel390Flag.java and catalogAvailability.js, remove the `catalogAvailability.js` line from the model-id guardrail ALLOWLIST in fiscal-models/__tests__/modelRegistry.vitest.js, delete the flag object, keep this entry).",
+        "symbols": [
+          "fiscal-model-390",
+          "FLAG_FISCAL_MODEL_390",
+          "ETGO_FLAG_FISCAL_MODEL_390",
+          "FiscalModel390Flag",
+          "catalogAvailability",
+          "splitCatalogAnswer",
+          "filterAvailableModels",
+          "unavailableModels"
+        ],
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, and none must be added. The frontend trail is the catalog answer's split, not a flag key: splitCatalogAnswer (inside useFiscalModelsCatalog.js) and filterAvailableModels/unavailableModels (FmListPage.jsx -> FmCatalogPage.jsx). The frontend names model 390 in exactly one place, catalogAvailability.js UNAVAILABLE_WITHOUT_ANSWER: the fail-hidden default used while there is no catalog answer (loading, read failure), mirroring the backend default, not a second evaluator -- any answer replaces it. The `_unavailable` marker itself is NOT a symbol: it collides with unrelated code (backendErrors.js, SubscriptionSection.jsx); it is only spelled in the two owned files (FiscalModel390Flag.UNAVAILABLE_KEY, catalogAvailability.UNAVAILABLE_KEY) and in useFiscalModelsCatalog.js's comment. The Organization window has NO toggle point: its Modelo 390 section already renders only while the catalog marks 390 active (useFiscalSectionVisibility.js), so it hides without naming the flag."
+      },
+      "$gatingComment": "ONE evaluator, the backend (FiscalModel390Flag). Targeted PER USER and PER TENANT: the context is FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the NEO session user, via GoAccountResolver.currentAccountEmail(), the same resolution bp-portal-link and contact-category-type use>).with(clientId), so the targeting key, `Email` and lowercase `email` carry the account and a Datadog rule matches the lowercase `email` attribute against lowercase values; with no resolvable account the context carries clientId only (tenant rules match, email rules do not, default hidden, never throws). GET /sws/neo/fiscal-models-catalog with the flag off answers the stored catalog minus `390` plus `\"_unavailable\": [\"390\"]`; flag on it answers exactly the stored catalog. PUT with the flag off ignores the client's 390 value and keeps the stored one (a tenant's earlier choice survives an off/on cycle); PUT with the flag on changes 390 only on an explicit value -- a body without the key keeps the stored one (absent is not false), so a page loaded while the flag was off and saved after it was turned on at runtime does not erase it; an unreadable stored catalog refuses the save in both states; `_unavailable` is never persisted. The SPA (not flag-owned, all models) saves the catalog only on a real change and never after a failed/unfinished read (FmCatalogPage catalogSelectionChanged, FmListPage onSave). Deliberately NOT gated (a flag is a visual gate, not authorization): /sws/neo/fiscal390/*, the fiscal303/declarations CRUD for model 390 and the organization's representanteLegal entity, all already protected by the role's window access. Local: etendo.go.flags.fiscal-model-390 / ETGO_FLAG_FISCAL_MODEL_390 (Tomcat restart).",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/fiscal-models/catalogAvailability.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/FiscalModel390Flag.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. Shared toggle points (removal cost): backend NeoFiscalModelsCatalogService.java (getActiveModels / saveActiveModels); frontend useFiscalModelsCatalog.js (splitCatalogAnswer), FmCatalogPage.jsx (filterAvailableModels), FmListPage.jsx (passes unavailableModels). GoFeatureFlags.java is framework. Not owned and staying when the flag goes: every Modelo 390 file itself (models/390/, the Organization's Modelo390IdentitySection.jsx / RepresentantesLegalesSection.jsx / useRepresentantesLegales.js / representanteLegal.js, the /fiscal390/* handlers) -- they ARE the feature, not the flag.",
+      "testSpecs": {
+        "$testSpecsComment": "Backend specs are tester-go's, frontend specs tester-functional's. The two existing shared specs below were only adjusted for the flag (default off) and still need explicit on/off cases -- see each note.",
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/FiscalModel390FlagTest.java",
+            "note": "Covers: applyToRead on/off (390 dropped + _unavailable added; on = stored as is; a stored _unavailable never echoed), applyToWrite on/off (incoming 390 ignored and stored 390 kept when off, absent when nothing stored; _unavailable stripped on both), arguments never mutated. Email reaches the provider context: contextFor(email, clientId) publishes the targeting key, `Email` and lowercase `email` plus clientId; contextFor(null, clientId) carries clientId only and no targeting key; isEnabled passes GoAccountResolver.currentAccountEmail() through, end to end through GoFeatureFlags into a capturing provider; unset, non-boolean and failing-provider all read as hidden."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/common/GoAccountResolverTest.java",
+            "note": "Shared spec, owned by ETP-5791 (develop): currentAccountEmail -- the resolver ETP-5791 extracted from PortalLinkPolicy and fiscal-model-390 now reuses (ETP-5716 had extracted the same method as findCurrentAccountEmail; dropped in the develop merge). Covers no OBContext (admin mode never entered), account found by a +suffix username, no user, no account and a failure reading the user -> null, admin mode always restored; a DAL failure is covered on findAccountByUsername."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoFiscalModelsCatalogServiceTest.java",
+            "note": "Shared spec. Every case pins the flag (flag(...) helper), so none depends on local Openbravo.properties/env. Extended for ETP-5716: GET with the flag on returns the stored catalog unchanged, GET off with a stored 390:true hides it and adds the marker, GET off with an unreadable store (PropertyException or RuntimeException) answers exactly {_unavailable:[390]}, a failure building the answer fails hidden; PUT off keeps the stored 390, PUT on keeps it when the body omits it, PUT never stores _unavailable, an unreadable store (PropertyException or RuntimeException) refuses the save with IllegalStateException in both flag states and writes nothing, PUT off over a corrupt or blank store saves without 390 or marker; the tenant id reaches the gate. The refusal's HTTP mapping (500, not 400) is pinned in NeoBuiltInEndpointHandlerTest (propagates, no 400) and NeoServletProcessRequestTest (500)."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/catalogAvailability.vitest.js",
+            "note": "Written for ETP-5716: splitCatalogAnswer (marker split off, listed ids removed from activeModels even if sent, ids normalised to strings, no marker = plain catalog, input not mutated, null/undefined/string/number/boolean bodies -> empty split, an array body yields no active model), filterAvailableModels (same array when nothing is unavailable, order kept, no mutation), unavailableWithoutAnswer returns a fresh ['390'] each call."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/useFiscalModelsCatalog.vitest.jsx",
+            "note": "Shared spec; extended for ETP-5716: an answer with _unavailable exposes unavailableModels and keeps the marker (and a 390 sent as active) out of activeModels; before the read settles, after a rejected read and after a non-ok answer unavailableModels is ['390'] (fail hidden); a successful answer without the marker clears it, also after a failed read; a refresh that brings the marker back hides the 390 again."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmCatalogPage.vitest.jsx",
+            "note": "Shared spec; extended for ETP-5716: unavailableModels=['390'] removes the 390 card, the header catalog count and the saved payload's 390 (defaults and after toggling); with no marker the 390 card is shown, counted and saved; a missing prop hides nothing; closing saves only a real change, and catalogSelectionChanged compares as booleans (missing key = false, 1/'Y' = true, null/undefined/'' = false), defaults missing arguments to {} and never mutates them."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/fiscal-models/__tests__/FmListPage.vitest.jsx",
+            "note": "Shared spec; its string-body case goes through splitCatalogAnswer. Extended for ETP-5716: a catalog answer {303:true,_unavailable:['390']} shows count (1), no 390 row, no 390 in the Modelo filter / Nueva declaración, and the drawer receives unavailableModels ['390']; a 390 sent as active with the marker stays hidden; a failed catalog GET hands the drawer ['390']; with no marker the 390 is counted, offered and the drawer hides nothing; with 390 unavailable (omitted, or sent as active with the marker) the PUT body sent to /fiscal-models-catalog carries neither 390 nor _unavailable; no PUT after a failed GET."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/organization/__tests__/useFiscalSectionVisibility.vitest.jsx",
+            "note": "Shared spec; extended for ETP-5716 through the real catalog reader: a catalog answer with _unavailable ['390'] keeps show390 false; a 390 sent as active together with the marker drives neither the 390 section, IAE nor the certificate; with no marker the 390 section shows."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/fiscal/fiscal-models-390-availability.mocked.spec.js",
+            "note": "Written for ETP-5716 (new file: no existing fiscal spec drives the catalog across list, drawer and Organization): mocked catalog answer with and without _unavailable: off -> list count (1), no 390 in the Modelo filter / Nueva declaración, no 390 card in the drawer, no Modelo 390 section in Organization, a drawer toggle PUTs a body with neither 390 nor _unavailable, closing the drawer with no change sends no PUT; on -> all present."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "mcp-and-api-not-gated",
+          "kind": "open",
+          "note": "By decision the flag hides only the UI: /fiscal390/*, the 390 declarations CRUD and the representanteLegal entity keep answering, so a direct API caller with the window grant can still create or read a 390 while it is hidden -- including through the MCP generic tools (etendo_list/etendo_get/etendo_update on organization/representanteLegal), since the MCP path never reads the flag. Therefore, if product wants the 390 unreachable outside the UI before 2027-01-01, that is an authorization change (a new decision), not a widening of this flag.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`fiscal-model-390` (ETP-5716)', 'A visual gate, not authorization'"
+          ]
+        },
+        {
+          "id": "refused-save-silent-in-spa",
+          "kind": "open",
+          "note": "When the stored catalog cannot be read, the backend refuses the catalog PUT (IllegalStateException from NeoFiscalModelsCatalogService.saveActiveModels, answered as HTTP 500 by NeoServlet, nothing written) in both flag states. The SPA does not notice: FmListPage's onSave has already applied the new selection through setActiveModels and its fire-and-forget PUT swallows the error (.catch(() => {})), so the page shows the change as saved until the next reload. Not done yet: map the refusal to a distinct status (409 or 503) instead of the generic 500, and in the SPA show a toast and re-read the catalog on a non-ok PUT. Not accepted debt -- an open item.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — '`fiscal-model-390` (ETP-5716)', 'Stored catalog unreadable'",
+            "docs/generated-custom-windows/fiscal-models.md — 'Persistence (NEO Headless, per-Client)', 'On save'"
+          ]
+        }
+      ]
     },
     {
       "id": "public-api-keys",
@@ -1427,6 +1534,216 @@
           "note": "The human approval of the ETP-5834 contract (surfaces, view content, storage, rollout, width precedence) is still recorded as PENDING, so the flag must not be turned on beyond a test environment, and the TTL above stays a placeholder until a person decides.",
           "refs": [
             "docs/plans/grid-customization-evaluation.md — 'Decision record'"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invoice-inbox",
+      "description": "Invoice Inbox (epic ETP-6046): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
+      "owner": "ivanrobledofutit",
+      "jira": "ETP-6047",
+      "created": "2026-11-02",
+      "flag": {
+        "key": "invoice-inbox",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag, delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and (once ETP-6049 adds it) the INVOICE_INBOX key in flag-keys.js with its toggle points; delete the flag object, keep this entry.",
+        "symbols": [
+          "invoice-inbox",
+          "FLAG_INVOICE_INBOX",
+          "InvoiceInboxFlag"
+        ],
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js yet (ETP-6049 adds INVOICE_INBOX when there is UI). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator."
+      },
+      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. The toggle point is InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart.",
+      "paths": {
+        "frontend": [],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxFlag.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpoint.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxIntake.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxMessages.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays.",
+      "testSpecs": {
+        "$testSpecsComment": "Backend specs are tester-go's. All are written and pass: the gate, the upload endpoint (toggle point), the intake, the messages, the shared specs and one DB-backed integration test (WeldBaseTest: the attachment manager is resolved through the Weld static bean manager, absent under a plain OBBaseTest). The environment-variable spelling of the local arm cannot be set from the JVM, so only the property is tested.",
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxFlagTest.java",
+            "note": "Covers: isEnabled(email, clientId) publishes the targeting key, Email and lowercase email plus clientId to the provider, end to end through GoFeatureFlags into a capturing provider; a targeted account reads true and a non-targeted one false; blank or null email -> clientId only, no targeting key, default false; isEnabled() passes GoAccountResolver.currentAccountEmail() and the OBContext tenant through; no OBContext or no client -> null client id, no throw; unset, non-boolean and failing provider all read false; local property arm (etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX) true/false."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpointTest.java",
+            "note": "Covers: flag off -> 403 feature_disabled before getParts() is called and before any window/org check; no window write access -> 403 access_denied; not multipart -> 400 not_multipart; star org and org outside getWritableOrganizations -> 403 org_not_allowed; getParts() throwing IllegalStateException -> 413 request_too_large (message carries 10 and 210 MB); getParts() IOException/ServletException -> 400 not_multipart; only parts named `files` with a submitted file name count; 0 files -> 400 no_files; 21 files -> 400 too_many_files with max 20 and count and NOTHING created; exactly 20 accepted; mixed batch answers 200 with accepted/rejected counts and ordered results; ids (client/org/user) captured once; parts' temp files deleted in every path."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxIntakeTest.java",
+            "note": "Covers: extension not in {pdf,jpg,jpeg,png} (webp, exe, none, ..) -> unsupported_type without touching the DAL; size 0 -> empty_file; path-traversal names sanitized; happy path creates the IncomingDocument (source UPLOAD, targetType PURCHASE_INVOICE, status PROCESSING, adjusted/reviewed false, client/org re-read by id), calls NeoAttachmentStore.store with markAsMain true and the table name, then commitAndClose and returns the row id; store 400/422 -> rollbackAndClose + invalid_content passing the store message; store 404/500 or no message -> store_failed; any exception -> rollbackAndClose + store_failed, never thrown; temp file and its directory removed in every path; one file failing does not affect the next."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxMessagesTest.java",
+            "note": "Covers: the AD text is used when present, the English fallback when the row is missing or messageBD returns the key or throws; @name@ placeholders replaced; every key has a default."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoBuiltInEndpointHandlerTest.java",
+            "note": "Shared spec (find with make find-tests): the invoice-inbox/upload POST branch delegates and writes the response; invoice-inbox with another entity or verb does not take the branch."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/roles/TemplateRoleWindowAccessTest.java",
+            "note": "Shared spec, updated: Purchasing 14, Finance 34, total 74, distinct windows 42; Invoice Inbox 81AC659E93504927B459E0CAE80CE923 is FULL for Compras and Financiero and absent for Ventas/Almacén. Parity guardrail: EnsureSystemRoleTemplatesScript's inlined matrix (compiled in memory, read by reflection) equals TemplateRoleWindowAccess for every role, Invoice Inbox included."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoAttachmentPolicyTest.java",
+            "note": "Shared spec: the per-file limit and the 210 MB multipart request limit derive from MAX_SIZE_MB (20 files x 10 MB + 10 MB margin)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxIntakeIntegrationTest.java",
+            "note": "DB-backed (WeldBaseTest, F&B sample data): each accepted file commits a PROCESSING row plus its main C_File attachment; a content mismatch leaves no row and no attachment; a refused file between two good ones does not affect them; nothing is created in C_Invoice."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "web-key-with-ui",
+          "kind": "scope",
+          "note": "No key in tools/app-shell/src/lib/flags/flag-keys.js on purpose. Story ETP-6049 adds INVOICE_INBOX when the inbox has a UI. Web client and backend use different targeting keys, so the Datadog rules must be written on the lowercase `email` attribute only.",
+          "refs": [
+            "ETP-6049"
+          ]
+        },
+        {
+          "id": "neo-spec-and-role-access",
+          "kind": "scope",
+          "note": "The NEO spec and the role access matrix of the Invoice Inbox window (see ETP-4878) are not part of this flag change.",
+          "refs": [
+            "ETP-4878"
+          ]
+        },
+        {
+          "id": "ttl-to-confirm",
+          "kind": "precondition",
+          "note": "The TTL 2027-01-31 is provisional and must be confirmed with product before the flag is turned on anywhere shared.",
+          "refs": [
+            "ETP-6046"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "product-movements-tab",
+      "description": "Read-only Movements tab of the Product window (ETP-5889): stock movements of a product with date, type, warehouse, signed quantity, resulting stock and cost, filtered and sorted in the backend. Switched on per account so it can roll out to chosen accounts first.",
+      "owner": "jortolano",
+      "jira": "ETP-5889",
+      "created": "2026-10-29",
+      "flag": {
+        "key": "product-movements-tab",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "PLACEHOLDER, not agreed with product: roughly one quarter after the first account gets the tab. Replace with the real date once the rollout plan exists.",
+        "symbols": [
+          "product-movements-tab",
+          "FLAG_PRODUCT_MOVEMENTS_TAB",
+          "ETGO_FLAG_PRODUCT_MOVEMENTS_TAB",
+          "etendo.go.flags.product-movements-tab",
+          "productMovements",
+          "PRODUCT_MOVEMENTS_CAPABILITY",
+          "ProductMovementsPolicy",
+          "product_movements_tab_opened"
+        ],
+        "$symbolsComment": "Backend-only flag (positive polarity): no key in flag-keys.js. The frontend trail is the capability name, because the browser only reads capabilities.productMovements off SFWindowAccessMap.",
+        "capability": {
+          "field": "productMovements",
+          "sources": [
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.productMovements) -- evaluated per account (ETGO_ACCOUNT email as targeting key, tenant as clientId attribute)"
+          ]
+        }
+      },
+      "$gatingComment": "ONE evaluator, the backend. ProductMovementsPolicy evaluates the flag per account; SFWindowAccessMap publishes the answer as capabilities.productMovements and the tab reads it with useCapabilitiesSafe(). ProductTransactionsHandler consults the same policy before adding etgoStockAfter and etgoTotalRows, so the tab and its data cannot disagree. Only behaviour is gated: the stored computed columns of M_Transaction (EM_Etgo_Warehouse_ID, EM_Etgo_Doc_Kind), their triggers and the ETGO_SF_* configuration ship unconditionally. The flag is NOT access control: with it off the /transactions rows and the new etgoWarehouse, etgoDocKind and etgoDocHeaderId fields stay readable under the role's own entity and organization access; only etgoStockAfter and etgoTotalRows are withheld.",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/product/ProductMovementsTab.jsx",
+          "tools/app-shell/src/windows/custom/product/productMovements.js",
+          "tools/app-shell/src/windows/custom/product/useProductMovementsTabTracking.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/ProductMovementsPolicy.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. ProductTransactionsHandler, SFWindowAccessMap, GoFeatureFlags, capabilityVisibility.js, tabIcons.js and the locale files are shared files the flag merely touches, so they are not listed. The product decisions.json/contract entries ship unconditionally.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ProductMovementsPolicyTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ProductTransactionsHandlerTest.java",
+            "note": "Shared spec: flag-off and Warehouse-never-consults-flag cases."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/SFWindowAccessMapTest.java",
+            "note": "Shared spec: productMovements capability cases."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/product/__tests__/ProductMovementsTab.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/product/__tests__/productMovements.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/product/__tests__/useProductMovementsTabTracking.vitest.jsx"
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "schema-must-be-deployed-before-targeting",
+          "kind": "precondition",
+          "note": "Turning the flag on for an account without update.database, ad_scd_check = 0 and the ETGO_SF_* configuration exported would show a tab whose Warehouse and Type columns cannot be sorted or filtered, so check all three before targeting any account.",
+          "refs": [
+            "docs/generated-custom-windows/product.md -- ETP-5889",
+            "com.etendoerp.go docs/STORED-COMPUTED-COLUMNS.md"
+          ]
+        },
+        {
+          "id": "hosted-flag-setting-missing",
+          "kind": "precondition",
+          "note": "The hosted control plane (Datadog Feature Flags, ConfigCat as the fallback) has no boolean setting product-movements-tab yet, so the flag stays off for every account until the platform team creates it and writes the targeting rule.",
+          "refs": [
+            "ProductMovementsPolicy -- isEnabledFor"
+          ]
+        },
+        {
+          "id": "kpi-denominator-under-gradual-rollout",
+          "kind": "open",
+          "note": "The adoption KPI counts every active warehouse device; with the tab on for a few accounts the denominator includes devices that cannot open it, so the figure is diluted until the rollout is complete or the KPI is restricted to flagged accounts.",
+          "refs": [
+            "etendo-kpis PR #15 -- eng_movements_tab_adoption"
+          ]
+        },
+        {
+          "id": "warehouse-filter-fed-by-stock",
+          "kind": "open",
+          "note": "The warehouse selector of the Movements tab lists the warehouses found in the product's stock rows (/stock, up to 100 rows), while the filter acts on its movements, so the two sources are not guaranteed to match. With today's data they do (95 product-warehouse pairs with movements, none without a stock row; at most 22 stock rows per product), but a warehouse would vanish from the selector if zero-quantity stock rows were ever deleted or a product had more than 100 stock rows, and its movements could then not be filtered. Accepted for now; the fix is to take the warehouses from the movements (a distinct list returned with etgoTotalRows) and is not scheduled.",
+          "refs": [
+            "tools/app-shell/src/windows/custom/product/ProductMovementsTab.jsx -- warehouses effect",
+            "ProductStockWarehouseHandler -- rows per storage bin",
+            "ETP-5889 CP-08 -- warehouse filter"
           ]
         }
       ]

@@ -113,6 +113,18 @@ export function publicFunctionalText({ summary, capabilities }) {
   };
 }
 
+// A field is published as its NEO value under a public name; nothing transforms it. The
+// `type` / `handlerId` keys of an earlier curation format promised custom handlers that were
+// never implemented, so they are refused rather than silently ignored.
+export function assertNoFieldMapping(field, where) {
+  for (const key of ['type', 'handlerId']) {
+    if (field.publicApi && Object.hasOwn(field.publicApi, key)) {
+      throw new Error(`${where}.${field.name}: publicApi.${key} is not supported; `
+        + 'a public field is its NEO value under a public name. Remove the key.');
+    }
+  }
+}
+
 // An entity is curated when at least one of its fields declares
 // `publicApi.exposed: true`. A curated entity publishes exactly its curation.
 export function isCurated(source) {
@@ -204,13 +216,21 @@ export function publicFieldName(internalName) {
     .toLowerCase();
 }
 
+// Maps a contract field type to the JSON type NEO answers for it. Every numeric
+// AD reference (amount, price, quantity, generic number) is a JSON number; the
+// contract spells date-time `dateTime` (`datetime` is kept for older contracts).
+// Everything else (ids, list codes, buttons, text) is a string.
 function openApiType(fieldType) {
   switch (fieldType) {
     case 'boolean': return { type: 'boolean' };
     case 'integer': return { type: 'integer', format: 'int32' };
     case 'decimal':
-    case 'amount': return { type: 'number', format: 'double' };
+    case 'amount':
+    case 'price':
+    case 'quantity':
+    case 'number': return { type: 'number', format: 'double' };
     case 'date': return { type: 'string', format: 'date' };
+    case 'dateTime':
     case 'datetime': return { type: 'string', format: 'date-time' };
     default: return { type: 'string' };
   }
@@ -251,6 +271,9 @@ export function inputFieldsOf(decisions, entityName) {
 // - `entities.<entity>.publicApi.readOnly: true`: GET/LIST only, every field `out`.
 // - `entities.<entity>.fields.<field>.publicApi.readOnly: true` (or the entity-level list
 //   `entities.<entity>.publicApi.readOnlyFields: ["field"]`): the field is `out`.
+// - `entities.<entity>.fields.<field>.publicApi.required: true`: a writable field the API
+//   refuses to create without. Declared, not derived: the contract's `required` also covers
+//   fields NEO fills by itself (e.g. an order's address or price list).
 // Field names are the internal (contract) names. Platform guardrails
 // (`neverExposedFields`, fiscal monitors) are applied by the generator and win over this.
 export function exposurePolicyOf(decisions, entityName) {
@@ -261,16 +284,20 @@ export function exposurePolicyOf(decisions, entityName) {
   for (const [name, field] of Object.entries(entity?.fields ?? {})) {
     if (field?.publicApi?.readOnly === true) readOnlyFields.add(name);
   }
+  const requiredFields = new Set(
+    Object.entries(entity?.fields ?? {}).filter(([, field]) => field?.publicApi?.required === true).map(([name]) => name),
+  );
   return {
     actions: Array.isArray(actions) ? actions : [],
     readOnly: entity?.publicApi?.readOnly === true,
     readOnlyFields,
+    requiredFields,
   };
 }
 
 export function buildEntity({
   specName, entityName, contract, functional, parent, rawEntity, inputFields = [],
-  policy = { actions: [], readOnly: false, readOnlyFields: new Set() },
+  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set() },
 }) {
   const source = contract.frontendContract.entities[entityName];
   const backend = contract.backendContract ?? {};
@@ -299,19 +326,20 @@ export function buildEntity({
   const fields = {};
   const curated = isCurated(source);
   for (const field of source.fields ?? []) {
+    assertNoFieldMapping(field, `${specName}/${entityName}`);
     if (!isPublicField(field, { curated, specName })) continue;
     const apiName = publicFieldName(field.publicApi?.name ?? field.name);
     if (fields[apiName]) {
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
     }
+    const direction = writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out';
     fields[apiName] = {
       sourceVisibility: field.visibility,
-      direction: writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out',
+      direction,
       internalPath: field.name,
-      type: 'passthrough',
       dataType: openApiType(field.type),
       reference: field.reference ?? null,
-      handlerId: null,
+      ...(direction === 'inout' && policy.requiredFields?.has(field.name) ? { required: true } : {}),
     };
   }
 
@@ -324,10 +352,8 @@ export function buildEntity({
       sourceVisibility: 'editable',
       direction: input.readable === true ? 'inout' : 'in',
       internalPath: input.internalPath,
-      type: 'passthrough',
       dataType: { type: input.dataType ?? 'string' },
       reference: null,
-      handlerId: null,
       ...(input.required === true ? { required: true } : {}),
     };
   }
@@ -341,10 +367,8 @@ export function buildEntity({
         sourceVisibility: rawField.visibility,
         direction: 'out',
         internalPath: rawField.name,
-        type: 'passthrough',
         dataType: { type: 'string' },
         reference: null,
-        handlerId: null,
       };
     }
     if (rawField.name === 'updated' && !fields.updated) {
@@ -352,10 +376,8 @@ export function buildEntity({
         sourceVisibility: rawField.visibility,
         direction: 'out',
         internalPath: rawField.name,
-        type: 'passthrough',
         dataType: { type: 'string', format: 'date-time' },
         reference: null,
-        handlerId: null,
       };
     }
   }
@@ -368,10 +390,8 @@ export function buildEntity({
       sourceVisibility: 'system',
       direction: 'out',
       internalPath: 'id',
-      type: 'passthrough',
       dataType: { type: 'string' },
       reference: null,
-      handlerId: null,
     };
   }
 
@@ -465,6 +485,10 @@ export async function generateManifest({
       const isPrimary = entityName === primaryEntityName;
       let parent = null;
       if (!isPrimary && excludedChildTabs.some((pattern) => pattern.test(source.tabName ?? ''))) continue;
+      // A tab under a child tab (`subline`, AD level 2) is filtered by that child's record, but the
+      // gateway nests one level only and would pass it the window's id: it always read empty
+      // (ETP-6012, purchase-order line-tax). Not published until nested children are supported.
+      if (!isPrimary && rawEntity?.level === 'subline') continue;
       if (!isPrimary && rawEntity && rawEntity.tableName !== primaryTable && primaryTable && primaryIdField) {
         const parentField = (rawEntity.fields ?? []).find((field) =>
           field.visibility === 'system' &&

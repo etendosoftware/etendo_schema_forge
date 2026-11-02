@@ -339,3 +339,7 @@ Regenerated as part of ETP-5197 (dead Link toolbar button, additive). `artifacts
 ## Pipeline regeneration — ETP-5194
 
 Regenerated as part of ETP-5194 (email correction window, contract `0.1.0` → `0.2.0`, additive). `artifacts/user/decisions.json`'s `user` entity `email` field changed `readOnlyLogicJs` from `"!!record.id"` to `"!!record.id && record.emailEditable !== true"`; the rule only reads the `emailEditable` flag `com.etendoerp.go` attaches to every `user` GET row, so the server-side guard and the form cannot drift. `make regen ONLY=user` re-ran (`UserForm.jsx`, `contract.json`, `contract.mcp.json` checksum); `npx sf-validate-pipeline --scope=user` reports 0 violations. No NEO push is needed: `readOnlyLogicJs` is client-only. The error-literal mapping (`backendErrors.js`) and the `backendError.userEmail*` i18n keys are hand-written, not pipeline output.
+
+## Roles for agents — ETP-5852
+
+Over NEO/MCP, `user/user` declares the read-only action `roles` (`UserRolesReadAction` in com.etendoerp.go): the applied template roles and whether the user is a client administrator, for administrators only. Assigning roles stays in this window. Feedback M-201.

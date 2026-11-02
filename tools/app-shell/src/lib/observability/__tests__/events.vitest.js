@@ -196,3 +196,29 @@ describe('survey events — account_id allowlist (ETP-5808)', () => {
   });
 });
 
+
+// ETP-5889 — the KPI event of the Product Movements tab; etendo-kpis counts it by this exact name.
+describe('product_movements_tab_opened event', () => {
+  const declared = {
+    account_id: 'client-1', category: 'navigation', entity: 'product', source: 'side_panel_link', specName: 'product',
+  };
+
+  it('is registered under the name the KPI collector counts, on the Mixpanel channel', () => {
+    expect(OBSERVABILITY_EVENTS.PRODUCT_MOVEMENTS_TAB_OPENED.name).toBe('product_movements_tab_opened');
+    expect(OBSERVABILITY_EVENTS.PRODUCT_MOVEMENTS_TAB_OPENED.channels).toEqual([OBSERVABILITY_CHANNELS.MIXPANEL]);
+  });
+
+  it('keeps the tenant and the declared properties', () => {
+    const { name, properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.PRODUCT_MOVEMENTS_TAB_OPENED, declared);
+    expect(name).toBe('product_movements_tab_opened');
+    expect(properties).toEqual(declared);
+  });
+
+  it('drops anything that is not declared, so no user, role or record identifier rides along', () => {
+    const { properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.PRODUCT_MOVEMENTS_TAB_OPENED, {
+      ...declared, productId: 'ABC', recordId: 'XYZ', userId: 'u1', role: 'admin', email: 'a@x.com',
+    });
+    expect(Object.keys(properties).sort()).toEqual(Object.keys(declared).sort());
+    expect(JSON.stringify(properties)).not.toMatch(/ABC|XYZ|u1|admin|a@x\.com/);
+  });
+});

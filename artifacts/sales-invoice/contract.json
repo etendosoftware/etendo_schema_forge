@@ -1,8 +1,8 @@
 {
-  "version": "0.93.0",
+  "version": "0.94.0",
   "generatedAt": "2026-10-19T17:29:21.531Z",
-  "updatedAt": "2026-10-28T18:53:22.130Z",
-  "checksum": "dce13bbd46a8c9d6",
+  "updatedAt": "2026-10-29T19:42:08.367Z",
+  "checksum": "0132a3d8f0bb5058",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -32,8 +32,7 @@
           "labelKey": "reactivate",
           "visibleWhenStatus": "CO",
           "documentAction": "RE",
-          "successKey": "reactivated",
-          "preUnpost": true
+          "successKey": "reactivated"
         },
         {
           "key": "post",
@@ -122,9 +121,10 @@
         {
           "key": "reversedInvoices",
           "labelKey": "rectificationsTab",
-          "component": "ReversedInvoicesPanel",
-          "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
-          "placement": "tab"
+          "component": "SalesRectificationsTab",
+          "importFrom": "@/windows/custom/sales-invoice/SalesRectificationsTab.jsx",
+          "placement": "tab",
+          "_note": "ETP-6002 (CP-26): shown only when the document type is a rectificative; an original invoice sees its rectificatives as related-documents chips instead (the ETP-5745 CP-12 in-tab view is dropped). An extraTabs entry is always visible unless its component reports onVisibilityChange(false); SalesRectificationsTab does that from the AR subtype (arInvoiceSubtype, or the selected document type on a new invoice). The reversedInvoices entity displayLogic below does NOT govern this tab (renderTab is false)."
         }
       ],
       "rowQuickActions": {
@@ -2868,6 +2868,323 @@
           }
         ],
         "javaQualifier": "invoiceExchangeRateHandler"
+      },
+      "accounting": {
+        "tableName": "Fact_Acct",
+        "tabId": "A399D7976DD74832A0D56586E46D149A",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "label": "General Ledger",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "AcctSchema",
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "label": "Currency",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Currency",
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "period",
+            "apiKey": "period",
+            "column": "C_Period_ID",
+            "label": "Period",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Period",
+            "inputMode": "selector",
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "label": "Accounting Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "account",
+            "apiKey": "account",
+            "column": "Account_ID",
+            "label": "Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "debit",
+            "apiKey": "debit",
+            "column": "AmtAcctDr",
+            "label": "Debit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "credit",
+            "apiKey": "credit",
+            "column": "AmtAcctCr",
+            "label": "Credit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "label": "Business Partner",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "BPartner",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search",
+            "validation": {
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 32
+            }
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "label": "Asset",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Asset",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 10
+            }
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "label": "1st Dimension",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "User1",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "label": "2nd Dimension",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "User2",
+            "inputMode": "selector",
+            "validation": {
+              "maxLength": 22
+            }
+          },
+          {
+            "name": "postingType",
+            "apiKey": "postingType",
+            "column": "PostingType",
+            "label": "Posting Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "enumValues": [
+              {
+                "value": "A",
+                "name": "Actual",
+                "labels": {
+                  "es_ES": "Real"
+                }
+              },
+              {
+                "value": "B",
+                "name": "Budget",
+                "labels": {
+                  "es_ES": "Presupuesto"
+                }
+              },
+              {
+                "value": "E",
+                "name": "Encumbrance",
+                "labels": {
+                  "es_ES": "Gravamen"
+                }
+              },
+              {
+                "value": "S",
+                "name": "Statistical",
+                "labels": {
+                  "es_ES": "Estadística"
+                }
+              }
+            ],
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "javaQualifier": "factAcctHandler"
       }
     }
   },
@@ -2900,8 +3217,7 @@
           "labelKey": "reactivate",
           "visibleWhenStatus": "CO",
           "documentAction": "RE",
-          "successKey": "reactivated",
-          "preUnpost": true
+          "successKey": "reactivated"
         },
         {
           "key": "post",
@@ -2990,9 +3306,10 @@
         {
           "key": "reversedInvoices",
           "labelKey": "rectificationsTab",
-          "component": "ReversedInvoicesPanel",
-          "importFrom": "@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx",
-          "placement": "tab"
+          "component": "SalesRectificationsTab",
+          "importFrom": "@/windows/custom/sales-invoice/SalesRectificationsTab.jsx",
+          "placement": "tab",
+          "_note": "ETP-6002 (CP-26): shown only when the document type is a rectificative; an original invoice sees its rectificatives as related-documents chips instead (the ETP-5745 CP-12 in-tab view is dropped). An extraTabs entry is always visible unless its component reports onVisibilityChange(false); SalesRectificationsTab does that from the AR subtype (arInvoiceSubtype, or the selected document type on a new invoice). The reversedInvoices entity displayLogic below does NOT govern this tab (renderTab is false)."
         }
       ],
       "rowQuickActions": {
@@ -5362,6 +5679,430 @@
           }
         ],
         "javaQualifier": "invoiceExchangeRateHandler"
+      },
+      "accounting": {
+        "tableName": "Fact_Acct",
+        "tabId": "A399D7976DD74832A0D56586E46D149A",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "recordID",
+            "apiKey": "recordID",
+            "column": "Record_ID",
+            "type": "text",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "period",
+            "apiKey": "period",
+            "column": "C_Period_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "account",
+            "apiKey": "account",
+            "column": "Account_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "sequenceNumber",
+            "apiKey": "sequenceNumber",
+            "column": "SeqNo",
+            "type": "integer",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "value",
+            "apiKey": "value",
+            "column": "AcctValue",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "accountingEntryDescription",
+            "apiKey": "accountingEntryDescription",
+            "column": "AcctDescription",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "debit",
+            "apiKey": "debit",
+            "column": "AmtAcctDr",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "credit",
+            "apiKey": "credit",
+            "column": "AmtAcctCr",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "postingType",
+            "apiKey": "postingType",
+            "column": "PostingType",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "locationFromAddress",
+            "apiKey": "locationFromAddress",
+            "column": "C_LocFrom_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "groupID",
+            "apiKey": "groupID",
+            "column": "Fact_Acct_Group_ID",
+            "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "documentType",
+            "apiKey": "documentType",
+            "column": "C_Doctype_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "foreignCurrencyCredit",
+            "apiKey": "foreignCurrencyCredit",
+            "column": "AmtSourceCr",
+            "type": "amount",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "documentCategory",
+            "apiKey": "documentCategory",
+            "column": "DocBaseType",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "activity",
+            "apiKey": "activity",
+            "column": "C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "locationToAddress",
+            "apiKey": "locationToAddress",
+            "column": "C_LocTo_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "gLCategory",
+            "apiKey": "gLCategory",
+            "column": "GL_Category_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "type",
+            "apiKey": "type",
+            "column": "FactAcctType",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "storageBin",
+            "apiKey": "storageBin",
+            "column": "M_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "adTable",
+            "apiKey": "adTable",
+            "column": "AD_Table_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "transactionDate",
+            "apiKey": "transactionDate",
+            "column": "DateTrx",
+            "type": "date",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "recordID2",
+            "apiKey": "recordID2",
+            "column": "Record_ID2",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "foreignCurrencyDebit",
+            "apiKey": "foreignCurrencyDebit",
+            "column": "AmtSourceDr",
+            "type": "amount",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "lineID",
+            "apiKey": "lineID",
+            "column": "Line_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fact_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "trxOrganization",
+            "apiKey": "trxOrganization",
+            "column": "AD_OrgTrx_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesRegion",
+            "apiKey": "salesRegion",
+            "column": "C_SalesRegion_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "tax",
+            "apiKey": "tax",
+            "column": "C_Tax_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "quantity",
+            "apiKey": "quantity",
+            "column": "Qty",
+            "type": "quantity",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "withholding",
+            "apiKey": "withholding",
+            "column": "C_Withholding_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "dateBalanced",
+            "apiKey": "dateBalanced",
+            "column": "Datebalanced",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "modify",
+            "apiKey": "modify",
+            "column": "Ismodify",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "factAcctHandler"
       }
     },
     "endpoints": [
@@ -5522,6 +6263,36 @@
         "path": "/exchangeRates/:id",
         "entity": "exchangeRates",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
@@ -5592,6 +6363,21 @@
         "listUrl": "/sws/neo/sales-invoice/exchangeRates",
         "detailUrl": "/sws/neo/sales-invoice/exchangeRates/{id}",
         "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
+        "listUrl": "/sws/neo/sales-invoice/accounting",
+        "detailUrl": "/sws/neo/sales-invoice/accounting/{id}",
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       }
     },
     "selectors": [
@@ -5835,6 +6621,92 @@
         "reference": "Currency",
         "inputMode": "search",
         "url": "/sws/neo/sales-invoice/exchangeRates/selectors/toCurrency"
+      },
+      {
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "column": "C_AcctSchema_ID",
+        "reference": "AcctSchema",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/accountingSchema"
+      },
+      {
+        "entity": "accounting",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/currency"
+      },
+      {
+        "entity": "accounting",
+        "field": "period",
+        "column": "C_Period_ID",
+        "reference": "Period",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/period"
+      },
+      {
+        "entity": "accounting",
+        "field": "account",
+        "column": "Account_ID",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/account"
+      },
+      {
+        "entity": "accounting",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/businessPartner"
+      },
+      {
+        "entity": "accounting",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/product"
+      },
+      {
+        "entity": "accounting",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/project"
+      },
+      {
+        "entity": "accounting",
+        "field": "costcenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/costcenter"
+      },
+      {
+        "entity": "accounting",
+        "field": "asset",
+        "column": "A_Asset_ID",
+        "reference": "Asset",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/asset"
+      },
+      {
+        "entity": "accounting",
+        "field": "stDimension",
+        "column": "User1_ID",
+        "reference": "User1",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/stDimension"
+      },
+      {
+        "entity": "accounting",
+        "field": "ndDimension",
+        "column": "User2_ID",
+        "reference": "User2",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/accounting/selectors/ndDimension"
       }
     ],
     "actions": [
@@ -6296,6 +7168,13 @@
         "field": "updatePaymentPlan",
         "runner": "node",
         "description": "Action endpoint for 'updatePaymentPlan' in paymentPlan should exist"
+      },
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
       },
       {
         "id": "t-crud-flags-exchangeRates",
@@ -7053,6 +7932,134 @@
         "description": "Display logic for 'aEAT349Period' in reversedInvoices should be valid JS"
       },
       {
+        "id": "t-field-presence-accounting-account",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "account",
+        "runner": "node",
+        "description": "Field 'account' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-accountingDate",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-accountingSchema",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "Field 'accountingSchema' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-asset",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "asset",
+        "runner": "node",
+        "description": "Field 'asset' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-businessPartner",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-costcenter",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-credit",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "credit",
+        "runner": "node",
+        "description": "Field 'credit' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-currency",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-debit",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "debit",
+        "runner": "node",
+        "description": "Field 'debit' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-description",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-ndDimension",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Field 'ndDimension' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-period",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "period",
+        "runner": "node",
+        "description": "Field 'period' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-postingType",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "postingType",
+        "runner": "node",
+        "description": "Field 'postingType' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-product",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-project",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-stDimension",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Field 'stDimension' should be present in accounting"
+      },
+      {
         "id": "t-field-presence-exchangeRates-currency",
         "category": "field-presence",
         "entity": "exchangeRates",
@@ -7691,6 +8698,134 @@
         "field": "reversedInvoice",
         "runner": "node",
         "description": "Field 'reversedInvoice' should be present in reversedInvoices"
+      },
+      {
+        "id": "t-field-type-accounting-account",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "account",
+        "runner": "node",
+        "description": "Field 'account' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-accountingDate",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-accountingSchema",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "Field 'accountingSchema' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-asset",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "asset",
+        "runner": "node",
+        "description": "Field 'asset' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-businessPartner",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-costcenter",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Field 'costcenter' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-credit",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "credit",
+        "runner": "node",
+        "description": "Field 'credit' should have type 'number' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-currency",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-debit",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "debit",
+        "runner": "node",
+        "description": "Field 'debit' should have type 'number' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-description",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-ndDimension",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Field 'ndDimension' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-period",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "period",
+        "runner": "node",
+        "description": "Field 'period' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-postingType",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "postingType",
+        "runner": "node",
+        "description": "Field 'postingType' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-product",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-project",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-stDimension",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Field 'stDimension' should have type 'string' in accounting"
       },
       {
         "id": "t-field-type-exchangeRates-currency",
@@ -9267,6 +10402,94 @@
         "description": "Field 'product' should be a supported filter for lines"
       },
       {
+        "id": "t-selector-endpoint-accounting-account",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "account",
+        "runner": "node",
+        "description": "Selector endpoint for 'account' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-accountingSchema",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "Selector endpoint for 'accountingSchema' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-asset",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "asset",
+        "runner": "node",
+        "description": "Selector endpoint for 'asset' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-businessPartner",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-costcenter",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costcenter' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-currency",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "currency",
+        "runner": "node",
+        "description": "Selector endpoint for 'currency' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-ndDimension",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "Selector endpoint for 'ndDimension' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-period",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "period",
+        "runner": "node",
+        "description": "Selector endpoint for 'period' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-product",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-project",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-stDimension",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "Selector endpoint for 'stDimension' in accounting should exist"
+      },
+      {
         "id": "t-selector-endpoint-exchangeRates-currency",
         "category": "selector-endpoint",
         "entity": "exchangeRates",
@@ -9441,6 +10664,294 @@
         "field": "reversedInvoice",
         "runner": "node",
         "description": "Selector endpoint for 'reversedInvoice' in reversedInvoices should exist"
+      },
+      {
+        "id": "t-system-field-accounting-accountingEntryDescription",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingEntryDescription",
+        "runner": "node",
+        "description": "System field 'accountingEntryDescription' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-activity",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "activity",
+        "runner": "node",
+        "description": "System field 'activity' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-adTable",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "adTable",
+        "runner": "node",
+        "description": "System field 'adTable' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-dateBalanced",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "dateBalanced",
+        "runner": "node",
+        "description": "System field 'dateBalanced' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-documentCategory",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "documentCategory",
+        "runner": "node",
+        "description": "System field 'documentCategory' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-documentType",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "documentType",
+        "runner": "node",
+        "description": "System field 'documentType' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-foreignCurrencyCredit",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "foreignCurrencyCredit",
+        "runner": "node",
+        "description": "System field 'foreignCurrencyCredit' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-foreignCurrencyDebit",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "foreignCurrencyDebit",
+        "runner": "node",
+        "description": "System field 'foreignCurrencyDebit' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-gLCategory",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "gLCategory",
+        "runner": "node",
+        "description": "System field 'gLCategory' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-groupID",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "groupID",
+        "runner": "node",
+        "description": "System field 'groupID' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-lineID",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "lineID",
+        "runner": "node",
+        "description": "System field 'lineID' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-locationFromAddress",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "locationFromAddress",
+        "runner": "node",
+        "description": "System field 'locationFromAddress' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-locationToAddress",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "locationToAddress",
+        "runner": "node",
+        "description": "System field 'locationToAddress' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-modify",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "modify",
+        "runner": "node",
+        "description": "System field 'modify' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-quantity",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "quantity",
+        "runner": "node",
+        "description": "System field 'quantity' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-recordID",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "recordID",
+        "runner": "node",
+        "description": "System field 'recordID' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-recordID2",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "recordID2",
+        "runner": "node",
+        "description": "System field 'recordID2' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-salesCampaign",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-salesRegion",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "salesRegion",
+        "runner": "node",
+        "description": "System field 'salesRegion' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-sequenceNumber",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "sequenceNumber",
+        "runner": "node",
+        "description": "System field 'sequenceNumber' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-storageBin",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "storageBin",
+        "runner": "node",
+        "description": "System field 'storageBin' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-tax",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "tax",
+        "runner": "node",
+        "description": "System field 'tax' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-transactionDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "transactionDate",
+        "runner": "node",
+        "description": "System field 'transactionDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-trxOrganization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "trxOrganization",
+        "runner": "node",
+        "description": "System field 'trxOrganization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-type",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "type",
+        "runner": "node",
+        "description": "System field 'type' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-uOM",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "uOM",
+        "runner": "node",
+        "description": "System field 'uOM' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-value",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "value",
+        "runner": "node",
+        "description": "System field 'value' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-withholding",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "withholding",
+        "runner": "node",
+        "description": "System field 'withholding' should exist in backend but not frontend for accounting"
       },
       {
         "id": "t-system-field-exchangeRates-active",
@@ -11075,6 +12586,13 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for reversedInvoices"
       },
       {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-exchangeRates",
         "category": "visibility",
         "entity": "exchangeRates",
@@ -11111,25 +12629,25 @@
       }
     ],
     "summary": {
-      "total": 630,
+      "total": 711,
       "byCategory": {
         "action-endpoint": 26,
-        "crud-flags": 5,
+        "crud-flags": 6,
         "default-value-type": 26,
         "displaylogic-evaluable": 32,
         "displaylogic-valid": 32,
-        "field-presence": 80,
-        "field-type": 80,
+        "field-presence": 96,
+        "field-type": 96,
         "readonlylogic-evaluable": 51,
         "readonlylogic-valid": 51,
         "rule-declared": 10,
         "searchable-filters": 6,
-        "selector-endpoint": 22,
-        "system-field": 204,
-        "visibility": 5
+        "selector-endpoint": 33,
+        "system-field": 240,
+        "visibility": 6
       },
       "byRunner": {
-        "node": 630,
+        "node": 711,
         "junit": 0
       }
     }
