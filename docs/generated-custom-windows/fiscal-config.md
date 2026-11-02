@@ -312,10 +312,23 @@ not a shared component, so these changes affect no other window.
   `useFormDirty.js` — the same serialized-baseline comparison as the Organization window's
   unsaved-changes banner (`OrganizationPage.jsx` `seededBaseline`): the form is serialized at mount
   and compared with its current serialization. A section reports itself clean on unmount (its
-  values go with it, e.g. when the SII | TicketBAI tab changes). After a successful save the page
+  values go with it). After a successful save the page
   bumps `resetKey`, the sections remount with fresh baselines and "Guardar" is disabled again; a
   failed save leaves the sections dirty, so it stays enabled for a retry. The certificate is not
   part of this: it is saved on upload.
+- **SII + TicketBAI: both tabs stay mounted** (QA F-1). Switching the SII | TicketBAI tab only
+  hides the other section (`hidden` on `FiscalConfigPage__siiPane` / `FiscalConfigPage__tbaiPane`),
+  so its unsaved edits survive a switch back and forth, and the page's dirty flag (the OR of both
+  sections) keeps "Guardar" enabled and the unsaved-changes guard armed while either tab is dirty.
+  Save runs `saveSections`: every dirty section, plus the complementary record being added, one
+  after the other (ETP-5112: never two PUTs at once). A clean section is not re-saved, because its
+  validation could fail behind a hidden tab where nobody sees it. Every section is attempted even
+  if an earlier one fails; the first failure is shown in the org bar as before, and its tab is
+  brought to the front so the section's own error is visible. After a successful save both
+  sections remount clean (`resetKey`). The certificate block (`CertSection`) renders only in the
+  visible tab (`hideCert` on the hidden one): the org has one certificate, and two mounted copies
+  would duplicate its test ids and its `/certificate` read. Its refresh after an upload
+  (`certRefreshKey`) is unchanged.
 - **Leaving with unsaved changes asks first.** The same dirty flag is fed into the shared
   `useUnsavedChangesGuard` (`hooks/useUnsavedChangesGuard.js`, ETP-5022/5073), so in-app
   navigation, the locale switch and F5/tab close show the app's existing unsaved-changes prompt;

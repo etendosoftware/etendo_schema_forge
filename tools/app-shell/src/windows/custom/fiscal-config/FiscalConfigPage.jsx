@@ -64,7 +64,7 @@ function resolveRenderProfile(addingComplementary, effectiveProfile) {
 }
 
 /**
- * Saves two sections one after the other — never both at once (ETP-5112).
+ * Saves the given sections one after the other — never at once (ETP-5112).
  *
  * Each section's `save()` issues a PUT carrying the record's `updated` token, and core parses that
  * token through a `private final static SimpleDateFormat` (`JsonToDataConverter` line 129) which is
@@ -72,24 +72,23 @@ function resolveRenderProfile(addingComplementary, effectiveProfile) {
  * check then refuses one with "the record has already been changed by another user" against a
  * record nobody touched. Reproduced on the Organization screen with exactly this two-write shape.
  *
- * Both sections are still attempted even when the first fails, which is what `allSettled` gave us
- * and what the combined error below depends on — hence the explicit try/catch per save rather than
- * a bare sequential await, which would skip the second on the first failure.
+ * Every section is still attempted even when an earlier one fails, which is what `allSettled` gave
+ * us and what the combined error below depends on — hence the explicit try/catch per save rather
+ * than a bare sequential await, which would skip the rest on the first failure.
+ *
+ * @param {Array<{ ref: object|null, tab: number }>} sections
+ * @returns {Promise<{ error: Error, tab: number } | null>} the first failure, or null
  */
-async function saveTwoRefs(ref1, ref2) {
-  const outcomes = [];
-  for (const ref of [ref1, ref2]) {
+async function saveSections(sections) {
+  let firstFailure = null;
+  for (const { ref, tab } of sections) {
     try {
       await ref?.save();
-      outcomes.push(null);
     } catch (err) {
-      outcomes.push(err);
+      firstFailure ??= { error: err, tab };
     }
   }
-  const firstError = outcomes.find(Boolean);
-  if (firstError) {
-    throw new Error(firstError.message ?? 'Error saving');
-  }
+  return firstFailure;
 }
 
 // ── FiscalConfigPage ───────────────────────────────────────────────────────────
@@ -212,12 +211,21 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
     setSaveError(null);
     setSavedOk(false);
     try {
-      if (effectiveProfile === 'sii' && addingComplementary === 'tbai') {
-        await saveTwoRefs(siiRef.current, complementaryRef.current);
-      } else if (effectiveProfile === 'tbai' && addingComplementary === 'sii') {
-        await saveTwoRefs(tbaiRef.current, complementaryRef.current);
-      } else if (effectiveProfile === 'sii+tbai') {
-        await saveTwoRefs(siiRef.current, tbaiRef.current);
+      if (renderProfile === 'sii+tbai') {
+        // Both tabs stay mounted (ETP-5831): save every section with unsaved changes, plus the
+        // complementary record being added (its save is what finishes "adding"). A clean section is
+        // not re-saved — its validation could fail behind a hidden tab where nobody sees it.
+        const sections = [
+          { key: 'sii', tab: 0, ref: addingComplementary === 'sii' ? complementaryRef : siiRef },
+          { key: 'tbai', tab: 1, ref: addingComplementary === 'tbai' ? complementaryRef : tbaiRef },
+        ].filter(s => dirtySections[s.key] || addingComplementary === s.key)
+          .map(s => ({ ref: s.ref.current, tab: s.tab }));
+        const failure = await saveSections(sections);
+        if (failure) {
+          // The failing section shows its own error; bring its tab to the front so it is seen.
+          setActiveTab(failure.tab);
+          throw new Error(failure.error?.message ?? 'Error saving');
+        }
       } else {
         const refMap = { sii: siiRef, 'sii-navarra': siiRef, tbai: tbaiRef, verifactu: verifactuRef };
         await refMap[effectiveProfile]?.current?.save();
@@ -517,7 +525,11 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                   onChange={setActiveTab}
                   className="pb-4"
                   data-testid="TabBar__310303" />
-                {activeTab === 0 && (
+                {/* Both tabs stay mounted (ETP-5831): switching only hides the other section, so its
+                    unsaved edits survive and keep counting for "Guardar" and the unsaved-changes
+                    guard. The certificate block renders in the visible tab only (one shared
+                    certificate: no duplicate block, test ids or /certificate read). */}
+                <div hidden={activeTab !== 0} data-testid="FiscalConfigPage__siiPane">
                   <SiiSection
                     key={`sii-${resetKey}`}
                     ref={addingComplementary === 'sii' ? complementaryRef : siiRef}
@@ -529,10 +541,11 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                     hideSave
                     locked={forceTestMode}
                     {...certProps}
+                    hideCert={activeTab !== 0}
                     onDirtyChange={reportDirty.sii}
                     data-testid="SiiSection__310303" />
-                )}
-                {activeTab === 1 && (
+                </div>
+                <div hidden={activeTab !== 1} data-testid="FiscalConfigPage__tbaiPane">
                   <TbaiSection
                     key={`tbai-${resetKey}`}
                     ref={addingComplementary === 'tbai' ? complementaryRef : tbaiRef}
@@ -543,9 +556,10 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                     hideSave
                     locked={forceTestMode}
                     {...certProps}
+                    hideCert={activeTab !== 1}
                     onDirtyChange={reportDirty.tbai}
                     data-testid="TbaiSection__310303" />
-                )}
+                </div>
                 <CertExpiryBanner
                   daysLeft={certDaysLeft}
                   variant="prominent"

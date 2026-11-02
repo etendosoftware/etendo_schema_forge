@@ -51,6 +51,8 @@ vi.mock('../../fiscal-monitor/useDebugMode.js', () => ({
 
 // `certExpiry.value` lets a test give the page a loaded certificate; `calls` records the
 // refreshKey each render asked for (ETP-5831: a replaced certificate re-reads it).
+// Section-double saves in call order (ETP-5831 QA F-1).
+const sectionSaves = vi.hoisted(() => []);
 const certExpiry = vi.hoisted(() => ({ value: { daysLeft: null, validTo: null }, calls: [] }));
 vi.mock('../useCertExpiry.js', () => ({
   useCertExpiry: (apiBaseUrl, opts) => { certExpiry.calls.push(opts); return certExpiry.value; },
@@ -93,12 +95,13 @@ vi.mock('../SiiSection.jsx', async () => {
   // The real dirty tracking over a one-field form: "edit" makes the section dirty.
   const { useFormDirty } = await import('../useFormDirty.js');
   return { default: React.forwardRef((props, ref) => {
-    React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
+    React.useImperativeHandle(ref, () => ({ save: () => { sectionSaves.push(['sii']); return Promise.resolve(); } }));
     const [form, setForm] = React.useState({ value: 'stored' });
     useFormDirty(form, props.onDirtyChange);
     return (
       <div
         data-testid="sii-section"
+        data-form={form.value}
         data-locked={String(!!props.locked)}
         data-hide-cert={String(!!props.hideCert)}
         data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
@@ -113,12 +116,13 @@ vi.mock('../TbaiSection.jsx', async () => {
   // The real dirty tracking over a one-field form: "edit" makes the section dirty.
   const { useFormDirty } = await import('../useFormDirty.js');
   return { default: React.forwardRef((props, ref) => {
-    React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
+    React.useImperativeHandle(ref, () => ({ save: () => { sectionSaves.push(['tbai']); return Promise.resolve(); } }));
     const [form, setForm] = React.useState({ value: 'stored' });
     useFormDirty(form, props.onDirtyChange);
     return (
       <div
         data-testid="tbai-section"
+        data-form={form.value}
         data-locked={String(!!props.locked)}
         data-hide-cert={String(!!props.hideCert)}
         data-cert-refresh-key={String(props.certRefreshKey ?? '')}>
@@ -599,6 +603,7 @@ describe('FiscalConfigPage — profile: tbai', () => {
 describe('FiscalConfigPage — profile: sii+tbai', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sectionSaves.length = 0;
     vi.mocked(useAuth).mockReturnValue({
       selectedOrg: { id: 'org-1', name: 'Test Org' },
       selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
@@ -632,10 +637,53 @@ describe('FiscalConfigPage — profile: sii+tbai', () => {
     expect(screen.getByTestId('tbai-section')).toBeInTheDocument();
   });
 
-  it('hides SiiSection after switching to TBAI tab', () => {
+  // ETP-5831 QA F-1: the inactive tab is hidden, not unmounted, so its unsaved edits survive.
+  it('hides SiiSection after switching to TBAI tab (still mounted)', () => {
     renderPage();
     fireEvent.click(screen.getByText('fiscal.tab.tbai'));
-    expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
+    expect(screen.getByTestId('FiscalConfigPage__siiPane')).toHaveAttribute('hidden');
+    expect(screen.getByTestId('FiscalConfigPage__tbaiPane')).not.toHaveAttribute('hidden');
+  });
+
+  it('keeps an SII edit across a switch to TicketBAI and back, with Save enabled on the other tab', () => {
+    renderPage();
+    const saveBtn = () => screen.getByText(/fiscal\.save/).closest('button');
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
+    expect(saveBtn()).not.toBeDisabled();
+    fireEvent.click(screen.getByText('fiscal.tab.sii'));
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-form', 'edited');
+    expect(saveBtn()).not.toBeDisabled();
+  });
+
+  it('keeps the unsaved-changes guard active when only the hidden tab is dirty', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
+    expect(hasUnsavedChanges()).toBe(true);
+  });
+
+  it('shows the certificate block in the visible tab only', () => {
+    renderPage();
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-hide-cert', 'false');
+    expect(screen.getByTestId('tbai-section')).toHaveAttribute('data-hide-cert', 'true');
+    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-hide-cert', 'true');
+    expect(screen.getByTestId('tbai-section')).toHaveAttribute('data-hide-cert', 'false');
+  });
+
+  it('a save with both tabs dirty saves both, and both reset clean afterwards', async () => {
+    renderPage();
+    const saveBtn = () => screen.getByText(/fiscal\.save/).closest('button');
+    fireEvent.click(screen.getByTestId('sii-section-edit'));
+    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
+    fireEvent.click(screen.getByTestId('tbai-section-edit'));
+    fireEvent.click(saveBtn());
+    await waitFor(() => expect(sectionSaves.map(([label]) => label)).toEqual(['sii', 'tbai']));
+    await waitFor(() => expect(saveBtn()).toBeDisabled());
+    expect(hasUnsavedChanges()).toBe(false);
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-form', 'stored');
+    expect(screen.getByTestId('tbai-section')).toHaveAttribute('data-form', 'stored');
   });
 });
 

@@ -8,23 +8,13 @@
 // corrupt each other's parse and one comes back refused as a conflict against a record
 // nobody touched.
 //
-// WHAT THIS FILE CAN AND CANNOT PROVE — read before extending it.
-//
-// On the `sii+tbai` layout this page mounts only the ACTIVE tab's section
-// (`{activeTab === 0 && <SiiSection ref={siiRef} …>}` / `{activeTab === 1 && <TbaiSection
-// ref={tbaiRef} …>}`), so React has nulled the other ref by the time Save is pressed and
-// `saveTwoRefs`'s second `ref?.save()` is a no-op. The pair therefore never actually
-// overlaps here regardless of how `saveTwoRefs` is written, and a non-overlap assertion
-// could not distinguish a sequential loop from `Promise.allSettled` on this page. The
-// first test below PINS that single-mount fact — if the page ever starts keeping both
-// sections mounted (which is what the onboarding wizard's DetailScreen does, deliberately,
-// "so ref stays valid"), it fails and this file must grow the real non-overlap assertion
-// that `OnboardingWizard.serialization.vitest.jsx` already carries.
-//
-// What is asserted instead is the part of `saveTwoRefs`'s contract that IS observable
-// here: each ref is awaited (a rejection surfaces as the page's save error rather than an
-// unhandled rejection), a null ref is tolerated, and the first ref failing does not stop
-// the second from being attempted.
+// Since ETP-5831 the `sii+tbai` layout keeps BOTH sections mounted (switching the SII | TicketBAI
+// tab only hides one) and Save saves every section with unsaved changes. Both refs are live at
+// save time, so the two PUTs genuinely could overlap here — this file therefore asserts the real
+// non-overlap (`minOverlapGap() > 0`, the SII save is held open 30 ms), the same assertion
+// `OnboardingWizard.serialization.vitest.jsx` carries. It also pins that each save is awaited (a
+// rejection surfaces as the page's save error), that a failure does not stop the next section,
+// and that a clean section is not re-saved.
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
@@ -32,6 +22,8 @@ import { createRequestJournal } from '@/test/requestJournal.js';
 
 const journalRef = { current: null };
 const saveOutcome = { sii: 'ok', tbai: 'ok' };
+// Which section doubles report unsaved changes (ETP-5831: only dirty sections are saved).
+const dirtyState = { sii: true, tbai: true };
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 
@@ -85,9 +77,9 @@ function makeSectionMock(label, delayMs) {
         fail: saveOutcome[label] === 'fail' ? new Error(`${label} boom`) : undefined,
       }),
     }));
-    // ETP-5831: the page's Save is enabled only while a section reports unsaved changes; these
-    // doubles report themselves dirty so the serialization tests can press it.
-    React.useEffect(() => { props.onDirtyChange?.(true); }, [props.onDirtyChange]);
+    // ETP-5831: the page's Save is enabled only while a section reports unsaved changes, and only
+    // dirty sections are saved; `dirtyState` decides what each double reports.
+    React.useEffect(() => { props.onDirtyChange?.(dirtyState[label] ?? true); }, [props.onDirtyChange]);
     return <div data-testid={`${label}-section`} />;
   });
 }
@@ -142,38 +134,38 @@ beforeEach(() => {
   journalRef.current = createRequestJournal();
   saveOutcome.sii = 'ok';
   saveOutcome.tbai = 'ok';
+  dirtyState.sii = true;
+  dirtyState.tbai = true;
 });
 
 describe('FiscalConfigPage — sii+tbai save (ETP-5112)', () => {
-  // The premise behind every other assertion in this file. See the header comment: if this
-  // ever fails because BOTH sections are mounted, the page's two saves really can overlap
-  // and this file owes a non-overlap assertion.
-  it('mounts only the active tab section, so the second ref is null at save time', () => {
+  it('keeps both tab sections mounted, hiding the inactive one', () => {
     renderPage();
 
-    expect(screen.getByTestId('sii-section')).toBeInTheDocument();
-    expect(screen.queryByTestId('tbai-section')).not.toBeInTheDocument();
+    expect(screen.getByTestId('FiscalConfigPage__siiPane')).not.toHaveAttribute('hidden');
+    expect(screen.getByTestId('FiscalConfigPage__tbaiPane')).toHaveAttribute('hidden');
+    expect(screen.getByTestId('tbai-section')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('fiscal.tab.tbai'));
 
-    expect(screen.getByTestId('tbai-section')).toBeInTheDocument();
-    expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
+    expect(screen.getByTestId('FiscalConfigPage__siiPane')).toHaveAttribute('hidden');
+    expect(screen.getByTestId('sii-section')).toBeInTheDocument();
   });
 
-  it('awaits the mounted section save and reports success', async () => {
+  it('saves both dirty sections one after the other, never overlapping', async () => {
     renderPage();
 
     clickSave();
-    await waitFor(() => expect(journalRef.current.allSettled(1)).toBe(true));
+    await waitFor(() => expect(journalRef.current.allSettled(2)).toBe(true));
 
-    expect(journalRef.current.labels()).toEqual(['sii']);
-    // No save error banner: `saveTwoRefs` resolved, i.e. the save was genuinely awaited.
-    expect(screen.queryByText('sii boom')).not.toBeInTheDocument();
+    expect(journalRef.current.labels()).toEqual(['sii', 'tbai']);
+    expect(journalRef.current.minOverlapGap()).toBeGreaterThan(0);
+    expect(screen.queryByText(/boom/)).not.toBeInTheDocument();
   });
 
-  it('saves the tbai section once its tab is the active one', async () => {
+  it('saves only the dirty section, whichever tab is visible', async () => {
+    dirtyState.sii = false;
     renderPage();
-    fireEvent.click(screen.getByText('fiscal.tab.tbai'));
 
     clickSave();
     await waitFor(() => expect(journalRef.current.allSettled(1)).toBe(true));
@@ -181,27 +173,23 @@ describe('FiscalConfigPage — sii+tbai save (ETP-5112)', () => {
     expect(journalRef.current.labels()).toEqual(['tbai']);
   });
 
-  // `saveTwoRefs` collects an outcome per ref and rethrows the FIRST error — a save that
-  // was fired but not awaited would surface as an unhandled rejection instead, and the
-  // banner would never appear.
-  it('surfaces a failing section save as the page save error', async () => {
+  it('surfaces a failing section save as the page save error and still attempts the next one', async () => {
     saveOutcome.sii = 'fail';
     renderPage();
 
     clickSave();
 
     await waitFor(() => expect(screen.getByText('sii boom')).toBeInTheDocument());
+    expect(journalRef.current.labels()).toEqual(['sii', 'tbai']);
   });
 
-  it('tolerates a null ref without failing the save', async () => {
-    // No org selected -> Save is disabled, so instead assert the shape that reaches
-    // `saveTwoRefs` with one null ref: only the mounted section is ever invoked.
+  it('brings the failing section to the front when its tab is hidden', async () => {
+    saveOutcome.tbai = 'fail';
     renderPage();
 
     clickSave();
-    await waitFor(() => expect(journalRef.current.allSettled(1)).toBe(true));
 
-    expect(journalRef.current.entries).toHaveLength(1);
-    expect(screen.queryByText(/boom/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('tbai boom')).toBeInTheDocument());
+    expect(screen.getByTestId('FiscalConfigPage__tbaiPane')).not.toHaveAttribute('hidden');
   });
 });
