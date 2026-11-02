@@ -260,8 +260,16 @@ What the panel shows — derived from the stored records by `deriveConfiguredSta
 | Certificado | "Válido hasta dd/mm/aaaa" from `useCertExpiry().validTo` (new return field), or "Pendiente" (warning colour) without a certificate |
 | Activado | earliest creation timestamp of the system's records (`created`, the API key NEO serves the `Created` audit column under); row omitted without one |
 
-The "Ver historial de envíos" link of the design is **deliberately not included**. In the
-`sii+tbai` layout the tab bar stays above the form and the panel sits beside the tab content.
+The "Ver historial de envíos" link of the design is **deliberately not included**.
+
+**Layout.** The page content is a form column plus the panel column (`withStatus` in
+`FiscalConfigPage.jsx`). From the `xl` breakpoint they sit side by side and the panel is a fixed
+360px column (`xl:w-[360px]`); below `xl` the panel stacks under the form at full width, so there
+is never a horizontal scroll. In the `sii+tbai` layout the SII | TicketBAI switch (`TabBar`) is
+the first element of the **form column**, not a full-width bar above the content, so the panel's
+top is level with the switch's top; `TabBar` takes a `className` for its wrapper spacing (default
+`px-6 py-3` for full-width bars, `pb-4` inside the column). The other profiles have no switch, so
+the panel is level with the first row of the form.
 i18n: `fiscal.status.title|active|body|row.cert` (en_US, es_ES); every other label reuses the
 applied screen's `fiscal.onboarding.applied.*` keys.
 

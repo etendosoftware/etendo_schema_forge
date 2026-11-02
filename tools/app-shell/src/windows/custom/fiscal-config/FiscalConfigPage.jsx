@@ -276,8 +276,10 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const configuredStatus = deriveConfiguredStatus({
     profile: effectiveProfile, siiRecord: effectiveSii, tbaiRecord: effectiveTbai, verifactuRecord: effectiveVerifactu,
   });
+  // Below `xl` the panel stacks under the form at full width (no horizontal scroll); from `xl` it
+  // is a 360px column beside it, its top level with the form's first row (or the tab switch).
   const statusPanel = configuredStatus ? (
-    <aside className="w-[340px] flex-shrink-0" aria-label={ui('fiscal.status.title')}>
+    <aside className="w-full xl:w-[360px] xl:flex-shrink-0" aria-label={ui('fiscal.status.title')} data-testid="FiscalConfigPage__statusColumn">
       <FiscalStatusSummary
         eyebrow={{
           label: ui('fiscal.status.title'),
@@ -299,8 +301,8 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
 
   // Form column + status panel, side by side.
   const withStatus = (content) => (
-    <div className="flex items-start gap-6">
-      <div className="flex-1 min-w-0">{content}</div>
+    <div className="flex flex-col xl:flex-row xl:items-start gap-6">
+      <div className="w-full xl:flex-1 min-w-0" data-testid="FiscalConfigPage__formColumn">{content}</div>
       {statusPanel}
     </div>
   );
@@ -488,14 +490,17 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         {/* SII + TBAI — with tabs (also used when adding a complementary SIF) */}
         {showContent && renderProfile === 'sii+tbai' && (
           <>
-            <TabBar
-              tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
-              active={activeTab}
-              onChange={setActiveTab}
-              data-testid="TabBar__310303" />
+            {/* The SII | TicketBAI switch sits in the form column, so the status panel's top is
+                level with the switch's top (ETP-5831). */}
             <div className="flex-1 overflow-y-auto">
               <div className="px-6 py-6">
                 {withStatus(<>
+                <TabBar
+                  tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
+                  active={activeTab}
+                  onChange={setActiveTab}
+                  className="pb-4"
+                  data-testid="TabBar__310303" />
                 {activeTab === 0 && (
                   <SiiSection
                     key={`sii-${resetKey}`}

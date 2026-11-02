@@ -151,8 +151,8 @@ vi.mock('../CertExpiryBanner.jsx', () => ({
 }));
 
 vi.mock('../TabBar.jsx', () => ({
-  default: ({ tabs, active, onChange }) => (
-    <div data-testid="tab-bar">
+  default: ({ tabs, active, onChange, className }) => (
+    <div data-testid="tab-bar" className={className}>
       {tabs.map((tab, i) => (
         <button key={i} onClick={() => onChange(i)} data-active={active === i}>{tab}</button>
       ))}
@@ -1231,6 +1231,33 @@ describe('FiscalConfigPage — "Estado" status panel on load (ETP-5831 B)', () =
     expect(screen.getByTestId('FiscalStatusSummary__row-activated')).toBeInTheDocument();
     // No submission-history link in the panel.
     expect(panel.querySelector('a')).toBeNull();
+  });
+
+  // Layout (ETP-5831): the SII | TicketBAI switch is the first thing in the form column, so the
+  // panel beside it starts level with the switch; the panel is a 360px column from `xl` and
+  // stacks full-width below it.
+  it('puts the SII | TicketBAI switch inside the form column, beside the status panel', () => {
+    mockConfig({ profile: 'sii+tbai', siiRecord: SII_REC, tbaiRecord: TBAI_REC });
+    renderPage();
+    const formColumn = screen.getByTestId('FiscalConfigPage__formColumn');
+    const statusColumn = screen.getByTestId('FiscalConfigPage__statusColumn');
+    expect(formColumn.firstElementChild).toBe(screen.getByTestId('tab-bar'));
+    expect(formColumn.parentElement).toBe(statusColumn.parentElement);
+  });
+
+  it('keeps the panel level with the form content when there is no tab switch', () => {
+    mockConfig({ profile: 'sii', siiRecord: SII_REC });
+    renderPage();
+    expect(screen.queryByTestId('tab-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('FiscalConfigPage__formColumn').firstElementChild).toBe(screen.getByTestId('sii-section'));
+  });
+
+  it('is a 360px column from xl and stacks full-width under the form below it', () => {
+    mockConfig({ profile: 'sii', siiRecord: SII_REC });
+    renderPage();
+    const statusColumn = screen.getByTestId('FiscalConfigPage__statusColumn');
+    expect(statusColumn.className.split(/\s+/)).toEqual(expect.arrayContaining(['w-full', 'xl:w-[360px]']));
+    expect(statusColumn.parentElement.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex-col', 'xl:flex-row']));
   });
 
   it('stays visible after switching between the SII and TicketBAI tabs', () => {
