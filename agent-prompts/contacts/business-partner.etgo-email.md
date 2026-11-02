@@ -1,0 +1,1 @@
+The contact's own email: the address of the customer, vendor or company itself, the one documents (invoices, orders, quotations) are sent to. Set it here, on the contact, when the user gives "the customer's email" or "their email". The `contact` entity is different: it holds the people who work for this contact, each with their own email; use it only when the user names a person.
