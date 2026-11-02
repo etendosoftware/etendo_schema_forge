@@ -389,6 +389,20 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
       // onboarding wizard reappears (TC2 end-state + TC4 valid no-SIF state).
       await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
       await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
+
+      // ETP-5831 — the page must stay interactive after the swap to the wizard: no modal
+      // leftover (overlay, body `pointer-events: none`, `inert` / `aria-hidden` siblings) may
+      // survive the dialog unmounting. Before the fix the screen froze until a full reload.
+      await expect(page.getByTestId('ChangeSifDialog__content')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => ({
+        pointerEvents: document.body.style.pointerEvents,
+        inert: document.querySelectorAll('[inert]').length,
+        ariaHidden: [...document.body.children].filter(el => el.getAttribute('aria-hidden') === 'true').length,
+        overlays: document.querySelectorAll('[role="dialog"], [data-state="open"][data-radix-dialog-overlay], .fixed.inset-0[data-state]').length,
+      }))).toEqual({ pointerEvents: '', inert: 0, ariaHidden: 0, overlays: 0 });
+      await page.getByRole('button', { name: new RegExp(t('fiscal.territory.navarra')) }).click({ timeout: 3_000 });
+      await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click({ timeout: 3_000 });
+      await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible({ timeout: 5_000 });
     });
   }
 

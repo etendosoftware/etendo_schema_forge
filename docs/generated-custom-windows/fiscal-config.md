@@ -139,6 +139,19 @@ A combined `sii+tbai` profile spans two rows, deactivated **sequentially**. By d
 
 Leaving the wizard without choosing a system is a **valid "no active SIF" state** — an org may legitimately carry only inactive trace rows. Picking and configuring a SIF from the wizard creates a new active config (possibly from a different SIF family than the one deactivated). Because the trigger enforces one active row per org per system, the new active config coexists cleanly with the old trace rows.
 
+**Freeze after confirming (fixed in ETP-5831, pre-existing).** Confirming "Cambiar SIF" used to
+leave `pointer-events: none` on `<body>`: the wizard appeared but nothing responded until a full
+reload. The kebab is a Radix `DropdownMenu` and the dialog a Radix `Dialog`, each built on
+`DismissableLayer`, which locks the body and saves the previous value to restore on close. In the
+Vite dev server `@radix-ui/react-dialog` is pre-bundled (something in `src/` imports it directly)
+while `@radix-ui/react-dropdown-menu` is served raw through the excluded `app-shell-core`, so the
+two load separate copies of that module, each with its own layer stack. The menu locked the body,
+the dialog saved that lock as the "original", and restored it on close. The kebab is now
+`modal={false}`, so it never takes the lock; the dialog alone locks and releases. A production
+build bundles one copy and does not show the freeze. Guarded by TC2 in
+`e2e/tests/flows/fiscal/fiscal-config.mocked.spec.js`, which now checks that the page stays
+interactive after the swap (no body `pointer-events`, `inert`, `aria-hidden` or open dialog, and
+the wizard reacts to clicks).
 ### Informational notices — INFORM, never block
 
 Before confirming, the dialog shows a per-SIF **permanence notice** (`fiscal.changeSif.notice.*`, `data-testid="ChangeSifDialog__notice"`), chosen by `getChangeSifNoticeKey(profile)`:

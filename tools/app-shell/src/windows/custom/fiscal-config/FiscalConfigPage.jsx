@@ -340,7 +340,12 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
         </div>
         <div className="flex items-center gap-2">
           {(canAddComplementary || canChangeSif) && !addingComplementary && (
-            <DropdownMenu data-testid="DropdownMenu__310303">
+            /* Non-modal on purpose (ETP-5831): "Cambiar SIF" opens a Radix Dialog from this menu.
+                A modal menu also locks <body> with `pointer-events: none`; in the Vite dev server the
+                menu and the dialog load separate copies of Radix's DismissableLayer, so the dialog
+                saved the menu's lock as the "original" value and restored it on close, freezing the
+                page until a reload. A non-modal menu never takes that lock. */
+            <DropdownMenu modal={false} data-testid="DropdownMenu__310303">
               <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__310303">
                 <button
                   type="button"
