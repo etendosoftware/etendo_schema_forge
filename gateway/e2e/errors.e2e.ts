@@ -4,7 +4,7 @@
 // only where the docs promise one.
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { API_KEY_READONLY, RUN_PREFIX } from './support/env.ts';
+import { READONLY_KEY, RUN_PREFIX } from './support/env.ts';
 import { api, cleanupCreated, expectErrorDocument, MISSING_ID, resource } from './support/client.ts';
 import { createAddress, createContact } from './support/fixtures.ts';
 
@@ -86,10 +86,10 @@ describe('write validation', () => {
   });
 });
 
-describe('write-protected key', { skip: API_KEY_READONLY ? false : 'PUBLIC_API_KEY_READONLY is not set' }, () => {
+describe('write-protected key', { skip: READONLY_KEY ? false : 'PUBLIC_API_KEY_READONLY is not set' }, () => {
   it('403 when a read-only key tries to create', async () => {
     const res = await api('POST', 'product', {
-      key: API_KEY_READONLY!,
+      key: READONLY_KEY!,
       body: resource('product', { search_key: `${RUN_PREFIX}-403`, name: `${RUN_PREFIX}-403` }),
     });
     if (res.status === 201) await api('DELETE', `product/${res.json.data.id}`); // never leave a record if the key was not read-only

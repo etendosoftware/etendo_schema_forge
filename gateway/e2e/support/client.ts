@@ -3,7 +3,7 @@
 // 429 back-off (the gateway limits each key to 100 requests / 60 s by default),
 // OpenAPI conformance on every successful body, and cleanup of created records.
 import assert from 'node:assert/strict';
-import { API_KEY, BASE_URL } from './env.ts';
+import { MAIN_KEY, BASE_URL } from './env.ts';
 import { assertConformsToOpenApi } from './openapi.ts';
 
 export interface ApiResponse {
@@ -29,7 +29,7 @@ const MAX_RATE_LIMIT_RETRIES = 5;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function api(method: string, path: string, options: RequestOptions = {}): Promise<ApiResponse> {
-  const key = options.key === undefined ? API_KEY : options.key;
+  const key = options.key === undefined ? MAIN_KEY : options.key;
   const headers: Record<string, string> = { Accept: 'application/vnd.api+json', ...options.headers };
   if (key !== null) headers.Authorization ??= `Bearer ${key}`;
   if (options.body !== undefined) headers['Content-Type'] ??= 'application/vnd.api+json';

@@ -35,8 +35,8 @@ function resolveBaseUrl(): string {
 }
 
 export const BASE_URL = resolveBaseUrl();
-export const API_KEY = required('PUBLIC_API_KEY');
-export const API_KEY_READONLY = process.env.PUBLIC_API_KEY_READONLY?.trim() || undefined;
+export const MAIN_KEY = required('PUBLIC_API_KEY');
+export const READONLY_KEY = process.env.PUBLIC_API_KEY_READONLY?.trim() || undefined;
 
 // One unique prefix per process (each e2e file runs in its own process), put in
 // searchKey / name of every record the run creates so leftovers are recognisable.
