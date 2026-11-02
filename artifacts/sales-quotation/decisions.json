@@ -294,7 +294,7 @@
         },
         "documentAction": {
           "visibility": "system",
-          "agentPrompt": "Document workflow action for this sales quotation. Fire it with etendo_action, sending the chosen value as parameters.docAction. A quotation Under evaluation (documentStatus=UE) is accepted with the Convertquotation action, which creates a draft sales order, or rejected with rejectQuotation (docAction RJ is routed to the same flow and needs its reason); it is never sent back to Draft. RE (Reactivate), VO (Void) and CL (Close) are not offered by the app and are refused with 400 on every quotation, whatever its status, voided included: delete a draft quotation with etendo_delete, and accept (Convertquotation) or reject (rejectQuotation) one Under evaluation. Read documentStatus with etendo_get before acting."
+          "agentPrompt": "Document workflow action for this sales quotation. Fire it with etendo_action, sending the chosen value as parameters.docAction. Only the values the app offers run; every other one is refused with 400. From documentStatus=DR (Draft): CO sends the quotation to evaluation (UE). A quotation Under evaluation (documentStatus=UE) is accepted with the Convertquotation action, which creates a draft sales order, or rejected with rejectQuotation (docAction RJ is routed to the same flow and needs its reason); it is never sent back to Draft. Any other value is refused in every status: RE (Reactivate), VO (Void) and CL (Close) are not offered by the app (delete a draft quotation with etendo_delete), nor are PR, AP, PO, RA, RC and XL, which come from the shared AD list, nor CO outside a draft. Read documentStatus with etendo_get before acting."
         },
         "createOrder": {
           "visibility": "system"

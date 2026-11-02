@@ -335,8 +335,8 @@ Flow encoded in the prompt: `DR -> CO` books, `CO -> RE` reactivates **only
 while the order has no linked documents** (same condition as the Reactivate menu action's
 `visibleWhenFieldFalse: hasLinkedDocuments`). `CL` (Close) is **not offered**: the window never shows
 it, and since the ETP-5704 QA round the backend refuses it on every sales order (see below), so the
-prompt tells the agent never to send it. `VO` (Void) is **not offered** either: since ETP-6026 the
-backend refuses it on a draft, in-progress or booked order (see below).
+prompt tells the agent never to send it. `VO` (Void) is **not offered** either. Since ETP-6026 the
+backend accepts only what the window offers and refuses every other value (see below).
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre-CO total-discount
 line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
@@ -732,27 +732,44 @@ the backend refuses what the UI does not offer.
   reason saying the app does not offer Close.
 - Purchase orders are untouched. No visible change in the UI: it never sends `CL`.
 
-### Void (`VO`) refused on a draft, in-progress or booked sales order — ETP-6026
+### Only the document actions the window offers run — ETP-6026
 
-The window offers Delete and Confirm on a draft and only Reactivate once booked; it never offers
-Void. Over MCP, `VO` on a draft order used to void it with total 0.
+Over MCP, `VO` on a draft order used to void it with total 0, and `PR` (Prepare) took a draft to
+`IP` (In progress). A deny-list of the bad values kept leaking the next one, so the `DocAction`
+button is now an **allow-list** of what the window offers, per stored `documentStatus`:
 
-- `SalesOrderHeaderHandler.handle()` refuses a POST of the `DocAction` button whose **effective**
-  value is `VO` when the stored `documentStatus` is `DR`, `IP` or `CO` — same `DocActionRefusalGuard`
-  resolution, 404 and fail-closed rules as Close. REST single, REST batch and MCP all reach it.
-- **Refusal**: HTTP 400, `messageKeys: ["ETGO_SalesOrderVoidNotOffered"]` (English / Spanish).
-- **Advertised**: `VO` is reported under `unavailableValues` of `documentAction` on those statuses,
-  and the advisory `MCP_CONFIG.actions.valuesByStatus` no longer lists `VO` (`DR` → CO, PR; `IP` → CO).
-- Purchase orders are untouched. No visible change in the UI: no component sends `VO` (grep of
-  the SPA, the window's custom components and app-shell-core).
+| Status | Accepted | Where the UI sends it |
+|---|---|---|
+| `DR` | `CO` | Confirmar (form, `OrderConfirmModal`; row action; bulk bar; the manage flow in `OrderCreateInvoice`) |
+| `IP` | `CO` | Confirmar in the form: an `IP` order is not processed, so the draft-mode Confirmar stays visible and `OrderConfirmModal` runs the stored `CO` |
+| `CO` | `RE` (and `CO`, a no-op) | Reactivate (menu action and bulk bar, only without linked documents). `CO` is let through only because the bulk bar sends it to every row of a mixed draft + booked selection; `DocActionIdempotency` answers that row "already applied" |
+| any other | nothing | — |
+
+- `SalesOrderHeaderHandler.handle()` decides on the **effective** value (root `docAction` when the
+  DAL accepts it, else the stored one) through `DocActionRefusalGuard.refuseUnlessAllowed` — same
+  resolution, 404 and fail-closed rules as Close; a request with nothing to run is refused too.
+  REST single, REST batch and MCP all reach it. Reactivate with linked documents keeps its own
+  earlier refusal (`OrderReactivationGuard`).
+- **Refusal**: HTTP 400 with `messageKeys` `ETGO_SalesOrderCloseNotOffered` (CL),
+  `ETGO_SalesOrderVoidNotOffered` (VO) or `ETGO_SalesOrderActionNotOffered` (any other value, which
+  the message names), English / Spanish. `RE` on a draft is the one exception: the pre-hook lets
+  it through to the rule that answered it before (`DocActionReactivationRule`'s 422
+  `ETGO_ReactivateOnlyCompleted`, which covers `DR` only), so the bulk bar's Reactivar over a
+  selection holding drafts reports those rows exactly as before. `RE` on `IP`, `VO` or `CL` gets the
+  400 `ETGO_SalesOrderActionNotOffered`.
+- **Advertised**: `MCP_CONFIG.actions.valuesByStatus` is the same list (`DR` → CO, `IP` → CO,
+  `CO` → RE, `VO`/`CL` → none), and every other value is reported under `unavailableValues`.
+- Purchase orders are untouched. No visible change in the UI for the flows it offers; a bulk
+  "Procesar" row in `CL`/`VO` that already failed with core's `@AlreadyPosted@` now fails with the
+  clearer 400 above.
 
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 - `etendo_schema(spec, entity, view:"actions", id:<sales order id>)` says `availableNow` / `unavailableReason` per action for that
-  record, and `availableValuesNow` for `documentAction`: a draft takes `CO` or `PR`; a completed order takes only `RE` (`CL`
-  and `VO` are not offered and are also reported under `unavailableValues` — see the ETP-5704 QA section above).
+  record, and `availableValuesNow` for `documentAction`: a draft or in-progress order takes `CO`; a completed order takes
+  only `RE`; every other value is reported under `unavailableValues` and refused (see the ETP-6026 section above).
   `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
-  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents, CL and VO are also refused by the pre-hook (see the ETP-5704 and ETP-6026 sections).
+  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents and every value outside the allow-list are also refused by the pre-hook (see the ETP-5704 and ETP-6026 sections).
 - `createShipment` and `createDraftInvoice` applies to a completed order only.
 - The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
   they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
