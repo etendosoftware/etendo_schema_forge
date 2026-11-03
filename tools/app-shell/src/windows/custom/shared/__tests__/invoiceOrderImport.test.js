@@ -13,6 +13,7 @@ import {
   fetchOrderDocuments,
   fetchOrderLines,
   submitOrderImport as submitWith,
+  discountOutcome,
 } from '../invoiceOrderImport.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -95,6 +96,32 @@ function installFetch({ orders, invLines = [], invoiceHeader, linesOk = true, he
     throw new Error(`Unexpected fetch: ${url}`);
   });
 }
+
+describe('invoice order import — the toast follows the server answer, not the prediction', () => {
+  const predicted = { afterImportResult: { carried: true, pct: 10 } };
+  for (const [name, data, expected] of [
+    ['server applied the % (as the MCP sees it)', { globalDiscount: { applied: true, percent: 12.5, reason: null } }, { carried: true, pct: 12.5 }],
+    ['server applied it, percent as a string', { globalDiscount: { applied: true, percent: '10', reason: null } }, { carried: true, pct: 10 }],
+    ['server did not apply it, although the popup predicted it', { globalDiscount: { applied: false, percent: null, reason: 'ordersWithoutDiscount' } }, { carried: false }],
+    ['older backend without the field: the prediction', { importedCount: 1 }, { carried: true, pct: 10 }],
+    ['malformed field: the prediction', { globalDiscount: {} }, { carried: true, pct: 10 }],
+  ]) {
+    it(name, () => {
+      assert.deepEqual(discountOutcome(data, predicted), expected);
+    });
+  }
+
+  it('submitOrderImport hands the server outcome to the toast', async () => {
+    const stub = async () => mockRes(true, { importedCount: 2, globalDiscount: { applied: false, percent: null, reason: 'carryGlobalDiscountFalse' } });
+    const result = await submitWith({
+      apiFetch: stub, config: SALES, base: '/b', invoiceId: 'inv1', selection: {},
+      lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
+      serverCarry: () => ({ carryGlobalDiscount: true, afterImportResult: { carried: true, pct: 5 } }),
+      ui: k => k,
+    });
+    assert.deepEqual(result, { ok: true, count: 2, afterImportResult: { carried: false } });
+  });
+});
 
 describe('invoice order import (sales) — fetchDocuments currency filter', () => {
   afterEach(() => {

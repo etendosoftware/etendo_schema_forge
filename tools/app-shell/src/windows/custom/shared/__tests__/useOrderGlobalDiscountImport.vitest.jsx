@@ -242,7 +242,11 @@ describe.each([
 
   it('carries a single order %: tag, undiscounted row total, toggle in the notice area, ONE import call and the carried toast', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }];
-    const { onSuccess } = renderModal({ orders });
+    // The toast reports the % the SERVER says it applied (12.5 here), not the popup's prediction.
+    const { onSuccess } = renderModal({
+      orders,
+      importRes: ok({ importedCount: 1, globalDiscount: { applied: true, percent: 12.5, reason: null } }),
+    });
     expect(screen.getByText(titleKey)).toBeInTheDocument();
     await selectAllOrders(orders);
 
@@ -263,7 +267,7 @@ describe.each([
       carryGlobalDiscount: true,
     });
     expect(writeCalls()).toEqual([]);
-    expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountImportedOne:{"count":1,"pct":"10"}');
+    expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountImportedOne:{"count":1,"pct":"12,5"}');
   });
 
   it('toggle ON by default; switched OFF the import asks the server not to carry and shows the default toast', async () => {

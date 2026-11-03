@@ -203,5 +203,20 @@ export async function submitOrderImport({ apiFetch, config, lines, base, invoice
   });
   if (!res.ok) return { ok: false, error: await actionErrorMessage(res, ui) };
   const data = (await res.json())?.response?.data;
-  return { ok: true, count: data?.importedCount, afterImportResult: carry.afterImportResult };
+  return { ok: true, count: data?.importedCount, afterImportResult: discountOutcome(data, carry) };
+}
+
+/**
+ * What the toast reports about the global discount: what the SERVER did (`globalDiscount:
+ * {applied, percent, reason}` of `importOrderLines`, the same answer the MCP gets), not what the
+ * popup predicted. The prediction (`serverCarry`) is only the fallback for an older backend that
+ * does not send the field.
+ */
+export function discountOutcome(data, carry) {
+  const reported = data?.globalDiscount;
+  if (!reported || typeof reported.applied !== 'boolean') return carry.afterImportResult;
+  const pct = Number(reported.percent);
+  return reported.applied && Number.isFinite(pct) && pct > 0
+    ? { carried: true, pct }
+    : { carried: false };
 }
