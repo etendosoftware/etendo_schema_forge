@@ -615,7 +615,7 @@ function StatementLinesPanel({
             checked={selected}
             onChange={() => onSelectLine(line)}
             data-testid={`recon-line-radio-${line.id}`}
-            className="h-4 w-4 accent-[hsl(var(--foreground))]"
+            className="h-4 w-4 accent-primary"
           />
         </TableCell>
         <DateCell

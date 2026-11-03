@@ -55,8 +55,9 @@ export const STATUS_MEMBERS = {
  * `bank-bounce-suggestions` flag and without discarded lines sees exactly the five entries it had
  * before:
  * - `bounce` when `counts.bounce` is present (the backend sends it only with the flag on);
- * - `discarded` when there is a discarded line (`counts.discarded > 0`, which the backend sends
- *   whatever the flag: Classic can discard lines too) or the flag is on.
+ * - `discarded` when the flag is on (`counts.bounce` present) or there is a discarded line
+ *   (`counts.discarded > 0`). The backend only sends `counts.discarded` with
+ *   `bank-bounce-suggestions` on, so the second test is a defensive fallback.
  * The active code is always kept, so the trigger never names an entry the list no longer has.
  *
  * @param {Record<string, number>|null|undefined} counts per-state counts from `pendingLines`

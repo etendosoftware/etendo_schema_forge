@@ -138,7 +138,7 @@ const MATCH_TONE = {
   reconciled: { tone: 'success', labelKey: 'financeAccountStatementLinesStatusReconciled' },
   partial:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusPartial' },
   pending:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusUnmatched' },
-  // ETP-5581 — a discarded line (`discarded: true`, sent by the backend whatever the flag):
+  // ETP-5581 — a discarded line (`discarded: true`, only sent with bank-bounce-suggestions on):
   // out of the reconciliation, so neither "sin conciliar" nor reconciled.
   discarded:  { tone: 'neutral', labelKey: 'financeAccountStatementLinesStatusDiscarded' },
 };

@@ -1,8 +1,9 @@
 import { ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { cn } from '@/lib/utils';
-import { SelectBox } from './AutoMatchSelectBox.jsx';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   bounceReason, isAmbiguousPair, isSelectableGroup, pairOriginalLines,
 } from './bouncePairs.js';
@@ -34,17 +35,27 @@ function PairTag({ group, original }) {
   );
 }
 
+/**
+ * The muted second-line text of one side: the date(s), then the bank reference when the side names
+ * one line. Two lines of the same text and amount the same day are told apart by that reference.
+ */
+function sideMeta(ui, dates, line) {
+  const ref = line ? String(line.referenceNo ?? '').trim() : '';
+  return [dates, ref ? ui('financeReconcileBounceRef', { ref }) : null].filter(Boolean).join(' · ');
+}
+
 /** One side of a pair row: description + signed amount, then a meta line. */
 function PairSide({ line, currency, meta, strong = false, testId }) {
   const amount = Number(line?.amount ?? 0);
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5 px-3 py-3" data-testid={testId}>
       <div className="flex items-center justify-between gap-2">
-        <span
-          className={cn('truncate text-sm leading-5 text-[hsl(var(--foreground))]', strong ? 'font-semibold' : 'font-medium')}
-          title={line?.description || undefined}>
-          {line?.description || line?.referenceNo || '—'}
-        </span>
+        {/* Clipped with an ellipsis, the full text on hover: bank descriptions often differ only
+            in their last characters ("…CONCEPTO 10000268 100-1" / "…-2"). */}
+        <TruncatedText
+          text={line?.description || line?.referenceNo || '—'}
+          className={cn('min-w-0 flex-1 text-sm leading-5 text-[hsl(var(--foreground))]', strong ? 'font-semibold' : 'font-medium')}
+          data-testid={testId ? `${testId}-desc` : undefined} />
         <MoneyAmount
           value={amount}
           currency={currency || 'EUR'}
@@ -64,27 +75,28 @@ function BouncePairRow({ group, checked, onToggle, onReview, currency, formatDat
   const ambiguous = isAmbiguousPair(group);
   const originals = pairOriginalLines(group);
   // An ambiguous pair shows its first candidate (they all carry the same amount) and every
-  // candidate's date; which one it is gets decided in the panel.
+  // candidate's date, but no reference: which one it is gets decided in the panel.
   const original = ambiguous ? null : originals[0] ?? null;
   const shownOriginal = originals[0] ?? {};
   const originalDates = originals.map((l) => formatDate(l.date)).filter(Boolean).join(' · ');
   const bounce = group.counterpartLine ?? {};
   const review = group.confidence !== 'high' || ambiguous;
   const selectable = isSelectableGroup(group);
+  const ariaLabel = ui(selectable
+    ? 'financeReconcileAutomatchBounceCheck'
+    : 'financeReconcileAutomatchBounceAmbiguousCheck');
   return (
     <div
       className="flex flex-row items-stretch overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))]"
       data-testid={`automatch-bounce-row-${group.groupKey}`}>
       <div className="flex w-8 flex-none items-start justify-center border-r border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-1 py-3">
-        <SelectBox
+        <Checkbox
           checked={checked}
           disabled={!selectable}
-          onClick={() => onToggle(group)}
-          testId={`automatch-bounce-check-${group.groupKey}`}
-          ariaLabel={ui(selectable
-            ? 'financeReconcileAutomatchBounceCheck'
-            : 'financeReconcileAutomatchBounceAmbiguousCheck')}
-          data-testid="SelectBox__bounce-pair" />
+          onChange={() => onToggle(group)}
+          aria-label={ariaLabel}
+          title={selectable ? undefined : ariaLabel}
+          data-testid={`automatch-bounce-check-${group.groupKey}`} />
       </div>
       <div className="flex min-w-0 flex-1 border-r border-[hsl(var(--border-subtle))] bg-card">
         <PairSide
@@ -94,8 +106,10 @@ function BouncePairRow({ group, checked, onToggle, onReview, currency, formatDat
           testId={`automatch-bounce-original-${group.groupKey}`}
           meta={(
             <>
-              <span className="text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">
-                {originalDates}
+              <span
+                className="min-w-0 truncate text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]"
+                data-testid={`automatch-bounce-original-meta-${group.groupKey}`}>
+                {sideMeta(ui, originalDates, original)}
               </span>
               <PairTag group={group} original={original} data-testid="PairTag__bounce-pair" />
             </>
@@ -109,8 +123,10 @@ function BouncePairRow({ group, checked, onToggle, onReview, currency, formatDat
           testId={`automatch-bounce-line-${group.groupKey}`}
           meta={(
             <>
-              <span className="text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">
-                {formatDate(bounce.date)}
+              <span
+                className="min-w-0 truncate text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]"
+                data-testid={`automatch-bounce-line-meta-${group.groupKey}`}>
+                {sideMeta(ui, formatDate(bounce.date), bounce)}
               </span>
               {review && onReview ? (
                 <button
@@ -133,7 +149,7 @@ function BouncePairRow({ group, checked, onToggle, onReview, currency, formatDat
 }
 
 /**
- * "Posibles rebotes (N)" — the bounce pairs of the automatch modal (ETP-5581), below its
+ * "Rebotes bancarios (N)" — the bounce pairs of the automatch modal (ETP-5581), below its
  * reconciliation groups and in the same card style: left the outgoing line, right the bounce.
  *
  * - High-confidence pairs start checked; pairs to review start unchecked and carry a
@@ -162,13 +178,12 @@ export function AutoMatchBounceSection({
       <div className="flex flex-col gap-0.5">
         <div className="flex flex-row">
           <div className="flex w-8 flex-none items-center justify-center">
-            <SelectBox
-              dash={checkedCount > 0}
+            <Checkbox
+              indeterminate={checkedCount > 0}
               disabled={selectable.length === 0}
-              onClick={() => onToggleAll(!allChecked)}
-              testId="automatch-bounce-select-all"
-              ariaLabel={ui('financeReconcileAutomatchBounceSelectAll')}
-              data-testid="SelectBox__bounce-select-all" />
+              onChange={() => onToggleAll(!allChecked)}
+              aria-label={ui('financeReconcileAutomatchBounceSelectAll')}
+              data-testid="automatch-bounce-select-all" />
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-2 pl-3">
             <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">

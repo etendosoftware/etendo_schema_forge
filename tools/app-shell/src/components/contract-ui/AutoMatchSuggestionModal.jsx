@@ -2,6 +2,7 @@ import { useMemo, useCallback } from 'react';
 import { ArrowUpRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -11,7 +12,7 @@ import { useAutoMatchSelection } from '@/hooks/useAutoMatchReview.js';
 import { cn } from '@/lib/utils';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import { StatusBadge, automatchBadgeKind } from './reconciliationBadges.jsx';
-import { SelectBox } from './AutoMatchSelectBox.jsx';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AutoMatchBounceSection } from './AutoMatchBounceSection.jsx';
 import {
   bouncePairPayload, splitAutoMatchGroups, summarizeApplyResults,
@@ -45,8 +46,8 @@ function formatSignedAmount(amount, currency) {
   return `${sign}${formatCurrency(currency, Math.abs(amount))}`;
 }
 
-/* SelectBox moved to ./AutoMatchSelectBox.jsx (ETP-5581) so the bounce-pair rows render the very
-   same control. */
+/* The checkboxes are the shared `Checkbox` (`@/components/ui/checkbox`), the one DataTable and every
+   list use for row selection, so the modal gets the same look and the same indeterminate state. */
 
 // ---------------------------------------------------------------------------
 // Row components
@@ -199,11 +200,10 @@ function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
     <div className="flex flex-row items-stretch overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))]">
       {/* Checkbox sidebar */}
       <div className="flex w-8 flex-none items-start justify-center border-r border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-1 py-3">
-        <SelectBox
+        <Checkbox
           checked={checked}
-          onClick={() => onToggle(group)}
-          testId={`automatch-group-check-${group.groupKey}`}
-          data-testid="SelectBox__a89979" />
+          onChange={() => onToggle(group)}
+          data-testid={`automatch-group-check-${group.groupKey}`} />
       </div>
       {/* Statement line (left half) */}
       <div className="flex min-w-0 flex-1 items-start border-r border-[hsl(var(--border-subtle))] bg-card px-3 py-3">
@@ -324,7 +324,7 @@ function notifyApplyWithPairs(results, ui) {
  * left = bank statement lines (with checkboxes), right = system operations to link.
  *
  * ETP-5581 — with the backend flag `bank-bounce-suggestions` on, `groups` also carries bounce pairs
- * (`kind: "bouncePair"`), rendered below the reconciliation groups as "Posibles rebotes (N)"
+ * (`kind: "bouncePair"`), rendered below the reconciliation groups as "Rebotes bancarios (N)"
  * ({@link AutoMatchBounceSection}) and applied in the SAME `applySuggestions` call. With the flag
  * off nothing in `groups` has that kind and the modal is exactly what it was.
  *
@@ -481,12 +481,11 @@ export function AutoMatchSuggestionModal({
               {/* Select-all sits in a w-8 box so its center lines up with the per-row checkbox
                   sidebar. Shows a dash whenever there is any selection (same control as the rows). */}
               <div className="flex w-8 flex-none items-center justify-center">
-                <SelectBox
-                  dash={checkedGroups.length > 0}
-                  onClick={toggleAll}
-                  testId="automatch-select-all"
-                  ariaLabel={ui('financeReconcileColSelect')}
-                  data-testid="SelectBox__a89979" />
+                <Checkbox
+                  indeterminate={checkedGroups.length > 0}
+                  onChange={toggleAll}
+                  aria-label={ui('financeReconcileColSelect')}
+                  data-testid="automatch-select-all" />
               </div>
               {/* Left header */}
               <div className="flex min-w-0 flex-1 items-center gap-2 pl-3">
@@ -550,45 +549,42 @@ export function AutoMatchSuggestionModal({
           {/* Action buttons */}
           <div className="flex items-center gap-2">
             {/* Cancel */}
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={onClose}
               data-testid="automatch-modal-cancel"
-              className="flex h-10 items-center justify-center rounded-full px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
+              className="h-10 rounded-full px-3 text-[hsl(var(--foreground))] hover:bg-muted hover:text-[hsl(var(--foreground))]"
             >
               {ui('cancel')}
-            </button>
+            </Button>
 
             {/* Open reconciliation */}
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
               data-testid="automatch-modal-open-reconciliation"
-              className="flex h-10 items-center gap-1 rounded-full border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+              className="h-10 gap-1 rounded-full border-[hsl(var(--border-control))] bg-card px-3 text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted hover:text-[hsl(var(--foreground))] [&_svg]:size-5"
             >
               <ArrowUpRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowUpRight__a89979" />
               <span>{ui('financeReconcileAutomatchActionOpen')}</span>
-            </button>
+            </Button>
 
-            {/* Apply — dark pill */}
-            <button
+            {/* Apply — the shared primary Button (blue), as "Nueva cuenta" in the accounts list. */}
+            <Button
               type="button"
               onClick={handleApply}
               disabled={applyCount === 0 || loading}
               data-testid="automatch-modal-apply"
-              className={cn(
-                'flex h-10 items-center gap-1 rounded-full px-3 text-sm font-medium transition-colors',
-                applyCount > 0 && !loading
-                  ? 'bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]'
-                  : 'cursor-not-allowed bg-[hsl(var(--border-control))] text-[hsl(var(--muted-foreground))]',
-              )}
+              className="h-10 gap-1 rounded-full px-3"
             >
               <span>
                 {loading
                   ? ui('loading')
                   : applyLabelText(ui, checkedGroups.length, checkedPairs.length)}
               </span>
-            </button>
+            </Button>
           </div>
         </div>
       </DialogContent>

@@ -3,6 +3,7 @@ import { useUI } from '@/i18n';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { formatDate, formatSigned } from '@/lib/formatSigned';
@@ -12,8 +13,10 @@ import { DISCARDED_STATE } from './bouncePairs.js';
 
 const ELEVATED_SHADOW =
   'shadow-[0px_10px_15px_-3px_hsl(var(--foreground) / 0.08),0px_4px_6px_-2px_hsl(var(--foreground) / 0.05)]';
-const SECONDARY_BTN = 'inline-flex h-8 items-center gap-1.5 rounded-full border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]';
-const PRIMARY_BTN = 'inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground';
+/** Pill sizing on top of the shared `Button` variants: the blue primary (default) and the outline. */
+const PILL_BTN = 'h-8 gap-1.5 rounded-full px-3 [&_svg]:size-4';
+/** The outline variant with the app's standard secondary colours, as in the payment-method modal. */
+const SECONDARY_BTN = cn(PILL_BTN, 'border-[hsl(var(--border-control))] bg-card text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted');
 
 /** Notice palette: high confidence green, to review amber, discarded grey. */
 function noticeClass(model) {
@@ -57,12 +60,42 @@ function sourceLabel(ui, model) {
     : ui('financeReconcileBounceSourceBounces', { count });
 }
 
-function TotalRow({ label, value, tone = 'neutral', testId }) {
+/**
+ * The muted "date · Ref. X" of a statement line, or null when it has neither. What tells two lines
+ * of the same text and amount apart (two returns of +0,61 the same day): the bank's own reference.
+ */
+function lineMeta(ui, line, bcpLocale) {
+  if (!line) return null;
+  const ref = String(line.referenceNo ?? '').trim();
+  const parts = [
+    line.date ? formatDate(line.date, bcpLocale) : null,
+    ref ? ui('financeReconcileBounceRef', { ref }) : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/** Footer label of the line selected in the left panel: a return, an outgoing line, or a discarded line. */
+function selectedLineLabel(ui, model) {
+  if (model.mode === DISCARDED_STATE) return ui('financeReconcileBounceSelectedLine');
+  return model.role === 'bounce'
+    ? ui('financeReconcileBounceSelectedBounce')
+    : ui('financeReconcileBounceTotalOriginal');
+}
+
+function TotalRow({ label, value, meta = null, tone = 'neutral', testId }) {
   return (
-    <div className="flex items-center justify-between px-3 text-sm leading-5" data-testid={testId}>
-      <span className="font-medium text-[hsl(var(--foreground))]">{label}</span>
+    <div className="flex items-center justify-between gap-2 px-3 text-sm leading-5" data-testid={testId}>
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="shrink-0 font-medium text-[hsl(var(--foreground))]">{label}</span>
+        {meta ? (
+          <TruncatedText
+            text={meta}
+            className="w-auto min-w-0 text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]"
+            data-testid={testId ? `${testId}-meta` : undefined} />
+        ) : null}
+      </span>
       <span className={cn(
-        'font-semibold tabular-nums',
+        'shrink-0 font-semibold tabular-nums',
         tone === 'success' && 'text-[var(--status-success-fg)]',
         tone === 'destructive' && 'text-[hsl(var(--destructive))]',
         tone === 'neutral' && 'text-[hsl(var(--foreground))]',
@@ -77,6 +110,7 @@ function PairRow({ row, model, onChoose, currency, bcpLocale }) {
   const ui = useUI();
   const chosen = row.id === model.chosenId;
   const amount = Number(row.amount) || 0;
+  const ref = String(row.referenceNo ?? '').trim();
   return (
     <TableRow
       data-testid={`recon-bounce-row-${row.id}`}
@@ -97,7 +131,7 @@ function PairRow({ row, model, onChoose, currency, bcpLocale }) {
             onChange={() => onChoose(row.id)}
             onClick={(e) => e.stopPropagation()}
             data-testid={`recon-bounce-radio-${row.id}`}
-            className="h-4 w-4 accent-[hsl(var(--foreground))]"
+            className="h-4 w-4 accent-primary"
           />
         ) : null}
       </TableCell>
@@ -112,7 +146,17 @@ function PairRow({ row, model, onChoose, currency, bcpLocale }) {
             text={row.description || row.partnerName || row.referenceNo || '—'}
             className="leading-5"
             data-testid={`recon-bounce-desc-${row.id}`} />
-          <StatusBadge kind={model.rowBadge} data-testid={`recon-bounce-badge-${row.id}`} />
+          <div className="flex w-full min-w-0 items-center gap-1.5">
+            <StatusBadge kind={model.rowBadge} data-testid={`recon-bounce-badge-${row.id}`} />
+            {/* The bank reference, muted: two outgoing lines with the same text and amount are
+                told apart by it without a column of their own. */}
+            {ref ? (
+              <TruncatedText
+                text={ui('financeReconcileBounceRef', { ref })}
+                className="w-auto min-w-0 text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]"
+                data-testid={`recon-bounce-ref-${row.id}`} />
+            ) : null}
+          </div>
         </div>
       </TableCell>
       <TableCell className="h-[62px] w-[121px] px-3 text-right align-middle" data-testid="TableCell__bounce-pair">
@@ -143,6 +187,10 @@ function netTone(net) {
  *   are "No es un rebote" (hides it for the session, persists nothing) and "Descartar par".
  * - A discarded line lists the line it was discarded with and offers "Restaurar par" (or
  *   "Restaurar línea" for a line discarded on its own).
+ * - Identical-looking lines are told apart without a new column: each row shows the bank
+ *   reference (`referenceNo`) muted next to its badge, the full description on hover, and the
+ *   footer opens with the selected line itself ("Rebote seleccionado" / "Salida seleccionada" /
+ *   "Línea seleccionada") with its date and reference, above the counterpart and the net.
  *
  * Discard and restore are writes: disabled under the window's read-only tier (the caller's handlers
  * are guarded too). "No es un rebote" changes no data and stays available.
@@ -205,10 +253,21 @@ export function BouncePairPanel({
       </div>
       <div className="border-t border-[hsl(var(--border-subtle))] bg-card px-0 pt-2 pb-1" data-testid="recon-bounce-footer">
         <div className="flex flex-col gap-1">
+          {/* The line selected in the left panel, with its date and bank reference: two returns of
+              the same text and amount the same day are otherwise indistinguishable here. */}
+          {line ? (
+            <TotalRow
+              label={selectedLineLabel(ui, model)}
+              value={formatSigned(line.amount, currency)}
+              meta={lineMeta(ui, line, bcpLocale)}
+              testId="recon-bounce-total-selected"
+              data-testid="TotalRow__bounce-selected" />
+          ) : null}
           {discarded ? null : (
             <TotalRow
               label={otherLabel}
               value={model.other ? formatSigned(model.other.amount, currency) : '—'}
+              meta={lineMeta(ui, model.other, bcpLocale)}
               testId="recon-bounce-total-other"
               data-testid="TotalRow__bounce-other" />
           )}
@@ -223,35 +282,36 @@ export function BouncePairPanel({
         </div>
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           {discarded ? <span /> : (
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onDismiss}
               className={SECONDARY_BTN}
               data-testid="recon-bounce-dismiss">
               <EyeOff className="h-4 w-4" data-testid="EyeOff__bounce-dismiss" />
               {ui('financeReconcileBounceDismiss')}
-            </button>
+            </Button>
           )}
           {discarded ? (
-            <button
+            <Button
               type="button"
               onClick={onRestore}
               disabled={busy || windowReadOnly || !line?.id}
-              className={PRIMARY_BTN}
+              className={PILL_BTN}
               data-testid="recon-bounce-restore">
               <RotateCcw className="h-4 w-4" data-testid="RotateCcw__bounce-restore" />
               {ui(model.paired ? 'financeReconcileBounceRestore' : 'financeReconcileBounceRestoreLine')}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
               onClick={onDiscard}
               disabled={busy || windowReadOnly || !model.discard}
-              className={PRIMARY_BTN}
+              className={PILL_BTN}
               data-testid="recon-bounce-discard">
               <Ban className="h-4 w-4" data-testid="Ban__bounce-discard" />
               {ui('financeReconcileBounceDiscard')}
-            </button>
+            </Button>
           )}
         </div>
       </div>
