@@ -179,7 +179,10 @@ describe('useOrderGlobalDiscountImport — success toast', () => {
     { name: 'carried, one line', args: { count: 1, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedOne:{"count":1,"pct":"10"}' } },
     { name: 'carried, many lines', args: { count: 2, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedMany:{"count":2,"pct":"10"}' } },
     { name: 'carried on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: true, pct: 10 } }, expected: null },
-    { name: 'not carried', args: { count: 1, afterImportResult: { carried: false } }, expected: null },
+    // QA: the order import never falls back to the generic «Líneas importadas desde pedido».
+    { name: 'not carried, one line', args: { count: 1, afterImportResult: { carried: false } }, expected: { message: 'importGlobalDiscountNotCarriedOne:{"count":1}' } },
+    { name: 'not carried, many lines', args: { count: 3, afterImportResult: { carried: false } }, expected: { message: 'importGlobalDiscountNotCarriedMany:{"count":3}' } },
+    { name: 'not carried on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: false } }, expected: null },
   ])('$name', ({ args, expected }) => {
     expect(hookProps().getSuccessToast(args)).toEqual(expected);
   });
@@ -189,9 +192,9 @@ describe('useOrderGlobalDiscountImport — success toast', () => {
 // ImportLinesModal and hook: the selection the modal computes is the one the decision runs on, and
 // the import is a single server action per direction — never a line POST nor a header PATCH.
 describe.each([
-  { direction: 'sales', invoiceSpec: 'sales-invoice', orderSpec: 'sales-order', titleKey: 'importFromSalesOrder', successKey: 'linesImportedFromSalesOrder' },
-  { direction: 'purchase', invoiceSpec: 'purchase-invoice', orderSpec: 'purchase-order', titleKey: 'importFromPurchaseOrder', successKey: 'linesImportedFromPurchaseOrder' },
-])('InvoiceOrderImportModal ($direction)', ({ direction, invoiceSpec, orderSpec, titleKey, successKey }) => {
+  { direction: 'sales', invoiceSpec: 'sales-invoice', orderSpec: 'sales-order', titleKey: 'importFromSalesOrder' },
+  { direction: 'purchase', invoiceSpec: 'purchase-invoice', orderSpec: 'purchase-order', titleKey: 'importFromPurchaseOrder' },
+])('InvoiceOrderImportModal ($direction)', ({ direction, invoiceSpec, orderSpec, titleKey }) => {
   const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
   function renderModal({ orders, importRes = ok({ importedCount: 1 }) }) {
@@ -270,7 +273,7 @@ describe.each([
     expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountImportedOne:{"count":1,"pct":"12,5"}');
   });
 
-  it('toggle ON by default; switched OFF the import asks the server not to carry and shows the default toast', async () => {
+  it('toggle ON by default; switched OFF the import asks the server not to carry and says «sin descuento global»', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }];
     const { onSuccess } = renderModal({ orders });
     await selectAllOrders(orders);
@@ -284,7 +287,7 @@ describe.each([
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
 
     expect(JSON.parse(importCalls()[0][1].body).carryGlobalDiscount).toBe(false);
-    expect(toast.success).toHaveBeenCalledWith(`${successKey}:{"count":1}`);
+    expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountNotCarriedOne:{"count":1}');
   });
 
   it('orders at 10 % + 0 % show the mixed warning, count two orders and send carryGlobalDiscount false', async () => {

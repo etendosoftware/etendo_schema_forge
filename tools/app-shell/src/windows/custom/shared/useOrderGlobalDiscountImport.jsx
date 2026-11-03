@@ -136,8 +136,14 @@ export default function useOrderGlobalDiscountImport() {
       );
     };
 
+    // The order import always says what happened to the global discount (QA): carried with its %,
+    // or «sin descuento global» — never the generic «Líneas importadas desde pedido».
     const getSuccessToast = ({ count, afterImportResult, partial }) => {
-      if (partial || !afterImportResult?.carried) return null;
+      if (partial || !afterImportResult) return null;
+      if (!afterImportResult.carried) {
+        const key = count === 1 ? 'importGlobalDiscountNotCarriedOne' : 'importGlobalDiscountNotCarriedMany';
+        return { message: ui(key, { count }) };
+      }
       const key = count === 1 ? 'importGlobalDiscountImportedOne' : 'importGlobalDiscountImportedMany';
       return { message: ui(key, { count, pct: fmtPct(afterImportResult.pct) }) };
     };

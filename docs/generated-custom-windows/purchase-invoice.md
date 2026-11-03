@@ -526,7 +526,7 @@ ids, so the chips refresh when the header is re-read after an import from order.
 **`DetailView.jsx` — `onRefresh` after import** now calls both `hook.fetchChildren` (lines) and `hook.fetchById` (header) so the `etgoTotalDiscount` the import wrote (server-side since ETP-5828) is immediately reflected in the `DocumentTotalsPanel` without requiring a manual page reload.
 
 **`DetailView.jsx` — `handleTotalDiscountChange`** (saves `etgoTotalDiscount` on blur) now:
-1. Shows `toast.success(ui('totalDiscountSaved'))` on a successful PATCH.
+1. Shows `toast.success(ui('totalDiscountSaved'))` («Descuento total guardado») on a successful PATCH, or `totalDiscountRemoved` («Descuento total quitado», ETP-5828 QA) when the discount was cleared (0 / empty).
 2. Shows `toast.error(...)` on failure instead of silently swallowing the error.
 3. Calls `hook.handleChange('etgoTotalDiscount', pct)` to update the local editing state so a subsequent document save does not overwrite the freshly persisted discount with the stale header snapshot.
 
