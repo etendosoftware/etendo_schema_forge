@@ -9,6 +9,7 @@ Show the result of a period (revenue, expenses and the profit or loss they add u
 - Filter by one or more business partners (**Contacto**) and products (**Producto**) in the **Dimensiones** section (ETP-6080). Both are optional multi-select popups; empty means no filter.
 - Choose the account level (Heading / Account / Breakdown / Subaccount) and whether to show only accounts with value.
 - Render the report inline as HTML preview and download it as PDF, XLSX, or CSV. XLSX and CSV share the Balance Sheet's flat grid (see `balance-sheet.md`).
+- With the `dynamic-reports` flag on, use the interactive view instead: live filters, an on-screen tree, comparison, splits by dimension and a drill-down to the ledger, the entry and the document (see *Interactive view* below).
 
 ## Interaction model
 - Route: `/report-viewer?report=profit-loss`.
@@ -18,7 +19,7 @@ Show the result of a period (revenue, expenses and the profit or loss they add u
 - Layout: grouped listing in portrait orientation.
 
 ## Reactive behavior and dependencies
-- The report does not auto-render: the user presses **Run Report** after picking parameters.
+- The report does not auto-render: the user presses **Run Report** after picking parameters (old viewer; the interactive view applies every change on its own).
 - `acctSchemaId` and `orgId` are required, hidden and defaulted. `yearId` is required in this viewer and depends on `orgId`.
 - The year and the date range combine: the year clamps activity to its periods, and `dateFrom` / `dateTo` narrow it further. The SQL accepts a request with dates and **no** `yearId` (ETP-6080, for the interactive view): the year clause is optional, so it is stripped instead of zeroing every amount.
 - With **Compare To**, `referenceYearId` becomes required and the reference columns are computed the same way.
@@ -41,6 +42,14 @@ With the flag on, the report opens `components/reports/dynamic/DynamicReportView
 - **Dates from `/query`:** `pg` sends a SQL `date` as the server's local midnight in UTC, so the panel reads the day with `sqlDateDay` (rounded to the nearest UTC day), never the raw prefix.
 - **Telemetry:** `report_opened`, `report_filter_applied`, `report_group_toggled` and `report_drilldown`, one `reportSessionId` per report session. Firing rules: `docs/ops/app-shell-observability.md` → *Interactive report events*.
 
+### The `/query` route (ETP-6080)
+`POST /api/reports/:id/query` answers JSON instead of a document. It is served by the same `report-server` as `/render` (CloudFront sends every `/api/reports/*` request there; in `make dev`, the Vite plugin `report-api.js`), and runs the same session and org check before any SQL. The handler is core's `cli/src/report-query.js`, shared by both engines.
+- **Request:** `{ params, locale, limit? }`. `params` are the contract's parameters, the same values `/render` takes. A JSON `null` body reads as `{}`.
+- **Account-tree report** (a contract with `sql.operandsQuery`, like this one): `{ kind: 'tree', rows }`, every level at once (the view folds them; `accountLevel` is ignored). Each row: `node_id`, `value`, `name`, `elementlevel`, `parentId`, `sign`, `isFormula`, `amount`, `amount_ref`, and with `compareTo: 'true'` the variation fields above.
+- **Split** (`splitBy` + `splitNodeId` + `splitSign`): `{ kind: 'split', rows }`, one row per dimension value (`node_id` = its id, `null` = unassigned), signed like the account.
+- **Listing report** (General Ledger, Journal Entries): `{ kind: 'rows', rows, openingRows }`, the SQL rows as they come. A SQL `date` arrives as a UTC timestamp (see *Dates from `/query`*).
+- **Errors:** JSON `{ error, code }`. `401` no session, `403` no CSRF or `ORG_ACCESS_DENIED` (no SQL runs), `404 REPORT_NOT_FOUND`, `400 QUERY_NOT_SUPPORTED` (not a SQL report), `400 INVALID_LIMIT`, `400 SPLIT_NOT_SUPPORTED`, `500 QUERY_FAILED` (logged server-side; the SQL and the DB message never reach the client).
+
 ### Interactive-view parameters (ETP-6080)
 Declared `hidden: true`, so they never appear in the filter panel or as an active filter in the PDF header:
 - `expandedNodeIds`: comma-separated ids of the expanded rows. When sent, the export prints exactly those rows instead of cutting at the account level.
@@ -57,7 +66,17 @@ Declared `hidden: true`, so they never appear in the filter panel or as an activ
 4. Turn on Compare To with the previous year: the reference, Variation and Variation % columns fill.
 5. Download PDF, XLSX and CSV: all three show the same rows and amounts.
 
+Interactive view (flag `dynamic-reports` on):
+6. Open **Pérdidas y Ganancias**: it opens on the current fiscal year up to today, with no button to press, folded at Cuenta.
+7. Change the period with **Mes**, then pick a Contacto: the tree reloads each time, and the chips show both. Remove the Contacto from its chip.
+8. Pick **Mismo período del año anterior**: Comparado, Var. and Var. % appear, coloured by trend.
+9. Pick **Desglosar cuentas por → Contacto**, expand all and open a leaf account's split: the parts add up to the account.
+10. Click a leaf account's name: the ledger's closing balance moves by the account's amount; open a line, then **Abrir documento**.
+11. Export to PDF with some rows expanded: the PDF shows the same rows as the screen.
+
 ## Automated evidence
 - `tools/app-shell/test/report-profit-loss-account-tree.test.js`: contract shape, SQL, templates, and the ETP-6080 additions (optional year clause, dimension filters, hidden params, trend opt-in, `splitQuery` predicates).
 - `tools/app-shell/test/report-balance-sheet-account-tree.test.js`: Balance Sheet matches Profit & Loss except the ETP-6080 parameters.
 - Core `cli/test/report-query.test.js` and `report-grouping.test.js`: the query answer equals the render at every account level, expansion, variation and the split.
+- `tools/app-shell/src/components/reports/dynamic/__tests__/`: the interactive view (`DynamicReportView.vitest.jsx`: opening period, folding, comparison, chips, split, errors, exports, drill-down, telemetry, translation parity), `dynamicDates.vitest.js` (periods, run in Madrid and Buenos Aires), `reportTree.vitest.js`, `drillDown.vitest.js`, `useReportQuery.vitest.js`.
+- `tools/app-shell/src/pages/__tests__/ReportViewerPage.dynamicSwitch.vitest.jsx` (flag switch) and `ReportViewerPage.networkError.vitest.jsx` (translated `ORG_ACCESS_DENIED` in the old viewer).
