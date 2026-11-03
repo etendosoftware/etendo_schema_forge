@@ -909,6 +909,7 @@ for (const { report, dir, contract } of TYPE_REPORTS) {
           assert.deepEqual(excel, [
             l.hdrGroup, l.hdrDepth, l.hdrType, l.hdrCode, l.hdrName, l.amount,
             ...(compareTo ? [l.amount_ref] : []),
+            ...(compareTo && l.variationAmount ? [l.variationAmount, l.variationPct] : []),
           ]);
         });
 

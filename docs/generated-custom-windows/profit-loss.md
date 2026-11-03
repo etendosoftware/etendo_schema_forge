@@ -24,6 +24,7 @@ Show the result of a period (revenue, expenses and the profit or loss they add u
 - With **Compare To**, `referenceYearId` becomes required and the reference columns are computed the same way.
 - Amounts are raw debit − credit in SQL; each branch's sign is applied in JS. Organization scope uses `ad_isorgincluded`, so a parent org includes its children. General Ledger and Journal Entries use the same rule, so a ledger drilled from a parent-org row adds up to its amount. Their account filter (`fromAccountId` / `toAccountId`) compares account **codes** (`ev.value`), so a drill-down passes the row's `value`, not its id. A role that cannot read the requested org gets `403 ORG_ACCESS_DENIED` (ETP-6080).
 - The contract declares `"trend": "result"`: with a comparison, each row carries `variationAmount`, `variationPct` and `trend` (`improves` when the result goes up: revenue up or expense down).
+- With a comparison, PDF, XLSX and CSV add **Variation** and **Variation %** after the reference amount (ETP-6080). The % cell is empty when the reference amount is 0. The XLSX/CSV templates are shared byte-for-byte with Balance Sheet and print these columns only when the contract declares `labels.variationAmount`, so Balance Sheet exports are unchanged.
 
 ### Interactive-view parameters (ETP-6080)
 Declared `hidden: true`, so they never appear in the filter panel or as an active filter in the PDF header:
@@ -38,7 +39,7 @@ Declared `hidden: true`, so they never appear in the filter panel or as an activ
 1. Open Finanzas / Informes, open **Pérdidas y Ganancias**, pick a year and run it; compare totals with Classic for the same year and organization.
 2. Pick a Contacto and run again: only that partner's amounts remain, and the totals drop accordingly.
 3. Pick two products: the amounts are the sum of both.
-4. Turn on Compare To with the previous year: the reference column fills.
+4. Turn on Compare To with the previous year: the reference, Variation and Variation % columns fill.
 5. Download PDF, XLSX and CSV: all three show the same rows and amounts.
 
 ## Automated evidence

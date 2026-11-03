@@ -484,13 +484,14 @@ describe('profit-loss template.hbs — tree rendering', () => {
 });
 
 describe('profit-loss template.hbs — Reference Amount column visibility', () => {
-  it('compareTo=true: shows the header, a 3-col colgroup and a reference cell per row', () => {
+  it('compareTo=true: shows the header, a 5-col colgroup and reference + variation cells per row', () => {
     const html = renderHtml({ compareTo: true });
     assert.doesNotMatch(html, /Missing helper/);
     assert.match(html, /<th class="cell-amount">Reference Amount<\/th>/);
-    assert.equal([...html.matchAll(/<col style="width:20%">/g)].length, 2);
-    // 2 amount cells per row (main + reference) + 2 amount headers.
-    assert.equal([...html.matchAll(/class="cell-amount"/g)].length, ROWS.length * 2 + 2);
+    assert.match(html, /<col style="width:40%"><col style="width:17%"><col style="width:17%"><col style="width:16%"><col style="width:10%">/);
+    // 4 amount cells per row (main, reference, variation, %) + 4 amount headers.
+    assert.equal([...html.matchAll(/class="cell-amount"/g)].length, ROWS.length * 4 + 4);
+    assert.doesNotMatch(html, /> %</, 'a row without variation data prints no stray %');
     assert.match(html, />8\.000,00</, 'the reference amount must be rendered');
   });
 
@@ -583,7 +584,7 @@ describe('profit-loss template-excel.hbs', () => {
     const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
     assert.deepEqual(
       [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
-      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia']
+      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia', 'Variación', 'Variación %']
     );
   });
 });
@@ -640,8 +641,8 @@ describe('profit-loss template-csv.hbs', () => {
 
   it('appends the reference-amount column only when compareTo === "true"', () => {
     const on = renderCsv({ compareTo: true }).trim().split('\n');
-    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount');
-    assert.equal(on[1], `${GROUP},0,Heading,P.G.1,Importe neto de la cifra de negocios,8716.16,8000`);
+    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount,Variation,Variation %');
+    assert.equal(on[1], `${GROUP},0,Heading,P.G.1,Importe neto de la cifra de negocios,8716.16,8000,,`);
 
     const off = renderCsv({ compareTo: false }).trim().split('\n');
     assert.equal(off[0], 'Group,Depth,Type,Code,Name,Amount');
@@ -650,7 +651,7 @@ describe('profit-loss template-csv.hbs', () => {
 
   it('header row uses translated labels [es_ES]', () => {
     const csv = renderCsv({ compareTo: true, locale: 'es_ES' });
-    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia');
+    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia,Variación,Variación %');
   });
 
   it('quotes a group name containing a comma through csvField', () => {
@@ -742,5 +743,62 @@ describe('profit-loss splitQuery — one account split by org / contact / produc
 
   it('returns the columns the split handler reads', () => {
     for (const col of ['AS dimension_id', 'AS dimension_name', 'f.own_amt', 'f.own_amt_ref']) assert.ok(SPLIT.includes(col), col);
+  });
+});
+
+// ── ETP-6080: variation columns in every export, only with a comparison ─────
+
+const VAR_ROWS = [
+  { ...ROWS[1], variationAmount: 716.16, variationPct: 8.95, trend: 'improves' },
+  { ...ROWS[2], variationAmount: -22.48, variationPct: null, trend: 'worsens' }, // reference 0: no %
+  { ...ROWS[3], variationAmount: 0, variationPct: 0, trend: null }, // unchanged: 0 % is still printed
+];
+
+describe('profit-loss exports — variation (ETP-6080)', () => {
+  it('labels the variation columns in both locales', () => {
+    assert.equal(LABELS.en_US.variationAmount, 'Variation');
+    assert.equal(LABELS.es_ES.variationPct, 'Variación %');
+  });
+
+  it('PDF/HTML: adds Variation and Variation % after the reference amount, % empty when the reference is 0', () => {
+    const html = renderHtml({ compareTo: true, rows: VAR_ROWS });
+    const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+    assert.ok(header.indexOf('Reference Amount') < header.indexOf('>Variation<'));
+    assert.ok(header.includes('Variation %'));
+    const body = html.slice(html.indexOf('<tbody>'));
+    assert.match(body, /716,16<\/td>\s*<td class="cell-amount">8,95 %<\/td>/);
+    assert.match(body, /-22,48<\/td>\s*<td class="cell-amount"><\/td>/);
+    assert.match(body, />0,00 %</);
+  });
+
+  it('PDF/HTML: no variation columns without a comparison', () => {
+    assert.doesNotMatch(renderHtml({ compareTo: false, rows: VAR_ROWS }), /Variation/);
+  });
+
+  it('Excel: raw numeric variation cells after the reference amount', () => {
+    const html = renderExcel({ compareTo: true, rows: VAR_ROWS });
+    assert.match(html, /<th>Variation<\/th><th>Variation %<\/th>/);
+    assert.match(html, /<td data-cell-type="number">716.16<\/td><td data-cell-type="number">8.95<\/td>/);
+    assert.doesNotMatch(renderExcel({ compareTo: false, rows: VAR_ROWS }), /Variation/);
+  });
+
+  it('CSV: raw variation values, empty % when the reference is 0', () => {
+    const [header, first, second] = renderCsv({ compareTo: true, rows: VAR_ROWS }).trim().split('\n');
+    assert.ok(header.endsWith(',"Variation","Variation %"') || header.endsWith(',Variation,Variation %'), header);
+    assert.ok(first.endsWith(',8000,716.16,8.95'), first);
+    assert.ok(second.endsWith(',0,-22.48,'), second);
+    assert.doesNotMatch(renderCsv({ compareTo: false, rows: VAR_ROWS }), /Variation/);
+  });
+
+  it('a contract without variation labels (Balance Sheet shares the Excel/CSV files) gets no variation columns', () => {
+    const { variationAmount, variationPct, ...noVariation } = LABELS.en_US;
+    void variationAmount; void variationPct;
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
+      meta: { ...META_BASE, labels: noVariation, params: { compareTo: 'true' } }, rows: VAR_ROWS,
+    });
+    assert.doesNotMatch(excel, /<td data-cell-type="number">716\.16</);
+    assert.match(excel, /<th>Reference Amount<\/th>\s*<\/tr>/);
   });
 });

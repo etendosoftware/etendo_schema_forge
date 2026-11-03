@@ -59,7 +59,9 @@
     "C": { "en_US": "Account", "es_ES": "Cuenta" },
     "D": { "en_US": "Breakdown", "es_ES": "Desglose" },
     "S": { "en_US": "Subaccount", "es_ES": "Subcuenta" },
-    "T": { "en_US": "Total", "es_ES": "Total" }
+    "T": { "en_US": "Total", "es_ES": "Total" },
+    "variationAmount": { "en_US": "Variation", "es_ES": "Variación" },
+    "variationPct": { "en_US": "Variation %", "es_ES": "Variación %" }
   },
   "mockDataFile": "mock-data.json"
 }
