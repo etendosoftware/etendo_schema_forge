@@ -3263,3 +3263,37 @@ as called from `regen-all.js`.
 version / `updatedAt` / checksum only. Treat `make regen-check ONLY=<window> FROM_CACHE=1` (what the
 pre-push hook and CI's offline drift check compute) as the authoritative result, and commit what it
 produces.
+
+## [2026-11-02] ETP-5831 — Two known gaps left open (root fix deferred)
+
+### 1. Dev server loads `@radix-ui/react-dismissable-layer` twice (page freeze after a menu → dialog)
+
+**Symptom:** in `make dev` only, confirming "Cambiar SIF" in Fiscal Configuration left
+`pointer-events: none` on `<body>`; the wizard appeared but nothing responded until a full reload.
+Production builds are not affected.
+
+**Root cause:** `@radix-ui/react-dialog` is pre-bundled by Vite (something in `src/` imports it
+directly, e.g. via `FileLightbox`), while `@radix-ui/react-dropdown-menu` is served raw through
+`@etendosoftware/app-shell-core`, which `tools/app-shell/vite.config.js` excludes from
+`optimizeDeps`. The two therefore load separate copies of `@radix-ui/react-dismissable-layer`, each
+with its own layer stack. The modal menu locked the body, the dialog saved that lock as the
+"original" value and restored it on close.
+
+**Workaround (in place):** the fiscal-config kebab is `DropdownMenu modal={false}`, so it never takes
+the lock. Any other hand-written menu that opens a dialog needs the same (see
+`docs/ui-customization.md` → kebab menu gotcha). Covered by TC2 in
+`e2e/tests/flows/fiscal/fiscal-config.mocked.spec.js`.
+
+**Root fix (deferred by the user to another ticket):** add the `@radix-ui/*` packages to
+`optimizeDeps.include` in `tools/app-shell/vite.config.js`, so dev resolves a single copy.
+
+### 2. `FiscalDefaultsSection` reads the full fiscal config on every contact view (QA F-3)
+
+**Symptom:** none visible; a cost. Contacts → Financiero now gates its "Valores por Defecto SIF"
+blocks on the active SIF of the selected organization (see `generated-custom-windows/contacts.md`
+→ "ETP-5831 (CP-20) — SIF-gated blocks"), and reads it through `useFiscalConfig`, which fetches the
+three fiscal config entities (SII, TicketBAI, VERI\*FACTU) each time a contact's Financial tab is
+mounted. There is no cache shared across contacts.
+
+**Status:** accepted for now, deferred. A shared, org-keyed cache (or a single lightweight
+"active SIF" read) would remove the repeated requests.

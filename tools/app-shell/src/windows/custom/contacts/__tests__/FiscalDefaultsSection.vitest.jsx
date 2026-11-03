@@ -1,11 +1,14 @@
 // @covers tools/app-shell/src/windows/custom/contacts/FiscalDefaultsSection.jsx
 /**
  * Tests for FiscalDefaultsSection — the grouped SII/TicketBAI fiscal-defaults
- * block (ETP-4784). Faithful to Classic: no "SII/TBAI active" gating — the
- * SII block (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) shows only when
- * `data.customer` is true (same gate as `BillingPreferencesForm.jsx`'s
- * Cliente block), and the TicketBAI block (`tbaiIssimplifiedinv`) always
- * renders.
+ * block (ETP-4784). Since ETP-5831 (CP-20) each block depends on its own SIF
+ * being active for the selected organization (`useFiscalConfig`): the SII
+ * block (`aeatsiiDefaultsiikey` + `aeatsiiSiikeylist`) needs an active SII
+ * config AND `data.customer` (same gate as `BillingPreferencesForm.jsx`'s
+ * Cliente block); the TicketBAI block (`tbaiIssimplifiedinv`) needs an active
+ * TicketBAI config. With neither block, the whole section is hidden.
+ * The suite defaults to both SIF active, so the pre-ETP-5831 cases keep
+ * describing the blocks themselves; the gate has its own describe.
  */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -20,6 +23,23 @@ import contract from '@generated/contacts/contract.json';
 // `useRealEntityForm` switches the EntityForm stub to the real component, for the one
 // behavior that only the real form can show: the key list's displayLogic gating.
 const formMode = vi.hoisted(() => ({ useRealEntityForm: false }));
+
+// The organization's active fiscal configuration (useFiscalConfig), keyed by the selected org.
+// `byOrg` (optional) answers per org id, standing in for the real hook re-reading on an org change.
+const fiscal = vi.hoisted(() => ({ state: null, calls: [], byOrg: null }));
+const auth = vi.hoisted(() => ({ selectedOrg: { id: 'org-1' } }));
+const BOTH_SIF_ACTIVE = Object.freeze({
+  loading: false, error: null, profile: 'sii+tbai', siiRecord: { id: 'sii' }, tbaiRecord: { id: 'tbai' }, verifactuRecord: null,
+});
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
+  useFiscalConfig: (orgId, apiBaseUrl) => {
+    fiscal.calls.push([orgId, apiBaseUrl]);
+    return fiscal.byOrg ? fiscal.byOrg[String(orgId)] : fiscal.state;
+  },
+}));
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: auth.selectedOrg }),
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
@@ -69,9 +89,110 @@ describe('FiscalDefaultsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     formMode.useRealEntityForm = false;
+    fiscal.state = BOTH_SIF_ACTIVE;
+    fiscal.calls = [];
+    fiscal.byOrg = null;
+    auth.selectedOrg = { id: 'org-1' };
   });
 
-  it('always renders the section title and description', () => {
+  // ETP-5831 CP-20 — each option depends on its own SIF being active for the organization.
+  describe('SIF gating — each block only while its own SIF is active', () => {
+    const sif = (overrides) => ({ ...BOTH_SIF_ACTIVE, ...overrides });
+
+    it('reads the fiscal config of the selected organization', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} apiBaseUrl="/sws/neo/contacts" />);
+      expect(fiscal.calls.at(-1)).toEqual(['org-1', '/sws/neo/contacts']);
+    });
+
+    it('shows only the SII block when only SII is active', () => {
+      fiscal.state = sif({ profile: 'sii', tbaiRecord: null });
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+
+      expect(screen.getByTestId('FiscalDefaultsSection__sii-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__tbai-block')).not.toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).not.toBeInTheDocument();
+    });
+
+    it('shows only the TicketBAI block when only TicketBAI is active', () => {
+      fiscal.state = sif({ profile: 'tbai', siiRecord: null });
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+
+      expect(screen.getByTestId('FiscalDefaultsSection__tbai-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
+      expect(findFieldsCall('aeatsiiSiikeylist')).toBeUndefined();
+    });
+
+    it('hides the whole section when neither SII nor TicketBAI is active (e.g. VERI*FACTU only)', () => {
+      fiscal.state = sif({ profile: 'verifactu', siiRecord: null, tbaiRecord: null, verifactuRecord: { id: 'vf' } });
+      const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+
+      expect(screen.queryByText('fiscalDefaults')).not.toBeInTheDocument();
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('hides the whole section when only SII is active but the partner is not a customer', () => {
+      fiscal.state = sif({ profile: 'sii', tbaiRecord: null });
+      const { container } = render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders nothing while the fiscal config is still loading (no flash)', () => {
+      fiscal.state = { ...BOTH_SIF_ACTIVE, loading: true, profile: null, siiRecord: null, tbaiRecord: null };
+      const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders nothing before the first load has run (profile still null)', () => {
+      fiscal.state = { ...BOTH_SIF_ACTIVE, profile: null, siiRecord: null, tbaiRecord: null };
+      const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('fails closed: a fiscal config read error hides the section', () => {
+      fiscal.state = sif({ error: 'HTTP 500' });
+      const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('hides the section when no organization is selected (useFiscalConfig answers "unconfigured")', () => {
+      auth.selectedOrg = null;
+      // What the real hook returns for a null org id: unconfigured, no records.
+      fiscal.byOrg = { null: { loading: false, error: null, profile: 'unconfigured', siiRecord: null, tbaiRecord: null, verifactuRecord: null } };
+      const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(fiscal.calls.at(-1)[0]).toBeNull();
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('re-reads the fiscal config when the organization changes, and swaps the blocks', () => {
+      fiscal.byOrg = {
+        'org-1': sif({ profile: 'sii', tbaiRecord: null }),
+        'org-2': sif({ profile: 'tbai', siiRecord: null }),
+      };
+      const { rerender } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('FiscalDefaultsSection__sii-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__tbai-block')).not.toBeInTheDocument();
+
+      auth.selectedOrg = { id: 'org-2' };
+      rerender(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(fiscal.calls.at(-1)[0]).toBe('org-2');
+      expect(screen.getByTestId('FiscalDefaultsSection__tbai-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
+    });
+
+    it('shows only the TicketBAI block when SII and TicketBAI are active but the partner is not a customer', () => {
+      render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('FiscalDefaultsSection__tbai-block')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
+      expect(findFieldsCall('aeatsiiSiikeylist')).toBeUndefined();
+    });
+
+    it('draws its own divider above the section, so a hidden section leaves no stray rule', () => {
+      const { container } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(container.firstChild.tagName).toBe('HR');
+    });
+  });
+
+  it('renders the section title and description', () => {
     render(<FiscalDefaultsSection data={{}} onChange={vi.fn()} />);
     expect(screen.getByText('fiscalDefaults')).toBeInTheDocument();
     expect(screen.getByText('fiscalDefaultsDescription')).toBeInTheDocument();
@@ -213,7 +334,7 @@ describe('FiscalDefaultsSection', () => {
     });
   });
 
-  describe('TicketBAI block — always shown', () => {
+  describe('TicketBAI block — independent of the customer flag', () => {
     it('renders the TicketBAI caption and toggle regardless of customer', () => {
       render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
 

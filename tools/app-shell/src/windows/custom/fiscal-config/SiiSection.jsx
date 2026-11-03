@@ -6,6 +6,7 @@ import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertSection from './CertSection.jsx';
+import { useFormDirty } from './useFormDirty.js';
 import SectionSaveButton from './SectionSaveButton.jsx';
 import { getFiscalRecordId, isEtendoTrue, mapSiiRecordToForm, normalizeDateInputValue, parseApiError, serializeBooleanFields } from './fiscalConfig.utils.js';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
@@ -25,10 +26,12 @@ function SectionRow({ label, children, labelExtra, noBorderTop, boldLabel }) {
   );
 }
 
-const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, onSave, variant, hideSave, hideCert, locked }, ref) {
+const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, onSave, variant, hideSave, hideCert, locked, certRefreshKey, onCertUploaded, onDirtyChange }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState(mapSiiRecordToForm(record));
+  // ETP-5831 — tells the page whether this section has unsaved changes (enables its Save).
+  useFormDirty(form, onDirtyChange);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
 
@@ -114,6 +117,8 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
             context="sii"
             orgId={orgId}
             apiBaseUrl={apiBaseUrl}
+            refreshKey={certRefreshKey}
+            onUploaded={onCertUploaded}
             data-testid="CertSection__fcb159" />
         </SectionRow>
       )}
