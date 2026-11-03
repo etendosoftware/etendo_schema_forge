@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
@@ -235,28 +235,31 @@ describe('InviteAcceptancePage', () => {
   });
 
   it('resolves registration_required branch and creates account then accepts', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          status: 'SENT',
-          clientName: 'Acme Corp',
-          email: 'new.user@example.com',
-          maskedEmail: 'n***r@example.com',
-          branch: 'registration_required',
-          accountExists: false,
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+    // Answered by URL, not by call order: the register screen also loads the terms and
+    // conditions when it opens (ETP-6081), and that request would take another one's answer.
+    const json = (body) => ({ ok: true, status: 200, json: async () => body });
+    const fetchMock = vi.fn(async (url) => {
+      const path = String(url);
+      if (path.includes('/sws/go/terms')) {
+        return json({ version: '2026-11', language: 'es_ES', content: 'Terms.', publishedAt: 0 });
+      }
+      if (path.includes('/sws/go/company-invitations/register-and-accept')) {
+        return json({
           status: 'success',
           token: 'new-session-token',
           account: { id: 'acc-1', email: 'new.user@example.com', name: 'New User' },
           clientName: 'Acme Corp',
-        }),
+        });
+      }
+      return json({
+        status: 'SENT',
+        clientName: 'Acme Corp',
+        email: 'new.user@example.com',
+        maskedEmail: 'n***r@example.com',
+        branch: 'registration_required',
+        accountExists: false,
       });
+    });
     globalThis.fetch = fetchMock;
 
     const { container } = renderPage('/invite?token=valid-token-456');
@@ -273,6 +276,11 @@ describe('InviteAcceptancePage', () => {
     fireEvent.change(container.querySelector('#reg-password'), {
       target: { value: 'Str0ng!Pass123' },
     });
+    // The version is only sent once the terms have arrived: let their request settle first.
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/sws/go/terms'))).toBe(true);
+    });
+    await act(async () => {});
     fireEvent.click(screen.getByTestId('action-register-submit'));
 
     await waitFor(() => {
@@ -280,10 +288,12 @@ describe('InviteAcceptancePage', () => {
         expect.stringContaining('/sws/go/company-invitations/register-and-accept'),
         expect.objectContaining({
           method: 'POST',
+          // ETP-6081: the terms version the register screen showed travels with the account.
           body: JSON.stringify({
             token: 'valid-token-456',
             name: 'New User',
             password: 'Str0ng!Pass123',
+            termsVersion: '2026-11',
           }),
         })
       );

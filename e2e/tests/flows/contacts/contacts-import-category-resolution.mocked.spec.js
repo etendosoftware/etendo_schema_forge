@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login } from '../../helpers/auth.js';

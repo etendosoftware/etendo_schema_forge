@@ -132,13 +132,11 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, unavailabl
   const lockedIds = new Set(catalog.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
 
-  const modelSortKey = (m) => {
-    if (active[m.id] && !m.locked) return 0;
-    if (m.locked) return 2;
-    return 1;
-  };
+  // ETP-5831 CP-21 — a stable order: locked ("Próximamente") models last, otherwise by model
+  // code. It never depends on the active state, so toggling a model does not move its card under
+  // the pointer (it used to sort active models first and re-sort on every toggle).
   const sortedCatalog = [...catalog].sort((a, b) =>
-    modelSortKey(a) - modelSortKey(b) || parseInt(a.id, 10) - parseInt(b.id, 10)
+    Number(Boolean(a.locked)) - Number(Boolean(b.locked)) || parseInt(a.id, 10) - parseInt(b.id, 10)
   );
 
   return (

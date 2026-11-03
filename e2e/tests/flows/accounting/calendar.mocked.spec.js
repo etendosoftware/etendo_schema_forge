@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/calendar/YearTableWithCloseStatus.jsx
 // @covers tools/app-shell/src/windows/custom/calendar/PeriodsExpandablePanel.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

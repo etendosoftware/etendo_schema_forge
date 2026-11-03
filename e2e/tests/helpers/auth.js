@@ -182,14 +182,34 @@ export async function declareNoSession(page) {
 }
 
 /**
- * ETP-5551 — opt-in race guard for specs that override `GET /sws/go/onboarding/first-steps`
- * AFTER `login()` (enable with `login(page, { awaitFirstStepsRead: true })`).
+ * Opt-in race guards for specs that override or count a read the dashboard issues on its own,
+ * keyed by the `login()` option that enables each one.
  *
- * `waitForURL('**\/dashboard')` resolves on the load event, but `FirstStepsProvider` only reads
- * this endpoint once the session restore has authenticated the shell. On a slow machine that
- * read lands after `login()` returns, so a spec's own override (e.g. an UNSEEN state) answers
- * it and the dashboard gate POSTs a stray `seen: true`. Waiting for the read guarantees it was
- * served by `login()`'s "already seen" stub.
+ * `waitForURL('**\/dashboard')` resolves on the load event, but the shell only sends these reads
+ * once the session restore has authenticated it. On a slow machine they land after `login()`
+ * returns, so the spec's own route sees the dashboard's read as if its page had sent it:
+ * - ETP-5551 `awaitFirstStepsRead`: a spec's first-steps override (e.g. an UNSEEN state) answers
+ *   it and the dashboard gate POSTs a stray `seen: true`.
+ * - ETP-6078 `awaitEnvironmentListRead`: a spec counting `GET /sws/go/environments` counts the
+ *   dashboard's read on top of the one its own page load sends (2 where the app sent 1 per page).
+ *
+ * Waiting for the read guarantees `login()`'s own `/sws/**` stubs served it.
+ */
+const DASHBOARD_READ_GUARDS = Object.freeze({
+  awaitFirstStepsRead: {
+    path: '/sws/go/onboarding/first-steps',
+    name: 'first-steps',
+    hint: 'FirstStepsProvider unmounted, gated, or the route renamed?',
+  },
+  awaitEnvironmentListRead: {
+    path: '/sws/go/environments',
+    name: 'environment-list',
+    hint: 'no useEnvironmentSwitch consumer on the dashboard, or the route renamed?',
+  },
+});
+
+/**
+ * Arms the {@link DASHBOARD_READ_GUARDS} entry for `option`.
  *
  * A response is enough (the serving route is already chosen); `requestfailed` also counts so a
  * spec that aborts the endpoint does not hang. Fails loudly on timeout: if the read is never
@@ -197,21 +217,21 @@ export async function declareNoSession(page) {
  * Must be armed BEFORE the navigation so a fast read cannot slip past it.
  *
  * @param {import('@playwright/test').Page} page
- * @returns {Promise<void>} rejects if no first-steps read settles within `timeout`
+ * @param {keyof typeof DASHBOARD_READ_GUARDS} option the `login()` option that enabled it
+ * @returns {Promise<void>} rejects if no matching read settles within `timeout`
  */
-function armFirstStepsReadGuard(page, { timeout = 10_000 } = {}) {
-  const isFirstStepsRead = (request) => request.method() === 'GET'
-    && request.url().includes('/sws/go/onboarding/first-steps');
-  const answered = page.waitForResponse((response) => isFirstStepsRead(response.request()), { timeout });
-  const failed = page.waitForEvent('requestfailed', { predicate: isFirstStepsRead, timeout });
+function armDashboardReadGuard(page, option, { timeout = 10_000 } = {}) {
+  const { path, name, hint } = DASHBOARD_READ_GUARDS[option];
+  const isGuardedRead = (request) => request.method() === 'GET' && request.url().includes(path);
+  const answered = page.waitForResponse((response) => isGuardedRead(response.request()), { timeout });
+  const failed = page.waitForEvent('requestfailed', { predicate: isGuardedRead, timeout });
   // The losing waiter still rejects later (timeout or page close); never let that go unhandled.
   answered.catch(() => {});
   failed.catch(() => {});
   const guard = Promise.any([answered, failed]).then(() => {}, (error) => {
     throw new Error(
-      `login({ awaitFirstStepsRead: true }): the dashboard never issued GET /sws/go/onboarding/first-steps `
-      + `within ${timeout}ms, so the first-steps race guard cannot hold `
-      + '(FirstStepsProvider unmounted, gated, or the route renamed?).',
+      `login({ ${option}: true }): the dashboard never issued GET ${path} `
+      + `within ${timeout}ms, so the ${name} race guard cannot hold (${hint}).`,
       { cause: error },
     );
   });
@@ -229,6 +249,9 @@ export async function login(page, {
   // ETP-5551 — mock mode only: wait for the dashboard's first-steps read before returning,
   // failing if it never happens. Only for specs that override that route after login().
   awaitFirstStepsRead = false,
+  // ETP-6078 — mock mode only: same, for the dashboard's GET /sws/go/environments. Only for
+  // specs that count or override that route after login().
+  awaitEnvironmentListRead = false,
 } = {}) {
   captureApiCredentials(page);
   if (IS_MOCK_MODE) {
@@ -414,10 +437,12 @@ export async function login(page, {
       }
     });
 
-    const firstStepsRead = awaitFirstStepsRead ? armFirstStepsReadGuard(page) : null;
+    const dashboardReads = Object.entries({ awaitFirstStepsRead, awaitEnvironmentListRead })
+      .filter(([, enabled]) => enabled)
+      .map(([option]) => armDashboardReadGuard(page, option));
     await page.goto('/dashboard');
     await page.waitForURL('**/dashboard', { timeout: 10_000 });
-    if (firstStepsRead) await firstStepsRead;
+    await Promise.all(dashboardReads);
     return;
   }
 

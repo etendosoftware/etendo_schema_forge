@@ -173,7 +173,7 @@ Branch state of every module repo on the remote. **Fixed on epic** = the module'
 | `org.openbravo.sepa.iso20022.template` | GitHub etendosoftware | yes | yes | +3 | GO | fixed on epic |
 | `org.openbravo.sepa.iso20022.credittransfer.customertobank` | Bitbucket koodu_software | no (`master`) | yes | +8 | GO | fixed on epic |
 | `org.openbravo.sepa.iso20022.coredirectdebit.customertobank` | Bitbucket koodu_software | no (`master`) | yes | +7 | GO | fixed on epic |
-| `com.etendoerp.service.integration.amazon.s3` | Bitbucket koodu_software | not checked | not checked | not checked | GO | in CI list; branches not verified |
+| `com.etendoerp.service.integration.amazon.s3` | Bitbucket koodu_software | no (`master`) | no | no `develop`; `epic` = `master`, 0 ahead | GO | fixed on epic |
 | `com.etendoerp.tomcat` | GitHub etendosoftware | yes | yes | 0 | none | usual model (epic exists, nothing ahead) |
 | `com.etendoerp.docker`, `com.etendoerp.copilot.devassistant` | GitHub etendosoftware | yes | yes | no epic | none | usual model; not tied to the DB model GO depends on |
 | `com.etendoerp.webhookevents` | GitHub etendosoftware | no | yes | no epic | none | usual model |
@@ -200,6 +200,15 @@ make check-modules ONLY=com.etendoerp.go,com.smf.ticketbai
 make check-modules ROOT=../../.worktrees/ETP-1234                        # one environment
 make check-modules ROOT=../../.worktrees/ETP-1234,../../.worktrees/ETP-5640   # several
 make check-modules ALL_ENVS=1                                            # main checkout + every ../.worktrees/*
+```
+
+To move the base repos and the fixed-on-epic modules to their branch: `develop` for base repos and `epic/ETP-3504` for the epic modules by default; usual modules are left alone. Repos with uncommitted changes are skipped, never stashed; no feature branch is created. Every repo is processed even if another one fails; the run ends with a report listing all failures in full.
+
+```bash
+make checkout-modules                              # checkout only (BASE_MOD=develop, EPIC_MOD=epic/ETP-3504)
+make checkout-modules PULL=1                       # checkout, then pull --ff-only
+make checkout-modules PULL=1 BASE_MOD=main         # base repos to main instead of develop
+make checkout-modules PULL=1 EPIC_MOD=epic/XYZ FETCH=0 ONLY=com.etendoerp.go
 ```
 
 `ROOT` is the Etendo root of the checkout to inspect (the directory that has `modules/`): the main checkout by default, or any local-env environment. Each root gets its own report. Inside an environment, repos that are real worktrees (`.git` file) are judged like the main checkout; repos that are **frozen copies** (own `.git` directory, made by `local-env worktree` for every repo you did not name) are reported with an extra note, because they never follow the main checkout.

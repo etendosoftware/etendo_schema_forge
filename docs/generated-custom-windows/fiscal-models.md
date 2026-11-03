@@ -4816,6 +4816,12 @@ The catalog drawer lists the tax forms the tenant can enable/disable — no lock
 | `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
 | `390` | Modelo 390 - Resumen anual de IVA | Anual | Declaración resumen anual de las autoliquidaciones de IVA del ejercicio (ETP-5716) |
 
+**Card order is stable (ETP-5831 CP-21).** The cards are sorted by model code (`303`, `349`,
+`390`), with any `locked` model last; the order never depends on the active state. Until
+ETP-5831 the drawer sorted active models first (since ETP-3778) and re-sorted on every toggle, so a
+card jumped away from the pointer as soon as it was switched on or off. Not a regression of the
+ETP-5831 catalog refactor — the active-first sort predates it.
+
 ### Modelo 390 behind the backend-only flag `fiscal-model-390` (ETP-5716)
 
 The whole Modelo 390 is hidden until the backend-only flag `fiscal-model-390` is on for the current
