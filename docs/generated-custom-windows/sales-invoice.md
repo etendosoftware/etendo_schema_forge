@@ -2553,7 +2553,7 @@ The `id` of every call is the draft sales invoice. `lines` omitted imports every
   descuento global del X % aplicado a la factura» tells the user: `applied:true, percent:X` when the header now holds the
   orders' %, else `applied:false, percent:null` with `reason` `carryGlobalDiscountFalse` (the call sent
   `carryGlobalDiscount:false`) or `ordersWithoutDiscount`. `availableOrders` rows also carry `globalDiscount`, the order's %
-  (0 when none), the popup's «% Dto. global X%» tag. Both fields are additive: the window reads neither.
+  (0 when none), the popup's «% Dto. global X%» tag. Both fields are additive: the window reads neither. Since the ETP-5828 QA parity pass `availableOrders` also reports each order's `amount` (the sum of its pending lines, no global discount — the popup row) and `availableOrderLines` each line's `unitPrice`, `discount` (%) and `amount` (price × pending — the popup line), and `importOrderLines` answers `order` next to `salesOrder` (same id; `salesOrder` kept for its readers). The header field `etgoTotalDiscount` carries an agentPrompt (`decisions.json`, exported to `ETGO_SF_FIELD`): always a %, applied to the subtotal after the line discounts, carried from the orders by `importOrderLines` and by the one-step invoice action.
 - The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
   through `MCP_CONFIG`. `createDraftInvoice` on the sales order or the goods shipment (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/sales-invoice/spec.md`)
   describes the flow.
