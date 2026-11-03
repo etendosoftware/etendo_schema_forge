@@ -9,13 +9,16 @@ import {
   fetchOrderLines,
   getOrderDisplay,
   submitOrderImport,
+  buildOrderInvoiceLineBody,
 } from './invoiceOrderImport.js';
 
 /**
  * «Importar desde pedido» of an invoice — ONE component for sales and purchase invoices
- * (ETP-5828). `direction` picks the specs and the labels (`INVOICE_ORDER_IMPORT`); everything
- * else — the server-side `importOrderLines` action, the pending of `availableOrderLines`, the
- * global-discount notice and the footer counting ORDERS — is the same for both.
+ * (ETP-5828). `direction` picks the specs, the labels and the data path (`INVOICE_ORDER_IMPORT`,
+ * `importVia`): `'server'` imports with the `importOrderLines` action (sales), `'client'` POSTs
+ * each line from the browser and PATCHes the header % afterwards (purchases, until QA decides the
+ * draft-pending rule, MCP-2). The look — the Figma popup, the global-discount notice, the footer
+ * counting ORDERS — is the same for both.
  *
  * @param {object} props  the parent's ImportLinesModal props (invoiceId, bpId, base, onClose, …)
  * @param {'sales'|'purchase'} props.direction
@@ -28,7 +31,11 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
   // base doubles it and 404s. The URLs already carry `base`.
   const apiFetch = useApiFetch('');
   const ui = useUI();
-  const { serverCarry, ...globalDiscountProps } = useOrderGlobalDiscountImport();
+  const viaServer = config.importVia === 'server';
+  // The client path needs the header endpoint for its browser-side PATCH (the hook's afterImport).
+  const { serverCarry, ...globalDiscountProps } = useOrderGlobalDiscountImport(
+    viaServer ? undefined : { headerEndpoint: `${config.invoiceSpec}/header` },
+  );
 
   // Stable per apiFetch/direction: ImportLinesModal re-reads the documents when fetchDocuments
   // changes identity.
@@ -53,7 +60,9 @@ export default function InvoiceOrderImportModal({ direction, ...props }) {
       fetchDocuments={handlers.fetchDocuments}
       fetchLines={handlers.fetchLines}
       getDocDisplay={getOrderDisplay}
-      submitImport={submitImport}
+      {...(viaServer
+        ? { submitImport }
+        : { linesEndpoint: `${config.invoiceSpec}/lines`, buildLineBody: buildOrderInvoiceLineBody })}
       {...globalDiscountProps}
       data-testid="ImportLinesModal__52f314" />
   );

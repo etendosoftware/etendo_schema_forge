@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { Switch } from '@/components/ui/switch';
 import { ImportNotice } from '@/components/contract-ui/ImportLinesModal.jsx';
 import { formatGroupedNumber } from '@/lib/formatCurrency.js';
@@ -7,6 +8,7 @@ import {
   normalizeGlobalDiscountPct,
   resolveOrderGlobalDiscount,
   isCarryingGlobalDiscount,
+  shouldPatchInvoiceGlobalDiscount,
 } from './orderGlobalDiscountRule.js';
 
 const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedContext?.orderDiscountMap?.[docId]);
@@ -18,8 +20,12 @@ const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedCont
  * `renderSelectionPanel`, `getSuccessToast`) plus `serverCarry`, so the shared
  * modal stays unaware of discounts.
  *
- * Nothing is written from the browser: the import is ONE `importOrderLines` server action that
- * applies the global discount itself; `serverCarry(selection)` says whether to ask it to.
+ * Two import paths, chosen per direction by `INVOICE_ORDER_IMPORT[direction].importVia`:
+ *  - `'server'` (sales): ONE `importOrderLines` server action applies the global discount itself;
+ *    `serverCarry(selection)` says whether to ask it to. Nothing is written from the browser.
+ *  - `'client'` (purchases, until QA decides the draft-pending rule, MCP-2): the lines are POSTed
+ *    from the browser and `afterImport` (returned only when `headerEndpoint` is given) PATCHes the
+ *    header %; `getSuccessToast` also reports a failed PATCH (`failedPct`).
  *
  * It expects the caller's `fetchDocuments` to put in `sharedContext`:
  *  - `orderDiscountMap`: `{ [orderId]: pct }` (orders without a global discount may be absent);
@@ -31,8 +37,11 @@ const orderPct = (sharedContext, docId) => normalizeGlobalDiscountPct(sharedCont
  *
  * The decision itself is the pure `resolveOrderGlobalDiscount` (orderGlobalDiscountRule.js).
  */
-export default function useOrderGlobalDiscountImport() {
+export default function useOrderGlobalDiscountImport({ headerEndpoint } = {}) {
   const ui = useUI();
+  // Empty base on purpose, like the modals: the URL already carries `base`. Only the client import
+  // path (purchases for now, `importVia: 'client'`) writes through it.
+  const apiFetch = useApiFetch('');
 
   const fmtPct = useCallback((value) => formatGroupedNumber(value, { maximumFractionDigits: 2 }), []);
 
@@ -139,6 +148,14 @@ export default function useOrderGlobalDiscountImport() {
     // The order import always says what happened to the global discount (QA): carried with its %,
     // or «sin descuento global» — never the generic «Líneas importadas desde pedido».
     const getSuccessToast = ({ count, afterImportResult, partial }) => {
+      // Client path only: the lines went in but the header PATCH did not (shown even when some
+      // lines failed, next to the modal's own partial warning).
+      if (afterImportResult?.failedPct != null) {
+        return {
+          message: ui('importGlobalDiscountPatchFailed', { pct: fmtPct(afterImportResult.failedPct) }),
+          variant: 'warning',
+        };
+      }
       if (partial || !afterImportResult) return null;
       if (!afterImportResult.carried) {
         const key = count === 1 ? 'importGlobalDiscountNotCarriedOne' : 'importGlobalDiscountNotCarriedMany';
@@ -160,12 +177,51 @@ export default function useOrderGlobalDiscountImport() {
       };
     };
 
+    // For a caller that creates the lines from the browser (`importVia: 'client'`, purchases until
+    // QA decides the draft-pending rule, MCP-2): after the per-line POSTs, writes the header % when
+    // the toggle is offered, ON, and the invoice has none yet. The decision is the one the user
+    // SAW: taken on the selected orders, never on the imported subset — a failed line POST must
+    // not turn a warning into a carry. The imported subset is only an extra guard that can drop the
+    // PATCH (nothing imported), never enable it. Always a %, never an amount; line discounts are
+    // never touched. Known: until the PATCH lands the totals show the lines without it (QA UI-1).
+    const afterImport = async ({ importedDocIds, selectedDocIds, documents, sharedContext, base, invoiceId, extraState }) => {
+      const docs = documents || [];
+      const decision = decide({ selectedDocuments: docs.filter(d => selectedDocIds?.has(d.id)), sharedContext });
+      const carryOn = carryOnOf(extraState);
+      if (!isCarryingGlobalDiscount(decision, carryOn)) return { carried: false };
+      const imported = decide({ selectedDocuments: docs.filter(d => importedDocIds?.has(d.id)), sharedContext });
+      if (imported.kind !== 'carry' || imported.pct !== decision.pct) return { carried: false };
+      if (!shouldPatchInvoiceGlobalDiscount(decision, carryOn)) return { carried: true, pct: decision.pct };
+      const headerUrl = `${base}/${headerEndpoint}/${invoiceId}`;
+      try {
+        // The line POSTs recalculate the header server-side, so the `updated` remembered when the
+        // modal opened is stale (409 stale_record, ETP-5073): re-read it and send the fresh one.
+        const readRes = await apiFetch(headerUrl);
+        if (!readRes.ok) return { carried: false, failedPct: decision.pct };
+        const header = (await readRes.json())?.response?.data?.[0];
+        if (!header) return { carried: false, failedPct: decision.pct };
+        // Someone set a % meanwhile: never overwrite it.
+        if (normalizeGlobalDiscountPct(header.etgoTotalDiscount) !== decision.invoicePct) {
+          return { carried: false, failedPct: decision.pct };
+        }
+        const res = await apiFetch(headerUrl, {
+          method: 'PATCH',
+          body: JSON.stringify({ etgoTotalDiscount: decision.pct, updated: header.updated }),
+        });
+        return res.ok ? { carried: true, pct: decision.pct } : { carried: false, failedPct: decision.pct };
+      } catch {
+        return { carried: false, failedPct: decision.pct };
+      }
+    };
+
     return {
       serverCarry,
       initialExtraState: { carryGlobalDiscount: true },
       renderDocAdornment,
       renderSelectionPanel,
       getSuccessToast,
+      // Only with a headerEndpoint: the browser-side header write of the client import path.
+      ...(headerEndpoint ? { afterImport } : {}),
     };
-  }, [ui, fmtPct, decide]);
+  }, [ui, fmtPct, decide, apiFetch, headerEndpoint]);
 }

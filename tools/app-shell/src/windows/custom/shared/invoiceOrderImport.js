@@ -6,24 +6,38 @@ import { translateImportRefusal } from '../../../lib/backendErrors.js';
  * `apiFetch`, so the component hands in its `useApiFetch('')` and a plain `node --test` hands in a
  * stub. Nothing here is direction-specific beyond the `INVOICE_ORDER_IMPORT` entry it is given.
  *
- * The import is ONE call to the invoice's declared `importOrderLines` action — the same one the
- * MCP uses — never one line POST per order line, so the window and the agents share one rule:
+ * With `importVia: 'server'` (sales; purchases go `'client'` for now, see INVOICE_ORDER_IMPORT) the
+ * import is ONE call to the invoice's declared `importOrderLines` action — the same one the MCP
+ * uses — never one line POST per order line, so the window and the agents share one rule:
  * - each order line's quantity goes first to its completed shipment/receipt lines not yet
  *   invoiced, oldest first, one INVOICE LINE PER SHIPMENT LINE; what was ordered and not delivered
  *   becomes one line linked to the order line only;
  * - prices, discount, tax and UoM are copied from the order line server-side, line numbers follow
  *   the invoice's last line, and the order's global discount is carried by the server
  *   (`carryGlobalDiscount`, decided by the same rule the notice shows) in the same transaction, so
- *   the totals are right the moment the popup closes (QA UI-1 on purchases: lines created from the
- *   browser and the header % PATCHed afterwards showed mixed totals for a few seconds);
+ *   the totals are right the moment the popup closes (the client path still shows mixed totals
+ *   for a few seconds, QA UI-1, because its header % is PATCHed after the line POSTs);
  * - all or nothing: a refusal (e.g. more than pending, a discount conflict) imports no line.
  * The selectable quantity is the action's own pending (`availableOrderLines`: ordered − invoiced −
  * what any draft invoice already holds), so the popup never offers more than the server accepts.
  */
 
-/** Per-direction configuration: the specs it reads and the i18n keys it shows. */
+/**
+ * Per-direction configuration: the specs it reads, the i18n keys it shows, and HOW it imports.
+ *
+ * `importVia` is the one switch of the data path (the popup looks the same either way):
+ *  - `'server'`: pending from the invoice's `availableOrderLines` action (drafts subtracted) and
+ *    ONE `importOrderLines` call that also carries the global discount (see the header comment);
+ *  - `'client'`: pending = ordered − invoiced read from the order lines (no draft subtraction),
+ *    one `POST {invoiceSpec}/lines` per selected line built by `buildOrderInvoiceLineBody`, then a
+ *    header `etgoTotalDiscount` PATCH from the browser when the carry applies. Purchases stay here
+ *    until QA decides whether drafts count as pending (MCP-2); known consequence: the totals show
+ *    a mix for a few seconds after the import (QA UI-1). Flipping purchases to `'server'` is this
+ *    one line.
+ */
 export const INVOICE_ORDER_IMPORT = Object.freeze({
   sales: Object.freeze({
+    importVia: 'server',
     invoiceSpec: 'sales-invoice',
     orderSpec: 'sales-order',
     titleKey: 'importFromSalesOrder',
@@ -33,6 +47,7 @@ export const INVOICE_ORDER_IMPORT = Object.freeze({
     successMessageKey: 'linesImportedFromSalesOrder',
   }),
   purchase: Object.freeze({
+    importVia: 'client',
     invoiceSpec: 'purchase-invoice',
     orderSpec: 'purchase-order',
     titleKey: 'importFromPurchaseOrder',
@@ -146,7 +161,10 @@ async function fetchActionPending({ apiFetch, config, base, invoiceId, orderId }
 export async function fetchOrderLines({ apiFetch, config, base, docId, sharedContext }) {
   const [res, actionPending] = await Promise.all([
     apiFetch(`${base}/${config.orderSpec}/lines?parentId=${docId}&_startRow=0&_endRow=200`),
-    fetchActionPending({ apiFetch, config, base, invoiceId: sharedContext?.invoiceId, orderId: docId }),
+    // The client path never asks the action: its pending is the order line's ordered − invoiced.
+    config.importVia === 'server'
+      ? fetchActionPending({ apiFetch, config, base, invoiceId: sharedContext?.invoiceId, orderId: docId })
+      : null,
   ]);
   if (!res.ok) return [];
   const lines = await rowsOf(res);
@@ -169,6 +187,40 @@ export async function fetchOrderLines({ apiFetch, config, base, docId, sharedCon
       _alreadyImported: alreadyInCurrent || pending <= 0,
     };
   });
+}
+
+/**
+ * The invoice line the CLIENT import path POSTs for one selected order line (restored as it was
+ * before ETP-5828 unified the popup). Price, list price, line discount, tax and UoM come from the
+ * order line; the order line FK travels as `salesOrderLine` (the spec's java_qualifier, ETP-5381).
+ * ETP-5710: unitPrice is the order line's already-discounted price. Without a list price the old
+ * fallback posted U == L next to etgoDiscount, which the server reads as "not yet discounted" and
+ * discounts again. Rebuild the list price so U != L (6 decimals, as the SPA).
+ */
+export function buildOrderInvoiceLineBody({ line, qty, invoiceId, lineNo }) {
+  const unitPrice = Number(line.unitPrice) || 0;
+  const grossUnitPrice = Number(line.grossUnitPrice) || 0;
+  const discount = Number(line.discount) || 0;
+  const storedListPrice = Number(line.listPrice) || 0;
+  const listPrice = storedListPrice
+    || (discount > 0 && discount < 100
+      ? Math.round((unitPrice / (1 - discount / 100)) * 1e6) / 1e6
+      : unitPrice);
+  return {
+    parentId: invoiceId,
+    product: line.product,
+    invoicedQuantity: qty,
+    unitPrice,
+    listPrice,
+    ...(grossUnitPrice ? { grossUnitPrice } : {}),
+    ...(discount ? { etgoDiscount: discount } : {}),
+    lineNetAmount: unitPrice * qty,
+    description: line.description || null,
+    tax: line.tax || null,
+    uOM: line.uOM || null,
+    lineNo,
+    salesOrderLine: line.id,
+  };
 }
 
 export const getOrderDisplay = (doc) => ({

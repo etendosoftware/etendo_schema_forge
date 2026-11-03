@@ -35,8 +35,15 @@ import InvoiceOrderImportModal from '../InvoiceOrderImportModal.jsx';
 
 const BASE = '/sws/neo';
 
+const HEADER_ENDPOINT = 'purchase-invoice/header';
+
 function hookProps() {
   return renderHook(() => useOrderGlobalDiscountImport()).result.current;
+}
+
+/** The hook as the client import path uses it: with a header endpoint, so it has afterImport. */
+function clientHookProps() {
+  return renderHook(() => useOrderGlobalDiscountImport({ headerEndpoint: HEADER_ENDPOINT })).result.current;
 }
 
 /**
@@ -174,8 +181,94 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
   });
 });
 
+// Client import path (purchases, importVia 'client', until MCP-2 is decided): restored from the
+// pre-unification suite. The header % is PATCHed from the browser after the line POSTs.
+describe('useOrderGlobalDiscountImport — afterImport header PATCH (client path)', () => {
+  const ORDERS = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }];
+
+  function afterImportArgs({ selected, imported, invoicePct = null, invoiceHasLines = false, invoiceStateKnown = true, carryOn = true }) {
+    const sel = selection({ orders: ORDERS, invoicePct, invoiceHasLines, invoiceStateKnown, carryOn });
+    return {
+      documents: sel.documents,
+      sharedContext: sel.sharedContext,
+      selectedDocIds: new Set(selected),
+      importedDocIds: new Set(imported),
+      extraState: sel.extraState,
+      base: BASE,
+      invoiceId: 'inv-1',
+    };
+  }
+
+  it.each([
+    { name: 'toggle off', args: { selected: ['SO-A'], imported: ['SO-A'], carryOn: false }, result: { carried: false } },
+    { name: 'invoice already at the same %', args: { selected: ['SO-A'], imported: ['SO-A'], invoicePct: 10 }, result: { carried: true, pct: 10 } },
+    { name: 'invoice-has-lines warning', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceHasLines: true }, result: { carried: false } },
+    { name: 'mixed selection whose 0 % order failed to import (B1)', args: { selected: ['SO-A', 'SO-B'], imported: ['SO-A'] }, result: { carried: false } },
+    { name: 'nothing imported', args: { selected: ['SO-A'], imported: [] }, result: { carried: false } },
+    { name: 'invoice header or lines could not be read', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceStateKnown: false }, result: { carried: false } },
+  ])('no PATCH: $name', async ({ args, result }) => {
+    expect(await clientHookProps().afterImport(afterImportArgs(args))).toEqual(result);
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  const HEADER_URL = `${BASE}/${HEADER_ENDPOINT}/inv-1`;
+  const headerRead = (row) => ({ ok: true, json: async () => ({ response: { data: row ? [row] : [] } }) });
+  const runCarry = () => clientHookProps().afterImport(afterImportArgs({ selected: ['SO-A'], imported: ['SO-A'] }));
+
+  it('PATCHes the header with the % when the toggle is on and the invoice has none', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }))
+      .mockResolvedValueOnce({ ok: true });
+    const result = await runCarry();
+    expect(result).toEqual({ carried: true, pct: 10 });
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
+    expect(mockApiFetch.mock.calls[1]).toEqual([HEADER_URL, {
+      method: 'PATCH',
+      body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }),
+    }]);
+  });
+
+  it.each([
+    ['0', 0],
+    ['null', null],
+  ])('re-read with etgoTotalDiscount %s → PATCH carries the fresh updated', async (_name, current) => {
+    mockApiFetch
+      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: current, updated: '2025-01-15T10:00:00Z' }))
+      .mockResolvedValueOnce({ ok: true });
+    expect(await runCarry()).toEqual({ carried: true, pct: 10 });
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(mockApiFetch.mock.calls[1][1].body)).toEqual({ etgoTotalDiscount: 10, updated: '2025-01-15T10:00:00Z' });
+  });
+
+  it.each([
+    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
+    ['throws', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
+    ['returns no row', () => mockApiFetch.mockResolvedValueOnce(headerRead(null))],
+    ['shows a % set meanwhile (5)', () => mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: 5, updated: 'X' }))],
+  ])('reports failedPct without PATCH when the header re-read %s', async (_name, arrange) => {
+    arrange();
+    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
+    expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
+  });
+
+  it.each([
+    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
+    ['rejects', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
+  ])('reports failedPct when the PATCH %s', async (_name, arrange) => {
+    mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }));
+    arrange();
+    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(mockApiFetch.mock.calls[1][1].method).toBe('PATCH');
+  });
+});
+
 describe('useOrderGlobalDiscountImport — success toast', () => {
   it.each([
+    { name: 'client PATCH failed', args: { count: 1, afterImportResult: { carried: false, failedPct: 10 } }, expected: { message: 'importGlobalDiscountPatchFailed:{"pct":"10"}', variant: 'warning' } },
+    { name: 'client PATCH failed on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: false, failedPct: 10 } }, expected: { message: 'importGlobalDiscountPatchFailed:{"pct":"10"}', variant: 'warning' } },
     { name: 'carried, one line', args: { count: 1, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedOne:{"count":1,"pct":"10"}' } },
     { name: 'carried, many lines', args: { count: 2, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedMany:{"count":2,"pct":"10"}' } },
     { name: 'carried on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: true, pct: 10 } }, expected: null },
@@ -191,10 +284,11 @@ describe('useOrderGlobalDiscountImport — success toast', () => {
 // The ONE order-import popup of sales and purchase invoices (InvoiceOrderImportModal), with the real
 // ImportLinesModal and hook: the selection the modal computes is the one the decision runs on, and
 // the import is a single server action per direction — never a line POST nor a header PATCH.
+// Server path (importVia 'server'): sales. Purchases go through the client path below until QA
+// decides the draft-pending rule (MCP-2); flipping them back adds their row here again.
 describe.each([
   { direction: 'sales', invoiceSpec: 'sales-invoice', orderSpec: 'sales-order', titleKey: 'importFromSalesOrder' },
-  { direction: 'purchase', invoiceSpec: 'purchase-invoice', orderSpec: 'purchase-order', titleKey: 'importFromPurchaseOrder' },
-])('InvoiceOrderImportModal ($direction)', ({ direction, invoiceSpec, orderSpec, titleKey }) => {
+])('InvoiceOrderImportModal ($direction, server path)', ({ direction, invoiceSpec, orderSpec, titleKey }) => {
   const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
   function renderModal({ orders, importRes = ok({ importedCount: 1 }) }) {
@@ -320,5 +414,102 @@ describe.each([
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('failedToImportLines'));
     expect(onSuccess).not.toHaveBeenCalled();
     expect(writeCalls()).toEqual([]);
+  });
+});
+
+// Client path (importVia 'client'): purchases, restored as before the unification while MCP-2 is
+// open — pending from the order lines, one line POST each, then the header % PATCHed from the
+// browser. Same popup, same notice and toasts as sales.
+describe('InvoiceOrderImportModal (purchase, client path)', () => {
+  const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
+
+  function renderModal({ orders, patchOk = true }) {
+    mockApiFetch.mockImplementation(async (url, opts) => {
+      if (url.includes('/purchase-order/header?')) {
+        return ok(orders.map(o => ({
+          id: o.id, documentNo: o.id, documentStatus: 'CO', businessPartner: 'bp-1', invoiceStatus: 0,
+          currency: 'EUR', etgoTotalDiscount: o.pct, orderDate: '2026-10-30',
+        })));
+      }
+      if (url.includes('/purchase-invoice/lines?parentId=')) return ok([]);
+      if (url.endsWith('/purchase-invoice/header/inv-1')) {
+        if (opts?.method === 'PATCH') return { ok: patchOk };
+        return ok([{ currency: 'EUR', etgoTotalDiscount: 0, updated: 'X' }]);
+      }
+      if (url.includes('/purchase-order/lines?parentId=')) {
+        const docId = new URL(url, 'http://x').searchParams.get('parentId');
+        // Ordered 3, invoiced 1: the client pending is 2 (no draft subtraction, no action call).
+        return ok([{ id: `${docId}-l1`, 'product$_identifier': `Product ${docId}`, product: 'p1',
+          orderedQuantity: 3, invoicedQuantity: 1, unitPrice: 50, listPrice: 50, tax: 't1', uOM: 'u1' }]);
+      }
+      if (url === '/purchase-invoice/lines' && opts?.method === 'POST') {
+        return { ok: true, json: async () => ({ response: { data: [{ id: 'new' }] } }) };
+      }
+      throw new Error(`Unexpected request ${opts?.method || 'GET'} ${url}`);
+    });
+    const onSuccess = vi.fn();
+    render(
+      <InvoiceOrderImportModal direction="purchase" invoiceId="inv-1" bpId="bp-1" base={BASE}
+        headers={{}} onClose={vi.fn()} onSuccess={onSuccess} />,
+    );
+    return { onSuccess };
+  }
+
+  async function selectAllAndImport(orders) {
+    const total = formatCurrency(undefined, 100); // 50 × pending 2
+    await waitFor(() => expect(screen.getAllByText(total)).toHaveLength(orders.length));
+    fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
+  }
+
+  const calls = (pred) => mockApiFetch.mock.calls.filter(pred);
+  const linePosts = () => calls(([url, opts]) => url === '/purchase-invoice/lines' && opts?.method === 'POST');
+  const patches = () => calls(([, opts]) => opts?.method === 'PATCH');
+  const actionCalls = () => calls(([url]) => url.includes('/action/'));
+
+  it('carries the order %: one line POST per line, then the header PATCH, and the carried toast', async () => {
+    const orders = [{ id: 'PO-A', pct: 10 }];
+    const { onSuccess } = renderModal({ orders });
+    await selectAllAndImport(orders);
+    expect(screen.getByTestId('ImportGlobalDiscount__toggle')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+
+    expect(actionCalls()).toEqual([]);
+    expect(linePosts()).toHaveLength(1);
+    expect(JSON.parse(linePosts()[0][1].body)).toMatchObject({
+      parentId: 'inv-1', product: 'p1', invoicedQuantity: 2, unitPrice: 50, salesOrderLine: 'PO-A-l1',
+    });
+    expect(patches()).toEqual([[`${BASE}/purchase-invoice/header/inv-1`, {
+      method: 'PATCH', body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }),
+    }]]);
+    expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountImportedOne:{"count":1,"pct":"10"}');
+  });
+
+  it('with the toggle OFF it POSTs the lines, never PATCHes, and says «sin descuento global»', async () => {
+    const orders = [{ id: 'PO-A', pct: 10 }];
+    const { onSuccess } = renderModal({ orders });
+    await selectAllAndImport(orders);
+    fireEvent.click(screen.getByTestId('ImportGlobalDiscount__switch'));
+
+    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+
+    expect(linePosts()).toHaveLength(1);
+    expect(patches()).toEqual([]);
+    expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountNotCarriedOne:{"count":1}');
+  });
+
+  it('a failed header PATCH keeps the lines and warns that the % was not applied', async () => {
+    const orders = [{ id: 'PO-A', pct: 10 }];
+    const { onSuccess } = renderModal({ orders, patchOk: false });
+    await selectAllAndImport(orders);
+
+    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+
+    expect(patches()).toHaveLength(1);
+    expect(toast.warning).toHaveBeenCalledWith('importGlobalDiscountPatchFailed:{"pct":"10"}');
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

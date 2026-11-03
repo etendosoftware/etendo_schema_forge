@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/shared/invoiceOrderImport.js
 // @covers artifacts/sales-invoice/custom/ImportFromOrderModal.jsx
 // @covers artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -14,6 +15,7 @@ import {
   fetchOrderLines,
   submitOrderImport as submitWith,
   discountOutcome,
+  buildOrderInvoiceLineBody,
 } from '../invoiceOrderImport.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -48,40 +50,46 @@ describe('invoice order import — one popup, two directions', () => {
     });
   }
 
-  for (const direction of ['sales', 'purchase']) {
+  // The one switch of the data path (MCP-2, `importVia`): sales read pending from the server
+  // action, purchases from the order lines until QA decides whether drafts count as pending.
+  for (const [direction, actionPending] of [['sales', true], ['purchase', false]]) {
     const config = INVOICE_ORDER_IMPORT[direction];
     const invoice = config.invoiceSpec;
     const order = config.orderSpec;
 
-    it(`${direction}: reads ${order} and ${invoice}, pending from ${invoice} availableOrderLines`, async () => {
+    it(`${direction}: reads ${order} and ${invoice}, ${actionPending ? 'pending from availableOrderLines' : 'pending = ordered − invoiced, no action call'}`, async () => {
       const urls = [];
       const stub = async (url) => {
         urls.push(url);
-        return mockRes(true, url.endsWith('/availableOrderLines') ? [{ id: 'ol1', pendingQuantity: 1 }] : []);
+        if (url.endsWith('/availableOrderLines')) return mockRes(true, [{ id: 'ol1', pendingQuantity: 1 }]);
+        if (url.includes(`/${order}/lines`)) return mockRes(true, [{ id: 'ol1', orderedQuantity: 5, invoicedQuantity: 2, unitPrice: 10 }]);
+        return mockRes(true, []);
       };
       await fetchOrderDocuments({ apiFetch: stub, config, base: '/b', bpId: 'bp1', invoiceId: 'inv1' });
-      await fetchOrderLines({ apiFetch: stub, config, base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' } });
+      const lines = await fetchOrderLines({ apiFetch: stub, config, base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1' } });
       assert.deepEqual(urls.map(u => u.split('?')[0]), [
         `/b/${order}/header`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
-        `/b/${order}/lines`, `/b/${invoice}/header/inv1/action/availableOrderLines`,
+        `/b/${order}/lines`,
+        ...(actionPending ? [`/b/${invoice}/header/inv1/action/availableOrderLines`] : []),
       ]);
-    });
-
-    it(`${direction}: imports through the ${invoice} importOrderLines action`, async () => {
-      const calls = [];
-      const stub = async (url, opts) => { calls.push([url, opts]); return mockRes(true, { importedCount: 1 }); };
-      const result = await submitWith({
-        apiFetch: stub, config, base: '/b', invoiceId: 'inv1', selection: {},
-        lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
-        serverCarry: () => ({ carryGlobalDiscount: false, afterImportResult: { carried: false } }),
-        ui: k => k,
-      });
-      assert.equal(calls.length, 1);
-      assert.equal(calls[0][0], `/b/${invoice}/header/inv1/action/importOrderLines`);
-      assert.equal(calls[0][1].method, 'POST');
-      assert.equal(result.ok, true);
+      assert.equal(lines[0]._maxQty, actionPending ? 1 : 3);
     });
   }
+
+  it('sales: imports through the sales-invoice importOrderLines action', async () => {
+    const calls = [];
+    const stub = async (url, opts) => { calls.push([url, opts]); return mockRes(true, { importedCount: 1 }); };
+    const result = await submitWith({
+      apiFetch: stub, config: SALES, base: '/b', invoiceId: 'inv1', selection: {},
+      lines: [{ line: { id: 'ol1' }, qty: 1, docId: 'o1' }],
+      serverCarry: () => ({ carryGlobalDiscount: false, afterImportResult: { carried: false } }),
+      ui: k => k,
+    });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], '/b/sales-invoice/header/inv1/action/importOrderLines');
+    assert.equal(calls[0][1].method, 'POST');
+    assert.equal(result.ok, true);
+  });
 });
 
 function mockRes(ok, data) {
@@ -369,6 +377,57 @@ describe('invoice order import (sales) — fetchDocuments invoice global-discoun
       assert.equal(sharedContext.invoiceGlobalDiscount, expected.invoiceGlobalDiscount);
       assert.equal(sharedContext.invoiceHasLines, expected.invoiceHasLines);
       assert.equal(sharedContext.invoiceStateKnown, expected.invoiceStateKnown);
+    });
+  }
+});
+
+// Restored from the pre-unification purchase popup tests (ImportFromPurchaseOrderModal.test.js):
+// the CLIENT path (purchases, importVia 'client') still builds and POSTs each invoice line.
+describe('invoice order import (purchase, client path) — buildOrderInvoiceLineBody', () => {
+  const buildLineBody = (args) => buildOrderInvoiceLineBody(args);
+  const PURCHASE_ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
+  const line = {
+    id: 'ol1',
+    product: 'p1',
+    description: 'Entrega especial',
+    unitPrice: 10,
+    listPrice: 10,
+    tax: 't1',
+    uOM: 'u1',
+  };
+
+  it('carries the order line description into the built invoice line body', () => {
+    const result = buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result.description, 'Entrega especial');
+  });
+
+  it('computes the line net amount from the unit price and the imported quantity', () => {
+    const result = buildLineBody({ line, qty: 3, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result.invoicedQuantity, 3);
+    assert.equal(result.lineNetAmount, 30);
+  });
+
+  // ETP-5381 REGRESSION GUARD: posting the FK under a key the spec does not declare makes
+  // NeoFieldFilter drop it silently (HTTP 200, line created, C_OrderLine_ID NULL).
+  it('sends the source order line under the spec API key for C_OrderLine_ID', () => {
+    const result = buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result[PURCHASE_ORDER_LINE_FK], 'ol1');
+    assert.equal(Object.hasOwn(result, 'cOrderlineId'), false);
+  });
+
+  // ETP-5710: an order line without a list price but with a discount used to post U == L +
+  // etgoDiscount, which the server reads as "not yet discounted" and discounts a second time.
+  for (const [name, input, listPrice] of [
+    ['reconstructs the list price when the order line has none and a discount', { unitPrice: 90, listPrice: 0, discount: 10 }, 100],
+    ['keeps the order line list price when it has one', { unitPrice: 90, listPrice: 100, discount: 10 }, 100],
+    ['falls back to the unit price without a discount', { unitPrice: 10, listPrice: 0 }, 10],
+    ['falls back to the unit price with a 100 percent discount', { unitPrice: 0, listPrice: 0, discount: 100 }, 0],
+    ['rounds the reconstructed list price to 6 decimals', { unitPrice: 10, listPrice: 0, discount: 3 }, 10.309278],
+  ]) {
+    it(name, () => {
+      const result = buildLineBody({ line: { ...line, ...input }, qty: 1, invoiceId: 'inv1', lineNo: 10 });
+      assert.equal(result.listPrice, listPrice);
+      if (input.discount && input.discount < 100) assert.equal(result.etgoDiscount, input.discount);
     });
   }
 });

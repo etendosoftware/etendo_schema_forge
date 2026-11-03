@@ -15,18 +15,22 @@ import { login } from '../../helpers/auth.js';
  * `C_OrderLine_ID` NULL, `C_INVOICE_POST` never wrote `M_MATCHSO` nor `QtyInvoiced`, so the
  * order stayed invoiceable forever (double invoicing).
  *
- * Both windows open the SAME popup (`InvoiceOrderImportModal`, ETP-5828) and import the same
- * way: ONE request, `POST /{invoiceSpec}/header/{id}/action/importOrderLines`, with
- * `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`. The FK
- * travels as `sourceLineId` and the server builds the line; pending quantities are read through
- * `.../action/availableOrderLines`, never computed in the browser. (Until ETP-5828 the purchase
- * popup still POSTed one `/purchase-invoice/lines` per line.)
+ * The write path differs per window, so each one declares how it imports (`importVia`):
+ *   - sales-invoice (`ImportFromOrderModal`) — since ETP-6002 the modal sends ONE request,
+ *     `POST /sales-invoice/header/{id}/action/importOrderLines`, with
+ *     `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`.
+ *     The FK travels as `sourceLineId` and the server builds the line; pending quantities are
+ *     read through `.../action/availableOrderLines`, never computed in the browser.
+ *   - purchase-invoice (`ImportFromPurchaseOrderModal`) — the same unified popup (ETP-5828) on its
+ *     client path (`importVia: 'client'`, until QA decides MCP-2): still one
+ *     `POST /purchase-invoice/lines` per line, carrying the FK as `salesOrderLine` (the spec's
+ *     java_qualifier).
  *
  * What this spec locks, per window:
- *   1. The FK of the selected order line reaches the server as `sourceLineId`, and the dead
- *      `cOrderlineId` key is sent nowhere.
- *   2. No per-line `POST /lines` is sent, and the quantity sent is the server's
- *      `pendingQuantity` (2), not ordered − invoiced computed locally (3).
+ *   1. The FK of the selected order line reaches the server under the key that window's
+ *      contract reads, and the dead `cOrderlineId` key is sent nowhere.
+ *   2. sales-invoice only: no per-line `POST /lines` is sent, and the quantity sent is the
+ *      server's `pendingQuantity` (2), not ordered − invoiced computed locally (3).
  *
  * Routing notes
  * -------------
@@ -84,7 +88,7 @@ const WINDOWS = [
     // ui('importFromPurchaseOrder') — "Import from PO" / "Importar desde pedido"
     importButton: /Import from PO|Importar desde pedido/i,
     documentType: { transactionDocument: 'doctype-ap-001', 'transactionDocument$_identifier': 'AP Invoice' },
-    importVia: 'action',
+    importVia: 'linePost',
   },
 ];
 
@@ -355,22 +359,33 @@ for (const win of WINDOWS) {
       await expect(importBtn).toBeEnabled({ timeout: 5_000 });
       await importBtn.click();
 
-      const imports = () => state.actionCalls.filter((c) => c.name === 'importOrderLines');
-      await expect.poll(() => imports().length, { timeout: 10_000 }).toBe(1);
+      if (cfg.importVia === 'action') {
+        const imports = () => state.actionCalls.filter((c) => c.name === 'importOrderLines');
+        await expect.poll(() => imports().length, { timeout: 10_000 }).toBe(1);
 
-      // Pending quantities came from the server, for the expanded order.
-      expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
-        .toContainEqual({ orderId });
+        // Pending quantities came from the server, for the expanded order.
+        expect(state.actionCalls.filter((c) => c.name === 'availableOrderLines').map((c) => c.body))
+          .toContainEqual({ orderId });
 
-      // ONE request: the order, its selected line by FK, the server's pending quantity (2,
-      // not ordered − invoiced = 3), and no global discount to carry (the order has none).
-      expect(imports()[0].body).toEqual({
-        orders: [{ orderId, lines: [{ sourceLineId: orderLine2Id, quantity: 2 }] }],
-        carryGlobalDiscount: false,
-      });
-      // The server builds the line: nothing is POSTed per line any more.
-      expect(state.postBodies).toEqual([]);
-      expect(JSON.stringify(state.actionCalls)).not.toContain('cOrderlineId');
+        // ONE request: the order, its selected line by FK, the server's pending quantity (2,
+        // not ordered − invoiced = 3), and no global discount to carry (the order has none).
+        expect(imports()[0].body).toEqual({
+          orders: [{ orderId, lines: [{ sourceLineId: orderLine2Id, quantity: 2 }] }],
+          carryGlobalDiscount: false,
+        });
+        // The server builds the line: nothing is POSTed per line any more.
+        expect(state.postBodies).toEqual([]);
+        expect(JSON.stringify(state.actionCalls)).not.toContain('cOrderlineId');
+      } else {
+        await expect.poll(() => state.postBodies.length, { timeout: 10_000 }).toBe(1);
+
+        const posted = state.postBodies[0];
+        // The FK the backend actually persists (spec java_qualifier for C_OrderLine_ID).
+        expect(posted.salesOrderLine).toBe(orderLine2Id);
+        // The dead key must not be present at all — NeoFieldFilter would drop it silently,
+        // so sending it "just in case" is indistinguishable from not sending the FK.
+        expect(Object.hasOwn(posted, 'cOrderlineId')).toBe(false);
+      }
     });
   });
 }

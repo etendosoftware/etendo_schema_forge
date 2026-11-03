@@ -17543,6 +17543,7 @@
     "importGlobalDiscountImportedMany": "{count} lines imported · {pct} % global discount applied to the invoice",
     "importGlobalDiscountNotCarriedOne": "{count} line imported · no global discount",
     "importGlobalDiscountNotCarriedMany": "{count} lines imported · no global discount",
+    "importGlobalDiscountPatchFailed": "Lines imported, but the {pct} % global discount could not be applied to the invoice",
     "linesImportedFromShipment": "Lines imported from shipment",
     "importFromReturnShipment": "Import from return",
     "searchReturnShipment": "Search return shipment...",

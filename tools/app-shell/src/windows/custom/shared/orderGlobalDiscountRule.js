@@ -12,7 +12,7 @@
  *  - `invoiceHasLines`: the invoice already has (visible) lines.
  *  - `invoiceStateKnown`: `false` when the invoice header or its lines could not be read. The
  *    invoice % and lines are then unknown, so the outcome is always `none`: nothing is offered and
- *    nothing is carried, because an unread % could be overwritten and unread lines discounted.
+ *    nothing is PATCHed, because an unread % could be overwritten and unread lines discounted.
  *
  * Outcomes (`kind`):
  *  - `none`            — nothing to show (no selection, invoice state unknown, or every order at
@@ -80,4 +80,17 @@ export function resolveOrderGlobalDiscount({ selectedOrders, invoicePct, invoice
  */
 export function isCarryingGlobalDiscount(decision, carryOn) {
   return decision?.kind === 'carry' && !!carryOn;
+}
+
+/**
+ * Whether the invoice header must be PATCHed with the orders' %: only when carrying and the
+ * invoice has no % yet. When the invoice already holds the same %, nothing is written; every
+ * other outcome leaves the header untouched.
+ *
+ * @param {ReturnType<typeof resolveOrderGlobalDiscount>} decision
+ * @param {boolean} carryOn the toggle state
+ * @returns {boolean}
+ */
+export function shouldPatchInvoiceGlobalDiscount(decision, carryOn) {
+  return isCarryingGlobalDiscount(decision, carryOn) && decision.invoicePct === 0;
 }

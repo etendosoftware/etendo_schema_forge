@@ -17523,6 +17523,7 @@
     "importGlobalDiscountImportedMany": "{count} líneas importadas · descuento global del {pct} % aplicado a la factura",
     "importGlobalDiscountNotCarriedOne": "{count} línea importada · sin descuento global",
     "importGlobalDiscountNotCarriedMany": "{count} líneas importadas · sin descuento global",
+    "importGlobalDiscountPatchFailed": "Líneas importadas, pero no se pudo aplicar el descuento global del {pct} % a la factura",
     "linesImportedFromShipment": "Líneas importadas desde envío",
     "importFromReturnShipment": "Importar desde devolución",
     "searchReturnShipment": "Buscar albarán de devolución...",
