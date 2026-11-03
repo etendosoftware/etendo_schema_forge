@@ -16,6 +16,31 @@ Since ETP-5695 the pre-push runs less than CI, and CI runs the rest:
 - **Dependency sync (step 0, `npm ci`):** runs when the branch changed `package.json`/`package-lock.json` vs the target **or** when the installed tree is stale. `scripts/check-node-modules-fresh.js` compares `node_modules/.package-lock.json` (what npm last installed) with `package-lock.json`: a missing `node_modules`, an installed version that differs, or a required locked package that is not installed forces `npm ci`, even when the lockfile did not change vs the target (e.g. after merging `develop`). The check is two JSON reads, so an in-sync tree stays fast.
 - **Sonar locale:** `run-sonar.sh` runs the scanner with `C.UTF-8` (`en_US.UTF-8` where `C.UTF-8` does not exist, i.e. macOS). Without it, a push run with `LANG=C` or `LC_ALL=C` (for example through a shell alias around `git`) aborts the scan with `InvalidPathException` on non-ASCII file names.
 - **Playwright integration specs:** left to CI's full pipeline. `PRE_PUSH_INTEGRATION=1` runs them in the pre-push too, against the backend resolved as described above.
+- **Playwright mocked specs:** only the ones the change can affect, picked from a coverage map of develop (next section). The PR's mini pipeline and the cut run all of them.
+
+## Mocked specs: selection by coverage (ETP-5891)
+
+On every push to develop, `.github/workflows/e2e-coverage-map.yml` runs the mocked suite with browser coverage and publishes the `e2e-coverage-map` artifact: for each app source file, the mocked specs whose tests executed it. When a push calls for the mocked suite, the pre-push takes the map of the newest develop commit at or before where the branch left develop, within the last 20 merges into develop, and `scripts/select-mocked-specs.js` picks the specs:
+
+- the specs that executed a changed file, or declare `@covers` it, or read it;
+- for a file the map lacks (a new file, or one with only top-level code): the specs of its nearest mapped importers;
+- for a changed e2e helper, mock or fixture: the specs that import or read it;
+- when app code changed: the specs in `e2e/mocked-always-run.json`, the specs newer than the map, and the ones the map has only part of (a test failed when it was built).
+
+It runs the whole suite instead when it cannot follow a change: dependencies (a core bump included), the Vite or Playwright configuration, `e2e/quarantine.json`, a locale file that changes or removes a key (one that only adds keys adds nothing), code that reaches nothing mapped, the hooks' own tooling, or a file no check knows. It does the same without a usable map: no `gh`, no login, no network and no kept map, or no map within those 20 merges. `PRE_PUSH_MOCKED_ALL=1` forces the whole suite.
+
+The pre-push prints each spec's reason under "Mocked spec selection". To see it without pushing:
+
+```bash
+node scripts/select-mocked-specs.js --base origin/develop
+```
+
+Downloaded maps are kept under `tmp/e2e-coverage-map/`. Measured over 60 days of develop merges, the pre-push runs on average 85% of the suite; a change to one window or one component of its own runs a few specs instead of all of them.
+
+Two rules keep the map honest, and `scripts/__tests__/mocked-specs-coverage-contract.test.js` checks both in the pre-push and in CI:
+
+- every `*.mocked.spec.js` imports `test` and `expect` from `e2e/tests/helpers/test.js`, never from `@playwright/test`, or its tests record no coverage;
+- a spec that opens pages besides the fixture's `page` (`.newPage()`, `.newContext()`) goes in `e2e/mocked-always-run.json` with its reason, because coverage only records the fixture's page.
 
 `PRE_PUSH_WORKERS` (default: half the logical CPUs) sets the vitest worker processes and caps the mocked Playwright workers at that number, and never above 4. `TEST_WORKERS` (vitest) and `E2E_WORKERS` (Playwright) override each one. Each vitest worker uses about 1.5 cores. Measured on a 10-core machine:
 

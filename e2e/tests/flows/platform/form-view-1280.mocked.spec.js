@@ -6,7 +6,7 @@
 // @covers tools/app-shell/src/windows/custom/product/ProductPriceBar.jsx
 // @covers artifacts/product/decisions.json
 // @covers artifacts/assets/decisions.json
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

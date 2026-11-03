@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx
 // @covers tools/app-shell/src/components/contract-ui/RowQuickActions.jsx
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, installNonAdminCapabilities } from '../../helpers/auth.js';
 
 /**

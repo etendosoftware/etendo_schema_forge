@@ -8,7 +8,7 @@
  * Run: npx playwright test fiscal-monitor-etp3778
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
 
