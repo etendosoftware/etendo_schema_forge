@@ -6,6 +6,7 @@ vi.mock('@/i18n', () => ({
     if (params) return `${key}:${JSON.stringify(params)}`;
     return key;
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 vi.mock('sonner', () => ({
@@ -216,7 +217,7 @@ describe('ImportLinesModal', () => {
 
     // Click on the first document row to expand it
     const docRow = screen.getByText('INV-001');
-    fireEvent.click(docRow.closest('div[style]'));
+    fireEvent.click(docRow.closest('[data-testid="ImportLinesModal__docRow"]'));
 
     await waitFor(() => {
       expect(defaultProps.fetchLines).toHaveBeenCalledWith(
@@ -240,7 +241,7 @@ describe('ImportLinesModal', () => {
       expect(screen.getByText('INV-001')).toBeInTheDocument();
     }, { timeout: 10000 });
 
-    fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+    fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
     await waitFor(() => {
       expect(screen.getByText('product')).toBeInTheDocument();
@@ -259,7 +260,7 @@ describe('ImportLinesModal', () => {
       expect(screen.getByText('INV-001')).toBeInTheDocument();
     }, { timeout: 10000 });
 
-    fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+    fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
     await waitFor(() => {
       expect(screen.getByText('product')).toBeInTheDocument();
@@ -298,7 +299,7 @@ describe('ImportLinesModal', () => {
     }, { timeout: 10000 });
     expect(screen.queryByText('2500.00')).toBeNull();
 
-    fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+    fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
     await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
     expect(screen.getByText('1.234,56')).toBeInTheDocument();
@@ -338,14 +339,13 @@ describe('ImportLinesModal', () => {
 
   it('renders close X button', async () => {
     renderModal();
-    // The X button has text content '\u00d7'
-    const closeBtn = screen.getByText('\u00d7');
+    const closeBtn = screen.getByRole('button', { name: 'close' });
     expect(closeBtn).toBeInTheDocument();
   });
 
   it('calls onClose when X button is clicked', () => {
     const { props } = renderModal();
-    fireEvent.click(screen.getByText('\u00d7'));
+    fireEvent.click(screen.getByRole('button', { name: 'close' }));
     expect(props.onClose).toHaveBeenCalled();
   });
 
@@ -416,7 +416,7 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
       return result;
     }
@@ -534,7 +534,7 @@ describe('ImportLinesModal', () => {
       const onSuccess = vi.fn();
       renderModal({ linesEndpoint: undefined, submitImport, onSuccess, autoSelectOnExpand: true, eagerLoadLines: false });
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument(), { timeout: 10000 });
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
       fireEvent.click(screen.getByText(/importSelected/).closest('button'));
       await waitFor(() => expect(submitImport).toHaveBeenCalledTimes(1));
@@ -571,7 +571,7 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
       return result;
     }
@@ -590,7 +590,7 @@ describe('ImportLinesModal', () => {
 
     it('commits a valid value on blur and updates the line-total preview, without any toast', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+      const qtyInput = screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '3' } });
       fireEvent.blur(qtyInput);
@@ -658,7 +658,7 @@ describe('ImportLinesModal', () => {
 
     it('round-trips a decimal quantity through draft -> commit', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+      const qtyInput = screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       // MaskedAmountInput always displays the CONFIGURED decimal separator (comma in
       // the default es-ES-style config), whichever accepted char (',' or '.') was
@@ -680,7 +680,7 @@ describe('ImportLinesModal', () => {
     // types the comma directly to close the gap on the literal keystroke QA hit.
     it('accepts a LITERAL comma-typed decimal quantity end-to-end (the ETP-5429 reported bug)', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+      const qtyInput = screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '2,5' } });
       expect(qtyInput.value).toBe('2,5');
@@ -705,7 +705,7 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
 
       const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
@@ -754,7 +754,7 @@ describe('ImportLinesModal', () => {
           expect(screen.queryByText('loading')).not.toBeInTheDocument();
           expect(screen.getByText('INV-001')).toBeInTheDocument();
         }, { timeout: 10000 });
-        fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+        fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
         await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
 
         const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
@@ -773,7 +773,7 @@ describe('ImportLinesModal', () => {
           expect(screen.queryByText('loading')).not.toBeInTheDocument();
           expect(screen.getByText('INV-001')).toBeInTheDocument();
         }, { timeout: 10000 });
-        fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+        fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
         await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
 
         const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
@@ -821,7 +821,7 @@ describe('ImportLinesModal', () => {
     it('fetches and displays lines on demand when a document is expanded via its row (loadLines body)', async () => {
       await renderWithLateDocuments();
 
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => {
         expect(defaultProps.fetchLines).toHaveBeenCalledWith(expect.objectContaining({ docId: 'doc-1' }));
@@ -848,7 +848,7 @@ describe('ImportLinesModal', () => {
 
       await renderWithLateDocuments({ fetchLines: pendingFetchLines });
 
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getByText('loadingLines')).toBeInTheDocument());
 
@@ -880,7 +880,7 @@ describe('ImportLinesModal', () => {
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
 
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getByText('noLinesFound')).toBeInTheDocument(), { timeout: 10000 });
     });
@@ -899,30 +899,6 @@ describe('ImportLinesModal', () => {
     });
   });
 
-  describe('document row hover feedback', () => {
-    it('applies a hover background on mouse enter and clears it on mouse leave', async () => {
-      renderModal();
-      // See the comment in the "resilience to a failed eager line fetch" test
-      // above: waiting on "INV-001 present" alone can catch the transient
-      // pre-eager-load render. Require fetchLines to have been called too so
-      // we only proceed once the checkboxes are actually in the DOM.
-      await waitFor(() => {
-        expect(defaultProps.fetchLines).toHaveBeenCalled();
-        expect(screen.getByText('INV-001')).toBeInTheDocument();
-      }, { timeout: 10000 });
-
-      // mouseenter/mouseleave don't bubble, so the target must be the exact row
-      // element the handlers are attached to. That row is the checkbox's direct
-      // parent (unlike the docNo text, which sits two style-bearing divs deeper).
-      const row = screen.getAllByTestId('checkbox')[0].closest('div[style]');
-      fireEvent.mouseEnter(row);
-      expect(row.style.background).toBe('hsl(var(--muted))');
-
-      fireEvent.mouseLeave(row);
-      expect(row.style.background).toBe('transparent');
-    });
-  });
-
   describe('line and doc selection interactions (toggleLine / toggleDoc / getDocCheckState)', () => {
     async function renderExpandedTwoLines() {
       const utils = renderModal();
@@ -931,7 +907,7 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
       return utils;
     }
@@ -939,7 +915,7 @@ describe('ImportLinesModal', () => {
     it('selects a line when its row is clicked and deselects it on a second click (toggleLine add/remove)', async () => {
       await renderExpandedTwoLines();
 
-      const lineRow = screen.getByText('Widget A').closest('div[style]');
+      const lineRow = screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]');
       fireEvent.click(lineRow);
       expect(screen.getByText('selected:{"count":1}')).toBeInTheDocument();
 
@@ -950,8 +926,8 @@ describe('ImportLinesModal', () => {
     it('toggles an individual line via its own checkbox, independent of the row click handler', async () => {
       await renderExpandedTwoLines();
 
-      // checkbox order in the DOM: [doc-1 checkbox, line-1 checkbox, line-2 checkbox, doc-2 checkbox]
-      const lineCheckbox = screen.getAllByTestId('checkbox')[1];
+      // checkbox order in the DOM: [doc-1, doc-1 lines master, line-1, line-2, doc-2]
+      const lineCheckbox = screen.getAllByTestId('checkbox')[2];
       fireEvent.click(lineCheckbox);
       expect(lineCheckbox.checked).toBe(true);
 
@@ -962,10 +938,10 @@ describe('ImportLinesModal', () => {
     it('marks the doc checkbox indeterminate on a partial selection, then checked (and selects all lines) when clicked, then unchecks all on a second click', async () => {
       await renderExpandedTwoLines();
 
-      const [docCheckbox, line1Checkbox, line2Checkbox] = screen.getAllByTestId('checkbox');
+      const [docCheckbox, masterCheckbox, line1Checkbox, line2Checkbox] = screen.getAllByTestId('checkbox');
 
       // Partial selection -> indeterminate (getDocCheckState: count > 0 && count < lines.length)
-      fireEvent.click(screen.getByText('Widget A').closest('div[style]'));
+      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
       expect(docCheckbox.getAttribute('data-indeterminate')).toBe('true');
       expect(docCheckbox.checked).toBe(false);
 
@@ -983,13 +959,32 @@ describe('ImportLinesModal', () => {
       expect(docCheckbox.checked).toBe(false);
     });
 
+    it('mirrors the document state in the inner master checkbox, which toggles every line too', async () => {
+      await renderExpandedTwoLines();
+
+      const [docCheckbox, masterCheckbox, line1Checkbox, line2Checkbox] = screen.getAllByTestId('checkbox');
+      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
+      expect(masterCheckbox.getAttribute('data-indeterminate')).toBe('true');
+
+      fireEvent.click(masterCheckbox);
+      expect(line1Checkbox.checked).toBe(true);
+      expect(line2Checkbox.checked).toBe(true);
+      expect(masterCheckbox.checked).toBe(true);
+      expect(docCheckbox.checked).toBe(true);
+      expect(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]').dataset.selected).toBe('true');
+
+      fireEvent.click(masterCheckbox);
+      expect(line1Checkbox.checked).toBe(false);
+      expect(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]').dataset.selected).toBe('false');
+    });
+
     it('stops click propagation on the quantity input so it never toggles the line selection', async () => {
       await renderExpandedTwoLines();
 
-      const qtyInput = screen.getAllByTestId('checkbox')[1].closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+      const qtyInput = screen.getAllByTestId('checkbox')[2].closest('[data-testid="ImportLinesModal__lineRow"]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
       fireEvent.click(qtyInput);
 
-      const lineCheckbox = screen.getAllByTestId('checkbox')[1];
+      const lineCheckbox = screen.getAllByTestId('checkbox')[2];
       expect(lineCheckbox.checked).toBe(false);
     });
   });
@@ -1012,9 +1007,9 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
-      fireEvent.click(screen.getByText('Widget A').closest('div[style]'));
+      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
       return utils;
     }
 
@@ -1087,9 +1082,9 @@ describe('ImportLinesModal', () => {
         expect(screen.queryByText('loading')).not.toBeInTheDocument();
         expect(screen.getByText('INV-001')).toBeInTheDocument();
       }, { timeout: 10000 });
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
-      fireEvent.click(screen.getByText('Widget A').closest('div[style]'));
+      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
       return utils;
     }
 
@@ -1155,7 +1150,7 @@ describe('ImportLinesModal', () => {
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
       expect(defaultProps.fetchLines).not.toHaveBeenCalled();
 
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(defaultProps.fetchLines).toHaveBeenCalledWith(
         expect.objectContaining({ docId: 'doc-1' }),
       ));
@@ -1171,7 +1166,7 @@ describe('ImportLinesModal', () => {
       renderModal({ filterZeroQty: true, eagerLoadLines: false });
 
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getByText('Pos Widget')).toBeInTheDocument());
       expect(screen.queryByText('Zero Widget')).not.toBeInTheDocument();
@@ -1182,7 +1177,7 @@ describe('ImportLinesModal', () => {
       renderModal({ eagerLoadLines: false });
 
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getByText('Pos Widget')).toBeInTheDocument());
       expect(screen.getByText('Zero Widget')).toBeInTheDocument();
@@ -1195,7 +1190,7 @@ describe('ImportLinesModal', () => {
       renderModal({ autoSelectOnExpand: true, eagerLoadLines: false });
 
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
       // Both lines auto-selected -> footer shows the count.
@@ -1207,7 +1202,7 @@ describe('ImportLinesModal', () => {
       renderModal({ eagerLoadLines: false });
 
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
       // No line selected -> the footer still shows the "nothing selected" prompt,
@@ -1224,7 +1219,7 @@ describe('ImportLinesModal', () => {
       renderModal({ eagerLoadLines: false });
 
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getAllByText('qty')).toHaveLength(1));
       expect(screen.queryByText('returnQty')).not.toBeInTheDocument();
@@ -1235,7 +1230,7 @@ describe('ImportLinesModal', () => {
       renderModal({ eagerLoadLines: false, showAvailableQtyColumn: true, qtyColumnLabelKey: 'returnQty' });
 
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
 
       await waitFor(() => expect(screen.getByText('qty')).toBeInTheDocument());
       expect(screen.getByText('returnQty')).toBeInTheDocument();
@@ -1249,42 +1244,117 @@ describe('ImportLinesModal', () => {
 
   // ETP-5828 QA: checking the first line made the global-discount panel appear above the footer;
   // the vertically centred dialog moved up and the list shrank, so a quick second click landed on
-  // another row. The dialog is now anchored at the top and the panel's height reserved up front.
+  // another row. The dialog now has a fixed size and the notice area is always rendered at a fixed
+  // height (neutral notice while there is nothing to say), so nothing moves when lines are selected.
   describe('layout stays put while selecting', () => {
     const panel = ({ selectedCount }) => (selectedCount > 0
       ? <div data-testid="test-selection-panel">panel</div>
       : null);
 
-    it('anchors the dialog at a fixed top offset instead of centring it vertically', () => {
+    it('gives the dialog a fixed size, centred, whatever its content', () => {
       renderModal();
-      const overlay = screen.getByTestId('ImportLinesModal__overlay');
-      expect(overlay.className).toContain('items-start');
-      expect(overlay.className).not.toContain('items-center');
-      expect(overlay.style.paddingTop).toBe('10vh');
+      const dialog = screen.getByTestId('import-lines-modal');
+      expect(dialog.style.width).toBe('800px');
+      expect(dialog.style.height).toBe('648px');
+      expect(screen.getByTestId('ImportLinesModal__overlay').className).toContain('items-center');
     });
 
-    it('reserves the panel slot before anything is selected and keeps it when the panel appears', async () => {
-      renderModal({ renderSelectionPanel: panel, selectionPanelMinHeight: 64 });
+    it('shows the neutral notice in a fixed-height slot, and swaps it for the panel in the same slot', async () => {
+      renderModal({ renderSelectionPanel: panel });
+      await waitFor(() => expect(defaultProps.fetchLines).toHaveBeenCalled());
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
 
       const slot = screen.getByTestId('ImportLinesModal__selectionPanelSlot');
-      expect(slot.style.minHeight).toBe('64px');
-      expect(slot.style.flexShrink).toBe('0');
-      expect(screen.queryByTestId('test-selection-panel')).toBeNull();
+      const height = slot.style.height;
+      expect(height).toMatch(/^\d+px$/);
+      expect(slot.className).toContain('shrink-0');
+      expect(screen.getByTestId('ImportLinesModal__neutralNotice')).toHaveTextContent('importNoticeTitle');
+      expect(screen.getByTestId('ImportLinesModal__neutralNotice')).toHaveTextContent('importNoticeBody');
 
-      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('Widget A').closest('div[style]'));
+      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
 
       const panelNode = screen.getByTestId('test-selection-panel');
       expect(panelNode.parentElement).toBe(slot);
-      expect(screen.getByTestId('ImportLinesModal__selectionPanelSlot').style.minHeight).toBe('64px');
+      expect(screen.queryByTestId('ImportLinesModal__neutralNotice')).toBeNull();
+      expect(screen.getByTestId('ImportLinesModal__selectionPanelSlot').style.height).toBe(height);
     });
 
-    it('renders no slot at all for a caller without a selection panel (the other import popups)', async () => {
+    it('renders no notice area at all for a caller without a selection panel (the other import popups)', async () => {
       renderModal();
       await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
       expect(screen.queryByTestId('ImportLinesModal__selectionPanelSlot')).toBeNull();
+    });
+  });
+
+  describe('«Seleccionar todo» and the document count (ETP-5828)', () => {
+    async function renderSettled(overrides = {}) {
+      const utils = renderModal(overrides);
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.queryByText('loading')).not.toBeInTheDocument();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
+      return utils;
+    }
+
+    const linesPerDoc = ({ docId }) => Promise.resolve(LINE_ROWS.map(l => ({ ...l, id: `${docId}-${l.id}` })));
+
+    it('selects every importable line of the visible documents, then deselects them', async () => {
+      defaultProps.fetchLines.mockImplementation(({ docId }) => Promise.resolve(docId === 'doc-1'
+        ? [{ ...LINE_ROWS[0], id: 'a1' }, { ...LINE_ROWS[1], id: 'a2', _alreadyImported: true }]
+        : [{ ...LINE_ROWS[0], id: 'b1' }]));
+      const submitImport = vi.fn().mockResolvedValue({ ok: true, count: 2 });
+      await renderSettled({ linesEndpoint: undefined, submitImport });
+
+      const toggle = screen.getByTestId('ImportLinesModal__selectAll');
+      expect(toggle).toHaveTextContent('selectAll');
+      fireEvent.click(toggle);
+      expect(toggle).toHaveTextContent('deselectAll');
+      expect(screen.getByText('selected:{"count":2}')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
+      await waitFor(() => expect(submitImport).toHaveBeenCalled());
+      // The already-imported line is never part of the selection.
+      expect(submitImport.mock.calls[0][0].lines.map(l => l.line.id)).toEqual(['a1', 'b1']);
+
+      fireEvent.click(toggle);
+      expect(screen.getByText('selectLinesToImport')).toBeInTheDocument();
+    });
+
+    it('only acts on the documents the search leaves visible', async () => {
+      defaultProps.fetchLines.mockImplementation(linesPerDoc);
+      await renderSettled();
+      fireEvent.change(screen.getByPlaceholderText('searchOrders'), { target: { value: 'INV-002' } });
+      fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
+      expect(screen.getByText('selected:{"count":2}')).toBeInTheDocument();
+    });
+
+    it('loads and selects the lines of documents not loaded yet (eagerLoadLines off)', async () => {
+      defaultProps.fetchLines.mockImplementation(linesPerDoc);
+      renderModal({ eagerLoadLines: false });
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      expect(defaultProps.fetchLines).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
+      await waitFor(() => expect(screen.getByText('selected:{"count":4}')).toBeInTheDocument());
+      expect(defaultProps.fetchLines).toHaveBeenCalledTimes(2);
+    });
+
+    it('counts DOCUMENTS in the footer and the import button when selectedDocumentsKey is given', async () => {
+      defaultProps.fetchLines.mockImplementation(linesPerDoc);
+      await renderSettled({ selectedDocumentsKey: 'importOrdersSelectedCount', importButtonKey: 'importSelectedOrders' });
+
+      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+      // Two lines of ONE order: «1 pedido(s) seleccionado(s)», «Importar seleccionados (1)».
+      fireEvent.click(screen.getAllByTestId('checkbox')[0]);
+
+      const hint = screen.getByTestId('ImportLinesModal__selectionHint');
+      expect(hint).toHaveTextContent('importOrdersSelectedCount:{"count":1}');
+      expect(hint).toHaveTextContent('importSelectedSuffix');
+      expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelectedOrders:{"count":" (1)"}');
     });
   });
 });

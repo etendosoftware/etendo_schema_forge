@@ -3207,6 +3207,43 @@ fine: the backend computes the rate on create from the reference date whenever i
 / `ETGO_ExchangeRateMissingOnComplete` + params) and are composed in the UI locale by
 `backendErrors.js` — see `docs/i18n-guide.md`, mechanism 3.
 
+### 23. «Import from …» popups — `ImportLinesModal` (ETP-5828 Figma)
+
+`tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` is the ONE shell of every
+«Importar desde …» / «Añadir desde …» popup (orders, shipments, receipts, returns, source
+invoices, in invoices, shipments, receipts and the return windows). It is not a `decisions.json`
+option: a window's `custom/` modal renders it with its own `fetchDocuments` / `fetchLines` /
+`getDocDisplay` and either `submitImport` (one server action, preferred) or
+`linesEndpoint` + `buildLineBody` (one POST per line).
+
+**Layout (Figma «Pop Up Añadir desde pedido», node 2702-6462).** A FIXED 800 × 648 dialog, centred
+(it never resizes or moves); title + business partner; a search box with a
+«Seleccionar todo / Deseleccionar todo» button (`ImportLinesModal__selectAll`, acts on the
+documents the search leaves visible and only on lines that can still be imported); document rows
+with an expand button, a checkbox (indeterminate on a partial selection), number, date, an
+adornment slot and the amount; an expanded document shows a bordered lines table with a master
+checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
+quantity, typed values still validated on blur); the footer has the selection hint and the
+«Cancelar» / primary pills.
+
+**Optional props added by ETP-5828** (all default to the previous behaviour):
+
+| Prop | Effect |
+|---|---|
+| `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
+| `selectedDocumentsKey` | i18n key such as `importOrdersSelectedCount` («{count} pedido(s)»): the footer reads «**N pedido(s)** seleccionado(s)» and the import button counts DOCUMENTS with a selected line instead of lines. |
+| `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
+
+Removed by ETP-5828: `selectionPanelMinHeight` (the notice area now always has its fixed height)
+and `getSelectionHint` (the footer follows the design). Stable test ids: `import-lines-modal`,
+`import-lines-search`, `ImportLinesModal__docRow` / `__lineRow` (with `data-selected`),
+`__linesMasterCheckbox`, `__qtyInput` (the stepper's input), `__selectionHint`, `__import`,
+`__cancel`, `__close`, `__neutralNotice`.
+
+The invoice order import is the reference consumer: `windows/custom/shared/InvoiceOrderImportModal.jsx`
+(one component, `direction="sales"|"purchase"`), with the global-discount notice from
+`useOrderGlobalDiscountImport.jsx`. See `docs/generated-custom-windows/sales-invoice.md`.
+
 ## Decision tree: which option to use?
 
 ```

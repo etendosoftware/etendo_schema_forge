@@ -1,19 +1,24 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { useUI } from '@/i18n';
+import {
+  AlertTriangle, ChevronDown, ChevronRight, CircleCheck, Info, Loader2, Search, SquareCheck, X,
+} from 'lucide-react';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { NumberStepperInput } from '@/components/contract-ui/NumberStepperInput.jsx';
 import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import { cn } from '@/lib/utils';
 
 // A draft is valid when it parses to a finite magnitude in (0, maxQty]. Sign is
 // intentionally ignored — matches the existing Math.abs behavior for negativeQuantity mode.
 // `tooHigh` distinguishes "numeric but over the max" from every other invalid case
 // (empty/non-numeric/zero/negative) so callers can pick the right error message.
 function classifyQtyDraft(raw, maxQty) {
-  if (raw === undefined || raw.trim() === '') return { valid: false, tooHigh: false };
+  if (raw === undefined || raw === null || String(raw).trim() === '') return { valid: false, tooHigh: false };
   const parsed = Number(raw);
   const isNumeric = Number.isFinite(parsed);
   const magnitude = Math.abs(parsed);
@@ -21,16 +26,65 @@ function classifyQtyDraft(raw, maxQty) {
   return { valid: false, tooHigh: isNumeric && magnitude > maxQty };
 }
 
-// The dialog is anchored at a fixed offset from the top of the viewport, never centred: content
-// that changes height while the user works (a document expanded, a selection panel appearing)
-// then grows or shrinks the dialog downwards only, so the rows above stay under the pointer.
-const DIALOG_TOP_OFFSET = '10vh';
-
 // Shows a caller-provided toast ({ message, variant }) and reports whether it did.
 function showCustomToast(custom) {
   if (!custom?.message) return false;
   (custom.variant === 'warning' ? toast.warning : toast.success)(custom.message);
   return true;
+}
+
+// Figma «Pop Up Añadir desde pedido» (ETP-5828). The dialog has a FIXED size and is centred:
+// nothing the user does (expanding a document, selecting lines, a notice appearing) can resize
+// or move it, so the row under the pointer stays where it was. The list is the only part that
+// grows or shrinks, and it scrolls.
+const DIALOG_WIDTH = 800;
+const DIALOG_HEIGHT = 648;
+// The notice area under the list is always rendered at this height (title + two body lines), so
+// a warning replacing the neutral notice never changes the height left to the list.
+const NOTICE_HEIGHT = 104;
+
+const SHADOW_XS = 'shadow-[var(--sf-shadow-xs)]';
+const CONTROL_BORDER = 'border-[hsl(var(--sf-border-input))]';
+const ICON_COLOR = 'text-[hsl(var(--sf-icon-outline-secondary))]';
+
+const PILL_BASE = 'inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium leading-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2';
+
+/**
+ * The notice of an import popup (Figma «Alert»): a left bar, an icon (or a control such as a
+ * switch in its place), a title and a body. `neutral` is the idle «Información de importación»
+ * state and the tone of an informative control; `warning` is an orange advice. It fills the
+ * height its slot gives it, so swapping one notice for another never moves anything.
+ */
+export function ImportNotice({ tone = 'neutral', title, body, control, 'data-testid': dataTestId, role }) {
+  const warning = tone === 'warning';
+  const Icon = warning ? AlertTriangle : Info;
+  return (
+    <div
+      data-testid={dataTestId}
+      data-tone={tone}
+      role={role}
+      className={cn(
+        'flex h-full items-start gap-1 overflow-y-auto rounded-r-lg border-l-2 p-4',
+        warning
+          ? 'border-[var(--status-warning-border)] bg-status-warning text-status-warning-foreground'
+          : cn(CONTROL_BORDER, 'bg-muted text-foreground'),
+      )}
+    >
+      <span className="flex h-6 shrink-0 items-center">
+        {control || (
+          <Icon
+            size={20}
+            aria-hidden="true"
+            className={warning ? 'text-status-warning-foreground' : 'text-[hsl(var(--sf-border-input))]'}
+            data-testid="Icon__b0ad7a" />
+        )}
+      </span>
+      <div className="flex min-w-0 flex-col px-2 text-sm leading-6">
+        <strong className="font-medium">{title}</strong>
+        {body && <p className={warning ? '' : 'text-muted-foreground'}>{body}</p>}
+      </div>
+    </div>
+  );
 }
 
 export default function ImportLinesModal({
@@ -69,10 +123,12 @@ export default function ImportLinesModal({
   initialExtraState,     // caller-owned state kept by the modal (e.g. a toggle), passed back everywhere
   renderDocAdornment,    // (doc, selection) => node shown in the document row, after the date
   getDocTotal,           // ({ doc, lines, total, sharedContext }) => number shown as the row total
-  renderSelectionPanel,  // (selection) => node rendered between the list and the footer
-  selectionPanelMinHeight, // px reserved for that panel even while it renders nothing, so its
-                           // appearance on the first selection does not shrink the list
-  getSelectionHint,      // (selection) => string | null overriding the footer "N selected" text
+  renderSelectionPanel,  // (selection) => node (usually an <ImportNotice>) shown in the fixed notice
+                         // area under the list; null shows the neutral «Información de importación».
+                         // Without this prop there is no notice area at all.
+  selectedDocumentsKey,  // i18n key ("{count} pedido(s)"): the footer and the import button then
+                         // count the DOCUMENTS with a selected line instead of the lines
+  importButtonKey = 'importSelected', // i18n key of the import button, `{count}` = " (N)" or ""
   getSuccessToast,       // ({ count, importedDocIds, afterImportResult, partial, ...selection }) => { message, variant? } | null
                          // `partial` = some line imports failed: the modal shows its own warning and
                          // ALSO shows whatever this returns (e.g. a failed follow-up write).
@@ -81,6 +137,7 @@ export default function ImportLinesModal({
     throw new Error('ImportLinesModal: linesEndpoint prop is required unless submitImport is provided');
   }
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const apiFetch = useApiFetch(base);
   const [documents, setDocuments] = useState([]);
   const [sharedContext, setSharedContext] = useState({});
@@ -96,6 +153,9 @@ export default function ImportLinesModal({
   const [eagerLoadingLines, setEagerLoadingLines] = useState(false);
   const [excludedByCurrency, setExcludedByCurrency] = useState(false);
   const [extraState, setExtraState] = useState(initialExtraState);
+  // Last value the stepper reported per line: a −/+ click reports it through onChange and then
+  // calls onStep in the same tick, before the draft state has re-rendered.
+  const lastQtyInput = useRef({});
 
   useEffect(() => {
     let cancelled = false;
@@ -155,7 +215,7 @@ export default function ImportLinesModal({
   }, [documents, docLines, search]);
 
   // Documents owning at least one selected line, in list order. Recomputed on every selection
-  // change so callers can react live (see `renderSelectionPanel` / `getSelectionHint`).
+  // change so callers can react live (see `renderSelectionPanel`).
   const selection = useMemo(() => {
     const selectedDocuments = documents.filter(d => (docLines[d.id] || []).some(l => selected.has(l.id)));
     return {
@@ -169,7 +229,20 @@ export default function ImportLinesModal({
     };
   }, [documents, docLines, selected, sharedContext, extraState]);
 
-  const loadLines = async (docId) => {
+  // Only a line that can still be imported is ever selected (by its row, its document, the
+  // inner master checkbox or «Seleccionar todo»).
+  const selectableIdsOf = (lines) => (lines || []).filter(l => !l._alreadyImported).map(l => l.id);
+
+  const addToSelection = (ids) => {
+    if (ids.length === 0) return;
+    setSelected(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
+  };
+
+  const removeFromSelection = (ids) => {
+    setSelected(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+  };
+
+  const loadLines = async (docId, { select = false } = {}) => {
     if (docLines[docId] || loadingLines.has(docId)) return;
     setLoadingLines(prev => { const n = new Set(prev); n.add(docId); return n; });
     try {
@@ -179,9 +252,7 @@ export default function ImportLinesModal({
       const qtyDefaults = {};
       enrichedLines.forEach(l => { qtyDefaults[l.id] = l._maxQty || 0; });
       setLineQuantities(prev => ({ ...prev, ...qtyDefaults }));
-      if (autoSelectOnExpand) {
-        setSelected(prev => { const n = new Set(prev); enrichedLines.forEach(l => n.add(l.id)); return n; });
-      }
+      if (autoSelectOnExpand || select) addToSelection(selectableIdsOf(enrichedLines));
     } catch { /* silent */ } finally { setLoadingLines(prev => { const n = new Set(prev); n.delete(docId); return n; }); }
   };
 
@@ -204,22 +275,32 @@ export default function ImportLinesModal({
       loadLines(docId);
       return;
     }
-    const lineIds = lines.map(l => l.id);
-    const allSelected = lineIds.every(id => selected.has(id));
-    setSelected(prev => {
-      const n = new Set(prev);
-      if (allSelected) { lineIds.forEach(id => n.delete(id)); } else { lineIds.forEach(id => n.add(id)); }
-      return n;
-    });
+    const lineIds = selectableIdsOf(lines);
+    if (lineIds.every(id => selected.has(id))) removeFromSelection(lineIds);
+    else addToSelection(lineIds);
   };
 
   const getDocCheckState = (docId) => {
-    const lines = docLines[docId] || [];
-    if (lines.length === 0) return { checked: false, indeterminate: false };
-    const count = lines.filter(l => selected.has(l.id)).length;
+    const lineIds = selectableIdsOf(docLines[docId]);
+    if (lineIds.length === 0) return { checked: false, indeterminate: false };
+    const count = lineIds.filter(id => selected.has(id)).length;
     if (count === 0) return { checked: false, indeterminate: false };
-    if (count === lines.length) return { checked: true, indeterminate: false };
+    if (count === lineIds.length) return { checked: true, indeterminate: false };
     return { checked: false, indeterminate: true };
+  };
+
+  // «Seleccionar todo» acts on the documents the search leaves visible. A document whose lines
+  // are not loaded yet (eagerLoadLines off) is loaded and selected in one go.
+  const visibleSelectable = filtered.flatMap(d => selectableIdsOf(docLines[d.id]));
+  const allVisibleLoaded = filtered.every(d => docLines[d.id]);
+  const allVisibleSelected = allVisibleLoaded && visibleSelectable.length > 0
+    && visibleSelectable.every(id => selected.has(id));
+  const selectAllDisabled = filtered.length === 0 || (allVisibleLoaded && visibleSelectable.length === 0);
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) { removeFromSelection(visibleSelectable); return; }
+    addToSelection(visibleSelectable);
+    filtered.filter(d => !docLines[d.id]).forEach(d => loadLines(d.id, { select: true }));
   };
 
   const collectSelectedLines = () => {
@@ -309,245 +390,384 @@ export default function ImportLinesModal({
     } catch (err) { toast.error(err.message || 'Failed to import'); } finally { setImporting(false); }
   };
 
-  const fmtDate = (d) => {
-    if (!d) return '-';
-    const [year, month, day] = String(d).slice(0, 10).split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  // Validates a typed (or stepped) quantity and keeps it, or reverts to the last kept one.
+  const commitQty = (line, raw) => {
+    const maxQty = line._maxQty || 0;
+    const check = classifyQtyDraft(raw, maxQty);
+    if (check.valid) {
+      setLineQuantities(prev => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
+    } else if (check.tooHigh) {
+      toast.error(ui('qtyMaxAllowed', { max: maxQty }));
+    } else {
+      toast.error(ui('qtyMustBePositive'));
+    }
+    delete lastQtyInput.current[line.id];
+    setQtyDrafts(prev => { const n = { ...prev }; delete n[line.id]; return n; });
   };
 
-  return createPortal(
-    <div onClick={onClose} className="fixed inset-0 z-50 flex items-start justify-center bg-foreground/30" style={{ paddingTop: DIALOG_TOP_OFFSET }} data-testid="ImportLinesModal__overlay">
-      <div onClick={e => e.stopPropagation()} style={{ width: 580, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))' }}>
+  const fmtDate = (d) => (d
+    ? formatCalendarDate(d, locale || 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '-');
 
-        <div style={{ padding: '14px 16px', borderBottom: '2px solid hsl(var(--border-subtle))' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui(titleKey)}</span>
-            <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
-          </div>
-          {bpName && <div style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>{bpName}</div>}
+  const countDocuments = !!selectedDocumentsKey;
+  const selectionSize = countDocuments ? selection.selectedDocuments.length : selected.size;
+  const importDisabled = selected.size === 0 || importing;
+
+  const renderFooterHint = () => {
+    if (selected.size === 0) return ui('selectLinesToImport');
+    const text = countDocuments
+      ? (
+        <>
+          <strong className="font-semibold">{ui(selectedDocumentsKey, { count: selectionSize })}</strong>
+          {' '}{ui('importSelectedSuffix')}
+        </>
+      )
+      : ui('selected', { count: selected.size });
+    return (
+      <>
+        <CircleCheck size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
+        <span>{text}</span>
+      </>
+    );
+  };
+
+  const renderListState = (message, { spinner = false, testId } = {}) => (
+    <div
+      data-testid={testId}
+      className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground"
+    >
+      {spinner
+        ? <Loader2 size={20} aria-hidden="true" className={cn('animate-spin', ICON_COLOR)} data-testid="Loader2__b0ad7a" />
+        : <Search size={20} aria-hidden="true" className={ICON_COLOR} data-testid="Search__b0ad7a" />}
+      <p>{message}</p>
+    </div>
+  );
+
+  const renderList = () => {
+    if (loading || eagerLoadingLines) {
+      return renderListState(ui('loading'), { spinner: true, testId: 'ImportLinesModal__loading' });
+    }
+    if (filtered.length === 0) {
+      let msg;
+      if (documents.length === 0) {
+        msg = (excludedByCurrency && noCurrencyMatchMessageKey) ? ui(noCurrencyMatchMessageKey) : ui(emptyMessageKey);
+      } else if (!search.trim() && allImportedMessageKey) {
+        msg = ui(allImportedMessageKey);
+      } else {
+        msg = ui(noSearchResultsKey);
+      }
+      return renderListState(msg, { testId: 'ImportLinesModal__empty' });
+    }
+    return filtered.map(renderDocument);
+  };
+
+  const renderQtyStepper = (line, { imported, displayQty, maxQty, qtyEdited }) => {
+    const draft = qtyDrafts[line.id];
+    const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
+    // Bounds in DISPLAY space: the stepper shows a negative number when negativeQuantity is on.
+    const low = Math.min(1, maxQty);
+    const bounds = negativeQuantity ? { min: -maxQty, max: -low } : { min: low, max: maxQty };
+    return (
+      <span onClick={e => e.stopPropagation()} className="block w-[150px] shrink-0">
+        <NumberStepperInput
+          id={`ImportLinesModal-qty-${line.id}`}
+          value={displayQty}
+          min={bounds.min}
+          max={bounds.max}
+          disabled={imported}
+          onChange={raw => {
+            lastQtyInput.current[line.id] = raw;
+            setQtyDrafts(prev => ({ ...prev, [line.id]: raw }));
+          }}
+          onCommit={raw => commitQty(line, raw)}
+          onStep={() => commitQty(line, lastQtyInput.current[line.id])}
+          className={cn(
+            CONTROL_BORDER, SHADOW_XS,
+            draftInvalid && 'border-destructive bg-destructive/10',
+            !draftInvalid && qtyEdited && 'border-[var(--status-warning-border)] bg-status-warning',
+          )}
+          data-testid="ImportLinesModal__qtyInput" />
+      </span>
+    );
+  };
+
+  const renderLine = (line, docId) => {
+    const imported = line._alreadyImported;
+    const lineSelected = !imported && selected.has(line.id);
+    const maxQty = line._maxQty || 0;
+    const currentQty = lineQuantities[line.id] ?? maxQty;
+    const qtyEdited = currentQty !== maxQty;
+    const unitPrice = line._unitPrice || null;
+    // negativeQuantity is display-only: the stepper's internal state (currentQty) always stays a
+    // positive magnitude for validation/clamping — only what's shown to the user (and the amount
+    // preview derived from it) gets the sign flip. buildLineBody still receives the plain positive
+    // qty and is responsible for negating it before persisting (see ImportFromSourceInvoiceModal).
+    const displayQty = negativeQuantity ? -currentQty : currentQty;
+    const lineTotal = unitPrice != null ? unitPrice * displayQty : null;
+    return (
+      <div
+        key={line.id}
+        data-testid="ImportLinesModal__lineRow"
+        data-line-id={line.id}
+        data-doc-id={docId}
+        data-selected={lineSelected ? 'true' : 'false'}
+        onClick={() => !imported && toggleLine(line.id)}
+        className={cn(
+          'flex h-16 items-center border-t border-border-subtle text-sm',
+          imported ? 'cursor-default opacity-40' : 'cursor-pointer',
+          lineSelected && 'bg-muted',
+        )}
+      >
+        <span className="flex w-8 shrink-0 justify-center pl-2">
+          <Checkbox
+            checked={lineSelected}
+            disabled={imported}
+            onClick={e => e.stopPropagation()}
+            onChange={() => !imported && toggleLine(line.id)}
+            className="shrink-0"
+            data-testid="Checkbox__5345ae" />
+        </span>
+        <span className={cn('min-w-0 px-3', showPriceColumns ? 'w-[176px] shrink-0' : 'flex-1')}>
+          <span className="block truncate font-semibold text-foreground">{line._productName}</span>
+          {imported && (
+            <span className="block truncate text-xs text-muted-foreground">
+              {line._inDraftShipments?.length ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}` : ui('alreadyImported')}
+            </span>
+          )}
+        </span>
+        {showAvailableQtyColumn && (
+          <span className="w-[90px] shrink-0 px-3 text-right tabular-nums text-muted-foreground">
+            {formatPlainDecimal(maxQty)}
+          </span>
+        )}
+        <span className="flex w-[174px] shrink-0 px-3">
+          {renderQtyStepper(line, { imported, displayQty, maxQty, qtyEdited })}
+        </span>
+        {showPriceColumns && (
+          <span className="min-w-0 flex-1 px-3 text-right tabular-nums tracking-[-0.01em] text-foreground">
+            {unitPrice ? formatCurrency(undefined, unitPrice) : '-'}
+          </span>
+        )}
+        {showPriceColumns && (
+          <span className="min-w-0 flex-1 px-3 text-right tabular-nums tracking-[-0.01em] text-foreground">
+            {lineTotal ? formatCurrency(undefined, lineTotal) : '-'}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderLinesTable = (doc, lines, checkState) => {
+    if (loadingLines.has(doc.id)) {
+      return <div className="py-2 text-sm text-muted-foreground">{ui('loadingLines')}</div>;
+    }
+    if (lines.length === 0) {
+      return <div className="py-2 text-sm text-muted-foreground">{ui('noLinesFound')}</div>;
+    }
+    const noneSelectable = selectableIdsOf(lines).length === 0;
+    return (
+      <div className={cn('overflow-hidden rounded-lg border border-border-subtle bg-card', SHADOW_XS)}>
+        <div className="flex h-10 items-center text-xs font-semibold leading-4 text-foreground">
+          <span className="flex w-8 shrink-0 justify-center pl-2">
+            <Checkbox
+              checked={checkState.checked}
+              indeterminate={checkState.indeterminate}
+              disabled={noneSelectable}
+              onChange={() => toggleDoc(doc.id)}
+              aria-label={ui('selectAll')}
+              className="shrink-0"
+              data-testid="ImportLinesModal__linesMasterCheckbox" />
+          </span>
+          <span className={cn('px-3', showPriceColumns ? 'w-[176px] shrink-0' : 'flex-1')}>{ui('product')}</span>
+          {showAvailableQtyColumn && <span className="w-[90px] shrink-0 px-3 text-right">{ui('qty')}</span>}
+          <span className="w-[174px] shrink-0 px-3">{ui(qtyColumnLabelKey)}</span>
+          {showPriceColumns && <span className="flex-1 px-3 text-right">{ui('price')}</span>}
+          {showPriceColumns && <span className="flex-1 px-3 text-right">{ui('amount')}</span>}
         </div>
+        {lines.map(line => renderLine(line, doc.id))}
+      </div>
+    );
+  };
 
-        <div style={{ padding: '10px 16px 0' }}>
-          <input
-            data-testid="import-lines-search"
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={ui(searchPlaceholderKey)}
-            style={{ width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))' }}
-          />
+  function renderDocument(doc) {
+    const isExpanded = expanded.has(doc.id);
+    const lines = docLines[doc.id] || [];
+    const checkState = getDocCheckState(doc.id);
+    const hasAnySelected = checkState.checked || checkState.indeterminate;
+    const display = getDocDisplay(doc);
+    const docTotalSign = negativeQuantity ? -1 : 1;
+    const baseDocTotal = lines.length > 0
+      ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0) * docTotalSign
+      : null;
+    const docTotal = (baseDocTotal != null && getDocTotal)
+      ? getDocTotal({ doc, lines, total: baseDocTotal, sharedContext })
+      : baseDocTotal;
+    const ExpandIcon = isExpanded ? ChevronDown : ChevronRight;
+    return (
+      <div key={doc.id} data-testid="ImportLinesModal__document" data-doc-id={doc.id}>
+        <div
+          data-testid="ImportLinesModal__docRow"
+          data-selected={hasAnySelected ? 'true' : 'false'}
+          data-expanded={isExpanded ? 'true' : 'false'}
+          onClick={() => toggleExpand(doc.id)}
+          className={cn(
+            'relative flex h-10 cursor-pointer items-center border-b border-border-subtle text-sm text-foreground transition-[background-color,box-shadow]',
+            hasAnySelected ? 'bg-muted' : 'hover:z-[1] hover:bg-card hover:shadow-lg',
+          )}
+        >
+          <span className="flex w-10 shrink-0 justify-center px-2">
+            <button
+              type="button"
+              aria-expanded={isExpanded}
+              aria-label={ui(isExpanded ? 'collapse' : 'expand')}
+              onClick={e => { e.stopPropagation(); toggleExpand(doc.id); }}
+              data-testid="ImportLinesModal__expand"
+              className={cn('flex h-6 w-6 items-center justify-center rounded-full border bg-card', CONTROL_BORDER, SHADOW_XS, ICON_COLOR)}
+            >
+              <ExpandIcon size={16} aria-hidden="true" data-testid="ExpandIcon__b0ad7a" />
+            </button>
+          </span>
+          <span className="flex w-6 shrink-0 justify-center">
+            <Checkbox
+              checked={checkState.checked}
+              indeterminate={checkState.indeterminate}
+              onClick={e => e.stopPropagation()}
+              onChange={() => toggleDoc(doc.id)}
+              className="shrink-0"
+              data-testid="Checkbox__5345ae" />
+          </span>
+          <span className="w-[124px] shrink-0 truncate px-3 font-semibold">{display.docNo}</span>
+          <span className="w-[112px] shrink-0 truncate px-3">{fmtDate(display.date)}</span>
+          <span className="flex w-[172px] shrink-0 items-center px-3">{renderDocAdornment?.(doc, selection)}</span>
+          <span className="min-w-0 flex-1 truncate pl-3 pr-14 text-right tabular-nums">
+            {display.secondary || (docTotal != null ? formatCurrency(undefined, docTotal) : '')}
+          </span>
         </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
-          {(() => {
-            if (loading || eagerLoadingLines) {
-              return <p style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
-            }
-            if (filtered.length === 0) {
-              let msg;
-              if (documents.length === 0) {
-                msg = (excludedByCurrency && noCurrencyMatchMessageKey) ? ui(noCurrencyMatchMessageKey) : ui(emptyMessageKey);
-              } else if (!search.trim() && allImportedMessageKey) {
-                msg = ui(allImportedMessageKey);
-              } else {
-                msg = ui(noSearchResultsKey);
-              }
-              return (
-                <p style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', padding: '24px 0', textAlign: 'center' }}>{msg}</p>
-              );
-            }
-            return <>{filtered.map(doc => {
-              const isExpanded = expanded.has(doc.id);
-              const isLoadingLns = loadingLines.has(doc.id);
-              const lines = docLines[doc.id] || [];
-              const checkState = getDocCheckState(doc.id);
-              const hasAnySelected = checkState.checked || checkState.indeterminate;
-              const display = getDocDisplay(doc);
-              const docTotalSign = negativeQuantity ? -1 : 1;
-              const baseDocTotal = lines.length > 0
-                ? lines.reduce((sum, l) => sum + (l._lineNetAmount || 0), 0) * docTotalSign
-                : null;
-              const docTotal = (baseDocTotal != null && getDocTotal)
-                ? getDocTotal({ doc, lines, total: baseDocTotal, sharedContext })
-                : baseDocTotal;
-              return (
-                <div key={doc.id} style={{ borderLeft: (isExpanded || hasAnySelected) ? '3px solid hsl(var(--foreground))' : '3px solid transparent' }}>
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderBottom: '0.5px solid hsl(var(--muted))', cursor: 'pointer' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--muted))'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                    onClick={() => toggleExpand(doc.id)}
-                  >
-                    <span style={{ fontSize: 11, color: 'hsl(var(--text-disabled))', width: 16, textAlign: 'center', transition: 'transform 0.15s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}>▶</span>
-                    <Checkbox
-                      checked={checkState.checked}
-                      indeterminate={checkState.indeterminate}
-                      onClick={e => e.stopPropagation()}
-                      onChange={() => toggleDoc(doc.id)}
-                      className="mx-2 shrink-0"
-                      data-testid="Checkbox__5345ae" />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{display.docNo}</span>
-                        <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtDate(display.date)}</span>
-                        {renderDocAdornment?.(doc, selection)}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', fontVariantNumeric: 'tabular-nums', flexShrink: 0, marginLeft: 8 }}>
-                      {display.secondary || (docTotal != null ? formatCurrency(undefined, docTotal) : '')}
-                    </span>
-                  </div>
-                  {isExpanded && (
-                    <div style={{ background: 'var(--color-background-secondary, hsl(var(--muted)))' }}>
-                      {(() => {
-                        if (isLoadingLns) {
-                          return <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: 'hsl(var(--text-disabled))' }}>{ui('loadingLines')}</div>;
-                        }
-                        if (lines.length === 0) {
-                          return <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: 'hsl(var(--text-disabled))' }}>{ui('noLinesFound')}</div>;
-                        }
-                        return (
-                          <>
-                            <div style={{ display: 'flex', padding: '4px 12px 4px 48px', fontSize: 11, fontWeight: 600, color: 'hsl(var(--text-disabled))', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
-                              <span style={{ flex: 1 }}>{ui('product')}</span>
-                              {showAvailableQtyColumn && <span style={{ width: 90, textAlign: 'right' }}>{ui('qty')}</span>}
-                              <span style={{ width: showAvailableQtyColumn ? 90 : 70, textAlign: 'right' }}>{ui(qtyColumnLabelKey)}</span>
-                              {showPriceColumns && <span style={{ width: 80, textAlign: 'right' }}>{ui('price')}</span>}
-                              {showPriceColumns && <span style={{ width: 80, textAlign: 'right' }}>{ui('amount')}</span>}
-                            </div>
-                            {lines.map(line => {
-                              const imported = line._alreadyImported;
-                              const lineSelected = !imported && selected.has(line.id);
-                              const maxQty = line._maxQty || 0;
-                              const currentQty = lineQuantities[line.id] ?? maxQty;
-                              const qtyEdited = currentQty !== maxQty;
-                              const unitPrice = line._unitPrice || null;
-                              // negativeQuantity is display-only: the stepper's internal state
-                              // (currentQty) always stays a positive magnitude for validation/
-                              // clamping — only what's shown to the user (and the amount
-                              // preview derived from it) gets the sign flip. buildLineBody
-                              // still receives the plain positive qty and is responsible for
-                              // negating it before persisting (see ImportFromSourceInvoiceModal).
-                              const displayQty = negativeQuantity ? -currentQty : currentQty;
-                              const lineTotal = unitPrice != null ? unitPrice * displayQty : null;
-                              return (
-                                <div
-                                  key={line.id}
-                                  onClick={() => !imported && toggleLine(line.id)}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', padding: '6px 12px 6px 48px', borderBottom: '0.5px solid hsl(var(--muted))',
-                                    cursor: imported ? 'default' : 'pointer',
-                                    background: lineSelected ? 'hsl(var(--muted))' : 'transparent',
-                                    opacity: imported ? 0.4 : 1,
-                                  }}
-                                >
-                                  <Checkbox
-                                    checked={lineSelected}
-                                    disabled={imported}
-                                    onClick={e => e.stopPropagation()}
-                                    onChange={() => !imported && toggleLine(line.id)}
-                                    className="mr-2 shrink-0"
-                                    data-testid="Checkbox__5345ae" />
-                                  <span style={{ fontSize: 13, color: imported ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: lineSelected ? 500 : 400 }}>
-                                    {line._productName}{imported && <span style={{ fontSize: 11, marginLeft: 6, color: 'hsl(var(--text-disabled))' }}>{line._inDraftShipments?.length ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}` : ui('alreadyImported')}</span>}
-                                  </span>
-                                  {showAvailableQtyColumn && (
-                                    <span style={{ width: 90, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
-                                      {formatPlainDecimal(maxQty)}
-                                    </span>
-                                  )}
-                                  <span style={{ width: showAvailableQtyColumn ? 90 : 70, flexShrink: 0, textAlign: 'right' }}>
-                                    {(() => {
-                                      const draft = qtyDrafts[line.id];
-                                      const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
-                                      let borderColor;
-                                      let backgroundColor;
-                                      if (draftInvalid) {
-                                        borderColor = '1px solid hsl(var(--destructive))';
-                                        backgroundColor = 'hsl(var(--destructive) / 0.08)';
-                                      } else if (qtyEdited) {
-                                        borderColor = '1px solid var(--color-border-warning, var(--status-warning-fg))';
-                                        backgroundColor = 'var(--color-background-warning, var(--status-warning-bg))';
-                                      } else {
-                                        borderColor = '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))';
-                                        backgroundColor = 'hsl(var(--card))';
-                                      }
-                                      return (
-                                        <span
-                                          onClick={e => e.stopPropagation()}
-                                          style={{
-                                            display: 'inline-block', width: 60, borderRadius: 4,
-                                            border: borderColor, background: backgroundColor,
-                                          }}>
-                                          <MaskedAmountInput
-                                            bare
-                                            grouping={false}
-                                            value={displayQty}
-                                            onChange={raw => setQtyDrafts(prev => ({ ...prev, [line.id]: raw }))}
-                                            onCommit={(_parsed, raw) => {
-                                              const check = classifyQtyDraft(raw, maxQty);
-                                              if (check.valid) {
-                                                setLineQuantities(prev => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
-                                              } else if (check.tooHigh) {
-                                                toast.error(ui('qtyMaxAllowed', { max: maxQty }));
-                                              } else {
-                                                toast.error(ui('qtyMustBePositive'));
-                                              }
-                                              setQtyDrafts(prev => { const n = { ...prev }; delete n[line.id]; return n; });
-                                            }}
-                                            className="w-full bg-transparent border-0 outline-none text-xs px-1 py-0.5"
-                                            data-testid="ImportLinesModal__qtyInput" />
-                                        </span>
-                                      );
-                                    })()}
-                                  </span>
-                                  {showPriceColumns && (
-                                    <span style={{ width: 80, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
-                                      {unitPrice ? formatCurrency(undefined, unitPrice) : '-'}
-                                    </span>
-                                  )}
-                                  {showPriceColumns && (
-                                    <span style={{ width: 80, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
-                                      {lineTotal ? formatCurrency(undefined, lineTotal) : '-'}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              );
-            })}</>;
-          })()}
-        </div>
-
-        {renderSelectionPanel && (
+        {isExpanded && (
           <div
-            data-testid="ImportLinesModal__selectionPanelSlot"
-            // grid: the panel stretches to fill the reserved height instead of leaving a strip
-            style={{ display: 'grid', flexShrink: 0, minHeight: selectionPanelMinHeight || undefined }}
+            data-testid="ImportLinesModal__docLines"
+            className={cn('px-11 pb-6 pt-3', hasAnySelected ? 'bg-muted' : 'bg-card')}
           >
-            {!loading && !eagerLoadingLines && renderSelectionPanel(selection)}
+            {renderLinesTable(doc, lines, checkState)}
           </div>
         )}
+      </div>
+    );
+  }
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))', padding: '10px 16px' }}>
-          <span style={{ fontSize: 12, color: selected.size > 0 ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: selected.size > 0 ? 500 : 400 }}>
-            {selected.size > 0
-              ? (getSelectionHint?.(selection) || ui('selected', { count: selected.size }))
-              : ui('selectLinesToImport')}
+  return createPortal(
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 p-4"
+      data-testid="ImportLinesModal__overlay"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={ui(titleKey)}
+        onClick={e => e.stopPropagation()}
+        data-testid="import-lines-modal"
+        className="relative flex flex-col gap-2 overflow-hidden rounded-lg bg-card py-2 text-foreground shadow-[var(--sf-shadow-overlay)]"
+        style={{
+          width: DIALOG_WIDTH, height: DIALOG_HEIGHT,
+          maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={ui('close')}
+          data-testid="ImportLinesModal__close"
+          className={cn('absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted', ICON_COLOR)}
+        >
+          <X size={20} aria-hidden="true" data-testid="X__b0ad7a" />
+        </button>
+
+        <div className="flex shrink-0 flex-col gap-0.5 py-3 pl-7 pr-12">
+          <span className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-xl font-semibold leading-7 tracking-[-0.005em] text-foreground">
+            {ui(titleKey)}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}>{ui('cancel')}</button>
+          <span className="min-h-4 truncate text-xs leading-4 text-foreground">{bpName}</span>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-7 pb-3">
+          <div className="flex h-10 shrink-0 items-center gap-3">
+            <label className="relative flex h-10 min-w-0 flex-1 items-center">
+              <Search
+                size={20}
+                aria-hidden="true"
+                className={cn('pointer-events-none absolute left-2', ICON_COLOR)}
+                data-testid="Search__b0ad7a" />
+              <input
+                data-testid="import-lines-search"
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={ui(searchPlaceholderKey)}
+                aria-label={ui(searchPlaceholderKey)}
+                className={cn(
+                  'h-10 w-full rounded-lg border bg-card py-2 pl-9 pr-2 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-focus-ring',
+                  CONTROL_BORDER, SHADOW_XS,
+                )}
+              />
+            </label>
             <button
-              type="button" onClick={handleImport} disabled={selected.size === 0 || importing}
-              style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', cursor: (selected.size === 0 || importing) ? 'not-allowed' : 'pointer', opacity: (selected.size === 0 || importing) ? 0.4 : 1 }}
+              type="button"
+              onClick={toggleSelectAll}
+              disabled={selectAllDisabled || loading || eagerLoadingLines}
+              data-testid="ImportLinesModal__selectAll"
+              className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium leading-6 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
             >
-              {importing ? ui('importing') : ui('importSelected', { count: selected.size > 0 ? ` (${selected.size})` : '' })}
+              <SquareCheck size={20} aria-hidden="true" className={ICON_COLOR} data-testid="SquareCheck__b0ad7a" />
+              {ui(allVisibleSelected ? 'deselectAll' : 'selectAll')}
+            </button>
+          </div>
+
+          <div data-testid="ImportLinesModal__list" className="min-h-0 flex-1 overflow-y-auto rounded-lg">
+            {renderList()}
+          </div>
+
+          {renderSelectionPanel && (
+            <div
+              data-testid="ImportLinesModal__selectionPanelSlot"
+              className="shrink-0 pt-3"
+              style={{ height: NOTICE_HEIGHT + 12 }}
+            >
+              {(!loading && !eagerLoadingLines && renderSelectionPanel(selection)) || (
+                <ImportNotice
+                  tone="neutral"
+                  title={ui('importNoticeTitle')}
+                  body={ui('importNoticeBody')}
+                  data-testid="ImportLinesModal__neutralNotice" />
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex h-16 shrink-0 items-center justify-between gap-3 px-7 py-3">
+          <span
+            data-testid="ImportLinesModal__selectionHint"
+            className="flex min-w-0 items-center gap-1 text-sm leading-5 text-status-neutral-foreground"
+          >
+            {renderFooterHint()}
+          </span>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              data-testid="ImportLinesModal__cancel"
+              className={cn(PILL_BASE, 'border bg-card text-foreground hover:bg-muted', CONTROL_BORDER, SHADOW_XS)}
+            >
+              {ui('cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={importDisabled}
+              data-testid="ImportLinesModal__import"
+              className={cn(PILL_BASE, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/40')}
+            >
+              {importing ? ui('importing') : ui(importButtonKey, { count: selectionSize > 0 ? ` (${selectionSize})` : '' })}
             </button>
           </div>
         </div>

@@ -1,8 +1,10 @@
 // @covers tools/app-shell/src/windows/custom/shared/useOrderGlobalDiscountImport.jsx
+// @covers tools/app-shell/src/windows/custom/shared/InvoiceOrderImportModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 const mockApiFetch = vi.fn();
@@ -28,14 +30,13 @@ vi.mock('@/components/ui/checkbox', () => ({
 import { render, renderHook, screen, fireEvent, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import ImportLinesModal from '@/components/contract-ui/ImportLinesModal.jsx';
 import useOrderGlobalDiscountImport from '../useOrderGlobalDiscountImport.jsx';
+import InvoiceOrderImportModal from '../InvoiceOrderImportModal.jsx';
 
-const HEADER_ENDPOINT = 'sales-invoice/header';
 const BASE = '/sws/neo';
 
 function hookProps() {
-  return renderHook(() => useOrderGlobalDiscountImport({ headerEndpoint: HEADER_ENDPOINT })).result.current;
+  return renderHook(() => useOrderGlobalDiscountImport()).result.current;
 }
 
 /**
@@ -172,103 +173,8 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
   });
 });
 
-describe('useOrderGlobalDiscountImport — footer hint', () => {
-  it.each([
-    { name: 'carrying, one line', sel: { orders: [{ id: 'SO-A', pct: 10 }], selectedCount: 1 }, expected: 'importGlobalDiscountSelectedOne:{"count":1,"pct":"10"}' },
-    { name: 'carrying, many lines', sel: { orders: [{ id: 'SO-A', pct: 10 }], selectedCount: 3 }, expected: 'importGlobalDiscountSelectedMany:{"count":3,"pct":"10"}' },
-    { name: 'toggle off', sel: { orders: [{ id: 'SO-A', pct: 10 }], carryOn: false }, expected: null },
-    { name: 'warning', sel: { orders: [{ id: 'SO-A', pct: 10 }], invoiceHasLines: true }, expected: null },
-  ])('$name → $expected', ({ sel, expected }) => {
-    expect(hookProps().getSelectionHint(selection(sel))).toBe(expected);
-  });
-});
-
-describe('useOrderGlobalDiscountImport — afterImport header PATCH', () => {
-  const ORDERS = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }];
-
-  function afterImportArgs({ selected, imported, invoicePct = null, invoiceHasLines = false, invoiceStateKnown = true, carryOn = true }) {
-    const sel = selection({ orders: ORDERS, invoicePct, invoiceHasLines, invoiceStateKnown, carryOn });
-    return {
-      documents: sel.documents,
-      sharedContext: sel.sharedContext,
-      selectedDocIds: new Set(selected),
-      importedDocIds: new Set(imported),
-      extraState: sel.extraState,
-      base: BASE,
-      invoiceId: 'inv-1',
-    };
-  }
-
-  it.each([
-    { name: 'toggle off', args: { selected: ['SO-A'], imported: ['SO-A'], carryOn: false }, result: { carried: false } },
-    { name: 'invoice already at the same %', args: { selected: ['SO-A'], imported: ['SO-A'], invoicePct: 10 }, result: { carried: true, pct: 10 } },
-    { name: 'invoice-has-lines warning', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceHasLines: true }, result: { carried: false } },
-    { name: 'mixed selection whose 0 % order failed to import (B1)', args: { selected: ['SO-A', 'SO-B'], imported: ['SO-A'] }, result: { carried: false } },
-    { name: 'nothing imported', args: { selected: ['SO-A'], imported: [] }, result: { carried: false } },
-    { name: 'invoice header or lines could not be read', args: { selected: ['SO-A'], imported: ['SO-A'], invoiceStateKnown: false }, result: { carried: false } },
-  ])('no PATCH: $name', async ({ args, result }) => {
-    expect(await hookProps().afterImport(afterImportArgs(args))).toEqual(result);
-    expect(mockApiFetch).not.toHaveBeenCalled();
-  });
-
-  const HEADER_URL = `${BASE}/${HEADER_ENDPOINT}/inv-1`;
-  const headerRead = (row) => ({ ok: true, json: async () => ({ response: { data: row ? [row] : [] } }) });
-  const runCarry = () => hookProps().afterImport(afterImportArgs({ selected: ['SO-A'], imported: ['SO-A'] }));
-
-  it('PATCHes the header with the % when the toggle is on and the invoice has none', async () => {
-    mockApiFetch
-      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }))
-      .mockResolvedValueOnce({ ok: true });
-    const result = await runCarry();
-    expect(result).toEqual({ carried: true, pct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(2);
-    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
-    expect(mockApiFetch.mock.calls[1]).toEqual([HEADER_URL, {
-      method: 'PATCH',
-      body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }),
-    }]);
-  });
-
-  it.each([
-    ['0', 0],
-    ['null', null],
-  ])('re-read with etgoTotalDiscount %s → PATCH carries the fresh updated', async (_name, current) => {
-    mockApiFetch
-      .mockResolvedValueOnce(headerRead({ etgoTotalDiscount: current, updated: '2025-01-15T10:00:00Z' }))
-      .mockResolvedValueOnce({ ok: true });
-    expect(await runCarry()).toEqual({ carried: true, pct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(mockApiFetch.mock.calls[1][1].body)).toEqual({ etgoTotalDiscount: 10, updated: '2025-01-15T10:00:00Z' });
-  });
-
-  it.each([
-    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
-    ['throws', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
-    ['returns no row', () => mockApiFetch.mockResolvedValueOnce(headerRead(null))],
-    ['shows a % set meanwhile (5)', () => mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: 5, updated: 'X' }))],
-  ])('reports failedPct without PATCH when the header re-read %s', async (_name, arrange) => {
-    arrange();
-    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(1);
-    expect(mockApiFetch.mock.calls[0]).toEqual([HEADER_URL]);
-  });
-
-  it.each([
-    ['answers not ok', () => mockApiFetch.mockResolvedValueOnce({ ok: false })],
-    ['rejects', () => mockApiFetch.mockRejectedValueOnce(new Error('network'))],
-  ])('reports failedPct when the PATCH %s', async (_name, arrange) => {
-    mockApiFetch.mockResolvedValueOnce(headerRead({ etgoTotalDiscount: null, updated: 'X' }));
-    arrange();
-    expect(await runCarry()).toEqual({ carried: false, failedPct: 10 });
-    expect(mockApiFetch).toHaveBeenCalledTimes(2);
-    expect(mockApiFetch.mock.calls[1][1].method).toBe('PATCH');
-  });
-});
-
 describe('useOrderGlobalDiscountImport — success toast', () => {
   it.each([
-    { name: 'PATCH failed', args: { count: 1, afterImportResult: { carried: false, failedPct: 10 } }, expected: { message: 'importGlobalDiscountPatchFailed:{"pct":"10"}', variant: 'warning' } },
-    { name: 'PATCH failed on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: false, failedPct: 10 } }, expected: { message: 'importGlobalDiscountPatchFailed:{"pct":"10"}', variant: 'warning' } },
     { name: 'carried, one line', args: { count: 1, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedOne:{"count":1,"pct":"10"}' } },
     { name: 'carried, many lines', args: { count: 2, afterImportResult: { carried: true, pct: 10 } }, expected: { message: 'importGlobalDiscountImportedMany:{"count":2,"pct":"10"}' } },
     { name: 'carried on a partial import', args: { count: 1, partial: true, afterImportResult: { carried: true, pct: 10 } }, expected: null },
@@ -278,58 +184,50 @@ describe('useOrderGlobalDiscountImport — success toast', () => {
   });
 });
 
-// The hook wired into the real ImportLinesModal: the selection the modal computes is the one the
-// decision runs on, and the PATCH / toasts happen after the per-line POST loop.
-describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
-  function Harness(props) {
-    const discountProps = useOrderGlobalDiscountImport({ headerEndpoint: HEADER_ENDPOINT });
-    return <ImportLinesModal {...props} {...discountProps} />;
-  }
+// The ONE order-import popup of sales and purchase invoices (InvoiceOrderImportModal), with the real
+// ImportLinesModal and hook: the selection the modal computes is the one the decision runs on, and
+// the import is a single server action per direction — never a line POST nor a header PATCH.
+describe.each([
+  { direction: 'sales', invoiceSpec: 'sales-invoice', orderSpec: 'sales-order', titleKey: 'importFromSalesOrder', successKey: 'linesImportedFromSalesOrder' },
+  { direction: 'purchase', invoiceSpec: 'purchase-invoice', orderSpec: 'purchase-order', titleKey: 'importFromPurchaseOrder', successKey: 'linesImportedFromPurchaseOrder' },
+])('InvoiceOrderImportModal ($direction)', ({ direction, invoiceSpec, orderSpec, titleKey, successKey }) => {
+  const ok = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
 
-  function renderModal({ orders, failingLines = [], patchOk = true }) {
-    mockApiFetch.mockImplementation(async (_url, opts) => {
-      // Option-less call = the header re-read before the PATCH.
-      if (opts === undefined) {
-        return { ok: true, json: async () => ({ response: { data: [{ etgoTotalDiscount: null, updated: 'X' }] } }) };
+  function renderModal({ orders, importRes = ok({ importedCount: 1 }) }) {
+    mockApiFetch.mockImplementation(async (url, opts) => {
+      if (url.includes(`/${orderSpec}/header?`)) {
+        return ok(orders.map(o => ({
+          id: o.id, documentNo: o.id, documentStatus: 'CO', businessPartner: 'bp-1', invoiceStatus: 0,
+          currency: 'EUR', etgoTotalDiscount: o.pct, orderDate: '2026-10-30',
+        })));
       }
-      if (opts.method === 'POST') return { ok: !failingLines.includes(JSON.parse(opts.body).line) };
-      return { ok: patchOk };
+      if (url.includes(`/${invoiceSpec}/lines?parentId=`)) return ok([]);
+      if (url.endsWith(`/${invoiceSpec}/header/inv-1`)) return ok([{ currency: 'EUR', etgoTotalDiscount: 0 }]);
+      if (url.includes(`/${orderSpec}/lines?parentId=`)) {
+        const docId = new URL(url, 'http://x').searchParams.get('parentId');
+        return ok([{ id: `${docId}-l1`, 'product$_identifier': `Product ${docId}`, orderedQuantity: 1, invoicedQuantity: 0, unitPrice: 100 }]);
+      }
+      if (url.endsWith('/action/availableOrderLines')) {
+        return ok([{ id: `${JSON.parse(opts.body).orderId}-l1`, pendingQuantity: 1 }]);
+      }
+      if (url.endsWith('/action/importOrderLines')) return importRes;
+      throw new Error(`Unexpected request ${opts?.method || 'GET'} ${url}`);
     });
     const onSuccess = vi.fn();
     render(
-      <Harness
+      <InvoiceOrderImportModal
+        direction={direction}
         invoiceId="inv-1"
         bpId="bp-1"
         base={BASE}
         headers={{}}
         onClose={vi.fn()}
-        onSuccess={onSuccess}
-        titleKey="importFromSalesOrder"
-        searchPlaceholderKey="searchSalesOrder"
-        emptyMessageKey="empty"
-        noSearchResultsKey="noResults"
-        successMessageKey="linesImportedFromSalesOrder"
-        linesEndpoint="sales-invoice/lines"
-        fetchDocuments={async () => ({
-          documents: orders.map(o => ({ id: o.id, documentNo: o.id })),
-          sharedContext: {
-            orderDiscountMap: Object.fromEntries(orders.map(o => [o.id, o.pct])),
-            invoiceGlobalDiscount: null,
-            invoiceHasLines: false,
-            invoiceStateKnown: true,
-          },
-        })}
-        fetchLines={async ({ docId }) => [
-          { id: `${docId}-l1`, _productName: `Product ${docId}`, _maxQty: 1, _unitPrice: 100, _lineNetAmount: 100 },
-        ]}
-        getDocDisplay={doc => ({ docNo: doc.documentNo, date: '2025-01-15' })}
-        buildLineBody={async ({ line }) => ({ line: line.id })}
-      />,
+        onSuccess={onSuccess} />,
     );
     return { onSuccess };
   }
 
-  async function selectAllOrdersAndImport(orders) {
+  async function selectAllOrders(orders) {
     // Every line is 100; the row total is shown once the eager line load has finished.
     const totals = orders.map(o => formatCurrency(undefined, o.pct > 0 ? 90 : 100));
     await waitFor(() => {
@@ -337,85 +235,85 @@ describe('useOrderGlobalDiscountImport inside ImportLinesModal', () => {
         expect(screen.getAllByText(total)).toHaveLength(totals.filter(t => t === total).length);
       }
     });
-    screen.getAllByTestId('checkbox').forEach(cb => fireEvent.click(cb));
+    fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
   }
 
-  const patchCalls = () => mockApiFetch.mock.calls.filter(([, opts]) => opts?.method === 'PATCH');
+  const importCalls = () => mockApiFetch.mock.calls.filter(([url]) => url.endsWith('/action/importOrderLines'));
+  const writeCalls = () => mockApiFetch.mock.calls.filter(([url, opts]) => (
+    opts?.method === 'PATCH' || (opts?.method === 'POST' && !url.includes('/action/'))));
 
-  it('carries a single order %: tag, discounted total, hint, header PATCH and the carried toast', async () => {
+  it('carries a single order %: tag, discounted total, toggle in the notice area, ONE import call and the carried toast', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }];
     const { onSuccess } = renderModal({ orders });
-    await selectAllOrdersAndImport(orders);
+    expect(screen.getByText(titleKey)).toBeInTheDocument();
+    await selectAllOrders(orders);
 
     expect(screen.getByTestId('ImportGlobalDiscount__tag')).toHaveTextContent('importGlobalDiscountTag:{"pct":"10"}');
     expect(screen.getByText(formatCurrency(undefined, 90))).toBeInTheDocument();
-    expect(screen.getByText('importGlobalDiscountSelectedOne:{"count":1,"pct":"10"}')).toBeInTheDocument();
-    // The toggle sits in the slot the modal reserved before the first selection (ETP-5828 QA):
-    // its appearance must not shrink the list under the pointer.
-    const slot = screen.getByTestId('ImportLinesModal__selectionPanelSlot');
-    expect(slot).toContainElement(screen.getByTestId('ImportGlobalDiscount__toggle'));
-    expect(slot.style.minHeight).toBe('64px');
+    expect(screen.getByTestId('ImportLinesModal__selectionPanelSlot'))
+      .toContainElement(screen.getByTestId('ImportGlobalDiscount__toggle'));
+    expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importOrdersSelectedCount:{"count":1}');
 
-    fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
 
-    expect(patchCalls()).toEqual([[`${BASE}/${HEADER_ENDPOINT}/inv-1`, { method: 'PATCH', body: JSON.stringify({ etgoTotalDiscount: 10, updated: 'X' }) }]]);
+    expect(importCalls()).toHaveLength(1);
+    const [url, opts] = importCalls()[0];
+    expect(url).toBe(`${BASE}/${invoiceSpec}/header/inv-1/action/importOrderLines`);
+    expect(JSON.parse(opts.body)).toEqual({
+      orders: [{ orderId: 'SO-A', lines: [{ sourceLineId: 'SO-A-l1', quantity: 1 }] }],
+      carryGlobalDiscount: true,
+    });
+    expect(writeCalls()).toEqual([]);
     expect(toast.success).toHaveBeenCalledWith('importGlobalDiscountImportedOne:{"count":1,"pct":"10"}');
-    expect(toast.warning).not.toHaveBeenCalled();
   });
 
-  it('toggle ON by default; switched OFF it imports the lines without PATCH and with the default toast', async () => {
+  it('toggle ON by default; switched OFF the import asks the server not to carry and shows the default toast', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }];
     const { onSuccess } = renderModal({ orders });
-    await selectAllOrdersAndImport(orders);
+    await selectAllOrders(orders);
 
     const toggle = screen.getByTestId('ImportGlobalDiscount__switch');
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-checked', 'false');
 
-    fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
 
-    const postCalls = mockApiFetch.mock.calls.filter(([, opts]) => opts?.method === 'POST');
-    expect(postCalls.map(([, opts]) => JSON.parse(opts.body))).toEqual([{ line: 'SO-A-l1' }]);
-    expect(patchCalls()).toEqual([]);
-    expect(toast.success).toHaveBeenCalledWith('linesImportedFromSalesOrder:{"count":1}');
-    expect(toast.success).toHaveBeenCalledTimes(1);
-    expect(toast.warning).not.toHaveBeenCalled();
+    expect(JSON.parse(importCalls()[0][1].body).carryGlobalDiscount).toBe(false);
+    expect(toast.success).toHaveBeenCalledWith(`${successKey}:{"count":1}`);
   });
 
-  it('B1: orders at 10 % + 0 % show the mixed warning and never PATCH when the 0 % order fails', async () => {
+  it('orders at 10 % + 0 % show the mixed warning, count two orders and send carryGlobalDiscount false', async () => {
     const orders = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 0 }];
-    const { onSuccess } = renderModal({ orders, failingLines: ['SO-B-l1'] });
-    await selectAllOrdersAndImport(orders);
+    const { onSuccess } = renderModal({ orders, importRes: ok({ importedCount: 2 }) });
+    await selectAllOrders(orders);
 
     expect(screen.getByTestId('ImportGlobalDiscount__warning')).toHaveTextContent('importGlobalDiscountMixedTitle');
-    expect(screen.getByText('selected:{"count":2}')).toBeInTheDocument();
+    expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelectedOrders:{"count":" (2)"}');
 
-    fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-
-    expect(patchCalls()).toEqual([]);
-    expect(toast.warning).toHaveBeenCalledTimes(1);
-    expect(toast.warning).toHaveBeenCalledWith('importedLinesWithErrors:{"count":1,"errors":1}');
-    expect(toast.success).not.toHaveBeenCalled();
+    expect(JSON.parse(importCalls()[0][1].body)).toEqual({
+      orders: [
+        { orderId: 'SO-A', lines: [{ sourceLineId: 'SO-A-l1', quantity: 1 }] },
+        { orderId: 'SO-B', lines: [{ sourceLineId: 'SO-B-l1', quantity: 1 }] },
+      ],
+      carryGlobalDiscount: false,
+    });
   });
 
-  it('shows both the partial-import warning and the failed-PATCH warning when lines and the PATCH fail', async () => {
-    const orders = [{ id: 'SO-A', pct: 10 }, { id: 'SO-B', pct: 10 }];
-    const { onSuccess } = renderModal({ orders, failingLines: ['SO-B-l1'], patchOk: false });
-    await selectAllOrdersAndImport(orders);
-
-    fireEvent.click(screen.getByText(/importSelected/).closest('button'));
-    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-
-    expect(patchCalls()).toHaveLength(1);
-    expect(JSON.parse(patchCalls()[0][1].body)).toEqual({ etgoTotalDiscount: 10, updated: 'X' });
-    expect(toast.warning.mock.calls).toEqual([
-      ['importedLinesWithErrors:{"count":1,"errors":1}'],
-      ['importGlobalDiscountPatchFailed:{"pct":"10"}'],
-    ]);
-    expect(toast.success).not.toHaveBeenCalled();
+  it('a refused import keeps the popup open, shows the translated refusal and creates nothing else', async () => {
+    const orders = [{ id: 'SO-A', pct: 0 }];
+    const { onSuccess } = renderModal({
+      orders,
+      importRes: { ok: false, json: async () => ({ error: { code: 'importSomethingNew', message: 'English' } }) },
+    });
+    await selectAllOrders(orders);
+    fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('failedToImportLines'));
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(writeCalls()).toEqual([]);
   });
 });
