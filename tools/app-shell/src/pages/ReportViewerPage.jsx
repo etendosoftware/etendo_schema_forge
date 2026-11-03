@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Printer, FileDown, FileSpreadsheet, Loader2, X, ChevronDown, Info, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,8 @@ import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
+import { useFeatureFlag, DYNAMIC_REPORTS } from '@/lib/flags';
+import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -223,6 +225,9 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
 
 // Dropdown / search-as-you-type selector.
 // minLength=0 → shows all options on focus (used for small catalogs like org, accounting schema).
+// ETP-6080: loaded only when the `dynamic-reports` flag opens it.
+const DynamicReportView = lazy(() => import('@/components/reports/dynamic/DynamicReportView.jsx'));
+
 export function getSelectorPlaceholderLabel(multi, selectedItems, label, displayText) {
   if (multi) {
     if (selectedItems.length > 0) {
@@ -2020,6 +2025,7 @@ export default function ReportViewerPage() {
   const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
   const categoryFilter = searchParams.get('category');
   const reportId = searchParams.get('report');
+  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
 
   // ETP-5402 QA follow-up — the caller's own per-report tiers (id -> 'full'|'read-only', a
   // missing key means no access), fetched once on mount. `null` means "not resolved yet" —
@@ -2119,6 +2125,14 @@ export default function ReportViewerPage() {
         windowId={categoryWindowId}
         data-testid={`WindowAccessGuard__report-viewer-${categoryFilter}`}
       />
+    );
+  }
+
+  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
+    return (
+      <Suspense fallback={<Loader2 className="w-5 h-5 m-auto animate-spin text-muted-foreground" />}>
+        <DynamicReportView report={selectedReport} onBack={clearReport} data-testid="DynamicReportView__3c998a" />
+      </Suspense>
     );
   }
 

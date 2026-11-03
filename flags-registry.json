@@ -1949,7 +1949,8 @@
           "reports/dynamic",
           "DynamicReportView",
           "useReportQuery",
-          "DYNAMIC_REPORT_IDS"
+          "DYNAMIC_REPORT_IDS",
+        "opensDynamicView"
         ]
       },
       "paths": {
@@ -1961,6 +1962,11 @@
       "$pathsComment": "Owned code only: the dynamic view and its query hook. ReportViewerPage.jsx (the one switch), flag-keys.js, the observability event catalog and the locale files are shared toggle points. The /query route (core report-query.js, dev engine report-api.js), the contract changes and the export templates serve every caller and are not gated.",
       "testSpecs": {
         "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/ReportViewerPage.dynamicSwitch.vitest.jsx",
+            "note": "The flag switch: on opens the dynamic view for a listed report only; off keeps the old viewer."
+          },
           {
             "root": "frontend",
             "path": "tools/app-shell/src/components/reports/dynamic/__tests__/useReportQuery.vitest.js",
