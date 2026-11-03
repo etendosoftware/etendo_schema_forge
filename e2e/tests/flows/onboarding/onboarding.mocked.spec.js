@@ -1,13 +1,13 @@
+// @covers tools/app-shell/src/pages/OnboardingPage.jsx
 import { test, expect } from '@playwright/test';
 import { declareNoSession } from '../../helpers/auth.js';
 
 const LOCALE_LABELS = {
   es_ES: {
     languageLabel: 'Idioma',
-    name: 'Nombre*',
+    name: 'Nombre completo*',
     email: 'Correo electrónico*',
-    password: 'Contraseña*',
-    createAccount: 'Crear cuenta',
+    createAccount: 'Empieza tu prueba de 14 días',
     continue: 'Continuar',
     companyName: 'Nombre de la empresa*',
     start: 'Empezar',
@@ -16,10 +16,9 @@ const LOCALE_LABELS = {
   },
   en_US: {
     languageLabel: 'Language',
-    name: 'Name*',
+    name: 'Full name*',
     email: 'Email*',
-    password: 'Password*',
-    createAccount: 'Create account',
+    createAccount: 'Start your 14-day trial',
     continue: 'Continue',
     companyName: 'Company name*',
     start: 'Start',
@@ -153,14 +152,9 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
   });
 }
 
-function buildDisposablePassword(suffix) {
-  return `Qa-${suffix}-Pass!42`;
-}
-
 async function completeOnboardingForm(page, emailPrefix, locale = 'es_ES') {
   const labels = labelsFor(locale);
   const suffix = Date.now();
-  const password = buildDisposablePassword(suffix);
   await page.goto('/onboarding');
 
   // Onboarding now defaults to the login view; switch to the register view
@@ -170,7 +164,6 @@ async function completeOnboardingForm(page, emailPrefix, locale = 'es_ES') {
   await expect(page.getByRole('heading', { name: labels.heading })).toBeVisible();
   await page.getByRole('textbox', { name: labels.name }).fill('QA Onboarding User');
   await page.getByRole('textbox', { name: labels.email }).fill(`${emailPrefix}-${suffix}@example.com`);
-  await page.getByRole('textbox', { name: labels.password }).fill(password);
   await page.getByRole('button', { name: labels.createAccount }).click();
 
   await expect(page.getByText(labels.intro)).toBeVisible();
@@ -210,7 +203,6 @@ test.describe('Onboarding with mocked Schema Forge backend boundary', () => {
 
     await page.getByRole('textbox', { name: labels.name }).fill('QA Onboarding User');
     await page.getByRole('textbox', { name: labels.email }).fill(`qa-onboarding-en-${suffix}@example.com`);
-    await page.getByRole('textbox', { name: labels.password }).fill(buildDisposablePassword(suffix));
     await page.getByRole('button', { name: labels.createAccount }).click();
 
     await expect(page.getByText(labels.intro)).toBeVisible();
