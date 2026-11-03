@@ -26,6 +26,19 @@ Show the result of a period (revenue, expenses and the profit or loss they add u
 - The contract declares `"trend": "result"`: with a comparison, each row carries `variationAmount`, `variationPct` and `trend` (`improves` when the result goes up: revenue up or expense down).
 - With a comparison, PDF, XLSX and CSV add **Variation** and **Variation %** after the reference amount (ETP-6080). The % cell is empty when the reference amount is 0. The XLSX/CSV templates are shared byte-for-byte with Balance Sheet and print these columns only when the contract declares `labels.variationAmount`, so Balance Sheet exports are unchanged.
 
+### Interactive view (ETP-6080, flag `dynamic-reports`)
+With the flag on, the report opens `components/reports/dynamic/DynamicReportView.jsx` instead of the old viewer. There is no **Generar informe**: every change in **Personalizar informe** sends a new query (`POST /api/reports/profit-loss/query`, 300 ms after the last change, an older request cancelled).
+- **Opening period:** the fiscal year that contains today, from its first day to today (a July calendar opens on 01/07). The years come from the year selector with `selectedOrgId`, so they are the calendar the org really uses. No year contains today, or the org has no calendar: 1 January to today, with a hint. The query never sends `yearId` / `referenceYearId`: the year picker and the **Año** shortcut only fill the dates. A closed year picked by hand fills its whole range; the current one stops at today.
+- **Shortcuts:** Mes, Trimestre (to date), Año (fiscal year to date), 12 meses (the last 12 months).
+- **Filters:** Contacto and Producto (multi-select, the old viewer's picker). Organización only when the role reaches more than one org (`*` not counted).
+- **Tree:** the query returns every level and the screen folds it. The level selector (default from the contract, Cuenta) sets the expansion; then rows open and close one by one, and **Expandir todo / Contraer todo**. Folding sends no request.
+- **Comparison:** Mismo período del año anterior (each date one calendar year back, 29 February → 28) or Período anterior (the same number of days, ending the day before). Adds Comparado / Var. / Var. % columns, green when the result improves and red when it worsens (`trend`).
+- **Split:** **Desglosar cuentas por** Organización / Contacto / Producto adds a toggle on every leaf account that lists its parts (`splitQuery`). Postings with no contact or product show as *(sin asignar)*.
+- **Context line:** period, organization, filters, comparison and split as chips; the filters, comparison and split can be removed from the chip.
+- **Exports:** PDF / Excel / CSV render the same params plus `accountLevel` and `expandedNodeIds`, so the file shows the rows the screen shows.
+- **Errors:** a role without access to the org sees *No tienes acceso a esta organización* and keeps the last result; any other failure, *No se pudo cargar el informe*.
+- Not in the view yet: the drill-down side panel (F9) and the KPI events (F10).
+
 ### Interactive-view parameters (ETP-6080)
 Declared `hidden: true`, so they never appear in the filter panel or as an active filter in the PDF header:
 - `expandedNodeIds`: comma-separated ids of the expanded rows. When sent, the export prints exactly those rows instead of cutting at the account level.

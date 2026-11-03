@@ -1,0 +1,259 @@
+// @covers tools/app-shell/src/components/reports/dynamic/DynamicReportView.jsx
+// @covers tools/app-shell/src/components/reports/dynamic/DynamicReportPanel.jsx
+// @covers tools/app-shell/src/components/reports/dynamic/DynamicReportTable.jsx
+// @covers tools/app-shell/src/components/reports/dynamic/useReportDefaults.js
+// @covers tools/app-shell/src/components/reports/dynamic/useAccountSplit.js
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+
+const apiFetchMock = vi.fn();
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
+vi.mock('@/i18n', () => ({
+  useUI: () => (key, params) => (params ? `${key}:${Object.values(params).join(',')}` : key),
+  useMenuLabel: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
+vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: vi.fn() }));
+vi.mock('@/components/ui/date-field', () => ({
+  DateField: ({ value, onChange, 'data-testid': testId }) => (
+    <input data-testid={testId} value={value} onChange={(e) => onChange(e.target.value)} />
+  ),
+}));
+// The old viewer's multi picker: a stub that commits one contact when clicked.
+vi.mock('@/pages/ReportViewerPage.jsx', () => ({
+  PopupMultiSelector: ({ label, onChange, 'data-testid': testId }) => (
+    <button type="button" data-testid={testId} onClick={() => onChange('B1', 'Acme')}>{label}</button>
+  ),
+  buildReportFilename: (id, format) => `${id}.${format}`,
+}));
+
+import DynamicReportView from '../DynamicReportView.jsx';
+
+const REPORT = {
+  id: 'profit-loss',
+  category: 'finance',
+  title: { es_ES: 'Pérdidas y Ganancias' },
+  sections: [{ id: 'periodo', label: { es_ES: 'Periodo' } }, { id: 'agrupacion', label: { es_ES: 'Agrupación' } }, { id: 'comparacion', label: { es_ES: 'Comparación' } }],
+  parameters: [
+    { name: 'orgId', label: { es_ES: 'Organización' } },
+    { name: 'dateFrom', label: { es_ES: 'Fecha de Inicio' } },
+    { name: 'dateTo', label: { es_ES: 'Fecha de Fin' } },
+    { name: 'bPartnerId', label: { es_ES: 'Contacto' } },
+    { name: 'productId', label: { es_ES: 'Producto' } },
+    { name: 'accountLevel', default: 'C', options: [{ value: 'E', label: { es_ES: 'Epígrafe' } }, { value: 'C', label: { es_ES: 'Cuenta' } }, { value: 'S', label: { es_ES: 'Subcuenta' } }] },
+  ],
+};
+const JULY_YEARS = [
+  { id: 'Y26', name: '2026 (GO)', startDate: '2026-07-01', endDate: '2027-06-30' },
+  { id: 'Y25', name: '2025 (GO)', startDate: '2025-07-01', endDate: '2026-06-30' },
+];
+const TREE = [
+  { node_id: 'E1', parentId: null, elementlevel: 'E', value: 'P.G.1', name: 'Ventas', amount: 1000, amount_ref: 800, sign: 'C' },
+  { node_id: 'C1', parentId: 'E1', elementlevel: 'C', value: '70', name: 'Ventas de mercaderías', amount: 1000, amount_ref: 800, sign: 'C' },
+  { node_id: 'S1', parentId: 'C1', elementlevel: 'S', value: '700', name: 'Ventas nacionales', amount: 1000, amount_ref: 800, sign: 'C' },
+];
+const withVariation = (rows) => rows.map((r) => ({ ...r, variationAmount: r.amount - r.amount_ref, variationPct: 25, trend: 'improves' }));
+
+const json = (body, { ok = true, status = 200 } = {}) => ({ ok, status, json: () => Promise.resolve(body) });
+let years;
+let queryAnswer;
+const queries = () => apiFetchMock.mock.calls.filter(([url]) => url.endsWith('/query')).map(([, init]) => JSON.parse(init.body).params);
+
+function route(url, init) {
+  if (url.includes('/report-selectors/acctschema')) return Promise.resolve(json({ items: [{ id: 'S1', name: 'Schema' }] }));
+  if (url.includes('/report-selectors/year')) return Promise.resolve(json({ items: years }));
+  if (url.endsWith('/render')) return Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(['x'])) });
+  if (url.endsWith('/query')) {
+    const { params } = JSON.parse(init.body);
+    if (params.splitBy) return Promise.resolve(json({ kind: 'split', rows: [{ node_id: 'O1', name: 'Spain', amount: 600, amount_ref: 0 }, { node_id: null, name: null, amount: 400, amount_ref: 0 }] }));
+    return Promise.resolve(queryAnswer(params));
+  }
+  return Promise.reject(new Error(`unexpected ${url}`));
+}
+
+const renderView = (props = {}) => render(<DynamicReportView report={REPORT} onBack={vi.fn()} selectedOrgId="O1" {...props} />);
+const rowIds = () => screen.queryAllByTestId('DynamicReportTable__row').map((r) => r.dataset.nodeId);
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 10, 3, 12));
+  years = JULY_YEARS;
+  queryAnswer = (params) => json({ kind: 'tree', rows: params.compareTo === 'true' ? withVariation(TREE) : TREE });
+  apiFetchMock.mockReset();
+  apiFetchMock.mockImplementation(route);
+  globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
+  globalThis.URL.revokeObjectURL = vi.fn();
+});
+afterEach(() => vi.useRealTimers());
+
+describe('DynamicReportView — opening (§19)', () => {
+  it('opens on the fiscal year that contains today, with the schema and org, and never sends a year', async () => {
+    renderView();
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    const [params] = queries();
+    expect(params).toMatchObject({ acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-07-01', dateTo: '2026-11-03', compareTo: 'false' });
+    expect(params).not.toHaveProperty('yearId');
+    expect(params).not.toHaveProperty('referenceYearId');
+    expect(screen.getByTestId('DynamicReportPanel__shortcut-year')).toHaveAttribute('aria-pressed', 'true');
+    expect(apiFetchMock.mock.calls.find(([u]) => u.includes('/year'))[0]).toContain('selectedOrgId=O1');
+  });
+
+  it('no fiscal year for today: 1 January to today, with the hint', async () => {
+    years = [];
+    renderView();
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(queries()[0]).toMatchObject({ dateFrom: '2026-01-01', dateTo: '2026-11-03' });
+    expect(screen.getByTestId('DynamicReportPanel__noFiscalYear')).toBeInTheDocument();
+  });
+
+  it('the first request waits for the defaults', async () => {
+    let releaseYears;
+    apiFetchMock.mockImplementation((url, init) => (url.includes('/year')
+      ? new Promise((res) => { releaseYears = () => res(json({ items: years })); })
+      : route(url, init)));
+    renderView();
+    await new Promise((r) => setTimeout(r, 400)); // longer than the query debounce
+    expect(queries()).toHaveLength(0);
+    releaseYears();
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(queries()[0].dateFrom).toBe('2026-07-01');
+  });
+
+  it('no accounting schema for the role: says there is nothing to show, sends no query', async () => {
+    apiFetchMock.mockImplementation((url, init) => (url.includes('/acctschema') ? Promise.resolve(json({ items: [] })) : route(url, init)));
+    renderView();
+    expect(await screen.findByTestId('DynamicReportView__empty')).toBeInTheDocument();
+    expect(queries()).toHaveLength(0);
+  });
+
+  it('a past year picked by hand gives its whole range', async () => {
+    renderView();
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__year'), { target: { value: 'Y25' } });
+    await waitFor(() => expect(queries().at(-1)).toMatchObject({ dateFrom: '2025-07-01', dateTo: '2026-06-30' }));
+  });
+});
+
+describe('DynamicReportView — tree', () => {
+  it('opens folded at the contract level (Account) and expands a row on click', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(within(screen.getAllByTestId('DynamicReportTable__row')[1]).getByTestId('DynamicReportTable__toggle'));
+    expect(rowIds()).toEqual(['E1', 'C1', 'S1']);
+  });
+
+  it('level selector, expand all and collapse all', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: 'E' } });
+    expect(rowIds()).toEqual(['E1']);
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    expect(rowIds()).toEqual(['E1', 'C1', 'S1']);
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapseAll'));
+    expect(rowIds()).toEqual(['E1']);
+  });
+
+  it('folding does not send a new request', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    await new Promise((r) => setTimeout(r, 400));
+    expect(queries()).toHaveLength(1);
+  });
+});
+
+describe('DynamicReportView — comparison and chips', () => {
+  it('"same period last year" sends the reference dates and shows the variation columns, coloured by trend', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toHaveLength(2));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'same-last-year' } });
+    await waitFor(() => expect(queries().at(-1)).toMatchObject({ compareTo: 'true', fromReferenceDate: '2025-07-01', toReferenceDate: '2025-11-03' }));
+    await waitFor(() => expect(screen.getAllByTestId('DynamicReportTable__variation')).toHaveLength(2));
+    expect(screen.getAllByTestId('DynamicReportTable__variationPct')[0]).toHaveTextContent('25,00 %');
+    expect(screen.getAllByTestId('DynamicReportTable__variation')[0].className).toContain('status-success-fg');
+    expect(screen.getByTestId('DynamicReportView__chip-compare')).toBeInTheDocument();
+  });
+
+  it('a contact filter shows as a removable chip; removing it sends the query without it', async () => {
+    renderView();
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+    await waitFor(() => expect(queries().at(-1).bPartnerId).toBe('B1'));
+    expect(screen.getByTestId('DynamicReportView__chip-bp')).toHaveTextContent('Acme');
+    fireEvent.click(screen.getByTestId('DynamicReportView__chipRemove-bp'));
+    await waitFor(() => expect(queries().at(-1).bPartnerId).toBe(''));
+    expect(screen.queryByTestId('DynamicReportView__chip-bp')).not.toBeInTheDocument();
+  });
+
+  it('the org picker shows only when the role reaches more than one org (0 not counted)', async () => {
+    const { unmount } = renderView({ roleOrgs: [{ id: '0', name: '*' }, { id: 'O1', name: 'Spain' }] });
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(screen.queryByTestId('DynamicReportPanel__org')).not.toBeInTheDocument();
+    unmount();
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }, { id: 'O2', name: 'USA' }] });
+    fireEvent.change(await screen.findByTestId('DynamicReportPanel__org'), { target: { value: 'O2' } });
+    await waitFor(() => expect(queries().at(-1).orgId).toBe('O2'));
+  });
+
+  it('"Limpiar filtros" goes back to the opening period with no filters', async () => {
+    renderView();
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__shortcut-month'));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+    await waitFor(() => expect(queries().at(-1)).toMatchObject({ dateFrom: '2026-11-01', bPartnerId: 'B1' }));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__reset'));
+    await waitFor(() => expect(queries().at(-1)).toMatchObject({ dateFrom: '2026-07-01', dateTo: '2026-11-03', bPartnerId: '' }));
+  });
+});
+
+describe('DynamicReportView — split, errors and exports', () => {
+  it('with a split dimension, a leaf account lists its parts by that dimension', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__splitBy'), { target: { value: 'org' } });
+    fireEvent.click(await screen.findByTestId('DynamicReportTable__splitToggle'));
+    const parts = await screen.findAllByTestId('DynamicReportTable__splitRow');
+    expect(parts.map((p) => p.textContent)).toEqual(['Spain600,00', 'dynamicReportSplitNone400,00']);
+    expect(queries().find((p) => p.splitBy)).toMatchObject({ splitBy: 'org', splitNodeId: 'S1', splitSign: 'C' });
+  });
+
+  it('org access denied shows the translated message and keeps the last tree', async () => {
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }, { id: 'O2', name: 'USA' }] });
+    await waitFor(() => expect(rowIds()).toHaveLength(2));
+    queryAnswer = () => json({ error: 'ORG_ACCESS_DENIED', code: 'ORG_ACCESS_DENIED' }, { ok: false, status: 403 });
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__org'), { target: { value: 'O2' } });
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('dynamicReportErrorOrgAccess');
+    expect(rowIds()).toHaveLength(2);
+  });
+
+  it('PDF export renders what the screen shows: same filters, level and expanded rows', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
+    const [, init] = apiFetchMock.mock.calls.find(([u]) => u.endsWith('/render'));
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ format: 'pdf', locale: 'es_ES' });
+    expect(body.params).toMatchObject({ dateFrom: '2026-07-01', accountLevel: 'C', expandedNodeIds: 'E1' });
+    expect(globalThis.URL.createObjectURL).toHaveBeenCalled();
+  });
+});
+
+describe('dynamic report view — translations', () => {
+  it('every ui() key the view uses exists in en_US and es_ES', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const dir = join(__dirname, '..');
+    const used = new Set();
+    for (const file of readdirSync(dir).filter((f) => /\.jsx?$/.test(f))) {
+      const src = readFileSync(join(dir, file), 'utf8');
+      for (const m of src.matchAll(/\bui\(\s*'([A-Za-z0-9]+)'/g)) used.add(m[1]);
+      for (const m of src.matchAll(/'(dynamicReport[A-Za-z0-9]+)'/g)) used.add(m[1]);
+    }
+    for (const locale of ['en_US', 'es_ES']) {
+      const labels = JSON.parse(readFileSync(join(__dirname, '../../../../locales', `${locale}.json`), 'utf8')).genericLabels;
+      expect([...used].filter((k) => !labels[k]), locale).toEqual([]);
+    }
+    expect(used.size).toBeGreaterThan(20);
+  });
+});

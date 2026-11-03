@@ -37,7 +37,7 @@ const ETENDO_BASE = getEtendoBase();
 // business/calendar date, so it deliberately does NOT go through
 // parseCalendarDate/formatCalendarDate (dateOnly.js) — those are for
 // timezone-safe business dates, a different problem.
-function buildReportFilename(reportId, format, suffix = '') {
+export function buildReportFilename(reportId, format, suffix = '') {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, '0');
   const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -223,11 +223,11 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   );
 }
 
-// Dropdown / search-as-you-type selector.
-// minLength=0 → shows all options on focus (used for small catalogs like org, accounting schema).
 // ETP-6080: loaded only when the `dynamic-reports` flag opens it.
 const DynamicReportView = lazy(() => import('@/components/reports/dynamic/DynamicReportView.jsx'));
 
+// Dropdown / search-as-you-type selector.
+// minLength=0 → shows all options on focus (used for small catalogs like org, accounting schema).
 export function getSelectorPlaceholderLabel(multi, selectedItems, label, displayText) {
   if (multi) {
     if (selectedItems.length > 0) {
@@ -503,7 +503,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
 
 // Multi-select popup: shows selected tags + a "+" button that opens a modal with
 // a searchable list and checkboxes. Used for Business Partner, Product, Project.
-function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
+export function PopupMultiSelector({ selector, label, onChange, value = '', displayValue = '' }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -2131,7 +2131,12 @@ export default function ReportViewerPage() {
   if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
     return (
       <Suspense fallback={<Loader2 className="w-5 h-5 m-auto animate-spin text-muted-foreground" />}>
-        <DynamicReportView report={selectedReport} onBack={clearReport} data-testid="DynamicReportView__3c998a" />
+        <DynamicReportView
+          report={selectedReport}
+          onBack={clearReport}
+          selectedOrgId={selectedOrg?.id || null}
+          roleOrgs={selectedRole?.orgList || []}
+          data-testid="DynamicReportView__3c998a" />
       </Suspense>
     );
   }
