@@ -22,7 +22,7 @@ const EXPORTS = [
   { format: 'csv', label: 'CSV', icon: FileText },
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
-const ERROR_KEYS = { org_access_denied: 'dynamicReportErrorOrgAccess' };
+const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess' };
 const NO_ROWS_EXPANDED = new Set();
 
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';

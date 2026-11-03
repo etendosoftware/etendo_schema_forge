@@ -26314,7 +26314,7 @@
     "dynamicReportRemoveFilter": "Quitar filtro {label}",
     "dynamicReportExpandRow": "Expandir {name}",
     "dynamicReportCollapseRow": "Contraer {name}",
-    "dynamicReportErrorOrgAccess": "No tienes acceso a esta organización.",
+    "reportErrorOrgAccess": "No tienes acceso a esta organización.",
     "dynamicReportErrorGeneric": "No se pudo cargar el informe.",
     "dynamicReportOpening": "Saldo inicial",
     "dynamicReportDebit": "Debe",

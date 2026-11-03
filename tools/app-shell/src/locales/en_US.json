@@ -26076,7 +26076,7 @@
     "dynamicReportRemoveFilter": "Remove filter {label}",
     "dynamicReportExpandRow": "Expand {name}",
     "dynamicReportCollapseRow": "Collapse {name}",
-    "dynamicReportErrorOrgAccess": "You do not have access to this organization.",
+    "reportErrorOrgAccess": "You do not have access to this organization.",
     "dynamicReportErrorGeneric": "The report could not be loaded.",
     "dynamicReportOpening": "Opening balance",
     "dynamicReportDebit": "Debit",

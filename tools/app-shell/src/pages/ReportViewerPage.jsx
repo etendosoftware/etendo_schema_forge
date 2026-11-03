@@ -1090,6 +1090,16 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
   );
 }
 
+/**
+ * The message of a failed render. The org check (ETP-6080) answers `ORG_ACCESS_DENIED` with an
+ * English text, so that code is shown translated; anything else keeps the server's message.
+ */
+async function renderErrorMessage(res, ui) {
+  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (data?.code === 'ORG_ACCESS_DENIED') return ui('reportErrorOrgAccess');
+  return data?.error || `Render failed: ${res.status}`;
+}
+
 function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReportId, extraParams = {}, isolateParams = [] }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -1143,8 +1153,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
         timeout: 0,
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(data.error || `Render failed: ${res.status}`);
+        throw new Error(await renderErrorMessage(res, ui));
       }
       if (format === 'html' || format === 'preview') {
         writeToIframe(await res.text());
@@ -1499,8 +1508,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         timeout: 0,
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(data.error || `Render failed: ${res.status}`);
+        throw new Error(await renderErrorMessage(res, ui));
       }
       if (format === 'html' || format === 'preview') {
         const html = await res.text();
@@ -1525,7 +1533,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
       setError(err.message);
     }
     setLoading(false);
-  }, [report.id, apiFetch, submitParams, locale]);
+  }, [report.id, apiFetch, submitParams, locale, ui]);
 
   // No auto-render on mount — wait for user to click Run Report... UNLESS the
   // page was opened via a deep-link that carries real filter values (e.g. the

@@ -23,7 +23,7 @@ function useErrorText(error, errorCode) {
   const ui = useUI();
   if (!error) return null;
   if (errorCode === 'network') return error;
-  return ui(errorCode === 'org_access_denied' ? 'dynamicReportErrorOrgAccess' : 'dynamicReportErrorGeneric');
+  return ui(errorCode === 'org_access_denied' ? 'reportErrorOrgAccess' : 'dynamicReportErrorGeneric');
 }
 
 /** report_drilldown for one step, timed from the click (this mount) to its first answer. */

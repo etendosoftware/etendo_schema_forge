@@ -6,6 +6,8 @@
 //   2. The render call opts out of apiFetch's default timeout (`timeout: 0`): a big report
 //      legitimately takes longer than the default, and cutting it off would turn a slow
 //      success into a false "try again".
+//   3. ETP-6080: the org check's 403 (`code: ORG_ACCESS_DENIED`, English text) shows translated,
+//      in the main viewer and the drill-down; any other failure keeps the server's message.
 // `useApiFetch` is wrapped (not replaced) so the options each call site passes can be
 // asserted while the real client still performs the request.
 
@@ -208,5 +210,47 @@ describe('ReportViewerPage — network failures and render timeout (ETP-5424)', 
 
     await waitFor(() => expect(renderCalls().length).toBeGreaterThanOrEqual(1));
     expect(renderCalls().every(({ options }) => options.timeout === 0)).toBe(true);
+  });
+});
+
+describe('ReportViewerPage — render refused by the org check (ETP-6080)', () => {
+  const denied = () => Promise.resolve({
+    ok: false, status: 403,
+    json: () => Promise.resolve({ error: 'The role has no access to the requested organization', code: 'ORG_ACCESS_DENIED' }),
+  });
+
+  beforeEach(() => {
+    apiFetchCalls.length = 0;
+    mockSearchParams = new URLSearchParams({ report: 'report-simple' });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('the main viewer shows the translated message, not the server text', async () => {
+    const user = userEvent.setup();
+    stubFetch(denied);
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Free Text')).toBeInTheDocument());
+    await user.click(screen.getByText('runReport'));
+    await waitFor(() => expect(screen.getByText('reportErrorOrgAccess')).toBeInTheDocument());
+    expect(screen.queryByText(/no access to the requested/)).not.toBeInTheDocument();
+  });
+
+  it('the drill-down shows it translated too', async () => {
+    stubFetch(denied);
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'aging-drilldown', bpId: 'bp-42', bpName: 'Acme Corp' } }));
+    });
+    await waitFor(() => expect(within(screen.getByTestId('dialog')).getByText('reportErrorOrgAccess')).toBeInTheDocument());
+  });
+
+  it('any other failure keeps the server message', async () => {
+    const user = userEvent.setup();
+    stubFetch(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: 'Template missing', code: 'RENDER_FAILED' }) }));
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Free Text')).toBeInTheDocument());
+    await user.click(screen.getByText('runReport'));
+    await waitFor(() => expect(screen.getByText('Template missing')).toBeInTheDocument());
   });
 });

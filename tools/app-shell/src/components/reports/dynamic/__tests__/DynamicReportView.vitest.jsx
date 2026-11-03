@@ -248,7 +248,7 @@ describe('DynamicReportView — split, errors and exports', () => {
     await waitFor(() => expect(rowIds()).toHaveLength(2));
     queryAnswer = () => json({ error: 'ORG_ACCESS_DENIED', code: 'ORG_ACCESS_DENIED' }, { ok: false, status: 403 });
     fireEvent.change(screen.getByTestId('DynamicReportPanel__org'), { target: { value: 'O2' } });
-    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('dynamicReportErrorOrgAccess');
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorOrgAccess');
     expect(rowIds()).toHaveLength(2);
   });
 
@@ -452,7 +452,7 @@ describe('dynamic report view — translations', () => {
     for (const file of readdirSync(dir).filter((f) => /\.jsx?$/.test(f))) {
       const src = readFileSync(join(dir, file), 'utf8');
       for (const m of src.matchAll(/\bui\(\s*'([A-Za-z0-9]+)'/g)) used.add(m[1]);
-      for (const m of src.matchAll(/'(dynamicReport[A-Za-z0-9]+)'/g)) used.add(m[1]);
+      for (const m of src.matchAll(/'((?:dynamicReport|reportError)[A-Za-z0-9]+)'/g)) used.add(m[1]);
     }
     for (const locale of ['en_US', 'es_ES']) {
       const labels = JSON.parse(readFileSync(join(__dirname, '../../../../locales', `${locale}.json`), 'utf8')).genericLabels;
