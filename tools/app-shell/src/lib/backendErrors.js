@@ -212,6 +212,12 @@ const BACKEND_ERROR_MAP = {
   // ETP-5471: create/import on a bank-connected account (BankStatementsHandler + the generic
   // financial-account statement entities).
   'This account is synchronized with the bank; statements cannot be created or imported manually.': 'backendError.statementBankConnectedNotCreatable',
+  // ETP-5581: com.etendoerp.go AD_MESSAGE ETGO_StatementLineDiscarded (409 LINE_DISCARDED), the
+  // refusal to reconcile a discarded line. Its key route is in BACKEND_ERROR_KEY_MAP; this text
+  // entry serves the reconcile paths that forward only the message (the split panel's
+  // reconcileGroup / reconcileDifference toasts, the automatch per-group failures). English-only
+  // AD message, so the text is a stable contract.
+  'This bank statement line is discarded, so it cannot be reconciled. Restore it first.': 'backendError.bankLineDiscarded',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
@@ -525,6 +531,17 @@ const BACKEND_ERROR_KEY_MAP = {
   // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
   // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
   ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',
+  // ETP-5581 — the coded refusals of the bank bounce-pair actions (com.etendoerp.go
+  // BankBounceErrors / StatementLineDiscard: discardPair, restorePair and the bounce-pair groups of
+  // applySuggestions), each with its short `code` and this AD_MESSAGE in `error.messageKeys`.
+  // English-only AD messages, so this map is where they become Spanish.
+  ETGO_StatementLineDiscarded: 'backendError.bankLineDiscarded',
+  ETGO_BounceSuggestionsOff: 'backendError.bounceSuggestionsOff',
+  ETGO_BounceSignMismatch: 'backendError.bounceSignMismatch',
+  ETGO_BounceAmountMismatch: 'backendError.bounceAmountMismatch',
+  ETGO_BounceHasPayment: 'backendError.bounceHasPayment',
+  ETGO_BounceLineNotPending: 'backendError.bounceLineNotPending',
+  ETGO_BounceDiscardNotAllowed: 'backendError.bounceDiscardNotAllowed',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own

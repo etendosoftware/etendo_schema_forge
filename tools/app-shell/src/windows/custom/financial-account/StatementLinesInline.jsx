@@ -138,6 +138,9 @@ const MATCH_TONE = {
   reconciled: { tone: 'success', labelKey: 'financeAccountStatementLinesStatusReconciled' },
   partial:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusPartial' },
   pending:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusUnmatched' },
+  // ETP-5581 — a discarded line (`discarded: true`, sent by the backend whatever the flag):
+  // out of the reconciliation, so neither "sin conciliar" nor reconciled.
+  discarded:  { tone: 'neutral', labelKey: 'financeAccountStatementLinesStatusDiscarded' },
 };
 
 // Backend `reconcileStatus` ("RECONCILED"/"PARTIAL"/"PENDING") → local pill kind. Falls back to
@@ -145,7 +148,9 @@ const MATCH_TONE = {
 // this ships).
 function matchKindFor(line) {
   const byStatus = { RECONCILED: 'reconciled', PARTIAL: 'partial', PENDING: 'pending' };
-  return byStatus[line.reconcileStatus] ?? (line.matched ? 'reconciled' : 'pending');
+  const kind = byStatus[line.reconcileStatus] ?? (line.matched ? 'reconciled' : 'pending');
+  // Only an unreconciled line can be discarded; a reconciled one keeps its own pill.
+  return kind === 'pending' && line.discarded === true ? 'discarded' : kind;
 }
 
 function MatchPill({ kind, ui }) {

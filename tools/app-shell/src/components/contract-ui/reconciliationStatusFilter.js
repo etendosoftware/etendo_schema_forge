@@ -17,8 +17,17 @@
  * subtypes apart inside the list.
  */
 
-/** Filter codes, in dropdown order. Also the fine-grained states a line can carry. */
-export const STATUS_CODES = ['pending', 'suggested', 'byRule', 'difference', 'reconciled'];
+/**
+ * Filter codes, in dropdown order. Also the fine-grained states a line can carry.
+ *
+ * ETP-5581 added two: `bounce` (a line of a possible bounce pair, which the backend only reports
+ * with the `bank-bounce-suggestions` flag on) and `discarded` (last). A discarded line is NOT in the
+ * default `pendingLines` answer at all — the backend leaves it out of `lines`, `total` and every
+ * count but `counts.discarded` — so "Todos" and the footer total exclude it by construction; the
+ * `discarded` entry is served by its own `status=discarded` request. Which of the two the dropdown
+ * actually offers is {@link visibleStatusCodes}.
+ */
+export const STATUS_CODES = ['pending', 'suggested', 'byRule', 'difference', 'bounce', 'reconciled', 'discarded'];
 
 /**
  * Which line states each filter code shows.
@@ -28,12 +37,41 @@ export const STATUS_CODES = ['pending', 'suggested', 'byRule', 'difference', 're
  * is NOT silently swallowed here (see `matchesStatus`).
  */
 export const STATUS_MEMBERS = {
-  pending: ['pending', 'suggested', 'byRule', 'difference'],
+  // A possible bounce still needs the user to act (discard the pair, or say it is not one), so it
+  // is a kind of pending too, exactly like a suggestion.
+  pending: ['pending', 'suggested', 'byRule', 'difference', 'bounce'],
   suggested: ['suggested'],
   byRule: ['byRule'],
   difference: ['difference'],
+  bounce: ['bounce'],
   reconciled: ['reconciled'],
+  discarded: ['discarded'],
 };
+
+/**
+ * The filter codes the dropdown offers for these counts.
+ *
+ * The two ETP-5581 codes only appear when the backend reports them, so an account without the
+ * `bank-bounce-suggestions` flag and without discarded lines sees exactly the five entries it had
+ * before:
+ * - `bounce` when `counts.bounce` is present (the backend sends it only with the flag on);
+ * - `discarded` when there is a discarded line (`counts.discarded > 0`, which the backend sends
+ *   whatever the flag: Classic can discard lines too) or the flag is on.
+ * The active code is always kept, so the trigger never names an entry the list no longer has.
+ *
+ * @param {Record<string, number>|null|undefined} counts per-state counts from `pendingLines`
+ * @param {string|null|undefined} active the active filter code
+ * @returns {string[]}
+ */
+export function visibleStatusCodes(counts, active) {
+  const bounceOn = counts?.bounce != null;
+  return STATUS_CODES.filter((code) => {
+    if (code === active) return true;
+    if (code === 'bounce') return bounceOn;
+    if (code === 'discarded') return bounceOn || (Number(counts?.discarded) || 0) > 0;
+    return true;
+  });
+}
 
 /** A line with no `state` yet (older payload, optimistic row) reads as plain pending. */
 function lineState(state) {

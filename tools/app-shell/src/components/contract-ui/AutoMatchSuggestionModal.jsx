@@ -1,15 +1,21 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { ArrowUpRight, Info, Check } from 'lucide-react';
+import { useMemo, useCallback } from 'react';
+import { ArrowUpRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, translateBackendErrorBody } from '@/lib/backendErrors.js';
 import { useApplySuggestions } from '@/hooks/useReconciliation';
+import { useAutoMatchSelection } from '@/hooks/useAutoMatchReview.js';
 import { cn } from '@/lib/utils';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import { StatusBadge, automatchBadgeKind } from './reconciliationBadges.jsx';
+import { SelectBox } from './AutoMatchSelectBox.jsx';
+import { AutoMatchBounceSection } from './AutoMatchBounceSection.jsx';
+import {
+  bouncePairPayload, splitAutoMatchGroups, summarizeApplyResults,
+} from './bouncePairs.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,43 +39,14 @@ function RuleTypeBadge({ label, tone = 'default' }) {
   );
 }
 
-function ariaCheckedValue(dash, checked) {
-  if (dash) return 'mixed';
-  return checked ? 'true' : 'false';
-}
-
 function formatSignedAmount(amount, currency) {
   if (amount === 0) return '—';
   const sign = amount < 0 ? '-' : '+';
   return `${sign}${formatCurrency(currency, Math.abs(amount))}`;
 }
 
-/**
- * Shared checkbox control so the header select-all and the per-group checkboxes look identical:
- * a 16px box with `rounded-[4px]`, dark when active, showing a check (rows) or a dash (header).
- */
-function SelectBox({ checked = false, dash = false, onClick, testId, ariaLabel }) {
-  const active = checked || dash;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={testId}
-      aria-label={ariaLabel}
-      aria-checked={ariaCheckedValue(dash, checked)}
-      className={cn(
-        'flex h-4 w-4 flex-none cursor-pointer items-center justify-center rounded-[4px] border',
-        active ? 'border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))]' : 'border-[hsl(var(--border-control))] bg-card',
-      )}
-    >
-      {dash && <span className="h-[2px] w-2 rounded-full bg-card" />}
-      {checked && !dash && <Check
-        className="h-3 w-3 text-primary-foreground"
-        strokeWidth={3}
-        data-testid="Check__a89979" />}
-    </button>
-  );
-}
+/* SelectBox moved to ./AutoMatchSelectBox.jsx (ETP-5581) so the bounce-pair rows render the very
+   same control. */
 
 // ---------------------------------------------------------------------------
 // Row components
@@ -224,7 +201,7 @@ function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
       <div className="flex w-8 flex-none items-start justify-center border-r border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-1 py-3">
         <SelectBox
           checked={checked}
-          onClick={() => onToggle(group.groupKey)}
+          onClick={() => onToggle(group)}
           testId={`automatch-group-check-${group.groupKey}`}
           data-testid="SelectBox__a89979" />
       </div>
@@ -258,14 +235,109 @@ function GroupRow({ group, checked, onToggle, currency, glItemDifference }) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The footer sentence for the checked suggestions. Transaction groups keep the wording they always
+ * had ("Se vincularán N operación(es). Se crearán M movimiento(s)."); checked bounce pairs add the
+ * lines they discard, joined to the link sentence when both are present (ETP-5581).
+ *
+ * @param {function} ui the `useUI()` translator
+ * @param {{ willLink: number, willCreate: number, pairCount: number, hasPairs: boolean }} counts
+ * @returns {string}
+ */
+function footerSummaryText(ui, {
+  willLink, willCreate, pairCount, hasPairs,
+}) {
+  if (willLink + willCreate + pairCount === 0) {
+    return ui(hasPairs ? 'financeReconcileAutomatchFooterNoneSelected' : 'financeReconcileAutomatchFooterNone');
+  }
+  const lines = pairCount * 2;
+  const linkAndDiscard = willLink > 0 && pairCount > 0;
+  return [
+    linkAndDiscard && ui('financeReconcileAutomatchFooterLinkAndDiscard', { link: willLink, lines }),
+    !linkAndDiscard && willLink > 0 && ui('financeReconcileAutomatchFooterLink', { count: willLink }),
+    willCreate > 0 && ui('financeReconcileAutomatchFooterCreate', { count: willCreate }),
+    !linkAndDiscard && pairCount > 0 && ui('financeReconcileAutomatchFooterDiscard', { count: lines }),
+  ].filter(Boolean).join(' ');
+}
+
+/**
+ * The primary button label: "Conciliar N grupo(s)" as always, or the bounce-pair variants
+ * ("Conciliar N grupo(s) y descartar M par(es)", "Descartar M par(es)") when pairs are checked.
+ */
+function applyLabelText(ui, groupCount, pairCount) {
+  if (pairCount === 0) return ui('financeReconcileAutomatchActionApply', { count: groupCount });
+  if (groupCount === 0) return ui('financeReconcileAutomatchActionDiscardPairs', { count: pairCount });
+  return ui('financeReconcileAutomatchActionApplyAndDiscard', { groups: groupCount, pairs: pairCount });
+}
+
+/**
+ * The toast of an apply of transaction groups only — the modal's toast before ETP-5581, unchanged.
+ *
+ * applySuggestions answers 201 even when every group is rejected — the reason travels inside
+ * results[]. Reducing that to two counters is what produced a bare "Error al aplicar la
+ * conciliación" for problems the backend had already explained.
+ */
+function notifyApplyResults(results, ui) {
+  const failures = results.filter((r) => r?.error);
+  const failedCount = failures.length;
+  const successCount = results.length - failedCount;
+  if (failedCount === 0) {
+    toast.success(ui('financeReconcileAutomatchToastSuccess', { count: successCount }));
+  } else if (successCount > 0) {
+    toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
+  } else {
+    // ETP-5121: the backend explains itself in English (e.g. the draft-statement guard);
+    // translateBackendError maps the known sentences to a locale key and passes anything
+    // else through untouched, so an unmapped message still reaches the user.
+    toast.error(translateBackendError(failures[0]?.error?.message, ui)
+      || ui('financeReconcileAutomatchToastError'));
+  }
+}
+
+/**
+ * The toast of an apply that carried bounce pairs (ETP-5581): what was reconciled, what was
+ * discarded, and the first refusal translated — a bounce refusal is coded (`error.messageKeys`), so
+ * it goes through `translateBackendErrorBody`. An apply without pairs keeps its original toast.
+ */
+function notifyApplyWithPairs(results, ui) {
+  const { groupsOk, pairsOk, failures } = summarizeApplyResults(results);
+  const done = [
+    groupsOk > 0 && ui('financeReconcileAutomatchToastSuccess', { count: groupsOk }),
+    pairsOk > 0 && ui('financeReconcileAutomatchToastPairsDiscarded', { count: pairsOk, lines: pairsOk * 2 }),
+  ].filter(Boolean).join(' ');
+  if (failures.length === 0) {
+    toast.success(done);
+    return;
+  }
+  const reason = translateBackendErrorBody(failures[0], ui, null) || ui('financeReconcileAutomatchToastError');
+  if (groupsOk + pairsOk > 0) {
+    toast.warning(
+      `${done} ${ui('financeReconcileAutomatchToastSomeFailed', { count: failures.length })}`,
+      { description: reason },
+    );
+    return;
+  }
+  toast.error(reason);
+}
+
+/**
  * Automatch suggestion modal — two-column layout matching the Figma design:
  * left = bank statement lines (with checkboxes), right = system operations to link.
  *
+ * ETP-5581 — with the backend flag `bank-bounce-suggestions` on, `groups` also carries bounce pairs
+ * (`kind: "bouncePair"`), rendered below the reconciliation groups as "Posibles rebotes (N)"
+ * ({@link AutoMatchBounceSection}) and applied in the SAME `applySuggestions` call. With the flag
+ * off nothing in `groups` has that kind and the modal is exactly what it was.
+ *
  * @param {{ accountId, accountName?, groups, kpis, currency?, open, onClose, onSuccess?,
- *   glItemDifference? }} props `glItemDifference` is the account's `{ id, name }` for differences —
- *   the same object `ReconciliationTab` composes for the panel — used to name the movement a
- *   near-match group will create. It is always set when such a group is present: the engine does
- *   not propose an amount deviation for an account with nowhere to post it.
+ *   glItemDifference?, selection?, dismissedPairKeys?, onReviewPair? }} props `glItemDifference`
+ *   is the account's `{ id, name }` for differences — the same object `ReconciliationTab` composes
+ *   for the panel — used to name the movement a near-match group will create. It is always set
+ *   when such a group is present: the engine does not propose an amount deviation for an account
+ *   with nowhere to post it.
+ *   `selection` (ETP-5581) lifts the checks out of the modal ({@link useAutoMatchSelection}) so they
+ *   survive a "Revisar en el panel" visit; without it the modal keeps its own. `dismissedPairKeys`
+ *   are pairs the user said are not a bounce, hidden here. `onReviewPair(group)` is "Revisar en el
+ *   panel"; without it the button is not offered.
  */
 export function AutoMatchSuggestionModal({
   accountId,
@@ -277,38 +349,36 @@ export function AutoMatchSuggestionModal({
   onClose,
   onSuccess,
   glItemDifference = null,
+  selection = null,
+  dismissedPairKeys = null,
+  onReviewPair = null,
 }) {
   const ui = useUI();
   const { apply, loading } = useApplySuggestions();
 
-  const allKeys = useMemo(() => new Set(groups.map((g) => g.groupKey)), [groups]);
-  const [checked, setChecked] = useState(allKeys);
+  // The checks default to every transaction group (and every high-confidence pair) whenever the
+  // suggestions (re)load. The host may own them (`selection`); otherwise the modal does.
+  const ownSelection = useAutoMatchSelection(groups);
+  const { isChecked, toggle, setMany } = selection ?? ownSelection;
 
-  // Default to all groups checked whenever the suggestions (re)load — the initial useState only
-  // runs on first render, when `groups` is still empty because autoMatch is loading.
-  useEffect(() => {
-    setChecked(new Set(groups.map((g) => g.groupKey)));
-  }, [groups]);
-
-  const allChecked = checked.size === groups.length && groups.length > 0;
-
-  const toggleAll = useCallback(() => {
-    setChecked(allChecked ? new Set() : allKeys);
-  }, [allChecked, allKeys]);
-
-  const onToggle = useCallback((groupKey) => {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupKey)) next.delete(groupKey);
-      else next.add(groupKey);
-      return next;
-    });
-  }, []);
+  const { transactionGroups, bouncePairs: allPairs } = useMemo(
+    () => splitAutoMatchGroups(groups), [groups]);
+  const pairs = useMemo(
+    () => (dismissedPairKeys?.size ? allPairs.filter((p) => !dismissedPairKeys.has(p.groupKey)) : allPairs),
+    [allPairs, dismissedPairKeys],
+  );
 
   const checkedGroups = useMemo(
-    () => groups.filter((g) => checked.has(g.groupKey)),
-    [groups, checked],
-  );
+    () => transactionGroups.filter(isChecked), [transactionGroups, isChecked]);
+  const checkedPairs = useMemo(() => pairs.filter(isChecked), [pairs, isChecked]);
+
+  const allChecked = checkedGroups.length === transactionGroups.length && transactionGroups.length > 0;
+
+  const toggleAll = useCallback(() => {
+    setMany(transactionGroups, !allChecked);
+  }, [allChecked, setMany, transactionGroups]);
+
+  const toggleAllPairs = useCallback((on) => setMany(pairs, on), [pairs, setMany]);
 
   // A near-match group both links its operation AND creates the movement that absorbs the
   // difference, so it counts on both sides. Counting only the link is what made the footer promise
@@ -317,37 +387,28 @@ export function AutoMatchSuggestionModal({
   const willCreate = checkedGroups.filter(
     (g) => g.isNew || (g.nearMatch && Math.abs(Number(g.difference ?? 0)) > 0)).length;
   const willLink = checkedGroups.filter((g) => !g.isNew).length;
+  const applyCount = checkedGroups.length + checkedPairs.length;
 
   const handleApply = async () => {
-    if (checkedGroups.length === 0 || loading) return;
+    if (applyCount === 0 || loading) return;
     try {
       const payload = {
         financialAccountId: accountId,
-        groups: checkedGroups.map((g) => ({
-          statementLineId: g.statementLine?.id,
-          operationIds: (g.operations ?? []).filter((o) => !o.isNew).map((o) => o.id),
-          ...(g.createPayment ? { createPayment: g.createPayment } : {}),
-        })),
+        groups: [
+          ...checkedGroups.map((g) => ({
+            statementLineId: g.statementLine?.id,
+            operationIds: (g.operations ?? []).filter((o) => !o.isNew).map((o) => o.id),
+            ...(g.createPayment ? { createPayment: g.createPayment } : {}),
+          })),
+          // ETP-5581 — the checked bounce pairs travel in the same call; the backend discards
+          // them first and refuses a line that two checked suggestions share.
+          ...checkedPairs.map(bouncePairPayload),
+        ],
       };
       const response = await apply(payload);
       const results = response?.results ?? [];
-      const failures = results.filter((r) => r?.error);
-      const failedCount = failures.length;
-      const successCount = results.length - failedCount;
-      // applySuggestions answers 201 even when every group is rejected — the reason travels inside
-      // results[]. Reducing that to two counters is what produced a bare "Error al aplicar la
-      // conciliación" for problems the backend had already explained.
-      if (failedCount === 0) {
-        toast.success(ui('financeReconcileAutomatchToastSuccess', { count: successCount }));
-      } else if (successCount > 0) {
-        toast.warning(ui('financeReconcileAutomatchToastPartial', { success: successCount, failed: failedCount }));
-      } else {
-        // ETP-5121: the backend explains itself in English (e.g. the draft-statement guard);
-        // translateBackendError maps the known sentences to a locale key and passes anything
-        // else through untouched, so an unmapped message still reaches the user.
-        toast.error(translateBackendError(failures[0]?.error?.message, ui)
-          || ui('financeReconcileAutomatchToastError'));
-      }
+      if (checkedPairs.length > 0) notifyApplyWithPairs(results, ui);
+      else notifyApplyResults(results, ui);
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -355,12 +416,12 @@ export function AutoMatchSuggestionModal({
     }
   };
 
-  const footerSummary = checkedGroups.length === 0
-    ? ui('financeReconcileAutomatchFooterNone')
-    : [
-        willLink > 0 && ui('financeReconcileAutomatchFooterLink', { count: willLink }),
-        willCreate > 0 && ui('financeReconcileAutomatchFooterCreate', { count: willCreate }),
-      ].filter(Boolean).join(' ');
+  const footerSummary = footerSummaryText(ui, {
+    willLink, willCreate, pairCount: checkedPairs.length, hasPairs: pairs.length > 0,
+  });
+  // The transaction-group block (its column header + rows, or the empty state) stays as it always
+  // was, and only steps aside when the run found bounce pairs and nothing else.
+  const showGroupBlock = transactionGroups.length > 0 || pairs.length === 0;
 
   return (
     <Dialog
@@ -397,6 +458,11 @@ export function AutoMatchSuggestionModal({
             // "A crear" was translated in all three locales but never rendered, so the movements
             // the run generates (rule payments + difference postings) had no figure anywhere.
             { label: ui('financeReconcileAutomatchKpiNew'), value: kpis.willCreate ?? 0 },
+            // ETP-5581 — only when the backend reports bounce pairs (flag on): the pairs still
+            // offered, the same figure the section header shows.
+            ...(kpis.bouncePairs == null ? [] : [
+              { label: ui('financeReconcileAutomatchKpiBouncePairs'), value: pairs.length },
+            ]),
           ].map(({ label, value }) => (
             <div key={label} className="flex flex-1 flex-col">
               <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">{label}</span>
@@ -410,52 +476,63 @@ export function AutoMatchSuggestionModal({
           {/* Column headers — mirrors GroupRow's box model (w-8 checkbox sidebar as a sibling of
               the two flex-1 columns, not nested in the first one) so the divider between the two
               title blocks lands exactly above the divider between the two row columns. */}
-          <div className="flex flex-row px-5 pb-0 pt-3">
-            {/* Select-all sits in a w-8 box so its center lines up with the per-row checkbox
-                sidebar. Shows a dash whenever there is any selection (same control as the rows). */}
-            <div className="flex w-8 flex-none items-center justify-center">
-              <SelectBox
-                dash={checked.size > 0}
-                onClick={toggleAll}
-                testId="automatch-select-all"
-                ariaLabel={ui('financeReconcileColSelect')}
-                data-testid="SelectBox__a89979" />
+          {showGroupBlock ? (
+            <div className="flex flex-row px-5 pb-0 pt-3">
+              {/* Select-all sits in a w-8 box so its center lines up with the per-row checkbox
+                  sidebar. Shows a dash whenever there is any selection (same control as the rows). */}
+              <div className="flex w-8 flex-none items-center justify-center">
+                <SelectBox
+                  dash={checkedGroups.length > 0}
+                  onClick={toggleAll}
+                  testId="automatch-select-all"
+                  ariaLabel={ui('financeReconcileColSelect')}
+                  data-testid="SelectBox__a89979" />
+              </div>
+              {/* Left header */}
+              <div className="flex min-w-0 flex-1 items-center gap-2 pl-3">
+                <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">
+                  {ui('financeReconcileAutomatchColStatement')}
+                </span>
+                <span className="rounded-lg border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-1.5 py-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+                  {transactionGroups.length}
+                </span>
+              </div>
+              {/* Right header */}
+              <div className="flex min-w-0 flex-1 items-center pl-3">
+                <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">
+                  {ui('financeReconcileAutomatchColOps')}
+                </span>
+              </div>
             </div>
-            {/* Left header */}
-            <div className="flex min-w-0 flex-1 items-center gap-2 pl-3">
-              <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">
-                {ui('financeReconcileAutomatchColStatement')}
-              </span>
-              <span className="rounded-lg border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-1.5 py-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-                {groups.length}
-              </span>
-            </div>
-            {/* Right header */}
-            <div className="flex min-w-0 flex-1 items-center pl-3">
-              <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">
-                {ui('financeReconcileAutomatchColOps')}
-              </span>
-            </div>
-          </div>
+          ) : null}
 
           {/* Rows */}
           <div className="flex-1 space-y-3 overflow-y-auto px-5 py-3">
-            {groups.length === 0 ? (
+            {showGroupBlock && transactionGroups.length === 0 ? (
               <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
                 {ui('financeReconcileAutomatchEmpty')}
               </p>
             ) : (
-              groups.map((group) => (
+              transactionGroups.map((group) => (
                 <GroupRow
                   key={group.groupKey}
                   group={group}
-                  checked={checked.has(group.groupKey)}
-                  onToggle={onToggle}
+                  checked={isChecked(group)}
+                  onToggle={toggle}
                   currency={currency}
                   glItemDifference={glItemDifference}
                   data-testid="GroupRow__a89979" />
               ))
             )}
+            <AutoMatchBounceSection
+              pairs={pairs}
+              isChecked={isChecked}
+              onToggle={toggle}
+              onToggleAll={toggleAllPairs}
+              onReview={onReviewPair}
+              currency={currency}
+              formatDate={formatLineDate}
+              data-testid="AutoMatchBounceSection__a89979" />
           </div>
         </div>
 
@@ -497,11 +574,11 @@ export function AutoMatchSuggestionModal({
             <button
               type="button"
               onClick={handleApply}
-              disabled={checkedGroups.length === 0 || loading}
+              disabled={applyCount === 0 || loading}
               data-testid="automatch-modal-apply"
               className={cn(
                 'flex h-10 items-center gap-1 rounded-full px-3 text-sm font-medium transition-colors',
-                checkedGroups.length > 0 && !loading
+                applyCount > 0 && !loading
                   ? 'bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]'
                   : 'cursor-not-allowed bg-[hsl(var(--border-control))] text-[hsl(var(--muted-foreground))]',
               )}
@@ -509,7 +586,7 @@ export function AutoMatchSuggestionModal({
               <span>
                 {loading
                   ? ui('loading')
-                  : ui('financeReconcileAutomatchActionApply', { count: checkedGroups.length })}
+                  : applyLabelText(ui, checkedGroups.length, checkedPairs.length)}
               </span>
             </button>
           </div>
