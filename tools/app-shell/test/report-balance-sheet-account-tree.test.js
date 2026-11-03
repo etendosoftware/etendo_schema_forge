@@ -40,6 +40,11 @@ const ARTIFACT_DIR = resolve(import.meta.dirname, '../../../artifacts/balance-sh
 const PL_DIR = resolve(import.meta.dirname, '../../../artifacts/profit-loss');
 const CONTRACT = JSON.parse(readFileSync(resolve(ARTIFACT_DIR, 'report-contract.json'), 'utf8'));
 const PL_CONTRACT = JSON.parse(readFileSync(resolve(PL_DIR, 'report-contract.json'), 'utf8'));
+// ETP-6080 gave profit-loss its interactive view first (dimension filters, split,
+// expansion); balance-sheet follows in ETP-6079. Until then the two match on
+// everything else, and these are the only profit-loss additions allowed.
+const PL_ONLY_SECTIONS = ['dimensiones'];
+const PL_ONLY_PARAMS = ['bPartnerId', 'productId', 'expandedNodeIds', 'splitBy', 'splitNodeId', 'splitSign'];
 const SQL = CONTRACT.sql.query;
 const OPERANDS_SQL = CONTRACT.sql.operandsQuery;
 const HELPERS_CODE = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
@@ -83,7 +88,7 @@ describe('balance-sheet report-contract.json — sections', () => {
   });
 
   it('matches profit-loss section-for-section (same sidebar layout)', () => {
-    assert.deepEqual(CONTRACT.sections, PL_CONTRACT.sections);
+    assert.deepEqual(CONTRACT.sections, PL_CONTRACT.sections.filter((s) => !PL_ONLY_SECTIONS.includes(s.id)));
   });
 });
 
@@ -103,7 +108,7 @@ describe('balance-sheet report-contract.json — the 11 sidebar parameters', () 
   });
 
   it('every parameter is byte-identical to its profit-loss counterpart', () => {
-    assert.deepEqual(CONTRACT.parameters, PL_CONTRACT.parameters);
+    assert.deepEqual(CONTRACT.parameters, PL_CONTRACT.parameters.filter((p) => !PL_ONLY_PARAMS.includes(p.name)));
   });
 
   it('yearId is a required, org-dependent year selector in "periodo"', () => {

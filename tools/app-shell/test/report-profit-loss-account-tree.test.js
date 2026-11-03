@@ -661,3 +661,86 @@ describe('profit-loss template-csv.hbs', () => {
     }
   });
 });
+
+// ── ETP-6080: interactive view support (dimension filters, split, expansion) ─
+
+const { applyPlaceholders } = await (await import('../vite-plugins/report-cli.js')).loadReportCli('report-sql');
+const apply = (sql, params) => applyPlaceholders(sql, { clientId: 'C1', params, contract: CONTRACT });
+const NO_YEAR = { acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-01-01', dateTo: '2026-12-31', compareTo: 'false' };
+
+describe('profit-loss SQL — the year clause is optional (ETP-6080)', () => {
+  // The interactive view sends dates, never yearId. The clause used to open the
+  // CASE with no leading AND, so it could not be stripped: '__YEARID__' = '' was
+  // false, BETWEEN NULL AND NULL was NULL and every amount fell to ELSE 0.
+  it('leaves no __YEARID__ behind when only dates are sent', () => {
+    const sql = apply(SQL, NO_YEAR);
+    assert.doesNotMatch(sql, /__YEARID__/);
+    assert.match(sql, /SUM\(CASE WHEN TRUE\s+AND \('2026-01-01' = '' OR fa\.dateacct >= '2026-01-01'::date\)/);
+  });
+
+  it('still filters by the year when the old viewer sends yearId', () => {
+    assert.match(apply(SQL, { ...NO_YEAR, yearId: 'Y1' }), /CASE WHEN TRUE AND \('Y1' = '' OR fa\.dateacct BETWEEN/);
+  });
+});
+
+describe('profit-loss — business partner / product filters (ETP-6080)', () => {
+  for (const [name, column] of [['bPartnerId', 'c_bpartner_id'], ['productId', 'm_product_id']]) {
+    it(`${name} is an optional multi-select search in "dimensiones", filtering fa.${column}`, () => {
+      const p = findParam(name);
+      assert.ok(p, `${name} not declared`);
+      assert.equal(p.type, 'search');
+      assert.equal(p.multi, true);
+      assert.equal(p.section, 'dimensiones');
+      assert.ok(!p.required && !p.hidden);
+      const placeholder = `__${name.toUpperCase()}__`;
+      for (const sql of [SQL, CONTRACT.sql.splitQuery]) {
+        assert.ok(sql.includes(`AND ('${placeholder}' = '' OR fa.${column} = '${placeholder}')`));
+      }
+      assert.match(apply(SQL, { ...NO_YEAR, [name]: 'A,B' }), new RegExp(`fa\\.${column} IN \\('A','B'\\)`));
+      assert.doesNotMatch(apply(SQL, NO_YEAR), new RegExp(placeholder));
+    });
+  }
+
+  it('declares the "dimensiones" section with bilingual labels', () => {
+    const section = CONTRACT.sections.find((s) => s.id === 'dimensiones');
+    assert.deepEqual(section?.label, { en_US: 'Dimensions', es_ES: 'Dimensiones' });
+  });
+});
+
+describe('profit-loss — interactive-only params are hidden (ETP-6080)', () => {
+  // Hidden: never in the filter panel, never printed as an active filter.
+  for (const name of ['expandedNodeIds', 'splitBy', 'splitNodeId', 'splitSign']) {
+    it(`${name} is declared hidden`, () => {
+      assert.equal(findParam(name)?.hidden, true);
+    });
+  }
+
+  it('opts in to the result trend rule (revenue up / expense down improve)', () => {
+    assert.equal(CONTRACT.trend, 'result');
+  });
+});
+
+describe('profit-loss splitQuery — one account split by org / contact / product (ETP-6080)', () => {
+  const SPLIT = CONTRACT.sql.splitQuery;
+  const facts = (sql) => sql.slice(sql.indexOf('FROM fact_acct fa WHERE'), sql.indexOf(' GROUP BY'));
+  const ownSums = (sql) => sql.slice(sql.indexOf('SUM(CASE WHEN TRUE AND'), sql.indexOf(' FROM fact_acct fa WHERE'));
+
+  it('reads fact_acct with exactly the main query\'s predicates (org, schema, R/C, dimensions)', () => {
+    assert.ok(facts(SPLIT).startsWith(facts(SQL)), facts(SPLIT));
+  });
+
+  it('sums the same periods as the main query (year/dates and the comparison)', () => {
+    assert.equal(ownSums(SPLIT), ownSums(SQL));
+  });
+
+  it('covers the node and its whole subtree, and groups by the chosen dimension', () => {
+    assert.match(SPLIT, /SELECT '__SPLITNODEID__'::varchar AS node_id/);
+    assert.match(SPLIT, /JOIN sub s ON tn\.parent_id = s\.node_id/);
+    assert.match(SPLIT, /fa\.account_id IN \(SELECT node_id FROM sub\)/);
+    assert.match(SPLIT, /CASE '__SPLITBY__' WHEN 'org' THEN fa\.ad_org_id WHEN 'bpartner' THEN fa\.c_bpartner_id ELSE fa\.m_product_id END AS dimension_id/);
+  });
+
+  it('returns the columns the split handler reads', () => {
+    for (const col of ['AS dimension_id', 'AS dimension_name', 'f.own_amt', 'f.own_amt_ref']) assert.ok(SPLIT.includes(col), col);
+  });
+});
