@@ -1,5 +1,4 @@
 import { useCallback, useMemo } from 'react';
-import { Percent } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Switch } from '@/components/ui/switch';
 import { ImportNotice } from '@/components/contract-ui/ImportLinesModal.jsx';
@@ -56,13 +55,9 @@ export default function useOrderGlobalDiscountImport() {
       return (
         <span
           data-testid="ImportGlobalDiscount__tag"
-          className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-lg bg-sidebar-accent px-2 py-1 text-xs leading-4 text-sidebar-accent-foreground"
+          className="inline-flex items-center whitespace-nowrap rounded-lg bg-sidebar-accent px-2 py-1 text-xs leading-4 text-sidebar-accent-foreground"
         >
-          <Percent
-            size={12}
-            strokeWidth={2.2}
-            aria-hidden="true"
-            data-testid="Percent__b75e6e" />
+          {/* Figma «% Dto. global 10%»: the leading % is text in the label, not an icon. */}
           {ui('importGlobalDiscountTag', { pct: fmtPct(pct) })}
         </span>
       );
@@ -111,7 +106,9 @@ export default function useOrderGlobalDiscountImport() {
             tone="warning"
             role="status"
             title={title}
-            body={`${body} ${warningClosing(decision.invoicePct)}`}
+            // «invoice has lines» already says the lines import without a global discount (its
+            // Figma body), so the closing sentence would repeat it.
+            body={decision.kind === 'invoiceHasLines' ? body : `${body} ${warningClosing(decision.invoicePct)}`}
             data-testid="ImportGlobalDiscount__warning" />
         );
       }

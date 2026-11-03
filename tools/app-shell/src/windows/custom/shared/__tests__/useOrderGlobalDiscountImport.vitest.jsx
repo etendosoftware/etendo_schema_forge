@@ -141,13 +141,15 @@ describe('useOrderGlobalDiscountImport — selection panel', () => {
       texts: [
         'importGlobalDiscountInvoiceHasLinesTitle',
         'importGlobalDiscountInvoiceHasLinesBody:{"pct":"10"}',
-        'importGlobalDiscountNotCarried',
       ],
+      // Its Figma body already ends «Se importarán sin descuento global.»: no closing sentence.
+      absent: ['importGlobalDiscountNotCarried', 'importGlobalDiscountKeepsInvoice'],
     },
-  ])('warning ($name): title, body and closing sentence, no toggle', ({ sel, texts }) => {
+  ])('warning ($name): title, body and closing sentence, no toggle', ({ sel, texts, absent = [] }) => {
     renderPanel(selection(sel));
     const warning = screen.getByTestId('ImportGlobalDiscount__warning');
     for (const text of texts) expect(warning.textContent).toContain(text);
+    for (const text of absent) expect(warning.textContent).not.toContain(text);
     expect(screen.queryByTestId('ImportGlobalDiscount__switch')).toBeNull();
   });
 

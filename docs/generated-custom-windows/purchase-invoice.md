@@ -505,7 +505,7 @@ ids, so the chips refresh when the header is re-read after an import from order.
 - Lists completed purchase orders (`documentStatus=CO`) of the same supplier with `invoiceStatus < 100`, in the invoice's currency.
 - Already-imported lines (matched via `salesOrderLine` / `C_OrderLine_ID` on existing invoice lines) are greyed, labelled "ya importado" and never selected.
 - **Server import (ETP-5828, fixes QA UI-1).** Each line's selectable quantity is the pending of `POST purchase-invoice/header/{id}/action/availableOrderLines` (drafts subtracted — that rule is unchanged and pending a product decision), and the selection is imported with ONE `POST purchase-invoice/header/{id}/action/importOrderLines` `{ orders: [{ orderId, lines: [{ sourceLineId, quantity }] }], carryGlobalDiscount }`, handled by the shared `ImportOrderLinesIntoInvoiceHandler`: lines and the header global discount are written in the same transaction, all or nothing. Before, the popup POSTed one `/purchase-invoice/lines` per line and PATCHed `etgoTotalDiscount` afterwards from the browser, so the totals showed a mix of discounted and undiscounted values for ~3 s after the import (QA UI-1). No line POST and no header PATCH are sent any more.
-- Global discount carry-over: the «Dto. global X %» badge, the row total net of the order %, the carry toggle and the three warnings are those of `useOrderGlobalDiscountImport.jsx`, decided by `resolveOrderGlobalDiscount` and sent as `carryGlobalDiscount`; a refusal (`importQuantityExceedsPending`, `globalDiscountConflict`, …) is shown translated and imports nothing.
+- Global discount carry-over: the «% Dto. global X%» badge, the row total net of the order %, the carry toggle and the three warnings are those of `useOrderGlobalDiscountImport.jsx`, decided by `resolveOrderGlobalDiscount` and sent as `carryGlobalDiscount`; a refusal (`importQuantityExceedsPending`, `globalDiscountConflict`, …) is shown translated and imports nothing.
 - **Currency filter — ETP-4029:** the modal fetches the invoice's own header (`GET purchase-invoice/header/{id}`) and keeps only candidate orders whose `currency` matches the invoice's current header currency (purchase orders carry `currency` directly). Empty-state message when candidates exist but none match: `noPurchaseOrdersMatchCurrency`.
 
 **Import from Goods Receipt** (`artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx`):
@@ -3007,7 +3007,7 @@ The `id` of every call is the draft purchase invoice. `lines` omitted imports ev
   descuento global del X % aplicado a la factura» tells the user: `applied:true, percent:X` when the header now holds the
   orders' %, else `applied:false, percent:null` with `reason` `carryGlobalDiscountFalse` (the call sent
   `carryGlobalDiscount:false`) or `ordersWithoutDiscount`. `availableOrders` rows also carry `globalDiscount`, the order's %
-  (0 when none), the popup's «Dto. global X %» tag. Both fields are additive: the window reads neither.
+  (0 when none), the popup's «% Dto. global X%» tag. Both fields are additive: the window reads neither.
 - The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
   through `MCP_CONFIG`. `createPurchaseInvoice` on the purchase order or the goods receipt (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/purchase-invoice/spec.md`)
   describes the flow.
