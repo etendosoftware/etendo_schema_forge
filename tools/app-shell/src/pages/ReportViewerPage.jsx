@@ -2087,7 +2087,11 @@ export default function ReportViewerPage() {
 
   const selectedReport = reportId ? visibleReports.find(r => r.id === reportId) : null;
 
+  // ETP-6080 F10: a report picked from the list was opened from the menu; any other arrival
+  // (a pasted URL, a favourite, a reload) counts as a deep link for `report_opened.source`.
+  const [pickedReportId, setPickedReportId] = useState(null);
   const selectReport = (report) => {
+    setPickedReportId(report.id);
     const params = new URLSearchParams(searchParams);
     params.set('report', report.id);
     setSearchParams(params);
@@ -2124,6 +2128,7 @@ export default function ReportViewerPage() {
           onBack={clearReport}
           selectedOrgId={selectedOrg?.id || null}
           roleOrgs={selectedRole?.orgList || []}
+          source={pickedReportId === selectedReport.id ? 'menu' : 'deep_link'}
           data-testid="DynamicReportView__3c998a" />
       </Suspense>
     );

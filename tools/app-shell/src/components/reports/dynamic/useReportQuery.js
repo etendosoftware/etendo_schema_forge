@@ -31,12 +31,13 @@ function errorCodeOf(status, body) {
  *
  * `required` overrides the params it waits for (the journal-entry drill-down has no dates).
  *
- * Returns `{ data, loading, error, errorCode }`: `error` is a displayable message (a network failure
- * carries its own translated one), `errorCode` the class (`network`, `org_access_denied`, `http_500`).
+ * Returns `{ data, loading, error, errorCode, settled }`: `error` is a displayable message (a network failure
+ * carries its own translated one), `errorCode` the class (`network`, `org_access_denied`, `http_500`),
+ * `settled` a counter that moves once per answered request (success or failure), never on abort.
  */
 export function useReportQuery(reportId, params, { locale, enabled = true, required = REQUIRED_QUERY_PARAMS } = {}) {
   const apiFetch = useApiFetch('');
-  const [state, setState] = useState({ data: null, loading: false, error: null, errorCode: null });
+  const [state, setState] = useState({ data: null, loading: false, error: null, errorCode: null, settled: 0 });
   // Params compared by value: the view rebuilds the object on every render.
   const paramsKey = JSON.stringify(params ?? {});
   const paramsRef = useRef(params);
@@ -62,10 +63,10 @@ export function useReportQuery(reportId, params, { locale, enabled = true, requi
         const body = await res.json().catch(() => null);
         if (controller.signal.aborted) return;
         if (!res.ok) {
-          setState((s) => ({ ...s, loading: false, error: body?.error || `HTTP ${res.status}`, errorCode: errorCodeOf(res.status, body) }));
+          setState((s) => ({ ...s, loading: false, error: body?.error || `HTTP ${res.status}`, errorCode: errorCodeOf(res.status, body), settled: s.settled + 1 }));
           return;
         }
-        setState({ data: body, loading: false, error: null, errorCode: null });
+        setState((s) => ({ data: body, loading: false, error: null, errorCode: null, settled: s.settled + 1 }));
       } catch (err) {
         if (controller.signal.aborted || err?.name === 'AbortError') return;
         setState((s) => ({
@@ -73,6 +74,7 @@ export function useReportQuery(reportId, params, { locale, enabled = true, requi
           loading: false,
           error: err?.message ?? null,
           errorCode: isNetworkError(err) ? 'network' : 'unknown',
+          settled: s.settled + 1,
         }));
       }
     }, QUERY_DEBOUNCE_MS);

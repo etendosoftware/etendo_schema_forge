@@ -1950,7 +1950,10 @@
           "DynamicReportView",
           "useReportQuery",
           "DYNAMIC_REPORT_IDS",
-        "opensDynamicView"
+          "opensDynamicView",
+          "pickedReportId",
+          "reportSessionId",
+          "REPORT_DRILLDOWN"
         ]
       },
       "paths": {

@@ -4,9 +4,12 @@
 // @covers tools/app-shell/src/components/reports/dynamic/useReportDefaults.js
 // @covers tools/app-shell/src/components/reports/dynamic/useAccountSplit.js
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicDrillPanel.jsx
+// @covers tools/app-shell/src/components/reports/dynamic/reportTelemetry.js
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const apiFetchMock = vi.fn();
+const trackMock = vi.fn();
+vi.mock('@/lib/observability.js', () => ({ track: (...args) => trackMock(...args) }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${Object.values(params).join(',')}` : key),
@@ -101,6 +104,7 @@ beforeEach(() => {
   entryAnswer = ENTRY;
   queryAnswer = (params) => json({ kind: 'tree', rows: params.compareTo === 'true' ? withVariation(TREE) : TREE });
   apiFetchMock.mockReset();
+  trackMock.mockReset();
   apiFetchMock.mockImplementation(route);
   globalThis.URL.createObjectURL = vi.fn(() => 'blob:x');
   globalThis.URL.revokeObjectURL = vi.fn();
@@ -323,6 +327,119 @@ describe('DynamicReportView — drill-down (F9)', () => {
     await openLedger();
     fireEvent.click(screen.getByTestId('DynamicDrillPanel__crumb-report'));
     await waitFor(() => expect(screen.queryByTestId('DynamicDrillPanel')).toBeNull());
+  });
+});
+
+describe('DynamicReportView — telemetry (F10, T9)', () => {
+  const sent = (name) => trackMock.mock.calls.filter(([event]) => event === name).map(([, props]) => props);
+  const settle = () => waitFor(() => expect(screen.queryByTestId('DynamicReportView__loading')).toBeNull());
+
+  it('report_opened once per session, after the first result, with source and duration; the defaults are no filter', async () => {
+    renderView({ source: 'menu' });
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    const [opened] = sent('report_opened');
+    expect(opened).toMatchObject({ specName: 'profit-loss', source: 'menu', outcome: 'success' });
+    expect(opened.reportSessionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(opened.durationMs).toEqual(expect.any(Number));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+    await waitFor(() => expect(sent('report_filter_applied')).toHaveLength(1));
+    expect(sent('report_opened')).toHaveLength(1);
+  });
+
+  it('a user change: one report_filter_applied once its result is in; "Limpiar filtros" none', async () => {
+    renderView();
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    expect(sent('report_filter_applied')).toEqual([]);
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+    await waitFor(() => expect(sent('report_filter_applied')).toHaveLength(1));
+    const [applied] = sent('report_filter_applied');
+    expect(applied).toMatchObject({ type: 'business_partner', outcome: 'success', reportSessionId: sent('report_opened')[0].reportSessionId });
+    expect(applied.durationMs).toEqual(expect.any(Number));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__reset'));
+    await waitFor(() => expect(queries().at(-1).bPartnerId).toBe(''));
+    await settle();
+    expect(sent('report_filter_applied')).toHaveLength(1);
+  });
+
+  it('two changes inside the debounce: only the one whose request ran is reported', async () => {
+    renderView();
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__shortcut-month'));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+    await waitFor(() => expect(queries().at(-1).compareTo).toBe('true'));
+    await settle();
+    expect(queries()).toHaveLength(2); // the opening one and the last change: the first change never ran
+    expect(sent('report_filter_applied').map((e) => e.type)).toEqual(['comparison']);
+  });
+
+  it('a failed request reports the error class, never the message', async () => {
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }, { id: 'O2', name: 'USA' }] });
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    queryAnswer = () => json({ error: 'Access denied to org O2', code: 'ORG_ACCESS_DENIED' }, { ok: false, status: 403 });
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__org'), { target: { value: 'O2' } });
+    await waitFor(() => expect(sent('report_filter_applied')).toHaveLength(1));
+    expect(sent('report_filter_applied')[0]).toMatchObject({ type: 'organization', outcome: 'error', errorCode: 'org_access_denied' });
+    expect(JSON.stringify(trackMock.mock.calls)).not.toContain('Access denied');
+  });
+
+  it('folding: expand / collapse / expand_all / collapse_all; the level is an account_level filter', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    const toggleOf = (i) => within(screen.getAllByTestId('DynamicReportTable__row')[i]).getByTestId('DynamicReportTable__toggle');
+    fireEvent.click(toggleOf(1));
+    fireEvent.click(toggleOf(1));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapseAll'));
+    expect(sent('report_group_toggled').map((e) => [e.type, e.outcome])).toEqual([
+      ['expand', 'success'], ['collapse', 'success'], ['expand_all', 'success'], ['collapse_all', 'success'],
+    ]);
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: 'S' } });
+    expect(sent('report_filter_applied')).toEqual([expect.objectContaining({ type: 'account_level', outcome: 'success' })]);
+  });
+
+  it('another report is a new session', async () => {
+    const view = renderView();
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(1));
+    view.rerender(<DynamicReportView report={{ ...REPORT, id: 'balance-sheet' }} onBack={vi.fn()} selectedOrgId="O1" />);
+    await waitFor(() => expect(sent('report_opened')).toHaveLength(2));
+    const [first, second] = sent('report_opened');
+    expect(second.specName).toBe('balance-sheet');
+    expect(second.reportSessionId).not.toBe(first.reportSessionId);
+  });
+
+  it('drill-down: ledger and entry timed, the document when its tab opens, no_document at a dead end', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => ({}));
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    fireEvent.click(await screen.findByTestId('DynamicReportTable__ledger'));
+    fireEvent.click((await screen.findAllByTestId('DynamicDrillPanel__openEntry'))[0]);
+    fireEvent.click(await screen.findByTestId('DynamicDrillPanel__openDocument'));
+    const drills = sent('report_drilldown');
+    expect(drills.map((e) => [e.type, e.outcome])).toEqual([['ledger', 'success'], ['entry', 'success'], ['document', 'success']]);
+    expect(drills[0].durationMs).toEqual(expect.any(Number));
+    expect(drills[1].durationMs).toEqual(expect.any(Number));
+    expect(drills[2]).not.toHaveProperty('durationMs');
+
+    trackMock.mockReset();
+    entryAnswer = { kind: 'rows', rows: ENTRY.rows.map((r) => ({ ...r, doc_window: null })) };
+    fireEvent.click(screen.getByTestId('DynamicDrillPanel__crumb-account'));
+    fireEvent.click((await screen.findAllByTestId('DynamicDrillPanel__openEntry'))[1]);
+    await screen.findByTestId('DynamicDrillPanel__noDocument');
+    await waitFor(() => expect(sent('report_drilldown').map((e) => [e.type, e.outcome])).toContainEqual(['document', 'no_document']));
+    open.mockRestore();
+  });
+
+  it('a blocked pop-up is a document drill-down that failed', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+    fireEvent.click(await screen.findByTestId('DynamicReportTable__ledger'));
+    fireEvent.click((await screen.findAllByTestId('DynamicDrillPanel__openEntry'))[0]);
+    fireEvent.click(await screen.findByTestId('DynamicDrillPanel__openDocument'));
+    expect(sent('report_drilldown').at(-1)).toMatchObject({ type: 'document', outcome: 'error' });
+    open.mockRestore();
   });
 });
 

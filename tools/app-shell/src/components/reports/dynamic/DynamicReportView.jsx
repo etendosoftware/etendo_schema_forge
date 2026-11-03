@@ -12,6 +12,7 @@ import DynamicDrillPanel from './DynamicDrillPanel.jsx';
 import { useReportQuery } from './useReportQuery.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
+import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
 import { comparisonPeriod, matchingShortcut, openingPeriod, pickedYearPeriod, shortcutPeriod } from './dynamicDates.js';
 import { expandAll, expansionForLevel, visibleRows } from './reportTree.js';
 
@@ -39,9 +40,10 @@ function initialState(defaultOrgId, period, level) {
  * ETP-6080 — the interactive report view (behind `dynamic-reports`). Opens on the fiscal year that
  * contains today (§19), applies every change on its own through `useReportQuery`, folds the tree
  * on screen, compares with a preset period and splits leaf accounts by a dimension. The exports
- * print what the screen shows: same params plus `expandedNodeIds`.
+ * print what the screen shows: same params plus `expandedNodeIds`. `source` ('menu' | 'deep_link')
+ * is how the report was opened, for `report_opened` (F10).
  */
-export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [] }) {
+export default function DynamicReportView({ report, onBack, selectedOrgId, roleOrgs = [], source = 'deep_link' }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const { locale } = useLocaleSwitch();
@@ -88,7 +90,11 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     toReferenceDate: reference?.toReferenceDate || '',
   }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, state.bPartnerId, state.productId, reference?.fromReferenceDate, reference?.toReferenceDate]);
 
-  const { data, loading, error, errorCode } = useReportQuery(report.id, queryParams, { locale });
+  const { data, loading, error, errorCode, settled } = useReportQuery(report.id, queryParams, { locale });
+  const telemetry = useReportTelemetry(report.id, { source, paramsKey: JSON.stringify(queryParams), settled, errorCode });
+  // A user's change: marked for report_filter_applied. The defaults and "Limpiar filtros" are not.
+  const userChange = (patch) => { telemetry.markFilter(filterTypeOf(patch)); change(patch); };
+  const groupToggled = (type) => telemetry.emit(REPORT_EVENTS.GROUP_TOGGLED, { type, outcome: 'success' });
   // The query waits for the schema (isQueryReady); a role that sees none would wait forever.
   const noSchema = !defaults.loading && !defaults.acctSchemaId;
   const rows = useMemo(() => data?.rows ?? [], [data]);
@@ -101,18 +107,26 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   }, [rows, expanded, state.level]);
   const expandedSet = expanded ?? NO_ROWS_EXPANDED;
   const shown = useMemo(() => visibleRows(rows, expandedSet), [rows, expandedSet]);
-  const toggleRow = (id) => setExpanded((prev) => {
-    const next = new Set(prev ?? []);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-  const setLevel = (level) => { change({ level }); setExpanded(expansionForLevel(rows, level)); };
+  const toggleRow = (id) => {
+    groupToggled(expandedSet.has(id) ? 'collapse' : 'expand');
+    setExpanded((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  // The level folds on screen: nothing loads, so the change is applied at once.
+  const setLevel = (level) => {
+    telemetry.emit(REPORT_EVENTS.FILTER_APPLIED, { type: 'account_level', outcome: 'success' });
+    change({ level });
+    setExpanded(expansionForLevel(rows, level));
+  };
 
   const [drillAccount, setDrillAccount] = useState(null);
   const { splits, toggle: toggleSplit } = useAccountSplit(report.id, queryParams, state.splitBy, { locale });
 
   const shortcut = matchingShortcut(state, defaults.years, today);
-  const onShortcut = (kind) => change(kind === 'year' ? openingPeriod(defaults.years, today) : shortcutPeriod(kind, today));
+  const onShortcut = (kind) => userChange(kind === 'year' ? openingPeriod(defaults.years, today) : shortcutPeriod(kind, today));
   const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel)); setExpanded(expansionForLevel(rows, defaultLevel)); };
 
   const [exporting, setExporting] = useState(null);
@@ -183,12 +197,12 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
       <div className="flex-1 min-h-0 flex">
         <DynamicReportPanel
           state={state}
-          onChange={change}
+          onChange={userChange}
           onShortcut={onShortcut}
-          onPickYear={(y) => y && change(pickedYearPeriod(y, today))}
+          onPickYear={(y) => y && userChange(pickedYearPeriod(y, today))}
           onLevel={setLevel}
-          onExpandAll={() => setExpanded(expandAll(rows))}
-          onCollapseAll={() => setExpanded(new Set())}
+          onExpandAll={() => { groupToggled('expand_all'); setExpanded(expandAll(rows)); }}
+          onCollapseAll={() => { groupToggled('collapse_all'); setExpanded(new Set()); }}
           onReset={reset}
           shortcut={shortcut}
           years={defaults.years}
@@ -216,7 +230,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                       type="button"
                       className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-muted"
                       aria-label={ui('dynamicReportRemoveFilter', { label: c.label })}
-                      onClick={() => change(c.clear)}
+                      onClick={() => userChange(c.clear)}
                       data-testid={`DynamicReportView__chipRemove-${c.key}`}
                     >
                       <X className="w-3 h-3" />
@@ -248,7 +262,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           </div>
         </main>
       </div>
-      <DynamicDrillPanel reportTitle={title} account={drillAccount} queryParams={queryParams} onClose={() => setDrillAccount(null)} />
+      <DynamicDrillPanel reportTitle={title} account={drillAccount} queryParams={queryParams} session={telemetry.session} onClose={() => setDrillAccount(null)} />
     </div>
   );
 }

@@ -211,6 +211,23 @@ Route tracking ignores query-string and hash-only changes.
 | `onboarding_environment_enter_succeeded` | Environment entry succeeds. |
 | `onboarding_environment_enter_failed` | Environment entry fails. |
 
+### Interactive report events (ETP-6080, flag `dynamic-reports`)
+
+Emitted by the interactive report view (`components/reports/dynamic/reportTelemetry.js`), as agreed
+in the reports KPI analysis (PR #25). Every event carries `specName` (the report id) and
+`reportSessionId`, a random UUID per report session. `reportSessionId` is in the host allowlist
+(`payload.js`) and in `TRUSTED_CONTEXT_KEYS` (`observability/core.js`): its name contains
+`session`, so without the trusted entry the gateway redacts it and the funnels break with no error.
+Its value (36 characters) stays under the gateway's opaque-value scrub. `errorCode` is a class
+(`network`, `http_500`, `org_access_denied`), never a message.
+
+| Event | When | Properties |
+|-------|------|-----------|
+| `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode` |
+| `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`), `outcome`, `durationMs` (none for `account_level`: nothing loads), `errorCode` |
+| `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success` |
+| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window) |
+
 ### Health Score events (ETP-4209)
 
 These three events feed the customer Health Score dashboard in Mixpanel.

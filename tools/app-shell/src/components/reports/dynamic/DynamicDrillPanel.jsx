@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { cn } from '@/lib/utils';
 import { reportDocumentUrl } from '@/components/reports/reportDocumentUrl.js';
 import { useReportQuery } from './useReportQuery.js';
+import { REPORT_EVENTS, resultOf, startReportTiming, trackReportEvent } from './reportTelemetry.js';
 import {
   ENTRY_REPORT_ID, ENTRY_REQUIRED_PARAMS, LEDGER_REPORT_ID, entryDocument, entryParams, filterLedgerRows,
   ledgerParams, ledgerSummary, sqlDateDay,
@@ -25,6 +26,17 @@ function useErrorText(error, errorCode) {
   return ui(errorCode === 'org_access_denied' ? 'dynamicReportErrorOrgAccess' : 'dynamicReportErrorGeneric');
 }
 
+/** report_drilldown for one step, timed from the click (this mount) to its first answer. */
+function useDrillTiming(session, type, settled, errorCode) {
+  const [stop] = useState(() => startReportTiming(REPORT_EVENTS.DRILLDOWN, { ...session, type }));
+  const sent = useRef(false);
+  useEffect(() => {
+    if (!settled || sent.current) return;
+    sent.current = true;
+    stop(resultOf(errorCode));
+  }, [settled, errorCode, stop]);
+}
+
 function Status({ loading, error, errorCode, empty }) {
   const ui = useUI();
   const errorText = useErrorText(error, errorCode);
@@ -34,10 +46,11 @@ function Status({ loading, error, errorCode, empty }) {
   return null;
 }
 
-function Ledger({ params, locale, dateText, onOpenEntry }) {
+function Ledger({ params, locale, dateText, onOpenEntry, session }) {
   const ui = useUI();
   const [search, setSearch] = useState('');
-  const { data, loading, error, errorCode } = useReportQuery(LEDGER_REPORT_ID, params, { locale });
+  const { data, loading, error, errorCode, settled } = useReportQuery(LEDGER_REPORT_ID, params, { locale });
+  useDrillTiming(session, 'ledger', settled, errorCode);
   const rows = data?.rows ?? [];
   const summary = useMemo(() => ledgerSummary(rows, data?.openingRows), [rows, data]);
   const shown = useMemo(() => filterLedgerRows(rows, search), [rows, search]);
@@ -102,11 +115,22 @@ function Ledger({ params, locale, dateText, onOpenEntry }) {
   );
 }
 
-function Entry({ params, locale, accountValue }) {
+function Entry({ params, locale, accountValue, session }) {
   const ui = useUI();
-  const { data, loading, error, errorCode } = useReportQuery(ENTRY_REPORT_ID, params, { locale, required: ENTRY_REQUIRED_PARAMS });
+  const { data, loading, error, errorCode, settled } = useReportQuery(ENTRY_REPORT_ID, params, { locale, required: ENTRY_REQUIRED_PARAMS });
+  useDrillTiming(session, 'entry', settled, errorCode);
   const rows = data?.rows ?? [];
   const doc = entryDocument(rows);
+  // The end of the path: an entry with no window to open is a drill-down that stops here (Q5).
+  const loadedWithoutDocument = rows.length > 0 && !doc;
+  useEffect(() => {
+    if (loadedWithoutDocument) trackReportEvent(REPORT_EVENTS.DRILLDOWN, { ...session, type: 'document', outcome: 'no_document' });
+  }, [loadedWithoutDocument, session]);
+  const openDocument = () => {
+    // A blocked pop-up returns null: the tab never opened.
+    const tab = window.open(reportDocumentUrl(doc), '_blank');
+    trackReportEvent(REPORT_EVENTS.DRILLDOWN, { ...session, type: 'document', outcome: tab ? 'success' : 'error' });
+  };
   return (
     <div className="flex flex-col gap-3" data-testid="DynamicDrillPanel__entry">
       <Status loading={loading} error={error} errorCode={errorCode} empty={!rows.length} />
@@ -140,7 +164,7 @@ function Entry({ params, locale, accountValue }) {
             <Button
               variant="outline"
               className="self-start h-9 gap-1.5 text-sm"
-              onClick={() => window.open(reportDocumentUrl(doc), '_blank')}
+              onClick={openDocument}
               data-testid="DynamicDrillPanel__openDocument"
             >
               <ExternalLink className="w-4 h-4" />{ui('dynamicReportOpenDocument')}
@@ -158,8 +182,9 @@ function Entry({ params, locale, accountValue }) {
  * ETP-6080 F9 — the drill-down side panel: report › account (its ledger, with the view's period and
  * filters) › entry (the whole entry, source account highlighted) › document (new tab). Each crumb
  * goes back to its step. An entry whose table has no window mapped ends the drill-down there (Q5).
+ * Each step emits `report_drilldown` (ledger / entry timed, document when the tab opens).
  */
-export default function DynamicDrillPanel({ reportTitle, account, queryParams, onClose }) {
+export default function DynamicDrillPanel({ reportTitle, account, queryParams, session, onClose }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [entry, setEntry] = useState(null);
@@ -190,8 +215,8 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, o
             ))}
           </nav>
         </SheetDescription>
-        {account && !entry && <Ledger params={ledger} locale={locale} dateText={dateText} onOpenEntry={setEntry} />}
-        {entry && <Entry key={entry.id} params={entryQuery} locale={locale} accountValue={account.value} />}
+        {account && !entry && <Ledger params={ledger} locale={locale} dateText={dateText} onOpenEntry={setEntry} session={session} />}
+        {entry && <Entry key={entry.id} params={entryQuery} locale={locale} accountValue={account.value} session={session} />}
       </SheetContent>
     </Sheet>
   );
