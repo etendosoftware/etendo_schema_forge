@@ -51,6 +51,7 @@ vi.mock('@/components/ui/dialog', () => ({
 
 vi.mock('lucide-react', () => ({
   ExternalLink: (props) => <span data-testid="icon-external" {...props} />,
+  Maximize2: (props) => <span data-testid="icon-maximize" {...props} />,
   Box: (props) => <span data-testid="icon-box" {...props} />,
   Calendar: (props) => <span data-testid="icon-calendar" {...props} />,
   ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,

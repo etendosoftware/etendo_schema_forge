@@ -1,9 +1,14 @@
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (params ? `${key}:${params.count}` : key),
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useLabel: () => (key) => key,
+}));
+
+vi.mock('@/lib/currencyFormatConfig', async (orig) => ({
+  ...(await orig()),
+  getCurrencyFormatConfig: () => ({ thousandsSeparator: '.', decimalSeparator: ',' }),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -24,6 +29,7 @@ vi.mock('@/components/ui/dialog', () => ({
 
 vi.mock('lucide-react', () => ({
   ExternalLink: (props) => <span data-testid="icon-external" {...props} />,
+  Maximize2: (props) => <span data-testid="icon-maximize" {...props} />,
   Box: (props) => <span data-testid="icon-box" {...props} />,
   Calendar: (props) => <span data-testid="icon-calendar" {...props} />,
   ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,
@@ -155,7 +161,7 @@ describe('ProductSidebar', () => {
     render(<ProductSidebar {...defaultProps} />);
 
     await waitFor(() => {
-      expect(screen.getByText('onHand')).toBeInTheDocument();
+      expect(screen.getByText('stockAvailableLabel')).toBeInTheDocument();
     });
   });
 
@@ -194,6 +200,133 @@ describe('ProductSidebar', () => {
       expect(screen.getByText('WH-Alpha')).toBeInTheDocument();
       expect(screen.getByText('WH-Beta')).toBeInTheDocument();
     });
+  });
+
+  // ETP-5908 RF-06: "N ubicaciones" is a link to the Warehouses tab.
+  it('renders the locations count as a button that opens the Warehouses tab', async () => {
+    const stockRows = [
+      { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Alpha', quantityOnHand: 30, reservedQty: 5 },
+      { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-Beta', quantityOnHand: 20, reservedQty: 2 },
+    ];
+    const transactions = [{ movementDate: '2025-03-01', movementQuantity: 20, storageBin: 'LOC1' }];
+    mockFetchResponses({ stockRows, transactions });
+    render(<ProductSidebar {...defaultProps} />);
+
+    const link = await screen.findByRole('button', { name: 'stockLocationsCount:2' });
+    expect(link.tagName).toBe('BUTTON');
+    expect(link.getAttribute('type')).toBe('button');
+    fireEvent.click(link);
+
+    expect((await screen.findAllByText('WH-Alpha')).length).toBeGreaterThan(0);
+    const cards = screen.getAllByTestId('WarehouseCardAvailability');
+    expect(cards[0].textContent).toContain('30 u');
+  });
+
+  it('formats quantities in the expand modal with the canonical separators', async () => {
+    mockFetchResponses({
+      stockRows: [
+        { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Alpha', quantityOnHand: 1080 },
+        { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-Beta', quantityOnHand: 300 },
+      ],
+      transactions: [{ movementDate: '2025-03-01', movementQuantity: 20, storageBin: 'LOC1' }],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'expand' }));
+    const dialog = await screen.findByTestId('dialog');
+    expect(dialog.textContent).toContain('1.080');
+    expect(dialog.textContent).toContain('total: 1.380');
+    expect(dialog.textContent).not.toContain('1,080');
+  });
+
+  it('keeps up to 2 decimals on fractional stock (card, summary, modal) and no decimals on integers', async () => {
+    mockFetchResponses({
+      stockRows: [
+        { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Alpha', quantityOnHand: 12.5 },
+        { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-Beta', quantityOnHand: 1080 },
+      ],
+      transactions: [{ movementDate: '2025-03-01', movementQuantity: 20, storageBin: 'LOC1' }],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+    expect(await screen.findByText('1.092,5')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'stockLocationsCount:2' }));
+    await screen.findAllByText('WH-Alpha');
+    const cards = screen.getAllByTestId('WarehouseCardAvailability');
+    const cardText = cards.map(c => c.textContent).join('|');
+    expect(cardText).toContain('12,5 u');
+    expect(cardText).not.toContain('13 u');
+    expect(cardText).toContain('1.080 u');
+    expect(cardText).not.toContain('1.080,');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'expand' }))[0]);
+    const dialog = await screen.findByTestId('dialog');
+    expect(dialog.textContent).toContain('12,5');
+    expect(dialog.textContent).toContain('total: 1.092,5');
+  });
+
+  it('places the locations link inline right after the "Available ·" label', async () => {
+    mockFetchResponses({
+      stockRows: [
+        { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Alpha', quantityOnHand: 30 },
+        { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-Beta', quantityOnHand: 20 },
+      ],
+      transactions: [{ movementDate: '2025-03-01', movementQuantity: 20, storageBin: 'LOC1' }],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+    const link = await screen.findByTestId('AvailabilityLocationsLink');
+    expect(link.previousElementSibling.textContent).toBe('stockAvailableLabel ·');
+    expect(link.parentElement.className).not.toContain('justify-between');
+  });
+
+  it('keeps the single-warehouse subtitle as plain text (not a link)', async () => {
+    mockFetchResponses({
+      stockRows: [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Only', quantityOnHand: 9 }],
+      transactions: [{ movementDate: '2025-03-01', movementQuantity: 9, storageBin: 'LOC1' }],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+    expect((await screen.findAllByText('WH-Only')).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /stockLocationsCount/ })).toBeNull();
+  });
+
+  // ETP-5908 RF-07: icon-only expand button.
+  it('renders the chart expand control as an icon-only button with tooltip and aria-label', async () => {
+    mockFetchResponses({
+      stockRows: [{ storageBin: 'LOC1', 'warehouse$_identifier': 'WH-A', quantityOnHand: 10 }],
+      transactions: [{ movementDate: '2025-03-01', movementQuantity: 10, storageBin: 'LOC1' }],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+
+    const btn = await screen.findByRole('button', { name: 'expand' });
+    expect(btn).toHaveAttribute('title', 'expand');
+    expect(btn).toHaveAttribute('aria-label', 'expand');
+    expect(btn.textContent).toBe('');
+    expect(screen.queryByTestId('icon-external')).toBeNull();
+    expect(btn.querySelector('[data-testid="Maximize2__59b33d"]')).not.toBeNull();
+
+    fireEvent.click(btn);
+    expect(await screen.findByTestId('dialog')).toBeInTheDocument();
+  });
+
+  // ETP-5908 RF-08 / RF-09: warehouse cards.
+  it('shows no reserved data and the "Available · N u" text with a series-coloured dot per warehouse', async () => {
+    mockFetchResponses({
+      stockRows: [
+        { storageBin: 'LOC1', 'warehouse$_identifier': 'WH-Alpha', quantityOnHand: 30, reservedQty: 5 },
+        { storageBin: 'LOC2', 'warehouse$_identifier': 'WH-Beta', quantityOnHand: 20, reservedQty: 2 },
+      ],
+      transactions: [],
+    });
+    render(<ProductSidebar {...defaultProps} />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    fireEvent.click(screen.getByText('warehouses'));
+
+    expect((await screen.findAllByText('WH-Alpha')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('reserved')).toBeNull();
+    // available shown is the on-hand quantity (no reservation subtracted)
+    const rows = screen.getAllByTestId('WarehouseCardAvailability');
+    expect(rows.map(r => r.children[0].textContent)).toEqual(['stockAvailableLabel', 'stockAvailableLabel']);
+    expect(rows.map(r => r.children[1].textContent)).toEqual(['30 u', '20 u']);
+    expect(rows[1].children[1].className).toContain('font-semibold');
+    const dots = screen.getAllByTestId('WarehouseCardDot');
+    expect(dots.map(d => d.style.backgroundColor)).toEqual(['rgb(236, 72, 153)', 'rgb(245, 158, 11)']);
   });
 
   it('handles fetch error gracefully (stock)', async () => {

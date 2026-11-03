@@ -20785,6 +20785,8 @@
     "productDistributedIn": "Distribuido en {count} almacenes",
     "productLast12Months": "Últimos 12 meses.",
     "expand": "Expandir",
+    "stockLocationsCount": "{count} ubicaciones",
+    "stockAvailableLabel": "Disponible",
     "collapse": "Contraer",
     "paymentInGroup": "Cobro",
     "paymentOutGroup": "Pago",

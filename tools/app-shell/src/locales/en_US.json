@@ -20549,6 +20549,8 @@
     "productDistributedIn": "Distributed in {count} warehouses",
     "productLast12Months": "Last 12 months.",
     "expand": "Expand",
+    "stockLocationsCount": "{count} locations",
+    "stockAvailableLabel": "Available",
     "collapse": "Collapse",
     "paymentInGroup": "Payment In",
     "paymentOutGroup": "Payment Out",

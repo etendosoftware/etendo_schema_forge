@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Box, Calendar, ChevronDown } from 'lucide-react';
+import { Maximize2, Box, Calendar, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { SIDEBAR_PERIOD_OPTIONS, DEFAULT_SIDEBAR_PERIOD, formatPeriodRange } from './productSidebarPeriod';
 import { niceScale, formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { formatStockQuantity } from './stockQuantityFormat';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
@@ -71,18 +72,29 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
   );
 }
 
-// Horizontal availability widget: icon box + label + locations badge + big number.
-function AvailabilityWidget({ label, value, badge }) {
+// Horizontal availability widget: icon box + label + locations link/badge + big number.
+// With `onBadgeClick` the badge is a real button (RF-06: opens the Warehouses tab).
+function AvailabilityWidget({ label, value, badge, onBadgeClick }) {
   return (
     <div className="flex-1 flex items-center gap-3 pl-3 pr-2 py-2 bg-card border border-border-subtle rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
       <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
         <Box className="w-6 h-6 text-disabled" data-testid="Box__59b33d" />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">{label}</span>
-          {badge && (
-            <span className="px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground whitespace-nowrap">{badge}</span>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground">{badge && onBadgeClick ? `${label} ·` : label}</span>
+          {badge && onBadgeClick && (
+            <button
+              type="button"
+              onClick={onBadgeClick}
+              className="text-xs text-status-info-foreground underline underline-offset-2 whitespace-nowrap rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              data-testid="AvailabilityLocationsLink"
+            >
+              {badge}
+            </button>
+          )}
+          {badge && !onBadgeClick && (
+            <span className="ml-1 px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground whitespace-nowrap">{badge}</span>
           )}
         </div>
         <span className="text-2xl font-medium tracking-[-0.01em] text-foreground leading-9">
@@ -271,7 +283,7 @@ function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize
   const hy = hoveredIdx !== null ? toY(seriesList[0].values[hoveredIdx]) : null;
   const tooltipX = hx !== null ? Math.max(PAD_X, Math.min(W - PAD_X - TW, hx - TW / 2)) : null;
   const tooltipY = hy !== null ? Math.max(PAD_Y, hy - TH - 8) : null;
-  const hVal = hoveredIdx !== null ? seriesList[0].values[hoveredIdx].toLocaleString() : null;
+  const hVal = hoveredIdx !== null ? formatStockQuantity(seriesList[0].values[hoveredIdx]) : null;
 
   // Multi-series tooltip box (one row per warehouse)
   const rowH = fontSize * 1.6;
@@ -324,7 +336,7 @@ function ChartSVG({ months, values, series, W, H, PAD_X, PAD_Y, gradId, fontSize
             <g key={s.name}>
               <rect x={mTipX + 6} y={mTipY + rowH * (idx + 1) + 1} width={8} height={3} rx={1} fill={s.color} />
               <text x={mTipX + 18} y={mTipY + rowH * (idx + 1) + fontSize} fontSize={fontSize} fontWeight="600" fill="white">
-                {s.values[hoveredIdx].toLocaleString()}
+                {formatStockQuantity(s.values[hoveredIdx])}
               </text>
             </g>
           ))}
@@ -431,14 +443,18 @@ function StockChart({
     <>
       {/* Mini chart shown in Summary tab */}
       <div className="px-4 pt-2 pb-3 flex flex-col gap-2">
-        {/* Title + Expandir */}
+        {/* Title + icon-only expand button */}
         <div className="flex items-center justify-between gap-1.5">
           <span className="text-sm font-normal text-muted-foreground flex-1">{ui('stockMovement')}</span>
           <button
+            type="button"
             onClick={() => setInternalOpen(true)}
-            className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline underline-offset-2 shrink-0"
+            title={ui('expand')}
+            aria-label={ui('expand')}
+            className="inline-flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            data-testid="StockChartExpandButton"
           >
-            {ui('expand')} <ExternalLink size={16} className="text-disabled" data-testid="ExternalLink__59b33d" />
+            <Maximize2 size={16} aria-hidden="true" data-testid="Maximize2__59b33d" />
           </button>
         </div>
         {/* Warehouse legend */}
@@ -521,14 +537,14 @@ function StockChart({
                         <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
                         <span className="text-sm text-muted-foreground truncate">{b.binName}</span>
                       </div>
-                      <span className="text-sm font-semibold text-foreground flex-shrink-0">{b.quantityOnHand.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-foreground flex-shrink-0">{formatStockQuantity(b.quantityOnHand)}</span>
                     </button>
                   );
                 })}
                 <div className="text-xs text-disabled mt-auto pt-2">
                   {selectedWarehouse
-                    ? `${locationRows.find(r => r.binName === selectedWarehouse)?.quantityOnHand?.toLocaleString() ?? 0} ${ui('units')}`
-                    : `${ui('total')}: ${currentStock?.toLocaleString()} ${ui('units')}`}
+                    ? `${formatStockQuantity(locationRows.find(r => r.binName === selectedWarehouse)?.quantityOnHand ?? 0)} ${ui('units')}`
+                    : `${ui('total')}: ${currentStock == null ? '' : formatStockQuantity(currentStock)} ${ui('units')}`}
                 </div>
               </div>
             )}
@@ -539,6 +555,34 @@ function StockChart({
   );
 }
 
+
+// One card per warehouse: series-coloured dot + name + "Available" left / "N u" right (ETP-5908 RF-08/RF-09).
+// No reserved data: Etendo does not manage reservations.
+function WarehouseCards({ rows, ui, fmt }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-[10px]" data-testid="WarehouseCards">
+      {rows.map((b, i) => (
+        <div key={b.binName} className="flex flex-col gap-2 bg-muted rounded-lg p-3" data-testid="WarehouseCard">
+          <div className="flex items-center gap-1 h-6">
+            <span className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }}
+                data-testid="WarehouseCardDot"
+              />
+            </span>
+            <span className="text-xs font-semibold text-muted-foreground truncate">{b.binName}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 pl-1 text-sm" data-testid="WarehouseCardAvailability">
+            <span className="text-muted-foreground">{ui('stockAvailableLabel')}</span>
+            <span className="font-semibold text-foreground">{fmt(b.quantityOnHand)} u</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const ui = useUI();
@@ -572,19 +616,18 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
 
   const binMap = (stockRows ?? []).reduce((acc, r) => {
     const binName = r['warehouse$_identifier'] ?? r.warehouse ?? r['storageBin$_identifier'] ?? r.storageBin ?? 'Unknown';
-    if (!acc[binName]) acc[binName] = { binName, quantityOnHand: 0, reservedQty: 0 };
+    if (!acc[binName]) acc[binName] = { binName, quantityOnHand: 0 };
     acc[binName].quantityOnHand += Number(r.quantityOnHand) || 0;
-    acc[binName].reservedQty += Number(r.reservedQty) || 0;
     return acc;
   }, {});
   const locationRows = Object.values(binMap).filter(b => b.quantityOnHand > 0);
   const binCount = locationRows.length;
 
-  const fmt = v => (v === null ? null : v.toLocaleString());
+  const fmt = v => (v === null ? null : formatStockQuantity(v));
 
   let onHandSubtitle = null;
   if (binCount === 1) onHandSubtitle = locationRows[0]?.binName ?? null;
-  else if (binCount > 1) onHandSubtitle = `${binCount} ${ui('locations')}`;
+  else if (binCount > 1) onHandSubtitle = ui('stockLocationsCount', { count: binCount });
 
   const hasChart = transactions !== null && transactions.length > 0;
   const sortedRows = [...locationRows].sort((a, b) => b.quantityOnHand - a.quantityOnHand);
@@ -644,9 +687,10 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
             {hasChart && <AvailabilityWidget
-              label={ui('onHand')}
+              label={ui('stockAvailableLabel')}
               value={fmt(onHand)}
               badge={onHandSubtitle}
+              onBadgeClick={binCount > 1 ? () => setActiveTab('warehouses') : undefined}
               data-testid="AvailabilityWidget__59b33d" />}
           </div>
         )}
@@ -660,32 +704,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
               ui={ui}
               disabled={!hasChart}
               data-testid="SidebarPeriodSelector__59b33d" />
-            {sortedRows.length > 0 && <div className="flex flex-col gap-[10px]">
-              {sortedRows.map((b, i) => {
-                const wAvailable = b.quantityOnHand - b.reservedQty;
-                return (
-                  <div key={b.binName} className="flex flex-col gap-3 bg-muted rounded-lg p-3">
-                    <div className="flex items-center gap-1 h-6">
-                      <span className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: DOT_COLORS[i % DOT_COLORS.length] }} />
-                      </span>
-                      <span className="text-xs font-semibold text-muted-foreground truncate">{b.binName}</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-normal text-muted-foreground">{ui('available')}</span>
-                        <span className="text-sm font-medium text-foreground">{fmt(wAvailable)}</span>
-                      </div>
-                      <div className="border-t border-[hsl(var(--foreground) / 0.05)]" />
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-normal text-muted-foreground">{ui('reserved')}</span>
-                        <span className="text-sm font-medium text-foreground">{fmt(b.reservedQty)}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>}
+            <WarehouseCards rows={sortedRows} ui={ui} fmt={fmt} />
           </div>
         )}
       </div>

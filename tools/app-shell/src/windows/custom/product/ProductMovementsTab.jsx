@@ -5,7 +5,8 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { PRODUCT_MOVEMENTS_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
-import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatStockQuantity } from './stockQuantityFormat';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import { getRouterBase } from '@/lib/deploymentBasePath';
 import { DateRangePopover } from '@/components/ui/date-range-popover.jsx';
@@ -90,7 +91,6 @@ function MovementRow({ row, ui, currency }) {
   const { labelKey, tone } = resolveMovementType(row);
   const typeLabel = labelKey ? ui(labelKey) : (row['movementType$_identifier'] ?? row.movementType ?? '—');
   const hasDocument = row.etgoDocWindow && row.etgoDocHeaderId && row.etgoDocLabel;
-  const formatQuantity = (n) => formatGroupedNumber(n, { maximumFractionDigits: 2 });
 
   return (
     <div role="row" className={`${GRID} border-b border-border/50 px-3 py-3 text-sm`} data-testid="product-movements-row">
@@ -105,11 +105,11 @@ function MovementRow({ row, ui, currency }) {
       </div>
       <span role="cell" className="truncate">{row['etgoWarehouse$_identifier'] ?? '—'}</span>
       <span role="cell" className="text-right font-semibold tabular-nums" style={{ color: SIGN_COLOR[quantityTone(row.movementQuantity)] }}>
-        {signedQuantity(row.movementQuantity, formatQuantity)}
+        {signedQuantity(row.movementQuantity, formatStockQuantity)}
       </span>
       <span role="cell" className="text-right tabular-nums">{formatCurrency(currency, row.transactionCost)}</span>
       <span role="cell" className="text-right font-semibold tabular-nums">
-        {row.etgoStockAfter == null ? '—' : formatQuantity(row.etgoStockAfter)}
+        {row.etgoStockAfter == null ? '—' : formatStockQuantity(row.etgoStockAfter)}
       </span>
     </div>
   );
