@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import { ArrowRight, ArrowLeft, FileText, Check, ChevronRight, Pencil, AlertTriangle } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Pencil, AlertTriangle } from 'lucide-react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { Button } from '@/components/ui/button';
-import { useUI, useLocaleSwitch } from '@/i18n';
+import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -13,45 +13,18 @@ import {
   buildOnboardingPayloads,
   getFiscalRecordId,
   getAllowedSystemsForTerritory,
-  getCertificateContext,
-  isProductionEnvironment,
   resolveSystem,
 } from './fiscalConfig.utils.js';
 import SiiSection from './SiiSection.jsx';
 import TbaiSection from './TbaiSection.jsx';
 import VerifactuSection from './VerifactuSection.jsx';
-import CertModal from './CertModal.jsx';
-import CertSection from './CertSection.jsx';
 import TabBar from './TabBar.jsx';
+import { TERRITORY_GROUP_META, buildTerritories, buildSystems } from './fiscalCatalog.js';
 
 // Keep in sync with useFiscalConfig.js
 const SII_ENTITY      = 'siiConfiguration';
 const TBAI_ENTITY     = 'header';
 const VERIFACTU_ENTITY = 'cabeceraDeConfiguraciónVerifactu';
-
-// ── Data (IDs and logic flags — display strings resolved via ui() inside component) ───
-
-const TERRITORY_META = {
-  navarra:  { id: 'navarra',  regime: 'sii_foral', askNational: false, askVolume: false, taxtype: 'IVA',  tbaiTerritory: null,       guipuzcoa: null },
-  alava:    { id: 'alava',    regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'ARABA',    guipuzcoa: null },
-  bizkaia:  { id: 'bizkaia',  regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'BIZKAIA',  guipuzcoa: null },
-  gipuzkoa: { id: 'gipuzkoa', regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'GIPUZKOA', guipuzcoa: 'Y'  },
-  baleares: { id: 'baleares', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IVA',  tbaiTerritory: null,       guipuzcoa: null },
-  canarias: { id: 'canarias', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IGIC', tbaiTerritory: null,       guipuzcoa: null },
-  // askVolume: false — unlike baleares/canarias, Ceuta/Melilla's IPSI tax scheme has no
-  // SII billing-volume threshold to ask about: SII cannot represent an IPSI taxpayer at
-  // all (AEATSII_CONFIG.taxtype only defines IVA/IGIC — see getAllowedSystemsForTerritory
-  // in fiscalConfig.utils.js, ETP-5272 point 4), so VERIFACTU is the only applicable
-  // system regardless of volume and the sub-question would be moot.
-  ceuta:    { id: 'ceuta',    regime: 'siiver',     askNational: false, askVolume: false, taxtype: 'IPSI', tbaiTerritory: null,       guipuzcoa: null },
-};
-
-const TERRITORY_GROUP_META = [
-  { regime: 'sii_foral', items: ['navarra'] },
-  { regime: 'tbai',      items: ['alava', 'bizkaia', 'gipuzkoa'] },
-  { regime: 'siiver',    items: ['baleares', 'canarias', 'ceuta'] },
-];
-
 
 // ── Network ───────────────────────────────────────────────────────────────────
 
@@ -305,133 +278,16 @@ function SkippedScreen({ orgName, selectedOrg, orgList, onSelectOrg, ui, onGoHom
   );
 }
 
-function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, system, selectedTerritory, alsoNational, volume, lowChoice, createdRecords, apiBaseUrl, apiFetch, locale, ui, SYSTEMS, TERRITORIES, onComplete, onGoHome }) {
-  const [cert, setCert] = useState(null);
-  const [certModalOpen, setCertModalOpen] = useState(false);
-
-  useEffect(() => {
-    if (!orgId || !system) return;
-    const certCtx = getCertificateContext(system);
-    if (!certCtx) return;
-    apiFetch(`/certificate?${new URLSearchParams({ orgId })}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data?.exists) setCert({ name: ui('fiscal.cert.loaded'), validTo: data.validTo ?? '' });
-      })
-      .catch(() => {});
-  }, [orgId, apiFetch, system, ui]);
-
-  const sys = SYSTEMS[system];
-  const terr = TERRITORIES[selectedTerritory ?? ''];
-  const certContext = getCertificateContext(system);
-  // ETP-5027: the environment row used to be hardcoded to the sandbox label. It
-  // now reads the real per-system environment column off the created records.
-  const isProduction = isProductionEnvironment(system, createdRecords);
-  const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui });
-
-  return (
-    <>
-      <ScreenLayout
-        toolbar={pageHeadEl}
-        actions={
-          <>
-            <Button variant="outline" onClick={onComplete} data-testid="Button__e9ef3f">{ui('fiscal.onboarding.viewConfig')}</Button>
-            <span className="flex-1" />
-            <Button onClick={onGoHome ?? onComplete} data-testid="Button__e9ef3f">{ui('fiscal.onboarding.goHome')}</Button>
-          </>
-        }
-        data-testid="ScreenLayout__e9ef3f">
-        <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: 'hsl(var(--foreground))' }}>{ui('fiscal.onboarding.applied.title')}</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          {ui('fiscal.onboarding.applied.subtitle', { system: sys?.name })}
-        </p>
-
-        <div className="rounded-xl border border-border overflow-hidden">
-          <div className="bg-status-success border-b border-status-success-border px-5 py-4 flex items-center gap-3.5">
-            <span className="w-9 h-9 rounded-full bg-status-success text-status-success-foreground flex items-center justify-center flex-shrink-0 text-xl">✓</span>
-            <div>
-              <div className="font-bold text-status-success-foreground">{ui('fiscal.onboarding.applied.configured', { system: sys?.name })}</div>
-              <div className="text-sm text-status-success-foreground/80 mt-0.5">{ui('fiscal.onboarding.applied.body')}</div>
-            </div>
-          </div>
-          <div className="divide-y divide-border px-5 py-2">
-            {terr && <Row
-              k={ui('fiscal.onboarding.applied.row.territory')}
-              v={terr.name}
-              data-testid="Row__e9ef3f" />}
-            <Row
-              k={ui('fiscal.onboarding.applied.row.system')}
-              v={sys?.name}
-              data-testid="Row__e9ef3f" />
-            <Row
-              k={ui('fiscal.onboarding.applied.row.tax')}
-              v={terr ? terr.systemLong : sys?.long}
-              data-testid="Row__e9ef3f" />
-            {terr?.askNational && (
-              <Row
-                k={ui('fiscal.onboarding.applied.row.national')}
-                v={alsoNational ? ui('fiscal.onboarding.applied.national.active') : ui('fiscal.onboarding.applied.national.na')}
-                data-testid="Row__e9ef3f" />
-            )}
-            {terr?.askVolume && volume && (
-              <Row
-                k={ui('fiscal.onboarding.applied.row.volume')}
-                v={volume === 'high' ? ui('fiscal.onboarding.applied.volume.high') : ui('fiscal.onboarding.applied.volume.low')}
-                data-testid="Row__e9ef3f" />
-            )}
-            {volume === 'low' && lowChoice && (
-              <Row
-                k={ui('fiscal.onboarding.applied.row.chosen')}
-                v={lowChoice === 'sii' ? ui('fiscal.onboarding.applied.chosen.sii') : ui('fiscal.onboarding.applied.chosen.verifactu')}
-                data-testid="Row__e9ef3f" />
-            )}
-            <Row
-              k={ui('fiscal.onboarding.applied.row.env')}
-              v={isProduction
-                ? <span className="text-status-success-foreground">{ui('fiscal.onboarding.applied.env.production')}</span>
-                : <span className="text-status-warning-foreground">{ui('fiscal.onboarding.applied.env.sandbox')}</span>}
-              data-testid="Row__e9ef3f" />
-            <Row
-              k={ui('fiscal.onboarding.applied.row.activated')}
-              v={new Date().toLocaleString(locale.replace('_', '-'), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              data-testid="Row__e9ef3f" />
-          </div>
-        </div>
-
-        <div className="mt-7">
-          <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">{ui('fiscal.onboarding.nextsteps.title')}</h3>
-          <div className="flex flex-col gap-2">
-            {certContext && (
-              <NextItem
-                icon={<FileText size={15} strokeWidth={1.75} data-testid="FileText__e9ef3f" />}
-                title={cert ? ui('fiscal.onboarding.cert.loaded.title') : ui('fiscal.onboarding.cert.upload.title')}
-                desc={cert
-                  ? ui('fiscal.onboarding.cert.loaded.desc', { name: cert.name, validTo: cert.validTo })
-                  : ui('fiscal.onboarding.cert.upload.desc')}
-                badge={cert ? null : ui('fiscal.onboarding.cert.pending')}
-                done={!!cert}
-                onClick={() => setCertModalOpen(true)}
-                data-testid="NextItem__e9ef3f" />
-            )}
-          </div>
-        </div>
-      </ScreenLayout>
-      {certModalOpen && certContext && (
-        <CertModal
-          context={certContext}
-          orgId={orgId}
-          apiBaseUrl={apiBaseUrl}
-          onClose={() => setCertModalOpen(false)}
-          onUpload={(c) => { setCert(c); setCertModalOpen(false); }}
-          data-testid="CertModal__e9ef3f" />
-      )}
-    </>
-  );
-}
-
-function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgName, selectedOrg, orgList, onSelectOrg, apiBaseUrl, error, ui, SYSTEMS, siiRef, tbaiRef, verifactuRef, onBack, onApplied, onComplete, locked }) {
+// `onApplied` / `onBack` hand over to the page (its `onComplete`, which re-reads the config): since
+// ETP-5831 there is no "Configuración aplicada" screen — the page's "Estado" panel replaces it, and
+// it only appears once the config is stored and re-read.
+function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgName, selectedOrg, orgList, onSelectOrg, apiBaseUrl, error, ui, SYSTEMS, siiRef, tbaiRef, verifactuRef, onBack, onApplied, locked }) {
   const sys = SYSTEMS[system];
   const [activeTab, setActiveTab] = useState(0);
+  // Double-submit guard: the ref blocks a second click in the same tick, the state disables the
+  // button for as long as the save runs.
+  const [savingDetail, setSavingDetail] = useState(false);
+  const savingRef = useRef(false);
 
   const SYS_LABEL = { SII: 'SII', TBAI: 'TicketBAI', 'SII+TBAI': 'SII + TicketBAI', VERIFACTU: 'VERI*FACTU' };
   const sysLabel = SYS_LABEL[system] ?? sys?.name ?? '';
@@ -443,7 +299,20 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
     // records were already created by the Confirm step (which is itself locked
     // by `locked` in ConfirmScreen), but this guard covers the case where
     // forceTestMode flips on mid-session, after the records already exist.
-    if (locked) return;
+    if (locked || savingRef.current) return;
+    savingRef.current = true;
+    setSavingDetail(true);
+    try {
+      await runDetailSaves();
+    } catch {
+      // The section shows its own error; stay on the detail screen.
+    } finally {
+      savingRef.current = false;
+      setSavingDetail(false);
+    }
+  }
+
+  async function runDetailSaves() {
     if (system === 'SII+TBAI') {
       // One after the other, NOT `Promise.allSettled([...])` (ETP-5112): each save is a PUT
       // carrying the record's `updated` token, and core parses it through a non-thread-safe
@@ -483,7 +352,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
       <Button variant="outline" onClick={onBack} data-testid="Button__e9ef3f">{ui('fiscal.cancel')}</Button>
       <Button
         onClick={handleSaveDetail}
-        disabled={locked}
+        disabled={locked || savingDetail}
         data-testid="OnboardingWizard__detailSaveButton">{ui('fiscal.save')}</Button>
     </div>
   );
@@ -1169,7 +1038,6 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
 
 export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, forceTestMode = false }) {
   const ui = useUI();
-  const { locale } = useLocaleSwitch();
   const { selectedOrg, selectedRole, selectOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
   const orgName = selectedOrg?.name ?? null;
@@ -1181,18 +1049,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
     onComplete();
   }
 
-  const TERRITORIES = {
-    navarra:  { ...TERRITORY_META.navarra,  name: ui('fiscal.territory.navarra'),  system: ui('fiscal.territory.system.sii'),    systemLong: ui('fiscal.territory.navarra.systemLong'),  example: ui('fiscal.territory.navarra.example')  },
-    alava:    { ...TERRITORY_META.alava,    name: ui('fiscal.territory.alava'),    system: ui('fiscal.territory.system.tbai'),   systemLong: ui('fiscal.territory.alava.systemLong'),    example: ui('fiscal.territory.alava.example')    },
-    bizkaia:  { ...TERRITORY_META.bizkaia,  name: ui('fiscal.territory.bizkaia'),  system: ui('fiscal.territory.system.tbai'),   systemLong: ui('fiscal.territory.bizkaia.systemLong'),  example: ui('fiscal.territory.bizkaia.example')  },
-    gipuzkoa: { ...TERRITORY_META.gipuzkoa, name: ui('fiscal.territory.gipuzkoa'), system: ui('fiscal.territory.system.tbai'),   systemLong: ui('fiscal.territory.gipuzkoa.systemLong'), example: ui('fiscal.territory.gipuzkoa.example') },
-    baleares: { ...TERRITORY_META.baleares, name: ui('fiscal.territory.espania'),  system: ui('fiscal.territory.system.siiver'), systemLong: ui('fiscal.territory.baleares.systemLong'), example: ui('fiscal.territory.baleares.example') },
-    canarias: { ...TERRITORY_META.canarias, name: ui('fiscal.territory.canarias'), system: ui('fiscal.territory.system.siiver'), systemLong: ui('fiscal.territory.canarias.systemLong'), example: ui('fiscal.territory.canarias.example') },
-    // ETP-5272 point 4: badge is VERI*FACTU-only (not the shared 'siiver' SII/VERI*FACTU
-    // badge) — SII cannot represent an IPSI (Ceuta/Melilla) taxpayer at all, so it is
-    // never a real option here, unlike baleares/canarias.
-    ceuta:    { ...TERRITORY_META.ceuta,    name: ui('fiscal.territory.ceuta'),    system: ui('fiscal.territory.system.verifactu'), systemLong: ui('fiscal.territory.ceuta.systemLong'),    example: ui('fiscal.territory.ceuta.example')    },
-  };
+  const TERRITORIES = buildTerritories(ui);
 
   const TERRITORY_GROUPS = TERRITORY_GROUP_META.map(g => ({
     ...g,
@@ -1200,12 +1057,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
     desc:  ui(`fiscal.territory.group.${g.regime === 'sii_foral' ? 'sii' : g.regime}.desc`),
   }));
 
-  const SYSTEMS = {
-    SII:       { id: 'SII',       name: 'SII',        long: ui('fiscal.system.sii.long'),      desc: ui('fiscal.system.sii.desc')      },
-    TBAI:      { id: 'TBAI',      name: 'TicketBAI',         long: ui('fiscal.system.tbai.long'),     desc: ui('fiscal.system.tbai.desc')     },
-    'SII+TBAI':{ id: 'SII+TBAI',  name: 'SII + TicketBAI',  long: ui('fiscal.system.siitbai.long'),  desc: ui('fiscal.system.siitbai.desc')  },
-    VERIFACTU: { id: 'VERIFACTU', name: 'VERI*FACTU',  long: ui('fiscal.system.verifactu.long'), desc: ui('fiscal.system.verifactu.desc') },
-  };
+  const SYSTEMS = buildSystems(ui);
 
   const [step, setStep]                   = useState('territory');
   const [selectedTerritory, setSelectedTerritory] = useState(null);
@@ -1295,24 +1147,6 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
         onComplete={onComplete}
         data-testid="SkippedScreen__e9ef3f" />
     );
-  } else if (step === 'applied') {
-    stepContent = (
-      <AppliedScreen
-        {...shared}
-        orgId={orgId}
-        system={system}
-        selectedTerritory={selectedTerritory}
-        alsoNational={alsoNational}
-        volume={volume}
-        lowChoice={lowChoice}
-        createdRecords={createdRecords}
-        apiBaseUrl={apiBaseUrl}
-        apiFetch={apiFetch}
-        locale={locale}
-        onComplete={onComplete}
-        onGoHome={onGoHome}
-        data-testid="AppliedScreen__e9ef3f" />
-    );
   } else if (step === 'detail') {
     stepContent = (
       <DetailScreen
@@ -1326,9 +1160,8 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
         siiRef={siiRef}
         tbaiRef={tbaiRef}
         verifactuRef={verifactuRef}
-        onBack={() => goTo('applied')}
-        onApplied={() => goTo('applied')}
-        onComplete={onComplete}
+        onBack={onComplete}
+        onApplied={onComplete}
         locked={forceTestMode}
         data-testid="DetailScreen__e9ef3f" />
     );
@@ -1406,38 +1239,3 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
 
 // ── Shared layout atoms ───────────────────────────────────────────────────────
 
-function Row({ k, v }) {
-  return (
-    <div className="flex justify-between gap-4 py-2.5 text-sm">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="font-medium text-right">{v}</span>
-    </div>
-  );
-}
-
-function NextItem({ icon, title, desc, badge, done, onClick }) {
-  return (
-    <button type="button" onClick={onClick}
-      className={`flex items-center gap-3 p-3.5 border rounded-[10px] hover:bg-muted/40 transition-colors text-left w-full
-        ${done ? 'bg-status-success border-status-success-border' : 'bg-background border-border'}`}>
-      <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm
-        ${done ? 'bg-status-success text-status-success-foreground' : 'bg-muted text-foreground/60'}`}>
-        {done ? <Check size={15} strokeWidth={2.5} data-testid="Check__e9ef3f" /> : icon}
-      </span>
-      <span className="flex-1">
-        <span className="flex items-center gap-2">
-          <span className={`text-sm font-semibold ${done ? 'text-status-success-foreground' : ''}`}>{title}</span>
-          {badge && !done && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-status-warning text-status-warning-foreground leading-none">{badge}</span>
-          )}
-        </span>
-        <span className="block text-xs text-muted-foreground mt-0.5">{desc}</span>
-      </span>
-      <ChevronRight
-        size={14}
-        strokeWidth={1.75}
-        className="text-muted-foreground"
-        data-testid="ChevronRight__e9ef3f" />
-    </button>
-  );
-}

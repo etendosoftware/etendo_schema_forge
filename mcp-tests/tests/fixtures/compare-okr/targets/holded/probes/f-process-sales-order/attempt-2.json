@@ -16,9 +16,9 @@
     "loop": {
       "turns": 8,
       "turnsWithUsage": 8,
-      "inputTokens": 23900,
+      "inputTokens": 99900,
       "outputTokens": 100,
-      "totalTokens": 24000,
+      "totalTokens": 100000,
       "cachedInputTokens": 0
     },
     "report": {
