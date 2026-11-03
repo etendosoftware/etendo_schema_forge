@@ -17,12 +17,13 @@ import { useActividadesIae, iaeCapState, IAE_MAX_SECONDARY_ACTIVITIES } from './
 // reference convention: `column` drives the selector URL's last path segment,
 // per NEO Headless's `GET /sws/neo/{spec}/{entity}/selectors/{columnName}`).
 const EPGRAFE_FIELD = { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', type: 'selector', reference: 'EPIAE_Epigraph', inputMode: 'selector' };
-const TYPE_FIELD = { key: 'epiaeType', column: 'Epiae_Type_ID', type: 'selector', reference: 'epiae_type', inputMode: 'selector' };
 const CODE_FIELD = { key: 'epiaeCode', column: 'Epiae_Code_ID', type: 'selector', reference: 'EPIAE_Code', inputMode: 'selector' };
 
+// ETP-5831 CP-17 — the "Clave" column (`epiaeType`, Epiae_Type_ID) is not offered (QA request).
+// Hidden only: the column stays in the entity, existing rows keep their value (never PATCHed from
+// here) and new rows omit it. The Modelo 390 still reads it, as a tooltip only (useOrg390Identity).
 const GRID_COLUMN_DEFS = [
   { key: 'epgrafeIAE', column: 'Epiae_Epigraph_ID', labelKey: 'orgIaeEpigraphLabel' },
-  { key: 'epiaeType', column: 'Epiae_Type_ID', labelKey: 'orgIaeTypeLabel' },
   { key: 'epiaeCode', column: 'Epiae_Code_ID', labelKey: 'orgIaeCodeLabel' },
   { key: 'default', column: 'Isdefault', labelKey: 'orgIaeDefaultLabel', required: true },
 ];
@@ -183,7 +184,6 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
     try {
       const created = await createRow({
         epgrafeIAE: newRow.epgrafeIAE || null,
-        epiaeType: newRow.epiaeType || null,
         epiaeCode: newRow.epiaeCode || null,
         default: !!newRow.default,
       });
@@ -242,15 +242,6 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
               selectorUrlFor={selectorUrlFor}
               token={token}
               data-testid="CreatableSearchSelect__iaeEpgrafe" />
-          </td>),
-        epiaeType: (<td className="py-1.5 px-2 align-middle">
-            <IaeSelector
-              field={TYPE_FIELD}
-              record={row}
-              onSelect={(field, val, label) => handleSelectorChange(row, field, val, label)}
-              selectorUrlFor={selectorUrlFor}
-              token={token}
-              data-testid="CreatableSearchSelect__iaeType" />
           </td>),
         epiaeCode: (<td className="py-1.5 px-2 align-middle">
             <div className="flex items-center gap-1.5">
@@ -320,7 +311,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
         t={gridLabel}
         data-testid="GridViewControls__93451b" />}
       <div className="overflow-x-auto rounded-lg border border-border">
-        {/* table-fixed: keeps the 3 selector columns (Epígrafe/Clave/Código) evenly split
+        {/* table-fixed: keeps the 2 selector columns (Epígrafe/Código) evenly split
             and the 2 fixed columns (Principal/actions) at their w-24/w-10 from the first
             paint, regardless of option-label length or load order — CreatableSearchSelect
             anchors its own dropdown (fixed-position + shouldAnchorDropdownRight/preferDown),
@@ -360,16 +351,6 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                     selectorUrlFor={selectorUrlFor}
                     token={token}
                     data-testid="CreatableSearchSelect__iaeNewEpgrafe" />
-                </td>),
-                epiaeType: (<td className="py-1.5 px-2 align-middle">
-                  <IaeSelector
-                    field={TYPE_FIELD}
-                    record={newRow}
-                    onSelect={selectNewRow}
-                    resolvedLabel={ui('orgIaeTypeLabel')}
-                    selectorUrlFor={selectorUrlFor}
-                    token={token}
-                    data-testid="CreatableSearchSelect__iaeNewType" />
                 </td>),
                 epiaeCode: (<td className="py-1.5 px-2 align-middle">
                   <IaeSelector

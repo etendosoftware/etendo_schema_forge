@@ -169,7 +169,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `e2e/tests/flows/attachments.mocked.spec.js` (Suites F–I) provides browser-level E2E coverage for the Attachments tab on Sales Order: tab visibility in the main strip alongside Lines (including the tab-switching preservation test), upload (valid file, badge increment, duplicate replace confirmation), single delete, Delete All, individual file download, and Download All (ZIP). The Attachments tab uses `tableName: "C_Order"` and the `data-testid` selector `tab-custom:attachments`.
 - `tests/test-sales-order-endpoints.sh` provides backend-level evidence for list/detail payloads, required order fields in API responses, and creation of a new sales-order header through the NEO endpoints.
 - `artifacts/sales-order/generated/web/sales-order/LinesTable.jsx` — the `unitPrice` column (`PriceActual`) uses `type: 'amount'` so the net unit price renders as a formatted currency value rather than a raw number.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/SalesOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is the CDI bean registered as `salesOrderHeaderHandler`. Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), which `visibleWhenFieldFalse: 'hasLinkedDocuments'` in `decisions.json` uses to conditionally hide the `Reactivate Order` action on the detail view and the `OrderReactivateBulkAction` uses as a row-level filter on the list. The same post-hook also appends `needsPrimaryDoc` (shipment, for this window) and `needsInvoiceDoc` (ETP-5295), computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/SalesOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is bound to `sales-order/header` by `@NeoExtension(spec = "sales-order", entity = "header")` (ETP-6026; it used to be the `salesOrderHeaderHandler` `Java_Qualifier`, cleared in the same change). Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), which `visibleWhenFieldFalse: 'hasLinkedDocuments'` in `decisions.json` uses to conditionally hide the `Reactivate Order` action on the detail view and the `OrderReactivateBulkAction` uses as a row-level filter on the list. The same post-hook also appends `needsPrimaryDoc` (shipment, for this window) and `needsInvoiceDoc` (ETP-5295), computed with the detail form's own formula — pending quantity/amount AND no draft document already covering it — which the frontend reads through `tools/app-shell/src/windows/custom/shared/orderPendingDocs.js`.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AbstractOrderHeaderHandler.java` — shared base class for both order header handlers; contains all `afterHandle()` logic including the batch IN query that avoids N+1 on list responses.
 - `artifacts/sales-order/custom/OrderCreateInvoice.jsx` proves the Send Email modal is wired with `bPartnerId` and `apiBaseUrl` so the recipient email is resolved from the contacts spec at open time and proposed as an editable `To` chip (removable, with additional To/CC recipients supported per ETP-4226 — edits reach the backend only through the allowlisted `recipientEdits` command field), and `documentType` is translated via `useMenuLabel()`. Backend delivery is handled by the `sales-order-send` transactional email contract in `com.etendoerp.go`, using the shared default document-send payload strategy.
 - **ETP-4717 — editable subject/message and status-gated Send:** `tools/app-shell/src/components/contract-ui/__tests__/SendDocumentModal.vitest.jsx` and `documentEmailSend.vitest.js` cover the editable `Asunto`/`Mensaje` fields and the opt-in `messageEdits` command field (present only when the operator actually changes subject or message; omitted — byte-identical legacy payload — otherwise). `e2e/tests/flows/document-send-recipients.mocked.spec.js` adds browser-level coverage that a typed message reaches the backend as `messageEdits.message`. `artifacts/sales-order/custom/__tests__/OrderCreateInvoice.test.js` locks `isCompleted && <SendDocumentButton>` (not `isDraft || isCompleted`) in source. `artifacts/__tests__/etp-4717-send-email-visibility.test.js` asserts `contract.json → frontendContract.window.rowQuickActions.actions.email.visibleWhen === "@DocumentStatus@='CO'"` so the grid row quick-action agrees with the Form-view topbar gate.
@@ -331,11 +331,12 @@ Booking a draft order over MCP:
     etendo_action { spec: "sales-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
-Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates **only
+Flow encoded in the prompt: `DR -> CO` books, `CO -> RE` reactivates **only
 while the order has no linked documents** (same condition as the Reactivate menu action's
 `visibleWhenFieldFalse: hasLinkedDocuments`). `CL` (Close) is **not offered**: the window never shows
 it, and since the ETP-5704 QA round the backend refuses it on every sales order (see below), so the
-prompt tells the agent never to send it.
+prompt tells the agent never to send it. `VO` (Void) is **not offered** either. Since ETP-6026 the
+backend accepts only what the window offers and refuses every other value (see below).
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre-CO total-discount
 line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
@@ -731,13 +732,44 @@ the backend refuses what the UI does not offer.
   reason saying the app does not offer Close.
 - Purchase orders are untouched. No visible change in the UI: it never sends `CL`.
 
+### Only the document actions the window offers run — ETP-6026
+
+Over MCP, `VO` on a draft order used to void it with total 0, and `PR` (Prepare) took a draft to
+`IP` (In progress). A deny-list of the bad values kept leaking the next one, so the `DocAction`
+button is now an **allow-list** of what the window offers, per stored `documentStatus`:
+
+| Status | Accepted | Where the UI sends it |
+|---|---|---|
+| `DR` | `CO` | Confirmar (form, `OrderConfirmModal`; row action; bulk bar; the manage flow in `OrderCreateInvoice`) |
+| `IP` | `CO` | Confirmar in the form: an `IP` order is not processed, so the draft-mode Confirmar stays visible and `OrderConfirmModal` runs the stored `CO` |
+| `CO` | `RE` (and `CO`, a no-op) | Reactivate (menu action and bulk bar, only without linked documents). `CO` is let through only because the bulk bar sends it to every row of a mixed draft + booked selection; `DocActionIdempotency` answers that row "already applied" |
+| any other | nothing | — |
+
+- `SalesOrderHeaderHandler.handle()` decides on the **effective** value (root `docAction` when the
+  DAL accepts it, else the stored one) through `DocActionRefusalGuard.refuseUnlessAllowed` — same
+  resolution, 404 and fail-closed rules as Close; a request with nothing to run is refused too.
+  REST single, REST batch and MCP all reach it. Reactivate with linked documents keeps its own
+  earlier refusal (`OrderReactivationGuard`).
+- **Refusal**: HTTP 400 with `messageKeys` `ETGO_SalesOrderCloseNotOffered` (CL),
+  `ETGO_SalesOrderVoidNotOffered` (VO) or `ETGO_SalesOrderActionNotOffered` (any other value, which
+  the message names), English / Spanish. `RE` on a draft is the one exception: the pre-hook lets
+  it through to the rule that answered it before (`DocActionReactivationRule`'s 422
+  `ETGO_ReactivateOnlyCompleted`, which covers `DR` only), so the bulk bar's Reactivar over a
+  selection holding drafts reports those rows exactly as before. `RE` on `IP`, `VO` or `CL` gets the
+  400 `ETGO_SalesOrderActionNotOffered`.
+- **Advertised**: `MCP_CONFIG.actions.valuesByStatus` is the same list (`DR` → CO, `IP` → CO,
+  `CO` → RE, `VO`/`CL` → none), and every other value is reported under `unavailableValues`.
+- Purchase orders are untouched. No visible change in the UI for the flows it offers; a bulk
+  "Procesar" row in `CL`/`VO` that already failed with core's `@AlreadyPosted@` now fails with the
+  clearer 400 above.
+
 ## Which actions apply now, and what the values mean over MCP — ETP-5714
 
 - `etendo_schema(spec, entity, view:"actions", id:<sales order id>)` says `availableNow` / `unavailableReason` per action for that
-  record, and `availableValuesNow` for `documentAction`: a draft takes `CO`, `VO` or `PR`; a completed order takes only `RE` (`CL`
-  is not offered and is also reported under `unavailableValues` — see the ETP-5704 QA section above).
+  record, and `availableValuesNow` for `documentAction`: a draft or in-progress order takes `CO`; a completed order takes
+  only `RE`; every other value is reported under `unavailableValues` and refused (see the ETP-6026 section above).
   `RE` is reported unavailable (`unavailableValues`) while the order has linked shipments, receipts or invoices, the rule
-  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents and CL are also refused by the pre-hook (see the ETP-5704 sections).
+  behind the UI's `hasLinkedDocuments` flag. Advice in the catalogue; RE with linked documents and every value outside the allow-list are also refused by the pre-hook (see the ETP-5704 and ETP-6026 sections).
 - `createShipment` and `createDraftInvoice` applies to a completed order only.
 - The classic *Cancel and Replace* buttons (and, on the purchase order, *Pick from Receipt*) are hidden from agents with a reason:
   they are multi-step classic flows with no MCP equivalent. To change a completed order, reactivate it, edit it and complete it again.
@@ -780,6 +812,10 @@ window does (the exchange rate follows the currency, `1` in the company's own; n
 price the order in it) and the order date is also the accounting date. See `purchase-order.md`
 ("Header validations over MCP `etendo_update`") and
 `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.41.
+
+## Template selection per organization — ETP-5988
+
+The printed order uses the organization's saved design (variant, color, font, text size, alternating rows, logo, footer) through the shared commercial template; with nothing saved it is unchanged. The `doc-template-selection` feature flag (default off) only hides the settings page (Settings → Printable documents) where the design is chosen. See `docs/document-printables.md` (D26) and `neo-headless.md` §4.13 in com.etendoerp.go.
 
 ## Agent prompts on order date and line tax — ETP-5852
 

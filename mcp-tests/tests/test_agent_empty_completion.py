@@ -282,3 +282,26 @@ class RunRecordV4Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FeedbackToolsPromptTest(unittest.TestCase):
+    """Prompt v5: comparisons tell the agent not to send feedback through a tool; a
+    feedback battery (`feedback_tools`) drops exactly that paragraph and nothing else."""
+
+    def test_the_default_prompt_forbids_feedback_tools_and_the_battery_prompt_does_not(self):
+        default = agent.system_prompt()
+        battery = agent.system_prompt(feedback_tools=True)
+        self.assertIn("Do not use any tool to send", default)
+        self.assertNotIn("Do not use any tool to send", battery)
+        # Only that paragraph differs: the reporting contract is the same for both.
+        self.assertIn("When you are finished, report:", battery)
+        self.assertEqual(default.count("\n- "), battery.count("\n- "))
+        for text in (default, battery):
+            self.assertNotIn("<!--", text)
+            self.assertNotIn("etendo", text.lower(), "the prompt names no platform")
+
+    def test_the_flag_comes_from_config_or_the_command_line(self):
+        from runner import config
+        self.assertFalse(config.feedback_tools({}))
+        self.assertTrue(config.feedback_tools({"run": {"feedback_tools": True}}))
+        self.assertTrue(config.feedback_tools({}, override=True))

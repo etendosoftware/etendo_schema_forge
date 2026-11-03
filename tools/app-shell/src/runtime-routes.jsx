@@ -25,6 +25,7 @@ const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 const SmartScanPage = lazy(() => import('./pages/SmartScanPage.jsx'));
 const OAuth2ClientsPage = lazy(() => import('./pages/OAuth2ClientsPage.jsx'));
 const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage.jsx'));
+const DocumentTemplatesPage = lazy(() => import('./pages/DocumentTemplatesPage.jsx'));
 const RolesOverviewPage = lazy(() => import('./pages/RolesOverviewPage.jsx'));
 const AcctProcessMonitorPage = lazy(() => import('./pages/AcctProcessMonitorPage.jsx'));
 const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
@@ -129,6 +130,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     lazyRoute('smart-scan', SmartScanPage),
     lazyRoute('oauth2-clients', OAuth2ClientsPage),
     lazyRoute('api-keys', ApiKeysPage),
+    // ETP-5988. Registered unconditionally; the `doc-template-selection` flag gates the menu entry
+    // and the backend authorizes every read and write.
+    lazyRoute('document-templates', DocumentTemplatesPage),
     lazyRoute('roles', RolesOverviewPage),
     // ETP-5269. Registered unconditionally, like 'upgrade' below: the `acct-process-monitor` flag
     // gates the menu entry, not the route, and SFAcctProcessMonitor enforces admin access itself.

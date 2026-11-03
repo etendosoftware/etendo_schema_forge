@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/TabBar.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 import TabBar from '../TabBar.jsx';
 
@@ -35,5 +36,20 @@ describe('TabBar — rendering', () => {
     render(<TabBar tabs={TABS} active={1} onChange={onChange} />);
     fireEvent.click(screen.getByText('SII'));
     expect(onChange).toHaveBeenCalledWith(0);
+  });
+});
+
+// ETP-5831 — a bar inside an already padded column passes its own spacing.
+describe('TabBar — wrapper spacing', () => {
+  it('keeps the full-width px-6 py-3 spacing by default', () => {
+    const { container } = render(<TabBar tabs={['A', 'B']} active={0} onChange={() => {}} />);
+    expect(container.firstChild.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'px-6', 'py-3']));
+  });
+
+  it('uses the given className instead of the default spacing', () => {
+    const { container } = render(<TabBar tabs={['A', 'B']} active={0} onChange={() => {}} className="pb-4" />);
+    const classes = container.firstChild.className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['flex', 'pb-4']));
+    expect(classes).not.toContain('px-6');
   });
 });

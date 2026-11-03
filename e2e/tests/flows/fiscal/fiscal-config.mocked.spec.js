@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/ChangeSifDialog.jsx
 import { test, expect } from '../../helpers/test.js';
 import { login, navigateTo, MOCK_ORG_ID } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
@@ -385,6 +389,20 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
       // onboarding wizard reappears (TC2 end-state + TC4 valid no-SIF state).
       await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
       await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
+
+      // ETP-5831 — the page must stay interactive after the swap to the wizard: no modal
+      // leftover (overlay, body `pointer-events: none`, `inert` / `aria-hidden` siblings) may
+      // survive the dialog unmounting. Before the fix the screen froze until a full reload.
+      await expect(page.getByTestId('ChangeSifDialog__content')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => ({
+        pointerEvents: document.body.style.pointerEvents,
+        inert: document.querySelectorAll('[inert]').length,
+        ariaHidden: [...document.body.children].filter(el => el.getAttribute('aria-hidden') === 'true').length,
+        overlays: document.querySelectorAll('[role="dialog"], [data-state="open"][data-radix-dialog-overlay], .fixed.inset-0[data-state]').length,
+      }))).toEqual({ pointerEvents: '', inert: 0, ariaHidden: 0, overlays: 0 });
+      await page.getByRole('button', { name: new RegExp(t('fiscal.territory.navarra')) }).click({ timeout: 3_000 });
+      await page.getByRole('button', { name: t('fiscal.onboarding.continue') }).click({ timeout: 3_000 });
+      await expect(page.getByText(t('fiscal.onboarding.confirm.title'))).toBeVisible({ timeout: 5_000 });
     });
   }
 
@@ -418,10 +436,14 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
 // verifactuConfig), which the backend no longer returns — recordId was always
 // null and the section's save() threw a "record id not found" error instead of
 // completing. Asserting the PUT request URL contains the record's `id` is the
-// direct regression signal for the bug; reaching the applied screen confirms the
-// save actually completed instead of throwing.
+// direct regression signal for the bug; reaching the configured page (with its "Estado" panel,
+// ETP-5831 — the wizard no longer has an applied screen) confirms the save actually completed
+// instead of throwing.
 
 async function installOnboardingRecordMock(page, { spec, record }) {
+  // Once the record exists (POST), the page's re-read after the wizard (ETP-5831) lists it, so
+  // the page leaves the wizard for the configured view.
+  let created = false;
   await page.route(`**/sws/neo/${spec}/**`, async route => {
     const req = route.request();
     const method = req.method();
@@ -433,9 +455,10 @@ async function installOnboardingRecordMock(page, { spec, record }) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(neoOk(isListLoad ? [] : [record])),
+        body: JSON.stringify(neoOk(isListLoad && !created ? [] : [record])),
       });
     }
+    if (method === 'POST') created = true;
     // POST (create) and PUT (update) both echo back the full record.
     return route.fulfill({
       status: 200,
@@ -554,8 +577,9 @@ test.describe('Fiscal Config — onboarding save regression (ETP-4401)', () => {
       ]);
       expect(putReq.url()).toContain(testCase.record.id);
 
-      // Success — reaches the applied screen instead of throwing "record id not found".
-      await expect(page.getByText(t('fiscal.onboarding.applied.title'))).toBeVisible({ timeout: 8_000 });
+      // Success — hands over to the configured page with its "Estado" panel (ETP-5831: no
+      // applied screen) instead of throwing "record id not found".
+      await expect(page.getByTestId('FiscalStatusSummary__panel')).toBeVisible({ timeout: 8_000 });
     });
   }
 });
@@ -825,4 +849,93 @@ test.describe('Fiscal Config — ChangeSifDialog notice per SIF profile', () => 
       await expect(page.getByTestId('ChangeSifDialog__content')).toHaveCount(0);
     });
   }
+});
+
+// ── Save gating, unsaved-changes guard and the "Estado" panel (ETP-5831) ───────
+//
+// A configured TicketBAI org: "Guardar" is enabled only while a section has unsaved changes; an
+// in-app navigation with unsaved changes opens the shared prompt, whose "Save and continue" goes
+// through the page save (PUT) and then navigates; the "Estado" panel is shown beside the form.
+
+async function installTbaiSaveMocks(page) {
+  const puts = [];
+  await page.route('**/sws/neo/tbai-config/**', async route => {
+    const req = route.request();
+    if (req.method() === 'PUT') {
+      const body = JSON.parse(req.postData() || '{}');
+      puts.push({ url: req.url(), body });
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(neoOk([{ ...TBAI_RECORD, ...body }])),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([TBAI_RECORD])) });
+  });
+  for (const other of ['sii-config', 'verifactu-config']) {
+    await page.route(`**/sws/neo/${other}/**`, route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(neoOk([])) }),
+    );
+  }
+  await page.route('**/certificate{/**,}**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) }),
+  );
+  return puts;
+}
+
+test.describe('Fiscal Config — Save gating, unsaved-changes guard and status panel (ETP-5831)', () => {
+  // The page Save is the only button carrying `data-dirty`.
+  const pageSave = (page) => page.locator('button[data-dirty]');
+  const autoSendSwitch = (page) => page.getByTestId('Switch__f06d4b');
+
+  test('shows the "Estado" panel for an org that already has a fiscal configuration', async ({ page }) => {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    const panel = page.getByTestId('FiscalStatusSummary__panel');
+    await expect(panel).toBeVisible({ timeout: 8_000 });
+    await expect(panel.getByTestId('FiscalStatusSummary__row-territory')).toContainText(t('fiscal.territory.alava'));
+    await expect(panel.getByTestId('FiscalStatusSummary__envBadge')).toHaveText(t('fiscal.onboarding.applied.env.sandbox'));
+  });
+
+  test('Save is disabled on load and enabled after an edit', async ({ page }) => {
+    await loginWithOrg(page);
+    await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(autoSendSwitch(page)).toBeVisible({ timeout: 8_000 });
+    await expect(pageSave(page)).toBeDisabled();
+    await expect(pageSave(page)).toHaveAttribute('data-dirty', 'false');
+
+    await autoSendSwitch(page).click();
+    await expect(pageSave(page)).toBeEnabled();
+    await expect(pageSave(page)).toHaveAttribute('data-dirty', 'true');
+  });
+
+  test('navigating away while dirty prompts, and "Save and continue" PUTs the change then navigates', async ({ page }) => {
+    await loginWithOrg(page);
+    const puts = await installTbaiSaveMocks(page);
+    await navigateTo(page, 'fiscal-config');
+
+    await expect(autoSendSwitch(page)).toBeVisible({ timeout: 8_000 });
+    await autoSendSwitch(page).click();
+    await expect(pageSave(page)).toBeEnabled();
+
+    await page.getByTestId('menu-item-dashboard').click();
+    const prompt = page.getByTestId('unsaved-navigation-dialog');
+    await expect(prompt).toBeVisible();
+    // The prompt holds the navigation: still on the fiscal configuration.
+    await expect(page).toHaveURL(/\/fiscal-config/);
+
+    const [putReq] = await Promise.all([
+      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes('/tbai-config/')),
+      prompt.getByTestId('unsaved-navigation-save').click(),
+    ]);
+    expect(putReq.url()).toContain(TBAI_RECORD.id);
+    expect(JSON.parse(putReq.postData() || '{}').autoSendInvoices).toBe(true);
+
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(prompt).toHaveCount(0);
+    expect(puts).toHaveLength(1);
+  });
 });

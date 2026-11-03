@@ -97,6 +97,8 @@ describe('isBrandingMutationRequest', () => {
     ['/sws/neo/organization/information/ORG1', 'PATCH', true],
     ['/etendo/sws/neo/organization/information/ORG1', 'PUT', true],
     ['/sws/neo/image', 'POST', true],
+    ['/sws/neo/doctemplateconfig', 'PUT', true],
+    ['/sws/neo/doctemplateconfig', 'GET', false],
     ['/sws/neo/warehouse/location', 'POST', true],
     ['/sws/neo/warehouse/location/LOC1', 'PATCH', true],
     ['/sws/neo/contacts/locationAddress/LOC1', 'PATCH', true],

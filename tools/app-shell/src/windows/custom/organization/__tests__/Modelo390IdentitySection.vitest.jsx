@@ -9,6 +9,7 @@ beforeEach(() => resetGridBoundary(gridBoundary));
 // @covers tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/representanteLegal.js
+// @covers tools/app-shell/src/windows/custom/organization/RepresentativeTableFrame.jsx
 //
 // The "Representante legal / Modelo 390" section of the Organization window. What must hold:
 // "Persona física" switches between the natural-person fields (page form) and the legal
@@ -102,6 +103,47 @@ describe('Modelo390IdentitySection — Persona física toggle', () => {
 
     fireEvent.click(screen.getByTestId('Modelo390IdentitySection__isPerson'));
     expect(await screen.findByTestId('RepresentantesLegalesSection__root')).toBeInTheDocument();
+  });
+
+  // ETP-5831 CP-16 — the natural-person fields use the representatives grid's table format, as a
+  // single editable row with no way to add a second one.
+  it('renders the natural-person fields as ONE row of the representatives table, with no add button', () => {
+    mockFetch([]);
+    render(<Harness initial={{ aeat390Isperson: true, aeat390Firstname: 'Ana' }} />);
+
+    const person = screen.getByTestId('Modelo390IdentitySection__personFields');
+    const table = within(person).getByRole('table');
+    expect(within(table).getAllByRole('columnheader').map(th => th.textContent)).toEqual([
+      'orgRepFirstNameLabel *', 'orgRepLastname1Label *', 'orgRepLastname2Label', 'org390RepNifLabel', 'org390RepNameLabel',
+    ]);
+    const bodyRows = table.querySelectorAll('tbody tr');
+    expect(bodyRows).toHaveLength(1);
+    for (const field of ['aeat390Firstname', 'aeat390Surname1', 'aeat390Surname2', 'aeat390RepNif', 'aeat390RepName']) {
+      expect(within(bodyRows[0]).getByTestId(`Modelo390IdentitySection__${field}`)).toBeInTheDocument();
+    }
+    expect(within(bodyRows[0]).getByTestId('Modelo390IdentitySection__aeat390Firstname')).toHaveValue('Ana');
+    // Labelled by its column header, so the inputs keep an accessible name.
+    expect(screen.getByLabelText(/orgRepFirstNameLabel/)).toBe(within(bodyRows[0]).getByTestId('Modelo390IdentitySection__aeat390Firstname'));
+    // Same visual shell as the representatives grid, and no way to add a second row.
+    expect(table.closest('[data-testid="RepresentativeTableFrame__person390"]')).not.toBeNull();
+    expect(screen.queryByTestId('RepresentantesLegalesSection__addButton')).not.toBeInTheDocument();
+    expect(within(person).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows a field error inside its cell of the natural-person row', () => {
+    mockFetch([]);
+    render(
+      <Modelo390IdentitySection
+        form={{ aeat390Isperson: true }}
+        fieldErrors={{ aeat390Surname1: 'fieldRequired' }}
+        onFieldChange={() => {}}
+        apiBaseUrl={API_BASE_URL}
+        orgId={ORG_ID} />
+    );
+    const error = screen.getByTestId('Modelo390IdentitySection__error-aeat390Surname1');
+    expect(error).toHaveTextContent('fieldRequired');
+    expect(error.closest('td')).toBe(screen.getByTestId('Modelo390IdentitySection__aeat390Surname1').closest('td'));
+    expect(screen.getByTestId('Modelo390IdentitySection__aeat390Surname1')).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('caps the natural-person inputs at the AD column lengths', () => {

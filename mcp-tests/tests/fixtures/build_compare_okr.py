@@ -80,7 +80,7 @@ w(root / "compare.json", {
     "compareSchemaVersion": 1, "compareId": "20261014T1000-cmp-fixture",
     "startedAt": "2026-10-14T10:00:00Z", "finishedAt": "2026-10-14T10:30:00Z",
     "subject": "local", "repeat": 3,
-    "decision": {"ruleVersion": 1, "callsMargin": 0.20, "tokensMargin": 0.10},
+    "decision": {"ruleVersion": 2, "callsMargin": 0.20, "tokensMargin": 0.10},
     "suite": {"file": "okr.yaml", "sha": "deadbeef", "schemaVersion": 2},
     "probes": ["w-invoice-one-product-issued", "q-product-prices-stock", "f-process-sales-order",
                "e-unknown-document", "q-both-not-possible", "q-short-of-attempts", "q-tokens-missing"],
@@ -117,11 +117,13 @@ attempt("holded", "q-product-prices-stock", 4, mode="read", replaces=2,
         calls=[call("list_products")], success=False, outcome="OKAY",
         suggestions=["legacy prose suggestion"])
 
-# 3. f-process: both 3/3, median calls local 10 vs holded 8 -> exactly 20 % -> holded wins on calls.
+# 3. f-process (rule 2: tokens before calls): both 3/3, local makes more calls (median 10 vs 8, a
+#    20 % gap that rule 1 gave to holded) but spends far fewer tokens (20k vs 100k) -> local, 3-tokens.
 for n, k in ((1, 10), (2, 10), (3, 9)):
-    attempt("local", "f-process-sales-order", n, calls=[call("etendo_get")] * k, success=True)
+    attempt("local", "f-process-sales-order", n, calls=[call("etendo_get")] * k, success=True, tokens=20000)
 for n, k in ((1, 8), (2, 8), (3, 9)):
-    attempt("holded", "f-process-sales-order", n, calls=[call("approve_sales_order")] * k, success=True)
+    attempt("holded", "f-process-sales-order", n, calls=[call("approve_sales_order")] * k, success=True,
+            tokens=100000)
 
 # 4. e-unknown: both 0/3 -> tie.
 for t, tool in (("local", "etendo_list"), ("holded", "list_documents")):
@@ -139,7 +141,7 @@ attempt("local", "q-short-of-attempts", 2, mode="read", calls=[call("etendo_list
 for n in (1, 2, 3):
     attempt("holded", "q-short-of-attempts", n, mode="read", calls=[call("list_contacts")], success=True)
 
-# 7. tokens missing on holded -> bytes decide (local 300 B vs holded 1000 B).
+# 7. tokens missing on holded -> not evaluable (rule 2 has no byte fallback).
 for n in (1, 2, 3):
     attempt("local", "q-tokens-missing", n, mode="read", calls=[call("etendo_list", nbytes=300)], success=True)
     attempt("holded", "q-tokens-missing", n, mode="read", calls=[call("list_contacts", nbytes=1000)],

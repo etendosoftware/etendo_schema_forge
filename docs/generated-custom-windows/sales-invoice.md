@@ -2677,9 +2677,13 @@ rules, the warning's conditions and the manual check:
 
 ## Bespoke grid personal views
 
-The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization. Its date, document number and total columns use the keys `reversedInvoiceDate`, `reversedDocumentNo` and `reversedGrandTotalAmount` (ETP-5684), so they never collide with the header fields of the same name; personal views saved with the earlier keys fall back to the default for those three columns.
+The shared bespoke `ReversedInvoicesPanel` uses the existing personal-view contract for `sales-invoice` / `reversedInvoices` when its API base identifies this window. Expansion, inline 349 editing and fixed action cells remain intact. Unknown API scopes disable personalization. Its date, document number and total columns use the keys `reversedInvoiceDate`, `reversedDocumentNo` and `reversedGrandTotalAmount` (ETP-5684), so they never collide with the header fields of the same name; personal views saved with the earlier keys fall back to the default for those three columns. The "Modelo 349" column (`aEAT349IsCorrective`) is only offered while Modelo 349 is active in the Fiscal Models catalog (ETP-5831 CP-14): with 349 inactive, or while the catalog is still loading, neither its header nor its `CorrectivaBadge` cells render, in the default or a personal view. Full gating write-up in `purchase-invoice.md` (ETP-4755 entry under Rectificaciones).
 
 The full app-shell `npm run test:all` suite and `npm run build` passed. Browser smoke covered Sales Order only, not this panel; authenticated preference persistence and human QA remain pending. See [the bespoke-grid inventory](../bespoke-grid-views.md) for verification boundaries.
+
+## Template selection per organization — ETP-5988
+
+The printed invoice uses the organization's saved design (variant, color, font, text size, alternating rows, logo, footer) through the shared commercial template; with nothing saved it is unchanged. The `doc-template-selection` feature flag (default off) only hides the settings page (Settings → Printable documents) where the design is chosen. See `docs/document-printables.md` (D26) and `neo-headless.md` §4.13 in com.etendoerp.go.
 
 ## Agent prompts on dates, line tax and installments — ETP-5852
 
@@ -2692,3 +2696,13 @@ The full app-shell `npm run test:all` suite and `npm run build` passed. Browser 
 ## Agent prompt on the business partner — ETP-5852
 
 `businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
+
+## Voiding an issued invoice, for agents — ETP-5848
+
+An issued invoice is voided with a credit note (factura rectificativa), never by reactivating and deleting it (decided 2026-10-23, OKR O2 flow `f-void-invoice`). Asked to void one, an agent sent `docAction: VO`, got only "send one of [CO, RE]", and reactivated the invoice. Three agent-facing texts now lead to the credit note, with no change of behavior:
+
+- the `documentAction` agent prompt (`artifacts/sales-invoice/decisions.json`) says RE only reopens the invoice as a draft and does not void it, and names the credit-note route (corrective `transactionDocument`, `importOriginInvoiceLines`, then CO);
+- the header's `MCP_CONFIG.actions.valueReasons.DocAction.VO` adds that route to the 422 a `VO` gets (new `valueReasons` key of the `actions` section, `McpActionsSection`);
+- the agentic docs page `etendo-go-docs/agentic/finance/invoices.md` walks the five calls.
+
+**Verify:** `etendo_action(spec: "sales-invoice", id: <completed invoice>, action: "documentAction", parameters: {docAction: "VO"})` answers 422 naming the credit note; re-run the okr probe `f-void-invoice`.

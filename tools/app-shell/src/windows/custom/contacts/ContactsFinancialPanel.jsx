@@ -317,12 +317,14 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
             data-testid="BillingPreferencesForm__d55d36" />
         </div>
       </div>
-      <hr className="border-t border-border mx-5" />
-      {/* Fiscal defaults (SII / TicketBAI) — grouped block, ETP-4784 part 2 UX fix */}
+      {/* Fiscal defaults (SII / TicketBAI) — grouped block, ETP-4784 part 2 UX fix. Each block
+          only while its SIF is active for the organization; the section draws its own divider
+          and renders nothing when no block applies (ETP-5831 CP-20). */}
       <FiscalDefaultsSection
         data={data}
         onChange={onChange}
         readOnly={editing === false}
+        apiBaseUrl={apiBaseUrl}
         data-testid="FiscalDefaultsSection__d55d36" />
     </div>
   );
