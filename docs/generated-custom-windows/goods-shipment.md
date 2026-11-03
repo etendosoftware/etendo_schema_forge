@@ -478,7 +478,7 @@ A refusal because the document's date has no open accounting period (`PeriodNotA
 
 ## Import order lines into a draft goods shipment over MCP — ETP-5713
 
-An agent fills a DRAFT goods shipment from sales orders, the way the window's "Import from order" («Importar desde pedido») modal does, with three declared
+An agent fills a DRAFT goods shipment from sales orders, the way the window's "Add from order" («Añadir desde pedido», key `addFromSalesOrder`) modal does, with three declared
 actions on `goodsShipment` (`GoodsShipmentHeaderHandler` through `ImportOrderLinesIntoInOutHandler`): `availableOrders` lists the
 completed sales orders of the goods shipment's business partner and currency that still have quantity to ship; `availableOrderLines`
 (`{orderId}`) lists an order's pending lines with their `pendingQuantity`; `importOrderLines`

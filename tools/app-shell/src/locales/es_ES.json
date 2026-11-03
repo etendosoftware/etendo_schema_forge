@@ -17702,6 +17702,7 @@
     "addLines": "Añadir líneas",
     "importFromShipment": "Importar desde albarán",
     "importFromSalesOrder": "Importar desde pedido",
+    "addFromSalesOrder": "Añadir desde pedido",
     "importFromSourceInvoice": "Importar desde factura origen",
     "noLinesYet": "Sin líneas todavía",
     "productCostRequired": "Sin costo definido no se podrán calcular los costes ni contabilizar los movimientos de este producto. Añade una línea en la solapa Costo.",
