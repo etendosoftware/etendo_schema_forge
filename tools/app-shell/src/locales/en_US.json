@@ -26082,6 +26082,7 @@
     "dynamicReportDebit": "Debit",
     "dynamicReportCredit": "Credit",
     "dynamicReportClosing": "Closing balance",
+    "dynamicReportMovement": "Period movement",
     "dynamicReportSearchLines": "Search lines",
     "dynamicReportDate": "Date",
     "dynamicReportDescription": "Description",

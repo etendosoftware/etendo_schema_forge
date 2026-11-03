@@ -46,24 +46,25 @@ function Status({ loading, error, errorCode, empty }) {
   return null;
 }
 
-function Ledger({ params, locale, dateText, onOpenEntry, session }) {
+function Ledger({ params, sign, locale, dateText, onOpenEntry, session }) {
   const ui = useUI();
   const [search, setSearch] = useState('');
   const { data, loading, error, errorCode, settled } = useReportQuery(LEDGER_REPORT_ID, params, { locale });
   useDrillTiming(session, 'ledger', settled, errorCode);
   const rows = data?.rows ?? [];
-  const summary = useMemo(() => ledgerSummary(rows, data?.openingRows), [rows, data]);
+  const summary = useMemo(() => ledgerSummary(rows, data?.openingRows, sign), [rows, data, sign]);
   const shown = useMemo(() => filterLedgerRows(rows, search), [rows, search]);
   const totals = [
     ['opening', 'dynamicReportOpening', summary.opening],
     ['debit', 'dynamicReportDebit', summary.debit],
     ['credit', 'dynamicReportCredit', summary.credit],
     ['closing', 'dynamicReportClosing', summary.closing],
+    ['movement', 'dynamicReportMovement', summary.movement],
   ];
   return (
     <div className="flex flex-col gap-3 min-h-0" data-testid="DynamicDrillPanel__ledger">
       {data && (
-        <dl className="grid grid-cols-4 gap-2 text-xs">
+        <dl className="grid grid-cols-5 gap-2 text-xs">
           {totals.map(([key, labelKey, value]) => (
             <div key={key} className="rounded-lg border border-border/40 p-2">
               <dt className="text-muted-foreground">{ui(labelKey)}</dt>
@@ -215,7 +216,7 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, s
             ))}
           </nav>
         </SheetDescription>
-        {account && !entry && <Ledger params={ledger} locale={locale} dateText={dateText} onOpenEntry={setEntry} session={session} />}
+        {account && !entry && <Ledger params={ledger} sign={account?.sign} locale={locale} dateText={dateText} onOpenEntry={setEntry} session={session} />}
         {entry && <Entry key={entry.id} params={entryQuery} locale={locale} accountValue={account.value} session={session} />}
       </SheetContent>
     </Sheet>

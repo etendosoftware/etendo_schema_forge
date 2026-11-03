@@ -14,7 +14,7 @@ import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
 import { comparisonPeriod, matchingShortcut, openingPeriod, pickedYearPeriod, shortcutPeriod } from './dynamicDates.js';
-import { expandAll, expansionForLevel, visibleRows } from './reportTree.js';
+import { foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
   { format: 'pdf', label: 'PDF', icon: FileDown },
@@ -23,7 +23,6 @@ const EXPORTS = [
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
 const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess' };
-const NO_ROWS_EXPANDED = new Set();
 
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';
 
@@ -100,34 +99,36 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const rows = useMemo(() => data?.rows ?? [], [data]);
   const compare = queryParams.compareTo === 'true' && Boolean(data) && rows.some((r) => 'variationAmount' in r);
 
-  // Expansion: the level sets it; the user then folds rows one by one. First data → the level's expansion.
-  const [expanded, setExpanded] = useState(null);
-  useEffect(() => {
-    if (expanded === null && rows.length) setExpanded(expansionForLevel(rows, state.level));
-  }, [rows, expanded, state.level]);
-  const expandedSet = expanded ?? NO_ROWS_EXPANDED;
+  // Folding: a base (the level, expand all, collapse all) plus the rows the user flipped since,
+  // applied to every result, so rows a new filter brings in follow the base.
+  const [fold, setFold] = useState(() => ({ base: 'level', flipped: new Set() }));
+  const expandedSet = useMemo(() => foldExpansion(rows, fold, state.level), [rows, fold, state.level]);
   const shown = useMemo(() => visibleRows(rows, expandedSet), [rows, expandedSet]);
+  const refold = (base) => setFold({ base, flipped: new Set() });
   const toggleRow = (id) => {
     groupToggled(expandedSet.has(id) ? 'collapse' : 'expand');
-    setExpanded((prev) => {
-      const next = new Set(prev ?? []);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
+    setFold((f) => {
+      const flipped = new Set(f.flipped);
+      if (flipped.has(id)) flipped.delete(id); else flipped.add(id);
+      return { ...f, flipped };
     });
   };
   // The level folds on screen: nothing loads, so the change is applied at once.
   const setLevel = (level) => {
     telemetry.emit(REPORT_EVENTS.FILTER_APPLIED, { type: 'account_level', outcome: 'success' });
     change({ level });
-    setExpanded(expansionForLevel(rows, level));
+    refold('level');
   };
 
   const [drillAccount, setDrillAccount] = useState(null);
   const { splits, toggle: toggleSplit } = useAccountSplit(report.id, queryParams, state.splitBy, { locale });
 
   const shortcut = matchingShortcut(state, defaults.years, today);
-  const onShortcut = (kind) => userChange(kind === 'year' ? openingPeriod(defaults.years, today) : shortcutPeriod(kind, today));
-  const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel)); setExpanded(expansionForLevel(rows, defaultLevel)); };
+  const onShortcut = (kind) => {
+    const { dateFrom, dateTo } = kind === 'year' ? openingPeriod(defaults.years, today) : shortcutPeriod(kind, today);
+    userChange({ dateFrom, dateTo });
+  };
+  const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel)); refold('level'); };
 
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
@@ -201,8 +202,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           onShortcut={onShortcut}
           onPickYear={(y) => y && userChange(pickedYearPeriod(y, today))}
           onLevel={setLevel}
-          onExpandAll={() => { groupToggled('expand_all'); setExpanded(expandAll(rows)); }}
-          onCollapseAll={() => { groupToggled('collapse_all'); setExpanded(new Set()); }}
+          onExpandAll={() => { groupToggled('expand_all'); refold('all'); }}
+          onCollapseAll={() => { groupToggled('collapse_all'); refold('none'); }}
           onReset={reset}
           shortcut={shortcut}
           years={defaults.years}

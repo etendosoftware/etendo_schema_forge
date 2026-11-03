@@ -28,10 +28,12 @@ describe('drillDown', () => {
     expect(sqlDateDay(null)).toBe('');
   });
 
-  it('opening, debit, credit and closing in debit − credit terms', () => {
+  it('opening, debit, credit and closing in debit − credit terms; the movement signed like the row', () => {
     const rows = [{ amtacctdr: '50', amtacctcr: 0 }, { amtacctdr: 0, amtacctcr: 1050 }];
-    expect(ledgerSummary(rows, [{ openingtotal: -150 }, { openingtotal: '-50' }])).toEqual({ opening: -200, debit: 50, credit: 1050, closing: -1200 });
-    expect(ledgerSummary([], null)).toEqual({ opening: 0, debit: 0, credit: 0, closing: 0 });
+    expect(ledgerSummary(rows, [{ openingtotal: -150 }, { openingtotal: '-50' }])).toEqual({ opening: -200, debit: 50, credit: 1050, closing: -1200, movement: -1000 });
+    // A credit-signed row (revenue): the movement is the amount the report shows for it.
+    expect(ledgerSummary(rows, [], 'C').movement).toBe(1000);
+    expect(ledgerSummary([], null)).toEqual({ opening: 0, debit: 0, credit: 0, closing: 0, movement: 0 });
   });
 
   it('the search looks at description, dimensions and day, ignoring case', () => {

@@ -1,10 +1,22 @@
 // @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/dynamicReports.js
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DYNAMIC_REPORT_IDS, opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
 
 let mockSearchParams = new URLSearchParams();
-vi.mock('react-router-dom', () => ({ useSearchParams: () => [mockSearchParams, vi.fn()] }));
+// Stateful, so picking a report from the list re-renders the page like the router would.
+vi.mock('react-router-dom', async () => {
+  const { useState } = await import('react');
+  return { useSearchParams: () => useState(mockSearchParams) };
+});
+// The view itself is covered in its own suite; here only what the page hands it.
+vi.mock('@/components/reports/dynamic/DynamicReportView.jsx', () => ({
+  default: ({ report, source }) => (
+    <div data-testid="DynamicReportView" data-source={source}>
+      <h2 data-testid="DynamicReportView__title">{report.title.en_US}</h2>
+    </div>
+  ),
+}));
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
@@ -63,6 +75,26 @@ describe('ReportViewerPage — dynamic-reports switch (ETP-6080)', () => {
     open('balance-sheet');
     await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
     expect(screen.queryByTestId('DynamicReportView')).not.toBeInTheDocument();
+  });
+});
+
+describe('ReportViewerPage — how the dynamic view was opened (F10 source)', () => {
+  beforeEach(() => {
+    mockFlagOn = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: () => Promise.resolve(REPORTS) });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a URL that already names the report is a deep link', async () => {
+    open('profit-loss');
+    expect(await screen.findByTestId('DynamicReportView')).toHaveAttribute('data-source', 'deep_link');
+  });
+
+  it('a report picked from the list was opened from the menu', async () => {
+    mockSearchParams = new URLSearchParams('category=finance');
+    render(<ReportViewerPage />);
+    fireEvent.click(await screen.findByText('Profit & Loss'));
+    expect(await screen.findByTestId('DynamicReportView')).toHaveAttribute('data-source', 'menu');
   });
 });
 

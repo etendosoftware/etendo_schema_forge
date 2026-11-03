@@ -26320,6 +26320,7 @@
     "dynamicReportDebit": "Debe",
     "dynamicReportCredit": "Haber",
     "dynamicReportClosing": "Saldo final",
+    "dynamicReportMovement": "Movimiento del período",
     "dynamicReportSearchLines": "Buscar líneas",
     "dynamicReportDate": "Fecha",
     "dynamicReportDescription": "Descripción",

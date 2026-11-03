@@ -1963,6 +1963,17 @@
         "backend": []
       },
       "$pathsComment": "Owned code only: the dynamic view and its query hook. ReportViewerPage.jsx (the one switch, plus the PopupMultiSelector and buildReportFilename exports the view reuses), flag-keys.js, the observability event catalog and the locale files are shared toggle points. The /query route (core report-query.js, dev engine report-api.js), the contract changes and the export templates serve every caller and are not gated.",
+      "deferredItems": [
+        {
+          "id": "view-imports-from-report-page",
+          "kind": "cosmetic",
+          "note": "DynamicReportPanel and DynamicReportView import PopupMultiSelector and buildReportFilename from ReportViewerPage.jsx: a circular import (the page lazy-loads the view, the view imports the page), and a page file that exports non-components loses Vite fast refresh. Works at runtime because the page module is already loaded when the lazy chunk runs. And therefore: retiring the flag by deletion would leave those two exports behind for nothing, and shipping it would keep a view that depends on the old viewer's file. Fix: move both to components/reports/ and import them from there in both viewers. Deferred by the user in the F6–F12 self-review (2026-11-03): keep ETP-6080 focused.",
+          "refs": [
+            "tools/app-shell/src/pages/ReportViewerPage.jsx — export function PopupMultiSelector, export function buildReportFilename",
+            "tools/app-shell/src/components/reports/dynamic/DynamicReportPanel.jsx — import from '@/pages/ReportViewerPage.jsx'"
+          ]
+        }
+      ],
       "testSpecs": {
         "unit": [
           {

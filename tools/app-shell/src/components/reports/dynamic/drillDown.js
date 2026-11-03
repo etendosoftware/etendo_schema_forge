@@ -41,12 +41,17 @@ export function sqlDateDay(raw) {
 
 const num = (v) => Number(v) || 0;
 
-/** Opening / debit / credit / closing of the ledger, in debit − credit terms. */
-export function ledgerSummary(rows = [], openingRows = []) {
+/**
+ * Opening / debit / credit / closing of the ledger, in debit − credit terms, plus `movement`: the
+ * period's debit − credit with the report row's sign (`C` flips it), so it equals the amount the
+ * user clicked on. The closing never does: it carries every earlier period too.
+ */
+export function ledgerSummary(rows = [], openingRows = [], sign = 'D') {
   const opening = (openingRows || []).reduce((sum, r) => sum + num(r.openingtotal), 0);
   const debit = rows.reduce((sum, r) => sum + num(r.amtacctdr), 0);
   const credit = rows.reduce((sum, r) => sum + num(r.amtacctcr), 0);
-  return { opening, debit, credit, closing: opening + debit - credit };
+  const movement = (debit - credit) * (sign === 'C' ? -1 : 1);
+  return { opening, debit, credit, closing: opening + debit - credit, movement: movement || 0 };
 }
 
 const SEARCHED_FIELDS = ['groupbyname', 'bpname', 'productname', 'projectname', 'costcentername'];

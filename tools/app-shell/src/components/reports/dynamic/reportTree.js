@@ -35,6 +35,22 @@ export function expandAll(rows) {
   return parentIds(rows);
 }
 
+/**
+ * The expansion of a fold: its `base` ('level' = down to `level`, 'all', 'none') with the rows the
+ * user flipped since. Recomputed for every result, so a row that first appears after a filter
+ * change follows the base instead of showing folded.
+ */
+export function foldExpansion(rows, { base, flipped }, level) {
+  const parents = parentIds(rows);
+  const expanded = base === 'all' ? parents : base === 'none' ? new Set() : expansionForLevel(rows, level);
+  const out = new Set(expanded);
+  for (const id of flipped) {
+    if (!parents.has(id)) continue;
+    if (out.has(id)) out.delete(id); else out.add(id);
+  }
+  return out;
+}
+
 /** The rows to show, in order, each with `depth` (0 = top) and `hasChildren`. */
 export function visibleRows(rows, expanded) {
   const parents = parentIds(rows);

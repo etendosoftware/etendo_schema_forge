@@ -178,6 +178,16 @@ describe('DynamicReportView — tree', () => {
     expect(rowIds()).toEqual(['E1']);
   });
 
+  it('rows a new filter brings in follow the level, not the earlier expansion', async () => {
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    queryAnswer = () => json({ kind: 'tree', rows: [...TREE,
+      { node_id: 'E2', parentId: null, elementlevel: 'E', value: 'P.G.2', name: 'Gastos', amount: 5, amount_ref: 0, sign: 'D' },
+      { node_id: 'C2', parentId: 'E2', elementlevel: 'C', value: '62', name: 'Servicios', amount: 5, amount_ref: 0, sign: 'D' }] });
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1', 'E2', 'C2']));
+  });
+
   it('folding does not send a new request', async () => {
     renderView();
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
@@ -294,6 +304,8 @@ describe('DynamicReportView — drill-down (F9)', () => {
     expect(screen.getByTestId('DynamicDrillPanel__debit')).toHaveTextContent('50,00');
     expect(screen.getByTestId('DynamicDrillPanel__credit')).toHaveTextContent('1.050,00');
     expect(screen.getByTestId('DynamicDrillPanel__closing')).toHaveTextContent('-1.200,00');
+    // Signed like the row (700 is a credit account): equals its 1.000,00 in the report.
+    expect(screen.getByTestId('DynamicDrillPanel__movement')).toHaveTextContent('1.000,00');
     // The day the server meant, not the UTC day before.
     expect(screen.getAllByTestId('DynamicDrillPanel__openEntry').map((b) => b.textContent)).toEqual(['15/09/2026', '02/10/2026']);
     fireEvent.change(screen.getByTestId('DynamicDrillPanel__search'), { target: { value: 'beta' } });

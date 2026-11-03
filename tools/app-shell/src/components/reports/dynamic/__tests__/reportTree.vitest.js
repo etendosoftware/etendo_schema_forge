@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportTree.js
-import { canSplit, expandAll, expansionForLevel, parentIds, visibleRows } from '../reportTree.js';
+import { canSplit, expandAll, expansionForLevel, foldExpansion, parentIds, visibleRows } from '../reportTree.js';
 
 // A heading with an account, which has a breakdown with a subaccount; a formula total at the top.
 const ROWS = [
@@ -43,5 +43,19 @@ describe('reportTree', () => {
   it('only a leaf, non-formula row can be split', () => {
     const shown = visibleRows(ROWS, expandAll(ROWS));
     expect(shown.filter(canSplit).map((r) => r.node_id)).toEqual(['S1', 'C2']);
+  });
+
+  it('a fold is its base plus the rows the user flipped; a flipped leaf is ignored', () => {
+    const none = new Set();
+    expect([...foldExpansion(ROWS, { base: 'level', flipped: none }, 'C')]).toEqual(['E1']);
+    expect([...foldExpansion(ROWS, { base: 'all', flipped: none }, 'C')].sort()).toEqual(['C1', 'D1', 'E1']);
+    expect([...foldExpansion(ROWS, { base: 'none', flipped: none }, 'C')]).toEqual([]);
+    expect([...foldExpansion(ROWS, { base: 'level', flipped: new Set(['E1', 'C1', 'S1']) }, 'C')]).toEqual(['C1']);
+  });
+
+  it('rows that first appear later follow the base, not the old expansion', () => {
+    const fold = { base: 'level', flipped: new Set(['C1']) };
+    const more = [...ROWS, { node_id: 'E2', parentId: null, elementlevel: 'E' }, { node_id: 'C3', parentId: 'E2', elementlevel: 'C' }];
+    expect(ids(visibleRows(more, foldExpansion(more, fold, 'C')))).toEqual(['E1', 'C1', 'D1', 'C2', 'T', 'E2', 'C3']);
   });
 });
