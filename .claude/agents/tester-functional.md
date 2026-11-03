@@ -292,11 +292,11 @@ describe('ComponentName', () => {
 
 ## Playwright E2E Spec Template (mocked)
 
-Mocked specs run without a backend by installing `/sws/**` route handlers AFTER `login()` (Playwright matches routes in reverse order). Use this shape:
+Mocked specs run without a backend by installing `/sws/**` route handlers AFTER `login()` (Playwright matches routes in reverse order). They take `test` and `expect` from `e2e/tests/helpers/test.js`, never from `@playwright/test`: that fixture records the coverage the pre-push selects specs with (ETP-5891), and `scripts/__tests__/mocked-specs-coverage-contract.test.js` fails otherwise. A spec that opens more pages (`context.newPage()`) also goes in `e2e/mocked-always-run.json`. Use this shape:
 
 ```javascript
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../helpers/test.js';
 import { login } from '../helpers/auth.js';
 
 const ROWS = [

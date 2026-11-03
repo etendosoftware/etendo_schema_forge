@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/lib/observability/browser.js
 // @covers tools/app-shell/src/lib/observability/killSwitch.js
 // @covers tools/app-shell/src/lib/observability/core.js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 
 /**

@@ -5,7 +5,7 @@
 // @covers artifacts/sales-invoice/generated/web/sales-invoice/HeaderPage.jsx
 // @covers artifacts/purchase-order/generated/web/purchase-order/HeaderPage.jsx
 // @covers artifacts/sales-quotation/generated/web/sales-quotation/QuotationPage.jsx
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/test.js';
 import { login } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
 import { addLinesEmptyStateButton, expandHeaderFields } from '../../helpers/purchase-helpers.js';

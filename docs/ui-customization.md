@@ -446,6 +446,8 @@ The kebab content has no save handle, so it cannot flush pending header edits it
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
 
+**Gotcha — a hand-written Radix `DropdownMenu` that opens a `Dialog` must be `modal={false}` (ETP-5831, dev server only).** In `make dev`, `@radix-ui/react-dialog` is pre-bundled by Vite while `@radix-ui/react-dropdown-menu` is served raw through the excluded `app-shell-core`, so each loads its own copy of `@radix-ui/react-dismissable-layer`. A modal menu sets `pointer-events: none` on `<body>`; the dialog's copy saves that lock as the "original" value and restores it on close, and the page stays frozen until a reload. A non-modal menu never takes the lock. Production builds bundle a single copy and are not affected. Reference: the org-bar kebab in `fiscal-config/FiscalConfigPage.jsx` ("Cambiar SIF"). Root fix deferred, see `docs/feedback.md` (ETP-5831).
+
 #### Posting actions follow "Show Accounting Fields" (ETP-5684)
 
 Contabilizar / Descontabilizar are hidden from every role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins always have it). **You declare nothing for this.** The three action renderers drop any descriptor whose `neoAction` (form kebab, row kebab) or `value` (bulk toolbar) is `post` or `unpost`:
