@@ -1540,7 +1540,7 @@
     },
     {
       "id": "invoice-inbox",
-      "description": "Invoice Inbox (epic ETP-6046): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
+      "description": "Invoice Inbox (epic ETP-6046; ETP-6047 flag and upload, ETP-6048 background reading): incoming supplier documents uploaded, run through OCR and turned into purchase invoices. Backend-only flag for now, evaluated per account. Off refuses the inbox upload endpoint before any OCR work is enqueued; the background worker that reads each accepted document (OCR, matching, validation) is only reachable through that upload. The ETGO_INCOMING_DOCUMENT table and the Invoice Inbox window ship unconditionally: the flag gates behaviour, not schema.",
       "owner": "ivanrobledofutit",
       "jira": "ETP-6047",
       "created": "2026-11-02",
@@ -1548,7 +1548,7 @@
         "key": "invoice-inbox",
         "defaultValue": false,
         "ttl": "2027-01-31",
-        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag, delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and (once ETP-6049 adds it) the INVOICE_INBOX key in flag-keys.js with its toggle points; delete the flag object, keep this entry.",
+        "ttlNote": "PROVISIONAL, pending confirmation with product (epic ETP-6046). Retirement means the inbox ships to everyone: unwrap the upload endpoint toggle point(s) that call InvoiceInboxFlag, delete InvoiceInboxFlag.java and its test, delete FLAG_INVOICE_INBOX from GoFeatureFlags, remove the com.etendoerp.go docs section and configuration-table row, delete the hosted Datadog setting, and (once ETP-6049 adds it) the INVOICE_INBOX key in flag-keys.js with its toggle points; delete the flag object, keep this entry. Retirement does NOT remove the background worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the stalled-row sweeper (InvoiceInboxSweeperStartup), the validator and status policy, the matchers, or the shared OCR changes (total_amount in ocr-config.json, retryable OcrUnavailableException, TaxIdNormalizer, vendor tax id lookups): they ship permanently.",
         "symbols": [
           "invoice-inbox",
           "FLAG_INVOICE_INBOX",
@@ -1556,19 +1556,30 @@
         ],
         "$symbolsComment": "Backend-only flag: no key in flag-keys.js yet (ETP-6049 adds INVOICE_INBOX when there is UI). ETGO_FLAG_INVOICE_INBOX is the local env arm and is not listed as a symbol: it is only spelled in docs and javadoc. The backend is the only evaluator."
       },
-      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. The toggle point is InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart.",
+      "$gatingComment": "ONE evaluator, the backend (InvoiceInboxFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, `Email` and lowercase `email` carry the account. Datadog rules are written on the lowercase `email` attribute only (never identifier, percentage or tenant attribute), because the web client and the backend use different targeting keys. With no resolvable account the context carries clientId only and the default stays off; never throws. The asynchronous OCR worker has no OBContext user, so it must NOT re-evaluate the flag; off-request callers use InvoiceInboxFlag.isEnabled(accountEmail, clientId) with values captured at request entry. Local: etendo.go.flags.invoice-inbox / ETGO_FLAG_INVOICE_INBOX (Tomcat restart). Hosted rollout: create the boolean setting `invoice-inbox` (default false) in Datadog Experimental/Production BEFORE targeting anyone. The toggle point is InvoiceInboxUploadEndpoint (POST /sws/neo/invoice-inbox/upload), which refuses with 403 feature_disabled before reading the multipart. ETP-6048 adds no second evaluator: everything it added is only REACHABLE through that gated upload. The worker (InvoiceInboxProcessor, which the upload endpoint feeds through InvoiceInboxProcessor.submit) and the sweeper never evaluate the flag by design: a PROCESSING row exists only because the flag was on at upload, so turning the flag off does NOT stop rows already queued or processing. Pieces that run REGARDLESS of the flag (removal cost and blast radius): (a) InvoiceInboxSweeperStartup, a SessionAwareStartup that runs at every startup and every 2 minutes and scans etgo_incoming_document for stalled PROCESSING rows, a no-op when the table has none; (b) the SHARED OCR schema ocr/ocr-config.json gained total_amount (number|null, in required), which also changes the schema served by GET /sws/neo/ocrconfig to the SPA 'Extraer y completar' of /purchase-invoice and to the MCP: verified manually and by the 577 SPA vitests, no behavior change; (c) shared OCR client changes: OcrUnavailableException.retryable (the old constructor stays retryable) and CopilotOcrServiceClient classifying HTTP failures through HttpStatusException; (d) ReceiverTaxIdCheck now delegates to the new TaxIdNormalizer; (e) PurchaseInvoiceOcrLookups has new vendorsByTaxId and vendorTaxId, organizationTaxId now reads through OBDal.getInstance(), and selector failures log WARN, while OcrLookups gained default methods vendorsByTaxId and vendorTaxId; (f) three new columns on ETGO_INCOMING_DOCUMENT (PROCESSING_ATTEMPTS, PROCESSING_LEASE, PROCESSED_AT) ship unconditionally: the flag gates behaviour, not schema.",
       "paths": {
         "frontend": [],
         "backend": [
           "src/com/etendoerp/go/schemaforge/InvoiceInboxFlag.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpoint.java",
           "src/com/etendoerp/go/schemaforge/InvoiceInboxIntake.java",
-          "src/com/etendoerp/go/schemaforge/InvoiceInboxMessages.java"
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxMessages.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxProcessor.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxWorkStore.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxValidator.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxStatusPolicy.java",
+          "src/com/etendoerp/go/schemaforge/InvoiceInboxSummary.java",
+          "src/com/etendoerp/go/schemaforge/ocr/InboxDocument.java",
+          "src/com/etendoerp/go/schemaforge/ocr/InboxMatcher.java",
+          "src/com/etendoerp/go/schemaforge/ocr/InboxVendorMatcher.java",
+          "src/com/etendoerp/go/schemaforge/ocr/InboxLineMatcher.java",
+          "src/com/etendoerp/go/schemaforge/ocr/TaxIdNormalizer.java",
+          "src/com/etendoerp/go/startup/InvoiceInboxSweeperStartup.java"
         ]
       },
-      "$pathsComment": "Owned code only. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays.",
+      "$pathsComment": "Owned code only. GoFeatureFlags.java is framework. The ONE toggle point is InvoiceInboxUploadEndpoint (the flag check at the top of handle(), at request entry); InvoiceInboxIntake and InvoiceInboxMessages are the endpoint's per-file work and texts. Shared code that only delegates, listed for removal cost: NeoBuiltInEndpointHandler.java (the one `invoice-inbox` / `upload` / POST branch, which stays after retirement because it is the route), NeoServlet.java (maxRequestSize 210 MB, stays). Also a touch point (shared, removal cost none): src/com/etendoerp/go/roles/TemplateRoleWindowAccess.java and src-util/modulescript/.../EnsureSystemRoleTemplatesScript.java carry the Invoice Inbox window grant (full for Compras and Financiero); the grant stays after retirement. NeoAttachmentPolicy.java holds the 210 MB request constants and stays. ETP-6048 owned files are the worker (InvoiceInboxProcessor, InvoiceInboxWorkStore), the validator and status policy (InvoiceInboxValidator, InvoiceInboxStatusPolicy, InvoiceInboxSummary), the matchers and tax id normalizer under schemaforge/ocr/, and InvoiceInboxSweeperStartup under startup/. They carry no flag check of their own: the only toggle point stays InvoiceInboxUploadEndpoint, which also hands each accepted row to InvoiceInboxProcessor.submit. Shared files ETP-6048 touched (NOT owned, they stay after retirement, listed for removal cost): ocr/ocr-config.json, ocr/OcrLookups.java, ocr/OcrUnavailableException.java, ocr/CopilotOcrServiceClient.java, ocr/ReceiverTaxIdCheck.java, schemaforge/PurchaseInvoiceOcrLookups.java, schemaforge/NeoAttachmentsHelper.java (new copyMainAttachmentToTemp), schemaforge/InvoiceInboxIntake.java (processingAttempts starts at 0).",
       "testSpecs": {
-        "$testSpecsComment": "Backend specs are tester-go's. All are written and pass: the gate, the upload endpoint (toggle point), the intake, the messages, the shared specs and one DB-backed integration test (WeldBaseTest: the attachment manager is resolved through the Weld static bean manager, absent under a plain OBBaseTest). The environment-variable spelling of the local arm cannot be set from the JVM, so only the property is tested.",
+        "$testSpecsComment": "Backend specs are tester-go's. All are written and pass: the gate, the upload endpoint (toggle point), the intake, the messages, the shared specs and one DB-backed integration test (WeldBaseTest: the attachment manager is resolved through the Weld static bean manager, absent under a plain OBBaseTest). The environment-variable spelling of the local arm cannot be set from the JVM, so only the property is tested. ETP-6048 specs are written and pass in the same way; the work-store, inbox-duplicates and vendor-tax-id integration tests are DB-backed (WeldBaseTest).",
         "unit": [
           {
             "root": "backend",
@@ -1578,12 +1589,12 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxUploadEndpointTest.java",
-            "note": "Covers: flag off -> 403 feature_disabled before getParts() is called and before any window/org check; no window write access -> 403 access_denied; not multipart -> 400 not_multipart; star org and org outside getWritableOrganizations -> 403 org_not_allowed; getParts() throwing IllegalStateException -> 413 request_too_large (message carries 10 and 210 MB); getParts() IOException/ServletException -> 400 not_multipart; only parts named `files` with a submitted file name count; 0 files -> 400 no_files; 21 files -> 400 too_many_files with max 20 and count and NOTHING created; exactly 20 accepted; mixed batch answers 200 with accepted/rejected counts and ordered results; ids (client/org/user) captured once; parts' temp files deleted in every path."
+            "note": "Covers: flag off -> 403 feature_disabled before getParts() is called and before any window/org check; no window write access -> 403 access_denied; not multipart -> 400 not_multipart; star org and org outside getWritableOrganizations -> 403 org_not_allowed; getParts() throwing IllegalStateException -> 413 request_too_large (message carries 10 and 210 MB); getParts() IOException/ServletException -> 400 not_multipart; only parts named `files` with a submitted file name count; 0 files -> 400 no_files; 21 files -> 400 too_many_files with max 20 and count and NOTHING created; exactly 20 accepted; mixed batch answers 200 with accepted/rejected counts and ordered results; ids (client/org/user) captured once; parts' temp files deleted in every path. Extended (ETP-6048): only the accepted rows are submitted to the worker, once; nothing is submitted when every file is rejected or the request is refused; a worker that fails to queue does not change the answer of a committed upload."
           },
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxIntakeTest.java",
-            "note": "Covers: extension not in {pdf,jpg,jpeg,png} (webp, exe, none, ..) -> unsupported_type without touching the DAL; size 0 -> empty_file; path-traversal names sanitized; happy path creates the IncomingDocument (source UPLOAD, targetType PURCHASE_INVOICE, status PROCESSING, adjusted/reviewed false, client/org re-read by id), calls NeoAttachmentStore.store with markAsMain true and the table name, then commitAndClose and returns the row id; store 400/422 -> rollbackAndClose + invalid_content passing the store message; store 404/500 or no message -> store_failed; any exception -> rollbackAndClose + store_failed, never thrown; temp file and its directory removed in every path; one file failing does not affect the next."
+            "note": "Covers: extension not in {pdf,jpg,jpeg,png} (webp, exe, none, ..) -> unsupported_type without touching the DAL; size 0 -> empty_file; path-traversal names sanitized; happy path creates the IncomingDocument (source UPLOAD, targetType PURCHASE_INVOICE, status PROCESSING, adjusted/reviewed false, client/org re-read by id), calls NeoAttachmentStore.store with markAsMain true and the table name, then commitAndClose and returns the row id; store 400/422 -> rollbackAndClose + invalid_content passing the store message; store 404/500 or no message -> store_failed; any exception -> rollbackAndClose + store_failed, never thrown; temp file and its directory removed in every path; one file failing does not affect the next. Extended (ETP-6048): a new row starts with processingAttempts 0."
           },
           {
             "root": "backend",
@@ -1608,7 +1619,92 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxIntakeIntegrationTest.java",
-            "note": "DB-backed (WeldBaseTest, F&B sample data): each accepted file commits a PROCESSING row plus its main C_File attachment; a content mismatch leaves no row and no attachment; a refused file between two good ones does not affect them; nothing is created in C_Invoice."
+            "note": "DB-backed (WeldBaseTest, F&B sample data): each accepted file commits a PROCESSING row plus its main C_File attachment; a content mismatch leaves no row and no attachment; a refused file between two good ones does not affect them; nothing is created in C_Invoice. Extended (ETP-6048): the committed PROCESSING row starts with no passes counted."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxProcessorTest.java",
+            "note": "Covers: a readable invoice ends PENDING_REVIEW (extraction stored first, lease released) and the worker never writes ADJUSTED or REVIEWED; runs as the row's user/client/org with admin mode balanced and the context cleared, also when matching throws; a stored extraction skips the attachment; nothing readable or a blank document or no main attachment -> ERROR / UNREADABLE; 5xx retried 3 times (0, 15, 45 s), a 400 not retried; a row discarded, confirmed or claimed by another node is left alone; foreign receiver -> ERROR / FOREIGN_RECEIVER, missing data -> MISSING_FIELDS; unexpected exceptions leave the row PROCESSING for the sweeper; every pass counts against the cap of three; the sweep ends exhausted rows, and a failing store rolls back; same vendor and number already in the inbox is a warning."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxValidatorTest.java",
+            "note": "Covers: a complete document is valid; missing vendor (ambiguous, unmatched, none; a new vendor needs name and tax id), date, amount, lines, line tax (D2 pending address with a printed rate) and product (D8 new product needs description, quantity above zero, price of zero or more); every missing item reported at once in document order; reference of 20 characters fits and 21 is REFERENCE_TOO_LONG; FOREIGN_RECEIVER wins over everything; null document or header-less is MISSING_FIELDS."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxStatusPolicyTest.java",
+            "note": "Covers: how a validation verdict moves a row: valid keeps PENDING_REVIEW, missing data -> ERROR / MISSING_FIELDS, long number -> REFERENCE_TOO_LONG, an edit that completes the data brings the row back to review, one validation error can change into the other; PROCESSING, READY, CONFIRMED, DISCARDED and ERRORs decided elsewhere (UNREADABLE, SERVICE_FAILURE, CONFIRM_FAILED) are never touched; adjusted and reviewed flags are never written."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxSummaryTest.java",
+            "note": "Covers: copies the header into the list columns (name, tax id, vendor, number, date, total), truncating to the column sizes (30 and 255), leaving them empty for blank, ambiguous or new vendor, a number over 20 characters, a malformed date or no total; the duplicate column holds the first duplicate; a header-less document leaves the row as it was; never writes status, error code, adjusted or reviewed."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxWorkStoreIntegrationTest.java",
+            "note": "DB-backed (WeldBaseTest): a claim counts the pass, sets the lease and returns what the worker needs; a live lease keeps others out, an expired one can be retaken; two nodes claiming at once produce exactly one winner; the cap of passes stops claims; the extraction is stored once and only while PROCESSING; failOrRelease releases the lease or ends the row as SERVICE_FAILURE on the last pass and never touches a row no longer PROCESSING; stalled ids are old PROCESSING rows with no live lease and passes left, oldest first and capped; exhausted rows end as SERVICE_FAILURE; the user's role is one of its own active roles in the client (default wins)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/InvoiceInboxProcessorInboxDuplicatesIntegrationTest.java",
+            "note": "DB-backed: an unlinked row with the same tax id in any spelling and the same number finds the first duplicate; a different number or tax id is not a duplicate; discarded rows, other clients and the row itself are ignored; a blank or short tax id or a bad number asks nothing; a linked vendor still matches by vendor id."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/PurchaseInvoiceOcrLookupsVendorTaxIdIntegrationTest.java",
+            "note": "DB-backed: vendorsByTaxId finds a vendor stored with or without a country prefix or with separators, returns both vendors sharing a tax id, honors the limit, skips inactive vendors and non-vendors, and never returns another client's vendor; vendorTaxId reads only my client's vendor; searchVendorsByName and vendorAddress work in admin mode and never leak another client's vendor."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/InboxVendorMatcherTest.java",
+            "note": "Covers: one vendor with the tax id is linked by tax id; the id is searched cleaned; two vendors sharing it are ambiguous (max ten candidates); a tax id under five characters is not searched; falls back to the exact name (linked only when the stored tax id is absent or equal; different tax ids are another company; a contains-only hit is never linked); unknown named vendor is new, nothing read is none."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/InboxLineMatcherTest.java",
+            "note": "Covers: lines keep what was read; products looked up once in line order; link by similarity above 90 % (single top; ties only suggested; ETP-5654 code-only lookalike not linked), exact name links, two exact are ambiguous, no candidates is a new product; without a vendor address every line is pending_vendor; the tax is resolved once per rate with candidates, no_tax_at_rate when none, unknown when the lookup fails."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/InboxMatcherTest.java",
+            "note": "Covers: a readable invoice becomes version 1 of the document (vendor, header, lines, notices); a foreign receiver is not matched; receiver or organization without tax id is a notice; a linked vendor without address is a notice; duplicate invoice found or unknown with a notice; the printed total is used when above zero, otherwise computed from the lines with tax rounded half up; dates read as ISO, d/M/yyyy and d-M-yy, impossible dates are null."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/TaxIdNormalizerTest.java",
+            "note": "Covers: clean (upper case A-Z and digits, placeholders become empty); stripVatPrefix for known country prefixes (GR alias of EL; NIE and CIF letters are never stripped); idsMatch ignores formatting and prefix on either side and never matches a blank; variants lists the id, the bare form and each prefix form, empty for a blank id."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/startup/InvoiceInboxSweeperStartupTest.java",
+            "note": "Covers: the first pass sweeps once and starts the periodic scheduler, a second pass creates no second one; the scheduler starts even when the first sweep fails and the failure still reaches the base class; shutdown stops scheduler and worker and can be called twice; qualifier and 2-minute period are the registered ones."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/PurchaseInvoiceOcrLookupsTest.java",
+            "note": "Shared spec, extended (ETP-6048): vendorsByTaxId (query shape, shared tax id returns both, foreign partners dropped, blank or failing is empty), vendorTaxId (tenant guard, trimmed, missing or failing is none), organizationTaxId read through the worker's own DAL, and selector failures log WARN naming the spec, status or exception class only."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoAttachmentsHelperTest.java",
+            "note": "Shared spec, extended (ETP-6048): copyMainAttachmentToTemp copies the bytes into an owner-only directory, removes the handler's own temporary copy, and is null without a main attachment, for a nameless one, or when the bytes are gone."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/CopilotOcrServiceClientTest.java",
+            "note": "Shared spec, extended (ETP-6048): 5xx, 408, 429, timeouts and connection failures are retryable (upload step classified the same way), other 4xx are not, an unparseable 200 stays retryable, and the two-argument OcrUnavailableException constructor stays retryable."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/OcrConfigTest.java",
+            "note": "Shared spec, extended (ETP-6048): total_amount is a nullable number, a property and required, but not a data key (a total alone is not a reading); the question asks for the total with taxes."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/ocr/OcrSanitizerTest.java",
+            "note": "Shared spec, extended (ETP-6048): the packaged schema keeps a printed total (number or numeric string), reads a missing total as null, and a hostile total becomes null."
           }
         ]
       },
@@ -1635,6 +1731,14 @@
           "note": "The TTL 2027-01-31 is provisional and must be confirmed with product before the flag is turned on anywhere shared.",
           "refs": [
             "ETP-6046"
+          ]
+        },
+        {
+          "id": "revalidate-on-edit",
+          "kind": "scope",
+          "note": "The requirement that validation is recomputed on every edit is delivered here only as a reusable InvoiceInboxValidator and InvoiceInboxStatusPolicy, but nothing calls them on an edit yet: the caller is ETP-6050. Until then a row's ERROR / MISSING_FIELDS state only changes when the worker reads the document, so an edited row keeps a stale verdict.",
+          "refs": [
+            "ETP-6050"
           ]
         }
       ]
