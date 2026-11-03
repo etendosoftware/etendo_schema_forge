@@ -55,11 +55,12 @@ export default function useOrderGlobalDiscountImport() {
       return (
         <span
           data-testid="ImportGlobalDiscount__tag"
-          className="inline-flex items-center whitespace-nowrap rounded-lg bg-[#EBEFFF] px-2 py-1 text-xs leading-4 text-[#2B48BC]"
+          className="inline-flex items-center whitespace-nowrap rounded-lg bg-[#EBEFFF] px-2 py-1 text-xs leading-4 text-[#2B48BC] dark:bg-primary/25 dark:text-sidebar-accent-foreground"
         >
           {/* Figma «% Dto. global 10%»: the leading % is text in the label, not an icon.
               Literal Figma colours on purpose: bg-sidebar-accent resolves to #F0F3FF, which is
-              indistinguishable from the selected row's background, so the pill vanished there. */}
+              indistinguishable from the selected row's background, so the pill vanished there.
+              Under `.dark` a translucent brand blue with the dark accent text (near white). */}
           {ui('importGlobalDiscountTag', { pct: fmtPct(pct) })}
         </span>
       );

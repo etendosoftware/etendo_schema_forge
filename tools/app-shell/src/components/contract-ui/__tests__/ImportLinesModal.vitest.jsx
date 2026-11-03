@@ -1328,9 +1328,11 @@ describe('ImportLinesModal', () => {
 
   describe('ImportNotice — the Figma «Alert» (ETP-5828)', () => {
     it.each([
-      ['neutral', ['bg-[#F3F5F9]', 'border-[#C7CBD3]'], 'text-[#6B7280]'],
-      ['warning', ['bg-status-warning', 'border-[#FFC233]'], 'text-status-warning-foreground'],
-    ])('%s: literal Figma colours, one truncated body line with the full text as its title', (tone, boxClasses, bodyClass) => {
+      // Light: the literal Figma colours. Dark: token fallbacks, so a light-only literal never
+      // leaves a white title on a light box (or the other way round) under `.dark`.
+      ['neutral', ['bg-[#F3F5F9]', 'border-[#C7CBD3]', 'dark:bg-muted', 'dark:border-border-control'], 'text-[#6B7280]'],
+      ['warning', ['bg-status-warning', 'border-[#FFC233]', 'dark:border-status-warning-border'], 'text-status-warning-foreground'],
+    ])('%s: literal Figma colours with dark fallbacks, one truncated body line with the full text as its title', (tone, boxClasses, bodyClass) => {
       const long = 'x '.repeat(200).trim();
       render(<ImportNotice tone={tone} title="Title" body={long} data-testid="notice" />);
       const notice = screen.getByTestId('notice');
@@ -1341,6 +1343,7 @@ describe('ImportLinesModal', () => {
       expect(body.className).toContain(bodyClass);
       expect(body).toHaveAttribute('title', long);
       expect(screen.getByTestId('ImportNotice__icon').className).toContain('w-6');
+      expect(screen.getByTestId('Icon__b0ad7a').getAttribute('class')).toMatch(/dark:text-/);
     });
 
     it('puts a control in place of the icon, in the same 24 px high row', () => {

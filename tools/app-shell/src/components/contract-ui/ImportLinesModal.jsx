@@ -48,16 +48,21 @@ const DIALOG_HEIGHT = 648;
 const NOTICE_GAP = 12;
 const NOTICE_HEIGHT = 80;
 
-// Figma «Alert» colours, literal: the closest tokens differ (bg-muted is #F1F5F9, the warning
-// border token is #FFDA85, muted-foreground is #6C6C89). The warning bg (#FFF9EB) and text
-// (#8A6100) are exactly --status-warning-bg / --status-warning-fg, so those stay tokens.
+// Figma «Alert» colours, literal in the light theme: the closest tokens differ (bg-muted is
+// #F1F5F9, the warning border token is #FFDA85, muted-foreground is #6C6C89). The warning bg
+// (#FFF9EB) and text (#8A6100) are exactly --status-warning-bg / --status-warning-fg, so those
+// stay tokens. The Figma has no dark variant: under `.dark` each part falls back to the dark
+// theme's tokens (muted surface, control border, icon/foreground text; the warning tokens already
+// switch to their dark values), so the notice stays readable and fits a dark UI.
 const NOTICE_TONES = {
   neutral: {
-    box: 'border-[#C7CBD3] bg-[#F3F5F9]', icon: '#C7CBD3',
-    title: 'text-foreground', body: 'text-[#6B7280]',
+    box: 'border-[#C7CBD3] bg-[#F3F5F9] dark:border-border-control dark:bg-muted',
+    icon: 'text-[#C7CBD3] dark:text-icon-secondary',
+    title: 'text-foreground', body: 'text-[#6B7280] dark:text-muted-foreground',
   },
   warning: {
-    box: 'border-[#FFC233] bg-status-warning', icon: '#C28800',
+    box: 'border-[#FFC233] bg-status-warning dark:border-status-warning-border',
+    icon: 'text-[#C28800] dark:text-status-warning-foreground',
     title: 'text-status-warning-foreground', body: 'text-status-warning-foreground',
   },
 };
@@ -93,7 +98,7 @@ export function ImportNotice({ tone = 'neutral', title, body, control, 'data-tes
         data-testid="ImportNotice__icon"
       >
         {control || (
-          <Icon size={20} color={colours.icon} aria-hidden="true" data-testid="Icon__b0ad7a" />
+          <Icon size={20} color="currentColor" aria-hidden="true" className={colours.icon} data-testid="Icon__b0ad7a" />
         )}
       </span>
       <div className="flex min-w-0 flex-1 flex-col px-2 text-sm leading-6">
@@ -642,9 +647,10 @@ export default function ImportLinesModal({
           )}
         >
           <span className="flex w-10 shrink-0 justify-center px-2">
-            {/* Shared round chevron (ETP-5593), sized to the Figma 24 × 24 with its #C7CBD3 border,
-                shadow-xs and #81848F icon; `!` because RowExpandToggle's own h-7/w-7/border/text
-                classes would otherwise win the cascade. */}
+            {/* Shared round chevron (ETP-5593), sized to the Figma 24 × 24, with shadow-xs. Border
+                and icon use the closest tokens to the Figma's #C7CBD3 / #81848F: --sf-border-input
+                (#D1D4DB) and --sf-icon-outline-secondary (#828FA3), both with dark values. `!`
+                because RowExpandToggle's own h-7/w-7/border/text classes would otherwise win. */}
             <RowExpandToggle
               orientation="horizontal"
               expanded={isExpanded}

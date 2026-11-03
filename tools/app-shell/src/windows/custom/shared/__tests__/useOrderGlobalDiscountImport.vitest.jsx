@@ -86,7 +86,10 @@ describe('useOrderGlobalDiscountImport — document row', () => {
       // disappeared against a selected row (#F1F5F9).
       expect(tag.className).toContain('bg-[#EBEFFF]');
       expect(tag.className).toContain('text-[#2B48BC]');
-      expect(tag.className).not.toMatch(/bg-sidebar-accent|bg-muted/);
+      expect(tag.className).not.toMatch(/(^| )bg-sidebar-accent|(^| )bg-muted/);
+      // Readable in dark mode too: the light literals get dark-theme fallbacks.
+      expect(tag.className).toContain('dark:bg-primary/25');
+      expect(tag.className).toContain('dark:text-sidebar-accent-foreground');
     } else expect(tag).toBeNull();
   });
 });
