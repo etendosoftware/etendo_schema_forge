@@ -3,19 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { ExternalLink, Box, Calendar, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
+import { SIDEBAR_PERIOD_OPTIONS, DEFAULT_SIDEBAR_PERIOD, formatPeriodRange } from './productSidebarPeriod';
 import { niceScale, formatDashboardAxisTick } from '@/lib/dashboardNumberFormat';
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const DOT_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316', '#6366f1'];
 
-// Time-range dropdown shown above the summary. Mirrors the Contacts PeriodSelector.
-// Drives the inline stock-movement chart window (see `inlineMonths`).
-const SIDEBAR_PERIOD_OPTIONS = [
-  { value: '3M', key: 'last3Months', months: 3 },
-  { value: '6M', key: 'last6Months', months: 6 },
-  { value: '12M', key: 'last12Months', months: 12 },
-];
+// Exact range (DD/MM/AAAA – DD/MM/AAAA) covered by the selected period (ETP-5908 RF-05).
+function PeriodRangeLabel({ period, className = '' }) {
+  return (
+    <span
+      className={`text-xs font-normal text-muted-foreground ${className}`}
+      data-testid="SidebarPeriodRange"
+    >
+      {formatPeriodRange(period)}
+    </span>
+  );
+}
 
 function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false }) {
   const [open, setOpen] = useState(false);
@@ -31,7 +36,7 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
   const current = SIDEBAR_PERIOD_OPTIONS.find(o => o.value === period) ?? SIDEBAR_PERIOD_OPTIONS[0];
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex flex-col gap-1">
       <button
         type="button"
         disabled={disabled}
@@ -47,6 +52,7 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
           className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="ChevronDown__59b33d" />
       </button>
+      <PeriodRangeLabel period={period} data-testid="PeriodRangeLabel__59b33d" />
       {open && (
         <div className="absolute top-11 left-0 z-50 min-w-full bg-card border border-border-control rounded-lg shadow-md overflow-hidden">
           {SIDEBAR_PERIOD_OPTIONS.map(opt => (
@@ -366,11 +372,13 @@ function StockChart({
   transactions, currentStock, locationRows = [], locatorToWarehouse = {},
   // Inline chart time window (driven by the sidebar period selector). Modal keeps its own period.
   inlineMonths = 12,
+  // Panel period; the modal starts on it each time it opens, then keeps its own state.
+  panelPeriod = DEFAULT_SIDEBAR_PERIOD,
   // External control: open modal pre-filtered to a warehouse
   externalOpen, externalWarehouse, onExternalClose,
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [period, setPeriod] = useState('6M');
+  const [period, setPeriod] = useState(panelPeriod);
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
   const ui = useUI();
 
@@ -382,6 +390,12 @@ function StockChart({
       setSelectedWarehouse(externalWarehouse ?? null);
     }
   }, [externalOpen, externalWarehouse]);
+
+  // Inherit the panel period on every open (RF-02); changes inside the modal stay local.
+  useEffect(() => {
+    if (isOpen) setPeriod(panelPeriod);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleOpenChange = (open) => {
     if (!open) {
@@ -463,7 +477,10 @@ function StockChart({
           <DialogHeader data-testid="DialogHeader__59b33d">
             <DialogTitle data-testid="DialogTitle__59b33d">
               <div className="flex items-center justify-between gap-4 pr-8">
-                <span>{ui('stockMovement')}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span>{ui('stockMovement')}</span>
+                  <PeriodRangeLabel period={period} data-testid="PeriodRangeLabel__59b33d" />
+                </div>
                 <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                   {SIDEBAR_PERIOD_OPTIONS.map(opt => (
                     <button key={opt.value} onClick={() => setPeriod(opt.value)}
@@ -529,7 +546,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const [stockRows, setStockRows] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
-  const [period, setPeriod] = useState('3M');
+  const [period, setPeriod] = useState(DEFAULT_SIDEBAR_PERIOD);
   const [chartTrigger, setChartTrigger] = useState({ open: false, warehouse: null });
 
   useEffect(() => {
@@ -581,6 +598,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
     locationRows,
     locatorToWarehouse,
     inlineMonths,
+    panelPeriod: period,
     externalOpen: chartTrigger.open,
     externalWarehouse: chartTrigger.warehouse,
     onExternalClose: () => setChartTrigger({ open: false, warehouse: null }),

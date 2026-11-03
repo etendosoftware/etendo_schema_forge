@@ -2,6 +2,7 @@
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useLabel: () => (key) => key,
 }));
 
@@ -213,7 +214,7 @@ describe('ProductSidebar', () => {
     render(<ProductSidebar {...defaultProps} />);
 
     // The period selector button should show i18n key for the period
-    expect(screen.getByText('last3Months')).toBeInTheDocument();
+    expect(screen.getByText('last12Months')).toBeInTheDocument();
   });
 });
 
@@ -240,6 +241,16 @@ describe('ProductSidebar — stays visible for stockable types', () => {
   it('renders normally for a stockable type (Article)', () => {
     mockFetchResponses();
     render(<ProductSidebar {...defaultProps} data={{ productType: 'I' }} />);
-    expect(screen.getByText('last3Months')).toBeInTheDocument();
+    expect(screen.getByText('last12Months')).toBeInTheDocument();
+  });
+});
+
+// ETP-5908 RF-01 / RF-05 — default period and exact range label.
+describe('ProductSidebar period range', () => {
+  it('shows the exact range under the period selector', async () => {
+    mockFetchResponses();
+    render(<ProductSidebar {...defaultProps} />);
+    const range = screen.getByTestId('SidebarPeriodRange');
+    expect(range.textContent).toMatch(/^\d{2}\/\d{2}\/\d{4} – \d{2}\/\d{2}\/\d{4}$/);
   });
 });

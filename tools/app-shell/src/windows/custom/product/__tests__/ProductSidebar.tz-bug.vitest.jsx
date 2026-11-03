@@ -29,6 +29,7 @@
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useLabel: () => (key) => key,
 }));
 
@@ -96,7 +97,7 @@ describe('ProductSidebar — ETP-4850 date off-by-one bug', () => {
 
   beforeEach(() => {
     // Pin "now" to a fixed, midday instant so the fixed 3-month window
-    // (default period) is deterministic: months = ['2026-06','2026-07','2026-08'].
+    // (period switched to 3M below; the panel opens on 12M) is deterministic: months = ['2026-06','2026-07','2026-08'].
     vi.setSystemTime(new Date(2026, 7, 15, 12, 0, 0));
     // jsdom does not implement layout, so getBoundingClientRect() would
     // otherwise return all zeros — mock it to match the inline chart's
@@ -126,6 +127,10 @@ describe('ProductSidebar — ETP-4850 date off-by-one bug', () => {
     await waitFor(() => {
       expect(screen.getByText('stockMovement')).toBeInTheDocument();
     });
+
+    // The panel opens on 12M; this geometry assumes the 3M window.
+    fireEvent.click(screen.getByText('last12Months'));
+    fireEvent.click(screen.getByText('last3Months'));
 
     const svg = container.querySelector('svg');
     expect(svg).toBeTruthy();
