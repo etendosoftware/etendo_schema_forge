@@ -1,8 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/AutoMatchSuggestionModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/AutoMatchBounceSection.jsx
-// @covers tools/app-shell/src/components/contract-ui/AutoMatchSelectBox.jsx
 /**
- * The "Posibles rebotes" section of the automatch modal (bounce pairs, flag `bank-bounce-suggestions`).
+ * The "Rebotes bancarios" section of the automatch modal (bounce pairs, flag `bank-bounce-suggestions`).
  *
  * The SPA never evaluates the flag: with it off the backend sends groups without `kind` and no
  * `kpis.bouncePairs`, and the modal must be exactly what it was. With it on, the bounce-pair groups
@@ -41,8 +40,10 @@ vi.mock('@/components/ui/money-amount', () => ({
 }));
 
 const applyMock = vi.fn();
+// `loading` is read on every render, so a test can put the apply in flight.
+const applyState = { loading: false };
 vi.mock('@/hooks/useReconciliation', () => ({
-  useApplySuggestions: () => ({ apply: applyMock, loading: false, error: null }),
+  useApplySuggestions: () => ({ apply: applyMock, loading: applyState.loading, error: null }),
 }));
 
 // --- Import under test (after mocks) ----------------------------------------
@@ -133,6 +134,9 @@ const applyButton = () => screen.getByTestId('automatch-modal-apply');
 const footerText = () => screen.getByTestId('Info__a89979').nextSibling.textContent;
 const kpiValue = (label) => screen.getByText(label).nextSibling.textContent;
 const check = (key) => screen.getByTestId(`automatch-bounce-check-${key}`);
+// The shared Checkbox puts the test id on its <label>; the state lives on the input inside it.
+const box = (testId) => within(screen.getByTestId(testId)).getByRole('checkbox');
+const checkInput = (key) => box(`automatch-bounce-check-${key}`);
 
 async function clickApply() {
   fireEvent.click(applyButton());
@@ -140,6 +144,7 @@ async function clickApply() {
 }
 
 beforeEach(() => {
+  applyState.loading = false;
   applyMock.mockReset().mockResolvedValue({ results: [] });
   toast.success.mockReset();
   toast.error.mockReset();
@@ -180,11 +185,12 @@ describe('AutoMatchSuggestionModal — flag off (no kind, no kpis.bouncePairs)',
   });
 });
 
-describe('AutoMatchSuggestionModal — the Posibles rebotes section', () => {
+describe('AutoMatchSuggestionModal — the Rebotes bancarios section', () => {
   it('renders the pairs below the groups, with their count and the KPI', () => {
     renderModal();
     const section = screen.getByTestId('automatch-bounce-section');
     expect(within(section).getByText('financeReconcileAutomatchBounceTitle')).toBeInTheDocument();
+    expect(within(section).getByText('financeReconcileAutomatchBounceHint')).toBeInTheDocument();
     expect(screen.getByTestId('automatch-bounce-count')).toHaveTextContent('3');
     expect(kpiValue('financeReconcileAutomatchKpiBouncePairs')).toBe('3');
     expect(screen.getByTestId('automatch-bounce-row-bp-high')).toBeInTheDocument();
@@ -216,23 +222,23 @@ describe('AutoMatchSuggestionModal — the Posibles rebotes section', () => {
 
   it('starts with high checked, review unchecked and ambiguous disabled with its aria-label', () => {
     renderModal();
-    expect(check('bp-high')).toHaveAttribute('aria-checked', 'true');
-    expect(check('bp-review')).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-high')).toHaveAttribute('aria-checked', 'true');
+    expect(checkInput('bp-review')).toHaveAttribute('aria-checked', 'false');
     expect(check('bp-review')).toHaveAttribute('aria-label', 'financeReconcileAutomatchBounceCheck');
     const amb = check('bp-amb');
-    expect(amb).toBeDisabled();
-    expect(amb).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-amb')).toBeDisabled();
+    expect(checkInput('bp-amb')).toHaveAttribute('aria-checked', 'false');
     expect(amb).toHaveAttribute('aria-label', 'financeReconcileAutomatchBounceAmbiguousCheck');
     fireEvent.click(amb);
-    expect(amb).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-amb')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('toggles a pair', () => {
     renderModal();
     fireEvent.click(check('bp-review'));
-    expect(check('bp-review')).toHaveAttribute('aria-checked', 'true');
+    expect(checkInput('bp-review')).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(check('bp-high'));
-    expect(check('bp-high')).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-high')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('offers "Revisar en el panel" only with onReviewPair, and only on pairs to review', () => {
@@ -252,22 +258,22 @@ describe('AutoMatchSuggestionModal — the Posibles rebotes section', () => {
   it('select-all of pairs checks every selectable pair, then unchecks them; never the ambiguous one', () => {
     renderModal();
     const all = screen.getByTestId('automatch-bounce-select-all');
-    expect(all).toHaveAttribute('aria-checked', 'mixed');
+    expect(box('automatch-bounce-select-all')).toHaveAttribute('aria-checked', 'mixed');
     fireEvent.click(all);
-    expect(check('bp-high')).toHaveAttribute('aria-checked', 'true');
-    expect(check('bp-review')).toHaveAttribute('aria-checked', 'true');
-    expect(check('bp-amb')).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-high')).toHaveAttribute('aria-checked', 'true');
+    expect(checkInput('bp-review')).toHaveAttribute('aria-checked', 'true');
+    expect(checkInput('bp-amb')).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(all);
-    expect(check('bp-high')).toHaveAttribute('aria-checked', 'false');
-    expect(check('bp-review')).toHaveAttribute('aria-checked', 'false');
-    expect(all).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-high')).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-review')).toHaveAttribute('aria-checked', 'false');
+    expect(box('automatch-bounce-select-all')).toHaveAttribute('aria-checked', 'false');
     // The transaction group is not touched by the pairs' select-all.
     expect(applyButton()).toHaveTextContent('financeReconcileAutomatchActionApply:{"count":1}');
   });
 
   it('disables the pairs select-all when only ambiguous pairs are offered', () => {
     renderModal({ groups: [TX, AMBIGUOUS] });
-    expect(screen.getByTestId('automatch-bounce-select-all')).toBeDisabled();
+    expect(box('automatch-bounce-select-all')).toBeDisabled();
   });
 
   it('hides the pairs the user dismissed (dismissedPairKeys) from rows, count and KPI', () => {
@@ -433,8 +439,8 @@ describe('AutoMatchSuggestionModal — host-owned selection', () => {
       setMany: vi.fn(),
     };
     renderModal({ selection });
-    expect(check('bp-review')).toHaveAttribute('aria-checked', 'true');
-    expect(check('bp-high')).toHaveAttribute('aria-checked', 'false');
+    expect(checkInput('bp-review')).toHaveAttribute('aria-checked', 'true');
+    expect(checkInput('bp-high')).toHaveAttribute('aria-checked', 'false');
     expect(applyButton()).toHaveTextContent('financeReconcileAutomatchActionDiscardPairs:{"count":1}');
 
     fireEvent.click(check('bp-high'));
@@ -446,5 +452,223 @@ describe('AutoMatchSuggestionModal — host-owned selection', () => {
     expect(applyMock.mock.calls[0][0].groups).toEqual([
       { kind: 'bouncePair', statementLineId: 'O2', counterpartLineId: 'B2' },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The shared controls: Checkbox (@/components/ui/checkbox) and Button (@/components/ui/button)
+// ---------------------------------------------------------------------------
+
+describe('AutoMatchSuggestionModal — the shared Checkbox of the pairs', () => {
+  it('puts the test id on the <label> and the state on the checkbox input inside it', () => {
+    renderModal();
+    const label = check('bp-high');
+    expect(label.tagName).toBe('LABEL');
+    const input = checkInput('bp-high');
+    expect(input.tagName).toBe('INPUT');
+    expect(input).toHaveAttribute('type', 'checkbox');
+    expect(input).toBeChecked();
+  });
+
+  it('names each inner checkbox from the aria-label of its row', () => {
+    renderModal();
+    const review = screen.getByTestId('automatch-bounce-row-bp-review');
+    expect(within(review).getByRole('checkbox', { name: 'financeReconcileAutomatchBounceCheck' }))
+      .toBe(checkInput('bp-review'));
+    const amb = screen.getByTestId('automatch-bounce-row-bp-amb');
+    expect(within(amb).getByRole('checkbox', { name: 'financeReconcileAutomatchBounceAmbiguousCheck' }))
+      .toBe(checkInput('bp-amb'));
+    expect(screen.getByRole('checkbox', { name: 'financeReconcileAutomatchBounceSelectAll' }))
+      .toBe(box('automatch-bounce-select-all'));
+  });
+
+  it('keeps the header "mixed" while any pair is checked, and unchecked once none is', () => {
+    renderModal();
+    const header = () => box('automatch-bounce-select-all');
+    // high checked by default
+    expect(header()).toHaveAttribute('aria-checked', 'mixed');
+    fireEvent.click(check('bp-review'));
+    fireEvent.click(check('bp-high'));
+    // only review checked now: still mixed
+    expect(checkInput('bp-review')).toHaveAttribute('aria-checked', 'true');
+    expect(header()).toHaveAttribute('aria-checked', 'mixed');
+    fireEvent.click(check('bp-review'));
+    expect(header()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('clicking the label of a disabled ambiguous pair changes nothing (no toggle, same label)', () => {
+    const selection = {
+      isChecked: vi.fn((g) => g.groupKey === 'bp-high' || g.groupKey === TX.groupKey),
+      toggle: vi.fn(),
+      setMany: vi.fn(),
+    };
+    renderModal({ selection });
+    const before = applyButton().textContent;
+    fireEvent.click(check('bp-amb'));
+    expect(selection.toggle).not.toHaveBeenCalled();
+    expect(checkInput('bp-amb')).not.toBeChecked();
+    expect(applyButton().textContent).toBe(before);
+  });
+});
+
+describe('AutoMatchSuggestionModal — the Apply button', () => {
+  it('is the shared primary Button (bg-primary)', () => {
+    renderModal();
+    expect(applyButton().tagName).toBe('BUTTON');
+    expect(applyButton().className).toContain('bg-primary');
+    expect(applyButton()).toBeEnabled();
+  });
+
+  it('is disabled with nothing selected and never calls apply', () => {
+    renderModal({ groups: [HIGH] });
+    fireEvent.click(check('bp-high'));
+    expect(applyButton()).toBeDisabled();
+    fireEvent.click(applyButton());
+    expect(applyMock).not.toHaveBeenCalled();
+  });
+
+  it('is disabled and reads "loading" while the apply is in flight', () => {
+    applyState.loading = true;
+    renderModal();
+    expect(applyButton()).toBeDisabled();
+    expect(applyButton()).toHaveTextContent('loading');
+    expect(applyButton()).not.toHaveTextContent('financeReconcileAutomatchActionApplyAndDiscard');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The bank reference and the descriptions of a pair row
+// ---------------------------------------------------------------------------
+
+const REF_PAIR = {
+  ...REVIEW,
+  groupKey: 'bp-ref',
+  statementLine: { ...REVIEW.statementLine, id: 'O5', referenceNo: 'R-OUT-5' },
+  counterpartLine: { ...REVIEW.counterpartLine, id: 'B5', referenceNo: ' R-IN-5 ' },
+};
+const BLANK_REF_PAIR = {
+  ...HIGH,
+  groupKey: 'bp-blank',
+  statementLine: { ...HIGH.statementLine, id: 'O6', referenceNo: '   ' },
+  counterpartLine: { ...HIGH.counterpartLine, id: 'B6', referenceNo: '' },
+};
+const AMB_REF = {
+  ...AMBIGUOUS,
+  groupKey: 'bp-amb-ref',
+  counterpartLine: { ...AMBIGUOUS.counterpartLine, id: 'B7', referenceNo: 'R-IN-7' },
+  candidates: [
+    { line: { ...AMBIGUOUS.candidates[0].line, id: 'C7', referenceNo: 'R-C7' } },
+    { line: { ...AMBIGUOUS.candidates[1].line, id: 'C8', referenceNo: 'R-C8' } },
+  ],
+};
+const refText = (ref) => `financeReconcileBounceRef:${JSON.stringify({ ref })}`;
+const meta = (side, key) => screen.getByTestId(`automatch-bounce-${side}-meta-${key}`);
+
+describe('AutoMatchSuggestionModal — the bank reference of a pair', () => {
+  it('shows "date · Ref. X" on both sides of a pair whose lines carry a reference (trimmed)', () => {
+    renderModal({ groups: [REF_PAIR] });
+    expect(meta('original', 'bp-ref')).toHaveTextContent(`01/05/2026 · ${refText('R-OUT-5')}`);
+    expect(meta('line', 'bp-ref')).toHaveTextContent(`04/05/2026 · ${refText('R-IN-5')}`);
+  });
+
+  it('shows only the date for a blank, whitespace or missing reference', () => {
+    renderModal({ groups: [BLANK_REF_PAIR, REVIEW] });
+    expect(meta('original', 'bp-blank').textContent).toBe('02/05/2026');
+    expect(meta('line', 'bp-blank').textContent).toBe('02/05/2026');
+    expect(meta('original', 'bp-review').textContent).toBe('01/05/2026');
+    expect(meta('line', 'bp-review').textContent).toBe('04/05/2026');
+    expect(screen.queryByText(/financeReconcileBounceRef/)).toBeNull();
+  });
+
+  it('an ambiguous pair: the original side shows every candidate date and never a reference', () => {
+    renderModal({ groups: [AMB_REF] });
+    expect(meta('original', 'bp-amb-ref').textContent).toBe('01/05/2026 · 03/05/2026');
+    expect(meta('original', 'bp-amb-ref')).not.toHaveTextContent('financeReconcileBounceRef');
+    // The bounce is one line, so its own reference is shown.
+    expect(meta('line', 'bp-amb-ref')).toHaveTextContent(`05/05/2026 · ${refText('R-IN-7')}`);
+  });
+});
+
+describe('AutoMatchSuggestionModal — pair descriptions (TruncatedText)', () => {
+  const LONG = 'TRANSFERENCIA A FAVOR DE PROVEEDORES UNIDOS CONCEPTO 10000268 100-1';
+  const LONG_PAIR = {
+    ...REVIEW,
+    groupKey: 'bp-long',
+    statementLine: { ...REVIEW.statementLine, description: LONG },
+  };
+  const setMetrics = (el, scrollWidth, clientWidth) => {
+    Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scrollWidth });
+    Object.defineProperty(el, 'clientWidth', { configurable: true, value: clientWidth });
+  };
+
+  it('renders each side description in its -desc element', () => {
+    renderModal({ groups: [LONG_PAIR] });
+    expect(screen.getByTestId('automatch-bounce-original-bp-long-desc')).toHaveTextContent(LONG);
+    expect(screen.getByTestId('automatch-bounce-line-bp-long-desc')).toHaveTextContent('RECIBO DEVUELTO');
+  });
+
+  it('reveals the full description in a tooltip when it is clipped', () => {
+    renderModal({ groups: [LONG_PAIR] });
+    const desc = screen.getByTestId('automatch-bounce-original-bp-long-desc');
+    setMetrics(desc, 640, 200);
+    fireEvent.focus(desc);
+    expect(screen.getByTestId('automatch-bounce-original-bp-long-desc-tooltip')).toHaveTextContent(LONG);
+  });
+
+  it('falls back to the reference when a line has no description', () => {
+    const noDesc = {
+      ...REF_PAIR,
+      groupKey: 'bp-nodesc',
+      counterpartLine: { ...REF_PAIR.counterpartLine, description: '' },
+    };
+    renderModal({ groups: [noDesc] });
+    expect(screen.getByTestId('automatch-bounce-line-bp-nodesc-desc')).toHaveTextContent('R-IN-5');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ambiguous pairs: two candidates, and two pairs sharing a candidate
+// ---------------------------------------------------------------------------
+
+describe('AutoMatchSuggestionModal — ambiguous pairs', () => {
+  // The "Revisar: 2 salidas posibles" tag of a 2-candidate pair is asserted in "tags a high pair…".
+  // Same statement, same day: bounce B9 over [C1, C2] and bounce B10 over [C2, C9]; they share C2.
+  // The backend offers both (neo-headless.md §4.12.1.1, "Two such pairs may share a neighbour").
+  const SHARED_A = AMBIGUOUS;
+  const SHARED_B = {
+    ...AMBIGUOUS,
+    groupKey: 'bp-amb-2',
+    counterpartLine: { id: 'B10', description: 'Abono ACME 2', amount: 80, date: '2026-05-06' },
+    candidates: [
+      AMBIGUOUS.candidates[1],
+      { line: { id: 'C9', description: 'Pago ACME 3', amount: -80, date: '2026-05-04' } },
+    ],
+  };
+
+  it('renders both pairs that share a candidate, each disabled, with its own candidates', () => {
+    renderModal({ groups: [TX, SHARED_A, SHARED_B], kpis: { ...KPIS_ON, bouncePairs: 2 } });
+    expect(screen.getByTestId('automatch-bounce-count')).toHaveTextContent('2');
+    expect(kpiValue('financeReconcileAutomatchKpiBouncePairs')).toBe('2');
+    for (const key of ['bp-amb', 'bp-amb-2']) {
+      expect(screen.getByTestId(`automatch-bounce-row-${key}`)).toBeInTheDocument();
+      expect(checkInput(key)).toBeDisabled();
+      expect(screen.getByTestId(`automatch-bounce-tag-review-${key}`))
+        .toHaveTextContent('financeReconcileBounceReasonAmbiguousShort');
+    }
+    expect(meta('original', 'bp-amb').textContent).toBe('01/05/2026 · 03/05/2026');
+    expect(meta('original', 'bp-amb-2').textContent).toBe('03/05/2026 · 04/05/2026');
+    // The shared candidate is the first one shown for the second pair.
+    expect(screen.getByTestId('automatch-bounce-original-bp-amb-2')).toHaveTextContent('Pago ACME 2');
+    // Neither can be checked here, so the pairs' select-all is disabled.
+    expect(box('automatch-bounce-select-all')).toBeDisabled();
+  });
+
+  it('offers "Revisar en el panel" on both, each for its own pair', () => {
+    const onReviewPair = vi.fn();
+    renderModal({ groups: [SHARED_A, SHARED_B], onReviewPair });
+    fireEvent.click(screen.getByTestId('automatch-bounce-review-bp-amb-2'));
+    expect(onReviewPair).toHaveBeenCalledWith(SHARED_B);
+    fireEvent.click(screen.getByTestId('automatch-bounce-review-bp-amb'));
+    expect(onReviewPair).toHaveBeenLastCalledWith(SHARED_A);
   });
 });

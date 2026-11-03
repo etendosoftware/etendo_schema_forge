@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 import { describe, expect, it } from 'vitest';
 import enUS from '../en_US.json';
 import esAR from '../es_AR.json';
@@ -201,6 +204,65 @@ describe('ETP-4965 — financeReconcile* locale parity', () => {
       }
       expect(g.financeReconcileBarDifferenceNotice, `${name}`).toContain('{concept}');
       expect(g.financeReconcileBarDifferenceNoticeNoConcept, `${name}`).not.toContain('{concept}');
+    }
+  });
+});
+
+// The bounce-pair panel footer and the bank reference (flag `bank-bounce-suggestions`): the selected
+// line opens the footer ("Rebote seleccionado" / "Línea seleccionada"), and "Ref. X" tells two lines
+// of the same text and amount apart. The UI's own wording is "rebote", never "devolución".
+describe('financeReconcileBounce* — the footer and reference keys', () => {
+  const LOCALES = { en_US: enUS, es_ES: esES, es_AR: esAR };
+  const KEYS = [
+    'financeReconcileBounceSelectedBounce',
+    'financeReconcileBounceSelectedLine',
+    'financeReconcileBounceRef',
+  ];
+
+  it('exist, non-blank, in every locale', () => {
+    for (const [name, dictionary] of Object.entries(LOCALES)) {
+      for (const key of KEYS) {
+        const value = dictionary.genericLabels?.[key];
+        expect(typeof value, `${name}.genericLabels.${key}`).toBe('string');
+        expect(value.trim(), `${name}.genericLabels.${key}`).not.toBe('');
+      }
+    }
+  });
+
+  it('interpolate {ref} in the reference key of every locale', () => {
+    for (const [name, dictionary] of Object.entries(LOCALES)) {
+      expect(dictionary.genericLabels.financeReconcileBounceRef, name).toContain('{ref}');
+    }
+  });
+
+  it('say "rebote" and never "devolución" in Spanish', () => {
+    for (const [name, dictionary] of Object.entries({ es_ES: esES, es_AR: esAR })) {
+      const g = dictionary.genericLabels;
+      expect(g.financeReconcileBounceSelectedBounce, name).toMatch(/rebote/i);
+      for (const key of KEYS) {
+        expect(g[key], `${name}.${key}`).not.toMatch(/devoluci[oó]n/i);
+      }
+    }
+  });
+
+  it('keep the selected-line labels distinct from each other and from the counterpart labels', () => {
+    for (const [name, dictionary] of Object.entries(LOCALES)) {
+      const g = dictionary.genericLabels;
+      expect(g.financeReconcileBounceSelectedBounce, name).not.toBe(g.financeReconcileBounceSelectedLine);
+      expect(g.financeReconcileBounceSelectedBounce, name).not.toBe(g.financeReconcileBounceTotalBounce);
+      expect(g.financeReconcileBounceSelectedLine, name).not.toBe(g.financeReconcileBounceTotalOriginal);
+    }
+  });
+
+  // ETP-5581 — the bounce section of the automatch modal says "rebote", never "devolución": the
+  // bank's own descriptions may say "DEVOLUCION", the UI copy does not. The hint under the
+  // "Rebotes bancarios" title is where the old wording lived.
+  it('keeps the bounce hint free of "devolución" wording in the Spanish locales', () => {
+    for (const [name, dictionary] of Object.entries({ es_ES: esES, es_AR: esAR })) {
+      const hint = dictionary.genericLabels?.financeReconcileAutomatchBounceHint;
+      expect(typeof hint, `${name}.genericLabels.financeReconcileAutomatchBounceHint`).toBe('string');
+      expect(hint, `${name}`).toContain('rebote');
+      expect(hint, `${name}`).not.toMatch(/devoluci/i);
     }
   });
 });

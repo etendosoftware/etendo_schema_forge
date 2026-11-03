@@ -108,7 +108,9 @@ describe('visibleStatusCodes — the dropdown entries offered for the counts (ET
     assert.deepEqual(visibleStatusCodes({ pending: 1, discarded: 0 }, 'pending'), FLAG_OFF_CODES);
   });
 
-  it('adds discarded (last) as soon as there is a discarded line, even with the flag off', () => {
+  // The backend only sends counts.discarded with the flag on, next to counts.bounce; reading a
+  // positive count on its own as "offer the entry" is a defensive fallback, not a real answer.
+  it('adds discarded (last) for a positive discarded count even without counts.bounce (defensive)', () => {
     assert.deepEqual(
       visibleStatusCodes({ pending: 1, discarded: 2 }, 'pending'),
       [...FLAG_OFF_CODES, 'discarded'],

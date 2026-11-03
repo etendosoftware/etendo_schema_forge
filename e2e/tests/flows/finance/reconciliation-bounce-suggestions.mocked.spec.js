@@ -9,7 +9,8 @@ import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
 /**
- * Bounce-pair suggestions ("Posibles rebotes") in the bank reconciliation — mocked.
+ * Bounce-pair suggestions (the modal's "Rebotes bancarios" section, the panel's "Posibles rebotes"
+ * filter) in the bank reconciliation — mocked.
  *
  * The backend detects bounce pairs behind the per-account flag `bank-bounce-suggestions`; the SPA
  * never evaluates it and renders what the backend answers. With the flag on, `autoMatch` carries
@@ -21,13 +22,15 @@ import { login } from '../../helpers/auth.js';
  *   1. the automatch modal auto-opens with one transaction group and three pairs (high, review,
  *      ambiguous): high checked, review unchecked, ambiguous disabled;
  *   2. "Revisar en el panel" on the ambiguous pair hides the modal, switches the panel filter to
- *      "Posibles rebotes", selects the bounce line and shows the review banner; choosing the original
- *      and "Descartar par" POSTs `discardPair` with the original and the bounce;
+ *      "Posibles rebotes", selects the bounce line and shows the review banner; each candidate shows
+ *      its bank reference ("Ref. X") and the footer the selected bounce's, the clipped description is
+ *      on hover; choosing the original and "Descartar par" POSTs `discardPair` with the original and
+ *      the bounce;
  *   3. "Volver a las sugerencias" reopens the modal with the checks as they were left, and Apply sends
  *      ONE `applySuggestions` with the transaction group first and both checked pairs;
  *   4. "Descartadas" lists the discarded lines (`status=discarded`) and "Restaurar par" POSTs
  *      `restorePair`;
- *   5. flag off: no "Posibles rebotes" section, no bounce KPI, the original apply payload.
+ *   5. flag off: no "Rebotes bancarios" section, no bounce KPI, the original apply payload.
  *
  * Mock mode only (run against plain `make dev`, not `make dev-mock`). Every route is installed AFTER
  * `login()` so it beats the generic `**\/sws\/**` stub (Playwright matches in reverse order).
@@ -70,9 +73,12 @@ const HIGH_ORIGINAL = { id: 'bsl-high-out', date: day(8), description: 'Pago pro
 const HIGH_BOUNCE = { id: 'bsl-high-in', date: day(8), description: 'DEVOLUCION RECIBO Luz', amount: 120 };
 const REVIEW_ORIGINAL = { id: 'bsl-rev-out', date: day(7), description: 'Recibo gimnasio', amount: -45 };
 const REVIEW_BOUNCE = { id: 'bsl-rev-in', date: day(4), description: 'RECIBO DEVUELTO gimnasio', amount: 45 };
-const AMB_CAND_1 = { id: 'bsl-amb-out-1', date: day(6), description: 'Pago ACME factura 1', amount: -80 };
-const AMB_CAND_2 = { id: 'bsl-amb-out-2', date: day(5), description: 'Pago ACME factura 2', amount: -80 };
-const AMB_BOUNCE = { id: 'bsl-amb-in', date: day(3), description: 'Abono ACME', amount: 80 };
+// The candidates carry the bank reference that tells them apart; the first one's description is
+// long enough to be clipped in the panel, so its full text is only on hover.
+const AMB_LONG_DESC = 'TRANSFERENCIA INMEDIATA A FAVOR DE ACME SUMINISTROS INDUSTRIALES SL CONCEPTO PAGO FACTURA 10000268 100-1';
+const AMB_CAND_1 = { id: 'bsl-amb-out-1', date: day(6), description: AMB_LONG_DESC, amount: -80, referenceNo: 'REF-AMB-OUT-1' };
+const AMB_CAND_2 = { id: 'bsl-amb-out-2', date: day(5), description: 'Pago ACME factura 2', amount: -80, referenceNo: 'REF-AMB-OUT-2' };
+const AMB_BOUNCE = { id: 'bsl-amb-in', date: day(3), description: 'Abono ACME', amount: 80, referenceNo: 'REF-AMB-IN' };
 
 const TX_GROUP = {
   kind: 'transaction',
@@ -268,6 +274,8 @@ async function openReconciliation(page) {
 
 const modal = (page) => page.getByTestId('automatch-suggestion-modal');
 const pairCheck = (page, key) => page.getByTestId(`automatch-bounce-check-${key}`);
+// The shared Checkbox puts the test id on its <label>; the state lives on the input inside it.
+const pairInput = (page, key) => pairCheck(page, key).getByRole('checkbox');
 
 test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
   test('the automatch modal opens with the pairs and their default checks', async ({ page }) => {
@@ -279,17 +287,26 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     const section = modal(page).getByTestId('automatch-bounce-section');
     await expect(section).toBeVisible();
     await expect(section.getByTestId('automatch-bounce-count')).toHaveText('3');
-    await expect(pairCheck(page, 'bp-high')).toHaveAttribute('aria-checked', 'true');
-    await expect(pairCheck(page, 'bp-review')).toHaveAttribute('aria-checked', 'false');
-    await expect(pairCheck(page, 'bp-amb')).toBeDisabled();
+    await expect(pairInput(page, 'bp-high')).toHaveAttribute('aria-checked', 'true');
+    await expect(pairInput(page, 'bp-review')).toHaveAttribute('aria-checked', 'false');
+    await expect(pairInput(page, 'bp-amb')).toBeDisabled();
     await expect(page.getByTestId('automatch-bounce-tag-high-bp-high')).toBeVisible();
     await expect(page.getByTestId('automatch-bounce-review-bp-amb')).toBeVisible();
     await expect(page.getByTestId('automatch-bounce-review-bp-high')).toHaveCount(0);
     // The UI's own wording is "rebote", never "devolución" (the bank descriptions may say it).
-    await expect(section).toContainText('Posibles rebotes');
+    await expect(section).toContainText('Rebotes bancarios');
+    await expect(section).toContainText('Pagos que el banco rechazó: una salida y su rebote');
+    // The same label twice: the section title and the KPI strip.
+    await expect(modal(page).getByText('Rebotes bancarios', { exact: true })).toHaveCount(2);
     const reviewTag = page.getByTestId('automatch-bounce-tag-review-bp-review');
     await expect(reviewTag).toContainText('rebote 3 día(s) después');
     await expect(reviewTag).not.toContainText(/devoluci[oó]n/i);
+    // The bounce of the ambiguous pair names its bank reference; its original side, still to be
+    // chosen in the panel, shows the candidate dates only.
+    await expect(page.getByTestId('automatch-bounce-line-meta-bp-amb')).toContainText(`Ref. ${AMB_BOUNCE.referenceNo}`);
+    const ambOriginalMeta = page.getByTestId('automatch-bounce-original-meta-bp-amb');
+    await expect(ambOriginalMeta).toContainText(' · ');
+    await expect(ambOriginalMeta).not.toContainText('Ref.');
   });
 
   test('"Revisar en el panel" on the ambiguous pair, then "Descartar par" sends discardPair', async ({ page }) => {
@@ -312,8 +329,19 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     const panel = page.getByTestId('recon-bounce-panel');
     await expect(panel).toBeVisible();
     await expect(panel.getByTestId('recon-bounce-discard')).toBeDisabled();
+    // Each candidate row shows its bank reference; the footer opens with the selected bounce.
+    await expect(panel.getByTestId(`recon-bounce-ref-${AMB_CAND_1.id}`)).toHaveText(`Ref. ${AMB_CAND_1.referenceNo}`);
+    await expect(panel.getByTestId(`recon-bounce-ref-${AMB_CAND_2.id}`)).toHaveText(`Ref. ${AMB_CAND_2.referenceNo}`);
+    await expect(panel.getByTestId('recon-bounce-total-selected')).toContainText('Rebote seleccionado');
+    await expect(panel.getByTestId('recon-bounce-total-selected-meta')).toContainText(`Ref. ${AMB_BOUNCE.referenceNo}`);
+    await expect(panel.getByTestId('recon-bounce-total-other-meta')).toHaveCount(0);
+    // The clipped description reveals its full text on hover.
+    await panel.getByTestId(`recon-bounce-desc-${AMB_CAND_1.id}`).hover();
+    await expect(page.getByTestId(`recon-bounce-desc-${AMB_CAND_1.id}-tooltip`)).toContainText(AMB_LONG_DESC);
+
     await panel.getByTestId(`recon-bounce-radio-${AMB_CAND_2.id}`).check();
     await expect(panel.getByTestId('recon-bounce-discard')).toBeEnabled();
+    await expect(panel.getByTestId('recon-bounce-total-other-meta')).toContainText(`Ref. ${AMB_CAND_2.referenceNo}`);
 
     const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=discardPair'));
     await panel.getByTestId('recon-bounce-discard').click();
@@ -336,14 +364,14 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     await expect(modal(page)).toBeVisible();
 
     await pairCheck(page, 'bp-review').click();
-    await expect(pairCheck(page, 'bp-review')).toHaveAttribute('aria-checked', 'true');
+    await expect(pairInput(page, 'bp-review')).toHaveAttribute('aria-checked', 'true');
     await page.getByTestId('automatch-bounce-review-bp-amb').click();
     await expect(modal(page)).toHaveCount(0);
 
     await page.getByTestId('recon-bounce-review-back').click();
     await expect(modal(page)).toBeVisible();
-    await expect(pairCheck(page, 'bp-high')).toHaveAttribute('aria-checked', 'true');
-    await expect(pairCheck(page, 'bp-review')).toHaveAttribute('aria-checked', 'true');
+    await expect(pairInput(page, 'bp-high')).toHaveAttribute('aria-checked', 'true');
+    await expect(pairInput(page, 'bp-review')).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByTestId('recon-bounce-review-banner')).toHaveCount(0);
 
     const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=applySuggestions'));
@@ -400,7 +428,7 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
 
     await expect(modal(page)).toBeVisible();
     await expect(page.getByTestId('automatch-bounce-section')).toHaveCount(0);
-    await expect(modal(page)).not.toContainText('Posibles rebotes');
+    await expect(modal(page)).not.toContainText('Rebotes bancarios');
 
     const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=applySuggestions'));
     await page.getByTestId('automatch-modal-apply').click();

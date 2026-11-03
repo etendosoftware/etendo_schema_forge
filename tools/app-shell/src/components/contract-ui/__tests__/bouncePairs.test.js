@@ -481,6 +481,34 @@ describe('bouncePanelModel — lines of a detected pair', () => {
   });
 });
 
+describe('bouncePanelModel — two ambiguous pairs sharing a candidate', () => {
+  // Both offered (neo-headless.md §4.12.1.1): L-IN3 over [A, B] and L-IN4 over [B, C], sharing B.
+  const CAND_C = { id: 'L-OUT-C', date: '2026-03-03', amount: -80 };
+  const first = { id: 'L-IN3', date: '2026-03-04', amount: 80, state: BOUNCE_STATE,
+    bouncePair: { groupKey: 'g-a', role: 'bounce', ambiguous: true, candidates: [{ line: CAND_A }, { line: CAND_B }] } };
+  const second = { id: 'L-IN4', date: '2026-03-05', amount: 80, state: BOUNCE_STATE,
+    bouncePair: { groupKey: 'g-b', role: 'bounce', ambiguous: true, candidates: [{ line: CAND_B }, { line: CAND_C }] } };
+
+  it('lists each pair with its own two candidates and a "2 salidas posibles" reason', () => {
+    const a = bouncePanelModel(first);
+    const b = bouncePanelModel(second);
+    assert.deepEqual(a.rows, [CAND_A, CAND_B]);
+    assert.deepEqual(b.rows, [CAND_B, CAND_C]);
+    assert.equal(a.reason.shortKey, 'financeReconcileBounceReasonAmbiguousShort');
+    assert.deepEqual(a.reason.params, { count: 2 });
+    assert.deepEqual(b.reason.params, { count: 2 });
+  });
+
+  it('choosing the shared candidate discards it against the bounce of the pair it was chosen in', () => {
+    assert.deepEqual(bouncePanelModel(first, { chosenOriginalId: 'L-OUT-B' }).discard,
+      { statementLineId: 'L-OUT-B', counterpartLineId: 'L-IN3' });
+    assert.deepEqual(bouncePanelModel(second, { chosenOriginalId: 'L-OUT-B' }).discard,
+      { statementLineId: 'L-OUT-B', counterpartLineId: 'L-IN4' });
+    // A candidate of the other pair only is not an option here.
+    assert.equal(bouncePanelModel(second, { chosenOriginalId: 'L-OUT-A' }).discard, null);
+  });
+});
+
 describe('bouncePanelModel — discarded lines', () => {
   const partner = { id: 'L-IN', state: DISCARDED_STATE, amount: 120.5 };
 

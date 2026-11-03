@@ -2,8 +2,9 @@
 // @covers tools/app-shell/src/components/contract-ui/BouncePairPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/useBouncePairReview.jsx
 /**
- * Bounce pairs and discarded lines in the reconciliation split panel (flag `bank-bounce-suggestions`
- * for the pairs; the discarded lines are unconditional).
+ * Bounce pairs and discarded lines in the reconciliation split panel (flag `bank-bounce-suggestions`).
+ * The backend sends `counts.bounce`, `counts.discarded` and the discarded rows only with the flag
+ * on; with it off the panel gets none of them.
  *
  * The SPA never evaluates the flag. It renders the `bounce` line state, `counts.bounce` and the
  * `bouncePair` annotation when the backend answers them; a selected bounce or discarded line gets
@@ -83,16 +84,18 @@ vi.mock('@/hooks/useReconciliation', async () => {
 
 const discardPairMock = vi.fn();
 const restorePairMock = vi.fn();
+// Read on every render, so a test can put a discard or a restore in flight (the panel's `busy`).
+const pairActions = { discarding: false, restoring: false };
 vi.mock('@/hooks/useBouncePairActions.js', () => ({
-  useDiscardPair: () => ({ discardPair: discardPairMock, loading: false, error: null }),
-  useRestorePair: () => ({ restorePair: restorePairMock, loading: false, error: null }),
+  useDiscardPair: () => ({ discardPair: discardPairMock, loading: pairActions.discarding, error: null }),
+  useRestorePair: () => ({ restorePair: restorePairMock, loading: pairActions.restoring, error: null }),
 }));
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
-import { formatDate } from '@/lib/formatSigned';
+import { formatDate, formatSigned } from '@/lib/formatSigned';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
@@ -182,6 +185,8 @@ async function selectLineRow(id) {
 
 beforeEach(() => {
   pending.answer = bounceAnswer;
+  pairActions.discarding = false;
+  pairActions.restoring = false;
   pending.calls = [];
   pending.reload = vi.fn();
   candidateLineIds.length = 0;
@@ -206,12 +211,15 @@ describe('ReconciliationSplitPanel — bounce lines in the left panel', () => {
     expect(screen.getByText(/^financeReconcileFilterStatusReconciled \(0\)/)).toBeInTheDocument();
   });
 
-  it('flag off but with a discarded line (Classic): offers Descartadas only', async () => {
-    pending.answer = () => ({ lines: [PLAIN], counts: { all: 1, pending: 1, discarded: 2 } });
+  // The backend only sends counts.discarded with the flag on, and then always with counts.bounce:
+  // an account whose pairs were all discarded answers `bounce: 0` next to `discarded: N`.
+  it('flag on with no pair left but discarded lines: offers Posibles rebotes (0) and Descartadas', async () => {
+    pending.answer = () => ({ lines: [PLAIN], counts: { all: 1, pending: 1, bounce: 0, discarded: 2 } });
     renderPanel();
     await screen.findByTestId('recon-line-row-P1');
+    expect(lastCall().status).toBeUndefined();
     openStatus('financeReconcileFilterStatusPending');
-    expect(screen.queryByText(/^financeReconcileFilterStatusBounce/)).toBeNull();
+    expect(screen.getByText(/^financeReconcileFilterStatusBounce \(0\)/)).toBeInTheDocument();
     expect(screen.getByText(/^financeReconcileFilterStatusDiscarded \(2\)/)).toBeInTheDocument();
   });
 
@@ -529,5 +537,240 @@ describe('ReconciliationSplitPanel — the "Revisar en el panel" focus request',
     // The request is consumed once: later reloads do not replay it.
     await new Promise((res) => setTimeout(res, 10));
     expect(r.onFocusConsumed).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Two ambiguous pairs sharing a candidate, with bank references ─────────────
+
+// One statement, one day, in this order (neo-headless.md §4.12.1.1, the adjacency example):
+// -0,61 (R-C1) · +0,61 (R-B1) · -0,61 (R-C2) · +0,61 (R-B2) · -0,61 (R-C3). Two ambiguous pairs,
+// R-B1 over [R-C1, R-C2] and R-B2 over [R-C2, R-C3]: both offered although they share R-C2, which
+// is annotated once, by the first pair.
+const SAME_DAY = '2026-08-24';
+const LONG_DESC = 'TRANSFERENCIA INMEDIATA A FAVOR DE PROVEEDORES UNIDOS CONCEPTO 10000268 100-1';
+const R_C1_SHORT = { id: 'R-C1', amount: -0.61, date: SAME_DAY, description: LONG_DESC, referenceNo: 'REF-120' };
+const R_C2_SHORT = { id: 'R-C2', amount: -0.61, date: SAME_DAY, description: 'TRANSFERENCIA 100-2', referenceNo: 'REF-140' };
+const R_C3_SHORT = { id: 'R-C3', amount: -0.61, date: SAME_DAY, description: 'TRANSFERENCIA 100-3', referenceNo: '   ' };
+const R_B1_SHORT = { id: 'R-B1', amount: 0.61, date: SAME_DAY, description: 'RETROCESION', referenceNo: 'REF-130' };
+const R_B2_SHORT = { id: 'R-B2', amount: 0.61, date: SAME_DAY, description: 'RETROCESION', referenceNo: '' };
+const SHARED_A = {
+  groupKey: 'g-shared-a', ambiguous: true, adjacent: true, confidence: 'review', signal: 'return_text', signals: ['return_text'],
+};
+const SHARED_B = { ...SHARED_A, groupKey: 'g-shared-b' };
+const bounceRow = (short, bouncePair) => ({ ...short, state: 'bounce', status: 'pending', bouncePair });
+const R_B1 = bounceRow(R_B1_SHORT, { ...SHARED_A, role: 'bounce', candidates: [{ line: R_C1_SHORT }, { line: R_C2_SHORT }] });
+const R_B2 = bounceRow(R_B2_SHORT, { ...SHARED_B, role: 'bounce', candidates: [{ line: R_C2_SHORT }, { line: R_C3_SHORT }] });
+const R_C1 = bounceRow(R_C1_SHORT, { ...SHARED_A, role: 'candidate', counterpartLine: R_B1_SHORT });
+const R_C2 = bounceRow(R_C2_SHORT, { ...SHARED_A, role: 'candidate', counterpartLine: R_B1_SHORT });
+const R_C3 = bounceRow(R_C3_SHORT, { ...SHARED_B, role: 'candidate', counterpartLine: R_B2_SHORT });
+
+function sharedAnswer(filters) {
+  if (filters.status === 'discarded') return { lines: [D1, D2, D3], counts: { discarded: 3 } };
+  return {
+    lines: [PLAIN, R_C1, R_B1, R_C2, R_B2, R_C3, O1, B1],
+    counts: { all: 8, pending: 1, suggested: 0, byRule: 0, difference: 0, reconciled: 0, bounce: 7, discarded: 3 },
+  };
+}
+
+const sameDay = () => formatDate(SAME_DAY, 'es-ES');
+const refText = (ref) => `financeReconcileBounceRef:${JSON.stringify({ ref })}`;
+const total = (which) => screen.getByTestId(`recon-bounce-total-${which}`);
+// The amount is the row's last cell; compared exactly, since the formatted value carries an NBSP.
+const totalValue = (which) => total(which).lastElementChild.textContent;
+
+describe('ReconciliationSplitPanel — ambiguous pairs sharing a candidate', () => {
+  beforeEach(() => { pending.answer = sharedAnswer; });
+
+  it('the Posibles rebotes filter lists both pairs, the shared candidate once', async () => {
+    renderPanel();
+    await screen.findByTestId('recon-line-row-R-B2');
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusBounce');
+    expect(screen.queryByTestId('recon-line-row-P1')).toBeNull();
+    expect(screen.queryAllByTestId(/^recon-line-row-R-/).map((el) => el.dataset.testid)).toEqual([
+      'recon-line-row-R-C1', 'recon-line-row-R-B1', 'recon-line-row-R-C2', 'recon-line-row-R-B2', 'recon-line-row-R-C3',
+    ]);
+    for (const id of ['R-B1', 'R-B2']) {
+      expect(within(row(id)).getByText('financeReconcileBadgeBounce')).toBeInTheDocument();
+    }
+  });
+
+  it('each bounce lists its own two candidates, with "2 salidas posibles" as the reason', async () => {
+    renderPanel();
+    await selectLineRow('R-B1');
+    expect(screen.getByTestId('recon-bounce-source')).toHaveTextContent('financeReconcileBounceSourceOriginals:{"count":2}');
+    expect(screen.queryAllByTestId(/^recon-bounce-row-/).map((el) => el.dataset.testid))
+      .toEqual(['recon-bounce-row-R-C1', 'recon-bounce-row-R-C2']);
+    expect(screen.getByTestId('recon-bounce-notice').textContent)
+      .toMatch(/^financeReconcileBounceNoticeReview:.*financeReconcileBounceReasonAmbiguous:.*count.*2/);
+
+    fireEvent.click(screen.getByTestId('recon-line-radio-R-B2'));
+    expect(screen.queryAllByTestId(/^recon-bounce-row-/).map((el) => el.dataset.testid))
+      .toEqual(['recon-bounce-row-R-C2', 'recon-bounce-row-R-C3']);
+    expect(screen.getByTestId('recon-bounce-radio-R-C2')).not.toBeChecked();
+  });
+
+  it('the choice on one pair does not carry over to the other pair sharing the candidate', async () => {
+    renderPanel();
+    await selectLineRow('R-B1');
+    fireEvent.click(screen.getByTestId('recon-bounce-radio-R-C2'));
+    expect(screen.getByTestId('recon-bounce-discard')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('recon-line-radio-R-B2'));
+    expect(screen.getByTestId('recon-bounce-radio-R-C2')).not.toBeChecked();
+    expect(screen.getByTestId('recon-bounce-discard')).toBeDisabled();
+  });
+});
+
+describe('ReconciliationSplitPanel — the bank reference and the description of a pair row', () => {
+  beforeEach(() => { pending.answer = sharedAnswer; });
+
+  it('shows "Ref. X" under a row that carries a reference', async () => {
+    renderPanel();
+    await selectLineRow('R-B1');
+    expect(screen.getByTestId('recon-bounce-ref-R-C1')).toHaveTextContent(refText('REF-120'));
+    expect(screen.getByTestId('recon-bounce-ref-R-C2')).toHaveTextContent(refText('REF-140'));
+  });
+
+  it('shows nothing for a whitespace, empty or missing reference', async () => {
+    renderPanel();
+    await selectLineRow('R-B2');
+    // whitespace
+    expect(screen.getByTestId('recon-bounce-row-R-C3')).toBeInTheDocument();
+    expect(screen.queryByTestId('recon-bounce-ref-R-C3')).toBeNull();
+    // empty: R-C3's counterpart is R-B2
+    fireEvent.click(screen.getByTestId('recon-line-radio-R-C3'));
+    expect(screen.getByTestId('recon-bounce-row-R-B2')).toBeInTheDocument();
+    expect(screen.queryByTestId('recon-bounce-ref-R-B2')).toBeNull();
+    // missing: B1 has no referenceNo at all
+    fireEvent.click(screen.getByTestId('recon-line-radio-O1'));
+    expect(screen.getByTestId('recon-bounce-row-B1')).toBeInTheDocument();
+    expect(screen.queryByTestId('recon-bounce-ref-B1')).toBeNull();
+  });
+
+  it('renders the description through TruncatedText, with the full text on hover when clipped', async () => {
+    renderPanel();
+    await selectLineRow('R-B1');
+    const desc = screen.getByTestId('recon-bounce-desc-R-C1');
+    expect(desc).toHaveTextContent(LONG_DESC);
+    Object.defineProperty(desc, 'scrollWidth', { configurable: true, value: 640 });
+    Object.defineProperty(desc, 'clientWidth', { configurable: true, value: 200 });
+    fireEvent.focus(desc);
+    expect(screen.getByTestId('recon-bounce-desc-R-C1-tooltip')).toHaveTextContent(LONG_DESC);
+  });
+});
+
+describe('ReconciliationSplitPanel — the footer of the bounce panel', () => {
+  beforeEach(() => { pending.answer = sharedAnswer; });
+
+  it('a bounce line: "Rebote seleccionado" with its amount and "date · Ref. X"', async () => {
+    renderPanel();
+    await selectLineRow('R-B1');
+    expect(within(total('selected')).getByText('financeReconcileBounceSelectedBounce')).toBeInTheDocument();
+    expect(totalValue('selected')).toBe(formatSigned(0.61, 'EUR'));
+    expect(screen.getByTestId('recon-bounce-total-selected-meta').textContent)
+      .toBe(`${sameDay()} · ${refText('REF-130')}`);
+  });
+
+  it('the counterpart meta follows the chosen radio, and is absent before a choice', async () => {
+    renderPanel();
+    await selectLineRow('R-B1');
+    expect(within(total('other')).getByText('financeReconcileBounceTotalOriginal')).toBeInTheDocument();
+    expect(totalValue('other')).toBe('—');
+    expect(screen.queryByTestId('recon-bounce-total-other-meta')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('recon-bounce-radio-R-C2'));
+    expect(screen.getByTestId('recon-bounce-total-other-meta').textContent).toBe(`${sameDay()} · ${refText('REF-140')}`);
+    expect(totalValue('other')).toBe(formatSigned(-0.61, 'EUR'));
+
+    fireEvent.click(screen.getByTestId('recon-bounce-radio-R-C1'));
+    expect(screen.getByTestId('recon-bounce-total-other-meta').textContent).toBe(`${sameDay()} · ${refText('REF-120')}`);
+  });
+
+  it('a line without a reference: the meta is the date alone', async () => {
+    renderPanel();
+    await selectLineRow('R-B2');
+    expect(screen.getByTestId('recon-bounce-total-selected-meta').textContent).toBe(sameDay());
+  });
+
+  it('a candidate line: "Salida seleccionada", the bounce as the counterpart', async () => {
+    renderPanel();
+    await selectLineRow('R-C1');
+    expect(within(total('selected')).getByText('financeReconcileBounceTotalOriginal')).toBeInTheDocument();
+    expect(totalValue('selected')).toBe(formatSigned(-0.61, 'EUR'));
+    expect(screen.getByTestId('recon-bounce-total-selected-meta').textContent).toBe(`${sameDay()} · ${refText('REF-120')}`);
+    expect(within(total('other')).getByText('financeReconcileBounceTotalBounce')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-bounce-total-other-meta').textContent).toBe(`${sameDay()} · ${refText('REF-130')}`);
+  });
+
+  it('an original line: "Salida seleccionada" with its amount and date', async () => {
+    renderPanel();
+    await selectLineRow('O1');
+    expect(within(total('selected')).getByText('financeReconcileBounceTotalOriginal')).toBeInTheDocument();
+    expect(totalValue('selected')).toBe(formatSigned(-120, 'EUR'));
+    expect(screen.getByTestId('recon-bounce-total-selected-meta').textContent).toBe(formatDate('2026-10-02', 'es-ES'));
+    expect(within(total('other')).getByText('financeReconcileBounceTotalBounce')).toBeInTheDocument();
+  });
+
+  it('a discarded line: "Línea seleccionada" with its amount', async () => {
+    renderPanel();
+    await screen.findByTestId('recon-line-row-R-B1');
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusDiscarded');
+    fireEvent.click(await screen.findByTestId('recon-line-radio-D1'));
+    expect(within(total('selected')).getByText('financeReconcileBounceSelectedLine')).toBeInTheDocument();
+    expect(totalValue('selected')).toBe(formatSigned(-50, 'EUR'));
+    expect(screen.getByTestId('recon-bounce-total-selected-meta').textContent).toBe(formatDate('2026-09-01', 'es-ES'));
+    expect(screen.queryByTestId('recon-bounce-total-other')).toBeNull();
+  });
+});
+
+// ── The shared controls of the bounce panel ───────────────────────────────────
+
+describe('ReconciliationSplitPanel — buttons and radios of the bounce panel', () => {
+  it('"Descartar par" is the blue primary Button, "No es un rebote" the outline one', async () => {
+    renderPanel();
+    await selectLineRow('O1');
+    const discard = screen.getByTestId('recon-bounce-discard');
+    expect(discard.tagName).toBe('BUTTON');
+    expect(discard.className).toContain('bg-primary');
+    const dismiss = screen.getByTestId('recon-bounce-dismiss');
+    expect(dismiss.className).toContain('border');
+    expect(dismiss.className).not.toContain('bg-primary');
+  });
+
+  it('"Descartar par" is disabled while a discard or a restore is in flight', async () => {
+    pairActions.discarding = true;
+    renderPanel();
+    await selectLineRow('O1');
+    expect(screen.getByTestId('recon-bounce-discard')).toBeDisabled();
+    expect(screen.getByTestId('recon-bounce-dismiss')).toBeEnabled();
+  });
+
+  it('"Restaurar par" is the blue primary Button, enabled when idle', async () => {
+    renderPanel();
+    await screen.findByTestId('recon-line-row-B3');
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusDiscarded');
+    fireEvent.click(await screen.findByTestId('recon-line-radio-D1'));
+    const restore = screen.getByTestId('recon-bounce-restore');
+    expect(restore.className).toContain('bg-primary');
+    expect(restore).toBeEnabled();
+  });
+
+  it('"Restaurar par" is disabled while a restore is in flight', async () => {
+    pairActions.restoring = true;
+    renderPanel();
+    await screen.findByTestId('recon-line-row-B3');
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusDiscarded');
+    fireEvent.click(await screen.findByTestId('recon-line-radio-D1'));
+    expect(screen.getByTestId('recon-bounce-restore')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('recon-bounce-restore'));
+    await Promise.resolve();
+    expect(restorePairMock).not.toHaveBeenCalled();
+  });
+
+  it('the left-panel and the pair radios use accent-primary', async () => {
+    renderPanel();
+    await selectLineRow('B3');
+    expect(screen.getByTestId('recon-line-radio-P1')).toHaveClass('accent-primary');
+    expect(screen.getByTestId('recon-line-radio-B3')).toHaveClass('accent-primary');
+    expect(screen.getByTestId('recon-bounce-radio-C1')).toHaveClass('accent-primary');
   });
 });

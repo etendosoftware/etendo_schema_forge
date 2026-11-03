@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // --- Mocks ----------------------------------------------------------------
@@ -235,10 +235,9 @@ describe('AutoMatchSuggestionModal', () => {
 
   it('all groups are checked by default', () => {
     renderModal();
-    // SelectBox renders <button aria-checked> elements, not <input type="checkbox">.
-    // The two group-level buttons should have aria-checked="true".
+    // The shared Checkbox puts the test id on its <label>; the state lives on the input inside it.
     const groupCheckboxes = screen.getAllByTestId(/automatch-group-check-/);
-    groupCheckboxes.forEach((cb) => expect(cb).toHaveAttribute('aria-checked', 'true'));
+    groupCheckboxes.forEach((cb) => expect(within(cb).getByRole('checkbox')).toHaveAttribute('aria-checked', 'true'));
   });
 
   it('select-all checkbox unchecks all groups', () => {
@@ -246,7 +245,7 @@ describe('AutoMatchSuggestionModal', () => {
     const selectAll = screen.getByTestId('automatch-select-all');
     fireEvent.click(selectAll); // uncheck all
     const groupCheckboxes = screen.getAllByTestId(/automatch-group-check-/);
-    groupCheckboxes.forEach((cb) => expect(cb).toHaveAttribute('aria-checked', 'false'));
+    groupCheckboxes.forEach((cb) => expect(within(cb).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false'));
   });
 
   it('apply button is disabled when no groups are checked', () => {
@@ -368,22 +367,22 @@ describe('AutoMatchSuggestionModal', () => {
     expect(screen.getByText('financeReconcileAutomatchEmpty')).toBeInTheDocument();
   });
 
-  // ── SelectBox header dash / empty (T7) ────────────────────────────────────────
+  // ── Select-all header dash / empty (T7) ────────────────────────────────────────
 
-  it('SelectBox header shows dash (active state) when any groups are checked', () => {
+  it('select-all header shows dash (indeterminate) when any groups are checked', () => {
     renderModal();
     const selectAll = screen.getByTestId('automatch-select-all');
     // With groups loaded, at least one is checked by default — the header must show dash.
-    expect(selectAll).toHaveAttribute('aria-checked', 'mixed');
+    expect(within(selectAll).getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed');
   });
 
-  it('SelectBox header shows empty (unchecked) when all groups are deselected', () => {
+  it('select-all header shows empty (unchecked) when all groups are deselected', () => {
     renderModal();
     // Uncheck all groups via the select-all toggle.
     fireEvent.click(screen.getByTestId('automatch-select-all'));
     const selectAll = screen.getByTestId('automatch-select-all');
     // No groups selected → no dash, no check → aria-checked = false.
-    expect(selectAll).toHaveAttribute('aria-checked', 'false');
+    expect(within(selectAll).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
   });
 
   // ── Amount color rendering (T7) ───────────────────────────────────────────────

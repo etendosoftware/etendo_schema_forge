@@ -287,8 +287,9 @@ describe('StatementLinesInline', () => {
     });
   });
 
-  // ETP-5581 — `discarded: true` comes with every line of `bank-statements?action=lines`, whatever
-  // the bounce flag: a discarded line is out of the reconciliation, so neither pending nor matched.
+  // ETP-5581 — `discarded` is sent on the lines of `bank-statements?action=lines` only with the
+  // `bank-bounce-suggestions` flag on; with it off the key is absent. A discarded line is out of
+  // the reconciliation, so neither pending nor matched.
   describe('discarded lines (ETP-5581)', () => {
     function renderLine(line) {
       linesMock.mockReturnValue({
@@ -318,6 +319,13 @@ describe('StatementLinesInline', () => {
     it('keeps the partial pill of a partially reconciled line', () => {
       renderLine({ matched: false, reconcileStatus: 'PARTIAL', discarded: true, pendingAmount: 10 });
       expect(screen.getByText('financeAccountStatementLinesStatusPartial')).toBeInTheDocument();
+    });
+
+    it('flag off (no discarded key at all): a plain unmatched line, no "Descartada" tag', () => {
+      renderLine({ matched: false, reconcileStatus: 'PENDING' });
+      expect(screen.getByText('financeAccountStatementLinesStatusUnmatched')).toBeInTheDocument();
+      expect(screen.queryByText('financeAccountStatementLinesStatusDiscarded')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('status-neutral')).not.toBeInTheDocument();
     });
 
     it('reads discarded:false as a plain unmatched line', () => {
