@@ -614,7 +614,7 @@ test.describe('Goods Shipment — Crear Factura refused by the plan quota (ETP-5
       resolvedPriceListId: 'pl-001',
     });
 
-    await login(page);
+    await login(page, { awaitEnvironmentListRead: true });
     await installGoodsShipmentMock(page, [shipment]);
 
     // The shared environment list, counted apart from the "Mis empresas" details read.

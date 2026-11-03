@@ -450,7 +450,7 @@ test.describe('Shared environment list — one read per page load', () => {
   };
 
   test.beforeEach(async ({ page }) => {
-    await login(page);
+    await login(page, { awaitEnvironmentListRead: true });
     await declareCookieSession(page);
     await installAccountMock(page);
     await installSubscriptionMock(page, ACTIVE_SUBSCRIPTION);
@@ -794,7 +794,7 @@ test.describe('Plan quotas — write refusal on save', () => {
   }
 
   test('a 403 QUOTA_EXCEEDED shows the translated quota message, not the blocked screen or a no-access error', async ({ page }) => {
-    await login(page);
+    await login(page, { awaitEnvironmentListRead: true });
     let posts = 0;
     // ETP-5051 — the refusal makes the app re-read the environment list once (QUOTA_REFUSED_EVENT
     // → useEnvironmentListFreshness), so the banner turns red right after it. The backend reports
