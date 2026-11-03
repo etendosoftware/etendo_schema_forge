@@ -86,9 +86,11 @@ const discardPairMock = vi.fn();
 const restorePairMock = vi.fn();
 // Read on every render, so a test can put a discard or a restore in flight (the panel's `busy`).
 const pairActions = { discarding: false, restoring: false };
+const pendingLineCountsMock = vi.fn();
 vi.mock('@/hooks/useBouncePairActions.js', () => ({
   useDiscardPair: () => ({ discardPair: discardPairMock, loading: pairActions.discarding, error: null }),
   useRestorePair: () => ({ restorePair: restorePairMock, loading: pairActions.restoring, error: null }),
+  usePendingLineCounts: () => pendingLineCountsMock,
 }));
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -192,6 +194,7 @@ beforeEach(() => {
   candidateLineIds.length = 0;
   discardPairMock.mockReset().mockResolvedValue({ discarded: true });
   restorePairMock.mockReset().mockResolvedValue({ restored: ['D1', 'D2'] });
+  pendingLineCountsMock.mockReset().mockResolvedValue(null);
   toast.success.mockClear();
   toast.error.mockClear();
   Element.prototype.scrollIntoView.mockClear();
@@ -448,6 +451,50 @@ describe('ReconciliationSplitPanel — the Descartadas filter', () => {
     expect(restorePairMock).toHaveBeenCalledWith({ financialAccountId: 'ACC-1', lineId: 'D3' });
   });
 
+  it('after a restore on Descartadas, re-reads the default counts so the other filters are current', async () => {
+    pendingLineCountsMock.mockResolvedValue({
+      all: 8, pending: 3, suggested: 0, byRule: 0, difference: 0, reconciled: 0, bounce: 5, discarded: 3,
+    });
+    await openDiscarded();
+    const discardedFilters = lastCall();
+    fireEvent.click(screen.getByTestId('recon-line-radio-D1'));
+    fireEvent.click(screen.getByTestId('recon-bounce-restore'));
+    await waitFor(() => expect(pendingLineCountsMock).toHaveBeenCalledWith({
+      financialAccountId: 'ACC-1', dateFrom: discardedFilters.dateFrom, dateTo: discardedFilters.dateTo,
+    }));
+    openStatus('financeReconcileFilterStatusDiscarded');
+    await waitFor(() => expect(screen.getByText(/^financeReconcileFilterStatusPending \(8\)/)).toBeInTheDocument());
+    // The discarded count still comes from the discarded answer.
+    expect(screen.getAllByText(/^financeReconcileFilterStatusDiscarded \(3\)/).length).toBeGreaterThan(0);
+  });
+
+  it('a failed re-read of the counts keeps the last ones and shows no error', async () => {
+    pendingLineCountsMock.mockRejectedValue(new Error('offline'));
+    await openDiscarded();
+    fireEvent.click(screen.getByTestId('recon-line-radio-D1'));
+    fireEvent.click(screen.getByTestId('recon-bounce-restore'));
+    await waitFor(() => expect(pendingLineCountsMock).toHaveBeenCalled());
+    openStatus('financeReconcileFilterStatusDiscarded');
+    expect(screen.getByText(/^financeReconcileFilterStatusPending \(6\)/)).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('a failed restore of a line discarded alone uses the single-line message', async () => {
+    restorePairMock.mockRejectedValue(new Error('x'));
+    await openDiscarded();
+    fireEvent.click(screen.getByTestId('recon-line-radio-D3'));
+    fireEvent.click(screen.getByTestId('recon-bounce-restore'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileBounceToastRestoreLineError'));
+  });
+
+  it('a failed restore of a pair keeps the pair message', async () => {
+    restorePairMock.mockRejectedValue(new Error('x'));
+    await openDiscarded();
+    fireEvent.click(screen.getByTestId('recon-line-radio-D1'));
+    fireEvent.click(screen.getByTestId('recon-bounce-restore'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileBounceToastRestoreError'));
+  });
+
   it('a failed restore shows the translated refusal', async () => {
     restorePairMock.mockRejectedValue(Object.assign(new Error('x'), {
       body: { error: { message: 'x', messageKeys: ['ETGO_BounceLineNotPending'] } },
@@ -537,6 +584,48 @@ describe('ReconciliationSplitPanel — the "Revisar en el panel" focus request',
     // The request is consumed once: later reloads do not replay it.
     await new Promise((res) => setTimeout(res, 10));
     expect(r.onFocusConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  it('a second request with the lines loaded and the filter already on Posibles rebotes selects the line', async () => {
+    const r = review({ lineId: 'B3', seq: 1 });
+    const { rerender } = renderPanel({ bounceReview: r });
+    await waitFor(() => expect(r.onFocusConsumed).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('recon-line-radio-B3')).toBeChecked();
+    // The user moves on to another line; nothing reloads, the filter stays on Posibles rebotes.
+    fireEvent.click(screen.getByTestId('recon-line-radio-B1'));
+    expect(screen.getByTestId('recon-line-radio-B1')).toBeChecked();
+    const callsBefore = pending.calls.length;
+    const filtersBefore = lastCall();
+
+    // "Revisar en el panel" again on the same pair: only `focus` changes.
+    rerender(<ReconciliationSplitPanel accountId="ACC-1" currency="EUR" amountTolerance={5}
+      bounceReview={{ ...r, focus: { lineId: 'B3', seq: 2 } }} />);
+
+    await waitFor(() => expect(r.onFocusConsumed).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('recon-line-radio-B3')).toBeChecked();
+    // Served from the lines on screen: no request with other filters.
+    expect(pending.calls.slice(callsBefore)
+      .every((c) => c.status === undefined && c.dateFrom === filtersBefore.dateFrom)).toBe(true);
+  });
+
+  it('while Descartadas is active at any date, waits for the reload before looking for the line', async () => {
+    // A first request for a line that is not there widens the range to any date and gives up.
+    const r = review({ lineId: 'GONE', seq: 1 });
+    const { rerender } = renderPanel({ bounceReview: r });
+    await waitFor(() => expect(r.onFocusConsumed).toHaveBeenCalledTimes(1));
+    expect(lastCall().dateFrom).toBeUndefined();
+    selectStatus('financeReconcileFilterStatusBounce', 'financeReconcileFilterStatusDiscarded');
+    await screen.findByTestId('recon-line-row-D1');
+    expect(lastCall().status).toBe('discarded');
+
+    // "Revisar en el panel": the lines on screen are the discarded ones, which do not hold B3.
+    rerender(<ReconciliationSplitPanel accountId="ACC-1" currency="EUR" amountTolerance={5}
+      bounceReview={{ ...r, focus: { lineId: 'B3', seq: 2 } }} />);
+
+    await waitFor(() => expect(r.onFocusConsumed).toHaveBeenCalledTimes(2));
+    expect(lastCall().status).toBeUndefined();
+    expect(screen.getByTestId('recon-line-radio-B3')).toBeChecked();
+    expect(screen.getByTestId('recon-bounce-panel')).toBeInTheDocument();
   });
 });
 
@@ -764,6 +853,25 @@ describe('ReconciliationSplitPanel — buttons and radios of the bounce panel', 
     fireEvent.click(screen.getByTestId('recon-bounce-restore'));
     await Promise.resolve();
     expect(restorePairMock).not.toHaveBeenCalled();
+  });
+
+  it('names each candidate radio by its date, amount and bank reference, so they can be told apart', async () => {
+    pending.answer = sharedAnswer;
+    renderPanel();
+    await selectLineRow('R-B1');
+    const amount = formatSigned(-0.61, 'EUR');
+    expect(screen.getByTestId('recon-bounce-radio-R-C1')).toHaveAttribute('aria-label',
+      `financeReconcileBounceChooseOriginalLineRef:${JSON.stringify({ date: sameDay(), amount, ref: 'REF-120' })}`);
+    expect(screen.getByTestId('recon-bounce-radio-R-C2')).toHaveAttribute('aria-label',
+      `financeReconcileBounceChooseOriginalLineRef:${JSON.stringify({ date: sameDay(), amount, ref: 'REF-140' })}`);
+  });
+
+  it('a candidate without a reference is named by its date and amount only', async () => {
+    pending.answer = sharedAnswer;
+    renderPanel();
+    await selectLineRow('R-B2');
+    expect(screen.getByTestId('recon-bounce-radio-R-C3')).toHaveAttribute('aria-label',
+      `financeReconcileBounceChooseOriginalLine:${JSON.stringify({ date: sameDay(), amount: formatSigned(-0.61, 'EUR') })}`);
   });
 
   it('the left-panel and the pair radios use accent-primary', async () => {

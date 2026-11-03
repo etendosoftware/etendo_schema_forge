@@ -255,6 +255,16 @@ describe('AutoMatchSuggestionModal — the Rebotes bancarios section', () => {
     expect(onReviewPair).toHaveBeenCalledWith(AMBIGUOUS);
   });
 
+  it('"Revisar en el panel" is the shared outline Button as a pill, never the primary one', () => {
+    renderModal({ onReviewPair: vi.fn() });
+    const reviewBtn = screen.getByTestId('automatch-bounce-review-bp-review');
+    expect(reviewBtn.tagName).toBe('BUTTON');
+    expect(reviewBtn).toHaveAttribute('type', 'button');
+    expect(reviewBtn.className).toContain('rounded-full');
+    expect(reviewBtn.className).toContain('border');
+    expect(reviewBtn.className).not.toContain('bg-primary');
+  });
+
   it('select-all of pairs checks every selectable pair, then unchecks them; never the ambiguous one', () => {
     renderModal();
     const all = screen.getByTestId('automatch-bounce-select-all');
@@ -480,6 +490,10 @@ describe('AutoMatchSuggestionModal — the shared Checkbox of the pairs', () => 
       .toBe(checkInput('bp-amb'));
     expect(screen.getByRole('checkbox', { name: 'financeReconcileAutomatchBounceSelectAll' }))
       .toBe(box('automatch-bounce-select-all'));
+    // A transaction group's checkbox is named after its statement line, so two groups differ.
+    expect(screen.getByRole('checkbox', {
+      name: `financeReconcileAutomatchGroupCheck:${JSON.stringify({ line: 'Transf. recibida ACME' })}`,
+    })).toBe(box(`automatch-group-check-${TX.groupKey}`));
   });
 
   it('keeps the header "mixed" while any pair is checked, and unchecked once none is', () => {

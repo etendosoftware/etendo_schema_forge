@@ -25,7 +25,7 @@ import {
   useApplySuggestions,
 } from '../useReconciliation.js';
 import { useReconciliationPost, RECONCILIATION_BASE_PATH } from '../useReconciliationPost.js';
-import { useDiscardPair, useRestorePair } from '../useBouncePairActions.js';
+import { useDiscardPair, usePendingLineCounts, useRestorePair } from '../useBouncePairActions.js';
 import { findFetchCall } from './findFetchCall.js';
 
 const BASE = '/sws/neo/bank-reconciliation';
@@ -767,5 +767,41 @@ describe('useRestorePair (POST restorePair)', () => {
     expect(caught.message).toBe('plain');
     expect(caught.code).toBeNull();
     expect(caught.status).toBe(409);
+  });
+});
+
+describe('usePendingLineCounts (GET pendingLines counts)', () => {
+  it('asks the default pendingLines answer (no status) for the date range and returns its counts', async () => {
+    const counts = { all: 8, pending: 3, bounce: 5, discarded: 1 };
+    mockActionResponse(getResponse({ lines: [], total: 0, counts }));
+    const { result } = renderHook(() => usePendingLineCounts(), { wrapper });
+
+    let returned;
+    await act(async () => {
+      returned = await result.current({ financialAccountId: 'acc-1', dateFrom: '2026-01-01', dateTo: '2026-12-31' });
+    });
+
+    const [, init] = findFetchCall(`/etendo${BASE}?action=pendingLines&accountId=acc-1&dateFrom=2026-01-01&dateTo=2026-12-31`);
+    expect(init?.method ?? 'GET').toBe('GET');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(returned).toEqual(counts);
+  });
+
+  it('omits an absent date bound and answers null when the answer has no counts', async () => {
+    mockActionResponse(getResponse({ lines: [] }));
+    const { result } = renderHook(() => usePendingLineCounts(), { wrapper });
+    let returned;
+    await act(async () => { returned = await result.current({ financialAccountId: 'acc-1' }); });
+    findFetchCall(`/etendo${BASE}?action=pendingLines&accountId=acc-1`);
+    expect(returned).toBeNull();
+  });
+
+  it('rejects on a non-ok answer', async () => {
+    mockActionResponse({ ok: false, status: 403, json: async () => ({}) });
+    const { result } = renderHook(() => usePendingLineCounts(), { wrapper });
+    let caught;
+    await act(async () => { caught = await result.current({ financialAccountId: 'acc-1' }).catch((e) => e); });
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.message).toBe('HTTP 403');
   });
 });

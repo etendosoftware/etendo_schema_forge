@@ -1,7 +1,8 @@
 // @covers tools/app-shell/src/hooks/useAutoMatchReview.js
 /**
  * `useAutoMatchSelection` / `useAutoMatchReview` — the automatch checks and the "Revisar en el
- * panel" review state shared by the automatch modal and the reconciliation panel (bounce pairs).
+ * panel" state (focus request, "No es un rebote" dismissals) shared by the automatch modal and the
+ * reconciliation panel (bounce pairs).
  */
 import { renderHook, act } from '@testing-library/react';
 import { useAutoMatchSelection, useAutoMatchReview } from '../useAutoMatchReview.js';
@@ -66,40 +67,25 @@ describe('useAutoMatchSelection', () => {
     expect(result.current.isChecked(TX)).toBe(true);
   });
 
-  it('with keepOnReload keeps the choices of the groups still present and drops the gone ones', () => {
-    const { result, rerender } = renderHook(
-      ({ groups, keep }) => useAutoMatchSelection(groups, { keepOnReload: keep }),
-      { initialProps: { groups: GROUPS, keep: true } },
-    );
+  it('keeps every choice while the groups do not reload (same array)', () => {
+    const { result, rerender } = renderHook(({ groups }) => useAutoMatchSelection(groups), {
+      initialProps: { groups: GROUPS },
+    });
     act(() => result.current.toggle(REVIEW));
-    act(() => result.current.toggle(HIGH));
-    // HIGH was discarded in the panel: the reload no longer offers it.
-    rerender({ groups: [TX, REVIEW, AMBIGUOUS], keep: true });
-    expect(result.current.isChecked(REVIEW)).toBe(true);
-    // Back again later: the dropped choice is gone, so it reads its default.
-    rerender({ groups: GROUPS, keep: true });
-    expect(result.current.isChecked(HIGH)).toBe(true);
-    expect(result.current.isChecked(REVIEW)).toBe(true);
-  });
-
-  it('turning keepOnReload off does not, by itself, reset the choices', () => {
-    const { result, rerender } = renderHook(
-      ({ groups, keep }) => useAutoMatchSelection(groups, { keepOnReload: keep }),
-      { initialProps: { groups: GROUPS, keep: true } },
-    );
-    act(() => result.current.toggle(REVIEW));
-    rerender({ groups: GROUPS, keep: false });
+    rerender({ groups: GROUPS });
     expect(result.current.isChecked(REVIEW)).toBe(true);
   });
 });
 
 describe('useAutoMatchReview', () => {
-  it('starts idle, with nothing dismissed and every suggestion remaining', () => {
+  it('starts idle, with no focus request and nothing dismissed', () => {
     const { result } = renderHook(() => useAutoMatchReview(GROUPS));
-    expect(result.current.reviewing).toBe(false);
     expect(result.current.focus).toBeNull();
     expect(result.current.dismissedKeys.size).toBe(0);
-    expect(result.current.remaining).toBe(4);
+    // The banner-era state is gone: no review flag, no way back, no count of what remains.
+    expect(result.current).not.toHaveProperty('reviewing');
+    expect(result.current).not.toHaveProperty('endReview');
+    expect(result.current).not.toHaveProperty('remaining');
     expect(result.current.panel).toEqual({
       focus: null,
       onFocusConsumed: result.current.consumeFocus,
@@ -111,7 +97,6 @@ describe('useAutoMatchReview', () => {
   it('startReview focuses the pair bounce line with an increasing seq', () => {
     const { result } = renderHook(() => useAutoMatchReview(GROUPS));
     act(() => result.current.startReview(AMBIGUOUS));
-    expect(result.current.reviewing).toBe(true);
     expect(result.current.focus).toEqual({ lineId: 'B3', seq: 1 });
     expect(result.current.panel.focus).toEqual({ lineId: 'B3', seq: 1 });
     // A second request for the same line is a new request.
@@ -123,31 +108,37 @@ describe('useAutoMatchReview', () => {
     const { result } = renderHook(() => useAutoMatchReview(GROUPS));
     act(() => result.current.startReview(TX));
     act(() => result.current.startReview(null));
-    expect(result.current.reviewing).toBe(false);
     expect(result.current.focus).toBeNull();
   });
 
-  it('consumeFocus clears the focus request and endReview ends the review', () => {
+  it('consumeFocus clears the focus request', () => {
     const { result } = renderHook(() => useAutoMatchReview(GROUPS));
     act(() => result.current.startReview(REVIEW));
     act(() => result.current.panel.onFocusConsumed());
     expect(result.current.focus).toBeNull();
-    expect(result.current.reviewing).toBe(true);
-    act(() => result.current.endReview());
-    expect(result.current.reviewing).toBe(false);
   });
 
-  it('keeps the modal checks across a reload while reviewing', () => {
+  it('keeps the modal checks after "Revisar en el panel" while the suggestions do not reload', () => {
+    const { result, rerender } = renderHook(({ groups }) => useAutoMatchReview(groups), {
+      initialProps: { groups: GROUPS },
+    });
+    act(() => result.current.selection.toggle(REVIEW));
+    act(() => result.current.startReview(AMBIGUOUS));
+    rerender({ groups: GROUPS });
+    expect(result.current.selection.isChecked(REVIEW)).toBe(true);
+  });
+
+  it('resets the modal checks on a reload, also after "Revisar en el panel"', () => {
     const { result, rerender } = renderHook(({ groups }) => useAutoMatchReview(groups), {
       initialProps: { groups: GROUPS },
     });
     act(() => result.current.selection.toggle(REVIEW));
     act(() => result.current.startReview(AMBIGUOUS));
     rerender({ groups: [...GROUPS] });
-    expect(result.current.selection.isChecked(REVIEW)).toBe(true);
+    expect(result.current.selection.isChecked(REVIEW)).toBe(false);
   });
 
-  it('resets the modal checks on a reload outside a review', () => {
+  it('resets the modal checks on a reload', () => {
     const { result, rerender } = renderHook(({ groups }) => useAutoMatchReview(groups), {
       initialProps: { groups: GROUPS },
     });
@@ -156,21 +147,15 @@ describe('useAutoMatchReview', () => {
     expect(result.current.selection.isChecked(REVIEW)).toBe(false);
   });
 
-  it('dismiss hides a pair from remaining; a repeated or empty key changes nothing', () => {
+  it('dismiss records a pair; a repeated or empty key changes nothing', () => {
     const { result } = renderHook(() => useAutoMatchReview(GROUPS));
     act(() => result.current.panel.onDismiss('bp-review'));
     const first = result.current.dismissedKeys;
     expect([...first]).toEqual(['bp-review']);
-    expect(result.current.remaining).toBe(3);
+    expect(result.current.panel.dismissedKeys).toBe(first);
     act(() => result.current.dismiss('bp-review'));
     act(() => result.current.dismiss(null));
     expect(result.current.dismissedKeys).toBe(first);
-  });
-
-  it('never counts a dismissed key against a transaction group', () => {
-    const { result } = renderHook(() => useAutoMatchReview(GROUPS));
-    act(() => result.current.dismiss('tx-1'));
-    expect(result.current.remaining).toBe(4);
   });
 
   it('clearDismissed forgets the dismissals, keeping the same set when there are none', () => {
@@ -181,22 +166,21 @@ describe('useAutoMatchReview', () => {
     act(() => result.current.dismiss('bp-high'));
     act(() => result.current.clearDismissed());
     expect(result.current.dismissedKeys.size).toBe(0);
-    expect(result.current.remaining).toBe(4);
   });
 
-  it('counts remaining over a missing groups array as 0', () => {
+  it('tolerates a missing groups array', () => {
     const { result } = renderHook(() => useAutoMatchReview(undefined));
-    expect(result.current.remaining).toBe(0);
+    expect(result.current.selection.isChecked(TX)).toBe(true);
+    expect(result.current.dismissedKeys.size).toBe(0);
   });
 
-  it('active=false ends the review, drops the focus and forgets the dismissals', () => {
+  it('active=false drops the focus and forgets the dismissals', () => {
     const { result, rerender } = renderHook(({ active }) => useAutoMatchReview(GROUPS, { active }), {
       initialProps: { active: true },
     });
     act(() => result.current.startReview(REVIEW));
     act(() => result.current.dismiss('bp-high'));
     rerender({ active: false });
-    expect(result.current.reviewing).toBe(false);
     expect(result.current.focus).toBeNull();
     expect(result.current.dismissedKeys.size).toBe(0);
   });

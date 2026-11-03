@@ -3,7 +3,6 @@
 // @covers tools/app-shell/src/components/contract-ui/BouncePairPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/useBouncePairReview.jsx
 // @covers tools/app-shell/src/hooks/useAutoMatchReview.js
-// @covers tools/app-shell/src/windows/custom/financial-account/BounceReviewBanner.jsx
 // @covers tools/app-shell/src/windows/custom/financial-account/index.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
@@ -21,13 +20,14 @@ import { login } from '../../helpers/auth.js';
  * Covered here:
  *   1. the automatch modal auto-opens with one transaction group and three pairs (high, review,
  *      ambiguous): high checked, review unchecked, ambiguous disabled;
- *   2. "Revisar en el panel" on the ambiguous pair hides the modal, switches the panel filter to
- *      "Posibles rebotes", selects the bounce line and shows the review banner; each candidate shows
+ *   2. "Revisar en el panel" on the ambiguous pair closes the modal, switches the panel filter to
+ *      "Posibles rebotes" and selects the bounce line, with no review banner; each candidate shows
  *      its bank reference ("Ref. X") and the footer the selected bounce's, the clipped description is
  *      on hover; choosing the original and "Descartar par" POSTs `discardPair` with the original and
  *      the bounce;
- *   3. "Volver a las sugerencias" reopens the modal with the checks as they were left, and Apply sends
- *      ONE `applySuggestions` with the transaction group first and both checked pairs;
+ *   3. after "Revisar en el panel", the Automatch button reopens the modal on the same suggestions
+ *      with the checks as they were left, and Apply sends ONE `applySuggestions` with the
+ *      transaction group first and both checked pairs;
  *   4. "Descartadas" lists the discarded lines (`status=discarded`) and "Restaurar par" POSTs
  *      `restorePair`;
  *   5. flag off: no "Rebotes bancarios" section, no bounce KPI, the original apply payload.
@@ -318,9 +318,9 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     await page.getByTestId('automatch-bounce-review-bp-amb').click();
 
     await expect(modal(page)).toHaveCount(0);
-    const banner = page.getByTestId('recon-bounce-review-banner');
-    await expect(banner).toBeVisible();
-    await expect(banner.getByTestId('recon-bounce-review-back')).toContainText('(4)');
+    // No review banner and no way back: the Automatch button is how the user returns.
+    await expect(page.getByTestId('recon-bounce-review-banner')).toHaveCount(0);
+    await expect(page.getByTestId('recon-bounce-review-back')).toHaveCount(0);
     // The filter moved to "Posibles rebotes": the suggested transaction line is gone.
     await expect(page.getByRole('button', { name: /^Posibles rebotes \(7\)/ })).toBeVisible();
     await expect(page.getByTestId(`recon-line-row-${TX_LINE.id}`)).toHaveCount(0);
@@ -353,11 +353,11 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
       counterpartLineId: AMB_BOUNCE.id,
     }]);
     await expect(page.locator('[data-type="success"]').first()).toBeVisible();
-    // A discard reloads the suggestions, but never pops the modal again during the review.
+    // A discard reloads the suggestions, but never pops the modal again on its own.
     await expect(modal(page)).toHaveCount(0);
   });
 
-  test('"Volver a las sugerencias" keeps the checks, and Apply sends one call with both kinds', async ({ page }) => {
+  test('the Automatch button reopens the modal with the checks kept, and Apply sends one call with both kinds', async ({ page }) => {
     await login(page);
     const { posts } = await installMocks(page);
     await openReconciliation(page);
@@ -368,11 +368,11 @@ test.describe('Reconciliation — bounce-pair suggestions (mocked)', () => {
     await page.getByTestId('automatch-bounce-review-bp-amb').click();
     await expect(modal(page)).toHaveCount(0);
 
-    await page.getByTestId('recon-bounce-review-back').click();
+    // Back through the Automatch button: the suggestions did not reload, so the checks are kept.
+    await page.getByTestId('financial-account-automatch').click();
     await expect(modal(page)).toBeVisible();
     await expect(pairInput(page, 'bp-high')).toHaveAttribute('aria-checked', 'true');
     await expect(pairInput(page, 'bp-review')).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByTestId('recon-bounce-review-banner')).toHaveCount(0);
 
     const post = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('action=applySuggestions'));
     await page.getByTestId('automatch-modal-apply').click();
