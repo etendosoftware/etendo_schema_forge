@@ -2548,8 +2548,8 @@ The `id` of every call is the draft sales invoice. `lines` omitted imports every
   with nothing created, and `carryGlobalDiscount:false` (the popup toggle off) imports the lines with the header
   untouched, only on the user's OK. Full rule and conflict codes: `modules/com.etendoerp.go/docs/neo-headless.md`
   §4.12.34, *Header link*.
-- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?,
-  globalDiscount:{applied, percent, reason}}}`. `globalDiscount` (ETP-5828 QA) is what the popup's toast «N líneas importadas ·
+- **Answer** (same on purchase invoices): `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}],
+  headerLinked, salesOrder?, order?, globalDiscount:{applied, percent, reason}}}`. `globalDiscount` (ETP-5828 QA) is what the popup's toast «N líneas importadas ·
   descuento global del X % aplicado a la factura» tells the user: `applied:true, percent:X` when the header now holds the
   orders' %, else `applied:false, percent:null` with `reason` `carryGlobalDiscountFalse` (the call sent
   `carryGlobalDiscount:false`) or `ordersWithoutDiscount`. `availableOrders` rows also carry `globalDiscount`, the order's %

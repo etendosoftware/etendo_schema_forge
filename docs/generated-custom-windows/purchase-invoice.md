@@ -3005,12 +3005,10 @@ The `id` of every call is the draft purchase invoice. `lines` omitted imports ev
   (orders differ, the invoice has another %, or lines without one) the call answers 422 `globalDiscountConflict`,
   creates nothing, and the agent resends with `carryGlobalDiscount:false` only after the user agrees. Step-by-step
   rule: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34, *Header link*.
-- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?,
-  globalDiscount:{applied, percent, reason}}}`. `globalDiscount` (ETP-5828 QA) is what the popup's toast «N líneas importadas ·
-  descuento global del X % aplicado a la factura» tells the user: `applied:true, percent:X` when the header now holds the
-  orders' %, else `applied:false, percent:null` with `reason` `carryGlobalDiscountFalse` (the call sent
-  `carryGlobalDiscount:false`) or `ordersWithoutDiscount`. `availableOrders` rows also carry `globalDiscount`, the order's %
-  (0 when none), the popup's «% Dto. global X%» tag. Both fields are additive: the window reads neither. Since the ETP-5828 QA parity pass `availableOrders` also reports each order's `amount` (the sum of its pending lines, no global discount — the popup row) and `availableOrderLines` each line's `unitPrice`, `discount` (%) and `amount` (price × pending — the popup line), and `importOrderLines` answers `order` next to `salesOrder` (same id; `salesOrder` kept for its readers). The header field `etgoTotalDiscount` carries an agentPrompt (`decisions.json`, exported to `ETGO_SF_FIELD`): always a %, applied to the subtotal after the line discounts, carried from the orders by `importOrderLines` and by the one-step invoice action.
+- **Answer:** the same envelope as on the sales invoice — see the «Answer» entry of the MCP section in
+  `docs/generated-custom-windows/sales-invoice.md`, which documents it once for both directions (`order` / `salesOrder`,
+  `globalDiscount`, and the `amount` / `unitPrice` / `discount` figures of the discovery actions). On a purchase invoice
+  `salesOrder` names the purchase order. The window reads none of it while purchases import client-side (MCP-2).
 - The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
   through `MCP_CONFIG`. `createPurchaseInvoice` on the purchase order or the goods receipt (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/purchase-invoice/spec.md`)
   describes the flow.
